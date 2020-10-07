@@ -4,11 +4,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import dask.dataframe as dd
-
-import cudf
+from dask import dataframe as dd
 
 import dask_cudf as dgd
+
+import cudf
 
 param_nrows = [5, 10, 50, 100]
 
@@ -62,15 +62,10 @@ def test_join_inner(left_nrows, right_nrows, left_nkeys, right_nkeys):
     got_rows = {}
 
     def gather(df, grows):
-        grows[df["index"].values[0]] = (set(df.al), set(df.ar))
+        grows[df["x"].values[0]] = (set(df.al), set(df.ar))
 
-    expect.reset_index().groupby("index").apply(
-        partial(gather, grows=expect_rows)
-    )
-
-    expect.reset_index().groupby("index").apply(
-        partial(gather, grows=got_rows)
-    )
+    expect.reset_index().groupby("x").apply(partial(gather, grows=expect_rows))
+    expect.reset_index().groupby("x").apply(partial(gather, grows=got_rows))
 
     assert got_rows == expect_rows
 
@@ -128,15 +123,11 @@ def test_join_left(left_nrows, right_nrows, left_nkeys, right_nkeys, how):
         cola = np.sort(np.asarray(df.al))
         colb = np.sort(np.asarray(df.ar))
 
-        grows[df["index"].values[0]] = (cola, colb)
+        grows[df["x"].values[0]] = (cola, colb)
 
-    expect.reset_index().groupby("index").apply(
-        partial(gather, grows=expect_rows)
-    )
+    expect.reset_index().groupby("x").apply(partial(gather, grows=expect_rows))
 
-    expect.reset_index().groupby("index").apply(
-        partial(gather, grows=got_rows)
-    )
+    expect.reset_index().groupby("x").apply(partial(gather, grows=got_rows))
 
     for k in expect_rows:
         np.testing.assert_array_equal(expect_rows[k][0], got_rows[k][0])
@@ -281,7 +272,7 @@ def test_indexed_join(how):
     d = g_left.merge(g_right, left_index=True, right_index=True, how=how)
     dg = dg_left.merge(dg_right, left_index=True, right_index=True, how=how)
 
-    # occassionally order is not correct (possibly do to hashing in the merge)
+    # occasionally order is not correct (possibly do to hashing in the merge)
     d = d.sort_values("x")  # index is preserved
     dg = dg.sort_values(
         "x"

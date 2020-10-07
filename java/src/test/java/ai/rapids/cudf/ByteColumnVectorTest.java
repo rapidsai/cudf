@@ -1,7 +1,5 @@
-
 /*
- *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -50,6 +48,16 @@ public class ByteColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  public void testUnsignedArrayAllocation() {
+    try (HostColumnVector v = HostColumnVector.fromUnsignedBytes(new byte[]{(byte)0xff, (byte)128, 5})) {
+      assertFalse(v.hasNulls());
+      assertEquals(0xff, Byte.toUnsignedInt(v.getByte(0)), 0xff);
+      assertEquals(128, Byte.toUnsignedInt(v.getByte(1)), 128);
+      assertEquals(5, Byte.toUnsignedInt(v.getByte(2)), 5);
+    }
+  }
+
+  @Test
   public void testAppendRepeatingValues() {
     try (HostColumnVector byteColumnVector = HostColumnVector.build(DType.INT8, 3,
         (b) -> b.append((byte) 2, 3L))) {
@@ -85,6 +93,22 @@ public class ByteColumnVectorTest extends CudfTestBase {
       for (int i = 0; i < 6; i++) {
         assertFalse(byteColumnVector.isNull(i));
       }
+      assertTrue(byteColumnVector.isNull(6));
+      assertTrue(byteColumnVector.isNull(7));
+    }
+  }
+
+  @Test
+  public void testAddingUnsignedNullValues() {
+    try (HostColumnVector byteColumnVector = HostColumnVector.fromBoxedUnsignedBytes(
+        new Byte[]{2, 3, 4, 5, (byte)128, (byte)254, null, null})) {
+      assertTrue(byteColumnVector.hasNulls());
+      assertEquals(2, byteColumnVector.getNullCount());
+      for (int i = 0; i < 6; i++) {
+        assertFalse(byteColumnVector.isNull(i));
+      }
+      assertEquals(128, Byte.toUnsignedInt(byteColumnVector.getByte(4)));
+      assertEquals(254, Byte.toUnsignedInt(byteColumnVector.getByte(5)));
       assertTrue(byteColumnVector.isNull(6));
       assertTrue(byteColumnVector.isNull(7));
     }

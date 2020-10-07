@@ -13,7 +13,7 @@ from cudf.utils.utils import (
 
 
 class ColumnAccessor(MutableMapping):
-    def __init__(self, data={}, multiindex=False, level_names=None):
+    def __init__(self, data=None, multiindex=False, level_names=None):
         """
         Parameters
         ----------
@@ -27,6 +27,8 @@ class ColumnAccessor(MutableMapping):
             For a non-hierarchical index, a tuple of size 1
             may be passe.
         """
+        if data is None:
+            data = {}
         # TODO: we should validate the keys of `data`
         if isinstance(data, ColumnAccessor):
             multiindex = multiindex or data.multiindex
@@ -69,8 +71,8 @@ class ColumnAccessor(MutableMapping):
 
     @property
     def level_names(self):
-        if self._level_names is None:
-            return tuple((None,) * self.nlevels)
+        if self._level_names is None or len(self._level_names) == 0:
+            return tuple((None,) * max(1, self.nlevels))
         else:
             return self._level_names
 
@@ -179,17 +181,21 @@ class ColumnAccessor(MutableMapping):
 
     def copy(self, deep=False):
         """
-        Make a (shallow) copy of this ColumnAccessor.
+        Make a copy of this ColumnAccessor.
         """
         if deep:
-            raise TypeError("Cannot deep copy a ColumnAccessor")
+            return self.__class__(
+                {k: v.copy(deep=True) for k, v in self._data.items()},
+                multiindex=self.multiindex,
+                level_names=self.level_names,
+            )
         return self.__class__(
             self._data.copy(),
             multiindex=self.multiindex,
             level_names=self.level_names,
         )
 
-    def get_by_label(self, key):
+    def select_by_label(self, key):
         """
         Return a subset of this column accessor,
         composed of the keys specified by `key`.
@@ -203,71 +209,16 @@ class ColumnAccessor(MutableMapping):
         ColumnAccessor
         """
         if isinstance(key, slice):
-            return self.get_by_label_slice(key)
+            return self._select_by_label_slice(key)
         elif pd.api.types.is_list_like(key) and not isinstance(key, tuple):
-            return self.get_by_label_list_like(key)
+            return self._select_by_label_list_like(key)
         else:
             if isinstance(key, tuple):
                 if any(isinstance(k, slice) for k in key):
-                    return self.get_by_label_with_wildcard(key)
-            return self.get_by_label_grouped(key)
+                    return self._select_by_label_with_wildcard(key)
+            return self._select_by_label_grouped(key)
 
-    def get_by_label_list_like(self, key):
-        return self.__class__(
-            to_flat_dict({k: self._grouped_data[k] for k in key}),
-            multiindex=self.multiindex,
-            level_names=self.level_names,
-        )
-
-    def get_by_label_grouped(self, key):
-        result = self._grouped_data[key]
-        if isinstance(result, cudf.core.column.ColumnBase):
-            return self.__class__({key: result})
-        else:
-            result = to_flat_dict(result)
-            if not isinstance(key, tuple):
-                key = (key,)
-            return self.__class__(
-                result,
-                multiindex=self.nlevels - len(key) > 1,
-                level_names=self.level_names[len(key) :],
-            )
-
-    def get_by_label_slice(self, key):
-        start, stop = key.start, key.stop
-        if key.step is not None:
-            raise TypeError("Label slicing with step is not supported")
-
-        if start is None:
-            start = self.names[0]
-        if stop is None:
-            stop = self.names[-1]
-        start = self._pad_key(start, slice(None))
-        stop = self._pad_key(stop, slice(None))
-        for idx, name in enumerate(self.names):
-            if _compare_keys(name, start):
-                start_idx = idx
-                break
-        for idx, name in enumerate(reversed(self.names)):
-            if _compare_keys(name, stop):
-                stop_idx = len(self.names) - idx
-                break
-        keys = self.names[start_idx:stop_idx]
-        return self.__class__(
-            {k: self._data[k] for k in keys},
-            multiindex=self.multiindex,
-            level_names=self.level_names,
-        )
-
-    def get_by_label_with_wildcard(self, key):
-        key = self._pad_key(key, slice(None))
-        return self.__class__(
-            {k: self._data[k] for k in self._data if _compare_keys(k, key)},
-            multiindex=self.multiindex,
-            level_names=self.level_names,
-        )
-
-    def get_by_index(self, index):
+    def select_by_index(self, index):
         """
         Return a ColumnAccessor composed of the columns
         specified by index.
@@ -304,6 +255,61 @@ class ColumnAccessor(MutableMapping):
         key = self._pad_key(key)
         self._data[key] = value
         self._clear_cache()
+
+    def _select_by_label_list_like(self, key):
+        return self.__class__(
+            to_flat_dict({k: self._grouped_data[k] for k in key}),
+            multiindex=self.multiindex,
+            level_names=self.level_names,
+        )
+
+    def _select_by_label_grouped(self, key):
+        result = self._grouped_data[key]
+        if isinstance(result, cudf.core.column.ColumnBase):
+            return self.__class__({key: result})
+        else:
+            result = to_flat_dict(result)
+            if not isinstance(key, tuple):
+                key = (key,)
+            return self.__class__(
+                result,
+                multiindex=self.nlevels - len(key) > 1,
+                level_names=self.level_names[len(key) :],
+            )
+
+    def _select_by_label_slice(self, key):
+        start, stop = key.start, key.stop
+        if key.step is not None:
+            raise TypeError("Label slicing with step is not supported")
+
+        if start is None:
+            start = self.names[0]
+        if stop is None:
+            stop = self.names[-1]
+        start = self._pad_key(start, slice(None))
+        stop = self._pad_key(stop, slice(None))
+        for idx, name in enumerate(self.names):
+            if _compare_keys(name, start):
+                start_idx = idx
+                break
+        for idx, name in enumerate(reversed(self.names)):
+            if _compare_keys(name, stop):
+                stop_idx = len(self.names) - idx
+                break
+        keys = self.names[start_idx:stop_idx]
+        return self.__class__(
+            {k: self._data[k] for k in keys},
+            multiindex=self.multiindex,
+            level_names=self.level_names,
+        )
+
+    def _select_by_label_with_wildcard(self, key):
+        key = self._pad_key(key, slice(None))
+        return self.__class__(
+            {k: self._data[k] for k in self._data if _compare_keys(k, key)},
+            multiindex=self.multiindex,
+            level_names=self.level_names,
+        )
 
     def _pad_key(self, key, pad_value=""):
         """

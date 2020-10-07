@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from cudf.core import DataFrame
+from cudf.core import DataFrame, Series
 from cudf.tests.utils import assert_eq
 
 
@@ -71,3 +71,23 @@ def test_numpy_non_contiguious():
 
     gdf = DataFrame.from_records(rec, index="index")
     assert_eq(aa, gdf["a"].values)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        Series([1, 2, 3, -12, 12, 44]),
+        Series([1, 2, 3, -12, 12, 44], dtype="str"),
+        Series([1, 2, 3, -12, 12, 44]).index,
+        DataFrame({"a": [1, 2, 3, -1234], "b": [0.1, 0.2222, 0.4, -3.14]}),
+        DataFrame(
+            {"a": [1, 2, 3, -1234], "b": [0.1, 0.2222, 0.4, -3.14]}
+        ).index,
+    ],
+)
+@pytest.mark.parametrize("dtype", [None, "float", "int", "str"])
+def test_series_dataframe__array__(data, dtype):
+    gs = data
+
+    with pytest.raises(TypeError):
+        gs.__array__(dtype=dtype)

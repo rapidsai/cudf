@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Copyright (c) 2019, NVIDIA CORPORATION.
+  Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 
     <groupId>ai.rapids</groupId>
     <artifactId>cudf</artifactId>
-    <version>0.13-SNAPSHOT</version>
+    <version>0.16-SNAPSHOT</version>
 
     <name>cudfjni</name>
     <description>
@@ -105,7 +105,7 @@
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
-            <version>1.7.9</version>
+            <version>${slf4j.version}</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
@@ -123,7 +123,7 @@
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
-            <version>1.7.9</version>
+            <version>${slf4j.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -142,14 +142,20 @@
         <ai.rapids.refcount.debug>false</ai.rapids.refcount.debug>
         <native.build.path>${basedir}/target/cmake-build</native.build.path>
         <skipNativeCopy>false</skipNativeCopy>
-        <cxx11.abi.value>ON</cxx11.abi.value>
+        <cxx.flags/>
+        <CMAKE_EXPORT_COMPILE_COMMANDS>OFF</CMAKE_EXPORT_COMPILE_COMMANDS>
+        <CUDA_STATIC_RUNTIME>OFF</CUDA_STATIC_RUNTIME>
+        <PER_THREAD_DEFAULT_STREAM>OFF</PER_THREAD_DEFAULT_STREAM>
+        <RMM_LOGGING_LEVEL>INFO</RMM_LOGGING_LEVEL>
+        <native.build.path>${project.build.directory}/cmake-build</native.build.path>
+        <slf4j.version>1.7.30</slf4j.version>
     </properties>
 
     <profiles>
         <profile>
-            <id>abiOff</id>
+            <id>no-cxx-deprecation-warnings</id>
             <properties>
-                <cxx11.abi.value>OFF</cxx11.abi.value>
+                <cxx.flags>-Wno-deprecated-declarations</cxx.flags>
             </properties>
         </profile>
         <profile>
@@ -176,7 +182,16 @@
                                     <goal>jar-no-fork</goal>
                                 </goals>
                             </execution>
+                            <execution>
+                                <id>test-jars</id>
+                                <goals>
+                                    <goal>test-jar</goal>
+                                </goals>
+                            </execution>
                         </executions>
+                        <configuration>
+                            <excludeResources>true</excludeResources>
+                        </configuration>
                     </plugin>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
@@ -227,6 +242,11 @@
     <build>
         <resources>
             <resource>
+              <!-- Include the properties file to provide the build information. -->
+              <directory>${project.build.directory}/extra-resources</directory>
+              <filtering>true</filtering>
+            </resource>
+            <resource>
               <directory>${basedir}/..</directory>
               <targetPath>META-INF</targetPath>
               <includes>
@@ -241,7 +261,7 @@
               </includes>
             </resource>
             <resource>
-                <directory>${basedir}/target/native-deps/</directory>
+                <directory>${project.build.directory}/native-deps/</directory>
             </resource>
         </resources>
         <pluginManagement>
@@ -326,12 +346,22 @@
                                       failonerror="true"
                                       executable="cmake">
                                     <arg value="${basedir}/src/main/native"/>
-                                    <arg value="-DCMAKE_CXX11_ABI=${cxx11.abi.value}"/>
+                                    <arg value="-DCUDA_STATIC_RUNTIME=${CUDA_STATIC_RUNTIME}" />
+                                    <arg value="-DPER_THREAD_DEFAULT_STREAM=${PER_THREAD_DEFAULT_STREAM}" />
+                                    <arg value="-DRMM_LOGGING_LEVEL=${RMM_LOGGING_LEVEL}" />
+                                    <arg value="-DCMAKE_CXX_FLAGS=${cxx.flags}"/>
+                                    <arg value="-DCMAKE_EXPORT_COMPILE_COMMANDS=${CMAKE_EXPORT_COMPILE_COMMANDS}"/>
+                                    <arg value="-DGPU_ARCHS=ALL"/>
                                 </exec>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"
                                       executable="make">
                                     <arg value="-j"/>
+                                </exec>
+                                <mkdir dir="${project.build.directory}/extra-resources"/>
+                                <exec executable="bash" output="${project.build.directory}/extra-resources/cudf-java-version-info.properties">
+                                  <arg value="${project.basedir}/buildscripts/build-info"/>
+                                  <arg value="${project.version}"/>
                                 </exec>
                             </tasks>
                         </configuration>
@@ -358,14 +388,6 @@
                             def proc = 'ldd ${native.build.path}/libcudfjni.so'.execute()
                             proc.consumeProcessOutput(sout, serr)
                             proc.waitForOrKill(10000)
-                            def librp = ~/librmm\\.so\\s+=>\\s+(.*)librmm.*\\.so\\s+.*/
-                            def m = librp.matcher(sout)
-                            if (m.find()) {
-                                pom.properties['native.deps.path'] = m.group(1)
-                            } else {
-                                fail("Could not find rmm as a dependency of libcudfjni out> $sout err> $serr")
-                            }
-
                             def libcudf = ~/libcudf\\.so\\s+=>\\s+(.*)libcudf.*\\.so\\s+.*/
                             def cudfm = libcudf.matcher(sout)
                             if (cudfm.find()) {
@@ -374,16 +396,34 @@
                                 fail("Could not find cudf as a dependency of libcudfjni out> $sout err> $serr")
                             }
 
+                            def libnvcomp = ~/libnvcomp\\.so\\s+=>\\s+(.*)libnvcomp.*\\.so\\s+.*/
+                            def nvcompm = libnvcomp.matcher(sout)
+                            if (nvcompm.find()) {
+                                pom.properties['native.nvcomp.path'] = nvcompm.group(1)
+                            } else {
+                                fail("Could not find nvcomp as a dependency of libcudfjni out> $sout err> $serr")
+                            }
+
                             def libcudart = ~/libcudart\\.so\\.(.*)\\s+=>.*/
                             def cm = libcudart.matcher(sout)
                             if (cm.find()) {
+                                if (pom.properties['CUDA_STATIC_RUNTIME'] == 'ON') {
+                                    fail("found libcudart when we expect to be statically linked to it")
+                                }
                                 def classifier = 'cuda' + cm.group(1)
                                   .replaceFirst(/\\./, '-') // First . becomes a -
                                   .replaceAll(/\\..*$/, '') // Drop all of the subversions from cuda
                                   .replaceAll(/-0$/, '') // If it is a X.0 version, like 10.0 drop the .0
                                 pom.properties['cuda.classifier'] = classifier
+                                println 'WARNING FOUND libcudart this means your jar will only work against a single version of the cuda runtime ' + classifier
+                            } else if (pom.properties['CUDA_STATIC_RUNTIME'] == 'OFF') {
+                                fail('could not find libcudart when we expect to be dynamically linked to it')
                             } else {
-                                fail("Could not find cudart as a dependency of libcudfjni out> $sout err> $serr")
+                                pom.properties['cuda.classifier'] = ''
+                            }
+
+                            if (pom.properties['CUDA_STATIC_RUNTIME'] == 'ON') {
+                                println 'WARNING RUNNING WITH STATIC LINKING DOES NOT FULLY WORK. USE WITH CAUTION.'
                             }
                             </source>
                         </configuration>
@@ -397,22 +437,16 @@
                     <!--Set by groovy script-->
                     <classifier>${cuda.classifier}</classifier>
                 </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>native-maven-plugin</artifactId>
-                <version>1.0-alpha-8</version>
-                <extensions>true</extensions>
-
-                <configuration>
-                    <javahClassNames>
-                        <javahClassName>ai.rapids.cudf.Cuda</javahClassName>
-                        <javahClassName>ai.rapids.cudf.ColumnVector</javahClassName>
-                        <javahClassName>ai.rapids.cudf.Table</javahClassName>
-                        <javahClassName>ai.rapids.cudf.Rmm</javahClassName>
-                    </javahClassNames>
-                    <javahOutputDirectory>${basedir}/src/main/native/include/</javahOutputDirectory>
-                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                        <configuration>
+                            <classifier>tests</classifier>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -438,7 +472,7 @@
                         <configuration>
                             <overwrite>true</overwrite>
                             <skip>${skipNativeCopy}</skip>
-                            <outputDirectory>${basedir}/target/native-deps/${os.arch}/${os.name}</outputDirectory>
+                            <outputDirectory>${project.build.directory}/native-deps/${os.arch}/${os.name}</outputDirectory>
                             <resources>
                                 <resource>
                                     <directory>${native.build.path}</directory>
@@ -451,16 +485,13 @@
                                     <directory>${native.cudf.path}</directory>
                                     <includes>
                                         <include>libcudf.so</include>
-                                        <include>libNVCategory.so</include>
-                                        <include>libNVStrings.so</include>
                                     </includes>
                                 </resource>
                                 <resource>
                                     <!--Set by groovy script-->
-                                    <directory>${native.deps.path}</directory>
+                                    <directory>${native.nvcomp.path}</directory>
                                     <includes>
-                                        <include>libboost_filesystem.so</include>
-                                        <include>librmm.so</include>
+                                        <include>libnvcomp.so</include>
                                     </includes>
                                 </resource>
                             </resources>

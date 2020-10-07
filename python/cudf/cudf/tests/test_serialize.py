@@ -17,6 +17,8 @@ from cudf.tests.utils import assert_eq
         lambda: cudf.Series([1, 2, 3], index=[4, 5, 6]),
         lambda: cudf.Series([1, None, 3]),
         lambda: cudf.Series([1, 2, 3], index=[4, 5, None]),
+        lambda: cudf.Series([1, 2, 3])[:2],
+        lambda: cudf.Series([1, 2, 3])[:2]._column,
         lambda: cudf.Series(["a", "bb", "ccc"]),
         lambda: cudf.Series(["a", None, "ccc"]),
         lambda: cudf.DataFrame({"x": [1, 2, 3]}),
@@ -31,27 +33,33 @@ from cudf.tests.utils import assert_eq
             {"x": ["a", "bb", "ccc"], "y": [1.0, None, 3.0]},
             index=[1, None, 3],
         ),
-        pd.util.testing.makeTimeDataFrame,
-        pd.util.testing.makeMixedDataFrame,
-        pd.util.testing.makeTimeDataFrame,
-        # pd.util.testing.makeMissingDataframe, # Problem in distributed
-        # pd.util.testing.makeMultiIndex, # Indices not serialized on device
+        pd._testing.makeTimeDataFrame,
+        pd._testing.makeMixedDataFrame,
+        pd._testing.makeTimeDataFrame,
+        # pd._testing.makeMissingDataframe, # Problem in distributed
+        # pd._testing.makeMultiIndex, # Indices not serialized on device
     ],
 )
-def test_serialize(df):
+@pytest.mark.parametrize("to_host", [True, False])
+def test_serialize(df, to_host):
     """ This should hopefully replace all functions below """
     a = df()
     if "cudf" not in type(a).__module__:
         a = cudf.from_pandas(a)
-    header, frames = a.serialize()
+    if to_host:
+        header, frames = a.host_serialize()
+    else:
+        header, frames = a.device_serialize()
     msgpack.dumps(header)  # ensure that header is msgpack serializable
     ndevice = 0
     for frame in frames:
-        if not isinstance(frame, (bytes, memoryview)):
+        if hasattr(frame, "__cuda_array_interface__"):
             ndevice += 1
     # Indices etc. will not be DeviceNDArray
     # but data should be...
-    if hasattr(df, "_cols"):
+    if to_host:
+        assert ndevice == 0
+    elif hasattr(df, "_cols"):
         assert ndevice >= len(df._data)
     else:
         assert ndevice > 0

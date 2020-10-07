@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,14 +15,17 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
+/**
+ * @addtogroup strings_split
+ * @{
+ * @file
+ */
 
 /**
  * @brief Returns a list of columns by splitting each string using the
@@ -38,18 +41,19 @@ namespace strings
  *
  * Any null string entries return corresponding null output columns.
  *
- * @param strings Strings instance for this operation.
- * @param delimiter UTF-8 encoded string indentifying the split points in each string.
+ * @param strings_column Strings instance for this operation.
+ * @param delimiter UTF-8 encoded string indicating the split points in each string.
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return New table of strings columns.
  */
-std::unique_ptr<experimental::table> split( strings_column_view const& strings,
-                                            string_scalar const& delimiter = string_scalar(""),
-                                            size_type maxsplit=-1,
-                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<table> split(
+  strings_column_view const& strings_column,
+  string_scalar const& delimiter      = string_scalar(""),
+  size_type maxsplit                  = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a list of columns by splitting each string using the
@@ -65,102 +69,169 @@ std::unique_ptr<experimental::table> split( strings_column_view const& strings,
  *
  * Any null string entries return corresponding null output columns.
  *
- * @param strings Strings instance for this operation.
- * @param delimiter UTF-8 encoded string indentifying the split points in each string.
+ * @param strings_column Strings instance for this operation.
+ * @param delimiter UTF-8 encoded string indicating the split points in each string.
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned table's device memory.
  * @return New strings columns.
  */
-std::unique_ptr<experimental::table> rsplit( strings_column_view const& strings,
-                                             string_scalar const& delimiter = string_scalar(""),
-                                             size_type maxsplit=-1,
-                                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<table> rsplit(
+  strings_column_view const& strings_column,
+  string_scalar const& delimiter      = string_scalar(""),
+  size_type maxsplit                  = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief The result(s) of a `contiguous_(r)split_record`
+ * @brief Splits individual strings elements into a list of strings.
  *
- * Each column_view resulting from a split operation performed by
- * contiguous_split_record will be returned wrapped in a
- * `contiguous_split_record_result`. The column data addresses stored in the
- * column_view objects are not owned by top level cudf::column objects. The
- * backing memory is instead owned by the `all_data` field and in one contiguous
- * block.
+ * Each element generates an array of strings that are stored in an output
+ * lists column.
  *
- * The user is responsible for assuring that the `column_views` or any derived
- * objects do not outlive the memory owned by `all_data`
- */
-struct contiguous_split_record_result {
-  std::vector<column_view> column_views;
-  std::unique_ptr<rmm::device_buffer> all_data;
-};
-
-/**
- * @brief Splits each element of the input column to a column of tokens storing
- * the resulting columns in a single contiguous block of memory.
+ * The number of elements in the output column will be the same as the number of
+ * elements in the input column. Each individual list item will contain the
+ * new strings for that row. The resulting number of strings in each row can vary
+ * from 0 to `maxsplit + 1`.
  *
- * This function splits each element in the input column to a column of tokens.
- * The number of columns in the output vector will be the same as the number of
- * elements in the input column. The column length will coincide with the
- * number of tokens; the resulting columns wrapped in the returned object may
- * have different sizes.
+ * The `delimiter` is searched within each string from beginning to end
+ * and splitting stops when either `maxsplit` or the end of the string is reached.
  *
- * Splitting a null string element will result in an empty output column.
+ * If a delimiter is not whitespace and occurs adjacent to another delimiter,
+ * an empty string is produced for that split occurrence. Likewise, a non-whitespace
+ * delimiter produces an empty string if it appears at the beginning or the end
+ * of a string.
  *
- * @throws cudf:logic_error if `delimiter` is invalid.
+ * @code{.pseudo}
+ * s = ["a_bc_def_g", "a__bc", "_ab_cd", "ab_cd_"]
+ * s1 = split_record(s, "_")
+ * s1 is a lists column of strings:
+ *     [ ["a", "bc", "def", "g"],
+ *       ["a", "", "bc"],
+ *       ["", "ab", "cd"],
+ *       ["ab", "cd", ""] ]
+ * s2 = split_record(s, "_", 1)
+ * s2 is a lists column of strings:
+ *     [ ["a", "bc_def_g"],
+ *       ["a", "_bc"],
+ *       ["", "ab_cd"],
+ *       ["ab", "cd_"] ]
+ * @endcode
+ *
+ * A whitespace delimiter produces no empty strings.
+ * @code{.pseudo}
+ * s = ["a bc def", "a  bc", " ab cd", "ab cd "]
+ * s1 = split_record(s, "")
+ * s1 is a lists column of strings:
+ *     [ ["a", "bc", "def"],
+ *       ["a", "bc"],
+ *       ["ab", "cd"],
+ *       ["ab", "cd"] ]
+ * s2 = split_record(s, "", 1)
+ * s2 is a lists column of strings:
+ *     [ ["a", "bc def"],
+ *       ["a", "bc"],
+ *       ["ab", "cd"],
+ *       ["ab", "cd "] ]
+ * @endcode
+ *
+ * A null string element will result in a null list item for that row.
+ *
+ * @throw cudf:logic_error if `delimiter` is invalid.
  *
  * @param strings A column of string elements to be splitted.
- * @param delimiter UTF-8 encoded string indentifying the split points in each
- *        string.
+ * @param delimiter The string to identify split points in each string.
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Resource for allocating device memory.
- * @return contiguous_split_record_result New vector of strings column_view
- *         objects
- *         (each column_view element of the vector holds splits from a string
- *         element of the input column).
+ * @param mr Device memory resource used to allocate the returned result's device memory.
+ * @return Lists column of strings
+ *         Each vector of the lists column holds splits from a single row
+ *         element of the input column.
  */
-contiguous_split_record_result contiguous_split_record(
-    strings_column_view const& strings,
-    string_scalar const& delimiter = string_scalar(""),
-    size_type maxsplit=-1,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()
-);
+std::unique_ptr<column> split_record(
+  strings_column_view const& strings,
+  string_scalar const& delimiter      = string_scalar(""),
+  size_type maxsplit                  = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Splits each element of the input column from the end to a column of
- * tokens storing the resulting columns in a single contiguous block of memory.
+ * @brief  Splits individual strings elements into a list of strings starting
+ * from the end of each string.
  *
- * This function splits each element in the input column to a column of tokens.
- * The number of columns in the output vector will be the same as the number of
- * elements in the input column. The column length will coincide with the
- * number of tokens; the resulting columns wrapped in the returned object may
- * have different sizes.
+ * Each element generates an array of strings that are stored in an output
+ * lists column.
  *
- * Splitting a null string element will result in an empty output column.
+ * The number of elements in the output column will be the same as the number of
+ * elements in the input column. Each individual list item will contain the
+ * new strings for that row. The resulting number of strings in each row can vary
+ * from 0 to `maxsplit + 1`.
  *
- * @throws cudf:logic_error if `delimiter` is invalid.
+ * The `delimiter` is searched from end to beginning within each string
+ * and splitting stops when either `maxsplit` or the beginning of the string
+ * is reached.
+ *
+ * If a delimiter is not whitespace and occurs adjacent to another delimiter,
+ * an empty string is produced for that split occurrence. Likewise, a non-whitespace
+ * delimiter produces an empty string if it appears at the beginning or the end
+ * of a string.
+ *
+ * Note that `rsplit_record` and `split_record` produce equivalent results for
+ * the default `maxsplit` value.
+ *
+ * @code{.pseudo}
+ * s = ["a_bc_def_g", "a__bc", "_ab_cd", "ab_cd_"]
+ * s1 = rsplit_record(s, "_")
+ * s1 is a lists column of strings:
+ *     [ ["a", "bc", "def", "g"],
+ *       ["a", "", "bc"],
+ *       ["", "ab", "cd"],
+ *       ["ab", "cd", ""] ]
+ * s2 = rsplit_record(s, "_", 1)
+ * s2 is a lists column of strings:
+ *     [ ["a_bc_def", "g"],
+ *       ["a_", "bc"],
+ *       ["_ab", "cd"],
+ *       ["ab_cd", ""] ]
+ * @endcode
+ *
+ * A whitespace delimiter produces no empty strings.
+ * @code{.pseudo}
+ * s = ["a bc def", "a  bc", " ab cd", "ab cd "]
+ * s1 = rsplit_record(s, "")
+ * s1 is a lists column of strings:
+ *     [ ["a", "bc", "def"],
+ *       ["a", "bc"],
+ *       ["ab", "cd"],
+ *       ["ab", "cd"] ]
+ * s2 = rsplit_record(s, "", 1)
+ * s2 is a lists column of strings:
+ *     [ ["a bc", "def"],
+ *       ["a", "bc"],
+ *       [" ab", "cd"],
+ *       ["ab", "cd"] ]
+ * @endcode
+ *
+ * A null string element will result in a null list item for that row.
+ *
+ * @throw cudf:logic_error if `delimiter` is invalid.
  *
  * @param strings A column of string elements to be splitted.
- * @param delimiter UTF-8 encoded string indentifying the split points in each
- *        string.
+ * @param delimiter The string to identify split points in each string.
  *        Default of empty string indicates split on whitespace.
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Resource for allocating device memory.
- * @return contiguous_split_record_result New vector of strings column_view
- *         objects
- *         (each column_view element of the vector holds splits from a string
- *         element of the input column).
+ * @param mr Device memory resource used to allocate the returned result's device memory.
+ * @return Lists column of strings
+ *         Each vector of the lists column holds splits from a single row
+ *         element of the input column.
  */
-contiguous_split_record_result contiguous_rsplit_record(
-    strings_column_view const& strings,
-    string_scalar const& delimiter = string_scalar(""),
-    size_type maxsplit=-1,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource()
-);
+std::unique_ptr<column> rsplit_record(
+  strings_column_view const& strings,
+  string_scalar const& delimiter      = string_scalar(""),
+  size_type maxsplit                  = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-} // namespace strings
-} // namespace cudf
+/** @} */  // end of doxygen group
+}  // namespace strings
+}  // namespace cudf

@@ -21,8 +21,8 @@
 #include <string>
 
 namespace cudf {
-
-std::string string_scalar::to_string(cudaStream_t stream) const {
+std::string string_scalar::to_string(cudaStream_t stream) const
+{
   std::string result;
   result.resize(_data.size());
   CUDA_TRY(cudaMemcpyAsync(&result[0], _data.data(), _data.size(), cudaMemcpyDeviceToHost, stream));

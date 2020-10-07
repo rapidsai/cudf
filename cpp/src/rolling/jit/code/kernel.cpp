@@ -15,35 +15,27 @@
  */
 
 namespace cudf {
-namespace experimental {
 namespace rolling {
 namespace jit {
 namespace code {
-
-
-
-const char* kernel_headers = 
-R"***(
+const char* kernel_headers =
+  R"***(
+#include <../src/rolling/rolling_jit_detail.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 )***";
 
 const char* kernel =
-R"***(
+  R"***(
 #include "operation.h"
 
 template <typename WindowType>
-cudf::size_type get_window(WindowType window, cudf::size_type index) { return 0; }
+cudf::size_type __device__ get_window(WindowType window, cudf::size_type index) { return window[index]; }
 
 template <>
-cudf::size_type get_window(cudf::size_type window, cudf::size_type index) { return window; }
+cudf::size_type __device__ get_window(cudf::size_type window, cudf::size_type index) { return window; }
 
-template <>
-cudf::size_type get_window(cudf::size_type* window, cudf::size_type index) {
-  return window[index];
-}
-
-template <typename InType, typename OutType, class agg_op, typename WindowType>
+template <typename InType, typename OutType, class agg_op, typename PrecedingWindowType, typename FollowingWindowType>
 __global__
 void gpu_rolling_new(cudf::size_type nrows,
                  InType const* const __restrict__ in_col, 
@@ -51,8 +43,8 @@ void gpu_rolling_new(cudf::size_type nrows,
                  OutType* __restrict__ out_col, 
                  cudf::bitmask_type* __restrict__ out_col_valid,
                  cudf::size_type * __restrict__ output_valid_count,
-                 WindowType preceding_window_begin,
-                 WindowType following_window_begin,
+                 PrecedingWindowType preceding_window_begin,
+                 FollowingWindowType following_window_begin,
                  cudf::size_type min_periods)
 {
   cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -113,8 +105,7 @@ void gpu_rolling_new(cudf::size_type nrows,
 }
 )***";
 
-} // namespace code
-} // namespace jit
-} // namespace rolling
-} // namespace experimental
-} // namespace cudf
+}  // namespace code
+}  // namespace jit
+}  // namespace rolling
+}  // namespace cudf

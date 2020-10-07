@@ -1,7 +1,5 @@
-
 /*
- *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -49,6 +47,19 @@ public class LongColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  public void testUnsignedArrayAllocation() {
+    try (HostColumnVector longColumnVector = HostColumnVector.fromUnsignedLongs(
+        0xfedcba9876543210L, 0x8000000000000000L, 5L)) {
+      assertFalse(longColumnVector.hasNulls());
+      assertEquals(Long.toUnsignedString(0xfedcba9876543210L),
+          Long.toUnsignedString(longColumnVector.getLong(0)));
+      assertEquals(Long.toUnsignedString(0x8000000000000000L),
+          Long.toUnsignedString(longColumnVector.getLong(1)));
+      assertEquals(5L, longColumnVector.getLong(2));
+    }
+  }
+
+  @Test
   public void testUpperIndexOutOfBoundsException() {
     try (HostColumnVector longColumnVector = HostColumnVector.fromLongs(2L, 3L, 5L)) {
       assertThrows(AssertionError.class, () -> longColumnVector.getLong(3));
@@ -72,6 +83,24 @@ public class LongColumnVectorTest extends CudfTestBase {
       for (int i = 0; i < 6; i++) {
         assertFalse(cv.isNull(i));
       }
+      assertTrue(cv.isNull(6));
+      assertTrue(cv.isNull(7));
+    }
+  }
+
+  @Test
+  public void testAddingUnsignedNullValues() {
+    try (HostColumnVector cv = HostColumnVector.fromBoxedUnsignedLongs(
+        2L, 3L, 4L, 5L, 0xfedcba9876543210L, 0x8000000000000000L, null, null)) {
+      assertTrue(cv.hasNulls());
+      assertEquals(2, cv.getNullCount());
+      for (int i = 0; i < 6; i++) {
+        assertFalse(cv.isNull(i));
+      }
+      assertEquals(Long.toUnsignedString(0xfedcba9876543210L),
+          Long.toUnsignedString(cv.getLong(4)));
+      assertEquals(Long.toUnsignedString(0x8000000000000000L),
+          Long.toUnsignedString(cv.getLong(5)));
       assertTrue(cv.isNull(6));
       assertTrue(cv.isNull(7));
     }

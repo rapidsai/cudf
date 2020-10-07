@@ -1,7 +1,7 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
+from setuptools import find_packages, setup
 
 import versioneer
-from setuptools import find_packages, setup
 
 install_requires = ["cudf", "dask", "distributed"]
 

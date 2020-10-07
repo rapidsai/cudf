@@ -88,7 +88,15 @@ def test_series_binop_scalar(nelem, binop, obj_class):
 _bitwise_binops = [operator.and_, operator.or_, operator.xor]
 
 
-_int_types = ["int8", "int16", "int32", "int64", "longlong"]
+_int_types = [
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "uint8",
+    "uint16",
+    "uint32",
+]
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
@@ -182,22 +190,32 @@ def test_series_compare(cmpop, obj_class, dtype):
     np.testing.assert_equal(result3.to_array(), cmpop(arr1, arr2))
 
 
+@pytest.mark.parametrize(
+    "obj", [pd.Series(["a", "b", None, "d", "e", None]), "a"]
+)
+@pytest.mark.parametrize("cmpop", _cmpops)
+@pytest.mark.parametrize(
+    "cmp_obj", [pd.Series(["b", "a", None, "d", "f", None]), "a"]
+)
+def test_string_series_compare(obj, cmpop, cmp_obj):
+
+    g_obj = obj
+    if isinstance(g_obj, pd.Series):
+        g_obj = Series.from_pandas(g_obj)
+    g_cmp_obj = cmp_obj
+    if isinstance(g_cmp_obj, pd.Series):
+        g_cmp_obj = Series.from_pandas(g_cmp_obj)
+
+    got = cmpop(g_obj, g_cmp_obj)
+    expected = cmpop(obj, cmp_obj)
+
+    utils.assert_eq(expected, got)
+
+
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize("nelem", [1, 2, 100])
 @pytest.mark.parametrize("cmpop", _cmpops)
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "datetime64[ms]",
-        "longlong",
-    ],
-)
+@pytest.mark.parametrize("dtype", utils.NUMERIC_TYPES + ["datetime64[ms]"])
 def test_series_compare_scalar(nelem, cmpop, obj_class, dtype):
     arr1 = np.random.randint(0, 100, 100).astype(dtype)
     sr1 = Series(arr1)
@@ -270,13 +288,16 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
     np.testing.assert_array_equal(expect, got)
 
 
-_dtypes = [np.int16, np.int32, np.int64, np.float32, np.float64]
-
-
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize(
     "binop,lhs_dtype,rhs_dtype",
-    list(product([operator.add, operator.mul], _dtypes, _dtypes)),
+    list(
+        product(
+            [operator.add, operator.mul],
+            utils.NUMERIC_TYPES,
+            utils.NUMERIC_TYPES,
+        )
+    ),
 )
 def test_series_binop_mixed_dtype(binop, lhs_dtype, rhs_dtype, obj_class):
     nelem = 10
@@ -300,7 +321,8 @@ def test_series_binop_mixed_dtype(binop, lhs_dtype, rhs_dtype, obj_class):
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
 @pytest.mark.parametrize(
-    "cmpop,lhs_dtype,rhs_dtype", list(product(_cmpops, _dtypes, _dtypes))
+    "cmpop,lhs_dtype,rhs_dtype",
+    list(product(_cmpops, utils.NUMERIC_TYPES, utils.NUMERIC_TYPES)),
 )
 def test_series_cmpop_mixed_dtype(cmpop, lhs_dtype, rhs_dtype, obj_class):
     nelem = 5
@@ -354,7 +376,9 @@ _reflected_ops = [
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
-@pytest.mark.parametrize("func, dtype", list(product(_reflected_ops, _dtypes)))
+@pytest.mark.parametrize(
+    "func, dtype", list(product(_reflected_ops, utils.NUMERIC_TYPES))
+)
 def test_reflected_ops_scalar(func, dtype, obj_class):
     # create random series
     np.random.seed(12)
@@ -377,7 +401,7 @@ def test_reflected_ops_scalar(func, dtype, obj_class):
     ps_result = func(random_series)
 
     # verify
-    np.testing.assert_allclose(ps_result, gs_result)
+    np.testing.assert_allclose(ps_result, gs_result.to_array())
 
 
 @pytest.mark.parametrize("binop", _binops)
@@ -462,6 +486,29 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
     cd_frame["x"] = cd_frame["x"].astype(np.float64)
     cd_frame["y"] = cd_frame["y"].astype(np.float64)
     utils.assert_eq(cd_frame, pd_frame)
+
+
+@pytest.mark.parametrize(
+    "df2",
+    [
+        cudf.DataFrame({"a": [3, 2, 1]}, index=[3, 2, 1]),
+        cudf.DataFrame([3, 2]),
+    ],
+)
+@pytest.mark.parametrize("binop", [operator.eq, operator.ne])
+def test_df_different_index_shape(df2, binop):
+    df1 = cudf.DataFrame([1, 2, 3], index=[1, 2, 3])
+
+    pdf1 = df1.to_pandas()
+    pdf2 = df2.to_pandas()
+
+    try:
+        binop(pdf1, pdf2)
+    except Exception as e:
+        with pytest.raises(type(e), match=e.__str__()):
+            binop(df1, df2)
+    else:
+        raise AssertionError(f"Expected {binop} to fail for {pdf1} and {pdf2}")
 
 
 @pytest.mark.parametrize("op", [operator.eq, operator.ne])
@@ -679,3 +726,49 @@ def test_vector_to_none_binops(dtype):
     got = data + None
 
     utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "lhs",
+    [
+        1,
+        3,
+        4,
+        pd.Series([5, 6, 2]),
+        pd.Series([0, 10, 20, 30, 3, 4, 5, 6, 2]),
+        6,
+    ],
+)
+@pytest.mark.parametrize("rhs", [1, 3, 4, pd.Series([5, 6, 2])])
+@pytest.mark.parametrize(
+    "ops",
+    [
+        (np.remainder, cudf.remainder),
+        (np.floor_divide, cudf.floor_divide),
+        (np.subtract, cudf.subtract),
+        (np.add, cudf.add),
+        (np.true_divide, cudf.true_divide),
+        (np.multiply, cudf.multiply),
+    ],
+)
+def test_ufunc_ops(lhs, rhs, ops):
+    np_op, cu_op = ops
+
+    if isinstance(lhs, pd.Series):
+        culhs = cudf.from_pandas(lhs)
+    else:
+        culhs = lhs
+
+    if isinstance(rhs, pd.Series):
+        curhs = cudf.from_pandas(rhs)
+    else:
+        curhs = rhs
+
+    expect = np_op(lhs, rhs)
+    got = cu_op(culhs, curhs)
+    if np.isscalar(expect):
+        assert got == expect
+    else:
+        utils.assert_eq(
+            expect, got,
+        )

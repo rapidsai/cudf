@@ -16,44 +16,34 @@
 
 package ai.rapids.cudf;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 class WriterOptions {
 
-  private final CompressionType compressionType;
   private final String[] columnNames;
-  private final Map<String, String> metadata;
+  private final boolean[] columnNullability;
 
   <T extends WriterBuilder> WriterOptions(T builder) {
-    compressionType = builder.compressionType;
     columnNames = (String[]) builder.columnNames.toArray(new String[builder.columnNames.size()]);
-    metadata = Collections.unmodifiableMap(builder.metadata);
-  }
-
-  public CompressionType getCompressionType() {
-    return compressionType;
+    columnNullability = new boolean[builder.columnNullability.size()];
+    for (int i = 0; i < builder.columnNullability.size(); i++) {
+      columnNullability[i] = (boolean)builder.columnNullability.get(i);
+    }
   }
 
   public String[] getColumnNames() {
     return columnNames;
   }
 
-  public Map<String, String> getMetadata() {
-    return metadata;
-  }
-
-  String[] getMetadataKeys() {
-    return metadata.keySet().toArray(new String[metadata.size()]);
-  }
-
-  String[] getMetadataValues() {
-    return metadata.values().toArray(new String[metadata.size()]);
+  public boolean[] getColumnNullability() {
+    return columnNullability;
   }
 
   protected static class WriterBuilder<T extends WriterBuilder> {
     final List<String> columnNames = new ArrayList<>();
-    final Map<String, String> metadata = new LinkedHashMap<>();
-    CompressionType compressionType = CompressionType.AUTO;
+    final List<Boolean> columnNullability = new ArrayList<>();
 
     /**
      * Add column name
@@ -61,36 +51,22 @@ class WriterOptions {
      */
     public T withColumnNames(String... columnNames) {
       this.columnNames.addAll(Arrays.asList(columnNames));
+      for (int i = 0; i < columnNames.length; i++) {
+        this.columnNullability.add(true);
+      }
       return (T) this;
     }
 
     /**
-     * Add a metadata key and a value
-     * @param key
-     * @param value
+     * Add column name that is not nullable
+     * @param columnNames
      */
-    public T withMetadata(String key, String value) {
-      this.metadata.put(key, value);
-      return (T) this;
-    }
-
-    /**
-     * Add a map of metadata keys and values
-     * @param metadata
-     */
-    public T withMetadata(Map<String, String> metadata) {
-      this.metadata.putAll(metadata);
-      return (T) this;
-    }
-
-    /**
-     * Set the compression type to use for writing
-     * @param compression
-     */
-    public T withCompressionType(CompressionType compression) {
-      this.compressionType = compression;
+    public T withNotNullableColumnNames(String... columnNames) {
+      this.columnNames.addAll(Arrays.asList(columnNames));
+      for (int i = 0; i < columnNames.length; i++) {
+        this.columnNullability.add(false);
+      }
       return (T) this;
     }
   }
-
 }

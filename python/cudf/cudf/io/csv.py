@@ -1,11 +1,12 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-20, NVIDIA CORPORATION.
+from io import BytesIO, StringIO
 
-from io import BytesIO, IOBase, StringIO
-
-import cudf._lib as libcudf
+from cudf import _lib as libcudf
+from cudf._lib.nvtx import annotate
 from cudf.utils import ioutils
 
 
+@annotate("READ_CSV", color="purple", domain="cudf_python")
 @ioutils.doc_read_csv()
 def read_csv(
     filepath_or_buffer,
@@ -45,7 +46,10 @@ def read_csv(
     """{docstring}"""
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
-        filepath_or_buffer, compression, (BytesIO, StringIO), **kwargs
+        path_or_data=filepath_or_buffer,
+        compression=compression,
+        iotypes=(BytesIO, StringIO),
+        **kwargs,
     )
     return libcudf.csv.read_csv(
         filepath_or_buffer,
@@ -83,10 +87,11 @@ def read_csv(
     )
 
 
+@annotate("WRITE_CSV", color="purple", domain="cudf_python")
 @ioutils.doc_to_csv()
 def to_csv(
     df,
-    path=None,
+    path_or_buf=None,
     sep=",",
     na_rep="",
     columns=None,
@@ -94,8 +99,19 @@ def to_csv(
     index=True,
     line_terminator="\n",
     chunksize=None,
+    **kwargs,
 ):
     """{docstring}"""
+
+    return_as_string = False
+    if path_or_buf is None:
+        path_or_buf = StringIO()
+        return_as_string = True
+
+    path_or_buf = ioutils.get_writer_filepath_or_buffer(
+        path_or_data=path_or_buf, mode="w", **kwargs
+    )
+
     if index:
         from cudf import MultiIndex
 
@@ -106,18 +122,40 @@ def to_csv(
                 columns = columns.copy()
                 columns.insert(0, df.index.name)
         df = df.reset_index()
+
+    if columns is not None:
+        try:
+            df = df[columns]
+        except KeyError:
+            raise NameError(
+                "Dataframe doesn't have the labels provided in columns"
+            )
+
     rows_per_chunk = chunksize if chunksize else len(df)
 
-    if isinstance(path, IOBase):
-        path = path.name
+    if ioutils.is_fsspec_open_file(path_or_buf):
+        with path_or_buf as file_obj:
+            file_obj = ioutils.get_IOBase_writer(file_obj)
+            libcudf.csv.write_csv(
+                df,
+                path_or_buf=file_obj,
+                sep=sep,
+                na_rep=na_rep,
+                header=header,
+                line_terminator=line_terminator,
+                rows_per_chunk=rows_per_chunk,
+            )
+    else:
+        libcudf.csv.write_csv(
+            df,
+            path_or_buf=path_or_buf,
+            sep=sep,
+            na_rep=na_rep,
+            header=header,
+            line_terminator=line_terminator,
+            rows_per_chunk=rows_per_chunk,
+        )
 
-    return libcudf.csv.write_csv(
-        cols=df._data,
-        path=path,
-        sep=sep,
-        na_rep=na_rep,
-        columns=columns,
-        header=header,
-        line_terminator=line_terminator,
-        rows_per_chunk=rows_per_chunk,
-    )
+    if return_as_string:
+        path_or_buf.seek(0)
+        return path_or_buf.read()

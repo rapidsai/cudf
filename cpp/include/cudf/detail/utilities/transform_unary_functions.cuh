@@ -26,12 +26,39 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
-
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/pair.h>
 
 namespace cudf {
+/**
+ * @brief Transforms non-null input using `Functor`, and for null, returns `null_replacement`.
+ *
+ * This functor argument is considered null if second value of functor argument pair is false.
+ *
+ * @tparam ResultType Output type of `Functor` and null replacement type.
+ * @tparam Functor functor to transform first value of argument pair to ResultType.
+ */
+template <typename ResultType, typename Functor>
+struct null_replacing_transformer {
+  using type = ResultType;
+  Functor f;
+  type replacement;
+  CUDA_HOST_DEVICE_CALLABLE
+  null_replacing_transformer(type null_replacement, Functor transformer)
+    : f(transformer), replacement(null_replacement)
+  {
+  }
+
+  template <typename ElementType>
+  CUDA_HOST_DEVICE_CALLABLE type operator()(thrust::pair<ElementType, bool> const &pair_value)
+  {
+    if (pair_value.second)
+      return f(pair_value.first);
+    else
+      return replacement;
+  }
+};
+
 /** -------------------------------------------------------------------------*
  * @brief intermediate struct to calculate mean and variance
  * This is an example case to output a struct from column input.
@@ -43,39 +70,32 @@ namespace cudf {
  *
  * @tparam ElementType  element data type of value and value_squared.
  * -------------------------------------------------------------------------**/
-template<typename ElementType>
-struct meanvar
-{
-    ElementType value;                /// the value
-    ElementType value_squared;        /// the value of squared
-    cudf::size_type count;   /// the count
+template <typename ElementType>
+struct meanvar {
+  ElementType value;          /// the value
+  ElementType value_squared;  /// the value of squared
+  cudf::size_type count;      /// the count
 
-    CUDA_HOST_DEVICE_CALLABLE
-    meanvar(ElementType _value=0, ElementType _value_squared=0, cudf::size_type _count=0)
-    : value(_value), value_squared(_value_squared), count(_count)
-    {};
+  CUDA_HOST_DEVICE_CALLABLE
+  meanvar(ElementType _value = 0, ElementType _value_squared = 0, cudf::size_type _count = 0)
+    : value(_value), value_squared(_value_squared), count(_count){};
 
-    using this_t = cudf::meanvar<ElementType>;
+  using this_t = cudf::meanvar<ElementType>;
 
-    CUDA_HOST_DEVICE_CALLABLE
-    this_t operator+(this_t const &rhs) const
-    {
-        return this_t(
-            (this->value + rhs.value),
-            (this->value_squared + rhs.value_squared),
-            (this->count + rhs.count)
-        );
-    };
+  CUDA_HOST_DEVICE_CALLABLE
+  this_t operator+(this_t const &rhs) const
+  {
+    return this_t((this->value + rhs.value),
+                  (this->value_squared + rhs.value_squared),
+                  (this->count + rhs.count));
+  };
 
-    CUDA_HOST_DEVICE_CALLABLE
-    bool operator==(this_t const &rhs) const
-    {
-        return (
-            (this->value == rhs.value) &&
-            (this->value_squared == rhs.value_squared) &&
-            (this->count == rhs.count)
-        );
-    };
+  CUDA_HOST_DEVICE_CALLABLE
+  bool operator==(this_t const &rhs) const
+  {
+    return ((this->value == rhs.value) && (this->value_squared == rhs.value_squared) &&
+            (this->count == rhs.count));
+  };
 };
 
 // --------------------------------------------------------------------------
@@ -91,14 +111,10 @@ struct meanvar
  *
  * @tparam  ResultType  scalar data type of output
  * -------------------------------------------------------------------------**/
-template<typename ElementType>
-struct transformer_squared
-{
-    CUDA_HOST_DEVICE_CALLABLE
-    ElementType operator() (ElementType const & value)
-    {
-        return (value*value);
-    };
+template <typename ElementType>
+struct transformer_squared {
+  CUDA_HOST_DEVICE_CALLABLE
+  ElementType operator()(ElementType const &value) { return (value * value); };
 };
 
 /** -------------------------------------------------------------------------*
@@ -110,17 +126,16 @@ struct transformer_squared
  *
  * @tparam  ElementType         scalar data type of input
  * -------------------------------------------------------------------------**/
-template<typename ElementType>
-struct transformer_meanvar
-{
-    using ResultType = meanvar<ElementType>;
+template <typename ElementType>
+struct transformer_meanvar {
+  using ResultType = meanvar<ElementType>;
 
-    CUDA_HOST_DEVICE_CALLABLE
-    ResultType operator()(thrust::pair<ElementType, bool> const& pair)
-    {
-        ElementType v = pair.first;
-        return meanvar<ElementType>(v, v*v, (pair.second)? 1 : 0 );
-    };
+  CUDA_HOST_DEVICE_CALLABLE
+  ResultType operator()(thrust::pair<ElementType, bool> const &pair)
+  {
+    ElementType v = pair.first;
+    return meanvar<ElementType>(v, v * v, (pair.second) ? 1 : 0);
+  };
 };
 
-} // namespace cudf
+}  // namespace cudf

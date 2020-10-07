@@ -1,9 +1,9 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import os
 import urllib
 import warnings
-from io import BytesIO, TextIOWrapper
+from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 
 import fsspec
 import fsspec.implementations.local
@@ -30,8 +30,8 @@ engine : {{ 'cudf', 'fastavro' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read.
-skip_rows : int, default None
-    If not None, the nunber of rows to skip from the start of the file.
+skiprows : int, default None
+    If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
 
@@ -101,19 +101,37 @@ Load a Parquet dataset into a DataFrame
 
 Parameters
 ----------
-filepath_or_buffer : str, path object, bytes, or file-like object
-    Either a path to a file (a `str`, `pathlib.Path`, or
-    `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
-    Python bytes of raw binary data, or any object with a `read()` method
-    (such as builtin `open()` file handler function or `BytesIO`).
+filepath_or_buffer : str, path object, bytes, file-like object, or a list
+    of such objects.
+    Contains one or more of the following: either a path to a file (a `str`,
+    `pathlib.Path`, or `py._path.local.LocalPath`), URL (including http, ftp,
+    and S3 locations), Python bytes of raw binary data, or any object with a
+    `read()` method (such as builtin `open()` file handler function or
+    `BytesIO`).
 engine : {{ 'cudf', 'pyarrow' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read.
-row_group : int, default None
-    If not None, only the row group with the specified index will be read.
-skip_rows : int, default None
-    If not None, the nunber of rows to skip from the start of the file.
+filters : list of tuple, list of lists of tuples default None
+    If not None, specifies a filter predicate used to filter out row groups
+    using statistics stored for each row group as Parquet metadata. Row groups
+    that do not match the given filter predicate are not read. The
+    predicate is expressed in disjunctive normal form (DNF) like
+    `[[('x', '=', 0), ...], ...]`. DNF allows arbitrary boolean logical
+    combinations of single column predicates. The innermost tuples each
+    describe a single column predicate. The list of inner predicates is
+    interpreted as a conjunction (AND), forming a more selective and
+    multiple column predicate. Finally, the most outer list combines
+    these filters as a disjunction (OR). Predicates may also be passed
+    as a list of tuples. This form is interpreted as a single conjunction.
+    To express OR in predicates, one must use the (preferred) notation of
+    list of lists of tuples.
+row_groups : int, or list, or a list of lists default None
+    If not None, specifies, for each input file, which row groups to read.
+    If reading multiple inputs, a list of lists should be passed, one list
+    for each input.
+skiprows : int, default None
+    If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
 strings_to_categorical : boolean, default False
@@ -168,6 +186,11 @@ index : bool, default None
 partition_cols : list, optional, default None
     Column names by which to partition the dataset
     Columns are partitioned in the order they are given
+partition_file_name : str, optional, default None
+    File name to use for partitioned datasets. Different partitions
+    will be written to different directories, but all files will
+    have this name.  If nothing is specified, a random uuid4 hex string
+    will be used for each file.
 
 See Also
 --------
@@ -175,6 +198,27 @@ cudf.io.parquet.read_parquet
 cudf.io.orc.read_orc
 """
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
+
+_docstring_merge_parquet_filemetadata = """
+Merge multiple parquet metadata blobs
+
+Parameters
+----------
+metadata_list : list
+    List of buffers returned by to_parquet
+
+Returns
+-------
+Combined parquet metadata blob
+
+See Also
+--------
+cudf.io.parquet.to_parquet
+"""
+doc_merge_parquet_filemetadata = docfmt_partial(
+    docstring=_docstring_merge_parquet_filemetadata
+)
+
 
 _docstring_read_orc_metadata = """
 Read an ORC file's metadata and schema
@@ -222,9 +266,10 @@ engine : {{ 'cudf', 'pyarrow' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read from the file.
-stripe: int, default None
-    If not None, only the stripe with the specified index will be read.
-skip_rows : int, default None
+stripes: list, default None
+    If not None, only these stripe will be read from the file. Stripes are
+    concatenated with index ignored.
+skiprows : int, default None
     If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
@@ -268,6 +313,8 @@ fname : str
     File path or object where the ORC dataset will be stored.
 compression : {{ 'snappy', None }}, default None
     Name of the compression to use. Use None for no compression.
+enable_statistics: boolean, default True
+    Enable writing column statistics.
 
 See Also
 --------
@@ -347,7 +394,7 @@ precise_float : boolean, default False
     is to use fast but less precise builtin functionality
 date_unit : string, default None
     The timestamp unit to detect if converting dates (pandas engine only).
-    The default behaviour is to try and detect the correct precision, but if
+    The default behavior is to try and detect the correct precision, but if
     this is not desired then pass one of 's', 'ms', 'us' or 'ns' to force
     parsing only seconds, milliseconds, microseconds or nanoseconds.
 encoding : str, default is 'utf-8'
@@ -357,7 +404,7 @@ lines : boolean, default False
     Read the file as a json object per line.
 chunksize : integer, default None
     Return JsonReader object for iteration (pandas engine only).
-    See the `line-delimted json docs
+    See the `line-delimited json docs
     <http://pandas.pydata.org/pandas-docs/stable/io.html#io-jsonl>`_
     for more information on ``chunksize``.
     This can only be passed if `lines=True`.
@@ -432,7 +479,7 @@ date_unit : string, default 'ms' (milliseconds)
 default_handler : callable, default None
     Handler to call if object cannot otherwise be converted to a
     suitable format for JSON. Should receive a single argument which is
-    the object to convert and return a serialisable object.
+    the object to convert and return a serializable object.
 lines : bool, default False
     If 'orient' is 'records' write out line delimited json format. Will
     throw ValueError if incorrect 'orient' since others are not list
@@ -781,16 +828,29 @@ cudf.io.csv.to_csv
 )
 doc_read_csv = docfmt_partial(docstring=_docstring_read_csv)
 
+_to_csv_example = """
+
+Write a dataframe to csv.
+
+>>> import cudf
+>>> filename = 'foo.csv'
+>>> df = cudf.DataFrame({'x': [0, 1, 2, 3],
+                         'y': [1.0, 3.3, 2.2, 4.4],
+                         'z': ['a', 'b', 'c', 'd']})
+>>> df = df.set_index([3, 2, 1, 0])
+>>> df.to_csv(filename)
+
+"""
 _docstring_to_csv = """
 
 Write a dataframe to csv file format.
 
 Parameters
 ----------
-df : DataFrame
-    DataFrame object to be written to csv
-path : str, default None
-    Path of file where DataFrame will be written
+{df_param}
+path_or_buf : str or file handle, default None
+    File path or object, if None is provided
+    the result is returned as a string.
 sep : char, default ','
     Delimiter to be used.
 na_rep : str, default ''
@@ -805,6 +865,12 @@ line_terminator : char, default '\\n'
 chunksize : int or None, default None
     Rows to write at a time
 
+Returns
+-------
+None or str
+    If `path_or_buf` is None, returns the resulting csv format as a string.
+    Otherwise returns None.
+
 Notes
 -----
 - Follows the standard of Pandas csv.QUOTE_NONNUMERIC for all output.
@@ -812,22 +878,51 @@ Notes
 
 Examples
 --------
-
-Write a dataframe to csv.
-
->>> import cudf
->>> filename = 'foo.csv'
->>> df = cudf.DataFrame({'x': [0, 1, 2, 3],
-                         'y': [1.0, 3.3, 2.2, 4.4],
-                         'z': ['a', 'b', 'c', 'd']})
->>> df = df.set_index([3, 2, 1, 0])
->>> df.to_csv(filename)
+{example}
 
 See Also
 --------
 cudf.io.csv.read_csv
 """
-doc_to_csv = docfmt_partial(docstring=_docstring_to_csv)
+doc_to_csv = docfmt_partial(
+    docstring=_docstring_to_csv.format(
+        df_param="""
+df : DataFrame
+    DataFrame object to be written to csv
+""",
+        example=_to_csv_example,
+    )
+)
+
+doc_dataframe_to_csv = docfmt_partial(
+    docstring=_docstring_to_csv.format(df_param="", example=_to_csv_example)
+)
+
+_docstring_kafka_datasource = """
+Configuration object for a Kafka Datasource
+
+Parameters
+----------
+kafka_configs : dict, key/value pairs of librdkafka configuration values.
+    The complete list of valid configurations can be found at
+    https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+topic : string, case sensitive name of the Kafka topic that contains the
+    source data.
+partition : int,
+    Zero-based identifier of the Kafka partition that the underlying consumer
+    should consume messages from. Valid values are 0 - (N-1)
+start_offset : int, Kafka Topic/Partition offset that consumption
+    should begin at. Inclusive.
+end_offset : int, Kafka Topic/Parition offset that consumption
+    should end at. Inclusive.
+batch_timeout : int, default 10000
+    Maximum number of milliseconds that will be spent trying to
+    consume messages between the specified 'start_offset' and 'end_offset'.
+delimiter : string, default None, optional delimiter to insert into the
+    output between kafka messages, Ex: "\n"
+
+"""
+doc_kafka_datasource = docfmt_partial(docstring=_docstring_kafka_datasource)
 
 
 def is_url(url):
@@ -879,7 +974,7 @@ def _is_local_filesystem(fs):
 
 
 def get_filepath_or_buffer(
-    path_or_data, compression, iotypes=(BytesIO), **kwargs
+    path_or_data, compression, mode="rb", iotypes=(BytesIO), **kwargs
 ):
     """Return either a filepath string to data, or a memory buffer of data.
     If filepath, then the source filepath is expanded to user's environment.
@@ -891,6 +986,8 @@ def get_filepath_or_buffer(
         Path to data or the data itself.
     compression : str
         Type of compression algorithm for the content
+    mode : str
+        Mode in which file is opened
     iotypes : (), default (BytesIO)
         Object type to exclude from file-like check
 
@@ -905,9 +1002,17 @@ def get_filepath_or_buffer(
         storage_options = kwargs.get("storage_options")
         # fsspec does not expanduser so handle here
         path_or_data = os.path.expanduser(path_or_data)
-        fs, _, paths = fsspec.get_fs_token_paths(
-            path_or_data, mode="rb", storage_options=storage_options
-        )
+
+        try:
+            fs, _, paths = fsspec.get_fs_token_paths(
+                path_or_data, mode=mode, storage_options=storage_options
+            )
+        except ValueError as e:
+            if str(e).startswith("Protocol not known"):
+                return path_or_data, compression
+            else:
+                raise e
+
         if len(paths) == 0:
             raise IOError(f"{path_or_data} could not be resolved to any files")
         elif len(paths) > 1:
@@ -932,3 +1037,79 @@ def get_filepath_or_buffer(
         path_or_data = BytesIO(path_or_data.read())
 
     return path_or_data, compression
+
+
+def get_writer_filepath_or_buffer(path_or_data, mode, **kwargs):
+    """
+    Return either a filepath string to data,
+    or a open file object to the output filesystem
+
+    Parameters
+    ----------
+    path_or_data : str, file-like object, bytes, ByteIO
+        Path to data or the data itself.
+    mode : str
+        Mode in which file is opened
+
+    Returns
+    -------
+    filepath_or_buffer : str,
+        Filepath string or buffer of data
+    """
+    if isinstance(path_or_data, str):
+        storage_options = kwargs.get("storage_options", {})
+        path_or_data = os.path.expanduser(path_or_data)
+        fs, _, _ = fsspec.get_fs_token_paths(
+            path_or_data, mode=mode or "w", storage_options=storage_options
+        )
+
+        if not _is_local_filesystem(fs):
+            filepath_or_buffer = fsspec.open(
+                path_or_data, mode=mode or "w", **(storage_options)
+            )
+            return filepath_or_buffer
+
+    return path_or_data
+
+
+def get_IOBase_writer(file_obj):
+    """
+    Parameters
+    ----------
+    file_obj : file-like object
+        Open file object for writing to any filesystem
+
+    Returns
+    -------
+    iobase_file_obj : file-like object
+        Open file object inheriting from io.IOBase
+    """
+    if not isinstance(file_obj, IOBase):
+        if "b" in file_obj.mode:
+            iobase_file_obj = BufferedWriter(file_obj)
+        else:
+            iobase_file_obj = TextIOWrapper(file_obj)
+        return iobase_file_obj
+
+    return file_obj
+
+
+def is_fsspec_open_file(file_obj):
+    if isinstance(file_obj, fsspec.core.OpenFile):
+        return True
+    return False
+
+
+def buffer_write_lines(buf, lines):
+    """
+    Appends lines to a buffer.
+    Parameters
+    ----------
+    buf
+        The buffer to write to
+    lines
+        The lines to append.
+    """
+    if any(isinstance(x, str) for x in lines):
+        lines = [str(x) for x in lines]
+    buf.write("\n".join(lines))

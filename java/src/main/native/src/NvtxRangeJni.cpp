@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,17 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/nvtx_utils.hpp>
+#include <cudf/detail/nvtx/nvtx3.hpp>
 
 #include "jni_utils.hpp"
+
+namespace {
+
+struct java_domain {
+  static constexpr char const* name{"Java"};
+};
+
+} // anonymous namespace
 
 extern "C" {
 
@@ -25,7 +33,9 @@ Java_ai_rapids_cudf_NvtxRange_push(JNIEnv *env, jclass clazz,
     jstring name, jint color_bits) {
   try {
     cudf::jni::native_jstring range_name(env, name);
-    cudf::nvtx::range_push_hex(range_name.get(), color_bits);
+    nvtx3::color range_color(static_cast<nvtx3::color::value_type>(color_bits));
+    nvtx3::event_attributes attr{range_color, range_name.get()};
+    nvtxDomainRangePushEx(nvtx3::domain::get<java_domain>(), attr.get());
   }
   CATCH_STD(env, );
 }
@@ -33,7 +43,7 @@ Java_ai_rapids_cudf_NvtxRange_push(JNIEnv *env, jclass clazz,
 JNIEXPORT void JNICALL
 Java_ai_rapids_cudf_NvtxRange_pop(JNIEnv *env, jclass clazz) {
   try {
-    cudf::nvtx::range_pop();
+    nvtxDomainRangePop(nvtx3::domain::get<java_domain>());
   }
   CATCH_STD(env, );
 }

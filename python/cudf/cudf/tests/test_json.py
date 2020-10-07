@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -23,16 +23,7 @@ def make_numeric_dataframe(nrows, dtype):
 
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
-    types = [
-        "bool",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "datetime64[ms]",
-    ]
+    types = NUMERIC_TYPES + DATETIME_TYPES + ["bool"]
     renamer = {
         "C_l0_g" + str(idx): "col_" + val for (idx, val) in enumerate(types)
     }
@@ -41,11 +32,11 @@ def pdf(request):
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
-    test_pdf = pd.util.testing.makeCustomDataframe(
+    test_pdf = pd._testing.makeCustomDataframe(
         nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
     )
     # Delete the name of the column index, and rename the row index
-    del test_pdf.columns.name
+    test_pdf.columns.name = None
     test_pdf.index.name = "test_index"
 
     # Cast all the column dtypes to objects, rename them, and then cast to
@@ -142,10 +133,22 @@ def test_json_writer(tmpdir, pdf, gdf):
         assert os.path.exists(pdf_series_fname)
         assert os.path.exists(gdf_series_fname)
 
-        expect_series = pd.read_json(pdf_series_fname, typ="series")
+        try:
+            # xref 'https://github.com/pandas-dev/pandas/pull/33373')
+            expect_series = pd.read_json(pdf_series_fname, typ="series")
+        except TypeError as e:
+            if str(e) == "<class 'bool'> is not convertible to datetime":
+                continue
+            else:
+                raise e
         got_series = pd.read_json(gdf_series_fname, typ="series")
 
         assert_eq(expect_series, got_series)
+
+        # Make sure results align for regular strings, not just files
+        pdf_string = pdf[column].to_json()
+        gdf_string = pdf[column].to_json()
+        assert_eq(pdf_string, gdf_string)
 
 
 @pytest.fixture(
@@ -182,7 +185,7 @@ def test_json_lines_basic(json_input, engine):
     assert all(cu_df.dtypes == ["int64", "int64", "int64"])
     for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
         assert str(cu_col) == str(pd_col)
-        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col])
+        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_array())
 
 
 def test_json_lines_byte_range(json_input):
@@ -245,8 +248,7 @@ def test_json_lines_compression(tmpdir, ext, out_comp, in_comp):
     cu_df = cudf.read_json(
         str(fname), compression=in_comp, lines=True, dtype=["int", "int"]
     )
-
-    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+    assert_eq(pd_df, cu_df)
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -283,22 +285,93 @@ def test_json_bool_values():
 
     # types should be ['bool', 'int64']
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
-    np.testing.assert_array_equal(pd_df[0], cu_df["0"])
+    np.testing.assert_array_equal(pd_df[0], cu_df["0"].to_array())
     # boolean values should be converted to 0/1
-    np.testing.assert_array_equal(pd_df[1], cu_df["1"])
+    np.testing.assert_array_equal(pd_df[1], cu_df["1"].to_array())
 
     cu_df = cudf.read_json(buffer, lines=True, dtype=["bool", "long"])
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
 
 
 @pytest.mark.parametrize(
-    "buffer", ["[null,]\n[1.0, ]", '{"0":null,"1":}\n{"0":1.0,"1": }']
+    "buffer",
+    [
+        "[1.0,]\n[null, ]",
+        '{"0":1.0,"1":}\n{"0":null,"1": }',
+        '{ "0" : 1.0 , "1" : }\n{ "0" : null , "1" : }',
+        '{"0":1.0}\n{"1":}',
+    ],
 )
 def test_json_null_literal(buffer):
     df = cudf.read_json(buffer, lines=True)
 
-    # first column contains a null field, type sould be set to float
+    # first column contains a null field, type should be set to float
     # second column contains only empty fields, type should be set to int8
     np.testing.assert_array_equal(df.dtypes, ["float64", "int8"])
-    np.testing.assert_array_equal(df["0"], [None, 1.0])
-    np.testing.assert_array_equal(df["1"], [None, None])
+    np.testing.assert_array_equal(
+        df["0"].to_array(fillna=np.nan), [1.0, np.nan]
+    )
+    np.testing.assert_array_equal(
+        df["1"].to_array(fillna=np.nan),
+        [
+            df["1"]._column.default_na_value(),
+            df["1"]._column.default_na_value(),
+        ],
+    )
+
+
+def test_json_bad_protocol_string():
+    test_string = '{"field": "s3://path"}'
+
+    expect = pd.DataFrame([{"field": "s3://path"}])
+    got = cudf.read_json(test_string, lines=True)
+
+    assert_eq(expect, got)
+
+
+def test_json_corner_case_with_escape_and_double_quote_char_with_pandas(
+    tmpdir,
+):
+    fname = tmpdir.mkdir("gdf_json").join("tmp_json_escape_double_quote")
+
+    pdf = pd.DataFrame(
+        {
+            "a": ['ab"cd', "\\\b", "\r\\", "'"],
+            "b": ["a\tb\t", "\\", '\\"', "\t"],
+            "c": ["aeiou", "try", "json", "cudf"],
+        }
+    )
+    pdf.to_json(fname, compression="infer", lines=True, orient="records")
+
+    df = cudf.read_json(
+        fname, compression="infer", lines=True, orient="records"
+    )
+    pdf = pd.read_json(
+        fname, compression="infer", lines=True, orient="records"
+    )
+
+    assert_eq(cudf.DataFrame(pdf), df)
+
+
+def test_json_corner_case_with_escape_and_double_quote_char_with_strings():
+    str_buffer = StringIO(
+        """{"a":"ab\\"cd","b":"a\\tb\\t","c":"aeiou"}
+           {"a":"\\\\\\b","b":"\\\\","c":"try"}
+           {"a":"\\r\\\\","b":"\\\\\\"","c":"json"}
+           {"a":"\'","b":"\\t","c":"cudf"}"""
+    )
+
+    df = cudf.read_json(
+        str_buffer, compression="infer", lines=True, orient="records"
+    )
+
+    expected = {
+        "a": ['ab"cd', "\\\b", "\r\\", "'"],
+        "b": ["a\tb\t", "\\", '\\"', "\t"],
+        "c": ["aeiou", "try", "json", "cudf"],
+    }
+
+    num_rows = df.shape[0]
+    for col_name in df._data:
+        for i in range(num_rows):
+            assert expected[col_name][i] == df[col_name][i]

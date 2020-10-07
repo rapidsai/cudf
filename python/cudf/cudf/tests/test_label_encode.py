@@ -6,7 +6,7 @@ from itertools import product
 import numpy as np
 import pytest
 
-from cudf.core import DataFrame
+from cudf.core import DataFrame, Series
 
 
 def _random_float(nelem, dtype):
@@ -19,9 +19,9 @@ def _random_int(nelem, dtype):
 
 def _random(nelem, dtype):
     dtype = np.dtype(dtype)
-    if dtype.kind in "iu":
+    if dtype.kind in {"i", "u"}:
         return _random_int(nelem, dtype)
-    elif dtype.kind in "f":
+    elif dtype.kind == "f":
         return _random_float(nelem, dtype)
 
 
@@ -39,7 +39,7 @@ def test_label_encode(nelem, dtype):
     # initialize data frame
     df["cats"] = _random(nelem, dtype)
     vals = df["cats"].unique()
-    lab = dict(zip(vals, range(len(vals))))
+    lab = dict({vals[i]: i for i in range(len(vals))})
 
     # label encode series
     ncol = df["cats"].label_encoding(cats=vals)
@@ -64,11 +64,13 @@ def test_label_encode_drop_one():
 
     # initialize data frame
     df["cats"] = np.random.randint(7, size=10, dtype=np.int32)
-    vals = list(df["cats"].unique())
+    vals = df["cats"].unique()
     # drop 1 randomly
-    del vals[random.randrange(len(vals))]
+    vals = vals[vals.index != random.randrange(len(vals))].reset_index(
+        drop=True
+    )
 
-    lab = dict(zip(vals, list(range(len(vals)))))
+    lab = dict({vals[i]: i for i in range(len(vals))})
 
     # label encode series
     ncol = df["cats"].label_encoding(cats=vals, dtype="float32")
@@ -111,6 +113,16 @@ def test_label_encode_float_output():
 
     handcoded = np.array([encoder.get(v, np.nan) for v in arr])
     np.testing.assert_equal(got, handcoded)
+
+
+@pytest.mark.parametrize(
+    "ncats,cat_dtype", [(10, np.int8), (127, np.int8), (128, np.int16)]
+)
+def test_label_encode_dtype(ncats, cat_dtype):
+    s = Series([str(i % ncats) for i in range(ncats + 1)])
+    cats = s.unique().astype(s.dtype)
+    encoded_col = s.label_encoding(cats=cats)
+    np.testing.assert_equal(encoded_col.dtype, cat_dtype)
 
 
 if __name__ == "__main__":

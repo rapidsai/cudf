@@ -21,11 +21,11 @@
 
 #pragma once
 
-#include <memory>
-#include <vector>
-#include <string>
-#include <map>
 #include <cudf/types.hpp>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
 
 // Forward declarations
 namespace arrow {
@@ -34,20 +34,18 @@ class RandomAccessFile;
 }
 }  // namespace arrow
 
-// <io/utilities/data_sink.hpp>
 namespace cudf {
+//! IO interfaces
 namespace io {
-  class data_sink;
-}
-}
+class data_sink;
+class datasource;
+}  // namespace io
+}  // namespace cudf
 
 //! cuDF interfaces
 namespace cudf {
-//! In-development features
-namespace experimental {
 //! IO interfaces
 namespace io {
-
 /**
  * @brief Compression algorithms
  */
@@ -66,11 +64,10 @@ enum class compression_type {
  * @brief Data source or destination types
  */
 enum class io_type {
-  FILEPATH,                  ///< Input/output is a file path
-  HOST_BUFFER,               ///< Input/output is a buffer in host memory,
-  ARROW_RANDOM_ACCESS_FILE,  ///< Input/output is an arrow::io::RandomAccessFile
-  VOID,                      ///< Input/output is nothing. No work is done. Useful for benchmarking
-  USER_SINK,                 ///< Input/output is handled by a custom user class
+  FILEPATH,          ///< Input/output is a file path
+  HOST_BUFFER,       ///< Input/output is a buffer in host memory
+  VOID,              ///< Input/output is nothing. No work is done. Useful for benchmarking
+  USER_IMPLEMENTED,  ///< Input/output is handled by a custom user class
 };
 
 /**
@@ -87,9 +84,22 @@ enum class quote_style {
  * @brief Column statistics granularity type for parquet/orc writers
  */
 enum statistics_freq {
-  STATISTICS_NONE = 0,     //!< No column statistics
-  STATISTICS_ROWGROUP = 1, //!< Per-Rowgroup column statistics
-  STATISTICS_PAGE = 2,     //!< Per-page column statistics
+  STATISTICS_NONE     = 0,  //!< No column statistics
+  STATISTICS_ROWGROUP = 1,  //!< Per-Rowgroup column statistics
+  STATISTICS_PAGE     = 2,  //!< Per-page column statistics
+};
+
+/**
+ * @brief Detailed name information for output columns.
+ *
+ * The hierarchy of children matches the hierarchy of children in the output
+ * cudf columns.
+ */
+struct column_name_info {
+  std::string name;
+  std::vector<column_name_info> children;
+  column_name_info(std::string const& _name) : name(_name) {}
+  column_name_info() = default;
 };
 
 /**
@@ -99,34 +109,38 @@ enum statistics_freq {
  * In the example below (2 top-level columns: struct column "col1" and string column "col2"),
  *  column_names = {"col1", "s3", "f5", "f6", "f4", "col2"}.
  *
- *     col1     col2 
- *      / \ 
- *     /   \ 
- *   s3    f4 
- *   / \ 
- *  /   \ 
- * f5    f6 
+ *     col1     col2
+ *      / \
+ *     /   \
+ *   s3    f4
+ *   / \
+ *  /   \
+ * f5    f6
  */
 struct table_metadata {
-  std::vector<std::string> column_names;        //!< Names of columns contained in the table
-  std::map<std::string, std::string> user_data; //!< Format-dependent metadata as key-values pairs  
+  std::vector<std::string> column_names;  //!< Names of columns contained in the table
+  std::vector<column_name_info>
+    schema_info;  //!< Detailed name information for the entire output hierarchy
+  std::map<std::string, std::string> user_data;  //!< Format-dependent metadata as key-values pairs
 };
 
 /**
- * @brief Derived class of table_metadata which includes nullability information per column of input.
- * 
- * This information is used as an optimization for chunked writes. If the caller leaves column_nullable
- * uninitialized, the writer code will assume the worst case : that all columns are nullable.
- * 
- * If the column_nullable field is not empty, it is expected that it has a length equal to the number
- * of columns in the table being written.  
- * 
- * In the case where column nullability is known, pass `true` if the corresponding column could contain 
- * nulls in one or more subtables to be written, otherwise `false`.
- * 
+ * @brief Derived class of table_metadata which includes nullability information per column of
+ * input.
+ *
+ * This information is used as an optimization for chunked writes. If the caller leaves
+ * column_nullable uninitialized, the writer code will assume the worst case : that all columns are
+ * nullable.
+ *
+ * If the column_nullable field is not empty, it is expected that it has a length equal to the
+ * number of columns in the table being written.
+ *
+ * In the case where column nullability is known, pass `true` if the corresponding column could
+ * contain nulls in one or more subtables to be written, otherwise `false`.
+ *
  */
 struct table_metadata_with_nullability : public table_metadata {
-  std::vector<bool>         column_nullable;    //!< Per-column nullability information.
+  std::vector<bool> column_nullable;  //!< Per-column nullability information.
 };
 
 /**
@@ -137,27 +151,56 @@ struct table_with_metadata {
   table_metadata metadata;
 };
 
+/**
+ * @brief Non-owning view of a host memory buffer
+ *
+ * Used to describe buffer input in `source_info` objects.
+ */
+struct host_buffer {
+  const char* data = nullptr;
+  size_t size      = 0;
+  host_buffer()    = default;
+  host_buffer(const char* data, size_t size) : data(data), size(size) {}
+};
 
 /**
  * @brief Source information for read interfaces
  */
 struct source_info {
   io_type type = io_type::FILEPATH;
-  std::string filepath;
-  std::pair<const char*, size_t> buffer;
-  std::shared_ptr<arrow::io::RandomAccessFile> file;
+  std::vector<std::string> filepaths;
+  std::vector<host_buffer> buffers;
+  std::vector<std::shared_ptr<arrow::io::RandomAccessFile>> files;
+  std::vector<cudf::io::datasource*> user_sources;
 
   source_info() = default;
 
-  explicit source_info(const std::string& file_path)
-      : type(io_type::FILEPATH), filepath(file_path) {}
+  explicit source_info(std::vector<std::string> const& file_paths)
+    : type(io_type::FILEPATH), filepaths(file_paths)
+  {
+  }
+  explicit source_info(std::string const& file_path)
+    : type(io_type::FILEPATH), filepaths({file_path})
+  {
+  }
 
-  explicit source_info(const char* host_buffer, size_t size)
-      : type(io_type::HOST_BUFFER), buffer(host_buffer, size) {}
+  explicit source_info(std::vector<host_buffer> const& host_buffers)
+    : type(io_type::HOST_BUFFER), buffers(host_buffers)
+  {
+  }
+  explicit source_info(const char* host_data, size_t size)
+    : type(io_type::HOST_BUFFER), buffers({{host_data, size}})
+  {
+  }
 
-  explicit source_info(
-      const std::shared_ptr<arrow::io::RandomAccessFile> arrow_file)
-      : type(io_type::ARROW_RANDOM_ACCESS_FILE), file(arrow_file) {}
+  explicit source_info(std::vector<cudf::io::datasource*> const& sources)
+    : type(io_type::USER_IMPLEMENTED), user_sources(sources)
+  {
+  }
+  explicit source_info(cudf::io::datasource* source)
+    : type(io_type::USER_IMPLEMENTED), user_sources({source})
+  {
+  }
 };
 
 /**
@@ -166,21 +209,20 @@ struct source_info {
 struct sink_info {
   io_type type = io_type::VOID;
   std::string filepath;
-  std::vector<char>* buffer = nullptr;
+  std::vector<char>* buffer      = nullptr;
   cudf::io::data_sink* user_sink = nullptr;
 
   sink_info() = default;
 
-  explicit sink_info(const std::string& file_path)
-      : type(io_type::FILEPATH), filepath(file_path) {}
+  explicit sink_info(const std::string& file_path) : type(io_type::FILEPATH), filepath(file_path) {}
 
-  explicit sink_info(std::vector<char>* buffer)
-      : type(io_type::HOST_BUFFER), buffer(buffer) {}  
+  explicit sink_info(std::vector<char>* buffer) : type(io_type::HOST_BUFFER), buffer(buffer) {}
 
   explicit sink_info(class cudf::io::data_sink* user_sink_)
-      : type(io_type::USER_SINK), user_sink(user_sink_) {}
+    : type(io_type::USER_IMPLEMENTED), user_sink(user_sink_)
+  {
+  }
 };
 
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

@@ -17,21 +17,18 @@
 #include <cudf/detail/aggregation/aggregation.cuh>
 
 namespace cudf {
-namespace experimental {
 namespace detail {
-
-void initialize_with_identity(mutable_table_view & table,
+void initialize_with_identity(mutable_table_view& table,
                               std::vector<aggregation::Kind> const& aggs,
-                              cudaStream_t stream) {
+                              cudaStream_t stream)
+{
   // TODO: Initialize all the columns in a single kernel instead of invoking one
   // kernel per column
   for (size_type i = 0; i < table.num_columns(); ++i) {
     auto col = table.column(i);
-    dispatch_type_and_aggregation(col.type(), aggs[i], identity_initializer{}, 
-                                  col, stream);
+    dispatch_type_and_aggregation(col.type(), aggs[i], identity_initializer{}, col, stream);
   }
 }
 
 }  // namespace detail
-}  // namespace experimental
 }  // namespace cudf

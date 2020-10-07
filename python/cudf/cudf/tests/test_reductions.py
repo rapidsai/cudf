@@ -1,16 +1,18 @@
 from __future__ import division, print_function
 
 import random
+import re
 from itertools import product
 
 import numpy as np
 import pytest
 
+import cudf
 from cudf.core import Series
 from cudf.tests import utils
-from cudf.tests.utils import gen_rand
+from cudf.tests.utils import NUMERIC_TYPES, gen_rand
 
-params_dtype = [np.float64, np.float32, np.int64, np.int32, np.int16, np.int8]
+params_dtype = NUMERIC_TYPES
 
 params_sizes = [1, 2, 3, 127, 128, 129, 200, 10000]
 
@@ -19,6 +21,7 @@ params = list(product(params_dtype, params_sizes))
 
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_sum(dtype, nelem):
+    dtype = np.dtype(dtype).type
     data = gen_rand(dtype, nelem)
     sr = Series(data)
 
@@ -47,7 +50,8 @@ def test_sum_string():
 
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_product(dtype, nelem):
-    if np.dtype(dtype).kind == "i":
+    dtype = np.dtype(dtype).type
+    if np.dtype(dtype).kind in {"u", "i"}:
         data = np.ones(nelem, dtype=dtype)
         # Set at most 30 items to [0..2) to keep the value within 2^32
         for _ in range(30):
@@ -69,13 +73,15 @@ accuracy_for_dtype = {np.float64: 6, np.float32: 5}
 
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_sum_of_squares(dtype, nelem):
+    dtype = np.dtype(dtype).type
     data = gen_rand(dtype, nelem)
     sr = Series(data)
 
     got = sr.sum_of_squares()
+    # got = dtype(got)
     expect = (data ** 2).sum()
 
-    if np.dtype(dtype).kind == "i":
+    if np.dtype(dtype).kind in {"u", "i"}:
         if 0 <= expect <= np.iinfo(dtype).max:
             np.testing.assert_array_almost_equal(expect, got)
         else:
@@ -88,6 +94,7 @@ def test_sum_of_squares(dtype, nelem):
 
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_min(dtype, nelem):
+    dtype = np.dtype(dtype).type
     data = gen_rand(dtype, nelem)
     sr = Series(data)
 
@@ -99,6 +106,7 @@ def test_min(dtype, nelem):
 
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_max(dtype, nelem):
+    dtype = np.dtype(dtype).type
     data = gen_rand(dtype, nelem)
     sr = Series(data)
 
@@ -154,3 +162,44 @@ def test_date_minmax():
     np_max = np_casted.max()
     gdf_max = gdf_casted.max()
     assert np_max == gdf_max
+
+
+@pytest.mark.parametrize(
+    "op",
+    ["sum", "product", "std", "var", "median", "kurt", "kurtosis", "skew"],
+)
+def test_datetime_unsupported_reductions(op):
+    gsr = cudf.Series([1, 2, 3, None], dtype="datetime64[ns]")
+    psr = gsr.to_pandas()
+
+    try:
+        getattr(psr, op)()
+    except Exception as e:
+        with pytest.raises(
+            type(e), match=re.escape(str(e)),
+        ):
+            getattr(gsr, op)()
+
+
+@pytest.mark.parametrize("op", ["product", "var", "kurt", "kurtosis", "skew"])
+def test_timedelta_unsupported_reductions(op):
+    gsr = cudf.Series([1, 2, 3, None], dtype="timedelta64[ns]")
+    psr = gsr.to_pandas()
+
+    try:
+        getattr(psr, op)()
+    except Exception as e:
+        with pytest.raises(type(e), match=re.escape(str(e))):
+            getattr(gsr, op)()
+
+
+@pytest.mark.parametrize("op", ["sum", "product", "std", "var"])
+def test_categorical_reductions(op):
+    gsr = cudf.Series([1, 2, 3, None], dtype="category")
+    psr = gsr.to_pandas()
+
+    try:
+        getattr(psr, op)()
+    except Exception as e:
+        with pytest.raises(type(e)):
+            getattr(gsr, op)()

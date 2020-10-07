@@ -1,6 +1,9 @@
 #!/bin/bash
 
-DOCKER_IMAGE="gpuci/rapidsai-base:cuda10.0-ubuntu16.04-gcc5-py3.6"
+GIT_DESCRIBE_TAG=`git describe --tags`
+MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
+
+DOCKER_IMAGE="gpuci/rapidsai:${MINOR_VERSION}-cuda10.1-devel-ubuntu16.04-py3.7"
 REPO_PATH=${PWD}
 RAPIDS_DIR_IN_CONTAINER="/rapids"
 CPP_BUILD_DIR="cpp/build"
@@ -123,7 +126,15 @@ fi
 
 # Run the generated build script in a container
 docker pull "${DOCKER_IMAGE}"
-docker run --runtime=nvidia --rm -it -e NVIDIA_VISIBLE_DEVICES="${NVIDIA_VISIBLE_DEVICES}" \
+
+DOCKER_MAJOR=$(docker -v|sed 's/[^[0-9]*\([0-9]*\).*/\1/')
+GPU_OPTS="--gpus device=${NVIDIA_VISIBLE_DEVICES}"
+if [ "$DOCKER_MAJOR" -lt 19 ]
+then
+    GPU_OPTS="--runtime=nvidia -e NVIDIA_VISIBLE_DEVICES='${NVIDIA_VISIBLE_DEVICES}'"
+fi
+
+docker run --rm -it ${GPU_OPTS} \
        -u "$(id -u)":"$(id -g)" \
        -v "${REPO_PATH}":"${REPO_PATH_IN_CONTAINER}" \
        -v "${CPP_CONTAINER_BUILD_DIR}":"${CPP_BUILD_DIR_IN_CONTAINER}" \

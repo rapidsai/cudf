@@ -15,14 +15,17 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
+/**
+ * @addtogroup strings_convert
+ * @{
+ * @file
+ */
 
 /**
  * @brief Returns a new BOOL8 column by parsing boolean values from the strings
@@ -32,12 +35,13 @@ namespace strings
  *
  * @param strings Strings instance for this operation.
  * @param true_string String to expect for true. Non-matching strings are false.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New BOOL8 column converted from strings.
  */
-std::unique_ptr<column> to_booleans( strings_column_view const& strings,
-                                     string_scalar const& true_string = string_scalar("true"),
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> to_booleans(
+  strings_column_view const& strings,
+  string_scalar const& true_string    = string_scalar("true"),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a new strings column converting the boolean values from the
@@ -47,16 +51,18 @@ std::unique_ptr<column> to_booleans( strings_column_view const& strings,
  *
  * @throw cudf::logic_error if the input column is not BOOL8 type.
  *
- * @param column Boolean column to convert.
+ * @param booleans Boolean column to convert.
  * @param true_string String to use for true in the output column.
  * @param false_string String to use for false in the output column.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> from_booleans( column_view const& booleans,
-                                       string_scalar const& true_string = string_scalar("true"),
-                                       string_scalar const& false_string = string_scalar("false"),
-                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> from_booleans(
+  column_view const& booleans,
+  string_scalar const& true_string    = string_scalar("true"),
+  string_scalar const& false_string   = string_scalar("false"),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-} // namespace strings
-} // namespace cudf
+/** @} */  // end of doxygen group
+}  // namespace strings
+}  // namespace cudf

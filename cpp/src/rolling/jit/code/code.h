@@ -17,23 +17,23 @@
  * limitations under the License.
  */
 
-#ifndef GDF_BINARY_OPERATION_JIT_CODE_CODE_H
-#define GDF_BINARY_OPERATION_JIT_CODE_CODE_H
+#pragma once
 
 namespace cudf {
-namespace experimental {
 namespace rolling {
 namespace jit {
 namespace code {
+extern const char* kernel_headers;
+extern const char* kernel;
+extern const char* operation_h;
 
-    extern const char* kernel_headers;
-    extern const char* kernel;
-    extern const char* operation_h;
+extern const char* kernel_headers;
+extern const char* kernel;
+extern const char* operation_h;
 
-}
-}
-}
-}
-}
+extern const char* grouped_window_wrapper;
 
-#endif
+}  // namespace code
+}  // namespace jit
+}  // namespace rolling
+}  // namespace cudf

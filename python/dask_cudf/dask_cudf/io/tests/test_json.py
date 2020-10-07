@@ -14,8 +14,9 @@ def test_read_json(tmp_path):
     df1 = dask.datasets.timeseries(
         dtypes={"x": int, "y": int}, freq="120s"
     ).reset_index(drop=True)
-    df1.to_json(tmp_path / "data-*.json")
-    df2 = dask_cudf.read_json(tmp_path / "data-*.json")
+    json_path = str(tmp_path / "data-*.json")
+    df1.to_json(json_path)
+    df2 = dask_cudf.read_json(json_path)
     dd.assert_eq(df1, df2)
 
     # file path test

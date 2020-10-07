@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+#include <sstream>
+
+#include <cudf/copying.hpp>
+#include <cudf/utilities/default_stream.hpp>
+
 #include "jni_utils.hpp"
 
 namespace {
@@ -21,15 +26,12 @@ namespace {
 // handles detaching a thread from the JVM when the thread terminates
 class jvm_detach_on_destruct {
 public:
-  explicit jvm_detach_on_destruct(JavaVM* jvm)
-      : jvm{jvm} {}
+  explicit jvm_detach_on_destruct(JavaVM *jvm) : jvm{jvm} {}
 
-  ~jvm_detach_on_destruct() {
-    jvm->DetachCurrentThread();
-  }
+  ~jvm_detach_on_destruct() { jvm->DetachCurrentThread(); }
 
 private:
-  JavaVM* jvm;
+  JavaVM *jvm;
 };
 
 } // anonymous namespace
@@ -37,8 +39,14 @@ private:
 namespace cudf {
 namespace jni {
 
-static jclass contiguous_table_jclass;
-static jmethodID from_contiguous_column_views;
+#ifdef CUDA_API_PER_THREAD_DEFAULT_STREAM
+constexpr bool is_ptds_enabled{true};
+#else
+constexpr bool is_ptds_enabled{false};
+#endif
+
+static jclass Contiguous_table_jclass;
+static jmethodID From_contiguous_column_views;
 
 #define CONTIGUOUS_TABLE_CLASS "ai/rapids/cudf/ContiguousTable"
 #define CONTIGUOUS_TABLE_FACTORY_SIG(param_sig) "(" param_sig ")L" CONTIGUOUS_TABLE_CLASS ";"
@@ -49,35 +57,35 @@ static bool cache_contiguous_table_jni(JNIEnv *env) {
     return false;
   }
 
-  from_contiguous_column_views = env->GetStaticMethodID(cls, 
-          "fromContiguousColumnViews", CONTIGUOUS_TABLE_FACTORY_SIG("[JJJJ"));
-  if (from_contiguous_column_views == nullptr) {
+  From_contiguous_column_views = env->GetStaticMethodID(cls, "fromContiguousColumnViews",
+                                                        CONTIGUOUS_TABLE_FACTORY_SIG("[JJJJ"));
+  if (From_contiguous_column_views == nullptr) {
     return false;
   }
 
   // Convert local reference to global so it cannot be garbage collected.
-  contiguous_table_jclass = static_cast<jclass>(env->NewGlobalRef(cls));
-  if (contiguous_table_jclass == nullptr) {
+  Contiguous_table_jclass = static_cast<jclass>(env->NewGlobalRef(cls));
+  if (Contiguous_table_jclass == nullptr) {
     return false;
   }
   return true;
 }
 
 static void release_contiguous_table_jni(JNIEnv *env) {
-  if (contiguous_table_jclass != nullptr) {
-    env->DeleteGlobalRef(contiguous_table_jclass);
-    contiguous_table_jclass = nullptr;
+  if (Contiguous_table_jclass != nullptr) {
+    env->DeleteGlobalRef(Contiguous_table_jclass);
+    Contiguous_table_jclass = nullptr;
   }
 }
 
-jobject contiguous_table_from(JNIEnv* env, cudf::experimental::contiguous_split_result & split) {
+jobject contiguous_table_from(JNIEnv *env, cudf::contiguous_split_result &split) {
   jlong address = reinterpret_cast<jlong>(split.all_data->data());
   jlong size = static_cast<jlong>(split.all_data->size());
   jlong buff_address = reinterpret_cast<jlong>(split.all_data.get());
   int num_columns = split.table.num_columns();
   cudf::jni::native_jlongArray views(env, num_columns);
   for (int i = 0; i < num_columns; i++) {
-    //TODO Exception handling is not ideal, if no exceptions are thrown ownership of the new cv
+    // TODO Exception handling is not ideal, if no exceptions are thrown ownership of the new cv
     // is passed to java. If an exception is thrown we need to free it, but this needs to be
     // coordinated with the java side because one column may have changed ownership while
     // another may not have. We don't want to double free the view so for now we just let it
@@ -86,14 +94,13 @@ jobject contiguous_table_from(JNIEnv* env, cudf::experimental::contiguous_split_
     // In the ideal case we would keep the view where it is at, and pass in a pointer to it
     // That pointer would then be copied when java takes ownership of it, but that adds an
     // extra JNI call that I would like to avoid for performance reasons.
-    cudf::column_view * cv = new cudf::column_view(split.table.column(i));
+    cudf::column_view *cv = new cudf::column_view(split.table.column(i));
     views[i] = reinterpret_cast<jlong>(cv);
   }
 
   views.commit();
-  jobject ret = env->CallStaticObjectMethod(contiguous_table_jclass, from_contiguous_column_views,
-          views.get_jArray(),
-          address, size, buff_address);
+  jobject ret = env->CallStaticObjectMethod(Contiguous_table_jclass, From_contiguous_column_views,
+                                            views.get_jArray(), address, size, buff_address);
 
   if (ret != nullptr) {
     split.all_data.release();
@@ -101,25 +108,88 @@ jobject contiguous_table_from(JNIEnv* env, cudf::experimental::contiguous_split_
   return ret;
 }
 
-native_jobjectArray<jobject> contiguous_table_array(JNIEnv* env, jsize length) {
-  return native_jobjectArray<jobject>(env, env->NewObjectArray(length, contiguous_table_jclass, nullptr));
+native_jobjectArray<jobject> contiguous_table_array(JNIEnv *env, jsize length) {
+  return native_jobjectArray<jobject>(
+      env, env->NewObjectArray(length, Contiguous_table_jclass, nullptr));
+}
+
+static jclass Host_memory_buffer_jclass;
+static jmethodID Host_buffer_allocate;
+static jfieldID Host_buffer_address;
+static jfieldID Host_buffer_length;
+
+#define HOST_MEMORY_BUFFER_CLASS "ai/rapids/cudf/HostMemoryBuffer"
+#define HOST_MEMORY_BUFFER_SIG(param_sig) "(" param_sig ")L" HOST_MEMORY_BUFFER_CLASS ";"
+
+static bool cache_host_memory_buffer_jni(JNIEnv *env) {
+  jclass cls = env->FindClass(HOST_MEMORY_BUFFER_CLASS);
+  if (cls == nullptr) {
+    return false;
+  }
+
+  Host_buffer_allocate = env->GetStaticMethodID(cls, "allocate", HOST_MEMORY_BUFFER_SIG("JZ"));
+  if (Host_buffer_allocate == nullptr) {
+    return false;
+  }
+
+  Host_buffer_address = env->GetFieldID(cls, "address", "J");
+  if (Host_buffer_address == nullptr) {
+    return false;
+  }
+
+  Host_buffer_length = env->GetFieldID(cls, "length", "J");
+  if (Host_buffer_length == nullptr) {
+    return false;
+  }
+
+  // Convert local reference to global so it cannot be garbage collected.
+  Host_memory_buffer_jclass = static_cast<jclass>(env->NewGlobalRef(cls));
+  if (Host_memory_buffer_jclass == nullptr) {
+    return false;
+  }
+  return true;
+}
+
+static void release_host_memory_buffer_jni(JNIEnv *env) {
+  if (Host_memory_buffer_jclass != nullptr) {
+    env->DeleteGlobalRef(Host_memory_buffer_jclass);
+    Host_memory_buffer_jclass = nullptr;
+  }
+}
+
+jobject allocate_host_buffer(JNIEnv *env, jlong amount, jboolean prefer_pinned) {
+  jobject ret = env->CallStaticObjectMethod(Host_memory_buffer_jclass, Host_buffer_allocate, amount,
+                                            prefer_pinned);
+
+  if (env->ExceptionCheck()) {
+    throw std::runtime_error("allocateHostBuffer threw an exception");
+  }
+  return ret;
+}
+
+jlong get_host_buffer_address(JNIEnv *env, jobject buffer) {
+  return env->GetLongField(buffer, Host_buffer_address);
+}
+
+jlong get_host_buffer_length(JNIEnv *env, jobject buffer) {
+  return env->GetLongField(buffer, Host_buffer_length);
 }
 
 // Get the JNI environment, attaching the current thread to the JVM if necessary. If the thread
 // needs to be attached, the thread will automatically detach when the thread terminates.
-JNIEnv* get_jni_env(JavaVM* jvm) {
-  JNIEnv* env = nullptr;
-  jint rc = jvm->GetEnv(reinterpret_cast<void**>(&env), MINIMUM_JNI_VERSION);
+JNIEnv *get_jni_env(JavaVM *jvm) {
+  JNIEnv *env = nullptr;
+  jint rc = jvm->GetEnv(reinterpret_cast<void **>(&env), MINIMUM_JNI_VERSION);
   if (rc == JNI_OK) {
     return env;
   }
   if (rc == JNI_EDETACHED) {
     JavaVMAttachArgs attach_args;
     attach_args.version = MINIMUM_JNI_VERSION;
-    attach_args.name = const_cast<char*>("cudf thread");
+    attach_args.name = const_cast<char *>("cudf thread");
     attach_args.group = NULL;
 
-    if (jvm->AttachCurrentThreadAsDaemon(reinterpret_cast<void**>(&env), &attach_args) == JNI_OK) {
+    if (jvm->AttachCurrentThreadAsDaemon(reinterpret_cast<void **>(&env), &attach_args) == JNI_OK) {
       // use thread_local object to detach the thread from the JVM when thread terminates.
       thread_local jvm_detach_on_destruct detacher(jvm);
     } else {
@@ -143,8 +213,30 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *) {
     return JNI_ERR;
   }
 
+  // make sure libcudf and the JNI library are built with the same PTDS mode
+  if (cudf::is_ptds_enabled() != cudf::jni::is_ptds_enabled) {
+    std::ostringstream ss;
+    ss << "Libcudf is_ptds_enabled=" << cudf::is_ptds_enabled()
+       << ", which does not match cudf jni is_ptds_enabled=" << cudf::jni::is_ptds_enabled
+       << ". They need to be built with the same per-thread default stream flag.";
+    env->ThrowNew(env->FindClass("java/lang/RuntimeException"), ss.str().c_str());
+    return JNI_ERR;
+  }
+
   // cache any class objects and method IDs here
   if (!cudf::jni::cache_contiguous_table_jni(env)) {
+    if (!env->ExceptionCheck()) {
+      env->ThrowNew(env->FindClass("java/lang/RuntimeException"),
+                    "Unable to locate contiguous table methods needed by JNI");
+    }
+    return JNI_ERR;
+  }
+
+  if (!cudf::jni::cache_host_memory_buffer_jni(env)) {
+    if (!env->ExceptionCheck()) {
+      env->ThrowNew(env->FindClass("java/lang/RuntimeException"),
+                    "Unable to locate host memory buffer methods needed by JNI");
+    }
     return JNI_ERR;
   }
 
@@ -159,6 +251,7 @@ JNIEXPORT void JNI_OnUnload(JavaVM *vm, void *) {
 
   // release cached class objects here.
   cudf::jni::release_contiguous_table_jni(env);
+  cudf::jni::release_host_memory_buffer_jni(env);
 }
 
 } // extern "C"

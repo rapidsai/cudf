@@ -8,10 +8,17 @@ import pytest
 
 from cudf.core import DataFrame, Series
 from cudf.core.column import NumericalColumn
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 sort_nelem_args = [2, 257]
-sort_dtype_args = [np.int32, np.int64, np.float32, np.float64]
+sort_dtype_args = [
+    np.int32,
+    np.int64,
+    np.uint32,
+    np.uint64,
+    np.float32,
+    np.float64,
+]
 sort_slice_args = [slice(1, None), slice(None, -1), slice(1, -1)]
 
 
@@ -29,6 +36,32 @@ def test_dataframe_sort_values(nelem, dtype):
     assert_eq(sorted_df.index.values, sorted_index)
     assert_eq(sorted_df["a"].values, aa[sorted_index])
     assert_eq(sorted_df["b"].values, bb[sorted_index])
+
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("index", ["a", "b", ["a", "b"]])
+def test_dataframe_sort_values_ignore_index(index, ignore_index):
+    gdf = DataFrame(
+        {"a": [1, 3, 5, 2, 4], "b": [1, 1, 2, 2, 3], "c": [9, 7, 7, 7, 1]}
+    )
+    gdf = gdf.set_index(index)
+
+    pdf = gdf.to_pandas()
+
+    expect = pdf.sort_values(list(pdf.columns), ignore_index=ignore_index)
+    got = gdf.sort_values((gdf.columns), ignore_index=ignore_index)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+def test_series_sort_values_ignore_index(ignore_index):
+    gsr = Series([1, 3, 5, 2, 4])
+    psr = gsr.to_pandas()
+
+    expect = psr.sort_values(ignore_index=ignore_index)
+    got = gsr.sort_values(ignore_index=ignore_index)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -57,7 +90,7 @@ def test_series_argsort(nelem, dtype, asc):
     if asc:
         expected = np.argsort(sr.to_array(), kind="mergesort")
     else:
-        expected = np.argsort(-sr.to_array(), kind="mergesort")
+        expected = np.argsort(sr.to_array() * -1, kind="mergesort")
     np.testing.assert_array_equal(expected, res.to_array())
 
 
@@ -169,18 +202,7 @@ def test_dataframe_nsmallest_sliced(counts, sliceobj):
 
 @pytest.mark.parametrize("num_cols", [1, 2, 3, 5])
 @pytest.mark.parametrize("num_rows", [0, 1, 2, 1000])
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "datetime64[ms]",
-    ],
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + DATETIME_TYPES)
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("na_position", ["first", "last"])
 def test_dataframe_multi_column(
@@ -269,7 +291,7 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
     df["a"] = np.random.choice(strlist[:map_size], nelem)
     df["b"] = np.random.uniform(low=0, high=map_size, size=nelem)
     df["c"] = np.random.randint(map_size, size=nelem)
-    df["d"] = df["a"]._column.as_categorical_column(np.int32)
+    df["d"] = df["a"].astype("category")
 
     def _check_scatter_by_map(dfs, col):
         assert len(dfs) == map_size
@@ -281,11 +303,14 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
             if len(df) > 0:
                 # Make sure the column types were preserved
                 assert isinstance(df[name]._column, type(col._column))
-            sr = df[name].astype(np.int32)
+            try:
+                sr = df[name].astype(np.int32)
+            except ValueError:
+                sr = df[name]
             assert sr.nunique() <= 1
             if sr.nunique() == 1:
                 if isinstance(df[name]._column, NumericalColumn):
-                    assert sr[0] == i
+                    assert sr.iloc[0] == i
         assert nrows == nelem
 
     _check_scatter_by_map(
@@ -304,7 +329,7 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
     if map_size == 2 and nelem == 100:
         df.scatter_by_map("a")  # Auto-detect map_size
         with pytest.raises(ValueError):
-            df.scatter_by_map("a", 1)  # Bad map_size
+            df.scatter_by_map("a", map_size=1, debug=True)  # Bad map_size
 
     # Test GenericIndex
     df2 = df.set_index("c")

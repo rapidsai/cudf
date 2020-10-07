@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -31,7 +31,8 @@ public class WindowOptions {
   private final ColumnVector precedingCol;
   private final ColumnVector followingCol;
   private final int timestampColumnIndex;
-  private FrameType frameType = FrameType.ROWS;
+  private final boolean timestampOrderAscending;
+  private final FrameType frameType;
 
   private WindowOptions(Builder builder) {
     this.preceding = builder.preceding;
@@ -40,7 +41,49 @@ public class WindowOptions {
     this.precedingCol = builder.precedingCol;
     this.followingCol = builder.followingCol;
     this.timestampColumnIndex = builder.timestampColumnIndex;
+    this.timestampOrderAscending = builder.timestampOrderAscending;
     this.frameType = timestampColumnIndex == -1? FrameType.ROWS : FrameType.RANGE; 
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (this == other) {
+      return true;
+    } else if (other instanceof WindowOptions) {
+      WindowOptions o = (WindowOptions) other;
+      boolean ret = this.preceding == o.preceding &&
+              this.following == o.following &&
+              this.minPeriods == o.minPeriods &&
+              this.timestampColumnIndex == o.timestampColumnIndex &&
+              this.timestampOrderAscending == o.timestampOrderAscending &&
+              this.frameType == o.frameType;
+      if (precedingCol != null) {
+        ret = ret && precedingCol.equals(o.precedingCol);
+      }
+      if (followingCol != null) {
+        ret = ret && followingCol.equals(o.followingCol);
+      }
+      return ret;
+    }
+    return false;
+  }
+
+  @Override
+  public int hashCode() {
+    int ret = 7;
+    ret = 31 * ret + preceding;
+    ret = 31 * ret + following;
+    ret = 31 * ret + minPeriods;
+    ret = 31 * ret + timestampColumnIndex;
+    ret = 31 * ret + Boolean.hashCode(timestampOrderAscending);
+    ret = 31 * ret + frameType.hashCode();
+    if (precedingCol != null) {
+      ret = 31 * ret + precedingCol.hashCode();
+    }
+    if (followingCol != null) {
+      ret = 31 * ret + followingCol.hashCode();
+    }
+    return ret;
   }
 
   public static Builder builder(){
@@ -59,6 +102,8 @@ public class WindowOptions {
 
   int getTimestampColumnIndex() { return this.timestampColumnIndex; }
 
+  boolean isTimestampOrderAscending() { return this.timestampOrderAscending; }
+
   FrameType getFrameType() { return frameType; }
 
   public static class Builder {
@@ -69,6 +114,7 @@ public class WindowOptions {
     private ColumnVector precedingCol = null;
     private ColumnVector followingCol = null;
     private int timestampColumnIndex = -1;
+    private boolean timestampOrderAscending = true;
 
     /**
      * Set the minimum number of observation required to evaluate an element.  If there are not
@@ -99,6 +145,16 @@ public class WindowOptions {
 
     public Builder timestampColumnIndex(int index) {
       this.timestampColumnIndex = index;
+      return this;
+    }
+
+    public Builder timestampAscending() {
+      this.timestampOrderAscending = true;
+      return this;
+    }
+
+    public Builder timestampDescending() {
+      this.timestampOrderAscending = false;
       return this;
     }
 

@@ -1,8 +1,12 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 """
 Test related to MultiIndex
 """
+import itertools
+import re
+
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
@@ -108,11 +112,11 @@ def test_string_index():
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
     stringIndex = StringIndex(["a", "b", "c", "d", "e"], name="name")
-    pdf.index = stringIndex
+    pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
     stringIndex = as_index(as_column(["a", "b", "c", "d", "e"]), name="name")
-    pdf.index = stringIndex
+    pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
 
@@ -225,12 +229,14 @@ def test_multiindex_take(pdf, gdf, pdfIndex):
     assert_eq(pdf.index.take(np.array([0])), gdf.index.take(np.array([0])))
     from cudf import Series
 
-    assert_eq(pdf.index.take(Series([0])), gdf.index.take(Series([0])))
+    assert_eq(pdf.index.take(pd.Series([0])), gdf.index.take(Series([0])))
     assert_eq(pdf.index.take([0, 1]), gdf.index.take([0, 1]))
     assert_eq(
         pdf.index.take(np.array([0, 1])), gdf.index.take(np.array([0, 1]))
     )
-    assert_eq(pdf.index.take(Series([0, 1])), gdf.index.take(Series([0, 1])))
+    assert_eq(
+        pdf.index.take(pd.Series([0, 1])), gdf.index.take(Series([0, 1]))
+    )
 
 
 def test_multiindex_getitem(pdf, gdf, pdfIndex):
@@ -560,32 +566,175 @@ def test_multiindex_equals():
     assert_eq(mi1.equals(mi2), False)
 
 
-def test_multiindex_copy():
-    # mi made from groupby
-    # make a copy with .copy
-    gdf = cudf.DataFrame(
-        {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
-    )
-    mi1 = gdf.groupby(["x", "y"]).mean().index
-    mi2 = mi1.copy(deep=False)
-    assert_eq(mi1, mi2)
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "Date": [
+                "2020-08-27",
+                "2020-08-28",
+                "2020-08-31",
+                "2020-08-27",
+                "2020-08-28",
+                "2020-08-31",
+                "2020-08-27",
+                "2020-08-28",
+                "2020-08-31",
+            ],
+            "Close": [
+                3400.00,
+                3401.80,
+                3450.96,
+                226.58,
+                228.91,
+                225.53,
+                505.13,
+                525.91,
+                534.98,
+            ],
+            "Symbol": [
+                "AMZN",
+                "AMZN",
+                "AMZN",
+                "MSFT",
+                "MSFT",
+                "MSFT",
+                "NVDA",
+                "NVDA",
+                "NVDA",
+            ],
+        }
+    ],
+)
+@pytest.mark.parametrize(
+    "levels",
+    [[["2000-01-01", "2000-01-02", "2000-01-03"], ["A", "B", "C"]], None],
+)
+@pytest.mark.parametrize(
+    "codes", [[[0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0]], None]
+)
+@pytest.mark.parametrize("names", [["X", "Y"]])
+def test_multiindex_copy_sem(data, levels, codes, names):
+    """Test semantic equality for MultiIndex.copy
+    """
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
 
-    mi2 = mi1.copy(deep=True)
-    assert_eq(mi1, mi2)
+    gdf = gdf.groupby(["Date", "Symbol"]).mean()
+    pdf = pdf.groupby(["Date", "Symbol"]).mean()
 
-    # mi made manually
-    # make a copy with .copy
-    # is it equal?
-    mi1 = cudf.MultiIndex(
-        levels=[[1, 3, 4, 5], [1, 2, 5]],
-        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-        names=["x", "y"],
-    )
-    mi2 = mi1.copy(deep=False)
-    assert_eq(mi1, mi2)
+    gmi = gdf.index
+    gmi_copy = gmi.copy(levels=levels, codes=codes, names=names)
 
-    mi2 = mi1.copy(deep=True)
-    assert_eq(mi1, mi2)
+    pmi = pdf.index
+    pmi_copy = pmi.copy(levels=levels, codes=codes, names=names)
+
+    for glv, plv in zip(gmi_copy.levels, pmi_copy.levels):
+        assert all(glv.values_host == plv.values)
+    for (_, gval), pval in zip(gmi.codes._data._data.items(), pmi.codes):
+        assert all(gval.values_host == pval.astype(np.int64))
+    assert_eq(gmi_copy.names, pmi_copy.names)
+
+    # Test same behavior when used on DataFrame
+    gdf.index = gmi_copy
+    pdf.index = pmi_copy
+    assert gdf.__repr__() == pdf.__repr__()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "Date": [
+                "2020-08-27",
+                "2020-08-28",
+                "2020-08-31",
+                "2020-08-27",
+                "2020-08-28",
+                "2020-08-31",
+                "2020-08-27",
+                "2020-08-28",
+                "2020-08-31",
+            ],
+            "Close": [
+                3400.00,
+                3401.80,
+                3450.96,
+                226.58,
+                228.91,
+                225.53,
+                505.13,
+                525.91,
+                534.98,
+            ],
+            "Symbol": [
+                "AMZN",
+                "AMZN",
+                "AMZN",
+                "MSFT",
+                "MSFT",
+                "MSFT",
+                "NVDA",
+                "NVDA",
+                "NVDA",
+            ],
+        },
+        cudf.MultiIndex(
+            levels=[[1001, 1002], [2001, 2002]],
+            codes=[[1, 1, 0, 0], [0, 1, 0, 1]],
+            names=["col1", "col2"],
+        ),
+    ],
+)
+@pytest.mark.parametrize("deep", [True, False])
+def test_multiindex_copy_deep(data, deep):
+    """Test memory idendity for deep copy
+        Case1: Constructed from GroupBy, StringColumns
+        Case2: Constrcuted from MultiIndex, NumericColumns
+    """
+    same_ref = not deep
+
+    if isinstance(data, dict):
+        from functools import reduce
+        import operator
+
+        gdf = cudf.DataFrame(data)
+        mi1 = gdf.groupby(["Date", "Symbol"]).mean().index
+        mi2 = mi1.copy(deep=deep)
+
+        lchildren = [col.children for _, col in mi1._data.items()]
+        rchildren = [col.children for _, col in mi2._data.items()]
+
+        # Flatten
+        lchildren = reduce(operator.add, lchildren)
+        rchildren = reduce(operator.add, rchildren)
+
+        lptrs = [child.base_data.ptr for child in lchildren]
+        rptrs = [child.base_data.ptr for child in rchildren]
+
+        assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
+
+    elif isinstance(data, cudf.MultiIndex):
+        mi1 = data
+        mi2 = mi1.copy(deep=deep)
+
+        # Assert ._levels idendity
+        lptrs = [lv._data._data[None].base_data.ptr for lv in mi1._levels]
+        rptrs = [lv._data._data[None].base_data.ptr for lv in mi2._levels]
+
+        assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
+
+        # Assert ._codes idendity
+        lptrs = [c.base_data.ptr for _, c in mi1._codes._data.items()]
+        rptrs = [c.base_data.ptr for _, c in mi2._codes._data.items()]
+
+        assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
+
+        # Assert ._data idendity
+        lptrs = [d.base_data.ptr for _, d in mi1._data.items()]
+        rptrs = [d.base_data.ptr for _, d in mi2._data.items()]
+
+        assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
 
 
 @pytest.mark.parametrize(
@@ -817,3 +966,350 @@ def test_multicolumn_set_item(pdf, pdfIndex):
     pdf["d"] = [1, 2, 3, 4, 5]
     gdf["d"] = [1, 2, 3, 4, 5]
     assert_eq(pdf, gdf)
+
+
+def test_multiindex_iter_error():
+    midx = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            f"{midx.__class__.__name__} object is not iterable. "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"if you wish to iterate over the values."
+        ),
+    ):
+        iter(midx)
+
+
+def test_multiindex_values():
+    midx = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+
+    result = midx.values
+
+    assert isinstance(result, cp.ndarray)
+    np.testing.assert_array_equal(
+        result.get(), np.array([[1, 1], [1, 5], [3, 2], [4, 2], [5, 1]])
+    )
+
+
+def test_multiindex_values_host():
+    midx = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    pmidx = midx.to_pandas()
+
+    assert_eq(midx.values_host, pmidx.values)
+
+
+@pytest.mark.parametrize(
+    "pdi, fill_value, expected",
+    [
+        (
+            pd.MultiIndex(
+                levels=[[1, 3, 4, None], [1, 2, 5]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+            5,
+            pd.MultiIndex(
+                levels=[[1, 3, 4, 5], [1, 2, 5]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+        ),
+        (
+            pd.MultiIndex(
+                levels=[[1, 3, 4, None], [1, None, 5]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+            100,
+            pd.MultiIndex(
+                levels=[[1, 3, 4, 100], [1, 100, 5]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+        ),
+        (
+            pd.MultiIndex(
+                levels=[["a", "b", "c", None], ["1", None, "5"]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+            "100",
+            pd.MultiIndex(
+                levels=[["a", "b", "c", "100"], ["1", "100", "5"]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+        ),
+    ],
+)
+def test_multiIndex_fillna(pdi, fill_value, expected):
+    gdi = cudf.from_pandas(pdi)
+
+    assert_eq(expected, gdi.fillna(fill_value))
+
+
+@pytest.mark.parametrize(
+    "pdi",
+    [
+        pd.MultiIndex(
+            levels=[[], [], []],
+            codes=[[], [], []],
+            names=["one", "two", "three"],
+        ),
+        pd.MultiIndex.from_tuples(
+            list(
+                zip(
+                    *[
+                        [
+                            "bar",
+                            "bar",
+                            "baz",
+                            "baz",
+                            "foo",
+                            "foo",
+                            "qux",
+                            "qux",
+                        ],
+                        [
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                        ],
+                    ]
+                )
+            )
+        ),
+    ],
+)
+def test_multiIndex_empty(pdi):
+    gdi = cudf.from_pandas(pdi)
+
+    assert_eq(pdi.empty, gdi.empty)
+
+
+@pytest.mark.parametrize(
+    "pdi",
+    [
+        pd.MultiIndex(
+            levels=[[], [], []],
+            codes=[[], [], []],
+            names=["one", "two", "three"],
+        ),
+        pd.MultiIndex.from_tuples(
+            list(
+                zip(
+                    *[
+                        [
+                            "bar",
+                            "bar",
+                            "baz",
+                            "baz",
+                            "foo",
+                            "foo",
+                            "qux",
+                            "qux",
+                        ],
+                        [
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                        ],
+                    ]
+                )
+            )
+        ),
+    ],
+)
+def test_multiIndex_size(pdi):
+    gdi = cudf.from_pandas(pdi)
+
+    assert_eq(pdi.size, gdi.size)
+
+
+@pytest.mark.parametrize(
+    "level",
+    [
+        [],
+        "alpha",
+        "location",
+        "weather",
+        0,
+        1,
+        [0, 1],
+        -1,
+        [-1, -2],
+        [-1, "weather"],
+    ],
+)
+def test_multiindex_droplevel_simple(pdfIndex, level):
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    assert_eq(pdfIndex.droplevel(level), gdfIndex.droplevel(level))
+
+
+@pytest.mark.parametrize(
+    "level",
+    itertools.chain(
+        *(
+            itertools.combinations(
+                ("alpha", "location", "weather", "sign", "timestamp"), r
+            )
+            for r in range(5)
+        )
+    ),
+)
+def test_multiindex_droplevel_name(pdfIndex, level):
+    level = list(level)
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    assert_eq(pdfIndex.droplevel(level), gdfIndex.droplevel(level))
+
+
+@pytest.mark.parametrize(
+    "level",
+    itertools.chain(*(itertools.combinations(range(5), r) for r in range(5))),
+)
+def test_multiindex_droplevel_index(pdfIndex, level):
+    level = list(level)
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    assert_eq(pdfIndex.droplevel(level), gdfIndex.droplevel(level))
+
+
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("return_indexer", [True, False])
+@pytest.mark.parametrize(
+    "pmidx",
+    [
+        pd.MultiIndex(
+            levels=[[1, 3, 4, 5], [1, 2, 5]],
+            codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+            names=["x", "y"],
+        ),
+        pd.MultiIndex.from_product(
+            [["bar", "baz", "foo", "qux"], ["one", "two"]],
+            names=["first", "second"],
+        ),
+        pd.MultiIndex(
+            levels=[[], [], []],
+            codes=[[], [], []],
+            names=["one", "two", "three"],
+        ),
+        pd.MultiIndex.from_tuples(
+            list(
+                zip(
+                    *[
+                        [
+                            "bar",
+                            "bar",
+                            "baz",
+                            "baz",
+                            "foo",
+                            "foo",
+                            "qux",
+                            "qux",
+                        ],
+                        [
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                            "one",
+                            "two",
+                        ],
+                    ]
+                )
+            )
+        ),
+    ],
+)
+def test_multiindex_sort_values(pmidx, ascending, return_indexer):
+    pmidx = pmidx
+    midx = cudf.from_pandas(pmidx)
+
+    expected = pmidx.sort_values(
+        ascending=ascending, return_indexer=return_indexer
+    )
+    actual = midx.sort_values(
+        ascending=ascending, return_indexer=return_indexer
+    )
+
+    if return_indexer:
+        expected_indexer = expected[1]
+        actual_indexer = actual[1]
+
+        assert_eq(expected_indexer, actual_indexer)
+
+        expected = expected[0]
+        actual = actual[0]
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "pdi",
+    [
+        pd.MultiIndex(
+            levels=[[1, 3.0, 4, 5], [1, 2.3, 5]],
+            codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+            names=["x", "y"],
+        ),
+        pd.MultiIndex(
+            levels=[[1, 3, 4, -10], [1, 11, 5]],
+            codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+            names=["x", "y"],
+        ),
+        pd.MultiIndex(
+            levels=[["a", "b", "c", "100"], ["1", "100", "5"]],
+            codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+            names=["x", "y"],
+        ),
+        pytest.param(
+            pd.MultiIndex(
+                levels=[[None, "b", "c", "a"], ["1", None, "5"]],
+                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+                names=["x", "y"],
+            ),
+            marks=[
+                pytest.mark.xfail(
+                    reason="https://github.com/pandas-dev/pandas/issues/35584"
+                )
+            ],
+        ),
+    ],
+)
+@pytest.mark.parametrize("ascending", [True, False])
+def test_multiIndex_argsort(pdi, ascending):
+    gdi = cudf.from_pandas(pdi)
+
+    if not ascending:
+        expected = pdi.argsort()[::-1]
+    else:
+        expected = pdi.argsort()
+
+    actual = gdi.argsort(ascending=ascending)
+
+    assert_eq(expected, actual)

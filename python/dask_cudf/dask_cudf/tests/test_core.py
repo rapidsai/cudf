@@ -1,10 +1,13 @@
+import random
+
+import cupy as cp
 import numpy as np
 import pandas as pd
-import pandas.util.testing as tm
 import pytest
 
 import dask
-import dask.dataframe as dd
+from dask import dataframe as dd
+from dask.dataframe.core import make_meta, meta_nonempty
 
 import cudf
 
@@ -30,6 +33,15 @@ def test_from_cudf():
     # Test conversion to dask.dataframe
     ddf = ingested.to_dask_dataframe()
     dd.assert_eq(ddf, df)
+
+
+def test_from_cudf_multiindex_raises():
+
+    df = cudf.DataFrame({"x": list("abc"), "y": [1, 2, 3], "z": [1, 2, 3]})
+
+    with pytest.raises(NotImplementedError):
+        # dask_cudf does not support MultiIndex yet
+        dgd.from_cudf(df.set_index(["x", "y"]))
 
 
 def test_from_cudf_with_generic_idx():
@@ -266,11 +278,10 @@ def test_assign():
     dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=2)
     pdcol = pd.Series(np.arange(20) + 1000)
     newcol = dd.from_pandas(cudf.Series(pdcol), npartitions=dgf.npartitions)
-    out = dgf.assign(z=newcol)
+    got = dgf.assign(z=newcol)
 
-    got = out
     dd.assert_eq(got.loc[:, ["x", "y"]], df)
-    np.testing.assert_array_equal(got["z"], pdcol)
+    np.testing.assert_array_equal(got["z"].compute().to_array(), pdcol)
 
 
 @pytest.mark.parametrize("data_type", ["int8", "int16", "int32", "int64"])
@@ -323,11 +334,11 @@ def test_setitem_scalar_datetime():
 @pytest.mark.parametrize(
     "func",
     [
-        lambda: tm.makeDataFrame().reset_index(),
-        tm.makeDataFrame,
-        tm.makeMixedDataFrame,
-        tm.makeObjectSeries,
-        tm.makeTimeSeries,
+        lambda: pd._testing.makeDataFrame().reset_index(),
+        pd._testing.makeDataFrame,
+        pd._testing.makeMixedDataFrame,
+        pd._testing.makeObjectSeries,
+        pd._testing.makeTimeSeries,
     ],
 )
 def test_repr(func):
@@ -378,10 +389,11 @@ def test_repartition_simple_divisions(start, stop):
     b = gdf.repartition(npartitions=stop)
     assert a.divisions == b.divisions
 
-    dd.utils.assert_eq(a, b)
+    dd.assert_eq(a, b)
 
 
-def test_repartition_hash_staged():
+@pytest.mark.parametrize("npartitions", [2, 17, 20])
+def test_repartition_hash_staged(npartitions):
     by = ["b"]
     datarange = 35
     size = 100
@@ -393,8 +405,11 @@ def test_repartition_hash_staged():
     )
     # WARNING: Specific npartitions-max_branch combination
     # was specifically chosen to cover changes in #4676
-    ddf = dgd.from_cudf(gdf, npartitions=17)
-    ddf_new = ddf.repartition(columns=by, max_branch=4)
+    npartitions_initial = 17
+    ddf = dgd.from_cudf(gdf, npartitions=npartitions_initial)
+    ddf_new = ddf.repartition(
+        columns=by, npartitions=npartitions, max_branch=4
+    )
 
     # Make sure we are getting a dask_cudf dataframe
     assert type(ddf_new) == type(ddf)
@@ -416,8 +431,9 @@ def test_repartition_hash_staged():
 
 
 @pytest.mark.parametrize("by", [["b"], ["c"], ["d"], ["b", "c"]])
-@pytest.mark.parametrize("npartitions", [4, 5])
-def test_repartition_hash(by, npartitions):
+@pytest.mark.parametrize("npartitions", [3, 4, 5])
+@pytest.mark.parametrize("max_branch", [3, 32])
+def test_repartition_hash(by, npartitions, max_branch):
     npartitions_i = 4
     datarange = 26
     size = 100
@@ -431,7 +447,9 @@ def test_repartition_hash(by, npartitions):
     )
     gdf.d = gdf.d.astype("datetime64[ms]")
     ddf = dgd.from_cudf(gdf, npartitions=npartitions_i)
-    ddf_new = ddf.repartition(columns=by, npartitions=npartitions)
+    ddf_new = ddf.repartition(
+        columns=by, npartitions=npartitions, max_branch=max_branch
+    )
 
     # Check that the length was preserved
     assert len(ddf_new) == len(ddf)
@@ -503,17 +521,29 @@ def test_concat(gdf, gddf, series):
     if series:
         gdf = gdf.x
         gddf = gddf.x
-    a = (
-        cudf.concat([gdf, gdf + 1, gdf + 2])
-        .sort_values("x")
-        .reset_index(drop=True)
-    )
-    b = (
-        dd.concat([gddf, gddf + 1, gddf + 2], interleave_partitions=True)
-        .compute()
-        .sort_values("x")
-        .reset_index(drop=True)
-    )
+        a = (
+            cudf.concat([gdf, gdf + 1, gdf + 2])
+            .sort_values()
+            .reset_index(drop=True)
+        )
+        b = (
+            dd.concat([gddf, gddf + 1, gddf + 2], interleave_partitions=True)
+            .compute()
+            .sort_values()
+            .reset_index(drop=True)
+        )
+    else:
+        a = (
+            cudf.concat([gdf, gdf + 1, gdf + 2])
+            .sort_values("x")
+            .reset_index(drop=True)
+        )
+        b = (
+            dd.concat([gddf, gddf + 1, gddf + 2], interleave_partitions=True)
+            .compute()
+            .sort_values("x")
+            .reset_index(drop=True)
+        )
     dd.assert_eq(a, b)
 
 
@@ -550,18 +580,21 @@ def test_hash_object_dispatch(index):
     # DataFrame
     result = dd.utils.hash_object_dispatch(obj, index=index)
     expected = dgd.backends.hash_object_cudf(obj, index=index)
-    dd.assert_eq(cudf.Series(result), cudf.Series(expected))
+    assert isinstance(result, cudf.Series)
+    dd.assert_eq(result, expected)
 
     # Series
     result = dd.utils.hash_object_dispatch(obj["x"], index=index)
     expected = dgd.backends.hash_object_cudf(obj["x"], index=index)
-    dd.assert_eq(cudf.Series(result), cudf.Series(expected))
+    assert isinstance(result, cudf.Series)
+    dd.assert_eq(result, expected)
 
     # DataFrame with MultiIndex
     obj_multi = obj.set_index(["x", "z"], drop=True)
     result = dd.utils.hash_object_dispatch(obj_multi, index=index)
     expected = dgd.backends.hash_object_cudf(obj_multi, index=index)
-    dd.assert_eq(cudf.Series(result), cudf.Series(expected))
+    assert isinstance(result, cudf.Series)
+    dd.assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(
@@ -596,10 +629,87 @@ def test_make_meta_backends(index):
     df["time_ms"] = df["time_s"].astype("datetime64[ms]")
     df["time_ns"] = df["time_s"].astype("datetime64[ns]")
     df = df.set_index(index)
-    ddf = dgd.from_cudf(df, npartitions=1)
 
     # Check "empty" metadata types
-    dd.assert_eq(ddf._meta.dtypes, df.dtypes)
+    chk_meta = make_meta(df)
+    dd.assert_eq(chk_meta.dtypes, df.dtypes)
 
     # Check "non-empty" metadata types
-    dd.assert_eq(ddf._meta.dtypes, ddf._meta_nonempty.dtypes)
+    chk_meta_nonempty = meta_nonempty(df)
+    dd.assert_eq(chk_meta.dtypes, chk_meta_nonempty.dtypes)
+
+    # Check dask code path if not MultiIndex
+    if not isinstance(df.index, cudf.MultiIndex):
+
+        ddf = dgd.from_cudf(df, npartitions=1)
+
+        # Check "empty" metadata types
+        dd.assert_eq(ddf._meta.dtypes, df.dtypes)
+
+        # Check "non-empty" metadata types
+        dd.assert_eq(ddf._meta.dtypes, ddf._meta_nonempty.dtypes)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.Series([]),
+        pd.DataFrame({"abc": [], "xyz": []}),
+        pd.Series([1, 2, 10, 11]),
+        pd.DataFrame({"abc": [1, 2, 10, 11], "xyz": [100, 12, 120, 1]}),
+    ],
+)
+def test_dataframe_series_replace(data):
+    pdf = data.copy()
+    gdf = cudf.from_pandas(pdf)
+
+    ddf = dgd.from_cudf(gdf, npartitions=5)
+
+    dd.assert_eq(ddf.replace(1, 2), pdf.replace(1, 2))
+
+
+def test_dataframe_assign_col():
+    df = cudf.DataFrame(list(range(100)))
+    pdf = pd.DataFrame(list(range(100)))
+
+    ddf = dgd.from_cudf(df, npartitions=4)
+    ddf["fold"] = 0
+    ddf["fold"] = ddf["fold"].map_partitions(
+        lambda cudf_df: cp.random.randint(0, 4, len(cudf_df))
+    )
+
+    pddf = dd.from_pandas(pdf, npartitions=4)
+    pddf["fold"] = 0
+    pddf["fold"] = pddf["fold"].map_partitions(
+        lambda p_df: np.random.randint(0, 4, len(p_df))
+    )
+
+    dd.assert_eq(ddf[0], pddf[0])
+    dd.assert_eq(len(ddf["fold"]), len(pddf["fold"]))
+
+
+def test_dataframe_set_index():
+    random.seed(0)
+    df = cudf.datasets.randomdata(26, dtypes={"a": float, "b": int})
+    df["str"] = list("abcdefghijklmnopqrstuvwxyz")
+    pdf = df.to_pandas()
+
+    ddf = dgd.from_cudf(df, npartitions=4)
+    ddf = ddf.set_index("str")
+
+    pddf = dd.from_pandas(pdf, npartitions=4)
+    pddf = pddf.set_index("str")
+    from cudf.tests.utils import assert_eq
+
+    assert_eq(ddf.compute(), pddf.compute())
+
+
+def test_dataframe_describe():
+    random.seed(0)
+    df = cudf.datasets.randomdata(20)
+    pdf = df.to_pandas()
+
+    ddf = dgd.from_cudf(df, npartitions=4)
+    pddf = dd.from_pandas(pdf, npartitions=4)
+
+    dd.assert_eq(ddf.describe(), pddf.describe(), check_less_precise=3)

@@ -2,7 +2,7 @@
 
 [![Build Status](https://gpuci.gpuopenanalytics.com/job/rapidsai/job/gpuci/job/cudf/job/branches/job/cudf-branch-pipeline/badge/icon)](https://gpuci.gpuopenanalytics.com/job/rapidsai/job/gpuci/job/cudf/job/branches/job/cudf-branch-pipeline/)
 
-**NOTE:** For the latest stable [README.md](https://github.com/rapidsai/cudf/blob/master/README.md) ensure you are on the `master` branch.
+**NOTE:** For the latest stable [README.md](https://github.com/rapidsai/cudf/blob/main/README.md) ensure you are on the `main` branch.
 
 Built based on the [Apache Arrow](http://arrow.apache.org/) columnar memory format, cuDF is a GPU DataFrame library for loading, joining, aggregating, filtering, and otherwise manipulating data.
 
@@ -43,37 +43,41 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 
 ## Installation
 
+
+### CUDA/GPU requirements
+
+* CUDA 10.0+
+* NVIDIA driver 410.48+
+* Pascal architecture or better (Compute Capability >=6.0)
+
 ### Conda
 
 cuDF can be installed with conda ([miniconda](https://conda.io/miniconda.html), or the full [Anaconda distribution](https://www.anaconda.com/download)) from the `rapidsai` channel:
 
-For `cudf version == 0.10` :
+For `cudf version == 0.13` :
 ```bash
-# for CUDA 9.2
+# for CUDA 10.1
 conda install -c rapidsai -c nvidia -c numba -c conda-forge \
-    cudf=0.10 python=3.6 cudatoolkit=9.2
+    cudf=0.13 python=3.7 cudatoolkit=10.1
 
-# or, for CUDA 10.0
+# or, for CUDA 10.2
 conda install -c rapidsai -c nvidia -c numba -c conda-forge \
-    cudf=0.10 python=3.6 cudatoolkit=10.0
+    cudf=0.13 python=3.7 cudatoolkit=10.2
 
-# or, for CUDA 10.1
-conda install -c rapidsai -c nvidia -c numba -c conda-forge \
-    cudf=0.10 python=3.6 cudatoolkit=10.1
 ```
 
 For the nightly version of `cudf` :
 ```bash
-# for CUDA 9.2
+# for CUDA 10.1
 conda install -c rapidsai-nightly -c nvidia -c numba -c conda-forge \
-    cudf python=3.6 cudatoolkit=9.2
+    cudf python=3.7 cudatoolkit=10.1
 
-# or, for CUDA 10.0
+# or, for CUDA 10.2
 conda install -c rapidsai-nightly -c nvidia -c numba -c conda-forge \
-    cudf python=3.6 cudatoolkit=10.0
+    cudf python=3.7 cudatoolkit=10.2
 ```
 
-Note: cuDF is supported only on Linux, and with Python versions 3.6 or 3.7.
+Note: cuDF is supported only on Linux, and with Python versions 3.7 and later.
 
 See the [Get RAPIDS version picker](https://rapids.ai/start.html) for more OS and version info. 
 

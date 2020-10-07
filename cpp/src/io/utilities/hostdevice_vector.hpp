@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 
 #pragma once
+
+#include <rmm/device_buffer.hpp>
 
 #include <cudf/utilities/error.hpp>
 
@@ -32,24 +34,39 @@ class hostdevice_vector {
  public:
   using value_type = T;
 
-  explicit hostdevice_vector(size_t max_size, cudaStream_t stream = 0)
-      : hostdevice_vector(max_size, max_size, stream) {}
+  hostdevice_vector() {}
 
-  explicit hostdevice_vector(size_t initial_size, size_t max_size,
-                             cudaStream_t stream = 0)
-      : num_elements(initial_size), max_elements(max_size) {
+  hostdevice_vector(hostdevice_vector &&v) { move(std::move(v)); }
+  hostdevice_vector &operator=(hostdevice_vector &&v)
+  {
+    move(std::move(v));
+    return *this;
+  }
+
+  explicit hostdevice_vector(size_t max_size, cudaStream_t stream = 0)
+    : hostdevice_vector(max_size, max_size, stream)
+  {
+  }
+
+  explicit hostdevice_vector(size_t initial_size, size_t max_size, cudaStream_t stream = 0)
+    : num_elements(initial_size), max_elements(max_size)
+  {
     if (max_elements != 0) {
       CUDA_TRY(cudaMallocHost(&h_data, sizeof(T) * max_elements));
-      RMM_ALLOC(&d_data, sizeof(T) * max_elements, stream);
+      d_data.resize(sizeof(T) * max_elements, stream);
     }
   }
 
-  ~hostdevice_vector() {
-    RMM_FREE(d_data, stream);
-    cudaFreeHost(h_data);
+  ~hostdevice_vector()
+  {
+    if (max_elements != 0) {
+      auto const free_result = cudaFreeHost(h_data);
+      assert(free_result == cudaSuccess);
+    }
   }
 
-  bool insert(const T &data) {
+  bool insert(const T &data)
+  {
     if (num_elements < max_elements) {
       h_data[num_elements] = data;
       num_elements++;
@@ -64,12 +81,41 @@ class hostdevice_vector {
 
   T &operator[](size_t i) const { return h_data[i]; }
   T *host_ptr(size_t offset = 0) const { return h_data + offset; }
-  T *device_ptr(size_t offset = 0) const { return d_data + offset; }
+  T *device_ptr(size_t offset = 0) { return reinterpret_cast<T *>(d_data.data()) + offset; }
+  T const *device_ptr(size_t offset = 0) const
+  {
+    return reinterpret_cast<T const *>(d_data.data()) + offset;
+  }
+
+  void host_to_device(cudaStream_t stream, bool synchronize = false)
+  {
+    cudaMemcpyAsync(d_data.data(), h_data, memory_size(), cudaMemcpyHostToDevice, stream);
+    if (synchronize) { cudaStreamSynchronize(stream); }
+  }
+
+  void device_to_host(cudaStream_t stream, bool synchronize = false)
+  {
+    cudaMemcpyAsync(h_data, d_data.data(), memory_size(), cudaMemcpyDeviceToHost, stream);
+    if (synchronize) { cudaStreamSynchronize(stream); }
+  }
 
  private:
+  void move(hostdevice_vector &&v)
+  {
+    stream       = v.stream;
+    max_elements = v.max_elements;
+    num_elements = v.num_elements;
+    h_data       = v.h_data;
+    d_data       = std::move(v.d_data);
+
+    v.max_elements = 0;
+    v.num_elements = 0;
+    v.h_data       = nullptr;
+  }
+
   cudaStream_t stream = 0;
   size_t max_elements = 0;
   size_t num_elements = 0;
-  T *h_data = nullptr;
-  T *d_data = nullptr;
+  T *h_data           = nullptr;
+  rmm::device_buffer d_data;
 };

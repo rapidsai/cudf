@@ -15,13 +15,16 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
+/**
+ * @addtogroup strings_convert
+ * @{
+ * @file
+ */
 
 /**
  * @brief Returns a new integer numeric column parsing integer values from the
@@ -43,12 +46,13 @@ namespace strings
  *
  * @param strings Strings instance for this operation.
  * @param output_type Type of integer numeric column to return.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column with integers converted from strings.
  */
-std::unique_ptr<column> to_integers( strings_column_view const& strings,
-                                     data_type output_type,
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> to_integers(
+  strings_column_view const& strings,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a new strings column converting the integer values from the
@@ -61,13 +65,13 @@ std::unique_ptr<column> to_integers( strings_column_view const& strings,
  *
  * @throw cudf::logic_error if integers column is not integral type.
  *
- * @param column Numeric column to convert.
- * @param mr Resource for allocating device memory.
- * @param stream Stream to use for any kernels in this function.
+ * @param integers Numeric column to convert.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column with integers as strings.
  */
-std::unique_ptr<column> from_integers( column_view const& integers,
-                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> from_integers(
+  column_view const& integers,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a new integer numeric column parsing hexadecimal values from the
@@ -89,12 +93,39 @@ std::unique_ptr<column> from_integers( column_view const& integers,
  *
  * @param strings Strings instance for this operation.
  * @param output_type Type of integer numeric column to return.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column with integers converted from strings.
  */
-std::unique_ptr<column> hex_to_integers( strings_column_view const& strings,
-                                         data_type output_type,
-                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> hex_to_integers(
+  strings_column_view const& strings,
+  data_type output_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-} // namespace strings
-} // namespace cudf
+/**
+ * @brief Returns a boolean column identifying strings in which all
+ * characters are valid for conversion to integers from hex.
+ *
+ * The output row entry will be set to `true` if the corresponding string element
+ * has at least one character in [0-9A-Za-z]. Also, the string may start
+ * with '0x'.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ['123', '-456', '', 'AGE', '+17EA', '0x9EF' '123ABC']
+ * b = s.is_hex(s)
+ * b is [true, false, false, false, false, true, true]
+ * @endcode
+ *
+ * Any null row results in a null entry for that row in the output column.
+ *
+ * @param strings Strings instance for this operation.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New column of boolean results for each string.
+ */
+std::unique_ptr<column> is_hex(
+  strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/** @} */  // end of doxygen group
+}  // namespace strings
+}  // namespace cudf

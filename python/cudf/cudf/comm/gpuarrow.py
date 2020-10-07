@@ -1,5 +1,4 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
-
 from collections import OrderedDict
 from collections.abc import Sequence
 
@@ -7,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from cudf._libxx.gpuarrow import (
+from cudf._lib.gpuarrow import (
     CudaRecordBatchStreamReader as _CudaRecordBatchStreamReader,
 )
 from cudf.core import Series, column

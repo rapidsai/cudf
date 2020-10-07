@@ -20,36 +20,18 @@
 
 #include <memory>
 
-namespace cudf {
-namespace datetime {
-namespace detail {
-
-enum class datetime_component {
-  INVALID = 0,
-  YEAR,
-  MONTH,
-  DAY,
-  WEEKDAY,
-  HOUR,
-  MINUTE,
-  SECOND,
-};
-
 /**
- * @brief  Extracts the supplied datetime component from any date time type
- * and returns an int16_t cudf::column.
- *
- * @param[in] cudf::column_view of the input datetime values
- * @returns cudf::column of the extracted int16_t datetime component
- * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @file datetime.hpp
+ * @brief DateTime column APIs.
  */
 
-template <datetime_component Component>
-std::unique_ptr<column> extract_component(
-    column_view const& column,
-    cudaStream_t stream = 0,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-}  // namespace detail
+namespace cudf {
+namespace datetime {
+/**
+ * @addtogroup datetime_extract
+ * @{
+ * @file
+ */
 
 /**
  * @brief  Extracts year from any date time type and returns an int16_t
@@ -61,8 +43,8 @@ std::unique_ptr<column> extract_component(
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
 std::unique_ptr<cudf::column> extract_year(
-    cudf::column_view const& column,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Extracts month from any date time type and returns an int16_t
@@ -74,8 +56,8 @@ std::unique_ptr<cudf::column> extract_year(
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
 std::unique_ptr<cudf::column> extract_month(
-    cudf::column_view const& column,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Extracts day from any date time type and returns an int16_t
@@ -87,8 +69,8 @@ std::unique_ptr<cudf::column> extract_month(
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
 std::unique_ptr<cudf::column> extract_day(
-    cudf::column_view const& column,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Extracts day from any date time type and returns an int16_t
@@ -100,8 +82,8 @@ std::unique_ptr<cudf::column> extract_day(
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
 std::unique_ptr<cudf::column> extract_weekday(
-    cudf::column_view const& column,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Extracts hour from any date time type and returns an int16_t
@@ -113,8 +95,8 @@ std::unique_ptr<cudf::column> extract_weekday(
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
 std::unique_ptr<cudf::column> extract_hour(
-    cudf::column_view const& column,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Extracts minute from any date time type and returns an int16_t
@@ -126,8 +108,8 @@ std::unique_ptr<cudf::column> extract_hour(
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
 std::unique_ptr<cudf::column> extract_minute(
-    cudf::column_view const& column,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Extracts second from any date time type and returns an int16_t
@@ -139,8 +121,74 @@ std::unique_ptr<cudf::column> extract_minute(
  * @throw cudf::logic_error if input column datatype is not TIMESTAMP
  */
 std::unique_ptr<cudf::column> extract_second(
-    cudf::column_view const& column,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/** @} */  // end of group
+/**
+ * @addtogroup datetime_compute
+ * @{
+ * @file
+ */
+
+/**
+ * @brief  Computes the last day of the month in date time type and returns a TIMESTAMP_DAYS
+ * cudf::column.
+ *
+ * @param[in] cudf::column_view of the input datetime values
+ *
+ * @returns cudf::column containing last day of the month as TIMESTAMP_DAYS
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ */
+std::unique_ptr<cudf::column> last_day_of_month(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief  Computes the day number since the start of the year from the datetime and
+ * returns an int16_t cudf::column. The value is between [1, {365-366}]
+ *
+ * @param[in] cudf::column_view of the input datetime values
+ *
+ * @returns cudf::column of datatype INT16 containing the day number since the start of the year.
+ * @throw cudf::logic_error if input column datatype is not a TIMESTAMP
+ */
+std::unique_ptr<cudf::column> day_of_year(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief  Adds or subtracts a number of months from the date time type and returns a
+ * timestamp column that is of the same type as the input `timestamps` column.
+ *
+ * For a given row, if the `timestamps` or the `months` column value is null,
+ * the output for that row is null.
+ * This method preserves the input time and the day where applicable. The date is rounded
+ * down to the last day of the month for that year, if the new day is invalid for that month.
+ *
+ * @code{.pseudo}
+ * Example:
+ * timestamps = [5/31/20 08:00:00, 5/31/20 00:00:00, 5/31/20 13:00:00, 5/31/20 23:00:00,
+ *               6/30/20 00:00:01, 6/30/20 14:12:13]
+ * months     = [1               , -1              , -3              , -15             ,
+ *               -1              , 1]
+ * r = add_calendrical_months(timestamp_column, months_column)
+ * r is [6/30/20 08:00:00, 4/30/20 00:00:00, 2/29/20 13:00:00, 2/28/19 23:00:00,
+ *       5/30/20 00:00:01, 7/30/20 14:12:13]
+ * @endcode
+
+ * @param[in] timestamps cudf::column_view of timestamp type.
+ * @param[in] months cudf::column_view of integer type containing the number of months to add.
+ *
+ * @returns cudf::column of timestamp type containing the computed timestamps.
+ * @throw cudf::logic_error if `timestamps` datatype is not a TIMESTAMP or if `months` datatype
+ * is not INT16.
+ * @throw cudf::logic_error if `timestamps` column size is not equal to `months` column size.
+ */
+std::unique_ptr<cudf::column> add_calendrical_months(
+  cudf::column_view const& timestamps,
+  cudf::column_view const& months,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+/** @} */  // end of group
 }  // namespace datetime
 }  // namespace cudf

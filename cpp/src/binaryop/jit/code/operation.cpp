@@ -18,60 +18,118 @@
  */
 
 namespace cudf {
-namespace experimental {
 namespace binops {
 namespace jit {
 namespace code {
 
 const char* operation =
-R"***(
+  R"***(
     #pragma once
+    #include <cmath>
+    #include <type_traits>
     #include "traits.h"
     using namespace simt::std;
 
     struct Add {
-        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        // Allow sum between chronos only when both input and output types
+        // are chronos. Unsupported combinations will fail to compile
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(is_chrono_v<TypeOut> &&
+                               is_chrono_v<TypeLhs> &&
+                               is_chrono_v<TypeRhs>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(x) + static_cast<TypeOut>(y));
+            return x + y;
+        }
+
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(!is_chrono_v<TypeOut> ||
+                               !is_chrono_v<TypeLhs> ||
+                               !is_chrono_v<TypeRhs>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
+            return static_cast<TypeOut>(static_cast<TypeCommon>(x) + static_cast<TypeCommon>(y));
         }
     };
 
     using RAdd = Add;
 
     struct Sub {
-        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        // Allow difference between chronos only when both input and output types
+        // are chronos. Unsupported combinations will fail to compile
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(is_chrono_v<TypeOut> &&
+                               is_chrono_v<TypeLhs> &&
+                               is_chrono_v<TypeRhs>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(x) - static_cast<TypeOut>(y));
+            return x - y;
+        }
+
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(!is_chrono_v<TypeOut> ||
+                               !is_chrono_v<TypeLhs> ||
+                               !is_chrono_v<TypeRhs>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
+            return static_cast<TypeOut>(static_cast<TypeCommon>(x) - static_cast<TypeCommon>(y));
         }
     };
 
     struct RSub {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(y) - static_cast<TypeOut>(x));
+            return Sub::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
         }
     };
 
     struct Mul {
-        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(!is_duration_v<TypeOut>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(x) * static_cast<TypeOut>(y));
+            using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
+            return static_cast<TypeOut>(static_cast<TypeCommon>(x) * static_cast<TypeCommon>(y));
+        }
+
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(is_duration_v<TypeOut>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return DurationProduct<TypeOut>(x, y);
+        }
+
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(is_duration_v<TypeLhs> && is_integral_v<TypeRhs>) ||
+                              (is_integral_v<TypeLhs> && is_duration_v<TypeRhs>)>* = nullptr>
+        static TypeOut DurationProduct(TypeLhs x, TypeRhs y) {
+            return x * y;
         }
     };
 
     using RMul = Mul;
 
     struct Div {
-        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(!is_duration_v<TypeLhs>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(x) / static_cast<TypeOut>(y));
+            using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
+            return static_cast<TypeOut>(static_cast<TypeCommon>(x) / static_cast<TypeCommon>(y));
+        }
+
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(is_duration_v<TypeLhs>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return DurationDivide<TypeOut>(x, y);
+        }
+
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs,
+                  enable_if_t<(is_integral_v<TypeRhs> || is_duration_v<TypeRhs>)>* = nullptr>
+        static TypeOut DurationDivide(TypeLhs x, TypeRhs y) {
+            return x / y;
         }
     };
 
     struct RDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(y) / static_cast<TypeOut>(x));
+            return Div::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
         }
     };
 
@@ -85,7 +143,7 @@ R"***(
     struct RTrueDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<double>(y) / static_cast<double>(x));
+            return TrueDiv::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
         }
     };
 
@@ -99,7 +157,7 @@ R"***(
     struct RFloorDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return floor(static_cast<double>(y) / static_cast<double>(x));
+            return FloorDiv::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
         }
     };
 
@@ -107,51 +165,41 @@ R"***(
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  enable_if_t<(is_integral_v<TypeOut>)>* = nullptr>
+                  enable_if_t<(is_integral_v<typename common_type<TypeOut, TypeLhs, TypeRhs>::type>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(x) % static_cast<TypeOut>(y));
+            using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
+            return static_cast<TypeOut>(static_cast<TypeCommon>(x) % static_cast<TypeCommon>(y));
         }
 
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  enable_if_t<(isFloat<TypeOut>)>* = nullptr>
+                  enable_if_t<(isFloat<typename common_type<TypeOut, TypeLhs, TypeRhs>::type>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return fmodf(static_cast<TypeOut>(x), static_cast<TypeOut>(y));
+            return static_cast<TypeOut>(fmodf(static_cast<float>(x), static_cast<float>(y)));
         }
 
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  enable_if_t<(isDouble<TypeOut>)>* = nullptr>
+                  enable_if_t<(isDouble<typename common_type<TypeOut, TypeLhs, TypeRhs>::type>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return fmod(static_cast<TypeOut>(x), static_cast<TypeOut>(y));
+            return static_cast<TypeOut>(fmod(static_cast<double>(x), static_cast<double>(y)));
+        }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_duration_v<TypeLhs> && is_duration_v<TypeOut>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return x % y;
         }
     };
 
     struct RMod {
-        template <typename TypeOut,
-                  typename TypeLhs,
-                  typename TypeRhs,
-                  enable_if_t<(is_integral_v<TypeOut>)>* = nullptr>
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<TypeOut>(y) % static_cast<TypeOut>(x));
-        }
-
-        template <typename TypeOut,
-                  typename TypeLhs,
-                  typename TypeRhs,
-                  enable_if_t<(isFloat<TypeOut>)>* = nullptr>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return fmodf(static_cast<TypeOut>(y), static_cast<TypeOut>(x));
-        }
-
-        template <typename TypeOut,
-                  typename TypeLhs,
-                  typename TypeRhs,
-                  enable_if_t<(isDouble<TypeOut>)>* = nullptr>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return fmod(static_cast<TypeOut>(y), static_cast<TypeOut>(x));
+            return Mod::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
         }
     };
 
@@ -173,25 +221,20 @@ R"***(
             double y1 = static_cast<double>(y);
             return fmod(fmod(x1, y1) + y1, y1);
         }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_duration_v<TypeLhs> && is_duration_v<TypeOut>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return ((x % y) + y) % y;
+        }
     };
 
     struct RPyMod {
-        template <typename TypeOut,
-                  typename TypeLhs,
-                  typename TypeRhs,
-                  enable_if_t<(is_integral_v<TypeOut>)>* = nullptr>
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return ((y % x) + x) % x;
-        }
-
-        template <typename TypeOut,
-                  typename TypeLhs,
-                  typename TypeRhs,
-                  enable_if_t<(is_floating_point_v<TypeOut>)>* = nullptr>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
-            double x1 = static_cast<double>(x);
-            double y1 = static_cast<double>(y);
-            return fmod(fmod(y1, x1) + x1, x1);
+            return PyMod::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
         }
     };
 
@@ -205,7 +248,7 @@ R"***(
     struct RPow {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return pow(static_cast<double>(y), static_cast<double>(x));
+            return Pow::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
         }
     };
 
@@ -332,7 +375,8 @@ R"***(
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
             TypeOut output;
-            GENERIC_BINARY_OP(&output, x, y);
+            using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
+            GENERIC_BINARY_OP(&output, static_cast<TypeCommon>(x), static_cast<TypeCommon>(y));
             return output;
         }
     };    
@@ -375,13 +419,152 @@ R"***(
     struct RShiftRightUnsigned {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (static_cast<make_unsigned_t<TypeLhs>>(y) >> x);            
+            return (static_cast<make_unsigned_t<TypeRhs>>(y) >> x);            
         }
     };    
+
+    struct LogBase {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return (std::log(static_cast<double>(x)) / std::log(static_cast<double>(y)));
+        }
+    };
+
+    struct RLogBase {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return LogBase::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
+        }
+    };
+
+    struct NullEquals {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            output_valid = true;
+            if (!lhs_valid && !rhs_valid) return true;
+            if (lhs_valid && rhs_valid) return x == y;
+            return false;
+        }
+    };
+
+    struct RNullEquals {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            output_valid = true;
+            return NullEquals::operate<TypeOut, TypeRhs, TypeLhs>(y, x, rhs_valid, lhs_valid,
+                                                                  output_valid);
+        }
+    };
+
+    struct NullMax {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            output_valid = true;
+            if (!lhs_valid && !rhs_valid) {
+                output_valid = false;
+                return TypeOut{};
+            } else if (lhs_valid && rhs_valid) {
+                return (TypeOut{x} > TypeOut{y}) ? TypeOut{x} : TypeOut{y};
+            } else if (lhs_valid) return TypeOut{x};
+            else return TypeOut{y};
+        }
+    };
+
+    struct RNullMax {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            return NullMax::operate<TypeOut, TypeRhs, TypeLhs>(y, x, rhs_valid, lhs_valid,
+                                                               output_valid);
+        }
+    };
+
+    struct NullMin {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            output_valid = true;
+            if (!lhs_valid && !rhs_valid) {
+                output_valid = false;
+                return TypeOut{};
+            } else if (lhs_valid && rhs_valid) {
+                return (TypeOut{x} < TypeOut{y}) ? TypeOut{x} : TypeOut{y};
+            } else if (lhs_valid) return TypeOut{x};
+            else return TypeOut{y};
+        }
+    };
+
+    struct RNullMin {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid,
+                               bool& output_valid) {
+            return NullMin::operate<TypeOut, TypeRhs, TypeLhs>(y, x, rhs_valid, lhs_valid,
+                                                               output_valid);
+        }
+    };
+
+    struct PMod {
+        // Ideally, these two specializations - one for integral types and one for non integral
+        // types shouldn't be required, as std::fmod should promote integral types automatically
+        // to double and call the std::fmod overload for doubles. Sadly, doing this in jitified
+        // code does not work - it is having trouble deciding between float/double overloads
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<(is_integral_v<typename simt::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            using common_t = typename simt::std::common_type<TypeLhs, TypeRhs>::type;
+            common_t xconv{x};
+            common_t yconv{y};
+            auto rem = xconv % yconv;
+            if (rem < 0) rem = (rem + yconv) % yconv;
+            return TypeOut{rem};
+        }
+
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs,
+                  enable_if_t<!(is_integral_v<typename simt::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            using common_t = typename simt::std::common_type<TypeLhs, TypeRhs>::type;
+            common_t xconv{x};
+            common_t yconv{y};
+            auto rem = std::fmod(xconv, yconv);
+            if (rem < 0) rem = std::fmod(rem + yconv, yconv);
+            return TypeOut{rem};
+        }
+    };
+
+    struct RPMod {
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return PMod::operate<TypeOut, TypeRhs, TypeLhs>(y, x);
+        }
+    };
+
+    struct ATan2 {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return TypeOut{std::atan2(double{x}, double{y})};
+        }
+    };
+
+    struct RATan2 {
+        template <typename TypeOut,
+                  typename TypeLhs,
+                  typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            return TypeOut{ATan2::operate<TypeOut, TypeRhs, TypeLhs>(y, x)};
+        }
+    };
 )***";
 
-} // namespace code
-} // namespace jit
-} // namespace binops
-} // namespace experimental
-} // namespace cudf
+}  // namespace code
+}  // namespace jit
+}  // namespace binops
+}  // namespace cudf

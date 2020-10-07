@@ -17,6 +17,10 @@ Contributions to cuDF fall into the following three categories.
     Follow the [code contributions](#code-contributions) guide below. If you
     need more context on a particular issue, please ask in a comment.
 
+As contributors and maintainers to this project,
+you are expected to abide by cuDF's code of conduct.
+More information can be found at: [Contributor Code of Conduct](https://docs.rapids.ai/resources/conduct/).
+
 ## Code contributions
 
 ### Your first issue
@@ -75,7 +79,7 @@ that committed code follows our standards. You can use the tools to
 automatically format your python code by running:
 
 ```bash
-isort --recursive --atomic --apply python
+isort --atomic python/**/*.py
 black python
 ```
 
@@ -89,12 +93,25 @@ flake8 --config=python/cudf/.flake8.cython
 Additionally, many editors have plugins that will apply `isort` and `Black` as
 you edit files, as well as use `flake8` to report any style / syntax issues.
 
+#### C++/CUDA
+
+cuDF uses [`clang-format`](https://clang.llvm.org/docs/ClangFormat.html)
+
+In order to format the C++/CUDA files, navigate to the root (`cudf`) directory and run:
+```
+python3 ./cpp/scripts/run-clang-format.py -inplace
+```
+
+Additionally, many editors have plugins or extensions that you can set up to automatically run `clang-format` either manually or on file save.
+
+#### Pre-commit hooks
+
 Optionally, you may wish to setup [pre-commit hooks](https://pre-commit.com/)
-to automatically run `isort`, `Black`, and `flake8` when you make a git commit.
+to automatically run `isort`, `Black`, `flake8` and `clang-format` when you make a git commit.
 This can be done by installing `pre-commit` via `conda` or `pip`:
 
 ```bash
-conda install pre_commit
+conda install -c conda-forge pre_commit
 ```
 
 ```bash
@@ -107,7 +124,7 @@ and then running:
 pre-commit install
 ```
 
-from the root of the cuDF repository. Now `isort`, `Black`, and `flake8` will be
+from the root of the cuDF repository. Now `isort`, `Black`, `flake8` and `clang-format` will be
 run each time you commit changes.
 
 ### Get libcudf Dependencies
@@ -115,31 +132,16 @@ run each time you commit changes.
 Compiler requirements:
 
 * `gcc`     version 5.4+
-* `nvcc`    version 9.2+
-* `cmake`   version 3.12.4+
+* `nvcc`    version 10.0+
+* `cmake`   version 3.14.0+
 
 CUDA/GPU requirements:
 
-* CUDA 9.2+
-* NVIDIA driver 396.44+
+* CUDA 10.0+
+* NVIDIA driver 410.48+
 * Pascal architecture or better
 
 You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
-
-Since `cmake` will download and build Apache Arrow you may need to install Boost C++ (version 1.58+) before running
-`cmake`:
-
-```bash
-# Install Boost C++ for Ubuntu 16.04/18.04
-$ sudo apt-get install libboost-all-dev
-```
-
-or
-
-```bash
-# Install Boost C++ for Conda
-$ conda install -c conda-forge boost
-```
 
 ## Script to build cuDF from source
 
@@ -157,11 +159,11 @@ git submodule update --init --remote --recursive
 - Create the conda development environment `cudf_dev`:
 ```bash
 # create the conda environment (assuming in base `cudf` directory)
+# note: RAPIDS currently doesn't support `channel_priority: strict`; use `channel_priority: flexible` instead
 conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda10.0.yml
 # activate the environment
 conda activate cudf_dev
 ```
-- If using CUDA 9.2, create the environment with `conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda9.2.yml` instead.
 - For other CUDA versions, check the corresponding cudf_dev_cuda*.yml file in conda/environments
 
 - Build and install `libcudf` after its dependencies. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
@@ -172,8 +174,7 @@ $ cd build                                                                # ente
 
 # CMake options:
 # -DCMAKE_INSTALL_PREFIX set to the install path for your libraries or $CONDA_PREFIX if you're using Anaconda, i.e. -DCMAKE_INSTALL_PREFIX=/install/path or -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
-# -DCMAKE_CXX11_ABI set to ON or OFF depending on the ABI version you want, defaults to ON. When turned ON, ABI compability for C++11 is used. When OFF, pre-C++11 ABI compability is used.
-$ cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=ON      # configure cmake ...
+$ cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX                           # configure cmake ...
 $ make -j                                                                 # compile the libraries librmm.so, libcudf.so ... '-j' will start a parallel job using the number of physical cores available on your system
 $ make install                                                            # install the libraries librmm.so, libcudf.so to the CMAKE_INSTALL_PREFIX
 ```
@@ -185,20 +186,13 @@ $ ./build.sh                                                              # To b
 ```
 - To build only the C++ component with the script
 ```bash
-$ ./build.sh libnvstrings libcudf                                         # Build only the cuDF C++ components and install them to $INSTALL_PREFIX if set, otherwise $CONDA_PREFIX
+$ ./build.sh libcudf                                                      # Build only the cuDF C++ components and install them to $INSTALL_PREFIX if set, otherwise $CONDA_PREFIX
 ```
 
 - To run tests (Optional):
 ```bash
 $ make test
 ```
-
-- Build the `nvstrings` python packages, in the `python/nvstrings` folder:
-```bash
-$ cd $CUDF_HOME/python/nvstrings
-$ python setup.py install
-```
-
 - Build the `cudf` python package, in the `python/cudf` folder:
 ```bash
 $ cd $CUDF_HOME/python/cudf
@@ -239,9 +233,6 @@ $ ./build.sh libcudf -g                # compile and install libcudf for debug
 $ PARALLEL_LEVEL=4 ./build.sh libcudf  # compile and install libcudf limiting parallel build jobs to 4 (make -j4)
 $ ./build.sh libcudf -n                # compile libcudf but do not install
 ```
-
-- The `build.sh` script can be customized to support other features:
-  - **ABI version:** The cmake `-DCMAKE_CXX11_ABI` option can be set to ON or OFF depending on the ABI version you want, defaults to ON. When turned ON, ABI compability for C++11 is used. When OFF, pre-C++11 ABI compability is used.
 
 Done! You are ready to develop for the cuDF OSS project.
 
@@ -285,13 +276,13 @@ For detailed information on usage of this script, see [here](ci/local/README.md)
 
 ## Automated Build in Docker Container
 
-A Dockerfile is provided with a preconfigured conda environment for building and installing cuDF from source based off of the master branch.
+A Dockerfile is provided with a preconfigured conda environment for building and installing cuDF from source based off of the main branch.
 
 ### Prerequisites
 
 * Install [nvidia-docker2](https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0)) for Docker + GPU support
-* Verify NVIDIA driver is `396.44` or higher
-* Ensure CUDA 9.2+ is installed
+* Verify NVIDIA driver is `410.48` or higher
+* Ensure CUDA 10.0+ is installed
 
 ### Usage
 
@@ -318,16 +309,16 @@ flag. Below is a list of the available arguments and their purpose:
 
 | Build Argument | Default Value | Other Value(s) | Purpose |
 | --- | --- | --- | --- |
-| `CUDA_VERSION` | 9.2 | 10.0 | set CUDA version |
+| `CUDA_VERSION` | 10.0 | 10.1, 10.2 | set CUDA version |
 | `LINUX_VERSION` | ubuntu16.04 | ubuntu18.04 | set Ubuntu version |
 | `CC` & `CXX` | 5 | 7 | set gcc/g++ version; **NOTE:** gcc7 requires Ubuntu 18.04 |
 | `CUDF_REPO` | This repo | Forks of cuDF | set git URL to use for `git clone` |
-| `CUDF_BRANCH` | master | Any branch name | set git branch to checkout of `CUDF_REPO` |
+| `CUDF_BRANCH` | main | Any branch name | set git branch to checkout of `CUDF_REPO` |
 | `NUMBA_VERSION` | newest | >=0.40.0 | set numba version |
 | `NUMPY_VERSION` | newest | >=1.14.3 | set numpy version |
 | `PANDAS_VERSION` | newest | >=0.23.4 | set pandas version |
-| `PYARROW_VERSION` | 0.15.0 | Not supported | set pyarrow version |
-| `CMAKE_VERSION` | newest | >=3.12 | set cmake version |
+| `PYARROW_VERSION` | 1.0.1 | Not supported | set pyarrow version |
+| `CMAKE_VERSION` | newest | >=3.14 | set cmake version |
 | `CYTHON_VERSION` | 0.29 | Not supported | set Cython version |
 | `PYTHON_VERSION` | 3.6 | 3.7 | set python version |
 

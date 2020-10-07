@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,39 +14,55 @@
  * limitations under the License.
  */
 
-/**
- * @file reader_impl.hpp
- * @brief cuDF-IO CSV reader class implementation header
- */
-
 #pragma once
 
 #include "csv.h"
 #include "csv_gpu.h"
 
-#include <io/utilities/column_buffer.hpp>
-#include <io/utilities/datasource.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
 #include <cudf/detail/utilities/trie.cuh>
+#include <io/utilities/column_buffer.hpp>
+#include <io/utilities/hostdevice_vector.hpp>
 
-#include <cudf/io/readers.hpp>
+#include <cudf/io/csv.hpp>
+#include <cudf/io/datasource.hpp>
+#include <cudf/io/detail/csv.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
+using cudf::detail::host_span;
+
 namespace cudf {
-namespace experimental {
 namespace io {
 namespace detail {
 namespace csv {
-
 using namespace cudf::io::csv;
 using namespace cudf::io;
 
 /**
  * @brief Implementation for CSV reader
+ *
+ * The CSV reader is implemented in 4 stages:
+ * Stage 1: read and optionally decompress the input data in host memory
+ * (may be a memory-mapped view of the data on disk)
+ *
+ * Stage 2: gather the offset of each data row within the csv data.
+ * Since the number of rows in a given character block may depend on the
+ * initial parser state (like whether the block starts in a middle of a
+ * quote or not), a separate row count and output parser state is computed
+ * for every possible input parser state per 16KB character block.
+ * The result is then used to infer the parser state and starting row at
+ * the beginning of every character block.
+ * A second pass can then output the location of every row (which is needed
+ * for the subsequent parallel conversion of every row from csv text
+ * to cudf binary form)
+ *
+ * Stage 3: Optional stage to infer the data type of each CSV column.
+ *
+ * Stage 4: Convert every row from csv text form to cudf binary form.
  */
 class reader::impl {
  public:
@@ -56,114 +72,102 @@ class reader::impl {
    * @param source Dataset source
    * @param filepath Filepath if reading dataset from a file
    * @param options Settings for controlling reading behavior
-   * @param mr Resource to use for device memory allocation
+   * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::unique_ptr<datasource> source, std::string filepath,
-                reader_options const &options,
+  explicit impl(std::unique_ptr<datasource> source,
+                std::string filepath,
+                csv_reader_options const &options,
                 rmm::mr::device_memory_resource *mr);
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns.
    *
-   * @param range_offset Number of bytes offset from the start
-   * @param range_size Bytes to read; use `0` for all remaining data
-   * @param skip_rows Number of rows to skip from the start
-   * @param skip_rows_end Number of rows to skip from the end
-   * @param num_rows Number of rows to read
-   * @param metadata Optional location to return table metadata
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(size_t range_offset, size_t range_size,
-                           int skip_rows, int skip_end_rows, int num_rows,
-                           cudaStream_t stream);
+  table_with_metadata read(cudaStream_t stream);
 
  private:
   /**
    * @brief Finds row positions within the specified input data.
    *
    * This function scans the input data to record the row offsets (relative to
-   * the start of the input data) and the symbol or character that begins that
-   * row. A row is actually the data/offset between two termination symbols.
+   * the start of the input data).
+   * A row is actually the data/offset between two termination symbols.
    *
-   * @param h_data Uncompressed input data in host memory
-   * @param h_size Number of bytes of uncompressed input data
-   * @param range_offset Number of bytes offset from the start
-   * @param stream Stream to use for memory allocation and kernels
+   * @param data Uncompressed input data in host memory
+   * @param range_begin Only include rows starting after this position
+   * @param range_end Only include rows starting before this position
+   * @param skip_rows Number of rows to skip from the start
+   * @param num_rows Number of rows to read; -1: all remaining data
+   * @param load_whole_file Hint that the entire data will be needed on gpu
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void gather_row_offsets(const char *h_data, size_t h_size,
-                          size_t range_offset, cudaStream_t stream);
+  void gather_row_offsets(host_span<char const> data,
+                          size_t range_begin,
+                          size_t range_end,
+                          size_t skip_rows,
+                          int64_t num_rows,
+                          bool load_whole_file,
+                          cudaStream_t stream);
 
   /**
-   * @brief Filters and discards row positions that are not used.
+   * @brief Find the start position of the first data row
    *
    * @param h_data Uncompressed input data in host memory
-   * @param h_size Number of bytes of uncompressed input data
-   * @param range_size Bytes to read; use `0` for all remaining data
-   * @param skip_rows Number of rows to skip from the start
-   * @param skip_end_rows Number of rows to skip from the end
-   * @param num_rows Number of rows to read; use -1 for all remaining data
-   * @param stream Stream to use for memory allocation and kernels
    *
-   * @return `std::pair<uint64_t, uint64_t>` First and last row positions
+   * @return Byte position of the first row
    */
-  std::pair<uint64_t, uint64_t> select_rows(const char *h_data, size_t h_size,
-                                            size_t range_size,
-                                            cudf::size_type skip_rows,
-                                            cudf::size_type skip_end_rows,
-                                            cudf::size_type num_rows,
-                                            cudaStream_t stream);
+  size_t find_first_row_start(host_span<char const> data);
 
   /**
    * @brief Returns a detected or parsed list of column dtypes.
    *
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return `std::vector<data_type>` List of column types
    */
   std::vector<data_type> gather_column_types(cudaStream_t stream);
 
   /**
-   * @brief Converts the row-column data and outputs to columns.
+   * @brief Converts the row-column data and outputs to column bufferrs.
    *
    * @param column_types Column types
-   * @param out_buffers Output columns' device buffers
-   * @param stream Stream to use for memory allocation and kernels
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   *
+   * @return list of column buffers of decoded data, or ptr/size in the case of strings.
    */
-  void decode_data(std::vector<data_type> const &column_types,
-                   std::vector<column_buffer> &out_buffers,
-                   cudaStream_t stream);
+  std::vector<column_buffer> decode_data(std::vector<data_type> const &column_types,
+                                         cudaStream_t stream);
 
  private:
   rmm::mr::device_memory_resource *mr_ = nullptr;
   std::unique_ptr<datasource> source_;
   std::string filepath_;
   std::string compression_type_;
-  const reader_options args_;
+  const csv_reader_options opts_;
 
-  rmm::device_buffer data_;
-  rmm::device_vector<uint64_t> row_offsets;
-  size_t num_records = 0;   // Number of rows with actual data
-  long num_bits = 0;        // Numer of 64-bit bitmaps (different than valid)
-  int num_active_cols = 0;  // Number of columns to read
-  int num_actual_cols = 0;  // Number of columns in the dataset
+  rmm::device_vector<char> data_;
+  rmm::device_vector<uint64_t> row_offsets_;
+  size_t num_records_  = 0;  // Number of rows with actual data
+  int num_active_cols_ = 0;  // Number of columns to read
+  int num_actual_cols_ = 0;  // Number of columns in the dataset
 
   // Parsing options
   ParseOptions opts{};
-  thrust::host_vector<column_parse::flags> h_column_flags;
-  rmm::device_vector<column_parse::flags> d_column_flags;
-  rmm::device_vector<SerialTrieNode> d_trueTrie;
-  rmm::device_vector<SerialTrieNode> d_falseTrie;
-  rmm::device_vector<SerialTrieNode> d_naTrie;
+  thrust::host_vector<column_parse::flags> h_column_flags_;
+  rmm::device_vector<column_parse::flags> d_column_flags_;
+  rmm::device_vector<SerialTrieNode> d_trie_true_;
+  rmm::device_vector<SerialTrieNode> d_trie_false_;
+  rmm::device_vector<SerialTrieNode> d_trie_na_;
 
   // Intermediate data
-  std::vector<std::string> col_names;
-  std::vector<char> header;
+  std::vector<std::string> col_names_;
+  std::vector<char> header_;
 };
 
 }  // namespace csv
 }  // namespace detail
 }  // namespace io
-}  // namespace experimental
 }  // namespace cudf

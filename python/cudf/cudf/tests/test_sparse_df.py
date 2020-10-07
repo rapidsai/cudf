@@ -2,22 +2,13 @@
 import os.path
 
 import numpy as np
+import pyarrow as pa
 import pytest
-
-import rmm
+from numba import cuda
 
 from cudf.comm.gpuarrow import GpuArrowReader
 from cudf.core import DataFrame, Series
 from cudf.tests.utils import assert_eq
-
-try:
-    import pyarrow as pa
-
-    arrow_version = pa.__version__
-except ImportError as msg:
-    print("Failed to import pyarrow: {}".format(msg))
-    pa = None
-    arrow_version = None
 
 
 def read_data():
@@ -45,25 +36,16 @@ def read_data():
     )
     data = batch.serialize().to_pybytes()
     data = np.ndarray(shape=len(data), dtype=np.byte, buffer=bytearray(data))
-    darr = rmm.to_device(data)
+    darr = cuda.to_device(data)
     return df, schema, darr
 
 
-@pytest.mark.skipif(
-    arrow_version is None,
-    reason="need compatible pyarrow to generate test data",
-)
 def test_fillna():
     _, schema, darr = read_data()
     gar = GpuArrowReader(schema, darr)
     masked_col = gar[8]
-    assert masked_col.null_count
-    sr = Series.from_masked_array(
-        data=masked_col.data,
-        mask=masked_col.null,
-        null_count=masked_col.null_count,
-    )
-    dense = sr.fillna(123)
+    sr = Series(data=masked_col.data)
+    dense = sr.nans_to_nulls().fillna(123)
     np.testing.assert_equal(123, dense.to_array())
     assert len(dense) == len(sr)
     assert dense.null_count == 0
@@ -82,10 +64,6 @@ def test_to_dense_array():
     assert filled.size == len(sr)
 
 
-@pytest.mark.skipif(
-    arrow_version is None,
-    reason="need compatible pyarrow to generate test data",
-)
 def test_reading_arrow_sparse_data():
     pdf, schema, darr = read_data()
     gar = GpuArrowReader(schema, darr)

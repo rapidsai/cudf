@@ -67,6 +67,7 @@ def path_or_buf(datadir):
                 "double1",
             ],
         ),
+        ("TestOrcFile.RLEv2.orc", ["x", "y"]),
         ("TestOrcFile.testSnappy.orc", None),
         ("TestOrcFile.demo-12-zlib.orc", ["_col2", "_col3", "_col4", "_col5"]),
     ],
@@ -192,7 +193,7 @@ def test_orc_reader_strings(datadir):
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
-def test_orc_read_stripe(datadir, engine):
+def test_orc_read_stripes(datadir, engine):
     path = datadir / "TestOrcFile.testDate1900.orc"
     try:
         pdf = cudf.read_orc(path, engine=engine)
@@ -201,17 +202,29 @@ def test_orc_read_stripe(datadir, engine):
 
     num_rows, stripes, col_names = cudf.io.read_orc_metadata(path)
 
+    # Read stripes one at a time
     gdf = [
-        cudf.read_orc(path, engine=engine, stripe=i) for i in range(stripes)
+        cudf.read_orc(path, engine=engine, stripes=[i]) for i in range(stripes)
     ]
     gdf = cudf.concat(gdf).reset_index(drop=True)
-
     assert_eq(pdf, gdf, check_categorical=False)
+
+    # Read stripes all at once
+    gdf = cudf.read_orc(path, engine=engine, stripes=range(stripes))
+    assert_eq(pdf, gdf, check_categorical=False)
+
+    # Read only some stripes
+    gdf = cudf.read_orc(path, engine=engine, stripes=[0, 1])
+    assert_eq(gdf, pdf.head(25000))
+    gdf = cudf.read_orc(path, engine=engine, stripes=[0, stripes - 1])
+    assert_eq(
+        gdf, cudf.concat([pdf.head(15000), pdf.tail(10000)], ignore_index=True)
+    )
 
 
 @pytest.mark.parametrize("num_rows", [1, 100, 3000])
-@pytest.mark.parametrize("skip_rows", [0, 1, 3000])
-def test_orc_read_rows(datadir, skip_rows, num_rows):
+@pytest.mark.parametrize("skiprows", [0, 1, 3000])
+def test_orc_read_rows(datadir, skiprows, num_rows):
     path = datadir / "TestOrcFile.decimal.orc"
     try:
         orcfile = pa.orc.ORCFile(path)
@@ -220,7 +233,7 @@ def test_orc_read_rows(datadir, skip_rows, num_rows):
 
     pdf = orcfile.read().to_pandas()
     gdf = cudf.read_orc(
-        path, engine="cudf", skip_rows=skip_rows, num_rows=num_rows
+        path, engine="cudf", skiprows=skiprows, num_rows=num_rows
     ).to_pandas()
 
     # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
@@ -229,7 +242,7 @@ def test_orc_read_rows(datadir, skip_rows, num_rows):
 
     # Slice rows out of the whole dataframe for comparison as PyArrow doesn't
     # have an API to read a subsection of rows from the file
-    pdf = pdf[skip_rows : skip_rows + num_rows]
+    pdf = pdf[skiprows : skiprows + num_rows]
 
     np.testing.assert_allclose(pdf, gdf)
 
@@ -318,3 +331,16 @@ def test_orc_writer_strings(tmpdir, dtypes):
     got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
 
     assert_eq(expect, got)
+
+
+def test_orc_writer_sliced(tmpdir):
+    cudf_path = tmpdir.join("cudf.orc")
+
+    df = pd.DataFrame()
+    df["String"] = np.array(["Alpha", "Beta", "Gamma", "Delta"])
+    df = cudf.from_pandas(df)
+
+    df_select = df.iloc[1:3]
+
+    df_select.to_orc(cudf_path)
+    assert_eq(cudf.read_orc(cudf_path), df_select.reset_index(drop=True))

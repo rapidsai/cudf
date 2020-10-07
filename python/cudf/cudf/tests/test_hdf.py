@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
 
 try:
     import tables  # noqa F401
@@ -21,16 +21,7 @@ except ImportError:
 
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
-    types = [
-        "bool",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "datetime64[ms]",
-    ]
+    types = NUMERIC_TYPES + DATETIME_TYPES + ["bool"]
     renamer = {
         "C_l0_g" + str(idx): "col_" + val for (idx, val) in enumerate(types)
     }
@@ -39,7 +30,7 @@ def pdf(request):
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
-    test_pdf = pd.util.testing.makeCustomDataframe(
+    test_pdf = pd._testing.makeCustomDataframe(
         nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
     )
     # Delete the name of the column index, and rename the row index
@@ -122,7 +113,7 @@ def test_hdf_writer(tmpdir, pdf, gdf, complib, format):
 
     if format == "fixed":
         pdf = pdf.drop("col_category", axis=1)
-        gdf = gdf.drop("col_category")
+        gdf = gdf.drop("col_category", axis=1)
 
     pdf_df_fname = tmpdir.join("pdf_df.hdf")
     gdf_df_fname = tmpdir.join("gdf_df.hdf")

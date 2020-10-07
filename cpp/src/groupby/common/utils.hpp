@@ -16,30 +16,26 @@
 
 #pragma once
 
-#include <cudf/detail/groupby.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
+#include <cudf/detail/groupby.hpp>
 #include <vector>
 
 namespace cudf {
-namespace experimental {
 namespace groupby {
-namespace detail {    
-
+namespace detail {
 inline std::vector<aggregation_result> extract_results(
-    std::vector<aggregation_request> const& requests,
-    experimental::detail::result_cache& cache)
+  std::vector<aggregation_request> const& requests, cudf::detail::result_cache& cache)
 {
   std::vector<aggregation_result> results(requests.size());
 
   for (size_t i = 0; i < requests.size(); i++) {
-    for (auto &&agg : requests[i].aggregations) {
-      results[i].results.emplace_back( cache.release_result(i, agg) );      
+    for (auto&& agg : requests[i].aggregations) {
+      results[i].results.emplace_back(cache.release_result(i, *agg));
     }
   }
   return results;
 }
 
-} // namespace detail
-} // namespace groupby
-} // namespace experimental
-} // namespace cudf
+}  // namespace detail
+}  // namespace groupby
+}  // namespace cudf

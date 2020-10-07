@@ -11,7 +11,7 @@ import cudf
 from cudf.tests.utils import assert_eq
 
 nelems = [0, 3, 10]
-dtype = [np.int32, np.float64]
+dtype = [np.uint16, np.int32, np.float64]
 nulls = ["some", "none"]
 params_1d = itertools.product(nelems, dtype, nulls)
 

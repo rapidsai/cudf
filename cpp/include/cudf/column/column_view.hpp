@@ -18,9 +18,14 @@
 #include <cudf/types.hpp>
 #include <vector>
 
+/**
+ * @file column_view.hpp
+ * @brief column view class definitons
+ */
+
 namespace cudf {
 namespace detail {
-/**---------------------------------------------------------------------------*
+/**
  * @brief A non-owning, immutable view of device data as a column of elements,
  * some of which may be null as indicated by a bitmask.
  *
@@ -32,16 +37,16 @@ namespace detail {
  * Specification: https://arrow.apache.org/docs/memory_layout.html
  *
  * Because `column_view_base` is non-owning, no device memory is allocated nor
- *free'd when `column_view_base` objects are created or destroyed.
+ *freed when `column_view_base` objects are created or destroyed.
  *
  * To enable zero-copy slicing, a `column_view_base` has an `offset` that
  *indicates the index of the first element in the column relative to the base
  *device memory allocation. By default, `offset()` is zero.
  *
- *---------------------------------------------------------------------------**/
+ **/
 class column_view_base {
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns pointer to the base device memory allocation casted to
    * the specified type.
    *
@@ -53,13 +58,14 @@ class column_view_base {
    *
    * @tparam The type to cast to
    * @return T const* Typed pointer to underlying data
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename T = void>
-  T const* head() const noexcept {
+  T const* head() const noexcept
+  {
     return static_cast<T const*>(_data);
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the underlying data casted to the specified type, plus the
    * offset.
    *
@@ -69,52 +75,55 @@ class column_view_base {
    *
    * @tparam T The type to cast to
    * @return T const* Typed pointer to underlying data, including the offset
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename T>
-  T const* data() const noexcept {
+  T const* data() const noexcept
+  {
     return head<T>() + _offset;
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Return first element (accounting for offset) after underlying data
    * is casted to the specified type.
    *
    * @tparam T The desired type
    * @return T const* Pointer to the first element after casting
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename T>
-  T const* begin() const noexcept {
+  T const* begin() const noexcept
+  {
     return data<T>();
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Return one past the last element after underlying data is casted to
    * the specified type.
    *
    * @tparam T The desired type
    * @return T const* Pointer to one past the last element after casting
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename T>
-  T const* end() const noexcept {
+  T const* end() const noexcept
+  {
     return begin<T>() + size();
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the number of elements in the column
-   *---------------------------------------------------------------------------**/
+   **/
   size_type size() const noexcept { return _size; }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns true if `size()` returns zero, or false otherwise
-   *---------------------------------------------------------------------------**/
+   **/
   size_type is_empty() const noexcept { return size() == 0; }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the element `data_type`
-   *---------------------------------------------------------------------------**/
+   **/
   data_type type() const noexcept { return _type; }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Indicates if the column can contain null elements, i.e., if it has
    * an allocated bitmask.
    *
@@ -122,78 +131,76 @@ class column_view_base {
    *
    * @return true The bitmask is allocated
    * @return false The bitmask is not allocated
-   *---------------------------------------------------------------------------**/
+   **/
   bool nullable() const noexcept { return nullptr != _null_mask; }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the count of null elements
    *
    * @note If the column was constructed with `UNKNOWN_NULL_COUNT`, or if at any
    * point `set_null_count(UNKNOWN_NULL_COUNT)` was invoked, then the
    * first invocation of `null_count()` will compute and store the count of null
    * elements indicated by the `null_mask` (if it exists).
-   *---------------------------------------------------------------------------**/
+   **/
   size_type null_count() const;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the count of null elements in the range [begin, end)
    *
    * @note If `null_count() != 0`, every invocation of `null_count(begin, end)`
    * will recompute the count of null elements indicated by the `null_mask` in
    * the range [begin, end).
    *
-   * @throws `cudf::logic_error` for invalid range (if `begin < 0`,
+   * @throws cudf::logic_error for invalid range (if `begin < 0`,
    * `begin > end`, `begin >= size()`, or `end > size()`).
    *
    * @param[in] begin The starting index of the range (inclusive).
-   * @param[in] end The index of the last element in the range (exlusive).
-   *---------------------------------------------------------------------------**/
+   * @param[in] end The index of the last element in the range (exclusive).
+   **/
   size_type null_count(size_type begin, size_type end) const;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Indicates if the column contains null elements,
    * i.e., `null_count() > 0`
    *
    * @return true One or more elements are null
    * @return false All elements are valid
-   *---------------------------------------------------------------------------**/
+   **/
   bool has_nulls() const { return null_count() > 0; }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Indicates if the column contains null elements in the range
    * [begin, end), i.e., `null_count(begin, end) > 0`
    *
-   * @throws `cudf::logic_error` for invalid range (if `begin < 0`,
+   * @throws cudf::logic_error for invalid range (if `begin < 0`,
    * `begin > end`, `begin >= size()`, or `end > size()`).
    *
    * @param begin The starting index of the range (inclusive).
-   * @param end The index of the last element in the range (exlusive).
+   * @param end The index of the last element in the range (exclusive).
    * @return true One or more elements are null in the range [begin, end)
    * @return false All elements are valid in the range [begin, end)
-   *---------------------------------------------------------------------------**/
-  bool has_nulls(size_type begin, size_type end) const {
-    return null_count(begin, end) > 0;
-  }
+   */
+  bool has_nulls(size_type begin, size_type end) const { return null_count(begin, end) > 0; }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns raw pointer to the underlying bitmask allocation.
    *
    * @note This function does *not* account for the `offset()`.
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
-   *---------------------------------------------------------------------------**/
+   **/
   bitmask_type const* null_mask() const noexcept { return _null_mask; }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the index of the first element relative to the base memory
    * allocation, i.e., what is returned from `head<T>()`.
-   *---------------------------------------------------------------------------**/
+   **/
   size_type offset() const noexcept { return _offset; }
 
  protected:
-  data_type _type{EMPTY};   ///< Element type
-  size_type _size{};  ///< Number of elements
-  void const* _data{};      ///< Pointer to device memory containing elements
+  data_type _type{type_id::EMPTY};   ///< Element type
+  size_type _size{};                 ///< Number of elements
+  void const* _data{};               ///< Pointer to device memory containing elements
   bitmask_type const* _null_mask{};  ///< Pointer to device memory containing
                                      ///< bitmask representing null elements.
                                      ///< Optional if `null_count() == 0`
@@ -201,14 +208,14 @@ class column_view_base {
   size_type _offset{};               ///< Index position of the first element.
                                      ///< Enables zero-copy slicing
 
-  column_view_base() = default;
-  ~column_view_base() = default;
+  column_view_base()                        = default;
+  ~column_view_base()                       = default;
   column_view_base(column_view_base const&) = default;
-  column_view_base(column_view_base&&) = default;
+  column_view_base(column_view_base&&)      = default;
   column_view_base& operator=(column_view_base const&) = default;
   column_view_base& operator=(column_view_base&&) = default;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Construct a `column_view_base` from pointers to device memory for
    *the elements and bitmask of the column.
    *
@@ -221,12 +228,12 @@ class column_view_base {
    * If `type` is `EMPTY`, the specified `null_count` will be ignored and
    * `null_count()` will always return the same value as `size()`
    *
-   * @throws `cudf::logic_error` if `size < 0`
-   * @throws `cudf::logic_error` if `size > 0` but `data == nullptr`
-   * @throws `cudf::logic_error` if `type.id() == EMPTY` but `data != nullptr`
+   * @throws cudf::logic_error if `size < 0`
+   * @throws cudf::logic_error if `size > 0` but `data == nullptr`
+   * @throws cudf::logic_error if `type.id() == EMPTY` but `data != nullptr`
    *or `null_mask != nullptr`
-   * @throws `cudf::logic_error` if `null_count > 0`, but `null_mask == nullptr`
-   * @throws `cudf::logic_error` if `offset < 0`
+   * @throws cudf::logic_error if `null_count > 0`, but `null_mask == nullptr`
+   * @throws cudf::logic_error if `offset < 0`
    *
    * @param type The element type
    * @param size The number of elements
@@ -237,11 +244,13 @@ class column_view_base {
    * @param offset optional, index of the first element
    * @param children optional, depending on the element type, child columns may
    * contain additional data
-   *---------------------------------------------------------------------------**/
-  column_view_base(data_type type, size_type size, void const* data,
+   */
+  column_view_base(data_type type,
+                   size_type size,
+                   void const* data,
                    bitmask_type const* null_mask = nullptr,
-                   size_type null_count = UNKNOWN_NULL_COUNT,
-                   size_type offset = 0);
+                   size_type null_count          = UNKNOWN_NULL_COUNT,
+                   size_type offset              = 0);
 };
 
 class mutable_column_view_base : public column_view_base {
@@ -250,9 +259,11 @@ class mutable_column_view_base : public column_view_base {
 };
 }  // namespace detail
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief A non-owning, immutable view of device data as a column of elements,
  * some of which may be null as indicated by a bitmask.
+ *
+ * @ingroup column_classes
  *
  * A `column_view` can be constructed implicitly from a `cudf::column`, or may
  * be constructed explicitly from a pointer to pre-existing device memory.
@@ -261,24 +272,24 @@ class mutable_column_view_base : public column_view_base {
  * bitmask is expected to adhere to the Arrow Physical Memory Layout
  * Specification: https://arrow.apache.org/docs/memory_layout.html
  *
- * Because `column_view` is non-owning, no device memory is allocated nor free'd
+ * Because `column_view` is non-owning, no device memory is allocated nor freed
  * when `column_view` objects are created or destroyed.
  *
  * To enable zero-copy slicing, a `column_view` has an `offset` that indicates
  * the index of the first element in the column relative to the base device
  * memory allocation. By default, `offset()` is zero.
  *
- *---------------------------------------------------------------------------**/
+ **/
 class column_view : public detail::column_view_base {
  public:
-  column_view() = default;
-  ~column_view() = default;
+  column_view()                   = default;
+  ~column_view()                  = default;
   column_view(column_view const&) = default;
-  column_view(column_view&&) = default;
+  column_view(column_view&&)      = default;
   column_view& operator=(column_view const&) = default;
   column_view& operator=(column_view&&) = default;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Construct a `column_view` from pointers to device memory for the
    * elements and bitmask of the column.
    *
@@ -291,12 +302,12 @@ class column_view : public detail::column_view_base {
    * If `type` is `EMPTY`, the specified `null_count` will be ignored and
    * `null_count()` will always return the same value as `size()`
    *
-   * @throws `cudf::logic_error` if `size < 0`
-   * @throws `cudf::logic_error` if `size > 0` but `data == nullptr`
-   * @throws `cudf::logic_error` if `type.id() == EMPTY` but `data != nullptr`
+   * @throws cudf::logic_error if `size < 0`
+   * @throws cudf::logic_error if `size > 0` but `data == nullptr`
+   * @throws cudf::logic_error if `type.id() == EMPTY` but `data != nullptr`
    *or `null_mask != nullptr`
-   * @throws `cudf::logic_error` if `null_count > 0`, but `null_mask == nullptr`
-   * @throws `cudf::logic_error` if `offset < 0`
+   * @throws cudf::logic_error if `null_count > 0`, but `null_mask == nullptr`
+   * @throws cudf::logic_error if `offset < 0`
    *
    * @param type The element type
    * @param size The number of elements
@@ -307,51 +318,66 @@ class column_view : public detail::column_view_base {
    * @param offset optional, index of the first element
    * @param children optional, depending on the element type, child columns may
    * contain additional data
-   *---------------------------------------------------------------------------**/
-  column_view(data_type type, size_type size, void const* data,
-              bitmask_type const* null_mask = nullptr,
-              size_type null_count = UNKNOWN_NULL_COUNT, size_type offset = 0,
+   */
+  column_view(data_type type,
+              size_type size,
+              void const* data,
+              bitmask_type const* null_mask            = nullptr,
+              size_type null_count                     = UNKNOWN_NULL_COUNT,
+              size_type offset                         = 0,
               std::vector<column_view> const& children = {});
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the specified child
    *
    * @param child_index The index of the desired child
    * @return column_view The requested child `column_view`
-   *---------------------------------------------------------------------------**/
-  column_view child(size_type child_index) const noexcept {
-    return _children[child_index];
-  }
+   */
+  column_view child(size_type child_index) const noexcept { return _children[child_index]; }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the number of child columns.
-   *---------------------------------------------------------------------------**/
+   **/
   size_type num_children() const noexcept { return _children.size(); }
 
+  /**
+   * @brief Returns iterator to the beginning of the ordered sequence of child column-views.
+   */
+  auto child_begin() const noexcept { return _children.cbegin(); }
+
+  /**
+   * @brief Returns iterator to the end of the ordered sequence of child column-views.
+   */
+  auto child_end() const noexcept { return _children.cend(); }
+
  private:
+  friend column_view logical_cast(column_view const& input, data_type type);
+
   std::vector<column_view> _children{};  ///< Based on element type, children
                                          ///< may contain additional data
 };                                       // namespace cudf
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief A non-owning, mutable view of device data as a column of elements,
  * some of which may be null as indicated by a bitmask.
  *
+ * @ingroup column_classes
+ *
  * A `mutable_column_view` can be constructed implicitly from a `cudf::column`,
- *or may be constructed explicitly from a pointer to pre-existing device memory.
+ * or may be constructed explicitly from a pointer to pre-existing device memory.
  *
  * Unless otherwise noted, the memory layout of the `mutable_column_view`'s data
- *and bitmask is expected to adhere to the Arrow Physical Memory Layout
+ * and bitmask is expected to adhere to the Arrow Physical Memory Layout
  * Specification: https://arrow.apache.org/docs/memory_layout.html
  *
  * Because `mutable_column_view` is non-owning, no device memory is allocated
- *nor free'd when `mutable_column_view` objects are created or destroyed.
+ * nor freed when `mutable_column_view` objects are created or destroyed.
  *
  * To enable zero-copy slicing, a `mutable_column_view` has an `offset` that
- *indicates the index of the first element in the column relative to the base
- *device memory allocation. By default, `offset()` is zero.
+ * indicates the index of the first element in the column relative to the base
+ * device memory allocation. By default, `offset()` is zero.
  *
- *---------------------------------------------------------------------------**/
+ **/
 class mutable_column_view : public detail::column_view_base {
  public:
   mutable_column_view() = default;
@@ -364,7 +390,7 @@ class mutable_column_view : public detail::column_view_base {
   mutable_column_view& operator=(mutable_column_view const&) = default;
   mutable_column_view& operator=(mutable_column_view&&) = default;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Construct a `mutable_column_view` from pointers to device memory for
    *the elements and bitmask of the column.
 
@@ -375,12 +401,12 @@ class mutable_column_view : public detail::column_view_base {
    * If `type` is `EMPTY`, the specified `null_count` will be ignored and
    * `null_count()` will always return the same value as `size()`
    *
-   * @throws `cudf::logic_error` if `size < 0`
-   * @throws `cudf::logic_error` if `size > 0` but `data == nullptr`
-   * @throws `cudf::logic_error` if `type.id() == EMPTY` but `data != nullptr`
+   * @throws cudf::logic_error if `size < 0`
+   * @throws cudf::logic_error if `size > 0` but `data == nullptr`
+   * @throws cudf::logic_error if `type.id() == EMPTY` but `data != nullptr`
    *or `null_mask != nullptr`
-   * @throws `cudf::logic_error` if `null_count > 0`, but `null_mask == nullptr`
-   * @throws `cudf::logic_error` if `offset < 0`
+   * @throws cudf::logic_error if `null_count > 0`, but `null_mask == nullptr`
+   * @throws cudf::logic_error if `offset < 0`
    *
    * @param type The element type
    * @param size The number of elements
@@ -392,14 +418,16 @@ class mutable_column_view : public detail::column_view_base {
    * @param offset optional, index of the first element
    * @param children optional, depending on the element type, child columns may
    * contain additional data
-   *---------------------------------------------------------------------------**/
-  mutable_column_view(data_type type, size_type size, void* data,
-                      bitmask_type* null_mask = nullptr,
-                      size_type null_count = cudf::UNKNOWN_NULL_COUNT,
-                      size_type offset = 0,
+   */
+  mutable_column_view(data_type type,
+                      size_type size,
+                      void* data,
+                      bitmask_type* null_mask                          = nullptr,
+                      size_type null_count                             = cudf::UNKNOWN_NULL_COUNT,
+                      size_type offset                                 = 0,
                       std::vector<mutable_column_view> const& children = {});
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns pointer to the base device memory allocation casted to
    * the specified type.
    *
@@ -410,13 +438,14 @@ class mutable_column_view : public detail::column_view_base {
    *
    * @tparam The type to cast to
    * @return T* Typed pointer to underlying data
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename T = void>
-  T* head() const noexcept {
+  T* head() const noexcept
+  {
     return const_cast<T*>(detail::column_view_base::head<T>());
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the underlying data casted to the specified type, plus the
    * offset.
    *
@@ -426,88 +455,116 @@ class mutable_column_view : public detail::column_view_base {
    *
    * @tparam T The type to cast to
    * @return T* Typed pointer to underlying data, including the offset
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename T>
-  T* data() const noexcept {
+  T* data() const noexcept
+  {
     return const_cast<T*>(detail::column_view_base::data<T>());
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Return first element (accounting for offset) when underlying data is
    * casted to the specified type.
    *
    * @tparam T The desired type
    * @return T* Pointer to the first element after casting
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename T>
-  T* begin() const noexcept {
+  T* begin() const noexcept
+  {
     return const_cast<T*>(detail::column_view_base::begin<T>());
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Return one past the last element after underlying data is casted to
    * the specified type.
    *
    * @tparam T The desired type
    * @return T* Pointer to one past the last element after casting
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename T>
-  T* end() const noexcept {
+  T* end() const noexcept
+  {
     return const_cast<T*>(detail::column_view_base::end<T>());
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns raw pointer to the underlying bitmask allocation.
    *
    * @note This function does *not* account for the `offset()`.
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
-   *---------------------------------------------------------------------------**/
-  bitmask_type* null_mask() const noexcept {
+   */
+  bitmask_type* null_mask() const noexcept
+  {
     return const_cast<bitmask_type*>(detail::column_view_base::null_mask());
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Set the null count
    *
    * @throws cudf::logic_error if `new_null_count > 0` and `nullable() == false`
    *
    * @param new_null_count The new null count
-   *---------------------------------------------------------------------------**/
+   **/
   void set_null_count(size_type new_null_count);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns a reference to the specified child
    *
    * @param child_index The index of the desired child
    * @return mutable_column_view The requested child `mutable_column_view`
-   *---------------------------------------------------------------------------**/
-  mutable_column_view& child(size_type child_index) noexcept {
+   */
+  mutable_column_view child(size_type child_index) const noexcept
+  {
     return mutable_children[child_index];
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns the number of child columns.
-   *---------------------------------------------------------------------------**/
+   **/
   size_type num_children() const noexcept { return mutable_children.size(); }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Converts a mutable view into an immutable view
    *
    * @return column_view An immutable view of the mutable view's elements
-   *---------------------------------------------------------------------------**/
+   **/
   operator column_view() const;
 
  private:
   std::vector<mutable_column_view> mutable_children;
 };
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Counts the number of descendants of the specified parent.
  *
  * @param parent The parent whose descendants will be counted
  * @return size_type The number of descendants of the parent
- *---------------------------------------------------------------------------**/
+ **/
 size_type count_descendants(column_view parent);
 
-}// namespace cudf
+/**
+ * @brief Zero-copy cast between types with the same underlying representation.
+ *
+ * This is similar to `reinterpret_cast` or `bit_cast` in that it gives a view of the same raw bits
+ * as a different type. Unlike `reinterpret_cast` however, this cast is only allowed on types that
+ * have the same width and underlying representation. For example, the way timestamp types are laid
+ * out in memory is equivalent to an integer representing a duration since a fixed epoch; logically
+ * casting to the same integer type (INT32 for days, INT64 for others) results in a raw view of the
+ * duration count. However, an INT32 column cannot be logically cast to INT64 as the sizes differ,
+ * nor can an INT32 columm be logically cast to a FLOAT32 since what the bits represent differs.
+ *
+ * The validity of the conversion can be checked with `cudf::is_logically_castable()`. For other
+ * conversions between fixed-width types which require a copy, see `cudf::cast()`.
+ *
+ * @throws cudf::logic_error if the specified cast is not possible, i.e.,
+ * `is_logically_castable(input.type(), type)` is false.
+ *
+ * @param input The `column_view` to cast from
+ * @param type The `data_type` to cast to
+ * @return New `column_view` wrapping the same data as `input` but cast to `type`
+ */
+column_view logical_cast(column_view const& input, data_type type);
+
+}  // namespace cudf

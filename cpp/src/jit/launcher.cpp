@@ -19,38 +19,30 @@
 
 #include <jit/launcher.h>
 #include <jit/parser.h>
-#include <cstdint>
 #include <chrono>
+#include <cstdint>
 
 namespace cudf {
 namespace jit {
+launcher::launcher(const std::string& hash,
+                   const std::string& cuda_source,
+                   const std::vector<std::string>& header_names,
+                   const std::vector<std::string>& compiler_flags,
+                   jitify::experimental::file_callback_type file_callback,
+                   cudaStream_t stream)
+  : cache_instance{cudf::jit::cudfJitCache::Instance()}, stream(stream)
+{
+  program = cache_instance.getProgram(
+    hash, cuda_source.c_str(), header_names, compiler_flags, file_callback);
+}
 
-    launcher::launcher(
-      const std::string& hash,
-      const std::string& cuda_source,
-      const std::vector<std::string>& header_names,
-      const std::vector<std::string>& compiler_flags,
-      jitify::experimental::file_callback_type file_callback,
-      cudaStream_t stream
-    )
-     : cache_instance{cudf::jit::cudfJitCache::Instance()}
-     , stream(stream) 
-    {
-      program = cache_instance.getProgram(
-                  hash,
-                  cuda_source.c_str(),
-                  header_names,
-                  compiler_flags,
-                  file_callback
-                );
-    }
+launcher::launcher(launcher&& launcher)
+  : program{std::move(launcher.program)},
+    cache_instance{cudf::jit::cudfJitCache::Instance()},
+    kernel_inst{std::move(launcher.kernel_inst)},
+    stream{launcher.stream}
+{
+}
 
-    launcher::launcher(launcher&& launcher)
-     : program {std::move(launcher.program)}
-     , cache_instance {cudf::jit::cudfJitCache::Instance()}
-     , kernel_inst {std::move(launcher.kernel_inst)}
-     , stream {launcher.stream}
-    { }
-
-} // namespace jit
-} // namespace cudf
+}  // namespace jit
+}  // namespace cudf

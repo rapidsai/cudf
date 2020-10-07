@@ -1,19 +1,38 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
-from cudf._lib.cudf cimport *
 
-cdef class TableView:
-    cdef cudf_table* ptr
-    cdef vector[gdf_column*] c_columns
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport (
+    table_view, mutable_table_view
+)
+
 
 cdef class Table:
-    cdef unique_ptr[cudf_table] ptr
-    cdef vector[gdf_column*] c_columns
+    cdef dict __dict__
+
+    cdef table_view view(self) except *
+    cdef mutable_table_view mutable_view(self) except *
+    cdef table_view data_view(self) except *
+    cdef mutable_table_view mutable_data_view(self) except *
+    cdef table_view index_view(self) except *
+    cdef mutable_table_view mutable_index_view(self) except *
 
     @staticmethod
-    cdef from_ptr(unique_ptr[cudf_table]&& ptr)
+    cdef Table from_unique_ptr(
+        unique_ptr[table] c_tbl,
+        column_names,
+        index_names=*
+    )
 
-cdef extern from "<utility>" namespace "std" nogil:
-    cdef cudf_table move(cudf_table)
-    cdef unique_ptr[cudf_table] move(unique_ptr[cudf_table])
+    @staticmethod
+    cdef Table from_table_view(
+        table_view,
+        owner,
+        column_names,
+        index_names=*
+    )
+
+cdef table_view make_table_view(columns) except *
+cdef mutable_table_view make_mutable_table_view(columns) except *
+cdef columns_from_ptr(unique_ptr[table] c_tbl)

@@ -19,11 +19,14 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 
-
-namespace cudf
-{
-namespace dictionary
-{
+namespace cudf {
+namespace dictionary {
+/**
+ * @addtogroup dictionary_encode
+ * @{
+ * @file
+ * @brief Dictionary column encode and decode APIs
+ */
 
 /**
  * @brief Construct a dictionary column by dictionary encoding an existing column.
@@ -37,40 +40,43 @@ namespace dictionary
  *
  * The null_mask and null count are copied from the input column to the output column.
  *
- * @throw cudf::logic_error if indices type is not INT32
+ * @throw cudf::logic_error if indices type is not an unsigned integer type.
+ * @throw cudf::logic_error if the column to encode is already a DICTIONARY type.
  *
- * ```
+ * @code{.pseudo}
  * c = [429,111,213,111,213,429,213]
  * d = make_dictionary_column(c)
  * d now has keys [111,213,429] and indices [2,0,1,0,1,2,1]
- * ```
+ * @endcode
  *
  * @param column The column to dictionary encode.
  * @param indices_type The integer type to use for the indices.
- * @param mr Optional resource to use for device memory allocation.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Returns a dictionary column.
  */
 std::unique_ptr<column> encode(
-    column_view const& column,
-    data_type indices_type = data_type{INT32},
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  column_view const& column,
+  data_type indices_type              = data_type{type_id::UINT32},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create a column by gathering the keys from the provided
  * dictionary_column into a new column using the indices from that column.
  *
- * ```
+ * @code{.pseudo}
  * d1 = {["a","c","d"],[2,0,1,0]}
  * s = decode(d1)
  * s is now ["d","a","c","a"]
- * ```
+ * @endcode
  *
  * @param dictionary_column Existing dictionary column.
- * @param mr Resource for allocating memory for the output.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column with type matching the dictionary_column's keys.
  */
-std::unique_ptr<column> decode( dictionary_column_view const& dictionary_column,
-                                rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> decode(
+  dictionary_column_view const& dictionary_column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-} // namespace dictionary
-} // namespace cudf
+/** @} */  // end of group
+}  // namespace dictionary
+}  // namespace cudf

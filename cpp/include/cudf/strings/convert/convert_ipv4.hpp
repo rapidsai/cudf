@@ -15,13 +15,16 @@
  */
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 
-namespace cudf
-{
-namespace strings
-{
+namespace cudf {
+namespace strings {
+/**
+ * @addtogroup strings_convert
+ * @{
+ * @file
+ */
 
 /**
  * @brief Converts IPv4 addresses into integers.
@@ -39,16 +42,17 @@ namespace strings
  * integer is undefined.
  *
  * The resulting 32-bit integer is placed in an int64_t to avoid setting the sign-bit
- * in a int32_t type. This could be changed if cudf supported a UINT32 type in the future.
+ * in an int32_t type. This could be changed if cudf supported a UINT32 type in the future.
  *
  * Any null entries will result in corresponding null entries in the output column.
  *
  * @param strings Strings instance for this operation.
- * @param mr Resource for allocating device memory.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New INT64 column converted from strings.
  */
-std::unique_ptr<column> ipv4_to_integers( strings_column_view const& strings,
-                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> ipv4_to_integers(
+  strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Converts integers into IPv4 addresses as strings.
@@ -65,12 +69,39 @@ std::unique_ptr<column> ipv4_to_integers( strings_column_view const& strings,
  *
  * @throw cudf::logic_error if the input column is not INT64 type.
  *
- * @param column Integer (INT64) column to convert.
- * @param mr Resource for allocating device memory.
+ * @param integers Integer (INT64) column to convert.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
-std::unique_ptr<column> integers_to_ipv4( column_view const& integers,
-                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> integers_to_ipv4(
+  column_view const& integers,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-} // namespace strings
-} // namespace cudf
+/**
+ * @brief Returns a boolean column identifying strings in which all
+ * characters are valid for conversion to integers from IPv4 format.
+ *
+ * The output row entry will be set to `true` if the corresponding string element
+ * has the following format `xxx.xxx.xxx.xxx` where `xxx` is integer digits
+ * between 0-255.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ['123.255.0.7', '127.0.0.1', '', '1.2.34' '123.456.789.10']
+ * b = s.is_ipv4(s)
+ * b is [true, true, false, false, true]
+ * @endcode
+ *
+ * Any null row results in a null entry for that row in the output column.
+ *
+ * @param strings Strings instance for this operation.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New column of boolean results for each string.
+ */
+std::unique_ptr<column> is_ipv4(
+  strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/** @} */  // end of doxygen group
+}  // namespace strings
+}  // namespace cudf

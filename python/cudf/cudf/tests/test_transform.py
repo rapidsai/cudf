@@ -1,21 +1,16 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 from __future__ import division
 
-import numba
 import numpy as np
 import pytest
-from packaging.version import Version
 
 from cudf.core import Series
+from cudf.tests.utils import NUMERIC_TYPES
 
-supported_types = ["int8", "int16", "int32", "int64", "float32", "float64"]
+supported_types = NUMERIC_TYPES
 
 
-@pytest.mark.skipif(
-    Version(numba.__version__) < Version("0.44.0a"),
-    reason="Numba 0.44.0a or newer required",
-)
 @pytest.mark.parametrize("dtype", supported_types)
 def test_applymap(dtype):
 
@@ -31,4 +26,4 @@ def test_applymap(dtype):
 
     result = lhs_arr ** 3
 
-    np.testing.assert_almost_equal(result, out_col)
+    np.testing.assert_almost_equal(result, out_col.to_array())

@@ -14,15 +14,13 @@
  * limitations under the License.
  */
 
-#ifndef GDF_UNARY_TRANSFORM_JIT_CODE_CODE_H
-#define GDF_UNARY_TRANSFORM_JIT_CODE_CODE_H
+#pragma once
 
 namespace cudf {
-namespace experimental {
 namespace transformation {
 namespace jit {
 namespace code {
-
+extern const char* kernel_header;
 extern const char* kernel;
 extern const char* traits;
 extern const char* operation;
@@ -30,7 +28,4 @@ extern const char* operation;
 }  // namespace code
 }  // namespace jit
 }  // namespace transformation
-}  // namespace experimental
 }  // namespace cudf
-
-#endif

@@ -1,5 +1,6 @@
-API Reference
-=============
+~~~~~~~~~~~~~~~~~~~
+cuDF API Reference
+~~~~~~~~~~~~~~~~~~~
 
 .. currentmodule:: cudf.core.dataframe
 
@@ -7,12 +8,8 @@ DataFrame
 ---------
 .. autoclass:: DataFrame
     :members:
-
-..
-  For cudf.concat function
-..
-.. automodule:: cudf.core.reshape
-    :members:
+    :inherited-members:
+    :exclude-members: serialize, deserialize, device_deserialize, device_serialize, host_deserialize, host_serialize, to_dict, itertuples, iterrows
 
 Series
 ------
@@ -20,36 +17,201 @@ Series
 
 .. autoclass:: Series
     :members:
- 
-Groupby
+    :inherited-members:
+    :exclude-members: serialize, deserialize, logical_not, logical_or, logical_and, remainder, sum_of_squares, fill, merge, iteritems, items, device_deserialize, device_serialize, host_deserialize, host_serialize, to_dict, tolist, to_list
+
+Strings
+-------
+.. currentmodule:: cudf.core.column.string
+
+.. autoclass:: StringMethods
+    :members:
+
+General Functions
+-----------------
+.. automodule:: cudf.core.reshape
+    :members:
+.. autofunction:: cudf.to_datetime
+
+
+Index
+-----
+.. currentmodule:: cudf.core.index
+.. autoclass:: Index
+    :members:
+    :inherited-members:
+    :exclude-members: serialize, deserialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+RangeIndex
+----------
+.. currentmodule:: cudf.core.index
+.. autoclass:: RangeIndex
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+GenericIndex
+------------
+.. currentmodule:: cudf.core.index
+.. autoclass:: GenericIndex
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+MultiIndex
+----------
+.. currentmodule:: cudf.core.multiindex
+.. autoclass:: MultiIndex
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+Int8Index
+---------
+.. currentmodule:: cudf.core.index
+.. autoclass:: Int8Index
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+Int16Index
+----------
+.. currentmodule:: cudf.core.index
+.. autoclass:: Int16Index
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+Int32Index
+----------
+.. currentmodule:: cudf.core.index
+.. autoclass:: Int32Index
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+Int64Index
+----------
+.. currentmodule:: cudf.core.index
+.. autoclass:: Int64Index
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+UInt8Index
+----------
+.. currentmodule:: cudf.core.index
+.. autoclass:: UInt8Index
+    :inherited-members:
+    :members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+UInt16Index
+-----------
+.. currentmodule:: cudf.core.index
+.. autoclass:: UInt16Index
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+UInt32Index
+-----------
+.. currentmodule:: cudf.core.index
+.. autoclass:: UInt32Index
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+UInt64Index
+-----------
+.. currentmodule:: cudf.core.index
+.. autoclass:: UInt64Index
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+Float32Index
+------------
+.. currentmodule:: cudf.core.index
+.. autoclass:: Float32Index
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+Float64Index
+------------
+.. currentmodule:: cudf.core.index
+.. autoclass:: Float64Index
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+CategoricalIndex
+----------------
+.. currentmodule:: cudf.core.index
+.. autoclass:: CategoricalIndex
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+StringIndex
+-----------
+.. currentmodule:: cudf.core.index
+.. autoclass:: StringIndex
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+DatetimeIndex
+-------------
+.. currentmodule:: cudf.core.index
+.. autoclass:: DatetimeIndex
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+TimedeltaIndex
+--------------
+.. currentmodule:: cudf.core.index
+.. autoclass:: TimedeltaIndex
+    :members:
+    :inherited-members:
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize, tolist, to_list
+
+Categories
+----------
+.. currentmodule:: cudf.core.column.categorical
+
+.. autoclass:: CategoricalAccessor
+    :members:
+
+GroupBy
 -------
 .. currentmodule:: cudf.core.groupby.groupby
 
-..
-  Could not get it to render inhereted methods from baseclass _Groupby when using autoclass with
-  DataFrameGroupBy and SeriesGroupby
-
-.. automethod:: DataFrameGroupBy.agg
-.. automethod:: DataFrameGroupBy.count
-.. automethod:: DataFrameGroupBy.max
-.. automethod:: DataFrameGroupBy.mean
-.. automethod:: DataFrameGroupBy.min
-.. automethod:: DataFrameGroupBy.quantile
-.. automethod:: DataFrameGroupBy.size
-.. automethod:: DataFrameGroupBy.sum
-
-..
-  Sphinx explicit members (:members: apply, apply_grouped, as_df..), and exclude-members wasn't working
-  Thus, manually specify the following for legacy_groupby.Groupby's docstring inclusion.
-  Other methods in the class are legacy duplicates of cudf.groupby.groupby.Groupby
-
-Legacy Groupby
---------------
-.. currentmodule:: cudf.core.groupby.legacy_groupby
-
-.. autoclass:: Groupby
+.. autoclass:: GroupBy
     :members:
-    :exclude-members: serialize, deserialize
+    :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
+
+General utility functions
+-------------------------
+.. currentmodule:: cudf.testing
+
+.. automodule:: cudf.testing.testing
+    :members:
+
+
+Timedelta Properties
+--------------------
+.. currentmodule:: cudf.core.series
+.. autoclass:: TimedeltaProperties
+    :members:
+
+Datetime Properties
+-------------------
+.. currentmodule:: cudf.core.series
+.. autoclass:: DatetimeProperties
+    :members:
 
 IO
 --
@@ -70,6 +232,13 @@ IO
 .. automodule:: cudf.io.feather
     :members:
 .. automodule:: cudf.io.hdf
+    :members:
+
+Extending cuDF
+----------------
+.. currentmodule:: cudf.api.extensions
+
+.. automodule:: cudf.api.extensions.accessor
     :members:
 
 GpuArrowReader

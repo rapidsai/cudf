@@ -15,11 +15,19 @@
  */
 #pragma once
 
-#include <cudf/column/column_view.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
 
-namespace cudf
-{
+/**
+ * @file
+ * @brief Class definition for cudf::dictionary_column_view
+ */
+
+namespace cudf {
+/**
+ * @addtogroup dictionary_classes
+ * @{
+ */
 
 /**
  * @brief A wrapper class for operations on a dictionary column.
@@ -29,50 +37,51 @@ namespace cudf
  * The indices represent the corresponding positions of each element's
  * value in the keys.
  */
-class dictionary_column_view : private column_view
-{
-public:
-    dictionary_column_view( column_view const& dictionary_column );
-    dictionary_column_view( dictionary_column_view&& dictionary_view ) = default;
-    dictionary_column_view( const dictionary_column_view& dictionary_view ) = default;
-    ~dictionary_column_view() = default;
-    dictionary_column_view& operator=(dictionary_column_view const&) = default;
-    dictionary_column_view& operator=(dictionary_column_view&&) = default;
+class dictionary_column_view : private column_view {
+ public:
+  dictionary_column_view(column_view const& dictionary_column);
+  dictionary_column_view(dictionary_column_view&& dictionary_view)      = default;
+  dictionary_column_view(const dictionary_column_view& dictionary_view) = default;
+  ~dictionary_column_view()                                             = default;
+  dictionary_column_view& operator=(dictionary_column_view const&) = default;
+  dictionary_column_view& operator=(dictionary_column_view&&) = default;
 
-    using column_view::size;
-    using column_view::null_mask;
-    using column_view::null_count;
-    using column_view::has_nulls;
-    using column_view::offset;
+  using column_view::has_nulls;
+  using column_view::null_count;
+  using column_view::null_mask;
+  using column_view::offset;
+  using column_view::size;
 
-    /**
-     * @brief Returns the parent column.
-     */
-    column_view parent() const noexcept;
+  /**
+   * @brief Returns the parent column.
+   */
+  column_view parent() const noexcept;
 
-    /**
-     * @brief Returns the column of indices
-     */
-    column_view indices() const noexcept;
+  /**
+   * @brief Returns the column of indices
+   */
+  column_view indices() const noexcept;
 
-    /**
-     * @brief Returns a column_view combining the indices data
-     * with offset, size, and nulls from the parent.
-     */
-    column_view get_indices_annotated() const noexcept;
+  /**
+   * @brief Returns a column_view combining the indices data
+   * with offset, size, and nulls from the parent.
+   */
+  column_view get_indices_annotated() const noexcept;
 
-    /**
-     * @brief Returns the column of keys
-     */
-    column_view keys() const noexcept;
+  /**
+   * @brief Returns the column of keys
+   */
+  column_view keys() const noexcept;
 
-    /**
-     * @brief Returns the number of rows in the keys column.
-     */
-    size_type keys_size() const noexcept;
-
-private:
-    column_view _dictionary;
+  /**
+   * @brief Returns the number of rows in the keys column.
+   */
+  size_type keys_size() const noexcept;
 };
+/** @} */  // end of group
 
-} // namespace cudf
+//! Dictionary column APIs.
+namespace dictionary {  // defined here for doxygen output
+}
+
+}  // namespace cudf

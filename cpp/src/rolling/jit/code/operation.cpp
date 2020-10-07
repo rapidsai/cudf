@@ -18,13 +18,11 @@
  */
 
 namespace cudf {
-namespace experimental {
 namespace rolling {
 namespace jit {
 namespace code {
-
 const char* operation_h =
-R"***(operation.h
+  R"***(operation.h
 #pragma once
   struct rolling_udf_ptx {
     template <typename OutType, typename InType>
@@ -48,8 +46,7 @@ R"***(operation.h
 
 )***";
 
-} // namespace code
-} // namespace jit
-} // namespace rolling
-} // namespace experimental
-} // namespace cudf
+}  // namespace code
+}  // namespace jit
+}  // namespace rolling
+}  // namespace cudf

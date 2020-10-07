@@ -1,13 +1,16 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
 
 from cudf.core import Series
 from cudf.datasets import randomdata
+from cudf.tests.utils import assert_eq
 
-params_dtypes = [np.int32, np.float32, np.float64]
+params_dtypes = [np.int32, np.uint32, np.float32, np.float64]
 methods = ["min", "max", "sum", "mean", "var", "std"]
 
 interpolation_methods = ["linear", "lower", "higher", "midpoint", "nearest"]
@@ -15,7 +18,8 @@ interpolation_methods = ["linear", "lower", "higher", "midpoint", "nearest"]
 
 @pytest.mark.parametrize("method", methods)
 @pytest.mark.parametrize("dtype", params_dtypes)
-def test_series_reductions(method, dtype):
+@pytest.mark.parametrize("skipna", [True, False])
+def test_series_reductions(method, dtype, skipna):
     np.random.seed(0)
     arr = np.random.random(100)
     if np.issubdtype(dtype, np.integer):
@@ -25,17 +29,20 @@ def test_series_reductions(method, dtype):
         mask = arr > 0.5
 
     arr = arr.astype(dtype)
-    arr2 = arr[mask]
+    if dtype in (np.float32, np.float64):
+        arr[[2, 5, 14, 19, 50, 70]] = np.nan
     sr = Series.from_masked_array(arr, Series(mask).as_mask())
+    psr = sr.to_pandas()
+    psr[~mask] = np.nan
 
-    def call_test(sr):
+    def call_test(sr, skipna):
         fn = getattr(sr, method)
         if method in ["std", "var"]:
-            return fn(ddof=1)
+            return fn(ddof=1, skipna=skipna)
         else:
-            return fn()
+            return fn(skipna=skipna)
 
-    expect, got = call_test(arr2), call_test(sr)
+    expect, got = call_test(psr, skipna=skipna), call_test(sr, skipna=skipna)
     print(expect, got)
     np.testing.assert_approx_equal(expect, got)
 
@@ -126,7 +133,7 @@ def test_series_scale():
     scaled = (arr - vmin) / (vmax - vmin)
     assert scaled.min() == 0
     assert scaled.max() == 1
-    pd.testing.assert_series_equal(sr.scale().to_pandas(), scaled)
+    assert_eq(sr.scale(), scaled)
 
 
 @pytest.mark.parametrize("int_method", interpolation_methods)
@@ -168,17 +175,17 @@ def test_exact_quantiles_int(int_method):
 
 
 def test_approx_quantiles():
+
     arr = np.asarray([6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
-    approx_results = [-1.01, 0.8, 0.8, 2.13, 6.8]
 
     gdf_series = Series(arr)
+    pdf_series = pd.Series(arr)
 
     q1 = gdf_series.quantile(quant_values, exact=False)
+    q2 = pdf_series.quantile(quant_values)
 
-    np.testing.assert_allclose(
-        q1.to_pandas().values, approx_results, rtol=1e-10
-    )
+    assert_eq(q1, q2)
 
 
 def test_approx_quantiles_int():
@@ -196,14 +203,13 @@ def test_approx_quantiles_int():
 @pytest.mark.parametrize("data", [[], [1, 2, 3, 10, 326497]])
 @pytest.mark.parametrize("q", [[], 0.5, 1, 0.234, [0.345], [0.243, 0.5, 1]])
 def test_misc_quantiles(data, q):
-    from cudf.tests import utils
 
     pdf_series = pd.Series(data)
     gdf_series = Series(data)
 
     expected = pdf_series.quantile(q)
     actual = gdf_series.quantile(q)
-    utils.assert_eq(expected, actual)
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -234,8 +240,17 @@ def test_kurtosis(data, null_flag):
         pdata.iloc[[0, 2]] = None
 
     got = data.kurtosis()
+    got = got if np.isscalar(got) else got.to_array()
     expected = pdata.kurtosis()
     np.testing.assert_array_almost_equal(got, expected)
+
+    got = data.kurt()
+    got = got if np.isscalar(got) else got.to_array()
+    expected = pdata.kurt()
+    np.testing.assert_array_almost_equal(got, expected)
+
+    with pytest.raises(NotImplementedError):
+        data.kurt(numeric_only=False)
 
 
 @pytest.mark.parametrize(
@@ -267,7 +282,11 @@ def test_skew(data, null_flag):
 
     got = data.skew()
     expected = pdata.skew()
+    got = got if np.isscalar(got) else got.to_array()
     np.testing.assert_array_almost_equal(got, expected)
+
+    with pytest.raises(NotImplementedError):
+        data.skew(numeric_only=False)
 
 
 @pytest.mark.parametrize("dtype", params_dtypes)
@@ -375,10 +394,110 @@ def test_corr1d(data1, data2):
 
 
 def test_df_corr():
-    from cudf.tests import utils
 
     gdf = randomdata(100, {str(x): float for x in range(50)})
     pdf = gdf.to_pandas()
     got = gdf.corr()
     expected = pdf.corr()
-    utils.assert_eq(got, expected)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [0.0, 1, 3, 6, np.NaN, 7, 5.0, np.nan, 5, 2, 3, -100],
+        [np.nan] * 3,
+        [1, 5, 3],
+        [],
+    ],
+)
+@pytest.mark.parametrize(
+    "ops",
+    [
+        "mean",
+        "min",
+        "max",
+        "sum",
+        "product",
+        "var",
+        "std",
+        "prod",
+        "kurtosis",
+        "skew",
+        "any",
+        "all",
+        "cummin",
+        "cummax",
+        "cumsum",
+        "cumprod",
+    ],
+)
+@pytest.mark.parametrize("skipna", [True, False, None])
+def test_nans_stats(data, ops, skipna):
+    psr = pd.Series(data)
+    gsr = Series(data)
+    assert_eq(
+        getattr(psr, ops)(skipna=skipna), getattr(gsr, ops)(skipna=skipna)
+    )
+
+    psr = pd.Series(data)
+    gsr = Series(data, nan_as_null=False)
+    # Since there is no concept of `nan_as_null` in pandas,
+    # nulls will be returned in the operations. So only
+    # testing for `skipna=True` when `nan_as_null=False`
+    assert_eq(getattr(psr, ops)(skipna=True), getattr(gsr, ops)(skipna=True))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [0.0, 1, 3, 6, np.NaN, 7, 5.0, np.nan, 5, 2, 3, -100],
+        [np.nan] * 3,
+        [1, 5, 3],
+    ],
+)
+@pytest.mark.parametrize("ops", ["sum", "product", "prod"])
+@pytest.mark.parametrize("skipna", [True, False, None])
+@pytest.mark.parametrize("min_count", [-10, -1, 0, 1, 2, 3, 5, 10])
+def test_min_count_ops(data, ops, skipna, min_count):
+    psr = pd.Series(data)
+    gsr = Series(data)
+
+    assert_eq(
+        getattr(psr, ops)(skipna=skipna, min_count=min_count),
+        getattr(gsr, ops)(skipna=skipna, min_count=min_count),
+    )
+
+
+@pytest.mark.parametrize(
+    "gsr",
+    [
+        Series([1, 2, 3, 4], dtype="datetime64[ns]"),
+        Series([1, 2, 3, 4], dtype="timedelta64[ns]"),
+    ],
+)
+def test_cov_corr_invalid_dtypes(gsr):
+    psr = gsr.to_pandas()
+
+    try:
+        psr.corr(psr)
+    except Exception as e:
+        with pytest.raises(
+            type(e),
+            match=re.escape(
+                f"cannot perform corr with types {gsr.dtype}, {gsr.dtype}"
+            ),
+        ):
+            gsr.corr(gsr)
+
+    try:
+        psr.cov(psr)
+    except Exception as e:
+        with pytest.raises(
+            type(e),
+            match=re.escape(
+                f"cannot perform covarience with types {gsr.dtype}, "
+                f"{gsr.dtype}"
+            ),
+        ):
+            gsr.cov(gsr)

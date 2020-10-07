@@ -7,3 +7,27 @@
     margin: 0.5em;
     content: ":";
 }
+
+.highlight:hover span#strike_button {
+    color:#767676;
+}
+
+span#strike_button {
+    color :#d0ced7;
+}
+
+/* Fix for text wrap in sphinx tables:
+ * https://rackerlabs.github.io/docs-rackspace/tools/rtd-tables.html 
+ */
+@media screen and (min-width: 767px) {
+
+    .wy-table-responsive table td {
+       /* !important prevents the common CSS stylesheets from overriding
+          this as on RTD they are loaded after this stylesheet */
+       white-space: normal !important;
+    }
+ 
+    .wy-table-responsive {
+       overflow: visible !important;
+    }
+ }

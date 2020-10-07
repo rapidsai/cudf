@@ -1,7 +1,12 @@
+import datetime
+import datetime as dt
+
 import numpy as np
+import pandas as pd
 import pytest
 
-from cudf._libxx.scalar import Scalar
+from cudf._lib.scalar import Scalar
+from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, TIMEDELTA_TYPES
 
 
 @pytest.mark.parametrize(
@@ -27,6 +32,21 @@ from cudf._libxx.scalar import Scalar
         np.int64(42),
         np.iinfo(np.int64).min,
         np.iinfo(np.int64).max,
+        np.uint8(0),
+        np.uint8(1),
+        np.uint8(255),
+        np.iinfo(np.uint8).min,
+        np.iinfo(np.uint8).max,
+        np.uint16(1),
+        np.iinfo(np.uint16).min,
+        np.iinfo(np.uint16).max,
+        np.uint32(42),
+        np.uint32(4294967254),
+        np.iinfo(np.uint32).min,
+        np.iinfo(np.uint32).max,
+        np.uint64(42),
+        np.iinfo(np.uint64).min,
+        np.uint64(np.iinfo(np.uint64).max),
         np.float32(1),
         np.float32(-1),
         np.finfo(np.float32).min,
@@ -69,26 +89,58 @@ from cudf._libxx.scalar import Scalar
 )
 def test_round_trip_scalar(value):
     s = Scalar(value)
+
     np.testing.assert_equal(s.value, value)
+    assert s.is_valid() is True
 
 
 @pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "datetime64[s]",
-        "datetime64[ms]",
-        "datetime64[us]",
-        "datetime64[ns]",
-        "object",
-    ],
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["object"]
 )
 def test_null_scalar(dtype):
     s = Scalar(None, dtype=dtype)
     assert s.value is None
     assert s.dtype == np.dtype(dtype)
+    assert s.is_valid() is False
+
+
+@pytest.mark.parametrize(
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["object"]
+)
+def test_valid_scalar(dtype):
+    s = Scalar(1, dtype=dtype)
+
+    assert s.dtype == np.dtype(dtype)
+    assert s.is_valid() is True
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        datetime.timedelta(seconds=76),
+        datetime.timedelta(microseconds=7),
+        datetime.timedelta(minutes=47),
+        datetime.timedelta(hours=4427),
+        datetime.timedelta(weeks=7134),
+        pd.Timestamp(15133.5, unit="s"),
+        pd.Timestamp(15133.5, unit="D"),
+        pd.Timedelta(1513393355.5, unit="s"),
+        pd.Timedelta(34765, unit="D"),
+    ],
+)
+def test_date_duration_scalars(value):
+    s = Scalar(value)
+
+    actual = s.value
+
+    if isinstance(value, dt.datetime):
+        expected = np.datetime64(value)
+    elif isinstance(value, dt.timedelta):
+        expected = np.timedelta64(value)
+    elif isinstance(value, pd.Timestamp):
+        expected = value.to_datetime64()
+    elif isinstance(value, pd.Timedelta):
+        expected = value.to_timedelta64()
+
+    np.testing.assert_equal(actual, expected)
+    assert s.is_valid() is True

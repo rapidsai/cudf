@@ -1,153 +1,19 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-import math
 from collections.abc import Iterator
-from operator import getitem
 
 import cupy
 import numpy as np
 import tlz as toolz
 
 from dask.base import tokenize
-from dask.dataframe.core import DataFrame, Index, Series, _concat
+from dask.dataframe import methods
+from dask.dataframe.core import DataFrame, Index, Series
 from dask.dataframe.shuffle import rearrange_by_column
-from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import M, digit, insert
+from dask.utils import M
 
 import cudf as gd
 from cudf.utils.dtypes import is_categorical_dtype
-
-
-def set_partitions_hash(df, columns, npartitions):
-    c = hash_object_dispatch(df[columns], index=False)
-    return np.mod(c, npartitions)
-
-
-def _shuffle_group(df, columns, stage, k, npartitions, ignore_index):
-    c = hash_object_dispatch(df[columns], index=False)
-    typ = np.min_scalar_type(npartitions * 2)
-    c = np.mod(c, npartitions).astype(typ, copy=False)
-    if stage > 0:
-        np.floor_divide(c, k ** stage, out=c)
-    if k < int(npartitions / (k ** stage)):
-        np.mod(c, k, out=c)
-    return group_split_dispatch(
-        df, c.astype(np.int32), k, ignore_index=ignore_index
-    )
-
-
-def rearrange_by_hash(
-    df, columns, npartitions, max_branch=None, ignore_index=True
-):
-    if npartitions and npartitions != df.npartitions:
-        # Use main-line dask for new npartitions
-        meta = df._meta._constructor_sliced([0])
-        partitions = df[columns].map_partitions(
-            set_partitions_hash, columns, npartitions, meta=meta
-        )
-        # Note: Dask will use a shallow copy for assign
-        df2 = df.assign(_partitions=partitions)
-        return rearrange_by_column(
-            df2,
-            "_partitions",
-            shuffle="tasks",
-            max_branch=max_branch,
-            npartitions=npartitions,
-            ignore_index=ignore_index,
-        )
-
-    n = df.npartitions
-    if max_branch is False:
-        stages = 1
-    else:
-        max_branch = max_branch or 32
-        stages = int(math.ceil(math.log(n) / math.log(max_branch)))
-
-    if stages > 1:
-        k = int(math.ceil(n ** (1 / stages)))
-    else:
-        k = n
-
-    if isinstance(columns, str):
-        columns = [columns]
-    elif isinstance(columns, tuple):
-        columns = list(columns)
-
-    groups = []
-    splits = []
-    combines = []
-
-    inputs = [
-        tuple(digit(i, j, k) for j in range(stages))
-        for i in range(k ** stages)
-    ]
-
-    token = tokenize(df, columns, max_branch)
-
-    start = {
-        ("shuffle-combine-" + token, 0, inp): (df._name, i)
-        if i < df.npartitions
-        else df._meta
-        for i, inp in enumerate(inputs)
-    }
-
-    for stage in range(1, stages + 1):
-        group = {  # Convert partition into dict of dataframe pieces
-            ("shuffle-group-" + token, stage, inp): (
-                _shuffle_group,
-                ("shuffle-combine-" + token, stage - 1, inp),
-                columns,
-                stage - 1,
-                k,
-                n,
-                ignore_index,
-            )
-            for inp in inputs
-        }
-
-        split = {  # Get out each individual dataframe piece from the dicts
-            ("shuffle-split-" + token, stage, i, inp): (
-                getitem,
-                ("shuffle-group-" + token, stage, inp),
-                i,
-            )
-            for i in range(k)
-            for inp in inputs
-        }
-
-        combine = {  # concatenate those pieces together, with their friends
-            ("shuffle-combine-" + token, stage, inp): (
-                _concat,
-                [
-                    (
-                        "shuffle-split-" + token,
-                        stage,
-                        inp[stage - 1],
-                        insert(inp, stage - 1, j),
-                    )
-                    for j in range(k)
-                ],
-                ignore_index,
-            )
-            for inp in inputs
-        }
-        groups.append(group)
-        splits.append(split)
-        combines.append(combine)
-
-    end = {
-        ("shuffle-" + token, i): ("shuffle-combine-" + token, stages, inp)
-        for i, inp in enumerate(inputs)
-    }
-
-    dsk = toolz.merge(start, end, *(groups + splits + combines))
-    graph = HighLevelGraph.from_collections(
-        "shuffle-" + token, dsk, dependencies=[df]
-    )
-    df2 = df.__class__(graph, "shuffle-" + token, df, df.divisions)
-    df2.divisions = (None,) * (df.npartitions + 1)
-
-    return df2
 
 
 def set_index_post(df, index_name, drop, column_dtype):
@@ -158,16 +24,9 @@ def set_index_post(df, index_name, drop, column_dtype):
 
 def _set_partitions_pre(s, divisions):
     partitions = divisions.searchsorted(s, side="right") - 1
-
-    # Use searchsorted to avoid string-compare limitations
-    # TODO: Simplify after github issue #4432 is resolved...
-    #       partitions[
-    #           (s >= divisions.iloc[-1])
-    #       ] = len(divisions) - 2
     partitions[
         divisions.tail(1).searchsorted(s, side="right").astype("bool")
     ] = (len(divisions) - 2)
-
     return partitions
 
 
@@ -258,13 +117,13 @@ def _approximate_quantile(df, q):
     final_type = df._meta._constructor
 
     # Create metadata
-    meta = df._meta_nonempty.quantile(q=q)
+    meta = df._meta_nonempty.quantiles(q=q)
 
     # Define final action (create df with quantiles as index)
     def finalize_tsk(tsk):
         return (final_type, tsk, q)
 
-    return_type = DataFrame
+    return_type = df.__class__
 
     # pandas/cudf uses quantile in [0, 1]
     # numpy / cupy uses [0, 100]
@@ -383,5 +242,5 @@ def sort_values(
     df4 = df3.map_partitions(M.sort_values, by)
     if not isinstance(divisions, gd.DataFrame) and set_divisions:
         # Can't have multi-column divisions elsewhere in dask (yet)
-        df4.divisions = tuple(divisions)
+        df4.divisions = methods.tolist(divisions)
     return df4

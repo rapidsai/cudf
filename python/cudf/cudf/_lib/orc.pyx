@@ -1,50 +1,46 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
-# cython: boundscheck = False
-
-from cudf._lib.cudf cimport *
-from cudf._lib.cudf import *
-from cudf._lib.includes.orc cimport (
-    reader as orc_reader,
-    reader_options as orc_reader_options,
-    writer as orc_writer,
-    writer_options as orc_writer_options,
-    compression_type
-)
-from cython.operator cimport dereference as deref
-from libc.stdlib cimport free
-from libcpp.memory cimport unique_ptr, make_unique
+from libcpp cimport bool, int
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
+from libcpp.vector cimport vector
+from libcpp.utility cimport move
+from cudf._lib.cpp.column.column cimport column
 
-from cudf._lib.utils cimport *
-from cudf._lib.utils import *
+from cudf._lib.cpp.io.orc cimport (
+    orc_reader_options,
+    read_orc as libcudf_read_orc,
+    orc_writer_options,
+    write_orc as libcudf_write_orc,
+)
+from cudf._lib.cpp.io.types cimport (
+    compression_type,
+    sink_info,
+    source_info,
+    table_metadata,
+    table_with_metadata,
+    data_sink,
+)
+from cudf._lib.cpp.types cimport (
+    data_type, type_id, size_type
+)
 
-import errno
-import os
+from cudf._lib.io.utils cimport make_source_info, make_sink_info
+from cudf._lib.table cimport Table
+from cudf._lib.types import np_to_cudf_types
+from cudf._lib.types cimport underlying_type_t_type_id
+import numpy as np
 
 
-cdef unique_ptr[cudf_table] make_table_from_columns(columns):
-    """
-    Cython function to create a `cudf_table` from an ordered dict of columns
-    """
-    cdef vector[gdf_column*] c_columns
-    for idx, (col_name, col) in enumerate(columns.items()):
-        # Workaround for string columns
-        if col.dtype.type == np.object_:
-            c_columns.push_back(
-                column_view_from_string_column(col, col_name)
-            )
-        else:
-            c_columns.push_back(
-                column_view_from_column(col, col_name)
-            )
-
-    return make_unique[cudf_table](c_columns)
-
-
-cpdef read_orc(filepath_or_buffer, columns=None, stripe=None,
-               skip_rows=None, num_rows=None, use_index=True,
-               decimals_as_float=True, force_decimal_scale=None):
+cpdef read_orc(object filepath_or_buffer,
+               object columns=None,
+               object stripes=None,
+               object skip_rows=None,
+               object num_rows=None,
+               bool use_index=True,
+               bool decimals_as_float=True,
+               object force_decimal_scale=None,
+               object timestamp_type=None):
     """
     Cython function to call into libcudf API, see `read_orc`.
 
@@ -52,54 +48,40 @@ cpdef read_orc(filepath_or_buffer, columns=None, stripe=None,
     --------
     cudf.io.orc.read_orc
     """
-
-    # Setup reader options
-    cdef orc_reader_options options = orc_reader_options()
-    for col in columns or []:
-        options.columns.push_back(str(col).encode())
-    options.use_index = use_index
-    options.decimals_as_float = decimals_as_float
-    if force_decimal_scale is not None:
-        options.forced_decimals_scale = force_decimal_scale
-
-    # Create reader from source
-    cdef const unsigned char[::1] buffer = view_of_buffer(filepath_or_buffer)
-    cdef string filepath
-    if buffer is None:
-        if not os.path.isfile(filepath_or_buffer):
-            raise FileNotFoundError(
-                errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
+    cdef orc_reader_options c_orc_reader_options = make_orc_reader_options(
+        filepath_or_buffer,
+        columns or [],
+        stripes or [],
+        get_size_t_arg(skip_rows, "skip_rows"),
+        get_size_t_arg(num_rows, "num_rows"),
+        (
+            type_id.EMPTY
+            if timestamp_type is None else
+            <type_id>(
+                <underlying_type_t_type_id> (
+                    np_to_cudf_types[np.dtype(timestamp_type)]
+                )
             )
-        filepath = <string>str(filepath_or_buffer).encode()
+        ),
+        use_index,
+        decimals_as_float,
+        get_size_t_arg(force_decimal_scale, "force_decimal_scale")
+    )
 
-    cdef unique_ptr[orc_reader] reader
+    cdef table_with_metadata c_result
+
     with nogil:
-        if buffer is None:
-            reader = unique_ptr[orc_reader](
-                new orc_reader(filepath, options)
-            )
-        else:
-            reader = unique_ptr[orc_reader](
-                new orc_reader(<char *>&buffer[0], buffer.shape[0], options)
-            )
+        c_result = move(libcudf_read_orc(c_orc_reader_options))
 
-    # Read data into columns
-    cdef cudf_table c_out_table
-    cdef size_type c_skip_rows = skip_rows if skip_rows is not None else 0
-    cdef size_type c_num_rows = num_rows if num_rows is not None else -1
-    cdef size_type c_stripe = stripe if stripe is not None else -1
-    with nogil:
-        if c_skip_rows != 0 or c_num_rows != -1:
-            c_out_table = reader.get().read_rows(c_skip_rows, c_num_rows)
-        elif c_stripe != -1:
-            c_out_table = reader.get().read_stripe(c_stripe)
-        else:
-            c_out_table = reader.get().read_all()
+    names = [name.decode() for name in c_result.metadata.column_names]
 
-    return table_to_dataframe(&c_out_table)
+    return Table.from_unique_ptr(move(c_result.tbl), names)
 
 
-cpdef write_orc(cols, filepath_or_buffer, compression=None):
+cpdef write_orc(Table table,
+                object path_or_buf,
+                object compression=None,
+                bool enable_statistics=True):
     """
     Cython function to call into libcudf API, see `write_orc`.
 
@@ -107,25 +89,79 @@ cpdef write_orc(cols, filepath_or_buffer, compression=None):
     --------
     cudf.io.orc.read_orc
     """
-
-    # Setup writer options
-    cdef orc_writer_options options = orc_writer_options()
-    if compression is None:
-        options.compression = compression_type.none
+    cdef compression_type compression_ = compression_type.NONE
+    if compression is None or compression is False:
+        compression_ = compression_type.NONE
     elif compression == "snappy":
-        options.compression = compression_type.snappy
+        compression_ = compression_type.SNAPPY
     else:
-        raise ValueError("Unsupported `compression` type")
-
-    # Create writer
-    cdef string filepath = <string>str(filepath_or_buffer).encode()
-    cdef unique_ptr[orc_writer] writer
-    with nogil:
-        writer = unique_ptr[orc_writer](
-            new orc_writer(filepath, options)
+        raise ValueError(
+            "Unsupported compression type `{}`".format(compression)
         )
 
-    # Write data to output
-    cdef unique_ptr[cudf_table] c_in_table = make_table_from_columns(cols)
+    cdef table_metadata metadata_ = table_metadata()
+    cdef unique_ptr[data_sink] data_sink_c
+    cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
+
+    metadata_.column_names.reserve(len(table._column_names))
+
+    for col_name in table._column_names:
+        metadata_.column_names.push_back(str.encode(col_name))
+
+    cdef orc_writer_options c_orc_writer_options = move(
+        orc_writer_options.builder(sink_info_c, table.data_view())
+        .metadata(&metadata_)
+        .compression(compression_)
+        .enable_statistics(<bool> (True if enable_statistics else False))
+        .build()
+    )
+
     with nogil:
-        writer.get().write_all(deref(c_in_table))
+        libcudf_write_orc(c_orc_writer_options)
+
+
+cdef size_type get_size_t_arg(object arg, str name) except*:
+    if name == "skip_rows":
+        arg = 0 if arg is None else arg
+        if not isinstance(arg, int) or arg < 0:
+            raise TypeError(f"{name} must be an int >= 0")
+    else:
+        arg = -1 if arg is None else arg
+        if not isinstance(arg, int) or arg < -1:
+            raise TypeError(f"{name} must be an int >= -1")
+    return <size_type> arg
+
+
+cdef orc_reader_options make_orc_reader_options(
+    object filepath_or_buffer,
+    object column_names,
+    object stripes,
+    size_type skip_rows,
+    size_type num_rows,
+    type_id timestamp_type,
+    bool use_index,
+    bool decimals_as_float,
+    size_type force_decimal_scale
+) except*:
+
+    cdef vector[string] c_column_names
+    cdef vector[size_type] strps = stripes
+    c_column_names.reserve(len(column_names))
+    for col in column_names:
+        c_column_names.push_back(str(col).encode())
+    cdef orc_reader_options opts
+    cdef source_info src = make_source_info([filepath_or_buffer])
+    opts = move(
+        orc_reader_options.builder(src)
+        .columns(c_column_names)
+        .stripes(strps)
+        .skip_rows(skip_rows)
+        .num_rows(num_rows)
+        .timestamp_type(data_type(timestamp_type))
+        .use_index(use_index)
+        .decimals_as_float64(decimals_as_float)
+        .forced_decimals_scale(force_decimal_scale)
+        .build()
+    )
+
+    return opts

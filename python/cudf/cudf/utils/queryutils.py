@@ -7,6 +7,7 @@ import numpy as np
 import six
 from numba import cuda
 
+import cudf
 from cudf.core.column import column_empty
 from cudf.utils import applyutils
 
@@ -194,6 +195,7 @@ def query_execute(df, expr, callenv):
         Contains keys 'local_dict', 'locals' and 'globals' which are all dict.
         They represent the arg, local and global dictionaries of the caller.
     """
+
     # compile
     compiled = query_compile(expr)
     kernel = compiled["kernel"]
@@ -215,7 +217,12 @@ def query_execute(df, expr, callenv):
             envargs.append(val)
     columns = compiled["colnames"]
     # prepare col args
-    colarrays = [df[col]._column.data_array_view for col in columns]
+
+    colarrays = [
+        cudf.core.dataframe.extract_col(df, col).data_array_view
+        for col in columns
+    ]
+
     # allocate output buffer
     nrows = len(df)
     out = column_empty(nrows, dtype=np.bool_)

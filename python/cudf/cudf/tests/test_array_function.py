@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.tests.utils import assert_eq
 from cudf.utils.utils import IS_NEP18_ACTIVE
 
 missing_arrfunc_cond = not IS_NEP18_ACTIVE
@@ -30,9 +31,9 @@ def test_array_func_cudf_series(np_ar, func):
     got = func(cudf_ser)
 
     if np.isscalar(expect):
-        np.testing.assert_approx_equal(expect, got)
+        assert_eq(expect, got)
     else:
-        np.testing.assert_array_equal(expect, got.to_pandas().values)
+        assert_eq(expect, got.to_array())
 
 
 # TODO: Make it future proof
@@ -60,8 +61,7 @@ def test_array_func_cudf_dataframe(pd_df, func):
     cudf_df = cudf.from_pandas(pd_df)
     expect = func(pd_df)
     got = func(cudf_df)
-
-    pd.testing.assert_series_equal(expect, got.to_pandas())
+    assert_eq(expect, got)
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
@@ -91,11 +91,7 @@ def test_array_func_cudf_index(np_ar, func):
     cudf_index = cudf.core.index.as_index(cudf.Series(np_ar))
     expect = func(np_ar)
     got = func(cudf_index)
-
-    if np.isscalar(expect):
-        np.testing.assert_approx_equal(expect, got)
-    else:
-        np.testing.assert_array_equal(expect, got.to_pandas().values)
+    assert_eq(expect, got)
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)

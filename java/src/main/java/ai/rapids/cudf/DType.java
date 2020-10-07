@@ -23,34 +23,49 @@ public enum DType {
   INT16(2, 2, "short"),
   INT32(4, 3, "int"),
   INT64(8, 4, "long"),
-  FLOAT32(4, 5, "float"),
-  FLOAT64(8, 6, "double"),
+  UINT8(1, 5, "uint8"),
+  UINT16(2, 6, "uint16"),
+  UINT32(4, 7, "uint32"),
+  UINT64(8, 8, "uint64"),
+  FLOAT32(4, 9, "float"),
+  FLOAT64(8, 10, "double"),
   /**
    * Byte wise true non-0/false 0.  In general true will be 1.
    */
-  BOOL8(1, 7, "bool"),
+  BOOL8(1, 11, "bool"),
   /**
    * Days since the UNIX epoch
    */
-  TIMESTAMP_DAYS(4, 8, "date32"),
+  TIMESTAMP_DAYS(4, 12, "date32"),
   /**
    * s since the UNIX epoch
    */
-  TIMESTAMP_SECONDS(8, 9, "timestamp[s]"),
+  TIMESTAMP_SECONDS(8, 13, "timestamp[s]"),
   /**
    * ms since the UNIX epoch
    */
-  TIMESTAMP_MILLISECONDS(8, 10, "timestamp[ms]"),
+  TIMESTAMP_MILLISECONDS(8, 14, "timestamp[ms]"),
   /**
    * microseconds since the UNIX epoch
    */
-  TIMESTAMP_MICROSECONDS(8, 11, "timestamp[us]"),
+  TIMESTAMP_MICROSECONDS(8, 15, "timestamp[us]"),
   /**
    * ns since the UNIX epoch
    */
-  TIMESTAMP_NANOSECONDS(8, 12, "timestamp[ns]"),
-  //DICTIONARY32(4, 13, "NO IDEA"),
-  STRING(0, 14, "str");
+  TIMESTAMP_NANOSECONDS(8, 16, "timestamp[ns]"),
+
+  //We currently don't have mappings for duration type to I/O files, and these
+  //simpleNames might change in future when we do
+  DURATION_DAYS(4, 17, "int32"),
+  DURATION_SECONDS(8, 18, "int64"),
+  DURATION_MILLISECONDS(8, 19, "int64"),
+  DURATION_MICROSECONDS(8, 20, "int64"),
+  DURATION_NANOSECONDS(8, 21, "int64"),
+  //DICTIONARY32(4, 22, "NO IDEA"),
+
+  STRING(0, 23, "str"),
+  LIST(0, 24, "list"),
+  STRUCT(0, 27, "struct");
 
   private static final DType[] D_TYPES = DType.values();
   final int sizeInBytes;
@@ -74,8 +89,61 @@ public enum DType {
     return TIME_RESOLUTION.contains(this);
   }
 
+  /**
+   * Returns true if this type is backed by int type
+   * Namely this method will return true for the following types
+   *       DType.INT32,
+   *       DType.UINT32,
+   *       DType.DURATION_DAYS,
+   *       DType.TIMESTAMP_DAYS
+   */
+  public boolean isBackedByInt() {
+    return INTS.contains(this);
+  }
+
+  /**
+   * Returns true if this type is backed by long type
+   * Namely this method will return true for the following types
+   *       DType.INT64,
+   *       DType.UINT64,
+   *       DType.DURATION_SECONDS,
+   *       DType.DURATION_MILLISECONDS,
+   *       DType.DURATION_MICROSECONDS,
+   *       DType.DURATION_NANOSECONDS,
+   *       DType.TIMESTAMP_SECONDS,
+   *       DType.TIMESTAMP_MILLISECONDS,
+   *       DType.TIMESTAMP_MICROSECONDS,
+   *       DType.TIMESTAMP_NANOSECONDS
+   */
+  public boolean isBackedByLong() {
+    return LONGS.contains(this);
+  }
+
+  /**
+   * Returns true for duration types
+   */
+  public boolean isDurationType() {
+    return DURATION_TYPE.contains(this);
+  }
+
+  /**
+   * Returns true for nested types
+   */
+  public boolean isNestedType() {
+    return NESTED_TYPE.contains(this);
+  }
+
   public int getNativeId() {
     return nativeId;
+  }
+
+  /**
+   * This only works for fixed width types. Variable width types like strings the value is
+   * undefined and should be ignored.
+   * @return
+   */
+  public int getSizeInBytes() {
+    return sizeInBytes;
   }
 
   public static DType fromNative(int nativeId) {
@@ -99,4 +167,37 @@ public enum DType {
       DType.TIMESTAMP_MILLISECONDS,
       DType.TIMESTAMP_MICROSECONDS,
       DType.TIMESTAMP_NANOSECONDS);
+
+  private static final EnumSet<DType> DURATION_TYPE = EnumSet.of(
+      DType.DURATION_DAYS,
+      DType.DURATION_MICROSECONDS,
+      DType.DURATION_MILLISECONDS,
+      DType.DURATION_NANOSECONDS,
+      DType.DURATION_SECONDS
+  );
+
+  private static final EnumSet<DType> LONGS = EnumSet.of(
+      DType.INT64,
+      DType.UINT64,
+      DType.DURATION_SECONDS,
+      DType.DURATION_MILLISECONDS,
+      DType.DURATION_MICROSECONDS,
+      DType.DURATION_NANOSECONDS,
+      DType.TIMESTAMP_SECONDS,
+      DType.TIMESTAMP_MILLISECONDS,
+      DType.TIMESTAMP_MICROSECONDS,
+      DType.TIMESTAMP_NANOSECONDS
+  );
+
+  private static final EnumSet<DType> INTS = EnumSet.of(
+      DType.INT32,
+      DType.UINT32,
+      DType.DURATION_DAYS,
+      DType.TIMESTAMP_DAYS
+  );
+
+  private static final EnumSet<DType> NESTED_TYPE = EnumSet.of(
+      DType.LIST,
+      DType.STRUCT
+  );
 }

@@ -72,7 +72,7 @@ def test_from_pandas_with_index():
     # Check index
     assert_eq(df.index.values, pdf.index.values)
     # Check again using pandas testing tool on frames
-    assert_eq(df.to_pandas(), pdf)
+    assert_eq(df, pdf)
 
 
 def test_from_pandas_rangeindex():

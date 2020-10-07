@@ -1,61 +1,15 @@
 from __future__ import division, print_function
 
-import cupy
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-import cudf._lib as libcudf
 from cudf.core import Series
-from cudf.core.column import column
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
 
 
-def test_gather_single_col():
-    col = column.as_column(np.arange(100), dtype=np.int32)
-    gather_map = np.array([0, 1, 2, 3, 5, 8, 13, 21], dtype=np.int32)
-
-    device_gather_map = cupy.asarray(gather_map)
-
-    out = libcudf.copying.gather(col, device_gather_map)
-
-    np.testing.assert_array_equal(out.to_array(), gather_map)
-
-
-def test_gather_cols():
-    cols = [
-        column.as_column(np.arange(10), dtype=np.int32),
-        column.as_column(np.arange(0.0, 2.0, 0.2), dtype=np.float32),
-    ]
-    gather_map = np.array([0, 1, 2, 3, 5, 8], dtype=np.int32)
-
-    expected = np.array(gather_map * 0.2, dtype=np.float32)
-
-    device_gather_map = cupy.asarray(gather_map)
-
-    out = libcudf.copying.gather(cols, device_gather_map)
-
-    np.testing.assert_array_equal(out[0].to_array(), gather_map)
-    np.testing.assert_array_almost_equal(out[1].to_array(), expected)
-
-
-def test_gather_string_col():
-    col = column.as_column(["a", "b", "c", "d"])
-    gather_map = column.as_column([0, 2, 3], dtype="int32").data_array_view
-    result = libcudf.copying.gather(col, gather_map)
-    assert list(result.to_array()) == ["a", "c", "d"]
-
-    col = column.as_column(["a", "b", None, "d"])
-    gather_map = column.as_column([0, 2, 3], dtype="int32").data_array_view
-    result = libcudf.copying.gather(col, gather_map)
-    assert list(result.to_array()) == ["a", None, "d"]
-
-
-@pytest.mark.parametrize(
-    "dtype",
-    ["bool", "int8", "int16", "int32", "int64", "float32", "float64", "str"],
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES + OTHER_TYPES)
 def test_repeat(dtype):
     arr = np.random.rand(10) * 10
     repeats = np.random.randint(10, size=10)
@@ -84,9 +38,7 @@ def test_repeat_dataframe():
     assert_eq(psr["a"].repeat(repeats), gsr.repeat(repeats)["a"])
 
 
-@pytest.mark.parametrize(
-    "dtype", ["bool", "int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 def test_repeat_scalar(dtype):
     arr = np.random.rand(10) * 10
     repeats = 10
