@@ -37,10 +37,9 @@ namespace parquet {
  **/
 class CompactProtocolWriter {
  public:
-  CompactProtocolWriter(std::vector<uint8_t> &output)
-    : m_buf(output), struct_start_pos(m_buf.size()), current_field_value(0)
-  {
-  }
+  CompactProtocolWriter(std::vector<uint8_t> &output) :
+    m_buf(output)
+  {}
 
   size_t write(const FileMetaData &);
   size_t write(const SchemaElement &);
@@ -51,8 +50,21 @@ class CompactProtocolWriter {
 
  protected:
   std::vector<uint8_t> &m_buf;
+  friend class CompactProtocolFieldWriter;
+};
+
+class CompactProtocolFieldWriter {
+
+  CompactProtocolWriter &writer;
   size_t struct_start_pos;
   int current_field_value;
+
+  public:
+    CompactProtocolFieldWriter(CompactProtocolWriter &caller) :
+      writer(caller),
+      struct_start_pos(writer.m_buf.size()),
+      current_field_value(0)
+  {}
 
   void putb(uint8_t v);
 
@@ -88,6 +100,7 @@ class CompactProtocolWriter {
   inline int current_field();
 
   inline void set_current_field(const int &field);
+
 };
 
 }  // namespace parquet
