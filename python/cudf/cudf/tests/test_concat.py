@@ -654,13 +654,17 @@ def test_concat_join(ignore_index, sort, join, axis):
 
     assert_eq(
         gd.concat(
-            [s1, s2, s3, s4], sort=sort, join=join, ignore_index=ignore_index,
-            axis=axis),
+            [s1, s2, s3, s4],
+            sort=sort,
+            join=join,
+            ignore_index=ignore_index,
+            axis=axis,
+        ),
         pd.concat(
             [ps1, ps2, ps3, ps4],
             sort=sort,
             join=join,
             ignore_index=ignore_index,
-            axis=axis
+            axis=axis,
         ),
     )
