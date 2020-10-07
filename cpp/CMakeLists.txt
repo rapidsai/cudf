@@ -176,12 +176,6 @@ include(CheckIncludeFiles)
 include(CheckLibraryExists)
 
 ###################################################################################################
-# - find CIDAToolkit ------------------------------------------------------------------------------------
-
-find_package(CUDAToolkit)
-set(CMAKE_CUDA_ARCHITECTURES ${GPU_ARCHS})
-
-###################################################################################################
 # - third party dependencies-----------------------------------------------------------------------
 # add third party dependencies using CMake FetchContent
 
@@ -300,14 +294,16 @@ endif(Boost_INCLUDE_DIR)
 ###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
 
+# FindCUDA doesn't quite set the variables it should. RMM needs this to be set to build from CPM
+set(CUDAToolkit_INCLUDE_DIR "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+
 CPMFindPackage(
   NAME RMM
   GITHUB_REPOSITORY rapidsai/rmm
   VERSION ${CMAKE_PROJECT_VERSION}
   GIT_TAG "branch-${CMAKE_PROJECT_VERSION_MAJOR}.${CMAKE_PROJECT_VERSION_MINOR}"
 )
-set(RMM_INCLUDE "${RMM_SOURCE_DIR}/include")
-set(RMM_LIBRARY "${RMM_SOURCE_DIR}/lib")
+
 message(STATUS "RMM: RMM_SOURCE_DIR set to ${RMM_SOURCE_DIR}")
 
 ###################################################################################################
@@ -319,13 +315,7 @@ CPMFindPackage(
   VERSION 0.3
 )
 
-set(DLPACK_INCLUDE "${dlpack_SOURCE_DIR}/include")
-
-get_cmake_property(_variableNames VARIABLES)
-list (SORT _variableNames)
-foreach (_variableName ${_variableNames})
-    message(STATUS "${_variableName}=${${_variableName}}")
-endforeach()
+#set(DLPACK_INCLUDE "${dlpack_SOURCE_DIR}/include")
 
 message(STATUS "DLPACK: DLPACK_INCLUDE set to ${DLPACK_INCLUDE}")
 
@@ -352,6 +342,11 @@ endif(PER_THREAD_DEFAULT_STREAM)
 # - add gtest -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
+get_cmake_property(_variableNames VARIABLES)
+list (SORT _variableNames)
+foreach (_variableName ${_variableNames})
+    message(STATUS "${_variableName}=${${_variableName}}")
+endforeach()
 
   CPMFindPackage(
     NAME GTEST
@@ -363,9 +358,10 @@ if(BUILD_TESTS)
       "gtest_force_shared_crt"
   )
   enable_testing()
+  set(GTEST_LIBRARY "gtest gtest_main gmock")
   
-  include_directories("${gtest_SOURCE_DIR}/include"
-                      "${gmock_SOURCE_DIR}/include")
+  #include_directories("${gtest_SOURCE_DIR}/include"
+  #                    "${gmock_SOURCE_DIR}/include")
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
 endif(BUILD_TESTS)
 
@@ -389,7 +385,8 @@ if(BUILD_BENCHMARKS)
     "RUN_HAVE_GNU_POSIX_REGEX 0" #
   )
 
-  include_directories("${benchmark_INCLUDE_DIR}/include")
+  set(benchmark_LIBRARY "benchmark")
+  #include_directories("${benchmark_INCLUDE_DIR}/include")
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/benchmarks)
 
   endif(BUILD_BENCHMARKS)
@@ -412,9 +409,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_BINARY_DIR}/include/jit"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
-                    "${ARROW_INCLUDE_DIR}"
-                    "${RMM_INCLUDE}"
-                    "${DLPACK_INCLUDE}")
+                    "${ARROW_INCLUDE_DIR}")
 
 if(CONDA_INCLUDE_DIRS)
     include_directories("${CONDA_INCLUDE_DIRS}")
@@ -425,8 +420,7 @@ endif(CONDA_INCLUDE_DIRS)
 
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
-                 "${CMAKE_BINARY_DIR}"
-                 "${gtest_BINARY_DIR}")
+                 "${CMAKE_BINARY_DIR}")
 
 if(CONDA_LINK_DIRS)
     link_directories("${CONDA_LINK_DIRS}")
@@ -829,7 +823,12 @@ target_compile_definitions(cudf PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_LO
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cuDF
-target_link_libraries(cudf arrow arrow_cuda nvrtc ${CUDART_LIBRARY} ZLIB::ZLIB Boost::filesystem)
+target_link_libraries(cudf 
+                      arrow arrow_cuda 
+                      nvrtc ${CUDART_LIBRARY} 
+                      ZLIB::ZLIB Boost::filesystem 
+                      rmm dlpack 
+                      ${GTEST_LIBRARY} ${benchmark_LIBRARY})
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
