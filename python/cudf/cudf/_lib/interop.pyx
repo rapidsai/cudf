@@ -100,7 +100,7 @@ cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj):
     dlpack_tensor.deleter(dlpack_tensor)
 
 
-cdef vector[column_metadata] gather_metadata(object metadata) except +:
+cdef vector[column_metadata] gather_metadata(object metadata) except *:
     """
     Metadata is stored as lists, and expected format is as follows,
     [["a", [["b"], ["c"], ["d"]]],       [["e"]],        ["f", ["", ""]]].

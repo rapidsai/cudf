@@ -140,18 +140,15 @@ std::shared_ptr<arrow::Array> get_arrow_dict_array(std::initializer_list<KEY_TYP
 
 // Creates only single layered list
 template <typename T>
-std::shared_ptr<arrow::Array> get_arrow_list_array(
-  std::initializer_list<T> data,
-  std::initializer_list<int32_t> offsets,
-  std::initializer_list<uint8_t> data_validity = {},
-  std::initializer_list<uint8_t> list_validity = {})
+std::shared_ptr<arrow::Array> get_arrow_list_array(std::vector<T> data,
+                                                   std::vector<int32_t> offsets,
+                                                   std::vector<uint8_t> data_validity = {},
+                                                   std::vector<uint8_t> list_validity = {})
 {
-  std::vector<int32_t> ofst(offsets);
-  std::vector<uint8_t> list_mask(list_validity);
   auto data_array = get_arrow_array<T>(data, data_validity);
   std::shared_ptr<arrow::Buffer> offset_buffer;
   arrow::BufferBuilder buff_builder;
-  CUDF_EXPECTS(buff_builder.Append(ofst.data(), sizeof(int32_t) * ofst.size()).ok(),
+  CUDF_EXPECTS(buff_builder.Append(offsets.data(), sizeof(int32_t) * offsets.size()).ok(),
                "Failed to append values to buffer builder");
   CUDF_EXPECTS(buff_builder.Finish(&offset_buffer).ok(), "Failed to allocate buffer");
 
@@ -160,7 +157,21 @@ std::shared_ptr<arrow::Array> get_arrow_list_array(
     offsets.size() - 1,
     offset_buffer,
     data_array,
-    list_mask.size() == 0 ? nullptr : arrow::internal::BytesToBits(list_mask).ValueOrDie());
+    list_validity.size() == 0 ? nullptr : arrow::internal::BytesToBits(list_validity).ValueOrDie());
+}
+
+template <typename T>
+std::shared_ptr<arrow::Array> get_arrow_list_array(
+  std::initializer_list<T> data,
+  std::initializer_list<int32_t> offsets,
+  std::initializer_list<uint8_t> data_validity = {},
+  std::initializer_list<uint8_t> list_validity = {})
+{
+  std::vector<T> data_vector(data);
+  std::vector<int32_t> ofst(offsets);
+  std::vector<uint8_t> data_mask(data_validity);
+  std::vector<uint8_t> list_mask(list_validity);
+  return get_arrow_list_array<T>(data_vector, ofst, data_mask, list_mask);
 }
 
 std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_tables(
