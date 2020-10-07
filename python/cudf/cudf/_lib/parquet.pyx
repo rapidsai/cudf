@@ -11,7 +11,11 @@ import json
 from cython.operator import dereference
 import numpy as np
 
-from cudf.utils.dtypes import np_to_pa_dtype, is_categorical_dtype
+from cudf.utils.dtypes import (
+    np_to_pa_dtype,
+    is_categorical_dtype,
+    is_struct_dtype
+)
 from libc.stdlib cimport free
 from libc.stdint cimport uint8_t
 from libcpp.memory cimport shared_ptr, unique_ptr, make_unique
@@ -20,6 +24,7 @@ from libcpp.map cimport map
 from libcpp.vector cimport vector
 from libcpp.utility cimport move
 from libcpp cimport bool
+
 
 from cudf._lib.cpp.types cimport data_type, size_type
 from cudf._lib.table cimport Table
@@ -40,6 +45,7 @@ from cudf._lib.cpp.io.parquet cimport (
     merge_rowgroup_metadata as parquet_merge_metadata,
     pq_chunked_state
 )
+from cudf._lib.column cimport Column
 from cudf._lib.io.utils cimport (
     make_source_info,
     make_sink_info
@@ -220,6 +226,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         )
     )
 
+    _update_struct_field_names(df, c_out_table.metadata.schema_info)
+
     if df.empty and meta is not None:
         cols_dtype_map = {}
         for col in meta['columns']:
@@ -253,11 +261,11 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
 cpdef write_parquet(
         Table table,
-        path,
-        index=None,
-        compression=None,
-        statistics="ROWGROUP",
-        metadata_file_path=None):
+        object path,
+        object index=None,
+        object compression=None,
+        str statistics="ROWGROUP",
+        object metadata_file_path=None):
     """
     Cython function to call into libcudf API, see `write_parquet`.
 
@@ -426,7 +434,7 @@ cdef class ParquetWriter:
             self.state = write_parquet_chunked_begin(args)
 
 
-cpdef merge_filemetadata(filemetadata_list):
+cpdef merge_filemetadata(object filemetadata_list):
     """
     Cython function to call into libcudf API, see `merge_rowgroup_metadata`.
 
@@ -484,3 +492,37 @@ cdef vector[string] _get_column_names(Table table, object index):
         column_names.push_back(str.encode(col_name))
 
     return column_names
+
+
+cdef _update_struct_field_names(
+    Table table,
+    vector[cudf_io_types.column_name_info]& schema_info
+):
+    for i, (name, col) in enumerate(table._data.items()):
+        table._data[name] = _update_column_struct_field_names(
+            col, schema_info[i]
+        )
+
+cdef Column _update_column_struct_field_names(
+    Column col,
+    cudf_io_types.column_name_info& info
+):
+    cdef vector[string] field_names
+
+    if is_struct_dtype(col):
+        field_names.reserve(len(col.base_children))
+        for i in range(info.children.size()):
+            field_names.push_back(info.children[i].name)
+        col = col._rename_fields(
+            field_names
+        )
+
+    if col.children:
+        children = list(col.children)
+        for i, child in enumerate(children):
+            children[i] = _update_column_struct_field_names(
+                child,
+                info.children[i]
+            )
+        col.set_base_children(tuple(children))
+    return col

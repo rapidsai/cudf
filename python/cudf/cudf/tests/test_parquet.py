@@ -48,7 +48,7 @@ def simple_pdf(request):
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
-    test_pdf = pd.util.testing.makeCustomDataframe(
+    test_pdf = pd._testing.makeCustomDataframe(
         nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
     )
     # Delete the name of the column index, and rename the row index
@@ -93,7 +93,7 @@ def pdf(request):
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
-    test_pdf = pd.util.testing.makeCustomDataframe(
+    test_pdf = pd._testing.makeCustomDataframe(
         nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
     )
     # Delete the name of the column index, and rename the row index
@@ -133,7 +133,7 @@ def rdg_seed():
 
 
 def make_pdf(nrows, ncolumns=1, nvalids=0, dtype=np.int64):
-    test_pdf = pd.util.testing.makeCustomDataframe(
+    test_pdf = pd._testing.makeCustomDataframe(
         nrows=nrows,
         ncols=1,
         data_gen_f=lambda r, c: r,
@@ -770,6 +770,43 @@ def string_gen(first_val, i):
     return strings[int_gen(first_val, i) % len(strings)]
 
 
+def list_row_gen(
+    gen, first_val, list_size, lists_per_row, include_validity=False
+):
+    """
+    Generate a single row for a List<List<>> column based on input parameters.
+
+    Args:
+        gen: A callable which generates an individual leaf element based on an
+            absolute index.
+        first_val : Generate the column as if it had started at 'first_val'
+            instead of 0.
+        list_size : Size of each generated list.
+        lists_per_row : Number of lists to generate per row.
+        include_validity : Whether or not to include nulls as part of the
+            column. If true, it will add a selection of nulls at both the
+            topmost row level and at the leaf level.
+
+    Returns:
+        The generated list column.
+    """
+
+    def L(list_size, first_val):
+        return [
+            (gen(first_val, i) if i % 2 == 0 else None)
+            if include_validity
+            else (gen(first_val, i))
+            for i in range(list_size)
+        ]
+
+    return [
+        (L(list_size, first_val + (list_size * i)) if i % 2 == 0 else None)
+        if include_validity
+        else L(list_size, first_val + (list_size * i))
+        for i in range(lists_per_row)
+    ]
+
+
 def list_gen(
     gen, skiprows, num_rows, lists_per_row, list_size, include_validity=False
 ):
@@ -923,6 +960,146 @@ def test_parquet_reader_list_num_rows(skip, tmpdir):
     )
     got = cudf.read_parquet(fname, skiprows=skip, num_rows=rows_to_read)
     assert_eq(expect, got, check_dtype=False)
+
+
+def struct_gen(gen, skip_rows, num_rows, include_validity=False):
+    """
+    Generate a struct column based on input parameters.
+
+    Args:
+        gen: A array of callables which generate an individual row based on an
+            absolute index.
+        skip_rows : Generate the column as if it had started at 'skip_rows'
+            instead of 0. The intent here is to emulate the skip_rows
+            parameter of the parquet reader.
+        num_fields : Number of fields in the struct.
+        include_validity : Whether or not to include nulls as part of the
+            column. If true, it will add a selection of nulls at both the
+            field level and at the value level.
+
+    Returns:
+        The generated struct column.
+    """
+
+    def R(first_val, num_fields):
+        return {
+            "col"
+            + str(f): (gen[f](first_val, first_val) if f % 4 != 0 else None)
+            if include_validity
+            else (gen[f](first_val, first_val))
+            for f in range(len(gen))
+        }
+
+    return [
+        (R((i + skip_rows), len(gen)) if (i + skip_rows) % 4 != 0 else None)
+        if include_validity
+        else R((i + skip_rows), len(gen))
+        for i in range(num_rows)
+    ]
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        # struct
+        [
+            {"a": 1, "b": 2},
+            {"a": 10, "b": 20},
+            {"a": None, "b": 22},
+            {"a": None, "b": None},
+            {"a": 15, "b": None},
+        ],
+        # struct-of-list
+        [
+            {"a": 1, "b": 2, "c": [1, 2, 3]},
+            {"a": 10, "b": 20, "c": [4, 5]},
+            {"a": None, "b": 22, "c": [6]},
+            {"a": None, "b": None, "c": None},
+            {"a": 15, "b": None, "c": [-1, -2]},
+            None,
+            {"a": 100, "b": 200, "c": [-10, None, -20]},
+        ],
+        # list-of-struct
+        [
+            [{"a": 1, "b": 2}, {"a": 2, "b": 3}, {"a": 4, "b": 5}],
+            None,
+            [{"a": 10, "b": 20}],
+            [{"a": 100, "b": 200}, {"a": None, "b": 300}, None],
+        ],
+        # struct-of-struct
+        [
+            {"a": 1, "b": {"inner_a": 10, "inner_b": 20}, "c": 2},
+            {"a": 3, "b": {"inner_a": 30, "inner_b": 40}, "c": 4},
+            {"a": 5, "b": {"inner_a": 50, "inner_b": None}, "c": 6},
+            {"a": 7, "b": None, "c": 8},
+            {"a": None, "b": {"inner_a": None, "inner_b": None}, "c": None},
+            None,
+            {"a": None, "b": {"inner_a": None, "inner_b": 100}, "c": 10},
+        ],
+    ],
+)
+def test_parquet_reader_struct_basic(tmpdir, data):
+    expect = pa.Table.from_pydict({"struct": data})
+    fname = tmpdir.join("test_parquet_reader_struct_basic.parquet")
+    pa.parquet.write_table(expect, fname)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)
+    assert expect.equals(got.to_arrow())
+
+
+def test_parquet_reader_struct_los_large(tmpdir):
+    num_rows = 256
+    list_size = 64
+    data = [
+        struct_gen([string_gen, int_gen, string_gen], 0, list_size, False)
+        if i % 2 == 0
+        else None
+        for i in range(num_rows)
+    ]
+    expect = pa.Table.from_pydict({"los": data})
+    fname = tmpdir.join("test_parquet_reader_struct_los_large.parquet")
+    pa.parquet.write_table(expect, fname)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)
+    assert expect.equals(got.to_arrow())
+
+
+@pytest.mark.parametrize(
+    "params", [[3, 4, 32, False], [3, 4, 32, True], [100, 25, 256, True]]
+)
+def test_parquet_reader_struct_sol_table(tmpdir, params):
+    # Struct<List<List>>
+    lists_per_row = params[0]
+    list_size = params[1]
+    num_rows = params[2]
+    include_validity = params[3]
+
+    def list_gen_wrapped(x, y):
+        return list_row_gen(
+            int_gen, x * list_size * lists_per_row, list_size, lists_per_row
+        )
+
+    def string_list_gen_wrapped(x, y):
+        return list_row_gen(
+            string_gen,
+            x * list_size * lists_per_row,
+            list_size,
+            lists_per_row,
+            include_validity,
+        )
+
+    data = struct_gen(
+        [int_gen, string_gen, list_gen_wrapped, string_list_gen_wrapped],
+        0,
+        num_rows,
+        include_validity,
+    )
+    expect = pa.Table.from_pydict({"sol": data})
+    fname = tmpdir.join("test_parquet_reader_struct_sol_table.parquet")
+    pa.parquet.write_table(expect, fname)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)
+    assert expect.equals(got.to_arrow())
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -1286,3 +1463,22 @@ def test_parquet_writer_sliced(tmpdir):
 
     df_select.to_parquet(cudf_path)
     assert_eq(cudf.read_parquet(cudf_path), df_select.reset_index(drop=True))
+
+
+@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
+def test_parquet_nullable_boolean(tmpdir, engine):
+    pandas_path = tmpdir.join("pandas_bools.parquet")
+
+    pdf = pd.DataFrame(
+        {
+            "a": pd.Series(
+                [True, False, None, True, False], dtype=pd.BooleanDtype()
+            )
+        }
+    )
+    expected_gdf = cudf.DataFrame({"a": [True, False, None, True, False]})
+
+    pdf.to_parquet(pandas_path)
+    actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
+
+    assert_eq(actual_gdf, expected_gdf)

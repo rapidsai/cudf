@@ -46,6 +46,7 @@ from cudf.utils.dtypes import (
     is_list_like,
     is_scalar,
     is_string_dtype,
+    is_struct_dtype,
     numeric_normalize_types,
 )
 from cudf.utils.utils import OrderedColumnDict
@@ -1176,7 +1177,7 @@ class DataFrame(Frame, Serializable):
         filling with `<NA>` values.
         """
         for col in df._data:
-            if is_list_dtype(df._data[col]):
+            if is_list_dtype(df._data[col]) or is_struct_dtype(df._data[col]):
                 # TODO we need to handle this
                 pass
             elif df._data[col].has_nulls:
@@ -4116,7 +4117,7 @@ class DataFrame(Frame, Serializable):
             win_type=win_type,
         )
 
-    def query(self, expr, local_dict={}):
+    def query(self, expr, local_dict=None):
         """
         Query with a boolean expression using Numba to compile a GPU kernel.
 
@@ -4183,6 +4184,9 @@ class DataFrame(Frame, Serializable):
         # can't use `annotate` decorator here as we inspect the calling
         # environment.
         with annotate("QUERY", color="purple", domain="cudf_python"):
+            if local_dict is None:
+                local_dict = {}
+
             if self.empty:
                 return self.copy()
 
@@ -4288,7 +4292,7 @@ class DataFrame(Frame, Serializable):
         func,
         incols,
         outcols,
-        kwargs={},
+        kwargs=None,
         pessimistic_nulls=True,
         chunks=None,
         blkct=None,
@@ -4334,6 +4338,8 @@ class DataFrame(Frame, Serializable):
         --------
         DataFrame.apply_rows
         """
+        if kwargs is None:
+            kwargs = {}
         if chunks is None:
             raise ValueError("*chunks* must be defined")
         return applyutils.apply_chunks(

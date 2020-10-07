@@ -1136,6 +1136,14 @@ def test_dataframe_hash_partition_keep_index(keep_index):
         assert_eq(exp, got)
 
 
+def test_dataframe_hash_partition_empty():
+    gdf = gd.DataFrame({"val": [1, 2], "key": [3, 2]}, index=["a", "b"])
+    parts = gdf.iloc[:0].partition_by_hash(["key"], nparts=3)
+    assert len(parts) == 3
+    for part in parts:
+        assert_eq(gdf.iloc[:0], part)
+
+
 @pytest.mark.parametrize("dtype1", utils.supported_numpy_dtypes)
 @pytest.mark.parametrize("dtype2", utils.supported_numpy_dtypes)
 def test_dataframe_concat_different_numerical_columns(dtype1, dtype2):
