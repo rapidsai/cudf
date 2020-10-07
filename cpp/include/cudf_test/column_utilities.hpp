@@ -156,7 +156,17 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
   return {host_data, bitmask_to_host(c)};
 }
 
-// TODO add docs
+/**
+ * @brief Copies the data and bitmask of a `column_view` to the host.
+ *
+ * This is the specialization for `fixed_point` that performs construction of a `fixed_point` from
+ * the underlying `rep` type that is stored on the device.
+ *
+ * @tparam T The data type of the elements of the `column_view`
+ * @param c the `column_view` to copy from
+ * @return std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> first is the
+ *  `column_view`'s data, and second is the column's bitmask.
+ */
 template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
 {

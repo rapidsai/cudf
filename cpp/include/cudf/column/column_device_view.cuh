@@ -750,7 +750,12 @@ __device__ inline dictionary32 const column_device_view::element<dictionary32>(
   return dictionary32{type_dispatcher(indices.type(), index_element_fn{}, indices, index)};
 }
 
-// TODO add docs
+/**
+ * @brief Returns a `numeric::decimal32` element at the specified index for a `fixed_point` column.
+ *
+ * @param element_index Position of the desired element
+ * @return numeric::decimal32 representing the element at this index
+ */
 template <>
 __device__ inline numeric::decimal32 const column_device_view::element<numeric::decimal32>(
   size_type element_index) const noexcept
@@ -760,7 +765,12 @@ __device__ inline numeric::decimal32 const column_device_view::element<numeric::
   return decimal32{scaled_integer<int32_t>{data<int32_t>()[element_index], scale}};
 }
 
-// TODO add docs
+/**
+ * @brief Returns a `numeric::decimal64` element at the specified index for a `fixed_point` column.
+ *
+ * @param element_index Position of the desired element
+ * @return numeric::decimal64 representing the element at this index
+ */
 template <>
 __device__ inline numeric::decimal64 const column_device_view::element<numeric::decimal64>(
   size_type element_index) const noexcept

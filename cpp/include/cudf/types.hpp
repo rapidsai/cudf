@@ -98,7 +98,14 @@ using size_type    = int32_t;
 using bitmask_type = uint32_t;
 using valid_type   = uint8_t;
 
-// TODO add docs
+/**
+ * @brief Similar to `std::distance` but returns `cudf::size_type` and performs `static_cast`
+ *
+ * @tparam T Iterator type
+ * @param f "first" iterator
+ * @param l "last" iterator
+ * @return size_type The distance between first and last
+ */
 template <typename T>
 size_type distance(T f, T l)
 {
