@@ -73,10 +73,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
                     "${gtest_SOURCE_DIR}/include"
                     "${gmock_SOURCE_DIR}/include"
-                    "${ARROW_INCLUDE_DIR}"
-                    "${ZLIB_INCLUDE_DIR}"
-                    "${Boost_INCLUDE_DIR}"
-                    "${RMM_INCLUDE}")
+                    "${ARROW_INCLUDE_DIR}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------

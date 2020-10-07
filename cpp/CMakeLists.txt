@@ -272,12 +272,6 @@ endif(ZLIB_INCLUDE_DIR)
 # Don't look for a CMake configuration file
 set(Boost_NO_BOOST_CMAKE ON)
 
-get_cmake_property(_variableNames VARIABLES)
-list (SORT _variableNames)
-foreach (_variableName ${_variableNames})
-    message(STATUS "${_variableName}=${${_variableName}}")
-endforeach()
-
 CPMFindPackage(
   NAME Boost
   GITHUB_REPOSITORY Orphis/boost-cmake@60fb5fa
@@ -303,36 +297,43 @@ endif(Boost_INCLUDE_DIR)
 #find_path(RMM_INCLUDE "rmm"
 #          HINTS "$ENV{RMM_ROOT}/include")
 
-# RMM fails to provide the RMM_SOURCE_DIR variable when installed with CPM. This does not work.
+#find_library(RMM_LIBRARY "rmm"
+#          HINTS "$ENV{RMM_ROOT}/lib" "$ENV{RMM_ROOT}/build")
+
+get_cmake_property(_variableNames VARIABLES)
+list (SORT _variableNames)
+foreach (_variableName ${_variableNames})
+    message(STATUS "${_variableName}=${${_variableName}}")
+endforeach()
+
+find_package(CUDAToolkit)
 
 CPMFindPackage(
   NAME RMM
   GITHUB_REPOSITORY rapidsai/rmm
-  VERSION 0.16.0a
+  VERSION ${CMAKE_PROJECT_VERSION}
+  GIT_TAG "branch-${CMAKE_PROJECT_VERSION_MAJOR}.${CMAKE_PROJECT_VERSION_MINOR}"
 )
-
-set(RMM_INCLUDE "${RMM_SOURCE_DIR}")
-endif(NOT RMM_INCLUDE)
-
-message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
+set(RMM_INCLUDE "${RMM_SOURCE_DIR}/include")
+set(RMM_LIBRARY "${RMM_SOURCE_DIR}/lib")
+message(STATUS "RMM: RMM_SOURCE_DIR set to ${RMM_SOURCE_DIR}")
 
 ###################################################################################################
 # - DLPACK -------------------------------------------------------------------------------------------
 
-find_path(
-    DLPACK_INCLUDE "dlpack"
-    HINTS "$ENV{DLPACK_ROOT}/include"
+CPMFindPackage(
+  NAME DLPACK
+  GITHUB_REPOSITORY dmlc/dlpack
+  VERSION 0.3
 )
 
-if(NOT DLPACK_INCLUDE)
-  CPMFindPackage(
-    NAME DLPACK
-    GITHUB_REPOSITORY dmlc/dlpack
-    VERSION 0.3
-  )
+set(DLPACK_INCLUDE "${dlpack_SOURCE_DIR}/include")
 
-  set(DLPACK_INCLUDE "${DLPACK_SOURCE_DIR}")
-endif(NOT DLPACK_INCLUDE)
+get_cmake_property(_variableNames VARIABLES)
+list (SORT _variableNames)
+foreach (_variableName ${_variableNames})
+    message(STATUS "${_variableName}=${${_variableName}}")
+endforeach()
 
 message(STATUS "DLPACK: DLPACK_INCLUDE set to ${DLPACK_INCLUDE}")
 
@@ -395,7 +396,7 @@ if(BUILD_BENCHMARKS)
     # Therefore, we just disable the feature test and assume platforms we care about have a regex impl available
     "RUN_HAVE_GNU_POSIX_REGEX 0" #
   )
-  set(benchmark_INCLUDE_DIR benchmark)
+
   include_directories("${benchmark_INCLUDE_DIR}/include")
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/benchmarks)
 
@@ -420,8 +421,6 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${ARROW_INCLUDE_DIR}"
-                    "${ZLIB_INCLUDE_DIR}"
-                    "${Boost_INCLUDE_DIR}"
                     "${RMM_INCLUDE}"
                     "${DLPACK_INCLUDE}")
 
