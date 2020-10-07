@@ -287,8 +287,8 @@ public class ColumnVectorTest extends CudfTestBase {
            "in the MD5 hash function. This string needed to be longer.A 60 character string to " +
            "test MD5's message padding algorithm",
            "hiJ\ud720\ud721\ud720\ud721", null);
-         ColumnVector result01 = ColumnVector.md5Hash(0, v0, v1);
-         ColumnVector result2 = ColumnVector.md5Hash(0, v2);
+         ColumnVector result01 = ColumnVector.md5Hash(v0, v1);
+         ColumnVector result2 = ColumnVector.md5Hash(v2);
          ColumnVector expected = ColumnVector.fromStrings(
           "0cc175b9c0f1b6a831c399e269772661", "f5112705c2f6dc7d3fc6bd496df6c2e8",
           "675c30ce6d1b27dcb5009b01be42e9bd", "8fa29148f63c1fe9248fdc4644e3a193",
@@ -302,7 +302,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void testMD5HashInts() {
     try (ColumnVector v0 = ColumnVector.fromBoxedInts(0, 100, null, null, Integer.MIN_VALUE, null);
          ColumnVector v1 = ColumnVector.fromBoxedInts(0, null, -100, null, null, Integer.MAX_VALUE);
-         ColumnVector result = ColumnVector.md5Hash(0, v0, v1);
+         ColumnVector result = ColumnVector.md5Hash(v0, v1);
          ColumnVector expected = ColumnVector.fromStrings(
           "7dea362b3fac8e00956a4952a3d4f474", "cdc824bf721df654130ed7447fb878ac",
           "7fb89558e395330c6a10ab98915fcafb", "d41d8cd98f00b204e9800998ecf8427e",
@@ -318,7 +318,7 @@ public class ColumnVectorTest extends CudfTestBase {
           POSITIVE_DOUBLE_NAN_UPPER_RANGE, POSITIVE_DOUBLE_NAN_LOWER_RANGE,
           NEGATIVE_DOUBLE_NAN_UPPER_RANGE, NEGATIVE_DOUBLE_NAN_LOWER_RANGE,
           Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
-         ColumnVector result = ColumnVector.md5Hash(0, v);
+         ColumnVector result = ColumnVector.md5Hash(v);
          ColumnVector expected = ColumnVector.fromStrings(
           "7dea362b3fac8e00956a4952a3d4f474", "d41d8cd98f00b204e9800998ecf8427e",
           "6f5b4a57fd3aeb25cd33aa6c56512fd4", "b36ce1b64164e8f12c52ee5f1131ec01",
@@ -337,7 +337,7 @@ public class ColumnVectorTest extends CudfTestBase {
           POSITIVE_FLOAT_NAN_LOWER_RANGE, POSITIVE_FLOAT_NAN_UPPER_RANGE,
           NEGATIVE_FLOAT_NAN_LOWER_RANGE, NEGATIVE_FLOAT_NAN_UPPER_RANGE,
           Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY);
-         ColumnVector result = ColumnVector.md5Hash(0, v);
+         ColumnVector result = ColumnVector.md5Hash(v);
          ColumnVector expected = ColumnVector.fromStrings(
           "f1d3ff8443297732862df21dc4e57262", "a5d1e9463fae706307f90b05e9e6db9a",
           "556915a037c2ce1adfbedd7ca24794ea", "59331a73da50b419339c0d67a9ec1a97",
@@ -353,7 +353,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void testMD5HashBools() {
     try (ColumnVector v0 = ColumnVector.fromBoxedBooleans(null, true, false, true, null, false);
          ColumnVector v1 = ColumnVector.fromBoxedBooleans(null, true, false, null, false, true);
-         ColumnVector result = ColumnVector.md5Hash(0, v0, v1);
+         ColumnVector result = ColumnVector.md5Hash(v0, v1);
          ColumnVector expected = ColumnVector.fromStrings(
           "d41d8cd98f00b204e9800998ecf8427e", "249ba6277758050695e8f5909bacd6d3",
           "c4103f122d27677c9db144cae1394a66", "55a54008ad1ba589aa210d2629c1df41",
@@ -375,7 +375,7 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector floats = ColumnVector.fromBoxedFloats(
           0f, 100f, -100f, NEGATIVE_FLOAT_NAN_LOWER_RANGE, NEGATIVE_FLOAT_NAN_UPPER_RANGE, null);
          ColumnVector bools = ColumnVector.fromBoxedBooleans(true, false, null, false, true, null);
-         ColumnVector result = ColumnVector.md5Hash(0, strings, integers, doubles, floats, bools);
+         ColumnVector result = ColumnVector.md5Hash(strings, integers, doubles, floats, bools);
          ColumnVector expected = ColumnVector.fromStrings(
           "c12c8638819fdd8377bbf537a4ebf0b4", "abad86357c1ae28eeb89f4b59700946a",
           "8c176e687e677a752868fe9d319d9d5c", "2f64d6a1d5b730fd97115924cf9aa486",
@@ -402,8 +402,8 @@ public class ColumnVectorTest extends CudfTestBase {
            "test MD5's message padding algorithm",
            "hiJ\ud720\ud721\ud720\ud721", null);
 
-         ColumnVector result01 = ColumnVector.md5Hash(0, v0, v1);
-         ColumnVector result2 = ColumnVector.md5Hash(0, v2);
+         ColumnVector result01 = ColumnVector.md5Hash(v0, v1);
+         ColumnVector result2 = ColumnVector.md5Hash(v2);
          ColumnVector expected = ColumnVector.fromStrings(
           "0cc175b9c0f1b6a831c399e269772661", "f5112705c2f6dc7d3fc6bd496df6c2e8",
           "675c30ce6d1b27dcb5009b01be42e9bd", "8fa29148f63c1fe9248fdc4644e3a193",
@@ -413,13 +413,17 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testMD5HashRetainNulls() {
-    try (ColumnVector v = ColumnVector.fromBoxedInts(0, 100, null, null, Integer.MIN_VALUE, null);
-         ColumnVector result = ColumnVector.md5Hash(1, v);
-         ColumnVector expected = ColumnVector.fromStrings(
-          "7dea362b3fac8e00956a4952a3d4f474", "cdc824bf721df654130ed7447fb878ac",
-          null, null, "152afd7bf4dbe26f85032eee0269201a", null)) {
-      assertColumnsAreEqual(result, expected);
+  void testNullReconfigureNulls() {
+    try (ColumnVector v0 = ColumnVector.fromBoxedInts(0, 100, null, null, Integer.MIN_VALUE, null);
+         ColumnVector v1 = ColumnVector.fromBoxedInts(0, 100, 1, 2, Integer.MIN_VALUE, null);
+         ColumnVector intResult = v1.mergeAndSetValidity(BinaryOp.BITWISE_AND, v0);
+         ColumnVector v2 = ColumnVector.fromStrings("0", "100", "1", "2", "MIN_VALUE", "3");
+         ColumnVector stringResult = v2.mergeAndSetValidity(BinaryOp.BITWISE_AND, v0, v1);
+         ColumnVector stringExpected = ColumnVector.fromStrings("0", "100", null, null, "MIN_VALUE", null);
+         ColumnVector noMaskResult = v2.mergeAndSetValidity(BinaryOp.BITWISE_AND)) {
+      assertColumnsAreEqual(v0, intResult);
+      assertColumnsAreEqual(stringExpected, stringResult);
+      assertColumnsAreEqual(v2, noMaskResult);
     }
   }
 
