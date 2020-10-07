@@ -35,13 +35,13 @@ size_t CompactProtocolWriter::write(const FileMetaData &f)
   if (f.created_by.size() != 0) { c.field_string(6, f.created_by); }
   if (f.column_order_listsize != 0) {
     // Dummy list of struct containing an empty field1 struct
-    c.put_fldh(7, c.current_field(), ST_FLD_LIST);
-    c.putb((uint8_t)((std::min(f.column_order_listsize, 0xfu) << 4) | ST_FLD_STRUCT));
+    c.put_field_header(7, c.current_field(), ST_FLD_LIST);
+    c.put_byte((uint8_t)((std::min(f.column_order_listsize, 0xfu) << 4) | ST_FLD_STRUCT));
     if (f.column_order_listsize >= 0xf) c.put_uint(f.column_order_listsize);
     for (uint32_t i = 0; i < f.column_order_listsize; i++) {
-      c.put_fldh(1, 0, ST_FLD_STRUCT);
-      c.putb(0);  // ColumnOrder.field1 struct end
-      c.putb(0);  // ColumnOrder struct end
+      c.put_field_header(1, 0, ST_FLD_STRUCT);
+      c.put_byte(0);  // ColumnOrder.field1 struct end
+      c.put_byte(0);  // ColumnOrder struct end
     }
     c.set_current_field(7);
   }
@@ -120,9 +120,9 @@ size_t CompactProtocolWriter::write(const ColumnChunkMetaData &s)
   return c.value();
 }
 
-void CompactProtocolFieldWriter::putb(uint8_t v) { writer.m_buf.push_back(v); }
+void CompactProtocolFieldWriter::put_byte(uint8_t v) { writer.m_buf.push_back(v); }
 
-void CompactProtocolFieldWriter::putb(const uint8_t *raw, uint32_t len)
+void CompactProtocolFieldWriter::put_byte(const uint8_t *raw, uint32_t len)
 {
   for (uint32_t i = 0; i < len; i++) writer.m_buf.push_back(raw[i]);
 }
@@ -131,11 +131,11 @@ uint32_t CompactProtocolFieldWriter::put_uint(uint64_t v)
 {
   int l = 1;
   while (v > 0x7f) {
-    putb(static_cast<uint8_t>(v | 0x80));
+    put_byte(static_cast<uint8_t>(v | 0x80));
     v >>= 7;
     l++;
   }
-  putb(static_cast<uint8_t>(v));
+  put_byte(static_cast<uint8_t>(v));
   return l;
 }
 
@@ -145,26 +145,26 @@ uint32_t CompactProtocolFieldWriter::put_int(int64_t v)
   return put_uint(((v ^ -s) << 1) + s);
 }
 
-void CompactProtocolFieldWriter::put_fldh(int f, int cur, int t)
+void CompactProtocolFieldWriter::put_field_header(int f, int cur, int t)
 {
   if (f > cur && f <= cur + 15)
-    putb(((f - cur) << 4) | t);
+    put_byte(((f - cur) << 4) | t);
   else {
-    putb(t);
+    put_byte(t);
     put_int(f);
   }
 }
 
 inline void CompactProtocolFieldWriter::field_int(int field, int32_t val)
 {
-  put_fldh(field, current_field_value, ST_FLD_I32);
+  put_field_header(field, current_field_value, ST_FLD_I32);
   put_int(val);
   current_field_value = field;
 }
 
 inline void CompactProtocolFieldWriter::field_int(int field, int64_t val)
 {
-  put_fldh(field, current_field_value, ST_FLD_I64);
+  put_field_header(field, current_field_value, ST_FLD_I64);
   put_int(val);
   current_field_value = field;
 }
@@ -172,8 +172,8 @@ inline void CompactProtocolFieldWriter::field_int(int field, int64_t val)
 template <typename Enum>
 inline void CompactProtocolFieldWriter::field_int_list(int field, const std::vector<Enum> &val)
 {
-  put_fldh(field, current_field_value, ST_FLD_LIST);
-  putb((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_I32));
+  put_field_header(field, current_field_value, ST_FLD_LIST);
+  put_byte((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_I32));
   if (val.size() >= 0xf) put_uint(val.size());
   for (auto &v : val) { put_int(static_cast<int32_t>(v)); }
   current_field_value = field;
@@ -182,7 +182,7 @@ inline void CompactProtocolFieldWriter::field_int_list(int field, const std::vec
 template <typename T>
 inline void CompactProtocolFieldWriter::field_struct(int field, const T &val)
 {
-  put_fldh(field, current_field_value, ST_FLD_STRUCT);
+  put_field_header(field, current_field_value, ST_FLD_STRUCT);
   writer.write(val);
   current_field_value = field;
 }
@@ -190,8 +190,8 @@ inline void CompactProtocolFieldWriter::field_struct(int field, const T &val)
 template <typename T>
 inline void CompactProtocolFieldWriter::field_struct_list(int field, const std::vector<T> &val)
 {
-  put_fldh(field, current_field_value, ST_FLD_LIST);
-  putb((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_STRUCT));
+  put_field_header(field, current_field_value, ST_FLD_LIST);
+  put_byte((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_STRUCT));
   if (val.size() >= 0xf) put_uint(val.size());
   for (auto &v : val) { writer.write(v); }
   current_field_value = field;
@@ -199,38 +199,38 @@ inline void CompactProtocolFieldWriter::field_struct_list(int field, const std::
 
 inline size_t CompactProtocolFieldWriter::value()
 {
-  putb(0);
+  put_byte(0);
   return writer.m_buf.size() - struct_start_pos;
 }
 
 inline void CompactProtocolFieldWriter::field_struct_blob(int field,
                                                           const std::vector<uint8_t> &val)
 {
-  put_fldh(field, current_field_value, ST_FLD_STRUCT);
-  putb(val.data(), (uint32_t)val.size());
-  putb(0);
+  put_field_header(field, current_field_value, ST_FLD_STRUCT);
+  put_byte(val.data(), (uint32_t)val.size());
+  put_byte(0);
   current_field_value = field;
 }
 
 inline void CompactProtocolFieldWriter::field_string(int field, const std::string &val)
 {
-  put_fldh(field, current_field_value, ST_FLD_BINARY);
+  put_field_header(field, current_field_value, ST_FLD_BINARY);
   put_uint(val.size());
   // FIXME : replace reinterpret_cast
-  putb(reinterpret_cast<const uint8_t *>(val.data()), (uint32_t)val.size());
+  put_byte(reinterpret_cast<const uint8_t *>(val.data()), (uint32_t)val.size());
   current_field_value = field;
 }
 
 inline void CompactProtocolFieldWriter::field_string_list(int field,
                                                           const std::vector<std::string> &val)
 {
-  put_fldh(field, current_field_value, ST_FLD_LIST);
-  putb((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_BINARY));
+  put_field_header(field, current_field_value, ST_FLD_LIST);
+  put_byte((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_BINARY));
   if (val.size() >= 0xf) put_uint(val.size());
   for (auto &v : val) {
     put_uint(v.size());
     // FIXME : replace reinterpret_cast
-    putb(reinterpret_cast<const uint8_t *>(v.data()), (uint32_t)v.size());
+    put_byte(reinterpret_cast<const uint8_t *>(v.data()), (uint32_t)v.size());
   }
   current_field_value = field;
 }

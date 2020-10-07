@@ -710,6 +710,23 @@ inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
            : (ctxid == ROW_CTX_QUOTE) ? ctx_map.y : (ctxid == ROW_CTX_COMMENT) ? ctx_map.z : 0;
 }
 
+/**
+ * @brief Single pair-wise 512-wide row context merge transform
+ *
+ * Merge row context blocks and record the merge operation in a context
+ * tree so that the transform is reversible.
+ * The tree is organized such that the left and right children of node n
+ * are located at indices n*2 and n*2+1, the root node starting at index 1
+ *
+ * @tparam lanemask mask to specify source of packed row context
+ * @tparam tmask mask to specify principle thread for merging row context
+ * @tparam base start location for writing into packed row context tree
+ * @tparam level_scale level of the node in the tree
+ * @param ctxtree[out] packed row context tree
+ * @param ctxb[in] packed row context for the current character block
+ * @param t thread id (leaf node id)
+ *
+ */
 template <uint32_t lanemask, uint32_t tmask, uint32_t base, uint32_t level_scale>
 inline __device__ void ctx_merge(uint64_t *ctxtree, packed_rowctx_t *ctxb, uint32_t t)
 {
@@ -720,6 +737,18 @@ inline __device__ void ctx_merge(uint64_t *ctxtree, packed_rowctx_t *ctxb, uint3
   }
 }
 
+/**
+ * @brief Single 512-wide row context inverse merge transform
+ *
+ * Walks the context tree starting from a root node
+ *
+ * @tparam rmask Mask to specify which threads write input row context
+ * @param[in] base Start read location of the merge transform tree
+ * @param[in] ctxtree Merge transform tree
+ * @param[in] ctx Input context
+ * @param[in] brow4 output row in block *4
+ * @param[in] t thread id (leaf node id)
+ */
 template <uint32_t rmask>
 inline __device__ void ctx_unmerge(
   uint32_t base, uint64_t *ctxtree, uint32_t *ctx, uint32_t *brow4, uint32_t t)

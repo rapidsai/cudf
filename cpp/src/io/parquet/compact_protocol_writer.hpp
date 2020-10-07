@@ -37,7 +37,7 @@ namespace parquet {
  **/
 class CompactProtocolWriter {
  public:
-  CompactProtocolWriter(std::vector<uint8_t> &output) : m_buf(output) {}
+  CompactProtocolWriter(std::vector<uint8_t> *output) : m_buf(*output) {}
 
   size_t write(const FileMetaData &);
   size_t write(const SchemaElement &);
@@ -62,15 +62,15 @@ class CompactProtocolFieldWriter {
   {
   }
 
-  void putb(uint8_t v);
+  void put_byte(uint8_t v);
 
-  void putb(const uint8_t *raw, uint32_t len);
+  void put_byte(const uint8_t *raw, uint32_t len);
 
   uint32_t put_uint(uint64_t v);
 
   uint32_t put_int(int64_t v);
 
-  void put_fldh(int f, int cur, int t);
+  void put_field_header(int f, int cur, int t);
 
   inline void field_int(int field, int32_t val);
 
