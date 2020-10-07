@@ -45,7 +45,7 @@ file_wrapper::file_wrapper(std::string const &filepath, int flags, mode_t mode)
 std::string get_libcudf_dir_path()
 {
   Dl_info dl_info;
-  dladdr((void *)get_libcudf_path, &dl_info);
+  dladdr((void *)get_libcudf_dir_path, &dl_info);
   std::string full_path{dl_info.dli_fname};
   auto const dir_path = full_path.substr(0, full_path.find_last_of('/') + 1);
   return dir_path;
