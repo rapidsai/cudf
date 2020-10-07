@@ -46,88 +46,91 @@ class memory_mapped_source : public datasource {
 
  public:
   explicit memory_mapped_source(const char *filepath, size_t offset, size_t size)
-    : _gds_file(filepath)
+    : _cufile_in(filepath)
   {
     auto const file = file_wrapper(filepath, O_RDONLY);
-    file_size_      = file.size();
-    if (file_size_ != 0) { map(file.desc(), offset, size); }
+    _file_size      = file.size();
+    if (_file_size != 0) { map(file.desc(), offset, size); }
   }
 
   virtual ~memory_mapped_source()
   {
-    if (map_addr_ != nullptr) { munmap(map_addr_, map_size_); }
+    if (_map_addr != nullptr) { munmap(_map_addr, _map_size); }
   }
 
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
-    CUDF_EXPECTS(offset >= map_offset_, "Requested offset is outside mapping");
+    CUDF_EXPECTS(offset >= _map_offset, "Requested offset is outside mapping");
 
     // Clamp length to available data in the mapped region
-    auto const read_size = std::min(size, map_size_ - (offset - map_offset_));
+    auto const read_size = std::min(size, _map_size - (offset - _map_offset));
 
     return std::make_unique<memory_mapped_buffer>(
-      static_cast<uint8_t *>(map_addr_) + (offset - map_offset_), read_size);
+      static_cast<uint8_t *>(_map_addr) + (offset - _map_offset), read_size);
   }
 
   size_t host_read(size_t offset, size_t size, uint8_t *dst) override
   {
-    CUDF_EXPECTS(offset >= map_offset_, "Requested offset is outside mapping");
+    CUDF_EXPECTS(offset >= _map_offset, "Requested offset is outside mapping");
 
     // Clamp length to available data in the mapped region
-    auto const read_size = std::min(size, map_size_ - (offset - map_offset_));
+    auto const read_size = std::min(size, _map_size - (offset - _map_offset));
 
-    auto const src = static_cast<uint8_t *>(map_addr_) + (offset - map_offset_);
+    auto const src = static_cast<uint8_t *>(_map_addr) + (offset - _map_offset);
     std::memcpy(dst, src, read_size);
     return read_size;
   }
 
   bool supports_device_read() const override { return true; }
 
-  bool is_device_read_preferred(size_t size) const { return _gds_file.is_gds_io_preferred(size); }
+  bool is_device_read_preferred(size_t size) const
+  {
+    return _cufile_in.is_cufile_io_preferred(size);
+  }
 
   std::unique_ptr<datasource::buffer> device_read(size_t offset, size_t size) override
   {
-    auto const read_size = std::min(size, map_size_ - (offset - map_offset_));
-    return _gds_file.read(offset, size);
+    auto const read_size = std::min(size, _map_size - (offset - _map_offset));
+    return _cufile_in.read(offset, size);
   }
 
   size_t device_read(size_t offset, size_t size, uint8_t *dst) override
   {
-    auto const read_size = std::min(size, map_size_ - (offset - map_offset_));
-    return _gds_file.read(offset, size, dst);
+    auto const read_size = std::min(size, _map_size - (offset - _map_offset));
+    return _cufile_in.read(offset, size, dst);
   }
 
-  size_t size() const override { return file_size_; }
+  size_t size() const override { return _file_size; }
 
  private:
   void map(int fd, size_t offset, size_t size)
   {
-    CUDF_EXPECTS(offset < file_size_, "Offset is past end of file");
+    CUDF_EXPECTS(offset < _file_size, "Offset is past end of file");
 
     // Offset for `mmap()` must be page aligned
-    map_offset_ = offset & ~(sysconf(_SC_PAGESIZE) - 1);
+    _map_offset = offset & ~(sysconf(_SC_PAGESIZE) - 1);
 
     // Clamp length to available data in the file
     if (size == 0) {
-      size = file_size_ - offset;
+      size = _file_size - offset;
     } else {
-      if ((offset + size) > file_size_) { size = file_size_ - offset; }
+      if ((offset + size) > _file_size) { size = _file_size - offset; }
     }
 
     // Size for `mmap()` needs to include the page padding
-    map_size_ = size + (offset - map_offset_);
+    _map_size = size + (offset - _map_offset);
 
     // Check if accessing a region within already mapped area
-    map_addr_ = mmap(nullptr, map_size_, PROT_READ, MAP_PRIVATE, fd, map_offset_);
-    CUDF_EXPECTS(map_addr_ != MAP_FAILED, "Cannot create memory mapping");
+    _map_addr = mmap(nullptr, _map_size, PROT_READ, MAP_PRIVATE, fd, _map_offset);
+    CUDF_EXPECTS(_map_addr != MAP_FAILED, "Cannot create memory mapping");
   }
 
  private:
-  size_t file_size_  = 0;
-  void *map_addr_    = nullptr;
-  size_t map_size_   = 0;
-  size_t map_offset_ = 0;
-  gds_input _gds_file;
+  size_t _file_size  = 0;
+  void *_map_addr    = nullptr;
+  size_t _map_size   = 0;
+  size_t _map_offset = 0;
+  cufile_input _cufile_in;
 };
 
 /**

@@ -26,6 +26,9 @@
 namespace cudf {
 namespace io {
 
+/**
+ * @brief Class that provides RAII for file handling.
+ */
 class file_wrapper {
   int const fd       = -1;
   long mutable _size = -1;
@@ -38,49 +41,88 @@ class file_wrapper {
   auto desc() const { return fd; }
 };
 
-struct cf_file_wrapper {
+/**
+ * @brief Class that provides RAII for cuFile file registration.
+ */
+struct cufile_registered_file {
   CUfileHandle_t handle = nullptr;
-  explicit cf_file_wrapper(int fd);
-  ~cf_file_wrapper();
+  explicit cufile_registered_file(int fd);
+  ~cufile_registered_file();
 };
 
-class gds_io_base {
+/**
+ * @brief Base class for cuFile input/output.
+ *
+ * Contains the file handles and common API for cuFile input and output classes.
+ */
+class cufile_io_base {
  public:
-  gds_io_base(std::string const &filepath, int flags) : file(filepath, flags), cf_file{file.desc()}
+  cufile_io_base(std::string const &filepath, int flags)
+    : file(filepath, flags), cf_file{file.desc()}
   {
   }
-  gds_io_base(std::string const &filepath, int flags, mode_t mode)
+  cufile_io_base(std::string const &filepath, int flags, mode_t mode)
     : file(filepath, flags, mode), cf_file{file.desc()}
   {
   }
 
-  static bool is_gds_io_preferred(size_t size) { return size > op_size_threshold; }
+  virtual ~cufile_io_base() = default;
+
+  /**
+   * @brief Returns an estimate of whether the cuFile operation is the optimal option.
+   *
+   * @param size Read/write operation size, in bytes.
+   * @return Whether a cuFile operation with the given size is expected to be faster than a host
+   * read + H2D copy
+   */
+  static bool is_cufile_io_preferred(size_t size) { return size > op_size_threshold; }
 
  protected:
   /**
-   * @brief The read/write size above which GDS is faster then host read + copy
+   * @brief The read/write size above which cuFile is faster then host read + copy
    *
-   * This may not be the optimal threshold for all systems. `is_gds_io_preferred` can use a
+   * This may not be the optimal threshold for all systems. `is_cufile_io_preferred` can use a
    * different logic based on the system config.
    */
   static constexpr size_t op_size_threshold = 128 << 10;
   file_wrapper const file;
-  cf_file_wrapper const cf_file;
+  cufile_registered_file const cf_file;
 };
 
-class gds_input : public gds_io_base {
+/**
+ * @brief Adapter for the `cuFileRead` API.
+ *
+ * Exposes APIs to read directly from a file into device memory.
+ */
+class cufile_input final : public cufile_io_base {
  public:
-  gds_input(std::string const &filepath);
+  cufile_input(std::string const &filepath);
 
+  /**
+   * @brief Reads into a new device buffer.
+   */
   std::unique_ptr<datasource::buffer> read(size_t offset, size_t size);
 
+  /**
+   * @brief Reads into existing device memory.
+   *
+   * Returns the number of bytes read.
+   */
   size_t read(size_t offset, size_t size, uint8_t *dst);
 };
 
-class gds_output : public gds_io_base {
+/**
+ * @brief Adapter for the `cuFileWrite` API.
+ *
+ * Exposes an API to write directly into a file from device memory.
+ */
+class cufile_output final : public cufile_io_base {
  public:
-  gds_output(std::string const &filepath);
+  cufile_output(std::string const &filepath);
 
+  /**
+   * @brief Writes the data from a device buffer into a file.
+   */
   void write(void const *data, size_t offset, size_t size);
 };
 
