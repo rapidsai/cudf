@@ -4821,39 +4821,19 @@ def test_rowwise_ops_nullable_int_dtypes(op, expected):
             "i1": gd.Series([1001, 2002], dtype="int64"),
         },
         {
-            "t1": ["2020-08-01 09:00:00", "1920-05-01 10:30:00"],
-            "t2": ["1940-08-31 06:00:00", pd.NaT],
-        },
-        {
-            "t1": ["2020-08-01 09:00:00", "1920-05-01 10:30:00"],
-            "t2": ["1940-08-31 06:00:00", pd.NaT],
+            "t1": gd.Series(
+                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ms]"
+            ),
+            "t2": gd.Series(["1940-08-31 06:00:00", None], dtype="<M8[ms]"),
             "i1": [1001, 2002],
         },
     ],
 )
 @pytest.mark.parametrize("op", ["max", "min"])
 @pytest.mark.parametrize("skipna", [True, False])
-@pytest.mark.skipif()
 def test_rowwise_ops_datetime_dtypes(data, op, skipna):
 
-    if (
-        data
-        == {
-            "t1": ["2020-08-01 09:00:00", "1920-05-01 10:30:00"],
-            "t2": ["1940-08-31 06:00:00", pd.NaT],
-        }
-        and op == "max"
-        and skipna
-    ):
-        pytest.skip(
-            reason="pandas row-wise max operation does not propagate"
-            " null values: https://github.com/pandas-dev/pandas/issues/36907"
-        )
-
     gdf = gd.DataFrame(data)
-    for col in gdf.columns:
-        if gdf[col].dtype == np.dtype("O"):
-            gdf[col] = gdf[col].astype("<M8[ms]")
     gdf_copy = gdf.copy(deep=True)
 
     pdf = gdf.to_pandas()
@@ -4863,6 +4843,88 @@ def test_rowwise_ops_datetime_dtypes(data, op, skipna):
 
     assert_eq(got, expected)
     assert_eq(gdf, gdf_copy)
+
+
+@pytest.mark.parametrize(
+    "data,op,skipna",
+    [
+        (
+            {
+                "t1": gd.Series(
+                    ["2020-08-01 09:00:00", "1920-05-01 10:30:00"],
+                    dtype="<M8[ms]",
+                ),
+                "t2": gd.Series(
+                    ["1940-08-31 06:00:00", None], dtype="<M8[ms]"
+                ),
+            },
+            "max",
+            True,
+        ),
+        (
+            {
+                "t1": gd.Series(
+                    ["2020-08-01 09:00:00", "1920-05-01 10:30:00"],
+                    dtype="<M8[ms]",
+                ),
+                "t2": gd.Series(
+                    ["1940-08-31 06:00:00", None], dtype="<M8[ms]"
+                ),
+            },
+            "min",
+            False,
+        ),
+        (
+            {
+                "t1": gd.Series(
+                    ["2020-08-01 09:00:00", "1920-05-01 10:30:00"],
+                    dtype="<M8[ms]",
+                ),
+                "t2": gd.Series(
+                    ["1940-08-31 06:00:00", None], dtype="<M8[ms]"
+                ),
+            },
+            "min",
+            True,
+        ),
+    ],
+)
+def test_rowwise_ops_datetime_dtypes_2(data, op, skipna):
+
+    gdf = gd.DataFrame(data)
+    gdf_copy = gdf.copy(deep=True)
+
+    pdf = gdf.to_pandas()
+
+    got = getattr(gdf, op)(axis=1, skipna=skipna)
+    expected = getattr(pdf, op)(axis=1, skipna=skipna)
+
+    assert_eq(got, expected)
+    assert_eq(gdf, gdf_copy)
+
+
+@pytest.mark.parametrize(
+    "data,res",
+    [
+        (
+            {
+                "t1": pd.Series(
+                    ["2020-08-01 09:00:00", "1920-05-01 10:30:00"],
+                    dtype="<M8[ns]",
+                ),
+                "t2": pd.Series(
+                    ["1940-08-31 06:00:00", pd.NaT], dtype="<M8[ns]"
+                ),
+            },
+            pd.Series(
+                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ns]"
+            ),
+        )
+    ],
+)
+def test_rowwise_ops_datetime_dtypes_pdbug(data, res):
+    pdf = pd.DataFrame(data)
+    assert_eq(res, pdf.max(axis=1, skipna=False))
 
 
 @pytest.mark.parametrize(
