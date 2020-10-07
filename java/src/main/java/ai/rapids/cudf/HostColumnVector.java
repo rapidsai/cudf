@@ -759,7 +759,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       while (currentByteIndex + length > newLen) {
         newLen *= 2;
       }
-      if (newLen > Integer.MAX_VALUE) {
+      if (newLen > Integer.MAX_VALUE && type == DType.STRING) {
         throw new IllegalStateException("A string buffer is not supported over 2GB in size");
       }
       if (newLen != oldLen) {
