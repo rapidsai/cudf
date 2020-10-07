@@ -985,7 +985,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
     for(int i = 0; i < columns.length; i++) {
       assert columns[i] != null : "Column vectors passed may not be null";
-      assert columns[i].getRowCount() == size : "Row count mismatch, all columns be the same size";
+      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
       columnViews[i] = columns[i].getNativeView();
     }
 
@@ -1007,7 +1007,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
     for(int i = 0; i < columns.length; i++) {
       assert columns[i] != null : "Column vectors passed may not be null";
-      assert columns[i].getRowCount() == size : "Row count mismatch, all columns be the same size";
+      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
       assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
       assert !columns[i].getType().isTimestamp() : "Unsupported column type Timestamp";
       if(columns[i].getType() == DType.LIST) {
