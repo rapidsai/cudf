@@ -592,7 +592,8 @@ def test_concat_dataframe_with_multiIndex(df1, df2):
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("sort", [True, False])
 @pytest.mark.parametrize("join", ["inner", "outer"])
-def test_concat_join(ignore_index, sort, join):
+@pytest.mark.parametrize("axis", [0, 1])
+def test_concat_join(ignore_index, sort, join, axis):
     pdf1 = pd.DataFrame(
         {
             "x": range(10),
@@ -654,11 +655,12 @@ def test_concat_join(ignore_index, sort, join):
     assert_eq(
         gd.concat(
             [s1, s2, s3, s4], sort=sort, join=join, ignore_index=ignore_index,
-        ),
+            axis=axis),
         pd.concat(
             [ps1, ps2, ps3, ps4],
             sort=sort,
             join=join,
             ignore_index=ignore_index,
+            axis=axis
         ),
     )
