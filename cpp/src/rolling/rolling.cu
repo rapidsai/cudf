@@ -715,7 +715,7 @@ struct rolling_window_launcher {
     // For LEAD(0)/LAG(0), no computation need be performed.
     // Return copy of input.
     if (0 == static_cast<cudf::detail::lead_lag_aggregation*>(agg.get())->row_offset) {
-      return std::make_unique<column>(input, static_cast<cudaStream_t>(0), mr);
+      return std::make_unique<column>(input, stream, mr);
     }
 
     auto output = make_fixed_width_column(
@@ -777,8 +777,7 @@ struct rolling_window_launcher {
              rmm::mr::device_memory_resource* mr,
              cudaStream_t stream)
   {
-    CUDF_EXPECTS(default_outputs.is_empty() || op == aggregation::LEAD || op == aggregation::LAG,
-                 "Only LEAD/LAG window functions support default values.");
+    CUDF_EXPECTS(default_outputs.is_empty(), "Only LEAD/LAG window functions support default values.");
 
     return launch<InputType,
                   typename corresponding_operator<op>::type,
