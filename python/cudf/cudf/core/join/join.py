@@ -133,7 +133,7 @@ class Merge(object):
         the subset of input configurations handled by the cython layer.
         Apply suffixes to columns.
         """
-
+   
         self.out_class = cudf.DataFrame
         if isinstance(self.lhs, cudf.MultiIndex) or isinstance(
             self.rhs, cudf.MultiIndex
@@ -141,10 +141,41 @@ class Merge(object):
             self.out_class = cudf.MultiIndex
         elif isinstance(self.lhs, cudf.Index):
             self.out_class = self.lhs.__class__
-
+        
         if on:
             on = [on] if isinstance(on, str) else list(on)
-            left_on = right_on = on
+            left_on = right_on = on 
+        
+            for key in on:
+                if key in self.lhs._data.keys() and key not in self.rhs._data.keys():
+                    if key in self.rhs.index.names:
+                        left_on = on
+                        self.right_index = True
+                        on = None
+                        right_on = None
+                    else:
+                        raise KeyError("message")
+
+                if key not in self.lhs._data.keys() and key in self.rhs._data.keys():
+                    if key in self.lhs.index.names:
+                        right_on = on
+                        self.left_index = True
+                        on = None
+                        left_on = None
+                    else:
+                        raise KeyError("message")
+
+                if key not in self.lhs._data.keys() and key not in self.rhs._data.keys():
+                    if key in self.lhs.index.names and key in self.rhs.index.names:
+                        self.right_index = True
+                        self.left_index = True
+                        on = None
+                        left_on = None
+                        right_on = None
+                    else:
+                        raise KeyError("message")
+
+    
         else:
             if left_on:
                 left_on = (
@@ -234,9 +265,7 @@ class Merge(object):
                 on_keys = list(on)
             else:
                 on_keys = on
-            for key in on_keys:
-                if not (key in lhs._data.keys() and key in rhs._data.keys()):
-                    raise KeyError(f"on key {on} not in both operands")
+
         elif left_on and right_on:
             left_on_keys = (
                 [left_on] if not isinstance(left_on, list) else left_on
@@ -277,7 +306,8 @@ class Merge(object):
             and not (left_on or right_on)
             and len(same_named_columns) == 0
         ):
-            raise ValueError("No common columns to perform merge on")
+           # raise ValueError("No common columns to perform merge on")
+           pass
 
         if suffixes:
             lsuffix, rsuffix = suffixes
