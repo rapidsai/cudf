@@ -119,6 +119,7 @@
 - PR #6409 Allow CuPy 8.x
 - PR #6407 Add RMM_LOGGING_LEVEL flag to Java docker build
 - PR #6438 Fetch nvcomp v1.1.0 for JNI build
+- PR #6459 Add `map` method to series
 
 ## Bug Fixes
 
