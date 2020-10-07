@@ -4604,7 +4604,7 @@ def test_df_constructor_dtype(dtype):
     "op", ["max", "min", "sum", "product", "mean", "var", "std"]
 )
 @pytest.mark.parametrize("skipna", [True, False])
-def test_rowwise_ops1(data, op, skipna):
+def test_rowwise_ops(data, op, skipna):
     gdf = data
     pdf = gdf.to_pandas()
 
@@ -4825,11 +4825,26 @@ def test_rowwise_ops_nullable_int_dtypes(op, expected):
 )
 @pytest.mark.parametrize("op", ["max", "min"])
 @pytest.mark.parametrize("skipna", [True, False])
+@pytest.mark.skipif()
 def test_rowwise_ops_datetime_dtypes(data, op, skipna):
-    gdf = gd.DataFrame(data)
 
-    if gdf.dtypes[0] == np.dtype("O"):
-        for col in gdf.columns:
+    if (
+        data
+        == {
+            "t1": ["2020-08-01 09:00:00", "1920-05-01 10:30:00"],
+            "t2": ["1940-08-31 06:00:00", pd.NaT],
+        }
+        and op == "max"
+        and skipna
+    ):
+        pytest.skip(
+            reason="pandas row-wise max operation does not propagate"
+            " null values: https://github.com/pandas-dev/pandas/issues/36907"
+        )
+
+    gdf = gd.DataFrame(data)
+    for col in gdf.columns:
+        if gdf[col].dtype == np.dtype("O"):
             gdf[col] = gdf[col].astype("<M8[ms]")
     gdf_copy = gdf.copy(deep=True)
 

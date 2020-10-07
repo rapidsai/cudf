@@ -6523,6 +6523,8 @@ class DataFrame(Frame, Serializable):
                             cudf.utils.dtypes.get_min_float_dtype(
                                 prepared._data[col]
                             )
+                            if not is_datetime_dtype(common_dtype)
+                            else np.dtype("float64")
                         )
                         .fillna(np.nan)
                     )
@@ -6544,17 +6546,16 @@ class DataFrame(Frame, Serializable):
                     "max",
                     "sum",
                     "prod",
-                    "nanmin",
-                    "nanmax",
-                    "nansum",
-                    "nanprod",
                     "cummin",
                     "cummax",
                     "cumsum",
                     "cumprod",
                 }
                 result_dtype = (
-                    common_dtype if method in type_coerced_methods else None
+                    common_dtype
+                    if method in type_coerced_methods
+                    or is_datetime_dtype(common_dtype)
+                    else None
                 )
                 result = column.as_column(result, dtype=result_dtype)
                 if mask is not None:
