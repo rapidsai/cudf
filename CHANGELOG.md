@@ -29,6 +29,8 @@
 - PR #6139 Add column conversion to big endian byte list.
 - PR #6220 Add `list_topics()` to supply list of underlying Kafka connection topics
 - PR #6254 Add `cudf::make_dictionary_from_scalar` factory function
+- PR #6262 Add nth_element series aggregation with null handling
+- PR #6277 Add support for LEAD/LAG window functions for fixed-width types
 - PR #6318 Add support for reading Struct and map types from Parquet files
 - PR #6315 Native code for string-map lookups, for cudf-java
 - PR #6302 Add custom dataframe accessors
