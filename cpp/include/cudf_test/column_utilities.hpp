@@ -161,7 +161,7 @@ template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nu
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
 {
   using namespace numeric;
-  using Rep = typename T::representation_type;
+  using Rep = typename T::rep;
 
   auto host_rep_types = thrust::host_vector<Rep>(c.size());
 

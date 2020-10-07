@@ -135,7 +135,7 @@ struct interleave_columns_functor {
     auto index_begin   = thrust::make_counting_iterator<size_type>(0);
     auto index_end     = thrust::make_counting_iterator<size_type>(output_size);
 
-    using Type = get_column_stored_type<T>;
+    using Type = device_storage_type_t<T>;
 
     auto func_value = [input   = *device_input,
                        divisor = input.num_columns()] __device__(size_type idx) {

@@ -2120,7 +2120,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiply2)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
-  using RepType   = get_column_stored_type<decimalXX>;
+  using RepType   = device_storage_type_t<decimalXX>;
 
   auto const lhs      = fp_wrapper<RepType>{{11, 22, 33, 44, 55}, scale_type{-1}};
   auto const rhs      = fp_wrapper<RepType>{{10, 10, 10, 10, 10}, scale_type{0}};
@@ -2135,7 +2135,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpAdd2)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
-  using RepType   = get_column_stored_type<decimalXX>;
+  using RepType   = device_storage_type_t<decimalXX>;
 
   auto const lhs      = fp_wrapper<RepType>{{11, 22, 33, 44, 55}, scale_type{-1}};
   auto const rhs      = fp_wrapper<RepType>{{100, 200, 300, 400, 500}, scale_type{-2}};
@@ -2150,7 +2150,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpAdd3)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
-  using RepType   = get_column_stored_type<decimalXX>;
+  using RepType   = device_storage_type_t<decimalXX>;
 
   auto const lhs      = fp_wrapper<RepType>{{1100, 2200, 3300, 4400, 5500}, scale_type{-3}};
   auto const rhs      = fp_wrapper<RepType>{{100, 200, 300, 400, 500}, scale_type{-2}};
@@ -2165,7 +2165,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiplySalar)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
-  using RepType   = get_column_stored_type<decimalXX>;
+  using RepType   = device_storage_type_t<decimalXX>;
 
   auto const lhs      = fp_wrapper<RepType>{{11, 22, 33, 44, 55}, scale_type{-1}};
   auto const rhs      = make_fixed_point_scalar<decimalXX>(100, scale_type{-1});
@@ -2180,7 +2180,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualSimple)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
-  using RepType   = get_column_stored_type<decimalXX>;
+  using RepType   = device_storage_type_t<decimalXX>;
 
   auto const trues    = std::vector<bool>(4, true);
   auto const col1     = fp_wrapper<RepType>{{1, 2, 3, 4}, scale_type{0}};
@@ -2196,7 +2196,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualLessGreater)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
-  using RepType   = get_column_stored_type<decimalXX>;
+  using RepType   = device_storage_type_t<decimalXX>;
 
   auto const sz = std::size_t{1000};
 

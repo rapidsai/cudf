@@ -294,7 +294,7 @@ struct concatenate_dispatch {
     bool const has_nulls =
       std::any_of(views.cbegin(), views.cend(), [](auto const& col) { return col.has_nulls(); });
 
-    using Type = get_column_stored_type<T>;
+    using Type = device_storage_type_t<T>;
 
     // Use a heuristic to guess when the fused kernel will be faster
     if (use_fused_kernel_heuristic(has_nulls, views.size())) {

@@ -240,7 +240,7 @@ __global__ void replace_kernel(cudf::column_device_view input,
                                cudf::column_device_view values_to_replace,
                                cudf::column_device_view replacement)
 {
-  using Type = cudf::get_column_stored_type<T>;
+  using Type = cudf::device_storage_type_t<T>;
 
   Type* __restrict__ output_data = output.data<Type>();
 

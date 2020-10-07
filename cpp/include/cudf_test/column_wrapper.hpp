@@ -188,7 +188,7 @@ template <typename ElementTo,
                                     cudf::is_fixed_point<ElementTo>()>* = nullptr>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
-  using RepType        = typename ElementTo::representation_type;
+  using RepType        = typename ElementTo::rep;
   auto transformer     = fixed_width_type_converter<ElementFrom, RepType>{};
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
@@ -214,7 +214,7 @@ template <typename ElementTo,
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   using namespace numeric;
-  using RepType = typename ElementTo::representation_type;
+  using RepType = typename ElementTo::rep;
   auto to_rep   = [](ElementTo fp) { return static_cast<scaled_integer<RepType>>(fp).value; };
   auto transformer_begin = thrust::make_transform_iterator(begin, to_rep);
   auto const size        = cudf::distance(begin, end);

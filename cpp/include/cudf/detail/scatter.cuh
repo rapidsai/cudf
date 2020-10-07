@@ -87,7 +87,7 @@ struct column_scatterer_impl {
     auto result      = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
 
-    using Type = get_column_stored_type<Element>;
+    using Type = device_storage_type_t<Element>;
 
     // NOTE use source.begin + scatter rows rather than source.end in case the
     // scatter map is smaller than the number of source rows

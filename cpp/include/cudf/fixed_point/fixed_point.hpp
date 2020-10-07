@@ -289,7 +289,7 @@ class fixed_point {
   scale_type _scale;
 
  public:
-  using representation_type = Rep;
+  using rep = Rep;
 
   /**
    * @brief Constructor that will perform shifting to store value appropriately

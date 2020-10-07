@@ -180,7 +180,7 @@ struct column_gatherer_impl {
     auto destination_column =
       cudf::detail::allocate_like(source_column, num_rows, policy, mr, stream);
 
-    using Type = get_column_stored_type<Element>;
+    using Type = device_storage_type_t<Element>;
 
     gather_helper(source_column.data<Type>(),
                   source_column.size(),

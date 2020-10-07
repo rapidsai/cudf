@@ -332,6 +332,18 @@ constexpr inline bool is_timestamp(data_type type)
 }
 
 /**
+ * @brief Function for determining if `type_id` is fixed_point
+ *
+ * @param id The `type_id` to check
+ * @return true If id is either DECIMAL32 or DECIMAL64
+ * @return false If id is not either DECIMAL32 or DECIMAL64
+ */
+constexpr inline bool is_fixed_point(type_id id)
+{
+  return id == type_id::DECIMAL32 || id == type_id::DECIMAL64;
+}
+
+/**
  * @brief Indicates whether the type `T` is a fixed-point type.
  *
  * @tparam T  The type to verify

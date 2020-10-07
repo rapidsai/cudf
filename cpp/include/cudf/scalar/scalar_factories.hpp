@@ -146,7 +146,7 @@ std::unique_ptr<scalar> make_fixed_width_scalar(
  */
 template <typename T>
 std::unique_ptr<scalar> make_fixed_point_scalar(
-  typename T::representation_type value,
+  typename T::rep value,
   numeric::scale_type scale,
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())

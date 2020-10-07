@@ -226,18 +226,6 @@ enum class type_id : int32_t {
 };
 
 /**
- * @brief Function for determining if `type_id` is fixed_point
- *
- * @param id The `type_id` to check
- * @return true If id is either DECIMAL32 or DECIMAL64
- * @return false If id is not either DECIMAL32 or DECIMAL64
- */
-constexpr inline bool is_fixed_point_type_id(type_id id)
-{
-  return id == type_id::DECIMAL32 || id == type_id::DECIMAL64;
-}
-
-/**
  * @brief Indicator for the logical data type of an element in a column.
  *
  * Simple types can be be entirely described by their `id()`, but some types
@@ -267,7 +255,7 @@ class data_type {
    **/
   explicit data_type(type_id id, int32_t scale) : _id{id}, _fixed_point_scale{scale}
   {
-    assert(is_fixed_point_type_id(id));
+    assert(id == type_id::DECIMAL32 || id == type_id::DECIMAL64);
   }
 
   /**

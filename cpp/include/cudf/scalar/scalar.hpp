@@ -265,7 +265,7 @@ class fixed_point_scalar : public scalar {
   static_assert(is_fixed_point<T>(), "Unexpected non-fixed_point type.");
 
  public:
-  using rep_type = typename T::representation_type;
+  using rep_type = typename T::rep;
 
   fixed_point_scalar() : scalar(data_type(type_to_id<T>())){};
   ~fixed_point_scalar()                               = default;

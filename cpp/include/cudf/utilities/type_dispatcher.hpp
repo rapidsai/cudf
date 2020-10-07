@@ -87,14 +87,14 @@ using id_to_type = typename id_to_type_impl<Id>::type;
  *
  * Use this "type function" with the `using` type alias:
  * @code
- * using Type = get_column_stored_type<Element>;
+ * using Type = device_storage_type_t<Element>;
  * @endcode
  *
  * @tparam T The literal type that is stored on the host
  */
 // clang-format off
 template <typename T>
-using get_column_stored_type =
+using device_storage_type_t =
   std::conditional_t<std::is_same<numeric::decimal32, T>::value, int32_t,
   std::conditional_t<std::is_same<numeric::decimal64, T>::value, int64_t, T>>;
 // clang-format on

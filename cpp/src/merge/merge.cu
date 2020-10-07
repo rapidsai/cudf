@@ -270,7 +270,7 @@ struct column_merger {
     //
     merged_col->set_null_count(lcol.null_count() + rcol.null_count());
 
-    using Type = get_column_stored_type<Element>;
+    using Type = device_storage_type_t<Element>;
 
     // to resolve view.data()'s types use: Element
     //

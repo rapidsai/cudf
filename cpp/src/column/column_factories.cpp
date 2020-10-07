@@ -49,7 +49,7 @@ struct size_of_helper {
   constexpr int operator()() const noexcept
   {
     // Only want the sizeof fixed_point::Rep as fixed_point::scale is stored in data_type
-    return sizeof(typename T::representation_type);
+    return sizeof(typename T::rep);
   }
 };
 }  // namespace

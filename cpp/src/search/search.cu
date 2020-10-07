@@ -144,7 +144,7 @@ struct contains_scalar_dispatch {
   {
     CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
 
-    using Type       = get_column_stored_type<Element>;
+    using Type       = device_storage_type_t<Element>;
     using ScalarType = cudf::scalar_type_t<Element>;
     auto d_col       = column_device_view::create(col, stream);
     auto s           = static_cast<const ScalarType*>(&value);

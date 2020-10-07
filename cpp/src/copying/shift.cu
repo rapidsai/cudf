@@ -57,7 +57,7 @@ struct shift_functor {
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
   {
-    using Type       = get_column_stored_type<T>;
+    using Type       = device_storage_type_t<T>;
     using ScalarType = cudf::scalar_type_t<Type>;
     auto& scalar     = static_cast<ScalarType const&>(fill_value);
 

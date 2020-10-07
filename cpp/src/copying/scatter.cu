@@ -135,7 +135,7 @@ struct column_scalar_scatterer_impl {
     auto result      = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
 
-    using Type = get_column_stored_type<Element>;
+    using Type = device_storage_type_t<Element>;
 
     // Use permutation iterator with constant index to dereference scalar data
     auto scalar_impl = static_cast<scalar_type_t<Type>*>(source.get());
