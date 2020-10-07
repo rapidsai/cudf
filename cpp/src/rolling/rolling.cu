@@ -777,7 +777,8 @@ struct rolling_window_launcher {
              rmm::mr::device_memory_resource* mr,
              cudaStream_t stream)
   {
-    CUDF_EXPECTS(default_outputs.is_empty(), "Only LEAD/LAG window functions support default values.");
+    CUDF_EXPECTS(default_outputs.is_empty(),
+                 "Only LEAD/LAG window functions support default values.");
 
     return launch<InputType,
                   typename corresponding_operator<op>::type,
