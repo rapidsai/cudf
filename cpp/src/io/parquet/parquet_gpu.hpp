@@ -19,13 +19,28 @@
 #include <cuda_runtime.h>
 #include <io/comp/gpuinflate.h>
 #include <io/statistics/column_stats.h>
+#include <cudf/types.hpp>
 #include <io/parquet/parquet_common.hpp>
+#include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 #include <vector>
 
 namespace cudf {
 namespace io {
 namespace parquet {
+
+/**
+ * @brief Struct representing an input column in the file.
+ */
+struct input_column_info {
+  int schema_idx;
+  std::string name;
+  // size == nesting depth. the associated real output
+  // buffer index in the dest column for each level of nesting.
+  std::vector<int> nesting;
+  auto nesting_depth() const { return nesting.size(); }
+};
+
 namespace gpu {
 
 /**
@@ -57,15 +72,14 @@ struct nvstrdesc_s {
  * @brief Nesting information
  */
 struct PageNestingInfo {
-  // input definition levels are remapped with this into
-  // the corresponding output PageNestingInfo struct
-  // within the same PageInfo.
-  // eg.
-  // PageNestingInfo *out = &page.nesting[page.nesting[d].d_remap];
-  int32_t d_remap;
+  // input repetition/definition levels are remapped with these values
+  // into the corresponding real output nesting depths.
+  int32_t start_depth;
+  int32_t end_depth;
 
   // set at initialization
   int32_t max_def_level;
+  int32_t max_rep_level;
 
   // set during preprocessing
   int32_t size;              // this page/nesting-level's size contribution to the output column
@@ -76,7 +90,7 @@ struct PageNestingInfo {
   int32_t value_count;       // total # of values decoded in this page/nesting-level
   int32_t valid_map_offset;  // current offset in bits relative to valid_map
   uint8_t *data_out;         // pointer into output buffer
-  uint32_t *valid_map;       // pointer into output validity buferr
+  uint32_t *valid_map;       // pointer into output validity buffer
 };
 
 /**
@@ -95,12 +109,12 @@ struct PageInfo {
   // - In the case of a nested schema, you have to decode the repetition and definition
   //   levels to extract actual column values
   int32_t num_input_values;
-  int32_t chunk_row;   // starting row of this page relative to the start of the chunk
-  int32_t num_rows;    // number of rows in this page
-  int32_t chunk_idx;   // column chunk this page belongs to
-  int32_t column_idx;  // column index this page belongs to
-  uint8_t flags;       // PAGEINFO_FLAGS_XXX
-  uint8_t encoding;    // Encoding for data or dictionary page
+  int32_t chunk_row;       // starting row of this page relative to the start of the chunk
+  int32_t num_rows;        // number of rows in this page
+  int32_t chunk_idx;       // column chunk this page belongs to
+  int32_t src_col_schema;  // schema index of this column
+  uint8_t flags;           // PAGEINFO_FLAGS_XXX
+  uint8_t encoding;        // Encoding for data or dictionary page
   uint8_t definition_level_encoding;  // Encoding used for definition levels (data page)
   uint8_t repetition_level_encoding;  // Encoding used for repetition levels (data page)
 
@@ -126,20 +140,22 @@ struct ColumnChunkDesc {
                                      uint32_t num_rows_,
                                      int16_t max_definition_level_,
                                      int16_t max_repetition_level_,
+                                     int16_t max_nesting_depth_,
                                      uint8_t def_level_bits_,
                                      uint8_t rep_level_bits_,
                                      int8_t codec_,
                                      int8_t converted_type_,
                                      int8_t decimal_scale_,
                                      int32_t ts_clock_rate_,
-                                     int32_t dst_col_index_,
-                                     int32_t src_col_index_)
+                                     int32_t src_col_index_,
+                                     int32_t src_col_schema_)
     : compressed_data(compressed_data_),
       compressed_size(compressed_size_),
       num_values(num_values_),
       start_row(start_row_),
       num_rows(num_rows_),
       max_level{max_definition_level_, max_repetition_level_},
+      max_nesting_depth{max_nesting_depth_},
       data_type(datatype_ | (datatype_length_ << 3)),
       level_bits{def_level_bits_, rep_level_bits_},
       num_data_pages(0),
@@ -153,8 +169,8 @@ struct ColumnChunkDesc {
       converted_type(converted_type_),
       decimal_scale(decimal_scale_),
       ts_clock_rate(ts_clock_rate_),
-      dst_col_index(dst_col_index_),
-      src_col_index(src_col_index_)
+      src_col_index(src_col_index_),
+      src_col_schema(src_col_schema_)
   {
   }
 
@@ -164,6 +180,7 @@ struct ColumnChunkDesc {
   size_t start_row;                                // starting row of this chunk
   uint32_t num_rows;                               // number of rows in this chunk
   int16_t max_level[level_type::NUM_LEVEL_TYPES];  // max definition/repetition level
+  int16_t max_nesting_depth;                       // max nesting depth of the output
   uint16_t data_type;                              // basic column data type, ((type_length << 3) |
                                                    // parquet::Type)
   uint8_t
@@ -181,8 +198,8 @@ struct ColumnChunkDesc {
   int8_t decimal_scale;                       // decimal scale pow(10, -decimal_scale)
   int32_t ts_clock_rate;  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
-  int32_t dst_col_index;  // my output column index
-  int32_t src_col_index;  // my source (order in the file) column index
+  int32_t src_col_index;   // my input column index
+  int32_t src_col_schema;  // my schema index in the file
 };
 
 /**
@@ -315,12 +332,14 @@ cudaError_t BuildStringDictionaryIndex(ColumnChunkDesc *chunks,
  * the parquet headers when dealing with nested schemas.
  * - The total sizes of all output columns at all nesting levels
  * - The starting output buffer offset for each page, for each nesting level
- *
  * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders)
+ *
+ * Note : this function is where output device memory is allocated for nested columns.
  *
  * @param[in,out] pages All pages to be decoded
  * @param[in] chunks All chunks to be decoded
- * @param[in,out] nested_info Per-output column nesting information (size, nullability)
+ * @param[in,out] input_columns Input column information
+ * @param[in,out] output_columns Output column information
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] min_rows crop all rows below min_row
  * @param[in] stream Cuda stream
@@ -329,10 +348,12 @@ cudaError_t BuildStringDictionaryIndex(ColumnChunkDesc *chunks,
  */
 cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
                                  hostdevice_vector<ColumnChunkDesc> const &chunks,
-                                 std::vector<std::vector<std::pair<int, bool>>> &nested_sizes,
+                                 std::vector<input_column_info> &input_columns,
+                                 std::vector<cudf::io::detail::column_buffer> &output_columns,
                                  size_t num_rows,
                                  size_t min_row,
-                                 cudaStream_t stream = (cudaStream_t)0);
+                                 cudaStream_t stream,
+                                 rmm::mr::device_memory_resource *mr);
 
 /**
  * @brief Launches kernel for reading the column data stored in the pages
