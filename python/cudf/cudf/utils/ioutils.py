@@ -30,7 +30,7 @@ engine : {{ 'cudf', 'fastavro' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read.
-skip_rows : int, default None
+skiprows : int, default None
     If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
@@ -130,7 +130,7 @@ row_groups : int, or list, or a list of lists default None
     If not None, specifies, for each input file, which row groups to read.
     If reading multiple inputs, a list of lists should be passed, one list
     for each input.
-skip_rows : int, default None
+skiprows : int, default None
     If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
@@ -269,7 +269,7 @@ columns : list, default None
 stripes: list, default None
     If not None, only these stripe will be read from the file. Stripes are
     concatenated with index ignored.
-skip_rows : int, default None
+skiprows : int, default None
     If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
@@ -828,16 +828,29 @@ cudf.io.csv.to_csv
 )
 doc_read_csv = docfmt_partial(docstring=_docstring_read_csv)
 
+_to_csv_example = """
+
+Write a dataframe to csv.
+
+>>> import cudf
+>>> filename = 'foo.csv'
+>>> df = cudf.DataFrame({'x': [0, 1, 2, 3],
+                         'y': [1.0, 3.3, 2.2, 4.4],
+                         'z': ['a', 'b', 'c', 'd']})
+>>> df = df.set_index([3, 2, 1, 0])
+>>> df.to_csv(filename)
+
+"""
 _docstring_to_csv = """
 
 Write a dataframe to csv file format.
 
 Parameters
 ----------
-df : DataFrame
-    DataFrame object to be written to csv
-path : str, default None
-    Path of file where DataFrame will be written
+{df_param}
+path_or_buf : str or file handle, default None
+    File path or object, if None is provided
+    the result is returned as a string.
 sep : char, default ','
     Delimiter to be used.
 na_rep : str, default ''
@@ -852,6 +865,12 @@ line_terminator : char, default '\\n'
 chunksize : int or None, default None
     Rows to write at a time
 
+Returns
+-------
+None or str
+    If `path_or_buf` is None, returns the resulting csv format as a string.
+    Otherwise returns None.
+
 Notes
 -----
 - Follows the standard of Pandas csv.QUOTE_NONNUMERIC for all output.
@@ -859,23 +878,25 @@ Notes
 
 Examples
 --------
-
-Write a dataframe to csv.
-
->>> import cudf
->>> filename = 'foo.csv'
->>> df = cudf.DataFrame({'x': [0, 1, 2, 3],
-                         'y': [1.0, 3.3, 2.2, 4.4],
-                         'z': ['a', 'b', 'c', 'd']})
->>> df = df.set_index([3, 2, 1, 0])
->>> df.to_csv(filename)
+{example}
 
 See Also
 --------
 cudf.io.csv.read_csv
 """
-doc_to_csv = docfmt_partial(docstring=_docstring_to_csv)
+doc_to_csv = docfmt_partial(
+    docstring=_docstring_to_csv.format(
+        df_param="""
+df : DataFrame
+    DataFrame object to be written to csv
+""",
+        example=_to_csv_example,
+    )
+)
 
+doc_dataframe_to_csv = docfmt_partial(
+    docstring=_docstring_to_csv.format(df_param="", example=_to_csv_example)
+)
 
 _docstring_kafka_datasource = """
 Configuration object for a Kafka Datasource

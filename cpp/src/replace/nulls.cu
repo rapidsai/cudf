@@ -22,6 +22,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/dictionary/detail/replace.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -259,6 +261,18 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
                                    mr);
 }
 
+template <>
+std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<cudf::dictionary32>(
+  cudf::column_view const& input,
+  cudf::column_view const& replacement,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  cudf::dictionary_column_view dict_input(input);
+  cudf::dictionary_column_view dict_repl(replacement);
+  return cudf::dictionary::detail::replace_nulls(dict_input, dict_repl, mr, stream);
+}
+
 template <typename T>
 struct replace_nulls_functor {
   T* value_it;
@@ -277,6 +291,7 @@ struct replace_nulls_scalar_kernel_forwarder {
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream = 0)
   {
+    CUDF_EXPECTS(input.type() == replacement.type(), "Data type mismatch");
     std::unique_ptr<cudf::column> output =
       cudf::allocate_like(input, cudf::mask_allocation_policy::NEVER, mr);
     auto output_view = output->mutable_view();
@@ -312,9 +327,21 @@ std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
+  CUDF_EXPECTS(input.type() == replacement.type(), "Data type mismatch");
   cudf::strings_column_view input_s(input);
   const cudf::string_scalar& repl = static_cast<const cudf::string_scalar&>(replacement);
   return cudf::strings::replace_nulls(input_s, repl, mr);
+}
+
+template <>
+std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<cudf::dictionary32>(
+  cudf::column_view const& input,
+  cudf::scalar const& replacement,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  cudf::dictionary_column_view dict_input(input);
+  return cudf::dictionary::detail::replace_nulls(dict_input, replacement, mr, stream);
 }
 
 }  // end anonymous namespace
@@ -347,8 +374,6 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   if (!input.has_nulls() || !replacement.is_valid()) {
     return std::make_unique<cudf::column>(input, stream, mr);
   }
-
-  CUDF_EXPECTS(input.type() == replacement.type(), "Data type mismatch");
 
   return cudf::type_dispatcher(
     input.type(), replace_nulls_scalar_kernel_forwarder{}, input, replacement, mr, stream);

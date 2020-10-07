@@ -13,7 +13,7 @@ from cudf.utils.utils import (
 
 
 class ColumnAccessor(MutableMapping):
-    def __init__(self, data={}, multiindex=False, level_names=None):
+    def __init__(self, data=None, multiindex=False, level_names=None):
         """
         Parameters
         ----------
@@ -27,6 +27,8 @@ class ColumnAccessor(MutableMapping):
             For a non-hierarchical index, a tuple of size 1
             may be passe.
         """
+        if data is None:
+            data = {}
         # TODO: we should validate the keys of `data`
         if isinstance(data, ColumnAccessor):
             multiindex = multiindex or data.multiindex

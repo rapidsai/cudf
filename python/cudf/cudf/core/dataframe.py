@@ -45,6 +45,7 @@ from cudf.utils.dtypes import (
     is_list_like,
     is_scalar,
     is_string_dtype,
+    is_struct_dtype,
     numeric_normalize_types,
 )
 from cudf.utils.utils import OrderedColumnDict
@@ -1175,7 +1176,7 @@ class DataFrame(Frame, Serializable):
         filling with `<NA>` values.
         """
         for col in df._data:
-            if is_list_dtype(df._data[col]):
+            if is_list_dtype(df._data[col]) or is_struct_dtype(df._data[col]):
                 # TODO we need to handle this
                 pass
             elif df._data[col].has_nulls:
@@ -1214,7 +1215,7 @@ class DataFrame(Frame, Serializable):
             # entire sequence/Index is to be printed.
             # Note : Pandas truncates the dimensions at the end of
             # the resulting dataframe when `display.show_dimensions`
-            # is set to truncate. Hence to display the dimentions we
+            # is set to truncate. Hence to display the dimensions we
             # need to extract maximum of `max_seq_items` and `nrows`
             # and have 1 extra value for ... to show up in the output
             # string.
@@ -4110,7 +4111,7 @@ class DataFrame(Frame, Serializable):
             win_type=win_type,
         )
 
-    def query(self, expr, local_dict={}):
+    def query(self, expr, local_dict=None):
         """
         Query with a boolean expression using Numba to compile a GPU kernel.
 
@@ -4177,6 +4178,9 @@ class DataFrame(Frame, Serializable):
         # can't use `annotate` decorator here as we inspect the calling
         # environment.
         with annotate("QUERY", color="purple", domain="cudf_python"):
+            if local_dict is None:
+                local_dict = {}
+
             if self.empty:
                 return self.copy()
 
@@ -4282,7 +4286,7 @@ class DataFrame(Frame, Serializable):
         func,
         incols,
         outcols,
-        kwargs={},
+        kwargs=None,
         pessimistic_nulls=True,
         chunks=None,
         blkct=None,
@@ -4328,6 +4332,8 @@ class DataFrame(Frame, Serializable):
         --------
         DataFrame.apply_rows
         """
+        if kwargs is None:
+            kwargs = {}
         if chunks is None:
             raise ValueError("*chunks* must be defined")
         return applyutils.apply_chunks(
@@ -6719,10 +6725,10 @@ class DataFrame(Frame, Serializable):
 
         return dlpack.to_dlpack(self)
 
-    @ioutils.doc_to_csv()
+    @ioutils.doc_dataframe_to_csv()
     def to_csv(
         self,
-        path=None,
+        path_or_buf=None,
         sep=",",
         na_rep="",
         columns=None,
@@ -6736,14 +6742,14 @@ class DataFrame(Frame, Serializable):
 
         return csv.to_csv(
             self,
-            path,
-            sep,
-            na_rep,
-            columns,
-            header,
-            index,
-            line_terminator,
-            chunksize,
+            path_or_buf=path_or_buf,
+            sep=sep,
+            na_rep=na_rep,
+            columns=columns,
+            header=header,
+            index=index,
+            line_terminator=line_terminator,
+            chunksize=chunksize,
         )
 
     @ioutils.doc_to_orc()
@@ -7309,7 +7315,7 @@ def _get_union_of_indices(indexes):
 def _get_union_of_series_names(series_list):
     names_list = []
     unnamed_count = 0
-    for idx, series in enumerate(series_list):
+    for series in series_list:
         if series.name is None:
             names_list.append(f"Unnamed {unnamed_count}")
             unnamed_count += 1

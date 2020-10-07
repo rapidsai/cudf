@@ -29,7 +29,7 @@ namespace detail {
  *
  * @tparam InputIterator Iterator type for `begin` and `end`
  * @tparam Predicate A predicator type which will be evaludated
- * @param begin Begining of the sequence of elements
+ * @param begin Beginning of the sequence of elements
  * @param end End of the sequence of elements
  * @param p Predicate to be applied to each element in `[begin,end)`
  * @param mr Device memory resource used to allocate the returned column's device memory
