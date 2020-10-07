@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #6460 Add is_timestamp format check API
+
 ## Improvements
 
 ## Bug Fixes
