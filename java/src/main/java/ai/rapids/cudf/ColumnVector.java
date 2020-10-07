@@ -2870,7 +2870,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   private static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
 
-  private static native long rollingWindow(long viewHandle,
+  private static native long rollingWindow(
+      long viewHandle,
       long defaultOutputHandle,
       int min_periods,
       long aggPtr,

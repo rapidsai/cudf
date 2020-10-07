@@ -26,7 +26,9 @@ import java.util.Arrays;
  */
 public abstract class Aggregation {
     /*
-     * Should be kept in sync with AggregationJni.cpp.
+     * This should be kept in sync with AggregationJni.cpp.  Note that the nativeId here is not the
+     * same as the C++ cudf::aggregation::Kind.  They are very closely related, but both are
+     * implementation details and generally should be hidden from the end user.
      * Visible for testing.
      */
     enum Kind {
@@ -248,7 +250,8 @@ public abstract class Aggregation {
                 if (defaultOutput != null) {
                     ret = ret && defaultOutput.equals(o.defaultOutput);
                 } else if (o.defaultOutput != null) {
-                    ret = ret && o.defaultOutput.equals(defaultOutput);
+                    // defaultOutput == null and o.defaultOutput != null so they are not equal
+                    ret = false;
                 } // else they are both null which is the same and a noop.
                 return ret;
             }
@@ -276,11 +279,11 @@ public abstract class Aggregation {
     }
 
     /**
-     * Get a ColumnVector that provides default values to be used for some window aggregations
-     * when there is not enough data to do the computation.  This really only happens for
-     * a very few number of window aggregations. Also note that the column returns should not be
-     * closed as the ownership and life cycle of the column is controlled outside of this.
-     * @return the native view of the column vector or 0
+     * Get the native view of a ColumnVector that provides default values to be used for some window
+     * aggregations when there is not enough data to do the computation.  This really only happens
+     * for a very few number of window aggregations. Also note that the ownership and life cycle of
+     * the column is controlled outside of this, so don't try to close it.
+     * @return the native view of the column vector or 0.
      */
     long getDefaultOutput() {
         return 0;
