@@ -3,6 +3,7 @@ import itertools
 
 import numpy as np
 import pandas as pd
+import cupy as cp
 
 import cudf
 
@@ -214,6 +215,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             raise ValueError(f"cannot concatenate object of type {type(o)}")
 
     allowed_typs = {cudf.Series, cudf.DataFrame}
+    typ = list(typs)[0]
 
     param_axis = _axis_map.get(axis, None)
     if param_axis is None:
@@ -227,6 +229,25 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
+
+        if join == "inner" and typ is cudf.Series:
+            new_df = cudf.concat(objs, axis=1)
+            indexes_list = []
+            for obj in objs:
+                indexes_list.append(cp.array(obj.index))
+            indexes = []
+            for i in range(len(new_df.index)):
+                for obj in indexes_list:
+                    if i not in obj:
+                        indexes.append(i)
+            df = new_df.drop(index=indexes)
+            return df
+
+        elif join == "inner" and typ is cudf.DataFrame:
+            raise NotImplementedError(
+                "We do not support having multiple columns"
+                "with the same column names yet."
+            )
 
         assert typs.issubset(allowed_typs)
         df = cudf.DataFrame()
