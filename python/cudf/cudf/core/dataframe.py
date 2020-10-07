@@ -3421,11 +3421,10 @@ class DataFrame(Frame, Serializable):
         ):
             raise TypeError("non-numeric data not yet supported")
 
-        if all([is_datetime_dtype(col.dtype) for col in cols]):
-            # np bug: https://github.com/numpy/numpy/issues/17428
-            dtype = np.dtype("datetime64[ms]")
-        else:
-            dtype = np.find_common_type(cols, [])
+        try:
+            dtype = np.result_type(*cols)
+        except ValueError:
+            dtype = None
         for k, c in self._data.items():
             if c.has_nulls:
                 errmsg = (
