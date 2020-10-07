@@ -49,7 +49,7 @@ struct file_ender_s {
  *
  * Parquet is a strongly-typed format so the file layout can be interpreted as
  * as a schema tree.
- **/
+ */
 struct SchemaElement {
   Type type                    = UNDEFINED_TYPE;
   ConvertedType converted_type = UNKNOWN;
@@ -72,6 +72,38 @@ struct SchemaElement {
            type_length == other.type_length && repetition_type == other.repetition_type &&
            name == other.name && num_children == other.num_children &&
            decimal_scale == other.decimal_scale && decimal_precision == other.decimal_precision;
+  }
+
+  // the parquet format is a little squishy when it comes to interpreting
+  // repeated fields. sometimes repeated fields act as "stubs" in the schema
+  // that don't represent a true nesting level.
+  //
+  // this is the case with plain lists:
+  //
+  // optional group my_list (LIST) {
+  //   repeated group element {        <-- not part of the output hierarchy
+  //     required binary str (UTF8);
+  //   };
+  // }
+  //
+  // However, for backwards compatibility reasons, there are a few special cases, namely
+  // List<Struct<>> (which also corresponds to how the map type is specified), where
+  // this does not hold true
+  //
+  // optional group my_list (LIST) {
+  //   repeated group element {        <-- part of the hierarchy because it represents a struct
+  //     required binary str (UTF8);
+  //     required int32 num;
+  //  };
+  // }
+  bool is_stub() const { return repetition_type == REPEATED && num_children == 1; }
+  // in parquet terms, a group is a level of nesting in the schema. a group
+  // can be a struct or a list
+  bool is_struct() const
+  {
+    return type == UNDEFINED_TYPE &&
+           // this assumption might be a little weak.
+           ((repetition_type != REPEATED) || (repetition_type == REPEATED && num_children == 2));
   }
 };
 
@@ -114,10 +146,6 @@ struct ColumnChunk {
 
   // Following fields are derived from other fields
   int schema_idx = -1;  // Index in flattened schema (derived from path_in_schema)
-  // if this is a non-nested type, this index will be the same as schema_idx.
-  // for a nested type, this will point to the fundamental leaf type schema
-  // element (int, string, etc)
-  int leaf_schema_idx = -1;
 };
 
 /**
@@ -308,7 +336,7 @@ class CompactProtocolReader {
   bool InitSchema(FileMetaData *md);
 
  protected:
-  int WalkSchema(std::vector<SchemaElement> &schema,
+  int WalkSchema(FileMetaData *md,
                  int idx           = 0,
                  int parent_idx    = 0,
                  int max_def_level = 0,
