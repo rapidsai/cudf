@@ -106,6 +106,21 @@ void CUDA_DEVICE_CALLABLE md5_process(TKey const& key, md5_intermediate_data* ha
     hash_state->buffer_length = len - copylen;
   }
 }
+
+/**
+ * Normalization of floating point NANs and zeros helper
+ */
+template <typename TKey>
+TKey CUDA_DEVICE_CALLABLE normalize_nans_and_zeros_helper(TKey key)
+{
+  if (isnan(key)) {
+    return std::numeric_limits<TKey>::quiet_NaN();
+  } else if (key == TKey{0.0}) {
+    return TKey{0.0};
+  } else {
+    return key;
+  }
+}
 }  // namespace
 
 /**
@@ -158,15 +173,7 @@ struct MD5ListHasher {
   {
     for (int i = offset_begin; i < offset_end; i++) {
       if (!data_col.is_null(i)) {
-        T const& key = data_col.element<T>(i);
-        if (isnan(key)) {
-          T nan = std::numeric_limits<T>::quiet_NaN();
-          md5_process(nan, hash_state);
-        } else if (key == T{0.0}) {
-          md5_process(T{0.0}, hash_state);
-        } else {
-          md5_process(key, hash_state);
-        }
+        md5_process(normalize_nans_and_zeros_helper<T>(data_col.element<T>(i)), hash_state);
       }
     }
   }
@@ -281,15 +288,7 @@ struct MD5Hash {
                              size_type row_index,
                              md5_intermediate_data* hash_state) const
   {
-    T const& key = col.element<T>(row_index);
-    if (isnan(key)) {
-      T nan = std::numeric_limits<T>::quiet_NaN();
-      md5_process(nan, hash_state);
-    } else if (key == T{0.0}) {
-      md5_process(T{0.0}, hash_state);
-    } else {
-      md5_process(key, hash_state);
-    }
+    md5_process(normalize_nans_and_zeros_helper<T>(col.element<T>(row_index)), hash_state);
   }
 
   template <typename T,

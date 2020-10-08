@@ -396,9 +396,8 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector result = ColumnVector.md5Hash(v);
          ColumnVector expected = ColumnVector.fromStrings(
           "675c30ce6d1b27dcb5009b01be42e9bd", "8fa29148f63c1fe9248fdc4644e3a193",
-          "1bc221b25e6c4825929e884092f4044f", //"d41d8cd98f00b204e9800998ecf8427e",
-          "d41d8cd98f00b204e9800998ecf8427e")) {
-      assertColumnsAreEqual(result, expected);
+          "1bc221b25e6c4825929e884092f4044f", "d41d8cd98f00b204e9800998ecf8427e")) {
+      assertColumnsAreEqual(expected, result);
     }
   }
 
