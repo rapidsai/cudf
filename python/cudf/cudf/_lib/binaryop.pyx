@@ -5,10 +5,10 @@ from enum import IntEnum
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
+from libcpp.utility cimport move
 
 from cudf._lib.binaryop cimport underlying_type_t_binary_operator
 from cudf._lib.column cimport Column
-from cudf._lib.move cimport move
 from cudf._lib.replace import replace_nulls
 from cudf._lib.scalar import as_scalar
 from cudf._lib.scalar cimport Scalar

@@ -4,11 +4,11 @@ from libc.stdint cimport uint32_t
 from libcpp cimport bool
 from libcpp.pair cimport pair
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
-from cudf._lib.move cimport move
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.table.table cimport table
@@ -42,6 +42,9 @@ def hash_partition(Table source_table, object columns_to_hash,
             )
         )
 
+    # Note that the offsets (`c_result.second`) may be empty when
+    # the original table (`source_table`) is empty. We need to
+    # return a list of zeros in this case.
     return (
         Table.from_unique_ptr(
             move(c_result.first),
@@ -51,7 +54,8 @@ def hash_partition(Table source_table, object columns_to_hash,
             else None
 
         ),
-        list(c_result.second)
+        list(c_result.second) if c_result.second.size()
+        else [0] * num_partitions
     )
 
 

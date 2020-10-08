@@ -4,6 +4,7 @@ from libcpp cimport bool, int
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 from cudf._lib.cpp.column.column cimport column
 
 from cudf._lib.cpp.io.orc cimport (
@@ -25,17 +26,21 @@ from cudf._lib.cpp.types cimport (
 )
 
 from cudf._lib.io.utils cimport make_source_info, make_sink_info
-from cudf._lib.move cimport move
 from cudf._lib.table cimport Table
 from cudf._lib.types import np_to_cudf_types
 from cudf._lib.types cimport underlying_type_t_type_id
 import numpy as np
 
 
-cpdef read_orc(filepath_or_buffer, columns=None, stripes=None,
-               skip_rows=None, num_rows=None, use_index=True,
-               decimals_as_float=True, force_decimal_scale=None,
-               timestamp_type=None):
+cpdef read_orc(object filepath_or_buffer,
+               object columns=None,
+               object stripes=None,
+               object skip_rows=None,
+               object num_rows=None,
+               bool use_index=True,
+               bool decimals_as_float=True,
+               object force_decimal_scale=None,
+               object timestamp_type=None):
     """
     Cython function to call into libcudf API, see `read_orc`.
 
@@ -74,9 +79,9 @@ cpdef read_orc(filepath_or_buffer, columns=None, stripes=None,
 
 
 cpdef write_orc(Table table,
-                path_or_buf,
-                compression=None,
-                enable_statistics=True):
+                object path_or_buf,
+                object compression=None,
+                bool enable_statistics=True):
     """
     Cython function to call into libcudf API, see `write_orc`.
 
@@ -96,7 +101,7 @@ cpdef write_orc(Table table,
 
     cdef table_metadata metadata_ = table_metadata()
     cdef unique_ptr[data_sink] data_sink_c
-    cdef sink_info sink_info_c = make_sink_info(path_or_buf, &data_sink_c)
+    cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
 
     metadata_.column_names.reserve(len(table._column_names))
 
@@ -115,7 +120,7 @@ cpdef write_orc(Table table,
         libcudf_write_orc(c_orc_writer_options)
 
 
-cdef size_type get_size_t_arg(arg, name) except*:
+cdef size_type get_size_t_arg(object arg, str name) except*:
     if name == "skip_rows":
         arg = 0 if arg is None else arg
         if not isinstance(arg, int) or arg < 0:
@@ -128,9 +133,9 @@ cdef size_type get_size_t_arg(arg, name) except*:
 
 
 cdef orc_reader_options make_orc_reader_options(
-    filepath_or_buffer,
-    column_names,
-    stripes,
+    object filepath_or_buffer,
+    object column_names,
+    object stripes,
     size_type skip_rows,
     size_type num_rows,
     type_id timestamp_type,

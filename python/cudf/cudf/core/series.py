@@ -977,7 +977,7 @@ class Series(Frame, Serializable):
         return self.to_string()
 
     def __repr__(self):
-        width, height = get_terminal_size()
+        _, height = get_terminal_size()
         max_rows = (
             height
             if get_option("display.max_rows") == 0
@@ -4261,6 +4261,8 @@ class Series(Frame, Serializable):
         StringIndex(['a' 'b' 'c'], dtype='object')
         """
         return self.index
+
+    _accessors = set()
 
 
 truediv_int_dtype_corrections = {
