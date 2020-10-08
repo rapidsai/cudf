@@ -892,8 +892,25 @@ class Series(Frame, Serializable):
         """
         if isinstance(arg, dict):
             result = self.replace(arg)
-        if isinstance(arg, cudf.Series):
+            for i in range(len(self)):
+                if self[i] not in arg.keys():
+                    result[i] = np.nan
+        elif isinstance(arg, cudf.Series):
             result = self.replace(arg.index, arg)
+            for i in range(len(self)):
+                if self[i] not in arg.index:
+                    result[i] = np.nan
+        
+        elif is_string_dtype(self._column.dtype) or isinstance(
+            self._column, cudf.core.column.CategoricalColumn
+        ):
+            raise TypeError(
+                "User defined functions are currently not "
+                "supported on Series with dtypes `str` and `category`."
+            )
+        else:
+            result = self.applymap(arg)
+            result = result.astype('float64')
         return result
 
     def __getitem__(self, arg):
