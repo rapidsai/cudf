@@ -6,12 +6,21 @@ import cudf
 import errno
 import os
 import pyarrow as pa
-import json
+
+try:
+    import ujson as json
+except ImportError:
+    import json
 
 from cython.operator import dereference
 import numpy as np
 
-from cudf.utils.dtypes import np_to_pa_dtype, is_categorical_dtype
+from cudf.utils.dtypes import (
+    np_to_pa_dtype,
+    is_categorical_dtype,
+    is_list_dtype,
+    is_struct_dtype
+)
 from libc.stdlib cimport free
 from libc.stdint cimport uint8_t
 from libcpp.memory cimport shared_ptr, unique_ptr, make_unique
@@ -20,6 +29,7 @@ from libcpp.map cimport map
 from libcpp.vector cimport vector
 from libcpp.utility cimport move
 from libcpp cimport bool
+
 
 from cudf._lib.cpp.types cimport data_type, size_type
 from cudf._lib.table cimport Table
@@ -40,6 +50,7 @@ from cudf._lib.cpp.io.parquet cimport (
     merge_rowgroup_metadata as parquet_merge_metadata,
     pq_chunked_state
 )
+from cudf._lib.column cimport Column
 from cudf._lib.io.utils cimport (
     make_source_info,
     make_sink_info
@@ -101,6 +112,8 @@ cpdef generate_pandas_metadata(Table table, index):
                 "'category' column dtypes are currently not "
                 + "supported by the gpu accelerated parquet writer"
             )
+        elif is_list_dtype(col):
+            types.append(col.dtype.to_arrow())
         else:
             types.append(np_to_pa_dtype(col.dtype))
 
@@ -129,6 +142,8 @@ cpdef generate_pandas_metadata(Table table, index):
                             "'category' column dtypes are currently not "
                             + "supported by the gpu accelerated parquet writer"
                         )
+                    elif is_list_dtype(col):
+                        types.append(col.dtype.to_arrow())
                     else:
                         types.append(np_to_pa_dtype(idx.dtype))
                     index_levels.append(idx)
@@ -145,9 +160,15 @@ cpdef generate_pandas_metadata(Table table, index):
         types,
     )
 
-    md = metadata[b'pandas']
-    json_str = md.decode("utf-8")
-    return json_str
+    md_dict = json.loads(metadata[b"pandas"])
+
+    # correct metadata for list and struct types
+    for col_meta in md_dict["columns"]:
+        if col_meta["numpy_type"] in ("list", "struct"):
+            col_meta["numpy_type"] = "object"
+
+    return json.dumps(md_dict)
+
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                    skiprows=None, num_rows=None, strings_to_categorical=False,
@@ -219,6 +240,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
             column_names=column_names
         )
     )
+
+    _update_struct_field_names(df, c_out_table.metadata.schema_info)
 
     if df.empty and meta is not None:
         cols_dtype_map = {}
@@ -484,3 +507,37 @@ cdef vector[string] _get_column_names(Table table, object index):
         column_names.push_back(str.encode(col_name))
 
     return column_names
+
+
+cdef _update_struct_field_names(
+    Table table,
+    vector[cudf_io_types.column_name_info]& schema_info
+):
+    for i, (name, col) in enumerate(table._data.items()):
+        table._data[name] = _update_column_struct_field_names(
+            col, schema_info[i]
+        )
+
+cdef Column _update_column_struct_field_names(
+    Column col,
+    cudf_io_types.column_name_info& info
+):
+    cdef vector[string] field_names
+
+    if is_struct_dtype(col):
+        field_names.reserve(len(col.base_children))
+        for i in range(info.children.size()):
+            field_names.push_back(info.children[i].name)
+        col = col._rename_fields(
+            field_names
+        )
+
+    if col.children:
+        children = list(col.children)
+        for i, child in enumerate(children):
+            children[i] = _update_column_struct_field_names(
+                child,
+                info.children[i]
+            )
+        col.set_base_children(tuple(children))
+    return col

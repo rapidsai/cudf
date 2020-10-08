@@ -381,7 +381,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * WARNING: Strictly for test only. This call is not efficient for production.
    */
-  List getList(long rowIndex) {
+  public List getList(long rowIndex) {
     assert rowIndex < rows;
     assert type == DType.LIST;
     List retList = new ArrayList();
@@ -405,7 +405,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * WARNING: Strictly for test only. This call is not efficient for production.
    */
-  HostColumnVector.StructData getStruct(int rowIndex) {
+  public HostColumnVector.StructData getStruct(int rowIndex) {
     assert rowIndex < rows;
     assert type == DType.STRUCT;
     List<Object> retList = new ArrayList<>();
