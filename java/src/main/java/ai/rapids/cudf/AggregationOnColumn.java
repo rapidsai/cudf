@@ -58,6 +58,11 @@ public class AggregationOnColumn extends Aggregation {
     }
 
     @Override
+    long getDefaultOutput() {
+        return wrapped.getDefaultOutput();
+    }
+
+    @Override
     public int hashCode() {
         return 31 * wrapped.hashCode() + columnIndex;
     }
