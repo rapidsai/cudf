@@ -86,7 +86,7 @@ bool __device__ process_rolling_window(column_device_view input,
       count = thrust::count_if(thrust::seq,
                                thrust::make_counting_iterator(start_index),
                                thrust::make_counting_iterator(end_index),
-                               [&input](auto i) { return input.is_valid(i); });
+                               [&input](auto i) { return input.is_valid_nocheck(i); });
     }
     output.element<OutputType>(current_index) = count;
   }
