@@ -474,6 +474,7 @@ add_library(cudf
             src/io/orc/reader_impl.cu
             src/io/orc/writer_impl.cu
             src/io/parquet/page_data.cu
+            src/io/parquet/compact_protocol_writer.cpp
             src/io/parquet/page_hdr.cu
             src/io/parquet/page_enc.cu
             src/io/parquet/page_dict.cu
