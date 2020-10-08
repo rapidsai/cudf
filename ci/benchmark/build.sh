@@ -58,6 +58,7 @@ logger "Check GPU usage..."
 nvidia-smi
 
 logger "Activate conda env..."
+. /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
 
 # Enter dependencies to be shown in ASV tooltips.

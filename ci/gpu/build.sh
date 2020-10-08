@@ -64,6 +64,7 @@ gpuci_logger "Check GPU usage"
 nvidia-smi
 
 gpuci_logger "Activate conda env"
+. /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
 
 gpuci_conda_retry install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
