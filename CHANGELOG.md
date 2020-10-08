@@ -173,7 +173,6 @@
 - PR #6304 Fix span_tests.cu includes
 - PR #6331 Avoids materializing `RangeIndex` during frame concatnation (when not needed)
 - PR #6278 Add filter tests for struct columns
-- PR #6353 Renamed skip_rows parameter to skiprows
 - PR #6353 Rename `skip_rows` parameter to `skiprows` in `read_parquet`, `read_avro` and `read_orc`
 - PR #6361 Detect overflow in hash join
 - PR #6397 Fix `build.sh` when `PARALLEL_LEVEL` environment variable isn't set
