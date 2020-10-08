@@ -63,21 +63,21 @@ class JSONReader(IOFuzz):
         )
         table = dg.rand_dataframe(dtypes_meta, num_rows, seed)
         df = pyarrow_to_pandas(table)
-        self._df = df
+        self._current_buffer = df
         logging.info(f"Shape of DataFrame generated: {df.shape}")
 
         return df.to_json()
 
     def write_data(self, file_name):
-        if self._df is not None:
-            self._df.to_json(file_name + "_crash_json.json", "wb")
+        if self._current_buffer is not None:
+            self._current_buffer.to_json(file_name + "_crash_json.json", "wb")
 
     def get_rand_params(self, params):
         params_dict = {}
         for param, values in params.items():
             if param == "dtype" and values is None:
                 dtype_val = np.random.choice(
-                    [True, False, self._df.dtypes.to_dict()]
+                    [True, False, self._current_buffer.dtypes.to_dict()]
                 )
                 if dtype_val is not None:
                     dtype_val = {
@@ -156,7 +156,7 @@ class JSONWriter(IOFuzz):
         for param, values in params.items():
             if param == "dtype" and values is None:
                 dtype_val = np.random.choice(
-                    [True, False, self._df.dtypes.to_dict()]
+                    [True, False, self._current_buffer.dtypes.to_dict()]
                 )
                 if dtype_val is not None:
                     dtype_val = {
