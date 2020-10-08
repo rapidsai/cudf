@@ -44,9 +44,6 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/logical.h>
 
-#include <cub/cub.cuh>
-#include <type_traits>
-
 namespace cudf {
 namespace detail {
 
