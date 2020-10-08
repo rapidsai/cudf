@@ -50,7 +50,7 @@ struct file_ender_s {
  *
  * Parquet is a strongly-typed format so the file layout can be interpreted as
  * as a schema tree.
- **/
+ */
 struct SchemaElement {
   Type type                    = UNDEFINED_TYPE;
   ConvertedType converted_type = UNKNOWN;
@@ -73,6 +73,38 @@ struct SchemaElement {
            type_length == other.type_length && repetition_type == other.repetition_type &&
            name == other.name && num_children == other.num_children &&
            decimal_scale == other.decimal_scale && decimal_precision == other.decimal_precision;
+  }
+
+  // the parquet format is a little squishy when it comes to interpreting
+  // repeated fields. sometimes repeated fields act as "stubs" in the schema
+  // that don't represent a true nesting level.
+  //
+  // this is the case with plain lists:
+  //
+  // optional group my_list (LIST) {
+  //   repeated group element {        <-- not part of the output hierarchy
+  //     required binary str (UTF8);
+  //   };
+  // }
+  //
+  // However, for backwards compatibility reasons, there are a few special cases, namely
+  // List<Struct<>> (which also corresponds to how the map type is specified), where
+  // this does not hold true
+  //
+  // optional group my_list (LIST) {
+  //   repeated group element {        <-- part of the hierarchy because it represents a struct
+  //     required binary str (UTF8);
+  //     required int32 num;
+  //  };
+  // }
+  bool is_stub() const { return repetition_type == REPEATED && num_children == 1; }
+  // in parquet terms, a group is a level of nesting in the schema. a group
+  // can be a struct or a list
+  bool is_struct() const
+  {
+    return type == UNDEFINED_TYPE &&
+           // this assumption might be a little weak.
+           ((repetition_type != REPEATED) || (repetition_type == REPEATED && num_children == 2));
   }
 };
 
@@ -115,10 +147,6 @@ struct ColumnChunk {
 
   // Following fields are derived from other fields
   int schema_idx = -1;  // Index in flattened schema (derived from path_in_schema)
-  // if this is a non-nested type, this index will be the same as schema_idx.
-  // for a nested type, this will point to the fundamental leaf type schema
-  // element (int, string, etc)
-  int leaf_schema_idx = -1;
 };
 
 /**
@@ -307,7 +335,7 @@ class CompactProtocolReader {
   bool InitSchema(FileMetaData *md);
 
  protected:
-  int WalkSchema(std::vector<SchemaElement> &schema,
+  int WalkSchema(FileMetaData *md,
                  int idx           = 0,
                  int parent_idx    = 0,
                  int max_def_level = 0,
@@ -545,155 +573,6 @@ class ParquetFieldStructBlob {
   }
 
   int &field(void) { return field_val; }
-};
-
-/**
- * @brief Class for parsing Parquet's Thrift Compact Protocol encoded metadata
- *
- * This class takes in the Parquet structs and outputs a Thrift-encoded binary blob
- *
- **/
-class CompactProtocolWriter {
- public:
-  CompactProtocolWriter() { m_buf = nullptr; }
-  CompactProtocolWriter(std::vector<uint8_t> *output) { m_buf = output; }
-  void putb(uint8_t v) { m_buf->push_back(v); }
-  void putb(const uint8_t *raw, uint32_t len)
-  {
-    for (uint32_t i = 0; i < len; i++) m_buf->push_back(raw[i]);
-  }
-  uint32_t put_uint(uint64_t v)
-  {
-    int l = 1;
-    while (v > 0x7f) {
-      putb(static_cast<uint8_t>(v | 0x80));
-      v >>= 7;
-      l++;
-    }
-    putb(static_cast<uint8_t>(v));
-    return l;
-  }
-  uint32_t put_int(int64_t v)
-  {
-    int64_t s = (v < 0);
-    return put_uint(((v ^ -s) << 1) + s);
-  }
-  void put_fldh(int f, int cur, int t)
-  {
-    if (f > cur && f <= cur + 15)
-      putb(((f - cur) << 4) | t);
-    else {
-      putb(t);
-      put_int(f);
-    }
-  }
-
- public:
-  size_t write(const FileMetaData *);
-  size_t write(const SchemaElement *);
-  size_t write(const RowGroup *);
-  size_t write(const KeyValue *);
-  size_t write(const ColumnChunk *);
-  size_t write(const ColumnChunkMetaData *);
-
- protected:
-  std::vector<uint8_t> *m_buf;
-
-  friend class CompactProtocolWriterBuilder;
-};
-
-class CompactProtocolWriterBuilder {
-  CompactProtocolWriter *ptr;
-  size_t struct_start_pos;
-  int current_field;
-
- public:
-  CompactProtocolWriterBuilder(CompactProtocolWriter *cpw_ptr)
-    : ptr(cpw_ptr), struct_start_pos(ptr->m_buf->size()), current_field(0)
-  {
-  }
-
-  inline void field_int(int field, int32_t val)
-  {
-    ptr->put_fldh(field, current_field, ST_FLD_I32);
-    ptr->put_int(val);
-    current_field = field;
-  }
-
-  inline void field_int(int field, int64_t val)
-  {
-    ptr->put_fldh(field, current_field, ST_FLD_I64);
-    ptr->put_int(val);
-    current_field = field;
-  }
-
-  template <typename Enum>
-  inline void field_int_list(int field, const std::vector<Enum> &val)
-  {
-    ptr->put_fldh(field, current_field, ST_FLD_LIST);
-    ptr->putb((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_I32));
-    if (val.size() >= 0xf) ptr->put_uint(val.size());
-    for (auto &v : val) { ptr->put_int(static_cast<int32_t>(v)); }
-    current_field = field;
-  }
-
-  template <typename T>
-  inline void field_struct(int field, const T &val)
-  {
-    ptr->put_fldh(field, current_field, ST_FLD_STRUCT);
-    ptr->write(&val);
-    current_field = field;
-  }
-
-  template <typename T>
-  inline void field_struct_list(int field, const std::vector<T> &val)
-  {
-    ptr->put_fldh(field, current_field, ST_FLD_LIST);
-    ptr->putb((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_STRUCT));
-    if (val.size() >= 0xf) ptr->put_uint(val.size());
-    for (auto &v : val) { ptr->write(&v); }
-    current_field = field;
-  }
-
-  inline size_t value(void)
-  {
-    ptr->putb(0);
-    return ptr->m_buf->size() - struct_start_pos;
-  }
-
-  inline void field_struct_blob(int field, const std::vector<uint8_t> &val)
-  {
-    ptr->put_fldh(field, current_field, ST_FLD_STRUCT);
-    ptr->putb(val.data(), (uint32_t)val.size());
-    ptr->putb(0);
-    current_field = field;
-  }
-
-  inline void field_string(int field, const std::string &val)
-  {
-    ptr->put_fldh(field, current_field, ST_FLD_BINARY);
-    ptr->put_uint(val.size());
-    // FIXME : replace reinterpret_cast
-    ptr->putb(reinterpret_cast<const uint8_t *>(val.data()), (uint32_t)val.size());
-    current_field = field;
-  }
-
-  inline void field_string_list(int field, const std::vector<std::string> &val)
-  {
-    ptr->put_fldh(field, current_field, ST_FLD_LIST);
-    ptr->putb((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_BINARY));
-    if (val.size() >= 0xf) ptr->put_uint(val.size());
-    for (auto &v : val) {
-      ptr->put_uint(v.size());
-      // FIXME : replace reinterpret_cast
-      ptr->putb(reinterpret_cast<const uint8_t *>(v.data()), (uint32_t)v.size());
-    }
-    current_field = field;
-  }
-
-  inline int get_field(void) { return current_field; }
-
-  inline void set_field(const int &field) { current_field = field; }
 };
 
 }  // namespace parquet

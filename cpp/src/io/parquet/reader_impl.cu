@@ -44,6 +44,10 @@ namespace parquet {
 using namespace cudf::io::parquet;
 using namespace cudf::io;
 
+// bit space we are reserving in column_buffer::user_data
+constexpr uint32_t PARQUET_COLUMN_BUFFER_SCHEMA_MASK          = (0xffffff);
+constexpr uint32_t PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED = (1 << 24);
+
 namespace {
 /**
  * @brief Function that translates Parquet datatype to cuDF type enum
@@ -84,10 +88,15 @@ type_id to_type_id(SchemaElement const &schema,
       }
       break;
 
+    // maps are just List<Struct<>>.
+    case parquet::MAP:
     case parquet::LIST: return type_id::LIST;
 
     default: break;
   }
+
+  // is it simply a struct?
+  if (schema.is_struct()) { return type_id::STRUCT; }
 
   // Physical storage type supported by Parquet; controls the on-disk storage
   // format in combination with the encoding type.
@@ -233,7 +242,6 @@ class aggregate_metadata {
   std::map<std::string, std::string> const agg_keyval_map;
   size_type const num_rows;
   size_type const num_row_groups;
-  std::vector<std::string> const column_names;
   /**
    * @brief Create a metadata object from each element in the source vector
    */
@@ -281,27 +289,13 @@ class aggregate_metadata {
         return sum + pfm.row_groups.size();
       });
   }
-  std::vector<std::string> gather_column_names()
-  {
-    for (auto const &pfm : per_file_metadata) {
-      if (pfm.row_groups.size() != 0) {
-        std::vector<std::string> column_names;
-        for (const auto &chunk : pfm.row_groups[0].columns) {
-          column_names.emplace_back(name_from_path(chunk.meta_data.path_in_schema));
-        }
-        return column_names;
-      }
-    }
-    return {};
-  }
 
  public:
   aggregate_metadata(std::vector<std::unique_ptr<datasource>> const &sources)
     : per_file_metadata(metadatas_from_sources(sources)),
       agg_keyval_map(merge_keyval_metadata()),
       num_rows(calc_num_rows()),
-      num_row_groups(calc_num_row_groups()),
-      column_names(gather_column_names())
+      num_row_groups(calc_num_row_groups())
   {
     // Verify that the input files have matching numbers of columns
     size_type num_cols = -1;
@@ -321,52 +315,51 @@ class aggregate_metadata {
     }
   }
 
-  auto const &get_row_group(size_type idx, size_type src_idx) const
+  auto const &get_row_group(size_type row_group_index, size_type src_idx) const
   {
     CUDF_EXPECTS(src_idx >= 0 && src_idx < static_cast<size_type>(per_file_metadata.size()),
                  "invalid source index");
-    return per_file_metadata[src_idx].row_groups[idx];
+    return per_file_metadata[src_idx].row_groups[row_group_index];
+  }
+
+  auto const &get_column_metadata(size_type row_group_index,
+                                  size_type src_idx,
+                                  int schema_idx) const
+  {
+    auto col = std::find_if(
+      per_file_metadata[src_idx].row_groups[row_group_index].columns.begin(),
+      per_file_metadata[src_idx].row_groups[row_group_index].columns.end(),
+      [schema_idx](ColumnChunk const &col) { return col.schema_idx == schema_idx ? true : false; });
+    CUDF_EXPECTS(col != std::end(per_file_metadata[src_idx].row_groups[row_group_index].columns),
+                 "Found no metadata for schema index");
+    return col->meta_data;
   }
 
   auto get_num_rows() const { return num_rows; }
 
   auto get_num_row_groups() const { return num_row_groups; }
 
-  auto const &get_schema(int idx) const { return per_file_metadata[0].schema[idx]; }
+  auto const &get_schema(int schema_idx) const { return per_file_metadata[0].schema[schema_idx]; }
 
   auto const &get_key_value_metadata() const { return agg_keyval_map; }
 
-  inline SchemaElement const &get_column_schema(int col_index) const
+  /**
+   * @brief Gets the concrete nesting depth of output cudf columns
+   *
+   * @param schema_index Schema index of the input column
+   *
+   * @return comma-separated index column names in quotes
+   */
+  inline int get_output_nesting_depth(int schema_index) const
   {
     auto &pfm = per_file_metadata[0];
-    return pfm.schema[pfm.row_groups[0].columns[col_index].schema_idx];
-  }
-
-  inline int get_column_leaf_schema_index(int col_index) const
-  {
-    return per_file_metadata[0].row_groups[0].columns[col_index].leaf_schema_idx;
-  }
-
-  inline SchemaElement const &get_column_leaf_schema(int col_index) const
-  {
-    return per_file_metadata[0].schema[get_column_leaf_schema_index(col_index)];
-  }
-
-  inline int get_nesting_depth(int col_index)
-  {
-    auto &pfm = per_file_metadata[0];
-
-    // see : the "Nested Types" section here
-    // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
-    int index = get_column_leaf_schema_index(col_index);
     int depth = 0;
 
     // walk upwards, skipping repeated fields
-    while (index > 0) {
-      if (pfm.schema[index].repetition_type != REPEATED) { depth++; }
-      index = pfm.schema[index].parent_idx;
+    while (schema_index > 0) {
+      if (!pfm.schema[schema_index].is_stub()) { depth++; }
+      schema_index = pfm.schema[schema_index].parent_idx;
     }
-
     return depth;
   }
 
@@ -496,36 +489,264 @@ class aggregate_metadata {
   }
 
   /**
+   * @brief Build input and output column structures based on schema input. Recursive.
+   *
+   * @param[in,out] schema_idx Schema index to build information for. This value gets
+   * incremented as the function recurses.
+   * @param[out] input_columns Input column information (source data in the file)
+   * @param[out] output_columns Output column structure (resulting cudf columns)
+   * @param[in,out] nesting A stack keeping track of child column indices so we can
+   * reproduce the linear list of output columns that correspond to an input column.
+   * @param[in] strings_to_categorical Type conversion parameter
+   * @param[in] timestamp_type_id Type conversion parameter
+   *
+   */
+  void build_column_info(int &schema_idx,
+                         std::vector<input_column_info> &input_columns,
+                         std::vector<column_buffer> &output_columns,
+                         std::deque<int> &nesting,
+                         bool strings_to_categorical,
+                         type_id timestamp_type_id) const
+  {
+    int start_schema_idx = schema_idx;
+    auto const &schema   = get_schema(schema_idx);
+    schema_idx++;
+
+    // if I am a stub, continue on
+    if (schema.is_stub()) {
+      // is this legit?
+      CUDF_EXPECTS(schema.num_children == 1, "Unexpected number of children for stub");
+      build_column_info(schema_idx,
+                        input_columns,
+                        output_columns,
+                        nesting,
+                        strings_to_categorical,
+                        timestamp_type_id);
+      return;
+    }
+
+    // if we're at the root, this is a new output column
+    int index = (int)output_columns.size();
+    nesting.push_back(static_cast<int>(output_columns.size()));
+    output_columns.emplace_back(
+      data_type{to_type_id(schema, strings_to_categorical, timestamp_type_id)},
+      schema.repetition_type == OPTIONAL ? true : false);
+    column_buffer &output_col = output_columns.back();
+    output_col.name           = schema.name;
+
+    // build each child
+    for (int idx = 0; idx < schema.num_children; idx++) {
+      build_column_info(schema_idx,
+                        input_columns,
+                        output_col.children,
+                        nesting,
+                        strings_to_categorical,
+                        timestamp_type_id);
+    }
+
+    // if I have no children, we're at a leaf and I'm an input column (that is, one with actual
+    // data stored) so add me to the list.
+    if (schema.num_children == 0) {
+      input_columns.emplace_back(input_column_info{start_schema_idx, schema.name});
+      input_column_info &input_col = input_columns.back();
+      std::copy(nesting.begin(), nesting.end(), std::back_inserter(input_col.nesting));
+    }
+
+    nesting.pop_back();
+  }
+
+  /**
    * @brief Filters and reduces down to a selection of columns
    *
    * @param use_names List of column names to select
    * @param include_index Whether to always include the PANDAS index column(s)
+   * @param strings_to_categorical Type conversion parameter
+   * @param timestamp_type_id Type conversion parameter
    *
-   * @return List of column names
+   * @return input column information, output column information, list of output column schema
+   * indices
    */
-  auto select_columns(std::vector<std::string> const &use_names, bool include_index) const
+  auto select_columns(std::vector<std::string> const &use_names,
+                      bool include_index,
+                      bool strings_to_categorical,
+                      type_id timestamp_type_id) const
   {
-    std::vector<std::pair<int, std::string>> selection;
+    auto const &pfm = per_file_metadata[0];
+
+    // determine the list of output columns
+    //
+    // there is not necessarily a 1:1 mapping between input columns and output columns.
+    // For example, parquet does not explicitly store a ColumnChunkDesc for struct columns.
+    // The "structiness" is simply implied by the schema.  For example, this schema:
+    //  required group field_id=1 name {
+    //    required binary field_id=2 firstname (String);
+    //    required binary field_id=3 middlename (String);
+    //    required binary field_id=4 lastname (String);
+    // }
+    // will only contain 3 internal columns of data (firstname, middlename, lastname).  But of
+    // course "name" is ultimately the struct column we want to return.
+    //
+    // "firstname", "middlename" and "lastname" represent the input columns in the file that we
+    // process to produce the final cudf "name" column.
+    //
+    std::vector<int> output_column_schemas;
     if (use_names.empty()) {
-      // No columns specified; include all in the dataset
-      for (const auto &name : column_names) { selection.emplace_back(selection.size(), name); }
+      // walk the schema and choose all top level columns
+      for (size_t schema_idx = 1; schema_idx < pfm.schema.size(); schema_idx++) {
+        auto const &schema = pfm.schema[schema_idx];
+        if (schema.parent_idx == 0) { output_column_schemas.push_back(schema_idx); }
+      }
     } else {
       // Load subset of columns; include PANDAS index unless excluded
       std::vector<std::string> local_use_names = use_names;
       if (include_index) { add_pandas_index_names(local_use_names); }
       for (const auto &use_name : local_use_names) {
-        for (size_t i = 0; i < column_names.size(); ++i) {
-          if (column_names[i] == use_name) {
-            selection.emplace_back(i, column_names[i]);
-            break;
-          }
+        for (size_t schema_idx = 1; schema_idx < pfm.schema.size(); schema_idx++) {
+          auto const &schema = pfm.schema[schema_idx];
+          if (use_name == schema.name) { output_column_schemas.push_back(schema_idx); }
         }
       }
     }
 
-    return selection;
+    // construct input and output output column info
+    std::vector<column_buffer> output_columns;
+    output_columns.reserve(output_column_schemas.size());
+    std::vector<input_column_info> input_columns;
+    std::deque<int> nesting;
+    for (size_t idx = 0; idx < output_column_schemas.size(); idx++) {
+      int schema_index = output_column_schemas[idx];
+      build_column_info(schema_index,
+                        input_columns,
+                        output_columns,
+                        nesting,
+                        strings_to_categorical,
+                        timestamp_type_id);
+    }
+
+    return std::make_tuple(
+      std::move(input_columns), std::move(output_columns), std::move(output_column_schemas));
   }
 };
+
+/**
+ * @brief Generate depth remappings for repetition and definition levels.
+ *
+ * When dealing with columns that contain lists, we must examine incoming
+ * repetition and definition level pairs to determine what range of output nesting
+ * is indicated when adding new values.  This function generates the mappings of
+ * the R/D levels to those start/end bounds
+ *
+ * @param remap Maps column schema index to the R/D remapping vectors for that column
+ * @param src_col_schema The column schema to generate the new mapping for
+ * @param md File metadata information
+ *
+ */
+void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::vector<int>>> &remap,
+                               int src_col_schema,
+                               aggregate_metadata const &md)
+{
+  // already generated for this level
+  if (remap.find(src_col_schema) != remap.end()) { return; }
+  auto schema   = md.get_schema(src_col_schema);
+  int max_depth = md.get_output_nesting_depth(src_col_schema);
+
+  CUDF_EXPECTS(remap.find(src_col_schema) == remap.end(),
+               "Attempting to remap a schema more than once");
+  auto inserted =
+    remap.insert(std::pair<int, std::pair<std::vector<int>, std::vector<int>>>{src_col_schema, {}});
+  auto &depth_remap = inserted.first->second;
+
+  std::vector<int> &rep_depth_remap = (depth_remap.first);
+  rep_depth_remap.resize(schema.max_repetition_level + 1);
+  std::vector<int> &def_depth_remap = (depth_remap.second);
+  def_depth_remap.resize(schema.max_definition_level + 1);
+
+  // the key:
+  // for incoming level values  R/D
+  // add values starting at the shallowest nesting level X has repetition level R
+  // until you reach the deepest nesting level Y that corresponds to the repetition level R1
+  // held by the nesting level that has definition level D
+  //
+  // Example: a 3 level struct with a list at the bottom
+  //
+  //                     R / D   Depth
+  // level0              0 / 1     0
+  //   level1            0 / 2     1
+  //     level2          0 / 3     2
+  //       list          0 / 3     3
+  //         element     1 / 4     4
+  //
+  // incoming R/D : 0, 0  -> add values from depth 0 to 3   (def level 0 always maps to depth 0)
+  // incoming R/D : 0, 1  -> add values from depth 0 to 3
+  // incoming R/D : 0, 2  -> add values from depth 0 to 3
+  // incoming R/D : 1, 4  -> add values from depth 4 to 4
+  //
+  // Note : the -validity- of values is simply checked by comparing the incoming D value against the
+  // D value of the given nesting level (incoming D >= the D for the nesting level == valid,
+  // otherwise NULL).  The tricky part is determining what nesting levels to add values at.
+  //
+  // For schemas with no repetition level (no lists), X is always 0 and Y is always max nesting
+  // depth.
+  //
+
+  // compute "X" from above
+  for (int s_idx = schema.max_repetition_level; s_idx >= 0; s_idx--) {
+    auto find_shallowest = [&](int r) {
+      int shallowest = -1;
+      int cur_depth  = max_depth - 1;
+      int schema_idx = src_col_schema;
+      while (schema_idx > 0) {
+        auto cur_schema = md.get_schema(schema_idx);
+        if (cur_schema.max_repetition_level == r) {
+          // if this is a repeated field, map it one level deeper
+          shallowest = cur_schema.is_stub() ? cur_depth + 1 : cur_depth;
+        }
+        if (!cur_schema.is_stub()) { cur_depth--; }
+        schema_idx = cur_schema.parent_idx;
+      }
+      return shallowest;
+    };
+    rep_depth_remap[s_idx] = find_shallowest(s_idx);
+  }
+
+  // compute "Y" from above
+  for (int s_idx = schema.max_definition_level; s_idx >= 0; s_idx--) {
+    auto find_deepest = [&](int d) {
+      SchemaElement prev_schema;
+      int schema_idx = src_col_schema;
+      int r1         = 0;
+      while (schema_idx > 0) {
+        SchemaElement cur_schema = md.get_schema(schema_idx);
+        if (cur_schema.max_definition_level == d) {
+          // if this is a repeated field, map it one level deeper
+          r1 = cur_schema.is_stub() ? prev_schema.max_repetition_level
+                                    : cur_schema.max_repetition_level;
+          break;
+        }
+        prev_schema = cur_schema;
+        schema_idx  = cur_schema.parent_idx;
+      }
+
+      // we now know R1 from above. return the deepest nesting level that has the
+      // same repetition level
+      schema_idx = src_col_schema;
+      int depth  = max_depth - 1;
+      while (schema_idx > 0) {
+        SchemaElement cur_schema = md.get_schema(schema_idx);
+        if (cur_schema.max_repetition_level == r1) {
+          // if this is a repeated field, map it one level deeper
+          depth = cur_schema.is_stub() ? depth + 1 : depth;
+          break;
+        }
+        if (!cur_schema.is_stub()) { depth--; }
+        prev_schema = cur_schema;
+        schema_idx  = cur_schema.parent_idx;
+      }
+      return depth;
+    };
+    def_depth_remap[s_idx] = find_deepest(s_idx);
+  }
+}
 
 /**
  * @copydoc cudf::io::detail::parquet::read_column_chunks
@@ -731,25 +952,19 @@ rmm::device_buffer reader::impl::decompress_page_data(
 /**
  * @copydoc cudf::io::detail::parquet::allocate_nesting_info
  */
-void reader::impl::allocate_nesting_info(
-  hostdevice_vector<gpu::ColumnChunkDesc> const &chunks,
-  hostdevice_vector<gpu::PageInfo> &pages,
-  hostdevice_vector<gpu::PageNestingInfo> &page_nesting_info,
-  std::vector<std::vector<std::pair<int, bool>>> &col_nesting_info,
-  int num_columns,
-  cudaStream_t stream)
+void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc> const &chunks,
+                                         hostdevice_vector<gpu::PageInfo> &pages,
+                                         hostdevice_vector<gpu::PageNestingInfo> &page_nesting_info,
+                                         cudaStream_t stream)
 {
-  // resize col_nesting_info
-  col_nesting_info.resize(num_columns);
-
   // compute total # of page_nesting infos needed and allocate space. doing this in one
   // buffer to keep it to a single gpu allocation
   size_t const total_page_nesting_infos = std::accumulate(
     chunks.host_ptr(), chunks.host_ptr() + chunks.size(), 0, [&](int total, auto &chunk) {
-      auto const src_col_index = chunk.src_col_index;
-      // the leaf schema represents the bottom of the nested hierarchy
-      auto const &leaf_schema               = _metadata->get_column_leaf_schema(src_col_index);
-      auto const per_page_nesting_info_size = leaf_schema.max_definition_level + 1;
+      // the schema of the input column
+      auto const &schema                    = _metadata->get_schema(chunk.src_col_schema);
+      auto const per_page_nesting_info_size = max(
+        schema.max_definition_level + 1, _metadata->get_output_nesting_depth(chunk.src_col_schema));
       return total + (per_page_nesting_info_size * chunk.num_data_pages);
     });
 
@@ -762,9 +977,10 @@ void reader::impl::allocate_nesting_info(
   int target_page_index = 0;
   int src_info_index    = 0;
   for (size_t idx = 0; idx < chunks.size(); idx++) {
-    int src_col_index              = chunks[idx].src_col_index;
-    auto &leaf_schema              = _metadata->get_column_leaf_schema(src_col_index);
-    int per_page_nesting_info_size = leaf_schema.max_definition_level + 1;
+    int src_col_schema = chunks[idx].src_col_schema;
+    auto &schema       = _metadata->get_schema(src_col_schema);
+    auto const per_page_nesting_info_size =
+      max(schema.max_definition_level + 1, _metadata->get_output_nesting_depth(src_col_schema));
 
     // skip my dict pages
     target_page_index += chunks[idx].num_dict_pages;
@@ -782,62 +998,64 @@ void reader::impl::allocate_nesting_info(
 
   // fill in
   int nesting_info_index = 0;
+  std::map<int, std::pair<std::vector<int>, std::vector<int>>> depth_remapping;
   for (size_t idx = 0; idx < chunks.size(); idx++) {
-    int dst_col_index = chunks[idx].dst_col_index;
-    int src_col_index = chunks[idx].src_col_index;
+    int src_col_schema = chunks[idx].src_col_schema;
 
-    // the leaf schema represents the bottom of the nested hierarchy
-    auto &leaf_schema = _metadata->get_column_leaf_schema(src_col_index);
-    // real depth of the output cudf column hiearchy (1 == no nesting, 2 == 1 level, etc)
-    int max_depth = _metadata->get_nesting_depth(src_col_index);
+    // schema of the input column
+    auto &schema = _metadata->get_schema(src_col_schema);
+    // real depth of the output cudf column hierarchy (1 == no nesting, 2 == 1 level, etc)
+    int max_depth = _metadata->get_output_nesting_depth(src_col_schema);
 
     // # of nesting infos stored per page for this column
-    size_t per_page_nesting_info_size = leaf_schema.max_definition_level + 1;
+    auto const per_page_nesting_info_size = max(schema.max_definition_level + 1, max_depth);
 
-    col_nesting_info[dst_col_index].resize(max_depth);
+    // if this column has lists, generate depth remapping
+    std::map<int, std::pair<std::vector<int>, std::vector<int>>> depth_remapping;
+    if (schema.max_repetition_level > 0) {
+      generate_depth_remappings(depth_remapping, src_col_schema, *_metadata);
+    }
 
     // fill in host-side nesting info
-    int schema_idx     = _metadata->get_column_leaf_schema_index(src_col_index);
-    auto cur_schema    = _metadata->get_schema(schema_idx);
-    int output_col_idx = max_depth - 1;
+    int schema_idx  = src_col_schema;
+    auto cur_schema = _metadata->get_schema(schema_idx);
+    int cur_depth   = max_depth - 1;
     while (schema_idx > 0) {
-      // repetition type for this level
-      FieldRepetitionType repetition_type = cur_schema.repetition_type;
+      // stub columns (basically the inner field of a list scheme element) are not real columns.
+      // we can ignore them for the purposes of output nesting info
+      if (!cur_schema.is_stub()) {
+        // initialize each page within the chunk
+        for (int p_idx = 0; p_idx < chunks[idx].num_data_pages; p_idx++) {
+          gpu::PageNestingInfo *pni =
+            &page_nesting_info[nesting_info_index + (p_idx * per_page_nesting_info_size)];
 
-      int d = cur_schema.max_definition_level;
+          // if we have lists, set our start and end depth remappings
+          if (schema.max_repetition_level > 0) {
+            auto remap = depth_remapping.find(src_col_schema);
+            CUDF_EXPECTS(remap != depth_remapping.end(),
+                         "Could not find depth remapping for schema");
+            std::vector<int> const &rep_depth_remap = (remap->second.first);
+            std::vector<int> const &def_depth_remap = (remap->second.second);
 
-      // set nullability on the column
-      if (repetition_type != REPEATED) {
-        col_nesting_info[dst_col_index][output_col_idx].second =
-          repetition_type == OPTIONAL ? true : false;
-      }
+            for (size_t m = 0; m < rep_depth_remap.size(); m++) {
+              pni[m].start_depth = rep_depth_remap[m];
+            }
+            for (size_t m = 0; m < def_depth_remap.size(); m++) {
+              pni[m].end_depth = def_depth_remap[m];
+            }
+          }
 
-      // initialize each page within the chunk
-      for (int p_idx = 0; p_idx < chunks[idx].num_data_pages; p_idx++) {
-        gpu::PageNestingInfo *pni =
-          &page_nesting_info[nesting_info_index + (p_idx * per_page_nesting_info_size)];
-        int input_index  = d;
-        int output_index = output_col_idx;
-
-        // values indexed by definition level
-        pni[input_index].d_remap = output_col_idx;
-
-        // REPEATED fields are not "real" output cudf columns. they just represent a level of
-        // nesting.
-        if (repetition_type != REPEATED) {
           // values indexed by output column index
-          pni[output_index].max_def_level = d;
-          pni[output_index].size          = 0;
-          // definition 0 always remaps to column 0.
-          if (output_index == 0) { pni[output_index].d_remap = 0; }
+          pni[cur_depth].max_def_level = cur_schema.max_definition_level;
+          pni[cur_depth].max_rep_level = cur_schema.max_repetition_level;
+          pni[cur_depth].size          = 0;
         }
+
+        // move up the hierarchy
+        cur_depth--;
       }
 
-      // move up the hierarchy
-
-      // if this was a REPEATED field, it represents a level of nesting, so
-      // move up the output column
-      if (repetition_type == REPEATED) { output_col_idx--; }
+      // next schema
       schema_idx = cur_schema.parent_idx;
       cur_schema = _metadata->get_schema(schema_idx);
     }
@@ -850,21 +1068,36 @@ void reader::impl::allocate_nesting_info(
 }
 
 /**
- * @copydoc cudf::io::detail::parquet::preprocess_nested_columns
+ * @copydoc cudf::io::detail::parquet::preprocess_columns
  */
-void reader::impl::preprocess_nested_columns(
-  hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
-  hostdevice_vector<gpu::PageInfo> &pages,
-  hostdevice_vector<gpu::PageNestingInfo> &page_nesting_info,
-  std::vector<std::vector<std::pair<size_type, bool>>> &nested_info,
-  size_t min_row,
-  size_t total_rows,
-  cudaStream_t stream)
+void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+                                      hostdevice_vector<gpu::PageInfo> &pages,
+                                      size_t min_row,
+                                      size_t total_rows,
+                                      bool has_lists,
+                                      cudaStream_t stream)
 {
-  // preprocess per-nesting level sizes by page
-  CUDA_TRY(gpu::PreprocessColumnData(pages, chunks, nested_info, total_rows, min_row, stream));
+  // TODO : we should be selectively preprocessing only columns that have
+  // lists in them instead of doing them all if even one contains lists.
 
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  // if there are no lists, simply allocate every allocate every output
+  // column to be of size num_rows
+  if (!has_lists) {
+    std::function<void(std::vector<column_buffer> &)> create_columns =
+      [&](std::vector<column_buffer> &cols) {
+        for (size_t idx = 0; idx < cols.size(); idx++) {
+          auto &col = cols[idx];
+          col.create(total_rows, stream, _mr);
+          create_columns(col.children);
+        }
+      };
+    create_columns(_output_columns);
+  } else {
+    // preprocess per-nesting level sizes by page
+    CUDA_TRY(gpu::PreprocessColumnData(
+      pages, chunks, _input_columns, _output_columns, total_rows, min_row, stream, _mr));
+    CUDA_TRY(cudaStreamSynchronize(stream));
+  }
 }
 
 /**
@@ -875,7 +1108,6 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
                                     hostdevice_vector<gpu::PageNestingInfo> &page_nesting,
                                     size_t min_row,
                                     size_t total_rows,
-                                    std::vector<column_buffer> &out_buffers,
                                     cudaStream_t stream)
 {
   auto is_dict_chunk = [](const gpu::ColumnChunkDesc &chunk) {
@@ -900,31 +1132,72 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
 
   // Update chunks with pointers to column data.
   for (size_t c = 0, page_count = 0, str_ofs = 0; c < chunks.size(); c++) {
+    input_column_info const &input_col = _input_columns[chunks[c].src_col_index];
+    CUDF_EXPECTS(input_col.schema_idx == chunks[c].src_col_schema,
+                 "Column/page schema index mismatch");
+
     if (is_dict_chunk(chunks[c])) {
       chunks[c].str_dict_index = str_dict_index.data().get() + str_ofs;
       str_ofs += pages[page_count].num_input_values;
     }
 
-    size_t max_depth = chunks[c].max_level[gpu::level_type::REPETITION];
+    size_t max_depth = _metadata->get_output_nesting_depth(chunks[c].src_col_schema);
 
     // allocate (gpu) an array of pointers to validity data of size : nesting depth
-    chunk_nested_valids.emplace_back(hostdevice_vector<uint32_t *>{max_depth + 1});
+    chunk_nested_valids.emplace_back(hostdevice_vector<uint32_t *>{max_depth});
     hostdevice_vector<uint32_t *> &valids = chunk_nested_valids.back();
     chunks[c].valid_map_base              = valids.device_ptr();
 
     // allocate (gpu) an array of pointers to out data of size : nesting depth
-    chunk_nested_data.emplace_back(hostdevice_vector<void *>{max_depth + 1});
+    chunk_nested_data.emplace_back(hostdevice_vector<void *>{max_depth});
     hostdevice_vector<void *> &data = chunk_nested_data.back();
     chunks[c].column_data_base      = data.device_ptr();
 
-    // fill in the arrays on the host
-    column_buffer *buf = &out_buffers[chunks[c].dst_col_index];
-    for (size_t idx = 0; idx <= max_depth; idx++) {
-      valids[idx] = buf->null_mask();
-      data[idx]   = buf->data();
-      if (idx < max_depth) {
-        CUDF_EXPECTS(buf->children.size() > 0, "Encountered a malformed column_buffer");
-        buf = &buf->children[0];
+    // fill in the arrays on the host.  there are some important considerations to
+    // take into account here for nested columns.  specifically, with structs
+    // there is sharing of output buffers between input columns.  consider this schema
+    //
+    //  required group field_id=1 name {
+    //    required binary field_id=2 firstname (String);
+    //    required binary field_id=3 middlename (String);
+    //    required binary field_id=4 lastname (String);
+    // }
+    //
+    // there are 3 input columns of data here (firstname, middlename, lastname), but
+    // only 1 output column (name).  The structure of the output column buffers looks like
+    // the schema itself
+    //
+    // struct      (name)
+    //     string  (firstname)
+    //     string  (middlename)
+    //     string  (lastname)
+    //
+    // The struct column can contain validity information. the problem is, the decode
+    // step for the input columns will all attempt to decode this validity information
+    // because each one has it's own copy of the repetition/definition levels. but
+    // since this is all happening in parallel it would mean multiple blocks would
+    // be stomping all over the same memory randomly.  to work around this, we set
+    // things up so that only 1 child of any given nesting level fills in the
+    // data (offsets in the case of lists) or validity information for the higher
+    // levels of the hierarchy that are shared.  In this case, it would mean we
+    // would just choose firstname to be the one that decodes the validity for name.
+    //
+    // we do this by only handing out the pointers to the first child we come across.
+    //
+    auto *cols = &_output_columns;
+    for (size_t idx = 0; idx < max_depth; idx++) {
+      auto &out_buf = (*cols)[input_col.nesting[idx]];
+      cols          = &out_buf.children;
+
+      int owning_schema = out_buf.user_data & PARQUET_COLUMN_BUFFER_SCHEMA_MASK;
+      if (owning_schema == 0 || owning_schema == input_col.schema_idx) {
+        valids[idx] = out_buf.null_mask();
+        data[idx]   = out_buf.data();
+        out_buf.user_data |=
+          static_cast<uint32_t>(input_col.schema_idx) & PARQUET_COLUMN_BUFFER_SCHEMA_MASK;
+      } else {
+        valids[idx] = nullptr;
+        data[idx]   = nullptr;
       }
     }
 
@@ -947,45 +1220,61 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
   page_nesting.device_to_host(stream);
   cudaStreamSynchronize(stream);
 
-  // for nested schemas, add the final offset to every offset buffer.
+  // for list columns, add the final offset to every offset buffer.
   // TODO : make this happen in more efficiently. Maybe use thrust::for_each
   // on each buffer.  Or potentially do it in PreprocessColumnData
   // Note : the reason we are doing this here instead of in the decode kernel is
   // that it is difficult/impossible for a given page to know that it is writing the very
   // last value that should then be followed by a terminator (because rows can span
   // page boundaries).
-  for (size_t idx = 0; idx < out_buffers.size(); idx++) {
-    column_buffer *out = &out_buffers[idx];
-    int depth          = 0;
-    while (out->children.size() != 0) {
-      int offset = out->children[0].size;
-      if (out->children[0].children.size() > 0) { offset--; }
-      cudaMemcpy(((int32_t *)out->data()) + (out->size - 1),
-                 &offset,
-                 sizeof(offset),
-                 cudaMemcpyHostToDevice);
-      depth++;
-      out = &out->children[0];
+  for (size_t idx = 0; idx < _input_columns.size(); idx++) {
+    input_column_info const &input_col = _input_columns[idx];
+
+    auto *cols = &_output_columns;
+    for (size_t l_idx = 0; l_idx < input_col.nesting_depth(); l_idx++) {
+      auto &out_buf = (*cols)[input_col.nesting[l_idx]];
+      cols          = &out_buf.children;
+
+      if (out_buf.type.id() != type_id::LIST ||
+          (out_buf.user_data & PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED)) {
+        continue;
+      }
+      CUDF_EXPECTS(l_idx < input_col.nesting_depth() - 1, "Encountered a leaf list column");
+      auto &child = (*cols)[input_col.nesting[l_idx + 1]];
+
+      // the final offset for a list at level N is the size of it's child
+      int offset = child.type.id() == type_id::LIST ? child.size - 1 : child.size;
+      cudaMemcpyAsync(((int32_t *)out_buf.data()) + (out_buf.size - 1),
+                      &offset,
+                      sizeof(offset),
+                      cudaMemcpyHostToDevice,
+                      stream);
+      out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
     }
   }
 
   // update null counts in the final column buffers
-  for (size_t i = 0; i < pages.size(); i++) {
-    gpu::PageInfo *pi = &pages[i];
+  for (size_t idx = 0; idx < pages.size(); idx++) {
+    gpu::PageInfo *pi = &pages[idx];
     if (pi->flags & gpu::PAGEINFO_FLAGS_DICTIONARY) { continue; }
-    gpu::ColumnChunkDesc *col = &chunks[pi->chunk_idx];
-    column_buffer *out        = &out_buffers[col->dst_col_index];
+    gpu::ColumnChunkDesc *col          = &chunks[pi->chunk_idx];
+    input_column_info const &input_col = _input_columns[col->src_col_index];
 
     int index                 = pi->nesting - page_nesting.device_ptr();
     gpu::PageNestingInfo *pni = &page_nesting[index];
 
-    int max_depth = col->max_level[gpu::level_type::REPETITION];
-    for (int idx = 0; idx <= max_depth; idx++) {
-      out->null_count() += pni[idx].value_count - pni[idx].valid_count;
+    auto *cols = &_output_columns;
+    for (size_t l_idx = 0; l_idx < input_col.nesting_depth(); l_idx++) {
+      auto &out_buf = (*cols)[input_col.nesting[l_idx]];
+      cols          = &out_buf.children;
 
-      if (idx < max_depth) { out = &out->children[0]; }
+      // if I wasn't the one who wrote out the validity bits, skip it
+      if (chunk_nested_valids[pi->chunk_idx][l_idx] == nullptr) { continue; }
+      out_buf.null_count() += pni[l_idx].value_count - pni[l_idx].valid_count;
     }
   }
+
+  cudaStreamSynchronize(stream);
 }
 
 reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
@@ -996,10 +1285,6 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
   // Open and parse the source dataset metadata
   _metadata = std::make_unique<aggregate_metadata>(_sources);
 
-  // Select only columns required by the options
-  _selected_columns =
-    _metadata->select_columns(options.get_columns(), options.is_enabled_use_pandas_metadata());
-
   // Override output timestamp resolution if requested
   if (options.get_timestamp_type().id() != type_id::EMPTY) {
     _timestamp_type = options.get_timestamp_type();
@@ -1007,6 +1292,13 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
 
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
+
+  // Select only columns required by the options
+  std::tie(_input_columns, _output_columns, _output_column_schemas) =
+    _metadata->select_columns(options.get_columns(),
+                              options.is_enabled_use_pandas_metadata(),
+                              _strings_to_categorical,
+                              _timestamp_type.id());
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
@@ -1018,24 +1310,16 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   const auto selected_row_groups =
     _metadata->select_row_groups(row_group_list, skip_rows, num_rows);
 
-  // Get a list of column data types
-  std::vector<data_type> column_types;
-  if (_metadata->get_num_row_groups() != 0) {
-    for (const auto &col : _selected_columns) {
-      auto &col_schema = _metadata->get_column_schema(col.first);
-      auto col_type    = to_type_id(col_schema, _strings_to_categorical, _timestamp_type.id());
-      CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
-      column_types.emplace_back(col_type);
-    }
-  }
+  table_metadata out_metadata;
 
+  // output cudf columns as determined by the top level schema
   std::vector<std::unique_ptr<column>> out_columns;
-  out_columns.reserve(column_types.size());
+  out_columns.reserve(_output_columns.size());
 
-  if (selected_row_groups.size() != 0 && column_types.size() != 0) {
+  if (selected_row_groups.size() != 0 && _input_columns.size() != 0) {
     // Descriptors for all the chunks that make up the selected columns
-    const auto num_columns = _selected_columns.size();
-    const auto num_chunks  = selected_row_groups.size() * num_columns;
+    const auto num_input_columns = _input_columns.size();
+    const auto num_chunks        = selected_row_groups.size() * num_input_columns;
     hostdevice_vector<gpu::ColumnChunkDesc> chunks(0, num_chunks, stream);
 
     // Association between each column chunk and its source
@@ -1047,8 +1331,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Keep track of column chunk file offsets
     std::vector<size_t> column_chunk_offsets(num_chunks);
 
-    // information needed allocate columns (including potential nesting)
-    bool has_nesting = false;
+    // if there are lists present, we need to preprocess
+    bool has_lists = false;
 
     // Initialize column chunk information
     size_t total_decompressed_size = 0;
@@ -1060,23 +1344,18 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       auto const row_group_rows   = std::min<int>(remaining_rows, row_group.num_rows);
       auto const io_chunk_idx     = chunks.size();
 
-      for (size_t i = 0; i < num_columns; ++i) {
-        auto col       = _selected_columns[i];
-        auto &col_meta = row_group.columns[col.first].meta_data;
+      // generate ColumnChunkDesc objects for everything to be decoded (all input columns)
+      for (size_t i = 0; i < num_input_columns; ++i) {
+        auto col = _input_columns[i];
+        // look up metadata
+        auto &col_meta = _metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
+        auto &schema   = _metadata->get_schema(col.schema_idx);
 
-        // the leaf schema represents the -values- encoded in the data, which in the case
-        // of nested types, is different from the # of rows
-        auto &leaf_schema = _metadata->get_column_leaf_schema(col.first);
-
-        // this file contains nesting and will require a preprocess
-        if (_metadata->get_nesting_depth(col.first) > 1) { has_nesting = true; }
+        // this column contains repetition levels and will require a preprocess
+        if (schema.max_repetition_level > 0) { has_lists = true; }
 
         // Spec requires each row group to contain exactly one chunk for every
         // column. If there are too many or too few, continue with best effort
-        if (col.second != name_from_path(col_meta.path_in_schema)) {
-          std::cerr << "Detected mismatched column chunk" << std::endl;
-          continue;
-        }
         if (chunks.size() >= chunks.max_size()) {
           std::cerr << "Detected too many column chunks" << std::endl;
           continue;
@@ -1085,12 +1364,13 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         int32_t type_width;
         int32_t clock_rate;
         int8_t converted_type;
+
         std::tie(type_width, clock_rate, converted_type) =
-          conversion_info(column_types[i].id(),
+          conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
                           _timestamp_type.id(),
-                          leaf_schema.type,
-                          leaf_schema.converted_type,
-                          leaf_schema.type_length);
+                          schema.type,
+                          schema.converted_type,
+                          schema.type_length);
 
         column_chunk_offsets[chunks.size()] =
           (col_meta.dictionary_page_offset != 0)
@@ -1100,20 +1380,21 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         chunks.insert(gpu::ColumnChunkDesc(col_meta.total_compressed_size,
                                            nullptr,
                                            col_meta.num_values,
-                                           leaf_schema.type,
+                                           schema.type,
                                            type_width,
                                            row_group_start,
                                            row_group_rows,
-                                           leaf_schema.max_definition_level,
-                                           leaf_schema.max_repetition_level,
-                                           required_bits(leaf_schema.max_definition_level),
-                                           required_bits(leaf_schema.max_repetition_level),
+                                           schema.max_definition_level,
+                                           schema.max_repetition_level,
+                                           _metadata->get_output_nesting_depth(col.schema_idx),
+                                           required_bits(schema.max_definition_level),
+                                           required_bits(schema.max_repetition_level),
                                            col_meta.codec,
                                            converted_type,
-                                           leaf_schema.decimal_scale,
+                                           schema.decimal_scale,
                                            clock_rate,
                                            i,
-                                           col.first));
+                                           col.schema_idx));
 
         // Map each column chunk to its column index and its source index
         chunk_source_map[chunks.size() - 1] = row_group_source;
@@ -1154,94 +1435,62 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         }
       }
 
+      // build output column info
+      // walk the schema, building out_buffers that mirror what our final cudf columns will look
+      // like. important : there is not necessarily a 1:1 mapping between input columns and output
+      // columns. For example, parquet does not explicitly store a ColumnChunkDesc for struct
+      // columns. The "structiness" is simply implied by the schema.  For example, this schema:
+      //  required group field_id=1 name {
+      //    required binary field_id=2 firstname (String);
+      //    required binary field_id=3 middlename (String);
+      //    required binary field_id=4 lastname (String);
+      // }
+      // will only contain 3 columns of data (firstname, middlename, lastname).  But of course
+      // "name" is a struct column that we want to return, so we have to make sure that we
+      // create it ourselves.
+      // std::vector<output_column_info> output_info = build_output_column_info();
+
       // nesting information (sizes, etc) stored -per page-
+      // note : even for flat schemas, we allocate 1 level of "nesting" info
       hostdevice_vector<gpu::PageNestingInfo> page_nesting_info;
-      // nesting information at the column level.
-      // - total column size per nesting level
-      // - nullability per nesting level
-      std::vector<std::vector<std::pair<int, bool>>> col_nesting_info;
+      allocate_nesting_info(chunks, pages, page_nesting_info, stream);
 
-      // even for flat schemas, we allocate 1 level of "nesting" info
-      allocate_nesting_info(
-        chunks, pages, page_nesting_info, col_nesting_info, num_columns, stream);
-
-      // for nested schemas, we have to do some further preprocessing to determine:
-      // - real column output sizes per level of nesting (in a flat schema, there's only 1 level of
-      //   nesting and it's size is the row count)
+      // - compute column sizes and allocate output buffers.
+      //   important:
+      //   for nested schemas, we have to do some further preprocessing to determine:
+      //    - real column output sizes per level of nesting (in a flat schema, there's only 1 level
+      //    of
+      //      nesting and it's size is the row count)
       //
-      // - output buffer offset values per-page, per nesting-level for the purposes of decoding.
-      if (has_nesting) {
-        preprocess_nested_columns(
-          chunks, pages, page_nesting_info, col_nesting_info, skip_rows, num_rows, stream);
-      }
-
-      std::vector<column_buffer> out_buffers;
-      out_buffers.reserve(column_types.size());
-      for (size_t i = 0; i < column_types.size(); ++i) {
-        auto col          = _selected_columns[i];
-        auto &leaf_schema = _metadata->get_column_leaf_schema(col.first);
-
-        int output_depth = leaf_schema.max_repetition_level + 1;
-
-        // nested schemas : sizes and nullability come from preprocess step
-        if (output_depth > 1) {
-          // the root buffer
-          out_buffers.emplace_back(column_buffer{column_types[i],
-                                                 col_nesting_info[i][0].first,
-                                                 col_nesting_info[i][0].second,
-                                                 stream,
-                                                 _mr});
-          column_buffer *col = &out_buffers[out_buffers.size() - 1];
-          // nested buffers
-          for (int idx = 1; idx < output_depth - 1; idx++) {
-            // note : all levels in a list column besides the leaf are offsets, so their length is
-            // always +1
-            col->children.push_back(column_buffer{column_types[i],
-                                                  col_nesting_info[i][idx].first,
-                                                  col_nesting_info[i][idx].second,
-                                                  stream,
-                                                  _mr});
-            col = &col->children[0];
-          }
-
-          // leaf buffer - plain data type. int, string, etc
-          col->children.push_back(column_buffer{
-            data_type{to_type_id(leaf_schema, _strings_to_categorical, _timestamp_type.id())},
-            col_nesting_info[i][output_depth - 1].first,
-            col_nesting_info[i][output_depth - 1].second,
-            stream,
-            _mr});
-        }
-        // flat schemas can infer sizes directly from # of rows
-        else {
-          // note : num_rows == # values for non-nested types
-          bool is_nullable = leaf_schema.max_definition_level != 0;
-          out_buffers.emplace_back(
-            column_buffer{column_types[i], num_rows, is_nullable, stream, _mr});
-        }
-      }
+      // - for nested schemas, output buffer offset values per-page, per nesting-level for the
+      // purposes of decoding.
+      preprocess_columns(chunks, pages, skip_rows, num_rows, has_lists, stream);
 
       // decoding of column data itself
-      decode_page_data(chunks, pages, page_nesting_info, skip_rows, num_rows, out_buffers, stream);
+      decode_page_data(chunks, pages, page_nesting_info, skip_rows, num_rows, stream);
 
       // create the final output cudf columns
-      for (size_t i = 0; i < column_types.size(); ++i) {
-        out_columns.emplace_back(make_column(out_buffers[i], stream, _mr));
+      for (size_t i = 0; i < _output_columns.size(); ++i) {
+        out_metadata.schema_info.push_back(column_name_info{""});
+        out_columns.emplace_back(
+          make_column(_output_columns[i], stream, _mr, &out_metadata.schema_info.back()));
       }
     }
   }
 
-  // Create empty columns as needed
-  for (size_t i = out_columns.size(); i < column_types.size(); ++i) {
-    out_columns.emplace_back(make_empty_column(column_types[i]));
+  // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
+  for (size_t i = out_columns.size(); i < _output_columns.size(); ++i) {
+    out_metadata.schema_info.push_back(column_name_info{""});
+    out_columns.emplace_back(make_empty_column(_output_columns[i].type));
   }
 
-  table_metadata out_metadata;
   // Return column names (must match order of returned columns)
-  out_metadata.column_names.resize(_selected_columns.size());
-  for (size_t i = 0; i < _selected_columns.size(); i++) {
-    out_metadata.column_names[i] = _selected_columns[i].second;
+  out_metadata.column_names.resize(_output_columns.size());
+  for (size_t i = 0; i < _output_column_schemas.size(); i++) {
+    auto const &schema           = _metadata->get_schema(_output_column_schemas[i]);
+    out_metadata.column_names[i] = schema.name;
   }
+
   // Return user metadata
   out_metadata.user_data = _metadata->get_key_value_metadata();
 

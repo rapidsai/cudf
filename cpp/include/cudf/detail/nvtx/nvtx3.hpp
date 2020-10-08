@@ -265,7 +265,7 @@
  * nvtx3::domain_thread_range<my_domain> r{};
  * \endcode
  *
- * When using a custom domain, it is reccomended to define type aliases for NVTX
+ * When using a custom domain, it is recommended to define type aliases for NVTX
  * constructs in the custom domain.
  * ```
  * using my_thread_range = nvtx3::domain_thread_range<my_domain>;

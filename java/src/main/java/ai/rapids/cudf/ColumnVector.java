@@ -1583,6 +1583,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     try {
       return new ColumnVector(
               rollingWindow(this.getNativeView(),
+                      op.getDefaultOutput(),
                       options.getMinPeriods(),
                       nativePtr,
                       options.getPreceding(),
@@ -2869,9 +2870,15 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   private static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
 
-  private static native long rollingWindow(long viewHandle, int min_periods, long aggPtr,
-                                           int preceding, int following,
-                                           long preceding_col, long following_col);
+  private static native long rollingWindow(
+      long viewHandle,
+      long defaultOutputHandle,
+      int min_periods,
+      long aggPtr,
+      int preceding,
+      int following,
+      long preceding_col,
+      long following_col);
 
   private static native long nansToNulls(long viewHandle) throws CudfException;
 
@@ -2936,7 +2943,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   /**
    * Native method to normalize the various bitwise representations of NAN and zero.
    * 
-   * All occurences of -NaN are converted to NaN. Likewise, all -0.0 are converted to 0.0.
+   * All occurrences of -NaN are converted to NaN. Likewise, all -0.0 are converted to 0.0.
    * 
    * @param viewHandle `long` representation of pointer to input column_view.
    * @return Pointer to a new `column` of normalized values.

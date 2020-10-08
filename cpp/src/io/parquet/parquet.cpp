@@ -230,7 +230,7 @@ bool CompactProtocolReader::read(KeyValue *k)
  */
 bool CompactProtocolReader::InitSchema(FileMetaData *md)
 {
-  if (WalkSchema(md->schema) != md->schema.size()) return false;
+  if (WalkSchema(md) != md->schema.size()) return false;
 
   /* Inside FileMetaData, there is a std::vector of RowGroups and each RowGroup contains a
    * a std::vector of ColumnChunks. Each ColumnChunk has a member ColumnMetaData, which contains
@@ -253,24 +253,19 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md)
         }();
         if (it == md->schema.cend()) return false;
         current_schema_index = std::distance(md->schema.cbegin(), it);
-
-        // if the schema index is already pointing at a nested type, we'll leave it alone.
-        if (column.schema_idx < 0 ||
-            md->schema[column.schema_idx].converted_type != parquet::LIST) {
-          column.schema_idx = current_schema_index;
-        }
-        column.leaf_schema_idx = current_schema_index;
-        parent                 = current_schema_index;
+        column.schema_idx    = current_schema_index;
+        parent               = current_schema_index;
       }
     }
   }
+
   return true;
 }
 
 /**
  * @brief Populates each node in the schema tree
  *
- * @param[out] schema Current node
+ * @param[out] md File metadata
  * @param[in] idx Current node index
  * @param[in] parent_idx Parent node index
  * @param[in] max_def_level Max definition level
@@ -279,10 +274,10 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md)
  * @return The node index that was populated
  */
 int CompactProtocolReader::WalkSchema(
-  std::vector<SchemaElement> &schema, int idx, int parent_idx, int max_def_level, int max_rep_level)
+  FileMetaData *md, int idx, int parent_idx, int max_def_level, int max_rep_level)
 {
-  if (idx >= 0 && (size_t)idx < schema.size()) {
-    SchemaElement *e = &schema[idx];
+  if (idx >= 0 && (size_t)idx < md->schema.size()) {
+    SchemaElement *e = &md->schema[idx];
     if (e->repetition_type == OPTIONAL) {
       ++max_def_level;
     } else if (e->repetition_type == REPEATED) {
@@ -292,12 +287,13 @@ int CompactProtocolReader::WalkSchema(
     e->max_definition_level = max_def_level;
     e->max_repetition_level = max_rep_level;
     e->parent_idx           = parent_idx;
-    parent_idx              = idx;
+
+    parent_idx = idx;
     ++idx;
     if (e->num_children > 0) {
       for (int i = 0; i < e->num_children; i++) {
         int idx_old = idx;
-        idx         = WalkSchema(schema, idx, parent_idx, max_def_level, max_rep_level);
+        idx         = WalkSchema(md, idx, parent_idx, max_def_level, max_rep_level);
         if (idx <= idx_old) break;  // Error
       }
     }
@@ -306,106 +302,6 @@ int CompactProtocolReader::WalkSchema(
     // Error
     return -1;
   }
-}
-
-/**
- * @Brief Parquet CompactProtocolWriter class
- */
-
-size_t CompactProtocolWriter::write(const FileMetaData *f)
-{
-  CompactProtocolWriterBuilder c(this);
-  c.field_int(1, f->version);
-  c.field_struct_list(2, f->schema);
-  c.field_int(3, f->num_rows);
-  c.field_struct_list(4, f->row_groups);
-  if (f->key_value_metadata.size() != 0) { c.field_struct_list(5, f->key_value_metadata); }
-  if (f->created_by.size() != 0) { c.field_string(6, f->created_by); }
-  if (f->column_order_listsize != 0) {
-    // Dummy list of struct containing an empty field1 struct
-    put_fldh(7, c.get_field(), ST_FLD_LIST);
-    putb((uint8_t)((std::min(f->column_order_listsize, 0xfu) << 4) | ST_FLD_STRUCT));
-    if (f->column_order_listsize >= 0xf) put_uint(f->column_order_listsize);
-    for (uint32_t i = 0; i < f->column_order_listsize; i++) {
-      put_fldh(1, 0, ST_FLD_STRUCT);
-      putb(0);  // ColumnOrder.field1 struct end
-      putb(0);  // ColumnOrder struct end
-    }
-    c.set_field(7);
-  }
-  return c.value();
-}
-
-size_t CompactProtocolWriter::write(const SchemaElement *s)
-{
-  CompactProtocolWriterBuilder c(this);
-  if (s->type != UNDEFINED_TYPE) {
-    c.field_int(1, s->type);
-    if (s->type_length != 0) { c.field_int(2, s->type_length); }
-  }
-  if (s->repetition_type != NO_REPETITION_TYPE) { c.field_int(3, s->repetition_type); }
-  c.field_string(4, s->name);
-
-  if (s->type == UNDEFINED_TYPE) { c.field_int(5, s->num_children); }
-  if (s->converted_type != UNKNOWN) {
-    c.field_int(6, s->converted_type);
-    if (s->converted_type == DECIMAL) {
-      c.field_int(7, s->decimal_scale);
-      c.field_int(8, s->decimal_precision);
-    }
-  }
-  return c.value();
-}
-
-size_t CompactProtocolWriter::write(const RowGroup *r)
-{
-  CompactProtocolWriterBuilder c(this);
-  c.field_struct_list(1, r->columns);
-  c.field_int(2, r->total_byte_size);
-  c.field_int(3, r->num_rows);
-  return c.value();
-}
-
-size_t CompactProtocolWriter::write(const KeyValue *k)
-{
-  CompactProtocolWriterBuilder c(this);
-  c.field_string(1, k->key);
-  if (k->value.size() != 0) { c.field_string(2, k->value); }
-  return c.value();
-}
-
-size_t CompactProtocolWriter::write(const ColumnChunk *s)
-{
-  CompactProtocolWriterBuilder c(this);
-  if (s->file_path.size() != 0) { c.field_string(1, s->file_path); }
-  c.field_int(2, s->file_offset);
-  c.field_struct(3, s->meta_data);
-  if (s->offset_index_length != 0) {
-    c.field_int(4, s->offset_index_offset);
-    c.field_int(5, s->offset_index_length);
-  }
-  if (s->column_index_length != 0) {
-    c.field_int(6, s->column_index_offset);
-    c.field_int(7, s->column_index_length);
-  }
-  return c.value();
-}
-
-size_t CompactProtocolWriter::write(const ColumnChunkMetaData *s)
-{
-  CompactProtocolWriterBuilder c(this);
-  c.field_int(1, s->type);
-  c.field_int_list(2, s->encodings);
-  c.field_string_list(3, s->path_in_schema);
-  c.field_int(4, s->codec);
-  c.field_int(5, s->num_values);
-  c.field_int(6, s->total_uncompressed_size);
-  c.field_int(7, s->total_compressed_size);
-  c.field_int(9, s->data_page_offset);
-  if (s->index_page_offset != 0) { c.field_int(10, s->index_page_offset); }
-  if (s->dictionary_page_offset != 0) { c.field_int(11, s->dictionary_page_offset); }
-  if (s->statistics_blob.size() != 0) { c.field_struct_blob(12, s->statistics_blob); }
-  return c.value();
 }
 
 }  // namespace parquet
