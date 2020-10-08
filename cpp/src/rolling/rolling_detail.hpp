@@ -40,7 +40,8 @@ static constexpr bool is_rolling_supported()
     constexpr bool is_operation_supported =
       (op == aggregation::SUM) or (op == aggregation::MIN) or (op == aggregation::MAX) or
       (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
-      (op == aggregation::MEAN) or (op == aggregation::ROW_NUMBER);
+      (op == aggregation::MEAN) or (op == aggregation::ROW_NUMBER) or (op == aggregation::LEAD) or
+      (op == aggregation::LAG);
 
     constexpr bool is_valid_numeric_agg =
       (cudf::is_numeric<ColumnType>() or cudf::is_duration<ColumnType>() or
@@ -52,7 +53,7 @@ static constexpr bool is_rolling_supported()
   } else if (cudf::is_timestamp<ColumnType>()) {
     return (op == aggregation::MIN) or (op == aggregation::MAX) or
            (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
-           (op == aggregation::ROW_NUMBER);
+           (op == aggregation::ROW_NUMBER) or (op == aggregation::LEAD) or (op == aggregation::LAG);
 
   } else if (std::is_same<ColumnType, cudf::string_view>()) {
     return (op == aggregation::MIN) or (op == aggregation::MAX) or
