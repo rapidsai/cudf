@@ -30,7 +30,7 @@ def pdf(request):
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
-    test_pdf = pd.util.testing.makeCustomDataframe(
+    test_pdf = pd._testing.makeCustomDataframe(
         nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
     )
     # Delete the name of the column index, and rename the row index

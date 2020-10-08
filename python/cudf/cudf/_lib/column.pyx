@@ -8,7 +8,11 @@ import rmm
 import cudf
 
 from cudf.core.buffer import Buffer
-from cudf.utils.dtypes import is_categorical_dtype, is_list_dtype
+from cudf.utils.dtypes import (
+    is_categorical_dtype,
+    is_list_dtype,
+    is_struct_dtype
+)
 import cudf._lib as libcudfxx
 
 from cpython.buffer cimport PyObject_CheckBuffer
@@ -17,6 +21,7 @@ from libcpp.pair cimport pair
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 from cudf._lib.cpp.strings.convert.convert_integers cimport (
     from_integers as cpp_from_integers
 )
@@ -29,7 +34,6 @@ from cudf._lib.types cimport (
     dtype_from_column_view
 )
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
-from cudf._lib.move cimport move
 
 from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -377,14 +381,16 @@ cdef class Column:
         data_dtype = col.dtype
         cdef libcudf_types.type_id tid
 
-        if not is_list_dtype(self.dtype):
+        if is_list_dtype(self.dtype):
+            tid = libcudf_types.type_id.LIST
+        elif is_struct_dtype(self.dtype):
+            tid = libcudf_types.type_id.STRUCT
+        else:
             tid = <libcudf_types.type_id> (
                 <underlying_type_t_type_id> (
                     np_to_cudf_types[np.dtype(data_dtype)]
                 )
             )
-        else:
-            tid = libcudf_types.type_id.LIST
 
         cdef libcudf_types.data_type dtype = libcudf_types.data_type(tid)
         cdef libcudf_types.size_type offset = self.offset

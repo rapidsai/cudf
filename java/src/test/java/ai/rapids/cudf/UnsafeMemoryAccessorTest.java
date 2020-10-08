@@ -75,4 +75,24 @@ public class UnsafeMemoryAccessorTest {
       UnsafeMemoryAccessor.free(address);
     }
   }
+
+  @Test
+  public void testGetLongs() {
+    int numLongs = 257;
+    long address = UnsafeMemoryAccessor.allocate(numLongs * 8);
+    for (int i = 0; i < numLongs; ++i) {
+      UnsafeMemoryAccessor.setLong(address + (i * 8), i);
+    }
+    long[] result = new long[numLongs];
+    UnsafeMemoryAccessor.getLongs(result, 0, address, numLongs);
+    for (int i = 0; i < numLongs; ++i) {
+      assertEquals(i, result[i]);
+    }
+    UnsafeMemoryAccessor.getLongs(result, 1,
+        address + ((numLongs - 1) * 8), 1);
+    for (int i = 0; i < numLongs; ++i) {
+      long expected = (i == 1) ? numLongs - 1 : i;
+      assertEquals(expected, result[i]);
+    }
+  }
 }

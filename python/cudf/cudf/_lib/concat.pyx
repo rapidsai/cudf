@@ -3,6 +3,7 @@
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 
 from cudf._lib.cpp.concatenate cimport (
     concatenate_masks as libcudf_concatenate_masks,
@@ -14,7 +15,6 @@ from cudf._lib.cpp.table.table cimport table, table_view
 
 from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
-from cudf._lib.move cimport move
 from cudf._lib.utils cimport (
     make_column_views,
     make_table_views,
