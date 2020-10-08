@@ -19,7 +19,7 @@ pyarrow_dtypes_to_pandas_dtypes = {
 }
 
 
-def _generate_rand_meta(obj, dtypes_list):
+def _generate_rand_meta(obj, dtypes_list, null_frequency_override=None):
     obj._current_params = {}
     num_rows = obj._rand(obj._max_rows)
     num_cols = obj._rand(obj._max_columns)
@@ -28,7 +28,11 @@ def _generate_rand_meta(obj, dtypes_list):
 
     for _ in range(num_cols):
         dtype = random.choice(dtypes_list)
-        null_frequency = random.uniform(0, 1)
+        null_frequency = (
+            random.uniform(0, 1)
+            if null_frequency_override is None
+            else null_frequency_override
+        )
         cardinality = obj._rand(obj._max_rows)
         meta = dict()
         if dtype == "str":
