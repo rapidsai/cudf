@@ -48,6 +48,7 @@ from cudf.utils.dtypes import (
     is_string_dtype,
     is_struct_dtype,
     numeric_normalize_types,
+    find_common_type
 )
 from cudf.utils.utils import OrderedColumnDict
 
@@ -3421,10 +3422,7 @@ class DataFrame(Frame, Serializable):
         ):
             raise TypeError("non-numeric data not yet supported")
 
-        try:
-            dtype = np.result_type(*cols)
-        except (ValueError, TypeError):
-            dtype = None
+        dtype = find_common_type([col.dtype for col in cols])
         for k, c in self._data.items():
             if c.has_nulls:
                 errmsg = (
@@ -5536,18 +5534,14 @@ class DataFrame(Frame, Serializable):
             )
             raise ValueError(msg)
 
-        original_dtypes = self.dtypes
         is_pure_dt = all(is_datetime_dtype(dt) for dt in self.dtypes)
 
         if not is_pure_dt:
             filtered = self.select_dtypes(include=[np.number, np.bool])
         else:
-            filtered = self
+            filtered = self.copy(deep=False)
 
-        try:
-            common_dtype = np.result_type(*filtered.dtypes)
-        except (ValueError, TypeError):
-            common_dtype = None
+        common_dtype = find_common_type(filtered.dtypes)
 
         if filtered._num_columns < self._num_columns:
             msg = (
@@ -5569,11 +5563,11 @@ class DataFrame(Frame, Serializable):
         else:
             mask = None
 
-        coerced = filtered.astype(common_dtype)
+        coerced = filtered.astype(common_dtype, copy=True)
         if is_pure_dt:
             # Further convert into cupy friendly types
-            coerced = coerced.astype("int64")
-        return coerced, mask, common_dtype, original_dtypes
+            coerced = coerced.astype("int64", copy=False)
+        return coerced, mask, common_dtype
 
     def count(self, axis=0, level=None, numeric_only=False, **kwargs):
         """
@@ -6514,12 +6508,7 @@ class DataFrame(Frame, Serializable):
                 "support `bool_only`."
                 raise NotImplementedError(msg)
 
-            (
-                prepared,
-                mask,
-                common_dtype,
-                original_dtypes,
-            ) = self._prepare_for_rowwise_op(method, skipna)
+            prepared, mask, common_dtype = self._prepare_for_rowwise_op(method, skipna)
             for col in prepared._data.names:
                 if prepared._data[col].nullable:
                     prepared._data[col] = (
@@ -6539,10 +6528,6 @@ class DataFrame(Frame, Serializable):
                 method = _cupy_nan_methods_map[method]
 
             result = getattr(cupy, method)(arr, axis=1, **kwargs)
-
-            if is_datetime_dtype(common_dtype):
-                # Convert the values back, based on original time unit
-                self = self.astype(original_dtypes, copy=False)
 
             if result.ndim == 1:
                 type_coerced_methods = {
