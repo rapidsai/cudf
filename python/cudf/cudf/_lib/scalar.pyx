@@ -62,10 +62,10 @@ cdef class Scalar:
         """
 
         value = cudf.utils.dtypes.to_cudf_compatible_scalar(value, dtype=dtype)
-        valid = value is not None
+        valid = not is_null_host_scalar(value)
 
         if dtype is None:
-            if value is None:
+            if not valid:
                 raise TypeError(
                     "dtype required when constructing a null scalar"
                 )
@@ -414,3 +414,11 @@ def as_scalar(val, dtype=None):
             return Scalar(val.value, dtype)
     else:
         return Scalar(value=val, dtype=dtype)
+
+def is_null_host_scalar(slr):
+    if slr is None:
+        return True
+    elif isinstance(slr, (np.datetime64, np.timedelta64)) and np.isnat(slr):
+        return True
+    else:
+        return False
