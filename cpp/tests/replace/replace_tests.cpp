@@ -29,7 +29,7 @@
 #include "cudf/fixed_point/fixed_point.hpp"
 
 #include <thrust/device_vector.h>
-#include "thrust/iterator/transform_iterator.h"
+#include <thrust/iterator/transform_iterator.h>
 
 #include <gtest/gtest.h>
 #include <cstdlib>

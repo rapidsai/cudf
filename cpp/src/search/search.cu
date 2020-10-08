@@ -25,7 +25,6 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/binary_search.h>
 #include <hash/unordered_multiset.cuh>

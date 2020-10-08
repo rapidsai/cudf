@@ -40,7 +40,6 @@
 #include <iterator>
 #include <memory>
 #include <numeric>
-#include <type_traits>
 
 namespace cudf {
 namespace test {

@@ -21,8 +21,6 @@
 #include <cudf/types.hpp>
 #include <strings/utilities.cuh>
 
-#include <numeric>
-
 namespace cudf {
 namespace detail {
 namespace {

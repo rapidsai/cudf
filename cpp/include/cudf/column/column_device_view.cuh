@@ -753,6 +753,9 @@ __device__ inline dictionary32 const column_device_view::element<dictionary32>(
 /**
  * @brief Returns a `numeric::decimal32` element at the specified index for a `fixed_point` column.
  *
+ * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
+ * then any attempt to use the result will lead to undefined behavior.
+ *
  * @param element_index Position of the desired element
  * @return numeric::decimal32 representing the element at this index
  */
@@ -767,6 +770,9 @@ __device__ inline numeric::decimal32 const column_device_view::element<numeric::
 
 /**
  * @brief Returns a `numeric::decimal64` element at the specified index for a `fixed_point` column.
+ *
+ * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
+ * then any attempt to use the result will lead to undefined behavior.
  *
  * @param element_index Position of the desired element
  * @return numeric::decimal64 representing the element at this index

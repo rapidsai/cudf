@@ -258,7 +258,7 @@ class data_type {
    * @brief Construct a new `data_type` object for `numeric::fixed_point`
    *
    * @param id The `fixed_point`'s identifier
-   * @param scale The `fixed_point`'s scale (see `fixed_poit::_scale`)
+   * @param scale The `fixed_point`'s scale (see `fixed_point::_scale`)
    **/
   explicit data_type(type_id id, int32_t scale) : _id{id}, _fixed_point_scale{scale}
   {

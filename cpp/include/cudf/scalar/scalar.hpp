@@ -278,7 +278,7 @@ class fixed_point_scalar : public scalar {
    * @brief Construct a new fixed_point scalar object from already shifted value and scale
    *
    * @param[in] value The initial shifted value of the fixed_point scalar
-   * @param[in] numeric::scale_type The scale of the fixed_point scalar
+   * @param[in] scale The scale of the fixed_point scalar
    * @param[in] is_valid Whether the value held by the scalar is valid
    * @param[in] stream CUDA stream used for device memory operations.
    * @param[in] mr Device memory resource to use for device memory allocation
