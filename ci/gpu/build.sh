@@ -67,6 +67,11 @@ gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
 
+gpuci_logger "Check conda environment"
+conda info
+conda config --show-sources
+conda list --show-channel-urls
+
 gpuci_logger "Install dependencies"
 gpuci_conda_retry install -y \
                   "cudatoolkit=$CUDA_REL" \
