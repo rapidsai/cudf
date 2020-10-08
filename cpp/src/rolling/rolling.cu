@@ -106,6 +106,7 @@ template <typename InputType,
           bool has_nulls,
           std::enable_if_t<op == aggregation::COUNT_ALL>* = nullptr>
 bool __device__ process_rolling_window(column_device_view input,
+                                       column_device_view ignored_default_outputs,
                                        mutable_column_device_view output,
                                        size_type start_index,
                                        size_type end_index,
