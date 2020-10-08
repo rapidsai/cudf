@@ -47,7 +47,7 @@ from cudf.utils.dtypes import (
     is_string_dtype,
     is_struct_dtype,
     numeric_normalize_types,
-    find_common_type
+    find_common_type,
 )
 from cudf.utils.utils import OrderedColumnDict
 
@@ -6380,7 +6380,9 @@ class DataFrame(Frame, Serializable):
                 "support `bool_only`."
                 raise NotImplementedError(msg)
 
-            prepared, mask, common_dtype = self._prepare_for_rowwise_op(method, skipna)
+            prepared, mask, common_dtype = self._prepare_for_rowwise_op(
+                method, skipna
+            )
             for col in prepared._data.names:
                 if prepared._data[col].nullable:
                     prepared._data[col] = (

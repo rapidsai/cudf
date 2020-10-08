@@ -5,7 +5,6 @@ from collections.abc import Sequence
 
 import cupy as cp
 import numpy as np
-from numpy.core.numerictypes import issubdtype
 import pandas as pd
 import pyarrow as pa
 from pandas.core.dtypes.common import infer_dtype_from_object
@@ -501,6 +500,7 @@ def _get_nan_for_dtype(dtype):
     else:
         return np.float64("nan")
 
+
 def find_common_type(dtypes):
     """
     Wrapper over np.find_common_type to handle special cases
@@ -524,15 +524,17 @@ def find_common_type(dtypes):
 
     # Aggregate same types
     dtypes = set(dtypes)
-    
+
     # Corner case 1:
     # Resort to np.result_type to handle "M" and "m" types separately
-    dt_dtypes = set(filter(lambda t : is_datetime_dtype(t), dtypes))
+    dt_dtypes = set(filter(lambda t: is_datetime_dtype(t), dtypes))
     if len(dt_dtypes) > 0:
         dtypes = dtypes - dt_dtypes
         dtypes.add(np.result_type(*dt_dtypes))
-    
-    td_dtypes = set(filter(lambda t : pd.api.types.is_timedelta64_dtype(t), dtypes))
+
+    td_dtypes = set(
+        filter(lambda t: pd.api.types.is_timedelta64_dtype(t), dtypes)
+    )
     if len(td_dtypes) > 0:
         dtypes = dtypes - td_dtypes
         dtypes.add(np.result_type(*td_dtypes))
