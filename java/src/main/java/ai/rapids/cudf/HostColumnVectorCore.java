@@ -38,9 +38,11 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
 
   protected final OffHeapState offHeap;
   protected final DType type;
+  protected long scale;
   protected long rows;
   protected Optional<Long> nullCount;
   protected List<HostColumnVectorCore> children;
+
 
   public HostColumnVectorCore(DType type, long rows,
                               Optional<Long> nullCount, HostMemoryBuffer data, HostMemoryBuffer validity,
@@ -48,6 +50,18 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
     this.offHeap = new OffHeapState(data, validity,  offsets);
     MemoryCleaner.register(this, offHeap);
     this.type = type;
+    this.rows = rows;
+    this.nullCount = nullCount;
+    this.children = nestedChildren;
+  }
+
+  public HostColumnVectorCore(DataType type, long rows,
+                              Optional<Long> nullCount, HostMemoryBuffer data, HostMemoryBuffer validity,
+                              HostMemoryBuffer offsets, List<HostColumnVectorCore> nestedChildren) {
+    this.offHeap = new OffHeapState(data, validity,  offsets);
+    MemoryCleaner.register(this, offHeap);
+    this.type = type.typeId;
+    this.scale = type.scale;
     this.rows = rows;
     this.nullCount = nullCount;
     this.children = nestedChildren;

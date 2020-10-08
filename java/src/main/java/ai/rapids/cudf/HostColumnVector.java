@@ -50,6 +50,11 @@ public final class HostColumnVector extends HostColumnVectorCore {
     this(type, rows, nullCount, hostDataBuffer, hostValidityBuffer, null);
   }
 
+  HostColumnVector(ai.rapids.cudf.DataType type, long rows, Optional<Long> nullCount,
+                   HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer) {
+    this(type, rows, nullCount, hostDataBuffer, hostValidityBuffer, null);
+  }
+
   /**
    * Create a new column vector with data populated on the host.
    * @param type               the type of the vector
@@ -83,6 +88,21 @@ public final class HostColumnVector extends HostColumnVectorCore {
       throw new IllegalStateException("Buffer cannot have a nullCount without a validity buffer");
     }
     if (type != DType.STRING && type != DType.LIST) {
+      assert offsetBuffer == null : "offsets are only supported for STRING and LIST";
+    }
+    refCount = 0;
+    incRefCountInternal(true);
+  }
+
+  HostColumnVector(ai.rapids.cudf.DataType type, long rows, Optional<Long> nullCount,
+                   HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
+                   HostMemoryBuffer offsetBuffer) {
+    super(type, rows, nullCount, hostDataBuffer, hostValidityBuffer, offsetBuffer, new ArrayList<>());
+    assert type.typeId != DType.LIST : "This constructor should not be used for list type";
+    if (nullCount.isPresent() && nullCount.get() > 0 && hostValidityBuffer == null) {
+      throw new IllegalStateException("Buffer cannot have a nullCount without a validity buffer");
+    }
+    if (type.typeId != DType.STRING && type.typeId != DType.LIST) {
       assert offsetBuffer == null : "offsets are only supported for STRING and LIST";
     }
     refCount = 0;
@@ -383,6 +403,26 @@ public final class HostColumnVector extends HostColumnVectorCore {
   public static HostColumnVector fromLongs(long... values) {
     return build(DType.INT64, values.length, (b) -> b.appendArray(values));
   }
+
+
+ /* public static HostColumnVector fromDecimal32(int... values) {
+        return build(DType.DECIMAL32, values.length, (b) -> b.appendArray(values));
+     }
+
+         public static HostColumnVector fromDecimal64(long... values) {
+        return build(DType.DECIMAL64, values.length, (b) -> b.appendArray(values));
+     }
+
+
+        public static HostColumnVector fromBoxedDecimals32(Integer... values) {
+    return build(DType.DECIMAL32, values.length, (b) -> b.appendBoxed(values));
+      }
+
+         public static HostColumnVector fromBoxedDecimals64(Long... values) {
+       return build(DType.DECIMAL64, values.length, (b) -> b.appendBoxed(values));
+  }*/
+
+
 
   /**
    * Create a new vector from the given values.
