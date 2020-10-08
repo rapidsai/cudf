@@ -204,6 +204,9 @@ def _scatter_scalar(scalars, Column scatter_map,
     cdef Scalar slr
     for val, col in zip(scalars, target_table._columns):
         slr = as_scalar(val, col.dtype)
+        # Since this uses this want the unique_ptr but not
+        # the value, we need an explicit sync
+        slr._sync()
         source_scalars.push_back(move(slr.c_value))
     cdef column_view scatter_map_view = scatter_map.view()
     cdef table_view target_table_view = target_table.data_view()
