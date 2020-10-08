@@ -6,7 +6,11 @@ import cudf
 import errno
 import os
 import pyarrow as pa
-import json
+
+try:
+    import ujson as json
+except ImportError:
+    import json
 
 from cython.operator import dereference
 import numpy as np
@@ -14,6 +18,7 @@ import numpy as np
 from cudf.utils.dtypes import (
     np_to_pa_dtype,
     is_categorical_dtype,
+    is_list_dtype,
     is_struct_dtype
 )
 from libc.stdlib cimport free
@@ -107,6 +112,8 @@ cpdef generate_pandas_metadata(Table table, index):
                 "'category' column dtypes are currently not "
                 + "supported by the gpu accelerated parquet writer"
             )
+        elif is_list_dtype(col):
+            types.append(col.dtype.to_arrow())
         else:
             types.append(np_to_pa_dtype(col.dtype))
 
@@ -135,6 +142,8 @@ cpdef generate_pandas_metadata(Table table, index):
                             "'category' column dtypes are currently not "
                             + "supported by the gpu accelerated parquet writer"
                         )
+                    elif is_list_dtype(col):
+                        types.append(col.dtype.to_arrow())
                     else:
                         types.append(np_to_pa_dtype(idx.dtype))
                     index_levels.append(idx)
@@ -151,9 +160,15 @@ cpdef generate_pandas_metadata(Table table, index):
         types,
     )
 
-    md = metadata[b'pandas']
-    json_str = md.decode("utf-8")
-    return json_str
+    md_dict = json.loads(metadata[b"pandas"])
+
+    # correct metadata for list and struct types
+    for col_meta in md_dict["columns"]:
+        if col_meta["numpy_type"] in ("list", "struct"):
+            col_meta["numpy_type"] = "object"
+
+    return json.dumps(md_dict)
+
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                    skiprows=None, num_rows=None, strings_to_categorical=False,

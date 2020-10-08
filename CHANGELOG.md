@@ -21,6 +21,8 @@
 - PR #6139 Add column conversion to big endian byte list.
 - PR #6220 Add `list_topics()` to supply list of underlying Kafka connection topics
 - PR #6254 Add `cudf::make_dictionary_from_scalar` factory function
+- PR #6262 Add nth_element series aggregation with null handling
+- PR #6277 Add support for LEAD/LAG window functions for fixed-width types
 - PR #6318 Add support for reading Struct and map types from Parquet files
 - PR #6315 Native code for string-map lookups, for cudf-java
 - PR #6302 Add custom dataframe accessors
@@ -101,6 +103,8 @@
 - PR #6273 Update JNI to use ORC options builder
 - PR #6293 Replace shuffle warp reduce with cub calls
 - PR #6287 Make java aggregate API follow C++ API
+- PR #6299 Add lead and lag to java
+- PR #6303 Use cudf test dtypes so timedelta tests are determinstic
 - PR #6327 Add dictionary specialization to `cudf::replace_nulls`
 - PR #6306 Remove cpw macros from page encode kernels
 - PR #6375 Parallelize Cython compilation in addition to Cythonization
@@ -273,6 +277,7 @@
 - PR #5815 LIST Support for ColumnVector
 - PR #5931 Support for `add_calendrical_months` API
 - PR #5992 Add support for `.dt.strftime`
+- PR #6075 Parquet writer - add support for nested LIST columns
 
 ## Improvements
 
