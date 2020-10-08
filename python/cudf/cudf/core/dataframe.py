@@ -3423,7 +3423,7 @@ class DataFrame(Frame, Serializable):
 
         try:
             dtype = np.result_type(*cols)
-        except ValueError:
+        except (ValueError, TypeError):
             dtype = None
         for k, c in self._data.items():
             if c.has_nulls:
@@ -5546,7 +5546,7 @@ class DataFrame(Frame, Serializable):
 
         try:
             common_dtype = np.result_type(*filtered.dtypes)
-        except ValueError:
+        except (ValueError, TypeError):
             common_dtype = None
 
         if filtered._num_columns < self._num_columns:

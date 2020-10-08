@@ -4832,6 +4832,13 @@ def test_rowwise_ops_nullable_int_dtypes(op, expected):
 @pytest.mark.parametrize("op", ["max", "min"])
 @pytest.mark.parametrize("skipna", [True, False])
 def test_rowwise_ops_datetime_dtypes(data, op, skipna):
+    """
+    Two tests are involved:
+    1. Pandas semantic equivalance
+    2. Datetime row-wise op will modify its underlying values
+    to utilize cupy gpu operations. Test that the values are
+    converted back to original after operations.
+    """
 
     gdf = gd.DataFrame(data)
     gdf_copy = gdf.copy(deep=True)
@@ -4904,7 +4911,7 @@ def test_rowwise_ops_datetime_dtypes_2(data, op, skipna):
 
 
 @pytest.mark.parametrize(
-    "data,res",
+    "data",
     [
         (
             {
@@ -4915,16 +4922,22 @@ def test_rowwise_ops_datetime_dtypes_2(data, op, skipna):
                 "t2": pd.Series(
                     ["1940-08-31 06:00:00", pd.NaT], dtype="<M8[ns]"
                 ),
-            },
-            pd.Series(
-                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ns]"
-            ),
+            }
         )
     ],
 )
-def test_rowwise_ops_datetime_dtypes_pdbug(data, res):
+def test_rowwise_ops_datetime_dtypes_pdbug(data):
+    """
+    Pandas bug: https://github.com/pandas-dev/pandas/issues/36907
+    """
     pdf = pd.DataFrame(data)
-    assert_eq(res, pdf.max(axis=1, skipna=False))
+    gdf = gd.from_pandas(pdf)
+
+    expected = pdf.max(axis=1, skipna=False)
+    got = gdf.max(axis=1, skipna=False)
+
+    with pytest.raises(AssertionError, match="numpy array are different"):
+        assert_eq(got, expected)
 
 
 @pytest.mark.parametrize(
