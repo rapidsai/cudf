@@ -94,7 +94,7 @@ $CC --version
 $CXX --version
 
 gpuci_logger "Check conda environment"
-conda list
+conda info
 conda config --show-sources
 conda list --show-channel-urls
 
