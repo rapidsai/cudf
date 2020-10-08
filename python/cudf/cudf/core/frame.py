@@ -237,15 +237,18 @@ class Frame(libcudf.table.Table):
                     empty_has_index = empty_has_index or len(obj) > 0
 
         if join == "inner":
-            index = objs[0].columns if len(objs) > 0 else pd.Index([])
-            for other in objs[1:]:
-                index = index.intersection(other.columns)
-            names = list(index)
+            names = list(
+                set(name for obj in objs for name in obj._column_names)
+            )
+            names_not_in_all = []
             for obj in objs:
-                columns_to_drop = [
-                    col for col in obj.columns if col not in names
-                ]
-            obj = obj.drop(columns=columns_to_drop)
+                for name in names:
+                    if name not in obj._column_names:
+                        names_not_in_all.append(name)
+                for x in names_not_in_all:
+                    if x in obj._column_names:
+                        obj = obj.drop(columns=names_not_in_all)
+            names = [x for x in names if x not in names_not_in_all]
 
         elif join == "outer":
             # Get a list of the unique table column names

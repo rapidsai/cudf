@@ -3,8 +3,6 @@ import itertools
 
 import numpy as np
 import pandas as pd
-import cupy as cp
-
 import cudf
 
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
@@ -231,17 +229,19 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     if axis == 1:
 
         if join == "inner" and typ is cudf.Series:
-            new_df = cudf.concat(objs, axis=1)
-            indexes_list = []
-            for obj in objs:
-                indexes_list.append(cp.array(obj.index))
-            indexes = []
-            for i in range(len(new_df.index)):
-                for obj in indexes_list:
-                    if i not in obj:
-                        indexes.append(i)
-            df = new_df.drop(index=indexes)
-            return df
+            for i, obj in enumerate(objs):
+                if not obj.name:
+                    obj.name = i
+            result = (
+                objs[0]
+                .to_frame()
+                .join(objs[1].to_frame(), on="index", how="inner")
+            )
+            for i in range(2, len(objs)):
+                result = result.join(
+                    objs[i].to_frame(), on="index", how="inner"
+                )
+            return result
 
         elif join == "inner" and typ is cudf.DataFrame:
             raise NotImplementedError(
