@@ -110,13 +110,13 @@ void CUDA_DEVICE_CALLABLE md5_process(TKey const& key, md5_intermediate_data* ha
 /**
  * Normalization of floating point NANs and zeros helper
  */
-template <typename TKey>
-TKey CUDA_DEVICE_CALLABLE normalize_nans_and_zeros_helper(TKey key)
+template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+T CUDA_DEVICE_CALLABLE normalize_nans_and_zeros_helper(T key)
 {
   if (isnan(key)) {
-    return std::numeric_limits<TKey>::quiet_NaN();
-  } else if (key == TKey{0.0}) {
-    return TKey{0.0};
+    return std::numeric_limits<T>::quiet_NaN();
+  } else if (key == T{0.0}) {
+    return T{0.0};
   } else {
     return key;
   }
