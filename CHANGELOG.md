@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- PR #6442 Remove deprecated `DataFrame.from_gpu_matrix`, `DataFrame.to_gpu_matrix`, `DataFrame.add_column` APIs and method parameters
+
 ## Bug Fixes
 
 # cuDF 0.16.0 (Date TBD)

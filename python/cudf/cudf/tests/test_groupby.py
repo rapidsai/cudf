@@ -901,7 +901,7 @@ def test_groupby_categorical_from_string():
     gdf["val"] = [0, 1, 2]
     gdf["id"] = gdf["id"].astype("category")
     assert_eq(
-        cudf.DataFrame({"val": gdf["val"]}).set_index(index=gdf["id"]),
+        cudf.DataFrame({"val": gdf["val"]}).set_index(keys=gdf["id"]),
         gdf.groupby("id").sum(),
     )
 
