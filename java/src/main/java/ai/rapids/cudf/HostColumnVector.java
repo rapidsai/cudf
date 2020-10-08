@@ -748,7 +748,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       if (data == null) {
         // since rows can be updated as we go, make data buffer as big as the estimate or the requested length
         if (!type.isNestedType() && type != DType.STRING) {
-          data = HostMemoryBuffer.allocate(estimatedRows * type.getSizeInBytes());
+          data = HostMemoryBuffer.allocate(Math.min(Integer.MAX_VALUE, estimatedRows * type.getSizeInBytes()));
         } else {
           data = HostMemoryBuffer.allocate(length);
         }
@@ -759,8 +759,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
       while (currentByteIndex + length > newLen) {
         newLen *= 2;
       }
-      if (newLen > Integer.MAX_VALUE && type == DType.STRING) {
-        throw new IllegalStateException("A string buffer is not supported over 2GB in size");
+      if (newLen > Integer.MAX_VALUE) {
+        throw new IllegalStateException("A data buffer is not supported over 2GB in size");
       }
       if (newLen != oldLen) {
         // need to grow the size of the buffer.
