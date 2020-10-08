@@ -167,22 +167,22 @@ TEST_F(TransformTest, MultiTypeOperationFailure)
   EXPECT_THROW(cudf::ast::compute_column(table, expression_1_plus_0), cudf::logic_error);
 }
 
-// TEST_F(TransformTest, LiteralComparison)
-// {
-//   auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
-//   auto table = cudf::table_view{{c_0}};
+TEST_F(TransformTest, LiteralComparison)
+{
+  auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
+  auto table = cudf::table_view{{c_0}};
 
-//   auto col_ref_0     = cudf::ast::column_reference(0);
-//   auto literal_value = cudf::numeric_scalar<int32_t>(41);
-//   auto literal       = cudf::ast::literal(literal_value);
+  auto col_ref_0     = cudf::ast::column_reference(0);
+  auto literal_value = cudf::numeric_scalar<int32_t>(41);
+  auto literal       = cudf::ast::literal(literal_value);
 
-//   auto expression = cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_0, literal);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_0, literal);
 
-//   auto result   = cudf::ast::compute_column(table, expression);
-//   auto expected = column_wrapper<bool>{false, false, false, true};
+  auto result   = cudf::ast::compute_column(table, expression);
+  auto expected = column_wrapper<bool>{false, false, false, true};
 
-//   cudf::test::expect_columns_equal(expected, result->view(), true);
-// }
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
 
 TEST_F(TransformTest, UnaryNot)
 {
@@ -276,73 +276,72 @@ TEST_F(TransformTest, CopyLiteral)
   cudf::test::expect_columns_equal(expected, result->view(), true);
 }
 
-// TEST_F(TransformTest, TrueDiv)
-// {
-//   auto c_0   = column_wrapper<int32_t>{3, 0, 1, 50};
-//   auto table = cudf::table_view{{c_0}};
+TEST_F(TransformTest, TrueDiv)
+{
+  auto c_0   = column_wrapper<int32_t>{3, 0, 1, 50};
+  auto table = cudf::table_view{{c_0}};
 
-//   auto col_ref_0     = cudf::ast::column_reference(0);
-//   auto literal_value = cudf::numeric_scalar<int32_t>(2);
-//   auto literal       = cudf::ast::literal(literal_value);
+  auto col_ref_0     = cudf::ast::column_reference(0);
+  auto literal_value = cudf::numeric_scalar<int32_t>(2);
+  auto literal       = cudf::ast::literal(literal_value);
 
-//   auto expression = cudf::ast::expression(cudf::ast::ast_operator::TRUE_DIV, col_ref_0, literal);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::TRUE_DIV, col_ref_0, literal);
 
-//   auto result   = cudf::ast::compute_column(table, expression);
-//   auto expected = column_wrapper<double>{1.5, 0.0, 0.5, 25.0};
+  auto result   = cudf::ast::compute_column(table, expression);
+  auto expected = column_wrapper<double>{1.5, 0.0, 0.5, 25.0};
 
-//   cudf::test::expect_columns_equal(expected, result->view(), true);
-// }
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
 
-// TEST_F(TransformTest, FloorDiv)
-// {
-//   auto c_0   = column_wrapper<double>{3.0, 0.0, 1.0, 50.0};
-//   auto table = cudf::table_view{{c_0}};
+TEST_F(TransformTest, FloorDiv)
+{
+  auto c_0   = column_wrapper<double>{3.0, 0.0, 1.0, 50.0};
+  auto table = cudf::table_view{{c_0}};
 
-//   auto col_ref_0     = cudf::ast::column_reference(0);
-//   auto literal_value = cudf::numeric_scalar<double>(2.0);
-//   auto literal       = cudf::ast::literal(literal_value);
+  auto col_ref_0     = cudf::ast::column_reference(0);
+  auto literal_value = cudf::numeric_scalar<double>(2.0);
+  auto literal       = cudf::ast::literal(literal_value);
 
-//   auto expression = cudf::ast::expression(cudf::ast::ast_operator::FLOOR_DIV, col_ref_0,
-//   literal);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::FLOOR_DIV, col_ref_0, literal);
 
-//   auto result   = cudf::ast::compute_column(table, expression);
-//   auto expected = column_wrapper<double>{1.0, 0.0, 0.0, 25.0};
+  auto result   = cudf::ast::compute_column(table, expression);
+  auto expected = column_wrapper<double>{1.0, 0.0, 0.0, 25.0};
 
-//   cudf::test::expect_columns_equal(expected, result->view(), true);
-// }
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
 
-// TEST_F(TransformTest, Mod)
-// {
-//   auto c_0   = column_wrapper<double>{3.0, 0.0, -1.0, -50.0};
-//   auto table = cudf::table_view{{c_0}};
+TEST_F(TransformTest, Mod)
+{
+  auto c_0   = column_wrapper<double>{3.0, 0.0, -1.0, -50.0};
+  auto table = cudf::table_view{{c_0}};
 
-//   auto col_ref_0     = cudf::ast::column_reference(0);
-//   auto literal_value = cudf::numeric_scalar<double>(2.0);
-//   auto literal       = cudf::ast::literal(literal_value);
+  auto col_ref_0     = cudf::ast::column_reference(0);
+  auto literal_value = cudf::numeric_scalar<double>(2.0);
+  auto literal       = cudf::ast::literal(literal_value);
 
-//   auto expression = cudf::ast::expression(cudf::ast::ast_operator::MOD, col_ref_0, literal);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::MOD, col_ref_0, literal);
 
-//   auto result   = cudf::ast::compute_column(table, expression);
-//   auto expected = column_wrapper<double>{1.0, 0.0, -1.0, 0.0};
+  auto result   = cudf::ast::compute_column(table, expression);
+  auto expected = column_wrapper<double>{1.0, 0.0, -1.0, 0.0};
 
-//   cudf::test::expect_columns_equal(expected, result->view(), true);
-// }
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
 
-// TEST_F(TransformTest, PyMod)
-// {
-//   auto c_0   = column_wrapper<double>{3.0, 0.0, -1.0, -50.0};
-//   auto table = cudf::table_view{{c_0}};
+TEST_F(TransformTest, PyMod)
+{
+  auto c_0   = column_wrapper<double>{3.0, 0.0, -1.0, -50.0};
+  auto table = cudf::table_view{{c_0}};
 
-//   auto col_ref_0     = cudf::ast::column_reference(0);
-//   auto literal_value = cudf::numeric_scalar<double>(2.0);
-//   auto literal       = cudf::ast::literal(literal_value);
+  auto col_ref_0     = cudf::ast::column_reference(0);
+  auto literal_value = cudf::numeric_scalar<double>(2.0);
+  auto literal       = cudf::ast::literal(literal_value);
 
-//   auto expression = cudf::ast::expression(cudf::ast::ast_operator::PYMOD, col_ref_0, literal);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::PYMOD, col_ref_0, literal);
 
-//   auto result   = cudf::ast::compute_column(table, expression);
-//   auto expected = column_wrapper<double>{1.0, 0.0, 1.0, 0.0};
+  auto result   = cudf::ast::compute_column(table, expression);
+  auto expected = column_wrapper<double>{1.0, 0.0, 1.0, 0.0};
 
-//   cudf::test::expect_columns_equal(expected, result->view(), true);
-// }
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
 
 CUDF_TEST_PROGRAM_MAIN()
