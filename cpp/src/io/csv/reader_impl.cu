@@ -660,7 +660,7 @@ std::vector<column_buffer> reader::impl::decode_data(std::vector<data_type> cons
                       is_final_allocation ? mr_ : rmm::mr::get_current_device_resource());
 
       out_buffer.name = col_names_[col];
-      out_buffers.emplace_back(out_buffer);
+      out_buffers.emplace_back(std::move(out_buffer));
       active_col++;
     }
   }

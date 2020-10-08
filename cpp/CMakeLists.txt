@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.16.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.17.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -474,6 +474,7 @@ add_library(cudf
             src/io/orc/reader_impl.cu
             src/io/orc/writer_impl.cu
             src/io/parquet/page_data.cu
+            src/io/parquet/compact_protocol_writer.cpp
             src/io/parquet/page_hdr.cu
             src/io/parquet/page_enc.cu
             src/io/parquet/page_dict.cu
@@ -619,6 +620,8 @@ add_library(cudf
             src/aggregation/aggregation.cpp
             src/aggregation/aggregation.cu
             src/aggregation/result_cache.cpp
+            src/ast/transform.cu
+            src/ast/linearizer.cpp
             src/utilities/default_stream.cpp
 )
 
