@@ -16,7 +16,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/fill.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/indexalator.cuh>
@@ -27,17 +26,14 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/lists/list_view.cuh>
-#include <cudf/stream_compaction.hpp>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/table/table_device_view.cuh>
-#include <cudf/utilities/traits.hpp>
 
 #include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
-#include <numeric>
 
 namespace cudf {
 namespace detail {
