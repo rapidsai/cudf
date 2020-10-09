@@ -251,13 +251,15 @@ class TimeDeltaColumn(column.ColumnBase):
     def default_na_value(self):
         """Returns the default NA value for this column
         """
-        return np.timedelta64("nat", self.time_unit)
+        return cudf.Scalar(cudf.NA, dtype=self.dtype)
 
     @property
     def time_unit(self):
         return self._time_unit
 
     def fillna(self, fill_value):
+        import pdb
+        pdb.set_trace()
         col = self
         if is_scalar(fill_value):
             if isinstance(fill_value, np.timedelta64):

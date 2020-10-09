@@ -238,7 +238,7 @@ class DatetimeColumn(column.ColumnBase):
     def fillna(self, fill_value):
         if is_scalar(fill_value):
             if not isinstance(fill_value, Scalar):
-                fill_value = np.datetime64(fill_value, self.time_unit)
+                fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
 
