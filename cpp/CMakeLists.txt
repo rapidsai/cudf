@@ -67,6 +67,69 @@ include(CheckIncludeFiles)
 include(CheckLibraryExists)
 
 ###################################################################################################
+# - third party dependencies-----------------------------------------------------------------------
+# add third party dependencies using CMake FetchContent
+
+add_subdirectory(thirdparty)
+
+###################################################################################################
+# - conda environment -----------------------------------------------------------------------------
+
+if("$ENV{CONDA_BUILD}" STREQUAL "1")
+    set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{BUILD_PREFIX};$ENV{PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
+    set(CONDA_INCLUDE_DIRS "$ENV{BUILD_PREFIX}/include" "$ENV{PREFIX}/include")
+    set(CONDA_LINK_DIRS "$ENV{BUILD_PREFIX}/lib" "$ENV{PREFIX}/lib")
+    message(STATUS "Conda build detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
+elseif(DEFINED ENV{CONDA_PREFIX})
+    set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{CONDA_PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
+    set(CONDA_INCLUDE_DIRS "$ENV{CONDA_PREFIX}/include")
+    set(CONDA_LINK_DIRS "$ENV{CONDA_PREFIX}/lib")
+    message(STATUS "Conda environment detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
+endif("$ENV{CONDA_BUILD}" STREQUAL "1")
+
+###################################################################################################
+# - find arrow ------------------------------------------------------------------------------------
+
+option(ARROW_STATIC_LIB "Build and statically link with Arrow libraries" OFF)
+
+if(ARROW_STATIC_LIB)
+  message(STATUS "BUILDING ARROW")
+  include(ConfigureArrow)
+
+  if(ARROW_FOUND)
+    message(STATUS "Apache Arrow found in ${ARROW_INCLUDE_DIR}")
+  else()
+    message(FATAL_ERROR "Apache Arrow not found, please check your settings.")
+  endif(ARROW_FOUND)
+
+  add_library(arrow STATIC IMPORTED ${ARROW_LIB})
+  add_library(arrow_cuda STATIC IMPORTED ${ARROW_CUDA_LIB})
+else()
+  find_path(ARROW_INCLUDE_DIR "arrow"
+      HINTS "$ENV{ARROW_ROOT}/include")
+
+  find_library(ARROW_LIB "arrow"
+      NAMES libarrow
+      HINTS "$ENV{ARROW_ROOT}/lib" "$ENV{ARROW_ROOT}/build")
+
+  find_library(ARROW_CUDA_LIB "arrow_cuda"
+      NAMES libarrow_cuda
+      HINTS "$ENV{ARROW_ROOT}/lib" "$ENV{ARROW_ROOT}/build")
+
+  message(STATUS "ARROW: ARROW_INCLUDE_DIR set to ${ARROW_INCLUDE_DIR}")
+  message(STATUS "ARROW: ARROW_LIB set to ${ARROW_LIB}")
+  message(STATUS "ARROW: ARROW_CUDA_LIB set to ${ARROW_CUDA_LIB}")
+
+  add_library(arrow SHARED IMPORTED ${ARROW_LIB})
+  add_library(arrow_cuda SHARED IMPORTED ${ARROW_CUDA_LIB})
+endif(ARROW_STATIC_LIB)
+
+if(ARROW_INCLUDE_DIR AND ARROW_LIB AND ARROW_CUDA_LIB)
+  set_target_properties(arrow PROPERTIES IMPORTED_LOCATION ${ARROW_LIB})
+  set_target_properties(arrow_cuda PROPERTIES IMPORTED_LOCATION ${ARROW_CUDA_LIB})
+endif(ARROW_INCLUDE_DIR AND ARROW_LIB AND ARROW_CUDA_LIB)
+
+###################################################################################################
 # - copy libcu++ ------------------------------------------------------------------------------------
 
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcudacxx")
@@ -75,9 +138,60 @@ file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcxx/include")
 file(INSTALL ${LIBCUDACXX_INCLUDE_DIR} DESTINATION ${CMAKE_BINARY_DIR}/include/libcudacxx/)
 file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION ${CMAKE_BINARY_DIR}/include/libcxx/include/)
 
+###################################################################################################
+# - find zlib -------------------------------------------------------------------------------------
 
+find_package(ZLIB REQUIRED)
 
+message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
+message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
 
+if(ZLIB_FOUND)
+    message(STATUS "ZLib found in ${ZLIB_INCLUDE_DIRS}")
+else()
+    message(FATAL_ERROR "ZLib not found, please check your settings.")
+endif(ZLIB_FOUND)
+
+###################################################################################################
+# - find boost ------------------------------------------------------------------------------------
+
+# Don't look for a CMake configuration file
+set(Boost_NO_BOOST_CMAKE ON)
+
+find_package(
+    Boost REQUIRED MODULE
+    COMPONENTS filesystem
+)
+
+message(STATUS "BOOST: Boost_LIBRARIES set to ${Boost_LIBRARIES}")
+message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
+
+if(Boost_FOUND)
+    message(STATUS "Boost found in ${Boost_INCLUDE_DIRS}")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
+else()
+    message(FATAL_ERROR "Boost not found, please check your settings.")
+endif(Boost_FOUND)
+
+###################################################################################################
+# - RMM -------------------------------------------------------------------------------------------
+
+find_path(RMM_INCLUDE "rmm"
+          HINTS "$ENV{RMM_ROOT}/include")
+
+message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
+
+###################################################################################################
+# - DLPACK -------------------------------------------------------------------------------------------
+
+find_path(
+    DLPACK_INCLUDE "dlpack"
+    HINTS "$ENV{DLPACK_ROOT}/include"
+)
+
+message(STATUS "DLPACK: DLPACK_INCLUDE set to ${DLPACK_INCLUDE}")
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
@@ -99,10 +213,23 @@ if(PER_THREAD_DEFAULT_STREAM)
 endif(PER_THREAD_DEFAULT_STREAM)
 
 ###################################################################################################
-# - third party dependencies-----------------------------------------------------------------------
-# add third party dependencies using CMake FetchContent
+# - add gtest -------------------------------------------------------------------------------------
 
-include(cmake/CUDF_Thirdparty.cmake)
+if(BUILD_TESTS)
+
+endif(BUILD_TESTS)
+
+message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
+
+###################################################################################################
+# - add google benchmark --------------------------------------------------------------------------
+
+if(BUILD_BENCHMARKS)
+
+
+endif(BUILD_BENCHMARKS)
+
+message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
@@ -119,7 +246,11 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_BINARY_DIR}/include/jit"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
-                    "${ARROW_INCLUDE_DIR}")
+                    "${ARROW_INCLUDE_DIR}"
+                    "${ZLIB_INCLUDE_DIRS}"
+                    "${Boost_INCLUDE_DIRS}"
+                    "${RMM_INCLUDE}"
+                    "${DLPACK_INCLUDE}")
 
 if(CONDA_INCLUDE_DIRS)
     include_directories("${CONDA_INCLUDE_DIRS}")
@@ -130,7 +261,8 @@ endif(CONDA_INCLUDE_DIRS)
 
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
-                 "${CMAKE_BINARY_DIR}")
+                 "${CMAKE_BINARY_DIR}"
+                 "${GTEST_LIBRARY_DIR}")
 
 if(CONDA_LINK_DIRS)
     link_directories("${CONDA_LINK_DIRS}")
@@ -534,11 +666,7 @@ target_compile_definitions(cudf PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_LO
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cuDF
-target_link_libraries(cudf 
-                      arrow arrow_
-                      cuda nvrtc 
-                      ${CUDART_LIBRARY} cuda 
-                      ZLIB::ZLIB Boost::filesystem)
+target_link_libraries(cudf arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
