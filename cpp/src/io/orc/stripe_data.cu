@@ -1100,6 +1100,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
     __syncthreads();
     if (num_vals_read != numvals) {
       bytestream_fill(bs, t);
+      __syncthreads();
       if (t == 0) {
         // Needs to be reset since bytestream has been filled
         bs->fill_count = 0;
