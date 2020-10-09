@@ -147,6 +147,14 @@ if(BUILD_TESTS)
   enable_testing()
   set(GTEST_LIBRARY gtest gtest_main gmock)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
+
+  if (GTest_ADDED)
+    add_library(GTest::gtest ALIAS gtest)
+    add_library(GTest::gmock ALIAS gmock)
+    add_library(GTest::gtest_main ALIAS gtest_main)
+    add_library(GTest::gmock_main ALIAS gmock_main)
+  endif()
+
   message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 endif(BUILD_TESTS)
 

@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.17...3.18 FATAL_ERROR)
 
 project(CUDA_DATAFRAME VERSION 0.16.0 LANGUAGES C CXX CUDA)
 
@@ -141,16 +141,21 @@ file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION ${CMAKE_BINARY_DIR}/include/l
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
 
-find_package(ZLIB REQUIRED)
+CPMFindPackage(
+  NAME ZLIB
+  GITHUB_REPOSITORY madler/zlib
+  VERSION 1.2.11
+)
 
-message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
-message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
+message(STATUS "ZLIB: ZLIB_LIBRARY set to ${ZLIB_LIBRARY}")
+message(STATUS "ZLIB: ZLIB_INCLUDE_DIR set to ${ZLIB_INCLUDE_DIR}")
 
-if(ZLIB_FOUND)
-    message(STATUS "ZLib found in ${ZLIB_INCLUDE_DIRS}")
+if(ZLIB_INCLUDE_DIR)
+    message(STATUS "ZLib found in ${ZLIB_INCLUDE_DIR}")
 else()
     message(FATAL_ERROR "ZLib not found, please check your settings.")
-endif(ZLIB_FOUND)
+endif(ZLIB_INCLUDE_DIR)
+
 
 ###################################################################################################
 # - find boost ------------------------------------------------------------------------------------
@@ -158,40 +163,56 @@ endif(ZLIB_FOUND)
 # Don't look for a CMake configuration file
 set(Boost_NO_BOOST_CMAKE ON)
 
-find_package(
-    Boost REQUIRED MODULE
-    COMPONENTS filesystem
+CPMFindPackage(
+  NAME Boost
+  GITHUB_REPOSITORY Orphis/boost-cmake@60fb5fa
+  VERSION 1.70.0
+  FIND_PACKAGE_ARGUMENTS "COMPONENTS filesystem"
 )
 
-message(STATUS "BOOST: Boost_LIBRARIES set to ${Boost_LIBRARIES}")
-message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
+message(STATUS "BOOST: Boost_LIBRARY set to ${Boost_LIBRARY}")
+message(STATUS "BOOST: Boost_INCLUDE_DIR set to ${Boost_INCLUDE_DIR}")
 
-if(Boost_FOUND)
-    message(STATUS "Boost found in ${Boost_INCLUDE_DIRS}")
+if(Boost_INCLUDE_DIR)
+    message(STATUS "Boost found in ${Boost_INCLUDE_DIR}")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
 else()
     message(FATAL_ERROR "Boost not found, please check your settings.")
-endif(Boost_FOUND)
+endif(Boost_INCLUDE_DIR)
 
 ###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
+
+# FindCUDA doesn't quite set the variables it should. RMM needs this to be set to build from CPM
+set(CUDAToolkit_INCLUDE_DIR "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
 
 find_path(RMM_INCLUDE "rmm"
           HINTS "$ENV{RMM_ROOT}/include")
 
 message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
 
+#CPMFindPackage(
+#  NAME RMM
+#  GITHUB_REPOSITORY rapidsai/rmm
+#  VERSION ${CMAKE_PROJECT_VERSION}
+#  GIT_TAG "branch-${CMAKE_PROJECT_VERSION_MAJOR}.${CMAKE_PROJECT_VERSION_MINOR}"
+#)
+
+#message(STATUS "RMM: RMM_SOURCE_DIR set to ${RMM_SOURCE_DIR}")
+
 ###################################################################################################
 # - DLPACK -------------------------------------------------------------------------------------------
 
-find_path(
-    DLPACK_INCLUDE "dlpack"
-    HINTS "$ENV{DLPACK_ROOT}/include"
+CPMFindPackage(
+  NAME DLPACK
+  GITHUB_REPOSITORY dmlc/dlpack
+  VERSION 0.3
 )
 
-message(STATUS "DLPACK: DLPACK_INCLUDE set to ${DLPACK_INCLUDE}")
+message(STATUS "DLPACK: dlpack_SOURCE_DIR set to ${dlpack_SOURCE_DIR}")
+
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
@@ -253,7 +274,7 @@ if(BUILD_BENCHMARKS)
     "RUN_HAVE_GNU_POSIX_REGEX 0" #
   )
 
-  include_directories("${benchmark_INCLUDE_DIR}/include")
+  include_directories("${benchmark_INCLUDE_DIR}")
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/benchmarks)
 
   endif(BUILD_BENCHMARKS)
@@ -276,11 +297,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_BINARY_DIR}/include/jit"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
-                    "${ARROW_INCLUDE_DIR}"
-                    "${ZLIB_INCLUDE_DIRS}"
-                    "${Boost_INCLUDE_DIRS}"
-                    "${RMM_INCLUDE}"
-                    "${DLPACK_INCLUDE}")
+                    "${ARROW_INCLUDE_DIR}")
 
 if(CONDA_INCLUDE_DIRS)
     include_directories("${CONDA_INCLUDE_DIRS}")
@@ -338,7 +355,14 @@ target_compile_definitions(cudf PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_LO
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cuDF
-target_link_libraries(cudf arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(cudf 
+                      arrow 
+                      arrow_cuda 
+                      nvrtc 
+                      ${CUDART_LIBRARY} 
+                      cuda 
+                      ZLIB::ZLIB
+                      Boost::filesystem)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
