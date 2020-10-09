@@ -743,97 +743,121 @@ public final class HostColumnVector extends HostColumnVectorCore {
       return this;
     }
 
-    private void resizeDataBuffer(int length) {
-      // just for strings we want to throw a real exception if we would overrun the buffer
-      if (data == null) {
-        // since rows can be updated as we go, make data buffer as big as the estimate or the requested length
-        if (!type.isNestedType() && type != DType.STRING) {
-          data = HostMemoryBuffer.allocate(Math.min(Integer.MAX_VALUE, estimatedRows * type.getSizeInBytes()));
+
+    /**
+     * A method that is responsible for growing the buffers as needed
+     * and incrementing the row counts when we append values or nulls.
+     * @param hasNull indicates whether the validity buffer needs to be considered, as the
+     *                nullcount may not have been fully calculated yet
+     * @param length the data length we want to fit in the data buffer
+     */
+    private void growBuffersandRows(boolean hasNull, int length) {
+      rows++;
+      // for offset buffer
+      if (type == DType.LIST || type == DType.STRING) {
+        if (this.offsets == null) {
+          offsets = HostMemoryBuffer.allocate((estimatedRows + 1) * OFFSET_SIZE);
+          offsets.setInt(0, 0);
         } else {
-          data = HostMemoryBuffer.allocate(length);
-        }
-        return;
-      }
-      long oldLen = data.getLength();
-      long newLen = Math.max(1, oldLen);
-      while (currentByteIndex + length > newLen) {
-        newLen *= 2;
-      }
-      if (newLen > Integer.MAX_VALUE) {
-        throw new IllegalStateException("A data buffer is not supported over 2GB in size");
-      }
-      if (newLen != oldLen) {
-        // need to grow the size of the buffer.
-        HostMemoryBuffer newData = HostMemoryBuffer.allocate(newLen);
-        try {
-          newData.copyFromHostBuffer(0, data, 0, data.length);
-          data.close();
-          data = newData;
-          newData = null;
-        } finally {
-          if (newData != null) {
-            newData.close();
+          if (offsets.length <= currentIndex * OFFSET_SIZE + OFFSET_SIZE) {
+            HostMemoryBuffer newOffset = HostMemoryBuffer.allocate(offsets.length * 2);
+            try {
+              newOffset.copyFromHostBuffer(0, offsets, 0, offsets.length);
+              offsets.close();
+              offsets = newOffset;
+              newOffset = null;
+            } finally {
+              if (newOffset != null) {
+                newOffset.close();
+              }
+            }
           }
         }
       }
-    }
-
-    private void initAndResizeOffsetBuffer(int currentIndex) {
-      if (this.offsets == null) {
-        offsets = HostMemoryBuffer.allocate((estimatedRows + 1) * OFFSET_SIZE);
-        offsets.setInt(0, 0);
-      } else {
-        if (offsets.length <= currentIndex * OFFSET_SIZE + OFFSET_SIZE) {
-          HostMemoryBuffer newOffset = HostMemoryBuffer.allocate(offsets.length * 2);
+      // for data buffer : If it is a fixed type, start off with estimated rows times the
+      // size of the type. We clamp the size of the data buffer at int max_value for strings and byte
+      // columns and (int max_value * type size) for other fixed width types.
+      // We double the size of the buffer but check if we are able to accommodate the requested length.
+      if (!type.isNestedType()) {
+        long maxLen;
+        if (type == DType.STRING) {
+          maxLen = Integer.MAX_VALUE;
+        } else {
+          maxLen = Integer.MAX_VALUE * (long)type.getSizeInBytes();
+        }
+        // just for strings we want to throw a real exception if we would overrun the buffer
+        if (data == null) {
+          // since rows can be updated as we go, make data buffer as big as the estimate or the requested length
+          // if it is a fixed width type - compute based on estimate
+          if (type != DType.STRING) {
+            data = HostMemoryBuffer.allocate(estimatedRows * type.getSizeInBytes());
+          } else {
+            data = HostMemoryBuffer.allocate(length);
+          }
+        }
+        long oldLen = data.getLength();
+        long newLen = Math.max(1, oldLen);
+        while (currentByteIndex + length > newLen) {
+          newLen = newLen * 2;
+        }
+        if (newLen != oldLen) {
+          newLen = Math.min(newLen, maxLen);
+          if (newLen < currentByteIndex + length) {
+            throw new IllegalStateException("A data buffer for strings is not supported over 2GB in size");
+          }
+          // need to grow the size of the buffer.
+          HostMemoryBuffer newData = HostMemoryBuffer.allocate(newLen);
           try {
-            newOffset.copyFromHostBuffer(0, offsets, 0, offsets.length);
-            offsets.close();
-            offsets = newOffset;
-            newOffset = null;
+            newData.copyFromHostBuffer(0, data, 0, data.length);
+            data.close();
+            data = newData;
+            newData = null;
           } finally {
-            if (newOffset != null) {
-              newOffset.close();
+            if (newData != null) {
+              newData.close();
+            }
+          }
+        }
+      }
+      // for validity buffer, we need hasNull since the nullCount alone does not suffice for a check,
+      // as it is incremented when we call setNullAt() which is after we initialize and grow the buffer.
+      if (nullCount > 0 || hasNull) {
+        if (this.valid == null) {
+          allocateBitmaskAndSetDefaultValues();
+        } else {
+          long bitmaskSize = ColumnVector.getNativeValidPointerSize((int) rows);
+          if (valid.length < bitmaskSize) {
+            HostMemoryBuffer newValid = HostMemoryBuffer.allocate(bitmaskSize);
+            try {
+              newValid.setMemory(0, bitmaskSize, (byte) 0xFF);
+              newValid.copyFromHostBuffer(0, valid, 0, valid.length);
+              valid.close();
+              valid = newValid;
+              newValid = null;
+            } finally {
+              if (newValid != null) {
+                newValid.close();
+              }
             }
           }
         }
       }
     }
 
-    private void initAndResizeValidBuffer() {
-      if (this.valid == null) {
-        allocateBitmaskAndSetDefaultValues();
-      } else {
-        long bitmaskSize = ColumnVector.getNativeValidPointerSize((int) rows);
-        if (valid.length < bitmaskSize) {
-          HostMemoryBuffer newValid = HostMemoryBuffer.allocate(bitmaskSize);
-          try {
-            newValid.setMemory(0, bitmaskSize, (byte) 0xFF);
-            newValid.copyFromHostBuffer(0, valid, 0, valid.length);
-            valid.close();
-            valid = newValid;
-            newValid = null;
-          } finally {
-            if (newValid != null) {
-              newValid.close();
-            }
-          }
-        }
-      }
-    }
-
+    /**
+     * Method that sets the null bit in the validity vector
+     * @param index the row index at which the null is marked
+     */
     private void setNullAt(int index) {
-      initAndResizeValidBuffer();
       nullCount += BitVectorHelper.setNullAt(valid, index);
     }
 
     public final ColumnBuilder appendNull() {
-      rows++;
-      resizeDataBuffer(currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+      growBuffersandRows(true, 0);
       setNullAt(currentIndex);
       currentIndex++;
       currentByteIndex += type.sizeInBytes;
       if (type == DType.STRING || type.isNestedType()) {
-        initAndResizeOffsetBuffer(currentIndex);
         offsets.setInt(currentIndex * OFFSET_SIZE, currentByteIndex);
       }
       return this;
@@ -841,10 +865,10 @@ public final class HostColumnVector extends HostColumnVectorCore {
 
     //For structs
     private ColumnBuilder append(StructData structData) {
-      rows++;
       assert type.isNestedType();
       if (type == DType.STRUCT) {
         if (structData.dataRecord == null) {
+          growBuffersandRows(true, 0);
           setNullAt(currentIndex);
           // structs propagate nulls to children and even further down if needed
           for (ColumnBuilder childBuilder : childBuilders) {
@@ -852,32 +876,33 @@ public final class HostColumnVector extends HostColumnVectorCore {
           }
           currentIndex++;
           return this;
+        } else {
+          growBuffersandRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+          for (int i = 0; i < structData.getNumFields(); i++) {
+            ColumnBuilder childBuilder = childBuilders.get(i);
+            appendChildOrNull(childBuilder, structData.dataRecord.get(i));
+          }
+          currentIndex++;
         }
-        for (int i = 0; i < structData.getNumFields(); i++) {
-          ColumnBuilder childBuilder = childBuilders.get(i);
-          appendChildOrNull(childBuilder, structData.dataRecord.get(i));
-        }
-        currentIndex++;
       }
       return this;
     }
 
     // For lists
     private <T> ColumnBuilder append(List<T> inputList) {
-      rows++;
       assert type.isNestedType();
       // We know lists have only 1 children
       ColumnBuilder childBuilder = childBuilders.get(0);
       if (inputList == null) {
-        initAndResizeValidBuffer();
+        growBuffersandRows(true, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
         setNullAt(currentIndex);
       } else {
+        growBuffersandRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
         for (Object listElement : inputList) {
           appendChildOrNull(childBuilder, listElement);
         }
       }
       currentIndex++;
-      initAndResizeOffsetBuffer(currentIndex);
       offsets.setInt(currentIndex * OFFSET_SIZE, childBuilder.getCurrentIndex());
       return this;
     }
@@ -921,10 +946,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public final ColumnBuilder append(byte value) {
-      rows++;
+      growBuffersandRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8;
       assert currentIndex < rows;
-      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
       data.setByte(currentIndex * type.sizeInBytes, value);
       currentIndex++;
       currentByteIndex += type.sizeInBytes;
@@ -932,10 +956,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public final ColumnBuilder append(short value) {
-      rows++;
+      growBuffersandRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type == DType.INT16 || type == DType.UINT16;
       assert currentIndex < rows;
-      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
       data.setShort(currentIndex * type.sizeInBytes, value);
       currentIndex++;
       currentByteIndex += type.sizeInBytes;
@@ -943,10 +966,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public final ColumnBuilder append(int value) {
-      rows++;
+      growBuffersandRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type.isBackedByInt();
       assert currentIndex < rows;
-      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
       data.setInt(currentIndex * type.sizeInBytes, value);
       currentIndex++;
       currentByteIndex += type.sizeInBytes;
@@ -954,10 +976,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public final ColumnBuilder append(long value) {
-      rows++;
+      growBuffersandRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type.isBackedByLong();
       assert currentIndex < rows;
-      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
       data.setLong(currentIndex * type.sizeInBytes, value);
       currentIndex++;
       currentByteIndex += type.sizeInBytes;
@@ -965,10 +986,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public final ColumnBuilder append(float value) {
-      rows++;
+      growBuffersandRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type == DType.FLOAT32;
       assert currentIndex < rows;
-      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
       data.setFloat(currentIndex * type.sizeInBytes, value);
       currentIndex++;
       currentByteIndex += type.sizeInBytes;
@@ -976,10 +996,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public final ColumnBuilder append(double value) {
-      rows++;
+      growBuffersandRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type == DType.FLOAT64;
       assert currentIndex < rows;
-      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
       data.setDouble(currentIndex * type.sizeInBytes, value);
       currentIndex++;
       currentByteIndex += type.sizeInBytes;
@@ -987,10 +1006,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public final ColumnBuilder append(boolean value) {
-      rows++;
+      growBuffersandRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type == DType.BOOL8;
       assert currentIndex < rows;
-      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
       data.setBoolean(currentIndex * type.sizeInBytes, value);
       currentIndex++;
       currentByteIndex += type.sizeInBytes;
@@ -1007,20 +1025,18 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public ColumnBuilder appendUTF8String(byte[] value, int srcOffset, int length) {
-      rows++;
       assert value != null : "appendNull must be used to append null strings";
       assert srcOffset >= 0;
       assert length >= 0;
       assert value.length + srcOffset <= length;
       assert type == DType.STRING : " type " + type + " is not String";
+      currentIndex++;
+      growBuffersandRows(false, length);
       assert currentIndex < rows + 1;
-      resizeDataBuffer(length);
       if (length > 0) {
         data.setBytes(currentByteIndex, value, srcOffset, length);
       }
       currentByteIndex += length;
-      currentIndex++;
-      initAndResizeOffsetBuffer(currentIndex);
       offsets.setInt(currentIndex * OFFSET_SIZE, currentByteIndex);
       return this;
     }
