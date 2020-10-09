@@ -26,8 +26,6 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/substring.hpp>
-#include <cudf/utilities/traits.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 #include <strings/utilities.cuh>
 
 namespace cudf {
@@ -123,7 +121,7 @@ std::unique_ptr<column> slice_strings(
   auto d_new_offsets = offsets_column->view().data<int32_t>();
 
   // build chars column
-  size_type bytes   = thrust::device_pointer_cast(d_new_offsets)[strings_count];
+  auto bytes = cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column = strings::detail::create_chars_child_column(
     strings_count, strings.null_count(), bytes, mr, stream);
   auto d_chars = chars_column->mutable_view().data<char>();
@@ -167,6 +165,7 @@ struct substring_from_fn {
 
   /**
    * @brief Function logic for substring_from API.
+   *
    * This does both calculate and the execute based on template parameter.
    */
   __device__ size_type operator()(size_type idx)
@@ -207,8 +206,7 @@ std::unique_ptr<column> compute_substrings_from_fn(column_device_view const& d_c
   auto d_new_offsets = offsets_column->view().data<int32_t>();
 
   // Build chars column
-  cudf::size_type bytes =
-    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
+  auto bytes = cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column =
     cudf::strings::detail::create_chars_child_column(strings_count, null_count, bytes, mr, stream);
   auto chars_view = chars_column->mutable_view();
@@ -315,14 +313,10 @@ std::unique_ptr<column> slice_strings(
   CUDF_EXPECTS(is_fixed_width(starts_column.type()), "Positions values must be fixed width type.");
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto d_column       = *strings_column;
-
-  auto starts_iter = cudf::detail::indexalator_factory::make_input_iterator(starts_column);
-  auto stops_iter  = cudf::detail::indexalator_factory::make_input_iterator(stops_column);
-  // return cudf::type_dispatcher(starts_column.type(),
-  //                             compute_substrings{},
+  auto starts_iter    = cudf::detail::indexalator_factory::make_input_iterator(starts_column);
+  auto stops_iter     = cudf::detail::indexalator_factory::make_input_iterator(stops_column);
   return compute_substrings_from_fn(
-    d_column, strings.null_count(), starts_iter, stops_iter, mr, stream);
+    *strings_column, strings.null_count(), starts_iter, stops_iter, mr, stream);
 }
 
 template <typename DelimiterItrT>
