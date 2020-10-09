@@ -644,6 +644,7 @@ foreach(CUDF_HEADER IN LISTS CUDF_HEADERS)
 endforeach()
 
 add_library(cudf ${CUDF_SRC})
+set_target_properties(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
 add_library(cudf::cudf ALIAS cudf)
 add_dependencies(cudf ${CUDF_MODULES})
 add_dependencies(cudf stringify_run)
@@ -658,6 +659,10 @@ target_link_libraries(cudf cudf_base ${CUDF_MODULES} arrow arrow_cuda nvrtc ${CU
 # - install targets -------------------------------------------------------------------------------
 
 # install targets for cuDF
+install(TARGETS cudf_base
+        DESTINATION lib
+        COMPONENT cudf)
+
 install(TARGETS ${CUDF_MODULES}
         DESTINATION lib
         COMPONENT cudf)

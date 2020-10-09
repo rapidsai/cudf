@@ -80,3 +80,26 @@ cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
 
 __version__ = get_versions()["version"]
 del get_versions
+
+def get_libraries():
+    """
+    Return list of library names to include in the `libraries` argument for C++
+    or Cython extensions using cudf
+    """
+    return [
+        "cudf",
+        "cudf_base",
+        "cudf_ast",
+        "cudf_comms",
+        "cudf_hash",
+        "cudf_interop",
+        "cudf_io",
+        "cudf_join",
+        "cudf_merge",
+        "cudf_partitioning",
+        "cudf_reductions",
+        "cudf_replace",
+        "cudf_reshape",
+        "cudf_rolling",
+        "cudf_transpose"
+    ]
