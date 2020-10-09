@@ -105,9 +105,16 @@ std::vector<std::unique_ptr<column>> match_dictionaries(
  * found in the provided tables.
  *
  * The result includes a vector of new dictionary columns along with a
- * vector of table_views with appropriately updated column_views.
+ * vector of table_views with corresponding updated column_views.
+ * And any column_views in the input tables that are not dictionary type
+ * are simply copied.
  *
- * @param input Vector of cudf::table_views in which to match dictionary columns.
+ * Merging the dictionary keys also adjusts the indices appropriately in the
+ * output dictionary columns.
+ *
+ * Any null rows are left unchanged.
+ *
+ * @param input Vector of cudf::table_views that include dictionary columns to be matched.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New dictionary columns and updated cudf::table_views.
