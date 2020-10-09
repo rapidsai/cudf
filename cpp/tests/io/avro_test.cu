@@ -3,7 +3,6 @@
 #include <iterator>
 
 #include "avro_test.hpp"
-#include "gtest/gtest.h"
 
 class AvroReaderTest : public cudf::test::BaseFixture {
 };
@@ -84,7 +83,7 @@ TEST_F(AvroReaderTest, CanParseMultipleUnsignedInts)
 
 TEST_F(AvroReaderTest, CanParseStringLengthZero)
 {
-  auto input = std::vector<uint8_t>{0b00000000};
+  auto input = std::vector<uint8_t>{0b0000000'0};
 
   uint64_t result;
   auto position = cudf::io::avro::parse_string_length(input.begin(), input.end(), result);
@@ -95,7 +94,7 @@ TEST_F(AvroReaderTest, CanParseStringLengthZero)
 
 TEST_F(AvroReaderTest, CanParseStringLengthZeroWithFlagBit)
 {
-  auto input = std::vector<uint8_t>{0b00000001};
+  auto input = std::vector<uint8_t>{0b0001000'1};
 
   uint64_t result;
   auto position = cudf::io::avro::parse_string_length(input.begin(), input.end(), result);
@@ -106,7 +105,7 @@ TEST_F(AvroReaderTest, CanParseStringLengthZeroWithFlagBit)
 
 TEST_F(AvroReaderTest, CanParseStringLengthNonZero)
 {
-  auto input = std::vector<uint8_t>{0b00010110};
+  auto input = std::vector<uint8_t>{0b0001011'0};
 
   uint64_t result;
   auto position = cudf::io::avro::parse_string_length(input.begin(), input.end(), result);
@@ -127,7 +126,18 @@ TEST_F(AvroReaderTest, CanParseString)
   ASSERT_EQ(input.begin() + 12, position);
 }
 
-TEST_F(AvroReaderTest, CanParseAvroMetadataKvps)
+TEST_F(AvroReaderTest, CanParseStringEmpty)
+{
+  auto input = std::vector<uint8_t>{0b00000000, 'a', 'n', 'y'};
+
+  std::string result;
+  auto position = cudf::io::avro::parse_string(input.begin(), input.end(), result);
+
+  ASSERT_EQ("", result);
+  ASSERT_EQ(input.begin() + 1, position);
+}
+
+TEST_F(AvroReaderTest, CanParseAvroMetadataKvpsBlocks)
 {
   auto input = std::vector<uint8_t>{0b010,    // 2 key value pairs
                                     0b011'0,  // key str length 3
@@ -155,20 +165,17 @@ TEST_F(AvroReaderTest, CanParseAvroMetadataKvps)
 
   std::map<std::string, std::string> kvps;
 
-  cudf::io::avro::parse_avro_metadata_kvps(input.begin(),  //
-                                           input.end(),
-                                           kvps);
+  cudf::io::avro::parse_avro_metadata_kvps_blocks(input.begin(),  //
+                                                  input.end(),
+                                                  std::inserter(kvps, kvps.end()));
 
   EXPECT_EQ(static_cast<size_t>(2), kvps.size());
 
-  auto search_0 = kvps.find("abc");
-  auto search_1 = kvps.find("hijkl");
+  ASSERT_NE(kvps.end(), kvps.find("abc"));
+  ASSERT_NE(kvps.end(), kvps.find("hijkl"));
 
-  ASSERT_NE(kvps.end(), search_0);
-  ASSERT_NE(kvps.end(), search_1);
-
-  EXPECT_EQ("defg", search_0->second);
-  EXPECT_EQ("mnopqr", search_1->second);
+  EXPECT_EQ("defg", kvps["abc"]);
+  EXPECT_EQ("mnopqr", kvps["hijkl"]);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

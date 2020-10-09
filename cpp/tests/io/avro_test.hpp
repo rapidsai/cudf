@@ -8,11 +8,28 @@ namespace cudf {
 namespace io {
 namespace avro {
 
+enum class avro_compression_codec { null, deflate };
+
 struct avro_metadata {
   std::string codec;
 };
 
 constexpr uint64_t avro_magic = (('O' << 0) | ('b' << 8) | ('j' << 16) | (0x01 << 24));
+
+template <typename Iter>
+inline constexpr Iter read_avro_magic(Iter begin, Iter end, bool& result)
+{
+  uint32_t sig4 = 0;
+
+  sig4 |= *begin++ << 0;
+  sig4 |= *begin++ << 8;
+  sig4 |= *begin++ << 16;
+  sig4 |= *begin++ << 24;
+
+  result = sig4 == avro_magic;
+
+  return begin;
+}
 
 template <typename Iter>
 inline constexpr Iter parse_uint64_t(Iter begin, Iter end, uint64_t& result)
@@ -70,21 +87,6 @@ inline constexpr Iter parse_string(Iter begin, Iter end, std::string& result)
   return str_end;
 }
 
-template <typename Iter>
-inline constexpr Iter read_avro_magic(Iter begin, Iter end, bool& result)
-{
-  uint32_t sig4 = 0;
-
-  sig4 |= *begin++ << 0;
-  sig4 |= *begin++ << 8;
-  sig4 |= *begin++ << 16;
-  sig4 |= *begin++ << 24;
-
-  result = sig4 == avro_magic;
-
-  return begin;
-}
-
 struct avro_schema {
 };
 
@@ -94,11 +96,33 @@ inline constexpr Iter parse_avro_schema(Iter begin, Iter end, avro_schema& schem
   return end;
 }
 
+template <typename Iter, typename OutputIter>
+inline constexpr Iter parse_avro_metadata_syncmarker(Iter begin, Iter end, OutputIter output)
+{
+  for (auto i = 0; i < 16; i++) { *output++ = *begin++; }
+
+  return begin;
+}
+
 // TODO: try to make constexpr
-template <typename Iter>
-inline Iter parse_avro_metadata_kvps(Iter begin,
-                                     Iter end,
-                                     std::map<std::string, std::string>& result)
+template <typename Iter, typename OutputIter>
+inline Iter parse_avro_metadata_kvps(Iter begin, Iter end, uint32_t num_entries, OutputIter out)
+{
+  for (uint32_t i = 0; i < num_entries; i++) {
+    std::string key;
+    std::string value;
+    begin = parse_string(begin, end, key);
+    begin = parse_string(begin, end, value);
+
+    *out++ = {key, value};
+  }
+
+  return begin;
+}
+
+// TODO: try to make constexpr
+template <typename Iter, typename OutputIter>
+inline Iter parse_avro_metadata_kvps_blocks(Iter begin, Iter end, OutputIter out)
 {
   while (true) {
     uint64_t num_kvp = 0;
@@ -109,16 +133,7 @@ inline Iter parse_avro_metadata_kvps(Iter begin,
 
     if (num_kvp == 0) { break; }
 
-    for (uint32_t i = 0; i < num_kvp; i++) {
-      std::string key;
-      std::string value;
-      begin = parse_string(begin, end, key);
-      begin = parse_string(begin, end, value);
-
-      result.emplace(key, value);
-
-      continue;
-    }
+    begin = parse_avro_metadata_kvps(begin, end, num_kvp, out);
   }
 
   return begin;
