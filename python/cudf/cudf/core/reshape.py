@@ -237,9 +237,9 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 .to_frame()
                 .join(objs[1].to_frame(), on="index", how="inner")
             )
-            for i in range(2, len(objs)):
+            for obj in objs[2:]:
                 result = result.join(
-                    objs[i].to_frame(), on="index", how="inner"
+                    obj.to_frame(), on="index", how="inner"
                 )
             return result
 
