@@ -5,6 +5,7 @@
 ## Improvements
 
 - PR #6398 Remove function constructor macros in parquet reader
+- PR #6442 Remove deprecated `DataFrame.from_gpu_matrix`, `DataFrame.to_gpu_matrix`, `DataFrame.add_column` APIs and method parameters
 
 ## Bug Fixes
 
