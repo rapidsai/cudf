@@ -97,7 +97,7 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(
     bool has_children = false;
     for (size_t i = 0; i < node->children.size(); ++i) {
       if (node->children[i] != nullptr) {
-        // Update the children offset of teh parent node, unless at the root
+        // Update the children offset of the parent node, unless at the root
         if (idx >= 0 && nodes[idx].children_offset < 0) {
           nodes[idx].children_offset = static_cast<uint16_t>(nodes.size() - idx);
         }

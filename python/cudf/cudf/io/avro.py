@@ -8,7 +8,7 @@ def read_avro(
     filepath_or_buffer,
     engine="cudf",
     columns=None,
-    skip_rows=None,
+    skiprows=None,
     num_rows=None,
     **kwargs,
 ):
@@ -25,7 +25,7 @@ def read_avro(
     if engine == "cudf":
         return DataFrame._from_table(
             libcudf.avro.read_avro(
-                filepath_or_buffer, columns, skip_rows, num_rows
+                filepath_or_buffer, columns, skiprows, num_rows
             )
         )
     else:

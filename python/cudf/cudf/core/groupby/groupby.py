@@ -67,7 +67,7 @@ class GroupBy(Serializable):
             raise
 
     def __iter__(self):
-        group_names, offsets, grouped_keys, grouped_values = self._grouped()
+        group_names, offsets, _, grouped_values = self._grouped()
         if isinstance(group_names, cudf.Index):
             group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
@@ -193,7 +193,7 @@ class GroupBy(Serializable):
         result.index.names = self.grouping.names
 
         # copy categorical information from keys to the result index:
-        result.index._copy_categories(self.grouping.keys)
+        result.index._postprocess_columns(self.grouping.keys)
         result._index = cudf.core.index.Index._from_table(result._index)
 
         if not self._as_index:
@@ -258,7 +258,7 @@ class GroupBy(Serializable):
 
         grouped_keys = cudf.Index._from_table(grouped_keys)
         grouped_values = self.obj.__class__._from_table(grouped_values)
-        grouped_values._copy_categories(self.obj)
+        grouped_values._postprocess_columns(self.obj)
         group_names = grouped_keys.unique()
         return (group_names, offsets, grouped_keys, grouped_values)
 

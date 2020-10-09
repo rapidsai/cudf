@@ -88,5 +88,33 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_colu
                                                std::unique_ptr<column> indices_column,
                                                rmm::device_buffer&& null_mask,
                                                size_type null_count);
+
+/**
+ * @brief Construct a dictionary column by taking ownership of the provided keys
+ * and indices columns.
+ *
+ * The `keys_column` must contain no nulls and is assumed to have elements
+ * that are unique and are in a strict, total order. Meaning, `keys_column[i]`
+ * is ordered before `keys_column[i+1]` for all `i in [0,n-1)` where `n` is the
+ * number of keys.
+ *
+ * The `indices_column` can be any integer type and should contain the null-mask
+ * to be used for the output column.
+ * The indices values must be in the range [0,keys_column.size()).
+ *
+ * @throw cudf::logic_error if keys_column contains nulls
+ *
+ * @param keys Column of unique, ordered values to use as the new dictionary column's keys.
+ * @param indices Indices values and null-mask to use for the new dictionary column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return New dictionary column.
+ */
+std::unique_ptr<column> make_dictionary_column(
+  std::unique_ptr<column> keys_column,
+  std::unique_ptr<column> indices_column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
+
 /** @} */  // end of group
 }  // namespace cudf

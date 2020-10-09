@@ -33,6 +33,14 @@ class CudfKafkaClient:
 
         self.kafka_meta_client = KafkaDatasource(self.kafka_confs)
 
+    def list_topics(self):
+
+        """
+        List the topics associated with the underlying Kafka Broker connection.
+        """
+
+        return self.kafka_meta_client.list_topics()
+
     def unsubscribe(self):
 
         """
