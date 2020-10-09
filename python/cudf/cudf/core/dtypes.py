@@ -117,8 +117,8 @@ class ListDtype(ExtensionDtype):
         if isinstance(element_type, ListDtype):
             self._typ = pa.list_(element_type._typ)
         else:
-            element_type = cudf.utils.dtypes.np_to_pa_dtype(
-                np.dtype(element_type)
+            element_type = cudf.utils.dtypes.cudf_dtype_to_pa_type(
+                element_type
             )
             self._typ = pa.list_(element_type)
 
