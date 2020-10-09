@@ -117,12 +117,12 @@ struct PageInfo {
   // - In the case of a nested schema, you have to decode the repetition and definition
   //   levels to extract actual column values
   int32_t num_input_values;
-  int32_t chunk_row;   // starting row of this page relative to the start of the chunk
-  int32_t num_rows;    // number of rows in this page
-  int32_t chunk_idx;   // column chunk this page belongs to
-  int32_t column_idx;  // column index this page belongs to
-  uint8_t flags;       // PAGEINFO_FLAGS_XXX
-  Encoding encoding;   // Encoding for data or dictionary page
+  int32_t chunk_row;       // starting row of this page relative to the start of the chunk
+  int32_t num_rows;        // number of rows in this page
+  int32_t chunk_idx;       // column chunk this page belongs to
+  int32_t src_col_schema;  // schema index of this column
+  uint8_t flags;           // PAGEINFO_FLAGS_XXX
+  Encoding encoding;       // Encoding for data or dictionary page
   Encoding definition_level_encoding;  // Encoding used for definition levels (data page)
   Encoding repetition_level_encoding;  // Encoding used for repetition levels (data page)
 

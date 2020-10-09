@@ -1125,7 +1125,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;
   buffer_.resize(0);
-  fendr.footer_len = static_cast<uint32_t>(cpw.write(&state.md));
+  fendr.footer_len = static_cast<uint32_t>(cpw.write(state.md));
   fendr.magic      = parquet_magic;
   out_sink_->host_write(buffer_.data(), buffer_.size());
   out_sink_->host_write(&fendr, sizeof(fendr));
@@ -1230,7 +1230,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
   output.insert(output.end(),
                 reinterpret_cast<const uint8_t *>(&fhdr),
                 reinterpret_cast<const uint8_t *>(&fhdr) + sizeof(fhdr));
-  fendr.footer_len = static_cast<uint32_t>(cpw.write(&md));
+  fendr.footer_len = static_cast<uint32_t>(cpw.write(md));
   fendr.magic      = parquet_magic;
   output.insert(output.end(),
                 reinterpret_cast<const uint8_t *>(&fendr),
