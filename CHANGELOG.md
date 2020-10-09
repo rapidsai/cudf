@@ -134,9 +134,9 @@
 - PR #6113 Fix to_timestamp to initialize default year to 1970
 - PR #6110 Handle `format` for other input types in `to_datetime`
 - PR #6118 Fix Java build for ORC read args change and update package version
-- PR #XXXX Fix CUDA C/C++ debug builds
 - PR #6121 Replace calls to get_default_resource with get_current_device_resource
 - PR #6128 Add support for numpy RandomState handling in `sample`
+- PR #6134 Fix CUDA C/C++ debug builds
 - PR #6137 Fix issue where `np.nan` is being return instead of `NAT` for datetime/duration types
 - PR #6298 Fix gcc-9 compilation error in dictionary/remove_keys.cu
 - PR #6172 Fix slice issue with empty column
