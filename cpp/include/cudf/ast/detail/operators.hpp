@@ -16,11 +16,11 @@
 #pragma once
 
 #include <cmath>
+#include <cuda/std/type_traits>
 #include <cudf/ast/operators.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <simt/type_traits>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -33,10 +33,10 @@ namespace detail {
 
 // Traits for valid operator / type combinations
 template <typename Op, typename LHS, typename RHS>
-constexpr bool is_valid_binary_op = simt::std::is_invocable<Op, LHS, RHS>::value;
+constexpr bool is_valid_binary_op = cuda::std::is_invocable<Op, LHS, RHS>::value;
 
 template <typename Op, typename T>
-constexpr bool is_valid_unary_op = simt::std::is_invocable<Op, T>::value;
+constexpr bool is_valid_unary_op = cuda::std::is_invocable<Op, T>::value;
 
 /**
  * @brief Operator dispatcher
@@ -983,7 +983,7 @@ struct return_type_functor {
             std::enable_if_t<is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type& result)
   {
-    using Out = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
+    using Out = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
     result    = cudf::data_type(cudf::type_to_id<Out>());
   }
 
@@ -1012,7 +1012,7 @@ struct return_type_functor {
             std::enable_if_t<is_valid_unary_op<OperatorFunctor, T>>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE void operator()(cudf::data_type& result)
   {
-    using Out = simt::std::invoke_result_t<OperatorFunctor, T>;
+    using Out = cuda::std::invoke_result_t<OperatorFunctor, T>;
     result    = cudf::data_type(cudf::type_to_id<Out>());
   }
 
