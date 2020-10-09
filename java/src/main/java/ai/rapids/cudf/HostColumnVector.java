@@ -849,6 +849,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
      * @param index the row index at which the null is marked
      */
     private void setNullAt(int index) {
+      assert index < rows : "Index for null value should fit the column with " + rows + " rows";
       nullCount += BitVectorHelper.setNullAt(valid, index);
     }
 
