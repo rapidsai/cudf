@@ -3742,6 +3742,14 @@ class DataFrame(Frame, Serializable):
             keep_index=not ignore_index,
         )
 
+
+    def agg(self, aggs):
+        result = cudf.DataFrame()
+        for agg in aggs:
+            result[agg] = getattr(self,agg)()
+        return result
+
+
     def nlargest(self, n, columns, keep="first"):
         """Get the rows of the DataFrame sorted by the n largest value of *columns*
 

@@ -7561,3 +7561,13 @@ def test_equals_dtypes():
     expect = lhs.to_pandas().equals(rhs.to_pandas())
 
     assert_eq(expect, got)
+
+
+def test_agg_for_dataframes():
+    pdf = pd.DataFrame({"a": [3,5,6]})
+    gdf = gd.DataFrame({"a": [3,5,6]})
+
+    got = pdf.agg("sum")
+    expect = gdf.agg("sum")
+
+    assert_eq(expect, got)
