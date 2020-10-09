@@ -87,6 +87,37 @@ elseif(DEFINED ENV{CONDA_PREFIX})
     message(STATUS "Conda environment detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
 endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 
+
+###################################################################################################
+# - copy libcu++ ------------------------------------------------------------------------------------
+
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcudacxx")
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcxx/include")
+
+file(INSTALL ${LIBCUDACXX_INCLUDE_DIR} DESTINATION ${CMAKE_BINARY_DIR}/include/libcudacxx/)
+file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION ${CMAKE_BINARY_DIR}/include/libcxx/include/)
+
+
+###################################################################################################
+# - jitify ----------------------------------------------------------------------------------------
+
+option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
+if(JITIFY_USE_CACHE)
+    message(STATUS "Using file cache for JIT compiled kernels")
+    add_definitions("-DJITIFY_USE_CACHE -DCUDF_VERSION=${CMAKE_PROJECT_VERSION}")
+endif(JITIFY_USE_CACHE)
+
+###################################################################################################
+# - per-thread default stream option --------------------------------------------------------------
+# This needs to be defined first so tests and benchmarks can inherit it.
+
+option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
+if(PER_THREAD_DEFAULT_STREAM)
+    message(STATUS "Using per-thread default stream")
+    add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
+endif(PER_THREAD_DEFAULT_STREAM)
+
+
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
 
@@ -128,15 +159,6 @@ if(ARROW_INCLUDE_DIR AND ARROW_LIB AND ARROW_CUDA_LIB)
   set_target_properties(arrow PROPERTIES IMPORTED_LOCATION ${ARROW_LIB})
   set_target_properties(arrow_cuda PROPERTIES IMPORTED_LOCATION ${ARROW_CUDA_LIB})
 endif(ARROW_INCLUDE_DIR AND ARROW_LIB AND ARROW_CUDA_LIB)
-
-###################################################################################################
-# - copy libcu++ ------------------------------------------------------------------------------------
-
-file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcudacxx")
-file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcxx/include")
-
-file(INSTALL ${LIBCUDACXX_INCLUDE_DIR} DESTINATION ${CMAKE_BINARY_DIR}/include/libcudacxx/)
-file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION ${CMAKE_BINARY_DIR}/include/libcxx/include/)
 
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
@@ -213,25 +235,6 @@ CPMFindPackage(
 
 message(STATUS "DLPACK: dlpack_SOURCE_DIR set to ${dlpack_SOURCE_DIR}")
 
-
-###################################################################################################
-# - jitify ----------------------------------------------------------------------------------------
-
-option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
-if(JITIFY_USE_CACHE)
-    message(STATUS "Using file cache for JIT compiled kernels")
-    add_definitions("-DJITIFY_USE_CACHE -DCUDF_VERSION=${CMAKE_PROJECT_VERSION}")
-endif(JITIFY_USE_CACHE)
-
-###################################################################################################
-# - per-thread default stream option --------------------------------------------------------------
-# This needs to be defined first so tests and benchmarks can inherit it.
-
-option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
-if(PER_THREAD_DEFAULT_STREAM)
-    message(STATUS "Using per-thread default stream")
-    add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
-endif(PER_THREAD_DEFAULT_STREAM)
 
 ###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
