@@ -30,6 +30,7 @@ requirements:
     - libcudf {{ version }}
     - rmm {{ minor_version }}
     - cudatoolkit {{ cuda_version }}
+    - nvtx >=0.2.1
   run:
     - python
     - pandas >=1.0,<1.2.0dev0
