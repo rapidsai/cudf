@@ -1,24 +1,3 @@
-include(FetchContent)
-
-###################################################################################################
-# - thrust/cub ------------------------------------------------------------------------------------
-
-message("Fetching Thrust")
-
-CPMFindPackage(
-  NAME Thrust
-  GITHUB_REPOSITORY NVIDIA/thrust
-  GIT_TAG 1.10.0
-  VERSION 1.10.0
-  GIT_SHALLOW TRUE
-  OPTIONS
-    # If there is no pre-installed thrust we can use, we'll install our fetched copy
-    # together with CUDF
-    "THRUST_INSTALL TRUE"
-  )
-
-thrust_create_target(cudf::Thrust FROM_OPTIONS)
-
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
 

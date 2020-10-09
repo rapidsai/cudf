@@ -104,11 +104,8 @@ endif(PER_THREAD_DEFAULT_STREAM)
 # - third party dependencies-----------------------------------------------------------------------
 # add third party dependencies using CMake FetchContent
 
+# jitify and libcudacxx are not CPM compatible yet
 add_subdirectory(thirdparty)
-
-###################################################################################################
-# - include paths ---------------------------------------------------------------------------------
-
 include(cmake/CUDF_Thirdparty.cmake)
 
 ###################################################################################################
