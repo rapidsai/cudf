@@ -1,12 +1,40 @@
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
 
-option(ARROW_STATIC_LIB "Build and statically link with Arrow libraries" OFF)
-
 if(ARROW_STATIC_LIB)
   message(STATUS "BUILDING ARROW")
-  include(ConfigureArrow)
-
+  CPMFindPackage(
+    NAME Arrow
+    GITHUB_REPOSITORY google/googletest
+    GIT_TAG apache-arrow-1.0.1
+    VERSION 1.0.1
+    GIT_SHALLOW TRUE
+    OPTIONS
+      "ARROW_WITH_LZ4 OFF"
+      "ARROW_WITH_ZSTD OFF"
+      "ARROW_WITH_BROTLI OFF"
+      "ARROW_WITH_SNAPPY OFF"
+      "ARROW_WITH_ZLIB OFF"
+      "ARROW_BUILD_STATIC ON"
+      "ARROW_BUILD_SHARED OFF"
+      "ARROW_BOOST_USE_SHARED OFF"
+      "ARROW_BUILD_TESTS OFF"
+      "ARROW_TEST_MEMCHECK OFF"
+      "ARROW_BUILD_BENCHMARKS OFF"
+      "ARROW_IPC ON"
+      "ARROW_FLIGHT OFF"
+      "ARROW_COMPUTE OFF"
+      "ARROW_CUDA ON"
+      "ARROW_JEMALLOC OFF"
+      "ARROW_BOOST_VENDORED OFF"
+      "ARROW_PYTHON OFF"
+      "ARROW_USE_GLOG OFF"
+      "ARROW_DATASET ON"
+      "ARROW_BUILD_UTILITIES OFF"
+      "ARROW_HDFS OFF"
+      "CMAKE_VERBOSE_MAKEFILE ON"
+  )
+  
   if(ARROW_FOUND)
     message(STATUS "Apache Arrow found in ${ARROW_INCLUDE_DIR}")
   else()

@@ -22,6 +22,11 @@ if(NOT CMAKE_CUDA_COMPILER)
 endif(NOT CMAKE_CUDA_COMPILER)
 
 ###################################################################################################
+# - CPM options --------------------------------------------------------------------------------
+
+include(cmake/CPM.cmake)
+
+###################################################################################################
 # - build type ------------------------------------------------------------------------------------
 
 # Set a default build type if none was specified
@@ -41,10 +46,6 @@ endif(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 
 include(cmake/CUDF_CompilerOptions.cmake)
 
-###################################################################################################
-# - CPM options --------------------------------------------------------------------------------
-
-include(cmake/CPM.cmake)
 
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
@@ -54,12 +55,6 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODUL
 include(FeatureSummary)
 include(CheckIncludeFiles)
 include(CheckLibraryExists)
-
-###################################################################################################
-# - third party dependencies-----------------------------------------------------------------------
-# add third party dependencies using CMake FetchContent
-
-add_subdirectory(thirdparty)
 
 ###################################################################################################
 # - conda environment -----------------------------------------------------------------------------
@@ -104,6 +99,12 @@ if(PER_THREAD_DEFAULT_STREAM)
     message(STATUS "Using per-thread default stream")
     add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
 endif(PER_THREAD_DEFAULT_STREAM)
+
+###################################################################################################
+# - third party dependencies-----------------------------------------------------------------------
+# add third party dependencies using CMake FetchContent
+
+add_subdirectory(thirdparty)
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
