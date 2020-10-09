@@ -366,7 +366,6 @@ if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
 endif(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
 
 include_directories("${CMAKE_BINARY_DIR}/include"
-                    "${CMAKE_BINARY_DIR}/include/jit"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${ARROW_INCLUDE_DIR}"
@@ -408,7 +407,7 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                    DEPENDS stringify
                    OUTPUT ${CMAKE_BINARY_DIR}/include/jit/types.h.jit
                           ${CMAKE_BINARY_DIR}/include/jit/types.hpp.jit
-                          ${CMAKE_BINARY_DIR}/include/bit.hpp.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/bit.hpp.jit
                           ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
                           ${CMAKE_BINARY_DIR}/include/jit/fixed_point.hpp.jit
                           ${CMAKE_BINARY_DIR}/include/jit/durations.hpp.jit
@@ -462,7 +461,7 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
                    # stringified headers are placed underneath the bin include jit directory and end in ".jit"
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/jit/types.h.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.hpp > ${CMAKE_BINARY_DIR}/include/jit/types.hpp.jit
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/utilities/bit.hpp > ${CMAKE_BINARY_DIR}/include/bit.hpp.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/utilities/bit.hpp > ${CMAKE_BINARY_DIR}/include/jit/bit.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify ../src/rolling/rolling_jit_detail.hpp > ${CMAKE_BINARY_DIR}/include/rolling_jit_detail.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/wrappers/timestamps.hpp > ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/fixed_point/fixed_point.hpp > ${CMAKE_BINARY_DIR}/include/jit/fixed_point.hpp.jit
@@ -492,7 +491,7 @@ add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
 add_custom_target(stringify_run DEPENDS
                   ${CMAKE_BINARY_DIR}/include/jit/types.h.jit
                   ${CMAKE_BINARY_DIR}/include/jit/types.hpp.jit
-                  ${CMAKE_BINARY_DIR}/include/bit.hpp.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/bit.hpp.jit
                   ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
                   ${CMAKE_BINARY_DIR}/include/jit/fixed_point.hpp.jit
                   ${CMAKE_BINARY_DIR}/include/jit/durations.hpp.jit
@@ -617,6 +616,7 @@ endforeach()
 
 add_library("${CUDF_NAMESPACE}_base" ${CUDF_BASE_SRC})
 add_library("${CUDF_NAMESPACE}::base" ALIAS "${CUDF_NAMESPACE}_base")
+add_dependencies("${CUDF_NAMESPACE}_base" stringify_run)
 
 foreach(CUDF_MODULE_DIR IN LISTS CUDF_MODULE_LIST)
     string(  # replace "/" with ";" to create a list of directory leaves for the module directory
