@@ -630,6 +630,7 @@ __global__ void detect_data_types_kernel(ParseOptions const opts,
     int decimal_count  = 0;
     int slash_count    = 0;
     int dash_count     = 0;
+    int plus_count     = 0;
     int colon_count    = 0;
     int exponent_count = 0;
     int other_count    = 0;
@@ -647,6 +648,7 @@ __global__ void detect_data_types_kernel(ParseOptions const opts,
       switch (*pos) {
         case '.': decimal_count++; break;
         case '-': dash_count++; break;
+        case '+': plus_count++; break;
         case '/': slash_count++; break;
         case ':': colon_count++; break;
         case 'e':
@@ -660,15 +662,22 @@ __global__ void detect_data_types_kernel(ParseOptions const opts,
     // Integers have to have the length of the string
     int int_req_number_cnt = value_len;
     // Off by one if they start with a minus sign
-    if (*desc.value_begin == '-' && value_len > 1) { --int_req_number_cnt; }
+    if ((*desc.value_begin == '-' || *desc.value_begin == '+') && value_len > 1) {
+      --int_req_number_cnt;
+    }
     // Off by one if they are a hexadecimal number
     if (maybe_hex) { --int_req_number_cnt; }
     if (serializedTrieContains(opts.trueValuesTrie, desc.value_begin, value_len) ||
         serializedTrieContains(opts.falseValuesTrie, desc.value_begin, value_len)) {
       atomicAdd(&column_infos[desc.column].bool_count, 1);
     } else if (digit_count == int_req_number_cnt) {
-      atomicAdd(&column_infos[desc.column].int_count, 1);
-    } else if (is_like_float(value_len, digit_count, decimal_count, dash_count, exponent_count)) {
+      if (*desc.value_begin == '-') {
+        atomicAdd(&column_infos[desc.column].int_count, 1);
+      } else {
+        atomicAdd(&column_infos[desc.column].uint_count, 1);
+      }
+    } else if (is_like_float(
+                 value_len, digit_count, decimal_count, dash_count + plus_count, exponent_count)) {
       atomicAdd(&column_infos[desc.column].float_count, 1);
     }
     // A date-time field cannot have more than 3 non-special characters

@@ -28,6 +28,7 @@ struct column_info {
   cudf::size_type datetime_count;
   cudf::size_type string_count;
   cudf::size_type int_count;
+  cudf::size_type uint_count;
   cudf::size_type bool_count;
   cudf::size_type null_count;
 };

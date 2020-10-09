@@ -524,10 +524,13 @@ void reader::impl::set_data_types(cudaStream_t stream)
         return type_id::STRING;
       } else if (cinfo.datetime_count > 0) {
         return type_id::TIMESTAMP_MILLISECONDS;
-      } else if (cinfo.float_count > 0 || (cinfo.int_count > 0 && cinfo.null_count > 0)) {
+      } else if (cinfo.float_count > 0 ||
+                 ((cinfo.int_count + cinfo.uint_count) > 0 && cinfo.null_count > 0)) {
         return type_id::FLOAT64;
       } else if (cinfo.int_count > 0) {
         return type_id::INT64;
+      } else if (cinfo.uint_count > 0) {
+        return type_id::UINT64;
       } else if (cinfo.bool_count > 0) {
         return type_id::BOOL8;
       } else {

@@ -545,8 +545,7 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
       CUDA_TRY(cudaStreamSynchronize(stream));
 
       for (int col = 0; col < num_active_cols_; col++) {
-        unsigned long long countInt = column_stats[col].countInt8 + column_stats[col].countInt16 +
-                                      column_stats[col].countInt32 + column_stats[col].countInt64;
+        unsigned long long countInt = column_stats[col].countInt64 + column_stats[col].countUInt64;
 
         if (column_stats[col].countNULL == num_records_) {
           // Entire column is NULL; allocate the smallest amount of memory
@@ -564,11 +563,11 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
           // PANDAS which states that a column of integers with
           // a single NULL record need to be treated as floats.
           dtypes.emplace_back(cudf::type_id::FLOAT64);
-        } else if (column_stats[col].negative_integer_instance) {
-          // All other integers are stored as 64-bit to conform to PANDAS
+        } else if (column_stats[col].countInt64 != 0) {
+          // Integers are stored as 64-bit to conform to PANDAS
           dtypes.emplace_back(cudf::type_id::INT64);
         } else {
-          // All other integers are stored as 64-bit to conform to PANDAS
+          // Integers are stored as 64-bit to conform to PANDAS
           dtypes.emplace_back(cudf::type_id::UINT64);
         }
       }
