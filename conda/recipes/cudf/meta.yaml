@@ -30,7 +30,6 @@ requirements:
     - libcudf {{ version }}
     - rmm {{ minor_version }}
     - cudatoolkit {{ cuda_version }}
-    - nvtx >=0.2.1
   run:
     - python
     - pandas >=1.0,<1.2.0dev0
@@ -42,6 +41,7 @@ requirements:
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec>=0.6.0
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
+    - nvtx >=0.2.1
 
 test:
   requires:
