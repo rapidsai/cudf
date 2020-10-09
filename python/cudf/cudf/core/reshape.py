@@ -238,9 +238,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 .join(objs[1].to_frame(), on="index", how="inner")
             )
             for obj in objs[2:]:
-                result = result.join(
-                    obj.to_frame(), on="index", how="inner"
-                )
+                result = result.join(obj.to_frame(), on="index", how="inner")
             return result
 
         elif join == "inner" and typ is cudf.DataFrame:

@@ -239,8 +239,18 @@ class Frame(libcudf.table.Table):
         if join == "inner":
             names = [name for obj in objs for name in obj._column_names]
             names = OrderedDict.fromkeys(names).keys()
-            names_not_in_all = [name for name in names for obj in objs if name not in obj._column_names]
-            obj = [obj.drop(columns=[x]) for obj in objs for x in names_not_in_all if x in obj._column_names ]
+            names_not_in_all = [
+                name
+                for name in names
+                for obj in objs
+                if name not in obj._column_names
+            ]
+            obj = [
+                obj.drop(columns=[x])
+                for obj in objs
+                for x in names_not_in_all
+                if x in obj._column_names
+            ]
             names = [x for x in names if x not in names_not_in_all]
 
         elif join == "outer":
