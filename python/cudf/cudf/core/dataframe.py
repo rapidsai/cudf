@@ -5438,7 +5438,7 @@ class DataFrame(Frame, Serializable):
         coerced = filtered.astype(common_dtype)
         if is_pure_dt:
             # Further convert into cupy friendly types
-            coerced = coerced.astype("int64")
+            coerced = coerced.astype("int64", copy=False)
         return coerced, mask, common_dtype
 
     def count(self, axis=0, level=None, numeric_only=False, **kwargs):
