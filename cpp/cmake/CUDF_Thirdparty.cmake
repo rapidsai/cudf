@@ -1,17 +1,4 @@
-###################################################################################################
-# - conda environment -----------------------------------------------------------------------------
 
-if("$ENV{CONDA_BUILD}" STREQUAL "1")
-    set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{BUILD_PREFIX};$ENV{PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
-    set(CONDA_INCLUDE_DIRS "$ENV{BUILD_PREFIX}/include" "$ENV{PREFIX}/include")
-    set(CONDA_LINK_DIRS "$ENV{BUILD_PREFIX}/lib" "$ENV{PREFIX}/lib")
-    message(STATUS "Conda build detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
-elseif(DEFINED ENV{CONDA_PREFIX})
-    set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{CONDA_PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
-    set(CONDA_INCLUDE_DIRS "$ENV{CONDA_PREFIX}/include")
-    set(CONDA_LINK_DIRS "$ENV{CONDA_PREFIX}/lib")
-    message(STATUS "Conda environment detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
-endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
@@ -54,7 +41,6 @@ if(ARROW_INCLUDE_DIR AND ARROW_LIB AND ARROW_CUDA_LIB)
   set_target_properties(arrow PROPERTIES IMPORTED_LOCATION ${ARROW_LIB})
   set_target_properties(arrow_cuda PROPERTIES IMPORTED_LOCATION ${ARROW_CUDA_LIB})
 endif(ARROW_INCLUDE_DIR AND ARROW_LIB AND ARROW_CUDA_LIB)
-
 
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
@@ -131,10 +117,12 @@ CPMFindPackage(
 
 message(STATUS "DLPACK: dlpack_SOURCE_DIR set to ${dlpack_SOURCE_DIR}")
 
+
 ###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
+
   CPMFindPackage(
     NAME GTEST
     GITHUB_REPOSITORY google/googletest
@@ -145,23 +133,20 @@ if(BUILD_TESTS)
       "gtest_force_shared_crt"
   )
   enable_testing()
-  set(GTEST_LIBRARY gtest gtest_main gmock)
+  
+  include_directories("${gtest_SOURCE_DIR}/include"
+                      "${gmock_SOURCE_DIR}/include")
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
-
-  if (GTest_ADDED)
-    add_library(GTest::gtest ALIAS gtest)
-    add_library(GTest::gmock ALIAS gmock)
-    add_library(GTest::gtest_main ALIAS gtest_main)
-    add_library(GTest::gmock_main ALIAS gmock_main)
-  endif()
-
-  message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 endif(BUILD_TESTS)
+
+
+message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 
 ###################################################################################################
 # - add google benchmark --------------------------------------------------------------------------
 
 if(BUILD_BENCHMARKS)
+
   CPMFindPackage(
     NAME benchmark
     GITHUB_REPOSITORY google/benchmark
@@ -171,9 +156,13 @@ if(BUILD_BENCHMARKS)
     # The REGEX feature test fails when gbench's cmake is run under CPM because it doesn't assume C++11
     # Additionally, attempting to set the CMAKE_CXX_VERSION here doesn't propogate to the feature test build
     # Therefore, we just disable the feature test and assume platforms we care about have a regex impl available
-    "RUN_HAVE_GNU_POSIX_REGEX 0" 
+    "RUN_HAVE_GNU_POSIX_REGEX 0" #
   )
-  set(benchmark_LIBRARY benchmark)
+
+  include_directories("${benchmark_INCLUDE_DIR}")
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/benchmarks)
-  message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
-endif(BUILD_BENCHMARKS)
+
+  endif(BUILD_BENCHMARKS)
+
+message(STATUS "benchmark_SOURCE_DIR: ${benchmark_SOURCE_DIR}")
+message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
