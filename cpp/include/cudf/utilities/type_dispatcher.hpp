@@ -115,7 +115,8 @@ using device_storage_type_t =
 template <typename T>
 bool type_id_matches_device_storage_type(type_id const& id)
 {
-  return id == type_to_id<device_storage_type_t<T>>() || id == type_to_id<T>();
+  return (id == type_id::DECIMAL32 && std::is_same<T, int32_t>::value) ||
+         (id == type_id::DECIMAL64 && std::is_same<T, int64_t>::value) || id == type_to_id<T>();
 }
 
 /**
