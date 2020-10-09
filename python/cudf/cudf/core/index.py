@@ -1448,6 +1448,8 @@ class Index(Frame, Serializable):
         else:
             return as_index(table)
 
+    _accessors = set()
+
 
 class RangeIndex(Index):
     """

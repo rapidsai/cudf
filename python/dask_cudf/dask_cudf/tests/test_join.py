@@ -272,7 +272,7 @@ def test_indexed_join(how):
     d = g_left.merge(g_right, left_index=True, right_index=True, how=how)
     dg = dg_left.merge(dg_right, left_index=True, right_index=True, how=how)
 
-    # occassionally order is not correct (possibly do to hashing in the merge)
+    # occasionally order is not correct (possibly do to hashing in the merge)
     d = d.sort_values("x")  # index is preserved
     dg = dg.sort_values(
         "x"

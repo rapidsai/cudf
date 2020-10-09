@@ -186,6 +186,9 @@ class Series(Frame, Serializable):
 
         if not isinstance(data, column.ColumnBase):
             data = column.as_column(data, nan_as_null=nan_as_null, dtype=dtype)
+        else:
+            if dtype is not None:
+                data = data.astype(dtype)
 
         if index is not None and not isinstance(index, Index):
             index = as_index(index)
@@ -974,7 +977,7 @@ class Series(Frame, Serializable):
         return self.to_string()
 
     def __repr__(self):
-        width, height = get_terminal_size()
+        _, height = get_terminal_size()
         max_rows = (
             height
             if get_option("display.max_rows") == 0
@@ -4014,18 +4017,12 @@ class Series(Frame, Serializable):
         group_keys=True,
         as_index=None,
         dropna=True,
-        method=None,
     ):
         if group_keys is not True:
             raise NotImplementedError(
                 "The group_keys keyword is not yet implemented"
             )
         else:
-            if method is not None:
-                warnings.warn(
-                    "The 'method' argument is deprecated and will be unused",
-                    DeprecationWarning,
-                )
             return SeriesGroupBy(
                 self, by=by, level=level, dropna=dropna, sort=sort
             )
@@ -4258,6 +4255,8 @@ class Series(Frame, Serializable):
         StringIndex(['a' 'b' 'c'], dtype='object')
         """
         return self.index
+
+    _accessors = set()
 
 
 truediv_int_dtype_corrections = {

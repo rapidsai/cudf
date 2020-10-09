@@ -35,6 +35,7 @@ from cudf.utils.dtypes import (
     is_numerical_dtype,
     is_scalar,
     is_string_dtype,
+    is_struct_dtype,
     min_signed_type,
     min_unsigned_type,
     np_to_pa_dtype,
@@ -312,30 +313,14 @@ class ColumnBase(Column, Serializable):
             codes = self.codes.astype(signed_type)
             categories = self.categories
 
-            out_indices = libcudf.interop.to_arrow(
-                libcudf.table.Table(
-                    cudf.core.column_accessor.ColumnAccessor({"None": codes})
-                ),
-                ["None"],
-                keep_index=False,
-            )
-            out_dictionary = libcudf.interop.to_arrow(
-                libcudf.table.Table(
-                    cudf.core.column_accessor.ColumnAccessor(
-                        {"None": categories}
-                    )
-                ),
-                ["None"],
-                keep_index=False,
-            )
+            out_indices = codes.to_arrow()
+            out_dictionary = categories.to_arrow()
 
             return pa.DictionaryArray.from_arrays(
-                out_indices["None"].chunk(0),
-                out_dictionary["None"].chunk(0),
-                ordered=self.ordered,
+                out_indices, out_dictionary, ordered=self.ordered,
             )
 
-        elif isinstance(self, cudf.core.column.StringColumn) and (
+        if isinstance(self, cudf.core.column.StringColumn) and (
             self.null_count == len(self)
         ):
             return pa.NullArray.from_buffers(
@@ -406,13 +391,17 @@ class ColumnBase(Column, Serializable):
                 size=codes.size,
                 ordered=array.type.ordered,
             )
+        elif isinstance(array.type, pa.StructType):
+            return cudf.core.column.StructColumn.from_arrow(array)
 
         return libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
         ]
 
     def _get_mask_as_column(self):
-        return libcudf.transform.mask_to_bools(self)
+        return libcudf.transform.mask_to_bools(
+            self.base_mask, self.offset, self.offset + len(self)
+        )
 
     def _memory_usage(self, **kwargs):
         return self.__sizeof__()
@@ -1413,6 +1402,15 @@ def build_column(
             dtype=dtype,
             mask=mask,
             offset=offset,
+            null_count=null_count,
+            children=children,
+        )
+    elif is_struct_dtype(dtype):
+        return cudf.core.column.StructColumn(
+            data=data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
             null_count=null_count,
             children=children,
         )

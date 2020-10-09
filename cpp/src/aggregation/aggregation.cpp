@@ -121,6 +121,16 @@ std::unique_ptr<aggregation> make_collect_aggregation()
 {
   return std::make_unique<aggregation>(aggregation::COLLECT);
 }
+/// Factory to create a LAG aggregation
+std::unique_ptr<aggregation> make_lag_aggregation(size_type offset)
+{
+  return std::make_unique<cudf::detail::lead_lag_aggregation>(aggregation::LAG, offset);
+}
+/// Factory to create a LEAD aggregation
+std::unique_ptr<aggregation> make_lead_aggregation(size_type offset)
+{
+  return std::make_unique<cudf::detail::lead_lag_aggregation>(aggregation::LEAD, offset);
+}
 /// Factory to create a UDF aggregation
 std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
                                                   std::string const& user_defined_aggregator,

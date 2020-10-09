@@ -424,9 +424,16 @@ public final class Table implements AutoCloseable {
   private static native long[] groupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
                                                 long[] aggInstances, boolean ignoreNullKeys) throws CudfException;
 
-  private static native long[] rollingWindowAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
-                                                      long[] aggInstances, int[] minPeriods, int[] preceding, int[] following,
-                                                      boolean ignoreNullKeys) throws CudfException;
+  private static native long[] rollingWindowAggregate(
+      long inputTable,
+      int[] keyIndices,
+      long[] defaultOutputs,
+      int[] aggColumnsIndices,
+      long[] aggInstances,
+      int[] minPeriods,
+      int[] preceding,
+      int[] following,
+      boolean ignoreNullKeys) throws CudfException;
 
   private static native long[] timeRangeRollingWindowAggregate(long inputTable, int[] keyIndices, int[] timestampIndices, boolean[] isTimesampAscending,
                                                                int[] aggColumnsIndices, long[] aggInstances, int[] minPeriods,
@@ -1871,6 +1878,7 @@ public final class Table implements AutoCloseable {
         int[] aggPrecedingWindows = new int[totalOps];
         int[] aggFollowingWindows = new int[totalOps];
         int[] aggMinPeriods = new int[totalOps];
+        long[] defaultOutputs = new long[totalOps];
         int opIndex = 0;
         for (Map.Entry<Integer, ColumnWindowOps> entry: groupedOps.entrySet()) {
           int columnIndex = entry.getKey();
@@ -1880,6 +1888,7 @@ public final class Table implements AutoCloseable {
             aggPrecedingWindows[opIndex] = operation.getWindowOptions().getPreceding();
             aggFollowingWindows[opIndex] = operation.getWindowOptions().getFollowing();
             aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
+            defaultOutputs[opIndex] = operation.getDefaultOutput();
             opIndex++;
           }
         }
@@ -1888,6 +1897,7 @@ public final class Table implements AutoCloseable {
         try (Table aggregate = new Table(rollingWindowAggregate(
             operation.table.nativeHandle,
             operation.indices,
+            defaultOutputs,
             aggColumnIndexes,
             aggInstances, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
             groupByOptions.getIgnoreNullKeys()))) {
@@ -2003,6 +2013,10 @@ public final class Table implements AutoCloseable {
             assert (operation.getWindowOptions().getFrameType() == WindowOptions.FrameType.RANGE);
             timestampColumnIndexes[opIndex] = operation.getWindowOptions().getTimestampColumnIndex();
             isTimestampOrderAscending[opIndex] = operation.getWindowOptions().isTimestampOrderAscending();
+            if (operation.getDefaultOutput() != 0) {
+              throw new IllegalArgumentException("Operations with a default output are not " +
+                  "supported on time based rolling windows");
+            }
             opIndex++;
           }
         }

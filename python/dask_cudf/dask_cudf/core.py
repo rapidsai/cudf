@@ -125,8 +125,11 @@ class DataFrame(_Frame, dd.core.DataFrame):
         meta = assigner(self._meta, k, dd.core.make_meta(v))
         return self.map_partitions(assigner, k, v, meta=meta)
 
-    def apply_rows(self, func, incols, outcols, kwargs={}, cache_key=None):
+    def apply_rows(self, func, incols, outcols, kwargs=None, cache_key=None):
         import uuid
+
+        if kwargs is None:
+            kwargs = {}
 
         if cache_key is None:
             cache_key = uuid.uuid4()
@@ -318,6 +321,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         """ Wraps dask.dataframe DataFrame.repartition method.
         Uses DataFrame.shuffle if `columns=` is specified.
         """
+        # TODO: Remove this function in future(0.17 release)
         columns = kwargs.pop("columns", None)
         if columns:
             warnings.warn(
