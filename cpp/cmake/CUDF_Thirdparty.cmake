@@ -1,11 +1,3 @@
-include(FetchContent)
-
-###################################################################################################
-# - third party dependencies-----------------------------------------------------------------------
-# add third party dependencies using CMake FetchContent
-
-add_subdirectory(thirdparty)
-
 ###################################################################################################
 # - conda environment -----------------------------------------------------------------------------
 
@@ -114,22 +106,19 @@ endif(Boost_INCLUDE_DIR)
 # FindCUDA doesn't quite set the variables it should. RMM needs this to be set to build from CPM
 set(CUDAToolkit_INCLUDE_DIR "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
 
-CPMFindPackage(
-  NAME RMM
-  GITHUB_REPOSITORY rapidsai/rmm
-  VERSION ${CMAKE_PROJECT_VERSION}
-  GIT_TAG "branch-${CMAKE_PROJECT_VERSION_MAJOR}.${CMAKE_PROJECT_VERSION_MINOR}"
-)
+find_path(RMM_INCLUDE "rmm"
+          HINTS "$ENV{RMM_ROOT}/include")
 
-add_library(rmm INTERFACE)
-add_library(rmm::rmm ALIAS rmm)
+message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
 
-target_include_directories(rmm INTERFACE
-  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-  "$<INSTALL_INTERFACE:include>"
-  )
+#CPMFindPackage(
+#  NAME RMM
+#  GITHUB_REPOSITORY rapidsai/rmm
+#  VERSION ${CMAKE_PROJECT_VERSION}
+#  GIT_TAG "branch-${CMAKE_PROJECT_VERSION_MAJOR}.${CMAKE_PROJECT_VERSION_MINOR}"
+#)
 
-message(STATUS "RMM: RMM_SOURCE_DIR set to ${RMM_SOURCE_DIR}")
+#message(STATUS "RMM: RMM_SOURCE_DIR set to ${RMM_SOURCE_DIR}")
 
 ###################################################################################################
 # - DLPACK -------------------------------------------------------------------------------------------
@@ -143,40 +132,40 @@ CPMFindPackage(
 message(STATUS "DLPACK: dlpack_SOURCE_DIR set to ${dlpack_SOURCE_DIR}")
 
 ###################################################################################################
-# - googletest ------------------------------------------------------------------------------------
+# - add gtest -------------------------------------------------------------------------------------
 
-if (BUILD_TESTS)
+if(BUILD_TESTS)
   CPMFindPackage(
-    NAME GTest
+    NAME GTEST
     GITHUB_REPOSITORY google/googletest
     GIT_TAG release-1.10.0
     VERSION 1.10.0
-    GIT_SHALLOW TRUE
     OPTIONS
       "INSTALL_GTEST OFF"
-    # googletest >= 1.10.0 provides a cmake config file -- use it if it exists
-    FIND_PACKAGE_ARGUMENTS "CONFIG"
-    )
-
-  if (GTest_ADDED)
-    add_library(GTest::gtest ALIAS gtest)
-    add_library(GTest::gmock ALIAS gmock)
-    add_library(GTest::gtest_main ALIAS gtest_main)
-    add_library(GTest::gmock_main ALIAS gmock_main)
-  endif()
-endif()
+      "gtest_force_shared_crt"
+  )
+  enable_testing()
+  set(GTEST_LIBRARY gtest gtest_main gmock)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
+endif(BUILD_TESTS)
 
 ###################################################################################################
-# - googlebenchmark -------------------------------------------------------------------------------
+# - add google benchmark --------------------------------------------------------------------------
 
-if (BUILD_BENCHMARKS)
+if(BUILD_BENCHMARKS)
   CPMFindPackage(
     NAME benchmark
     GITHUB_REPOSITORY google/benchmark
-    VERSION 1.5.2
-    GIT_SHALLOW TRUE
+    VERSION 1.5.1
     OPTIONS
-      "BENCHMARK_ENABLE_TESTING OFF"
-      "BENCHMARK_ENABLE_INSTALL OFF"
-      )
-endif()
+    "BENCHMARK_ENABLE_TESTING OFF"
+    # The REGEX feature test fails when gbench's cmake is run under CPM because it doesn't assume C++11
+    # Additionally, attempting to set the CMAKE_CXX_VERSION here doesn't propogate to the feature test build
+    # Therefore, we just disable the feature test and assume platforms we care about have a regex impl available
+    "RUN_HAVE_GNU_POSIX_REGEX 0" 
+  )
+  set(benchmark_LIBRARY benchmark)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/benchmarks)
+  message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
+endif(BUILD_BENCHMARKS)
