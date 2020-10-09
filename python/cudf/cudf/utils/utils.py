@@ -13,7 +13,7 @@ import cudf
 from cudf.core import column
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import to_cudf_compatible_scalar
-
+from cudf._lib.column import make_column_from_scalar
 mask_dtype = np.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
 
@@ -348,14 +348,7 @@ def time_col_replace_nulls(input_col):
     null = column.column_empty_like(input_col, masked=True, newsize=1)
     out_col = cudf._lib.replace.replace(
         input_col,
-        column.as_column(
-            Buffer(
-                np.array(
-                    [input_col.default_na_value()], dtype=input_col.dtype
-                ).view("|u1")
-            ),
-            dtype=input_col.dtype,
-        ),
+        make_column_from_scalar(input_col.default_na_value(), 1),
         null,
     )
     return out_col
