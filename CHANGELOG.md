@@ -5,6 +5,7 @@
 ## Improvements
 
 - PR #6432 Add dictionary support to `cudf::upper_bound` and `cudf::lower_bound`
+- PR #6442 Remove deprecated `DataFrame.from_gpu_matrix`, `DataFrame.to_gpu_matrix`, `DataFrame.add_column` APIs and method parameters
 
 ## Bug Fixes
 
