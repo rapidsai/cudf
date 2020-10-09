@@ -21,7 +21,6 @@ from cudf.utils.dtypes import (
     is_numerical_dtype,
     is_scalar,
     min_scalar_type,
-    min_signed_type,
 )
 
 
@@ -473,7 +472,7 @@ class Frame(libcudf.table.Table):
                 self, as_column(gather_map), keep_index=keep_index
             )
         )
-        result._copy_categories(self)
+        result._postprocess_columns(self)
         if keep_index and self._index is not None:
             result._index.names = self._index.names
         return result
@@ -488,7 +487,7 @@ class Frame(libcudf.table.Table):
             self, columns_to_hash, num_partitions, keep_index
         )
         output = self.__class__._from_table(output)
-        output._copy_categories(self, include_index=keep_index)
+        output._postprocess_columns(self, include_index=keep_index)
         return output, offsets
 
     def _as_column(self):
@@ -507,7 +506,7 @@ class Frame(libcudf.table.Table):
     def _scatter(self, key, value):
         result = self._from_table(libcudf.copying.scatter(value, key, self))
 
-        result._copy_categories(self)
+        result._postprocess_columns(self)
         return result
 
     def _empty_like(self, keep_index=True):
@@ -515,7 +514,7 @@ class Frame(libcudf.table.Table):
             libcudf.copying.table_empty_like(self, keep_index)
         )
 
-        result._copy_categories(self, include_index=keep_index)
+        result._postprocess_columns(self, include_index=keep_index)
         return result
 
     def _slice(self, arg):
@@ -568,7 +567,7 @@ class Frame(libcudf.table.Table):
                     )[0]
                 )
 
-                result._copy_categories(self, include_index=keep_index)
+                result._postprocess_columns(self, include_index=keep_index)
                 # Adding index of type RangeIndex back to
                 # result
                 if keep_index is False and self.index is not None:
@@ -699,7 +698,7 @@ class Frame(libcudf.table.Table):
         for i, name in enumerate(self._data):
             output._data[name] = self._data[name].clip(lower[i], upper[i])
 
-        output._copy_categories(self, include_index=False)
+        output._postprocess_columns(self, include_index=False)
 
         return self._mimic_inplace(output, inplace=inplace)
 
@@ -1044,7 +1043,7 @@ class Frame(libcudf.table.Table):
         result = partitioned._split(output_offsets, keep_index=keep_index)
 
         for frame in result:
-            frame._copy_categories(self, include_index=keep_index)
+            frame._postprocess_columns(self, include_index=keep_index)
 
         if npartitions:
             for _ in range(npartitions - len(result)):
@@ -1366,7 +1365,7 @@ class Frame(libcudf.table.Table):
                 self, how=how, keys=subset, thresh=thresh
             )
         )
-        result._copy_categories(self)
+        result._postprocess_columns(self)
         return result
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
@@ -1408,7 +1407,7 @@ class Frame(libcudf.table.Table):
                 self, as_column(boolean_mask)
             )
         )
-        result._copy_categories(self)
+        result._postprocess_columns(self)
         return result
 
     def _quantiles(
@@ -1440,7 +1439,7 @@ class Frame(libcudf.table.Table):
             )
         )
 
-        result._copy_categories(self)
+        result._postprocess_columns(self)
         return result
 
     def rank(
@@ -1593,7 +1592,7 @@ class Frame(libcudf.table.Table):
             libcudf.filling.repeat(self, count)
         )
 
-        result._copy_categories(self)
+        result._postprocess_columns(self)
         return result
 
     def _fill(self, fill_values, begin, end, inplace):
@@ -1759,7 +1758,7 @@ class Frame(libcudf.table.Table):
                     keep_index=keep_index,
                 )
             )
-            result._copy_categories(self)
+            result._postprocess_columns(self)
 
             return result
         else:
@@ -1925,7 +1924,7 @@ class Frame(libcudf.table.Table):
         else:
             result = cudf_category_frame
 
-        # In a scenarion where column is of type list/other non
+        # In a scenario where column is of type list/other non
         # pandas types, there will be no pandas metadata associated with
         # given arrow table as those types can only originate from
         # arrow.
@@ -1933,6 +1932,8 @@ class Frame(libcudf.table.Table):
             for name in result._data.names:
                 if pandas_dtypes[name] == "categorical":
                     dtype = "category"
+                elif pandas_dtypes[name] == "bool":
+                    dtype = pandas_dtypes[name]
                 else:
                     dtype = np_dtypes[name]
 
@@ -1960,92 +1961,9 @@ class Frame(libcudf.table.Table):
         b: int64
         index: int64
         """
-
-        data = self.copy(deep=False)
-
-        codes = {}
-        # saving the name as they might get changed from int to str
-        codes_keys = []
-        categories = {}
-        # saving the name as they might get changed from int to str
-        names = self._data.names
-        null_arrays_names = []
-
-        for name in names:
-            col = self._data[name]
-            if isinstance(col, cudf.core.column.CategoricalColumn,):
-                # arrow doesn't support unsigned codes
-                signed_type = (
-                    min_signed_type(col.categories.size)
-                    if col.codes.size > 0
-                    else np.int8
-                )
-                codes[str(name)] = col.codes.astype(signed_type)
-                categories[str(name)] = col.categories
-                codes_keys.append(name)
-            elif isinstance(
-                col, cudf.core.column.StringColumn
-            ) and col.null_count == len(col):
-                null_arrays_names.append(name)
-
-        data = libcudf.table.Table(
-            data._data.select_by_label(
-                [
-                    name
-                    for name in names
-                    if name not in codes_keys + null_arrays_names
-                ]
-            )
+        return pa.Table.from_pydict(
+            {name: col.to_arrow() for name, col in self._data.items()}
         )
-
-        out_table = pa.table([])
-        if data._num_columns > 0:
-            out_table = libcudf.interop.to_arrow(
-                data, data._data.names, keep_index=False
-            )
-
-        if len(codes) > 0:
-            codes_table = libcudf.table.Table(codes)
-            indices = libcudf.interop.to_arrow(
-                codes_table, codes_table._data.names, keep_index=False
-            )
-            dictionaries = dict(
-                (name, categories[name].to_arrow())
-                for name in categories.keys()
-            )
-            for name in codes_keys:
-                # as name can be interger in case of cudf
-                actual_name = name
-                name = str(name)
-                dict_array = pa.DictionaryArray.from_arrays(
-                    indices[name].chunk(0),
-                    _get_dictionary_array(dictionaries[name]),
-                    ordered=self._data[actual_name].ordered,
-                )
-
-                if out_table.num_columns == 0:
-                    out_table = pa.table({name: dict_array})
-                else:
-                    try:
-                        out_table = out_table.add_column(
-                            names.index(actual_name), name, dict_array
-                        )
-                    except pa.lib.ArrowInvalid:
-                        out_table = out_table.append_column(name, dict_array)
-
-        if len(null_arrays_names):
-            for name in null_arrays_names:
-                null_array = pa.NullArray.from_buffers(
-                    pa.null(), len(self), [pa.py_buffer((b""))]
-                )
-                if out_table.num_columns == 0:
-                    out_table = pa.table({name: null_array})
-                else:
-                    out_table = out_table.add_column(
-                        names.index(name), name, null_array
-                    )
-
-        return out_table
 
     def drop_duplicates(
         self,
@@ -2094,7 +2012,7 @@ class Frame(libcudf.table.Table):
             )
         )
 
-        result._copy_categories(self)
+        result._postprocess_columns(self)
         return result
 
     def replace(self, to_replace, replacement):
@@ -2156,7 +2074,9 @@ class Frame(libcudf.table.Table):
                     (cudf.core.index.CategoricalIndex, cudf.MultiIndex),
                 )
             ):
-                self._index._copy_categories(other._index, include_index=False)
+                self._index._postprocess_columns(
+                    other._index, include_index=False
+                )
                 # When other._index is a CategoricalIndex, there is
                 # possibility that corresposing self._index be GenericIndex
                 # with codes. So to update even the class signature, we
@@ -2170,6 +2090,35 @@ class Frame(libcudf.table.Table):
                         self._index
                     )
         return self
+
+    def _copy_struct_names(self, other, include_index=True):
+        """
+        Utility that copies struct field names.
+        """
+        for name, col, other_col in zip(
+            self._data.keys(), self._data.values(), other._data.values()
+        ):
+            if isinstance(other_col, cudf.core.column.StructColumn):
+                self._data[name] = col._rename_fields(
+                    other_col.dtype.fields.keys()
+                )
+
+        if include_index and self._index is not None:
+            for name, col, other_col in zip(
+                self._index._data.keys(),
+                self._index._data.values(),
+                other._index._data.values(),
+            ):
+                if isinstance(other_col, cudf.core.column.StructColumn):
+                    self._index._data[name] = col._rename_fields(
+                        other_col.dtype.fields.keys()
+                    )
+
+        return self
+
+    def _postprocess_columns(self, other, include_index=True):
+        self._copy_categories(other, include_index=include_index)
+        self._copy_struct_names(other, include_index=include_index)
 
     def _unaryop(self, op):
         data_columns = (col.unary_operator(op) for col in self._columns)
@@ -2265,7 +2214,7 @@ class Frame(libcudf.table.Table):
         The table containing the tiled "rows".
         """
         result = self.__class__._from_table(libcudf.reshape.tile(self, count))
-        result._copy_categories(self)
+        result._postprocess_columns(self)
         return result
 
     def searchsorted(

@@ -29,6 +29,7 @@
 #include <thrust/device_vector.h>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include "cudf/types.hpp"
 using aggregation = cudf::aggregation;
 
 template <typename T>
@@ -93,7 +94,8 @@ struct ReductionTest : public cudf::test::BaseFixture {
                       T_out expected_value,
                       bool succeeded_condition,
                       std::unique_ptr<aggregation> const &agg,
-                      cudf::data_type output_dtype = cudf::data_type{})
+                      cudf::data_type output_dtype = cudf::data_type{},
+                      bool expected_null           = false)
   {
     if (cudf::data_type{} == output_dtype) output_dtype = underlying_column.type();
 
@@ -101,7 +103,8 @@ struct ReductionTest : public cudf::test::BaseFixture {
       std::unique_ptr<cudf::scalar> result = cudf::reduce(underlying_column, agg, output_dtype);
       using ScalarType                     = cudf::scalar_type_t<T_out>;
       auto result1                         = static_cast<ScalarType *>(result.get());
-      EXPECT_EQ(expected_value, result1->value());
+      EXPECT_EQ(expected_null, !result1->is_valid());
+      if (result1->is_valid()) { EXPECT_EQ(expected_value, result1->value()); }
     };
 
     if (succeeded_condition) {
@@ -125,6 +128,7 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
   using T = TypeParam;
   std::vector<int> int_values({5, 0, -120, -111, 0, 64, 63, 99, 123, -16});
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 0, 1});
+  std::vector<bool> all_null({0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
   std::vector<T> v = convert_values<T>(int_values);
 
   // Min/Max succeeds for any gdf types including
@@ -139,7 +143,15 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
   this->reduction_test(col, expected_min_result, result_error, cudf::make_min_aggregation());
   this->reduction_test(col, expected_max_result, result_error, cudf::make_max_aggregation());
 
-  // test with nulls
+  auto res = cudf::minmax(col);
+
+  using ScalarType = cudf::scalar_type_t<T>;
+  auto min_result  = static_cast<ScalarType *>(res.first.get());
+  auto max_result  = static_cast<ScalarType *>(res.second.get());
+  EXPECT_EQ(min_result->value(), expected_min_result);
+  EXPECT_EQ(max_result->value(), expected_max_result);
+
+  // test with some nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
   cudf::size_type valid_count =
     cudf::column_view(col_nulls).size() - cudf::column_view(col_nulls).null_count();
@@ -154,6 +166,47 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
     col_nulls, expected_min_null_result, result_error, cudf::make_min_aggregation());
   this->reduction_test(
     col_nulls, expected_max_null_result, result_error, cudf::make_max_aggregation());
+
+  auto null_res = cudf::minmax(col_nulls);
+
+  using ScalarType     = cudf::scalar_type_t<T>;
+  auto min_null_result = static_cast<ScalarType *>(null_res.first.get());
+  auto max_null_result = static_cast<ScalarType *>(null_res.second.get());
+  EXPECT_EQ(min_null_result->value(), expected_min_null_result);
+  EXPECT_EQ(max_null_result->value(), expected_max_null_result);
+
+  // test with some nulls
+  cudf::test::fixed_width_column_wrapper<T> col_all_nulls = construct_null_column(v, all_null);
+  cudf::size_type all_null_valid_count                    = 0;
+
+  auto all_null_r_min = replace_nulls(v, all_null, std::numeric_limits<T>::max());
+  auto all_null_r_max = replace_nulls(v, all_null, std::numeric_limits<T>::lowest());
+
+  T expected_min_all_null_result =
+    *(std::min_element(all_null_r_min.begin(), all_null_r_min.end()));
+  T expected_max_all_null_result =
+    *(std::max_element(all_null_r_max.begin(), all_null_r_max.end()));
+
+  this->reduction_test(col_all_nulls,
+                       expected_min_all_null_result,
+                       result_error,
+                       cudf::make_min_aggregation(),
+                       cudf::data_type{},
+                       true);
+  this->reduction_test(col_all_nulls,
+                       expected_max_all_null_result,
+                       result_error,
+                       cudf::make_max_aggregation(),
+                       cudf::data_type{},
+                       true);
+
+  auto all_null_res = cudf::minmax(col_all_nulls);
+
+  using ScalarType         = cudf::scalar_type_t<T>;
+  auto min_all_null_result = static_cast<ScalarType *>(all_null_res.first.get());
+  auto max_all_null_result = static_cast<ScalarType *>(all_null_res.second.get());
+  EXPECT_EQ(min_all_null_result->is_valid(), false);
+  EXPECT_EQ(max_all_null_result->is_valid(), false);
 }
 
 template <typename T>
@@ -1015,7 +1068,9 @@ TYPED_TEST(ReductionTest, NthElement)
   // without nulls
   for (cudf::size_type n :
        {-input_size, -input_size / 2, -2, -1, 0, 1, 2, input_size / 2, input_size - 1}) {
-    T expected_value_nonull = v[mod(n, v.size())];
+    auto const index         = mod(n, v.size());
+    T expected_value_nonull  = v[index];
+    bool const expected_null = !host_bools[index];
     this->reduction_test(col,
                          expected_value_nonull,
                          true,
@@ -1027,7 +1082,9 @@ TYPED_TEST(ReductionTest, NthElement)
     this->reduction_test(col_nulls,
                          expected_value_nonull,
                          true,
-                         cudf::make_nth_element_aggregation(n, cudf::null_policy::INCLUDE));
+                         cudf::make_nth_element_aggregation(n, cudf::null_policy::INCLUDE),
+                         cudf::data_type{},
+                         expected_null);
   }
   // valid only
   for (cudf::size_type n :

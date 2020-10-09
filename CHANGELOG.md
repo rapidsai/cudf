@@ -6,18 +6,24 @@
 - PR #5975 Add strings `filter_characters` API
 - PR #5843 Add `filters` parameter to Python `read_parquet` function for filtering row groups
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
+- PR #5494 Add Abstract Syntax Tree (AST) evaluator.
 - PR #6076 Add durations type support for csv writer, reader
 - PR #5874 Add `COLLECT` groupby aggregation
 - PR #6330 Add ability to query if PTDS is enabled
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 - PR #6171 Java and Jni support for Struct columns
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
+- PR #6271 Add support to deep-copy struct columns from struct column-view
+- PR #6262 Add nth_element series aggregation with null handling
+- PR #6316 Add StructColumn to Python API
+- PR #6247 Add `minmax` reduction function
 - PR #6232 `Json` and `Avro` benchmarking in python
 - PR #6139 Add column conversion to big endian byte list.
 - PR #6220 Add `list_topics()` to supply list of underlying Kafka connection topics
-- PR #6271 Add support to deep-copy struct columns from struct column-view
 - PR #6254 Add `cudf::make_dictionary_from_scalar` factory function
 - PR #6262 Add nth_element series aggregation with null handling
+- PR #6277 Add support for LEAD/LAG window functions for fixed-width types
+- PR #6318 Add support for reading Struct and map types from Parquet files
 - PR #6315 Native code for string-map lookups, for cudf-java
 - PR #6302 Add custom dataframe accessors
 - PR #6301 Add JNI bindings to nvcomp
@@ -65,6 +71,7 @@
 - PR #6163 Use `Column.full` instead of `scalar_broadcast_to` or `cupy.zeros`
 - PR #6176 Fix cmake warnings for GoogleTest, GoogleBenchmark, and Arrow external projects
 - PR #6149 Update to Arrow v1.0.1
+- PR #6421 Use `pandas.testing` in `cudf`
 - PR #6357 Use `pandas.testing` in `dask-cudf`
 - PR #6201 Expose libcudf test utilities headers for external project use.
 - PR #6174 Data profile support in random data generator; Expand cuIO benchmarks
@@ -91,17 +98,21 @@
 - PR #6248 Optimize groupby-agg in dask_cudf
 - PR #6243 Move `equals()` logic to `Frame`
 - PR #6245 Split up replace.cu into multiple source files
-- PR #6218 increase visiblity/consistency for cuio reader writer private member variable names.
+- PR #6218 increase visibility/consistency for cuio reader writer private member variable names.
 - PR #6268 Add file tags to libcudf doxygen
 - PR #6265 Update JNI to use ORC options builder
 - PR #6273 Update JNI to use ORC options builder
 - PR #6293 Replace shuffle warp reduce with cub calls
 - PR #6287 Make java aggregate API follow C++ API
+- PR #6299 Add lead and lag to java
+- PR #6303 Use cudf test dtypes so timedelta tests are determinstic
+- PR #6327 Add dictionary specialization to `cudf::replace_nulls`
 - PR #6306 Remove cpw macros from page encode kernels
 - PR #6375 Parallelize Cython compilation in addition to Cythonization
-- PR #6303 Use cudf test dtypes so timedelta tests are determinstic
+- PR #6303 Use cudf test dtypes so timedelta tests are deterministic
 - PR #6326 Simplify interal csv/json kernel parameters
 - PR #6308 Add dictionary support to cudf::scatter with scalar
+- PR #6346 Remove macros from CompactProtocolWriter
 - PR #6312 Conda recipe dependency cleanup
 - PR #6347 Add dictionary support to cudf::copy_range
 - PR #6332 Add support to return csv as string when `path=None` in `to_csv`
@@ -111,6 +122,9 @@
 - PR #6377 Update ci/local/README.md
 - PR #6383 Removed `move.pxd`, use standard library `move`
 - PR #6400 Removed unused variables
+- PR #6409 Allow CuPy 8.x
+- PR #6407 Add RMM_LOGGING_LEVEL flag to Java docker build
+- PR #6438 Fetch nvcomp v1.1.0 for JNI build
 
 ## Bug Fixes
 
@@ -160,13 +174,24 @@
 - PR #6304 Fix span_tests.cu includes
 - PR #6331 Avoids materializing `RangeIndex` during frame concatnation (when not needed)
 - PR #6278 Add filter tests for struct columns
+- PR #6353 Rename `skip_rows` parameter to `skiprows` in `read_parquet`, `read_avro` and `read_orc`
 - PR #6361 Detect overflow in hash join
 - PR #6397 Fix `build.sh` when `PARALLEL_LEVEL` environment variable isn't set
 - PR #6366 Fix Warp Reduce calls in cuio statistics calculation to account for NaNs
 - PR #6345 Fix ambiguous constructor compile error with devtoolset
 - PR #6335 Fix conda commands for outdated python version
+- PR #6372 Fix issue related to reading a nullable boolean column in `read_parquet` when `engine=pyarrow`
 - PR #6378 Fix index handling in `fillna` and incorrect pytests
 - PR #6380 Avoid problematic column-index check in dask_cudf.read_parquet test
+- PR #6403 Fix error handling in notebook tests
+- PR #6408 Avoid empty offset list in hash_partition output
+- PR #6402 Update JNI build to pull fixed nvcomp commit
+- PR #6410 Fix uses of dangerous default values in Python code
+- PR #6424 Check for null data in close for ColumnBuilder
+- PR #6426 Fix `RuntimeError` when `np.bool_` is passed as `header` in `to_csv`
+- PR #6443 Make java apis getList and getStruct public
+- PR #6445 Add `dlpack` to run section of libcudf conda recipe to fix downstream build issues
+- PR #6450 Make java Column Builder row agnostic
 
 
 # cuDF 0.15.0 (26 Aug 2020)
@@ -253,6 +278,7 @@
 - PR #5815 LIST Support for ColumnVector
 - PR #5931 Support for `add_calendrical_months` API
 - PR #5992 Add support for `.dt.strftime`
+- PR #6075 Parquet writer - add support for nested LIST columns
 
 ## Improvements
 
