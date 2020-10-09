@@ -42,7 +42,7 @@ from cudf._lib.cpp.scalar.scalar cimport (
     string_scalar
 )
 cimport cudf._lib.cpp.types as libcudf_types
-
+from cudf._lib.cpp.scalar.scalar_factories cimport make_numeric_scalar
 
 cdef class Scalar:
 
@@ -60,7 +60,6 @@ cdef class Scalar:
         dtype : dtype
             A NumPy dtype.
         """
-
         value = cudf.utils.dtypes.to_cudf_compatible_scalar(value, dtype=dtype)
         valid = not is_null_host_scalar(value)
 
@@ -69,15 +68,17 @@ cdef class Scalar:
                 raise TypeError(
                     "dtype required when constructing a null scalar"
                 )
+            if isinstance(value, (np.datetime64, np.timedelta64)):
+                if np.isnat(value) and np.datetime_data(value.dtype)[0] == 'generic':
+                    raise TypeError("Can't create a NaT scalar without a dtype")
+                else:
+                    dtype = value.dtype
             else:
                 dtype = value.dtype
-
         dtype = np.dtype(dtype)
 
         # Caching Mechanism
-        
         self._initialize_cache(value, dtype)
-        #self.set_device_value(value, dtype)
 
     def _initialize_cache(self, value, dtype):
         self._host_value = value
@@ -91,7 +92,7 @@ cdef class Scalar:
         self._device_value_current = False
 
     def set_device_value(self, value, dtype):
-        valid = value not in  {None, cudf.NA}
+        valid = not is_null_host_scalar(value)
 
         if pd.api.types.is_string_dtype(dtype):
             _set_string_from_np_string(self.c_value, value, valid)
@@ -417,8 +418,6 @@ def as_scalar(val, dtype=None):
 
 def is_null_host_scalar(slr):
     if slr is None or slr is cudf.NA:
-        return True
-    elif isinstance(slr, (np.datetime64, np.timedelta64)) and np.isnat(slr):
         return True
     else:
         return False
