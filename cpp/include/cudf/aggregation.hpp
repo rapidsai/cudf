@@ -71,6 +71,8 @@ class aggregation {
     NTH_ELEMENT,     ///< get the nth element
     ROW_NUMBER,      ///< get row-number of element
     COLLECT,         ///< collect values into a list
+    LEAD,            ///< window function, accesses row at specified offset following current row
+    LAG,             ///< window function, accesses row at specified offset preceding current row
     PTX,             ///< PTX UDF based reduction
     CUDA             ///< CUDA UDf based reduction
   };
@@ -196,6 +198,12 @@ std::unique_ptr<aggregation> make_row_number_aggregation();
 
 /// Factory to create a COLLECT_NUMBER aggregation
 std::unique_ptr<aggregation> make_collect_aggregation();
+
+/// Factory to create a LAG aggregation
+std::unique_ptr<aggregation> make_lag_aggregation(size_type offset);
+
+/// Factory to create a LEAD aggregation
+std::unique_ptr<aggregation> make_lead_aggregation(size_type offset);
 
 /**
  * @brief Factory to create an aggregation base on UDF for PTX or CUDA

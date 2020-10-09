@@ -710,6 +710,59 @@ inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
            : (ctxid == ROW_CTX_QUOTE) ? ctx_map.y : (ctxid == ROW_CTX_COMMENT) ? ctx_map.z : 0;
 }
 
+/**
+ * @brief Single pair-wise 512-wide row context merge transform
+ *
+ * Merge row context blocks and record the merge operation in a context
+ * tree so that the transform is reversible.
+ * The tree is organized such that the left and right children of node n
+ * are located at indices n*2 and n*2+1, the root node starting at index 1
+ *
+ * @tparam lanemask mask to specify source of packed row context
+ * @tparam tmask mask to specify principle thread for merging row context
+ * @tparam base start location for writing into packed row context tree
+ * @tparam level_scale level of the node in the tree
+ * @param ctxtree[out] packed row context tree
+ * @param ctxb[in] packed row context for the current character block
+ * @param t thread id (leaf node id)
+ *
+ */
+template <uint32_t lanemask, uint32_t tmask, uint32_t base, uint32_t level_scale>
+inline __device__ void ctx_merge(uint64_t *ctxtree, packed_rowctx_t *ctxb, uint32_t t)
+{
+  uint64_t tmp = SHFL_XOR(*ctxb, lanemask);
+  if (!(t & tmask)) {
+    *ctxb                              = merge_row_contexts(*ctxb, tmp);
+    ctxtree[base + (t >> level_scale)] = *ctxb;
+  }
+}
+
+/**
+ * @brief Single 512-wide row context inverse merge transform
+ *
+ * Walks the context tree starting from a root node
+ *
+ * @tparam rmask Mask to specify which threads write input row context
+ * @param[in] base Start read location of the merge transform tree
+ * @param[in] ctxtree Merge transform tree
+ * @param[in] ctx Input context
+ * @param[in] brow4 output row in block *4
+ * @param[in] t thread id (leaf node id)
+ */
+template <uint32_t rmask>
+inline __device__ void ctx_unmerge(
+  uint32_t base, uint64_t *ctxtree, uint32_t *ctx, uint32_t *brow4, uint32_t t)
+{
+  rowctx32_t ctxb_left, ctxb_right, ctxb_sum;
+  ctxb_sum   = get_row_context(ctxtree[base], *ctx);
+  ctxb_left  = get_row_context(ctxtree[(base)*2 + 0], *ctx);
+  ctxb_right = get_row_context(ctxtree[(base)*2 + 1], ctxb_left & 3);
+  if (t & (rmask)) {
+    *brow4 += (ctxb_sum & ~3) - (ctxb_right & ~3);
+    *ctx = ctxb_left & 3;
+  }
+}
+
 /*
  * @brief 512-wide row context merge transform
  *
@@ -735,32 +788,22 @@ static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
                                                      packed_rowctx_t ctxb,
                                                      uint32_t t)
 {
-  uint64_t tmp;
-
-#define CTX_MERGE(lanemask, tmask, base, level_scale)                       \
-  tmp = SHFL_XOR(ctxb, lanemask);                                           \
-  if (!(t & (tmask))) {                                                     \
-    ctxb                                   = merge_row_contexts(ctxb, tmp); \
-    ctxtree[(base) + (t >> (level_scale))] = ctxb;                          \
-  }
-
   ctxtree[512 + t] = ctxb;
-  CTX_MERGE(1, 0x1, 256, 1);
-  CTX_MERGE(2, 0x3, 128, 2);
-  CTX_MERGE(4, 0x7, 64, 3);
-  CTX_MERGE(8, 0xf, 32, 4);
+  ctx_merge<1, 0x1, 256, 1>(ctxtree, &ctxb, t);
+  ctx_merge<2, 0x3, 128, 2>(ctxtree, &ctxb, t);
+  ctx_merge<4, 0x7, 64, 3>(ctxtree, &ctxb, t);
+  ctx_merge<8, 0xf, 32, 4>(ctxtree, &ctxb, t);
   __syncthreads();
   if (t < 32) {
     ctxb = ctxtree[32 + t];
-    CTX_MERGE(1, 0x1, 16, 1);
-    CTX_MERGE(2, 0x3, 8, 2);
-    CTX_MERGE(4, 0x7, 4, 3);
-    CTX_MERGE(8, 0xf, 2, 4);
+    ctx_merge<1, 0x1, 16, 1>(ctxtree, &ctxb, t);
+    ctx_merge<2, 0x3, 8, 2>(ctxtree, &ctxb, t);
+    ctx_merge<4, 0x7, 4, 3>(ctxtree, &ctxb, t);
+    ctx_merge<8, 0xf, 2, 4>(ctxtree, &ctxb, t);
     // Final stage
-    tmp = SHFL_XOR(ctxb, 16);
+    uint64_t tmp = SHFL_XOR(ctxb, 16);
     if (t == 0) { ctxtree[1] = merge_row_contexts(ctxb, tmp); }
   }
-#undef CTX_MERGE
 }
 
 /*
@@ -780,27 +823,16 @@ static inline __device__ rowctx32_t rowctx_inverse_merge_transform(uint64_t ctxt
 {
   uint32_t ctx     = ctxtree[0] & 3;  // Starting input context
   rowctx32_t brow4 = 0;               // output row in block *4
-  rowctx32_t ctxb_left, ctxb_right, ctxb_sum;
 
-#define CTX_UNMERGE(rmask, base)                                      \
-  ctxb_sum   = get_row_context(ctxtree[base], ctx);                   \
-  ctxb_left  = get_row_context(ctxtree[(base)*2 + 0], ctx);           \
-  ctxb_right = get_row_context(ctxtree[(base)*2 + 1], ctxb_left & 3); \
-  if (t & (rmask)) {                                                  \
-    brow4 += (ctxb_sum & ~3) - (ctxb_right & ~3);                     \
-    ctx = ctxb_left & 3;                                              \
-  }
-
-  CTX_UNMERGE(256, 1);
-  CTX_UNMERGE(128, 2 + (t >> 8));
-  CTX_UNMERGE(64, 4 + (t >> 7));
-  CTX_UNMERGE(32, 8 + (t >> 6));
-  CTX_UNMERGE(16, 16 + (t >> 5));
-  CTX_UNMERGE(8, 32 + (t >> 4));
-  CTX_UNMERGE(4, 64 + (t >> 3));
-  CTX_UNMERGE(2, 128 + (t >> 2));
-  CTX_UNMERGE(1, 256 + (t >> 1));
-#undef CTX_UNMERGE
+  ctx_unmerge<256>(1, ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<128>(2 + (t >> 8), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<64>(4 + (t >> 7), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<32>(8 + (t >> 6), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<16>(16 + (t >> 5), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<8>(32 + (t >> 4), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<4>(64 + (t >> 3), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<2>(128 + (t >> 2), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<1>(256 + (t >> 1), ctxtree, &ctx, &brow4, t);
 
   return brow4 + ctx;
 }
