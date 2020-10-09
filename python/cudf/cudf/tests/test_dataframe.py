@@ -4833,23 +4833,30 @@ def test_rowwise_ops_nullable_int_dtypes(op, expected):
                 ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ms]"
             ),
             "t2": gd.Series(["1940-08-31 06:00:00", None], dtype="<M8[ms]"),
-            "i1": [1001, 2002],
+            "i1": gd.Series([1001, 2002], dtype="int64"),
+        },
+        {
+            "t1": gd.Series(
+                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ms]"
+            ),
+            "i1": gd.Series([1001, 2002], dtype="int64"),
+            "f1": gd.Series([-100.001, 123.456], dtype="float64"),
+        },
+        {
+            "t1": gd.Series(
+                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ms]"
+            ),
+            "i1": gd.Series([1001, 2002], dtype="int64"),
+            "f1": gd.Series([-100.001, 123.456], dtype="float64"),
+            "b1": gd.Series([True, False], dtype="bool"),
         },
     ],
 )
 @pytest.mark.parametrize("op", ["max", "min"])
 @pytest.mark.parametrize("skipna", [True, False])
 def test_rowwise_ops_datetime_dtypes(data, op, skipna):
-    """
-    Two tests are involved:
-    1. Pandas semantic equivalance
-    2. Datetime row-wise op will modify its underlying values
-    to utilize cupy gpu operations. Test that the values are
-    converted back to original after operations.
-    """
 
     gdf = gd.DataFrame(data)
-    gdf_copy = gdf.copy(deep=True)
 
     pdf = gdf.to_pandas()
 
@@ -4857,7 +4864,6 @@ def test_rowwise_ops_datetime_dtypes(data, op, skipna):
     expected = getattr(pdf, op)(axis=1, skipna=skipna)
 
     assert_eq(got, expected)
-    assert_eq(gdf, gdf_copy)
 
 
 @pytest.mark.parametrize(
@@ -4907,7 +4913,6 @@ def test_rowwise_ops_datetime_dtypes(data, op, skipna):
 def test_rowwise_ops_datetime_dtypes_2(data, op, skipna):
 
     gdf = gd.DataFrame(data)
-    gdf_copy = gdf.copy(deep=True)
 
     pdf = gdf.to_pandas()
 
@@ -4915,7 +4920,6 @@ def test_rowwise_ops_datetime_dtypes_2(data, op, skipna):
     expected = getattr(pdf, op)(axis=1, skipna=skipna)
 
     assert_eq(got, expected)
-    assert_eq(gdf, gdf_copy)
 
 
 @pytest.mark.parametrize(
