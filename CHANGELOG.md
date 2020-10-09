@@ -4,7 +4,7 @@
 
 ## Improvements
 
-- PR #6415 Support `datetime64[ms]` in row-wise op
+- PR #6415 Support `datetime64` in row-wise op
 - PR #6442 Remove deprecated `DataFrame.from_gpu_matrix`, `DataFrame.to_gpu_matrix`, `DataFrame.add_column` APIs and method parameters
 
 ## Bug Fixes
