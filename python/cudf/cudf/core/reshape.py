@@ -237,9 +237,9 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 .to_frame()
                 .join(objs[1].to_frame(), on="index", how="inner")
             )
-            for i in range(2, len(objs)):
+            for obj in objs[2:]:
                 result = result.join(
-                    objs[i].to_frame(), on="index", how="inner"
+                    obj.to_frame(), on="index", how="inner"
                 )
             return result
 
@@ -252,7 +252,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         assert typs.issubset(allowed_typs)
         if not typs.issubset(allowed_typs):
             raise TypeError(
-                "Can only concatenate Series" "and DataFrame objs when axis=1"
+                "Can only concatenate Series and DataFrame objects when axis=1"
             )
         df = cudf.DataFrame()
         _normalize_series_and_dataframe(objs, axis=axis)
