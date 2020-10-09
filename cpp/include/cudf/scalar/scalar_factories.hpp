@@ -15,12 +15,7 @@
  */
 #pragma once
 
-#include <cudf/null_mask.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
-#include "scalar.hpp"
-
-#include <type_traits>
+#include <cudf/scalar/scalar.hpp>
 
 namespace cudf {
 /**
