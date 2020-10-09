@@ -109,7 +109,7 @@ using device_storage_type_t =
  * @return false If T does not match the stored column type id
  */
 template <typename T>
-bool column_type_id_matches_column_stored_type(type_id const& id)
+bool type_id_matches_device_storage_type(type_id const& id)
 {
   return (id == type_id::DECIMAL32 && std::is_same<T, int32_t>::value) ||
          (id == type_id::DECIMAL64 && std::is_same<T, int64_t>::value) || id == type_to_id<T>();
