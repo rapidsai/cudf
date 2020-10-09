@@ -6,7 +6,7 @@
 
 ## Bug Fixes
 
-- PR #6446 Fix csv integer parsing
+- PR #6446 Fix csv and json integer parsing
 
 # cuDF 0.16.0 (Date TBD)
 
