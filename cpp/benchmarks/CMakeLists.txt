@@ -26,8 +26,7 @@ endfunction(ConfigureBench)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${THRUST_INCLUDE_DIR}"
-                    "${JITIFY_INCLUDE_DIR}"
+include_directories("${JITIFY_INCLUDE_DIR}"
                     "${LIBCUDACXX_INCLUDE_DIR}")
 
 if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)

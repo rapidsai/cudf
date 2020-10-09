@@ -86,19 +86,27 @@ endif(Boost_INCLUDE_DIR)
 # FindCUDA doesn't quite set the variables it should. RMM needs this to be set to build from CPM
 set(CUDAToolkit_INCLUDE_DIR "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
 
-find_path(RMM_INCLUDE "rmm"
-          HINTS "$ENV{RMM_ROOT}/include")
+#find_path(RMM_INCLUDE "rmm"
+#          HINTS "$ENV{RMM_ROOT}/include")
 
-message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
+#get_cmake_property(_variableNames VARIABLES)
+#list (SORT _variableNames)
+#foreach (_variableName ${_variableNames})
+#    message(STATUS "${_variableName}=${${_variableName}}")
+#endforeach()
 
-#CPMFindPackage(
-#  NAME RMM
-#  GITHUB_REPOSITORY rapidsai/rmm
-#  VERSION ${CMAKE_PROJECT_VERSION}
-#  GIT_TAG "branch-${CMAKE_PROJECT_VERSION_MAJOR}.${CMAKE_PROJECT_VERSION_MINOR}"
-#)
+CPMFindPackage(
+  NAME RMM
+  GITHUB_REPOSITORY rapidsai/rmm
+  VERSION ${CMAKE_PROJECT_VERSION}
+  GIT_TAG "branch-${CMAKE_PROJECT_VERSION_MAJOR}.${CMAKE_PROJECT_VERSION_MINOR}"
+  OPTIONS (CUDAToolkit_INCLUDE_DIR ${CUDAToolkit_INCLUDE_DIR})
+  )
+#set(RMM_INCLUDE "${RMM_SOURCE_DIR}/include")
+#include_directories(${RMM_INCLUDE})
 
 #message(STATUS "RMM: RMM_SOURCE_DIR set to ${RMM_SOURCE_DIR}")
+
 
 ###################################################################################################
 # - DLPACK -------------------------------------------------------------------------------------------
@@ -110,7 +118,6 @@ CPMFindPackage(
 )
 
 message(STATUS "DLPACK: dlpack_SOURCE_DIR set to ${dlpack_SOURCE_DIR}")
-
 
 ###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
@@ -142,9 +149,6 @@ if(BUILD_TESTS)
 
   message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 endif(BUILD_TESTS)
-
-
-
 
 ###################################################################################################
 # - add google benchmark --------------------------------------------------------------------------

@@ -76,7 +76,6 @@ elseif(DEFINED ENV{CONDA_PREFIX})
     message(STATUS "Conda environment detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
 endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 
-
 ###################################################################################################
 # - copy libcu++ ------------------------------------------------------------------------------------
 
@@ -114,8 +113,7 @@ include(cmake/CUDF_Thirdparty.cmake)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${THRUST_INCLUDE_DIR}"
-                    "${JITIFY_INCLUDE_DIR}"
+include_directories("${JITIFY_INCLUDE_DIR}"
                     "${LIBCUDACXX_INCLUDE_DIR}")
 
 if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
@@ -194,8 +192,9 @@ else()
 endif(CUDA_STATIC_RUNTIME)
 
 target_link_libraries(cudf INTERFACE ZLIB::ZLIB Boost::filesystem)
-target_link_libraries(cudf INTERFACE arrow arrow_cuda) 
+target_link_libraries(cudf INTERFACE arrow arrow_cuda)
 target_link_libraries(cudf INTERFACE nvrtc cuda)
+target_link_libraries(cudf INTERFACE rmm)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------

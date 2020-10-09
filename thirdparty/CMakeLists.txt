@@ -5,19 +5,19 @@ include(FetchContent)
 
 message("Fetching Thrust")
 
-FetchContent_Declare(
-    thrust
-    GIT_REPOSITORY https://github.com/NVIDIA/thrust.git
-    GIT_TAG        1.10.0
-    GIT_SHALLOW    true
-)
+CPMFindPackage(
+  NAME Thrust
+  GITHUB_REPOSITORY NVIDIA/thrust
+  GIT_TAG 1.10.0
+  VERSION 1.10.0
+  GIT_SHALLOW TRUE
+  OPTIONS
+    # If there is no pre-installed thrust we can use, we'll install our fetched copy
+    # together with CUDF
+    "THRUST_INSTALL TRUE"
+  )
 
-FetchContent_GetProperties(thrust)
-if(NOT thrust_POPULATED)
-  FetchContent_Populate(thrust)
-  # We are not using the thrust CMake targets, so no need to call `add_subdirectory()`.
-endif()
-set(THRUST_INCLUDE_DIR "${thrust_SOURCE_DIR}" PARENT_SCOPE)
+thrust_create_target(cudf::Thrust FROM_OPTIONS)
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
