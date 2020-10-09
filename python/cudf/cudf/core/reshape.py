@@ -252,7 +252,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         assert typs.issubset(allowed_typs)
         if not typs.issubset(allowed_typs):
             raise TypeError(
-                "Can only concatenate Series" "and DataFrame objs when axis=1"
+                "Can only concatenate Series and DataFrame objects when axis=1"
             )
         df = cudf.DataFrame()
         _normalize_series_and_dataframe(objs, axis=axis)
