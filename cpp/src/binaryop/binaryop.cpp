@@ -36,9 +36,9 @@
 #include "compiled/binary_ops.hpp"
 
 #include <jit/bit.hpp.jit>
+#include <jit/common_headers.hpp>
 #include <jit/durations.hpp.jit>
 #include <jit/fixed_point.hpp.jit>
-#include <jit/common_headers.hpp>
 #include <jit/timestamps.hpp.jit>
 #include <jit/types.hpp.jit>
 #include <string>
