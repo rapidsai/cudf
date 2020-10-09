@@ -85,6 +85,10 @@ using id_to_type = typename id_to_type_impl<Id>::type;
 /**
  * @brief "Returns" the corresponding type that is stored on the device when using `cudf::column`
  *
+ * Only the fixed_point::rep is stored on device when a `fixed_point` is stored in a `cudf::column`.
+ * For example, the `using decimal32 = fixed_point<int32_t, Radix::BASE_10>` means that `decimal32`
+ * is stored as `int32_t` on device when stored in a `cudf::column`.
+ *
  * Use this "type function" with the `using` type alias:
  * @code
  * using Type = device_storage_type_t<Element>;
@@ -111,8 +115,7 @@ using device_storage_type_t =
 template <typename T>
 bool type_id_matches_device_storage_type(type_id const& id)
 {
-  return (id == type_id::DECIMAL32 && std::is_same<T, int32_t>::value) ||
-         (id == type_id::DECIMAL64 && std::is_same<T, int64_t>::value) || id == type_to_id<T>();
+  return id == type_to_id<device_storage_type_t<T>>() || id == type_to_id<T>();
 }
 
 /**
