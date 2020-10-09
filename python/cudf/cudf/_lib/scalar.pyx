@@ -416,7 +416,7 @@ def as_scalar(val, dtype=None):
         return Scalar(value=val, dtype=dtype)
 
 def is_null_host_scalar(slr):
-    if slr is None:
+    if slr is None or slr is cudf.NA:
         return True
     elif isinstance(slr, (np.datetime64, np.timedelta64)) and np.isnat(slr):
         return True
