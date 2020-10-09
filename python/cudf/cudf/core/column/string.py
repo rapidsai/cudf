@@ -5,6 +5,7 @@ import warnings
 import cupy
 import numpy as np
 import pandas as pd
+from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
@@ -41,7 +42,6 @@ from cudf._lib.nvtext.tokenize import (
     detokenize as cpp_detokenize,
     tokenize as cpp_tokenize,
 )
-from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar, as_scalar
 from cudf._lib.strings.attributes import (
     code_points as cpp_code_points,
