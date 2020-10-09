@@ -61,16 +61,13 @@ endif(ZLIB_INCLUDE_DIR)
 ###################################################################################################
 # - find boost ------------------------------------------------------------------------------------
 
-# Don't look for a CMake configuration file
-set(Boost_NO_BOOST_CMAKE ON)
-
 CPMFindPackage(
   NAME Boost
-  GITHUB_REPOSITORY Orphis/boost-cmake@60fb5fa
+  GITHUB_REPOSITORY Orphis/boost-cmake
+  GIT_TAG 60fb5fa
   VERSION 1.70.0
   FIND_PACKAGE_ARGUMENTS "COMPONENTS filesystem"
 )
-
 if(Boost_INCLUDE_DIR)
     message(STATUS "Boost found in ${Boost_INCLUDE_DIR}")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
@@ -83,16 +80,12 @@ endif(Boost_INCLUDE_DIR)
 ###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
 
-# FindCUDA doesn't quite set the variables it should. RMM needs this to be set to build from CPM
-set(CUDAToolkit_INCLUDE_DIR "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
-
 CPMFindPackage(
   NAME RMM
   GITHUB_REPOSITORY rapidsai/rmm
   VERSION ${CMAKE_PROJECT_VERSION}
   GIT_TAG "branch-${CMAKE_PROJECT_VERSION_MAJOR}.${CMAKE_PROJECT_VERSION_MINOR}"
-  OPTIONS (CUDAToolkit_INCLUDE_DIR ${CUDAToolkit_INCLUDE_DIR})
-  )
+)
 
 ###################################################################################################
 # - DLPACK -------------------------------------------------------------------------------------------
