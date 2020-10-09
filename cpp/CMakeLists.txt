@@ -38,24 +38,13 @@ endif(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 
 ###################################################################################################
 # - compiler options ------------------------------------------------------------------------------
+
 include(cmake/CUDF_CompilerOptions.cmake)
 
 ###################################################################################################
 # - CPM options --------------------------------------------------------------------------------
+
 include(cmake/CPM.cmake)
-
-###################################################################################################
-# - cudart options --------------------------------------------------------------------------------
-# cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
-
-option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
-
-if(CUDA_STATIC_RUNTIME)
-    message(STATUS "Enabling static linking of cudart")
-    set(CUDART_LIBRARY "cudart_static")
-else()
-    set(CUDART_LIBRARY "cudart")
-endif(CUDA_STATIC_RUNTIME)
 
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
@@ -156,12 +145,13 @@ endif(CONDA_LINK_DIRS)
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
+
 include(cmake/CUDF_LibraryTargets.cmake)
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
-include(cmake/CUDF_Jitify.cmake)
 
+include(cmake/CUDF_Jitify.cmake)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
@@ -192,17 +182,20 @@ message(STATUS "RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
 target_compile_definitions(cudf PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_LOGGING_LEVEL})
 
 ###################################################################################################
-# - link libraries --------------------------------------------------------------------------------
+# - library targets -------------------------------------------------------------------------------
 
-# link targets for cuDF
-target_link_libraries(cudf 
-                      arrow 
-                      arrow_cuda 
-                      nvrtc 
-                      ${CUDART_LIBRARY} 
-                      cuda 
-                      ZLIB::ZLIB
-                      Boost::filesystem)
+if(CUDA_STATIC_RUNTIME)
+    message(STATUS "Enabling static linking of cudart")
+    set(CUDART_LIBRARY "cudart_static")
+    target_link_libraries(cudf INTERFACE cudart_static)
+else()
+    set(CUDART_LIBRARY "cudart")
+    target_link_libraries(cudf INTERFACE cudart)
+endif(CUDA_STATIC_RUNTIME)
+
+target_link_libraries(cudf INTERFACE ZLIB::ZLIB Boost::filesystem)
+target_link_libraries(cudf INTERFACE arrow arrow_cuda) 
+target_link_libraries(cudf INTERFACE nvrtc cuda)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------

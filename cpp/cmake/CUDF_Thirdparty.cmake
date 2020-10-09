@@ -1,5 +1,3 @@
-
-
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
 
@@ -60,7 +58,6 @@ else()
     message(FATAL_ERROR "ZLib not found, please check your settings.")
 endif(ZLIB_INCLUDE_DIR)
 
-
 ###################################################################################################
 # - find boost ------------------------------------------------------------------------------------
 
@@ -73,9 +70,6 @@ CPMFindPackage(
   VERSION 1.70.0
   FIND_PACKAGE_ARGUMENTS "COMPONENTS filesystem"
 )
-
-message(STATUS "BOOST: Boost_LIBRARY set to ${Boost_LIBRARY}")
-message(STATUS "BOOST: Boost_INCLUDE_DIR set to ${Boost_INCLUDE_DIR}")
 
 if(Boost_INCLUDE_DIR)
     message(STATUS "Boost found in ${Boost_INCLUDE_DIR}")
@@ -124,23 +118,33 @@ message(STATUS "DLPACK: dlpack_SOURCE_DIR set to ${dlpack_SOURCE_DIR}")
 if(BUILD_TESTS)
 
   CPMFindPackage(
-    NAME GTEST
+    NAME GTest
     GITHUB_REPOSITORY google/googletest
     GIT_TAG release-1.10.0
     VERSION 1.10.0
+    GIT_SHALLOW TRUE
     OPTIONS
       "INSTALL_GTEST OFF"
-      "gtest_force_shared_crt"
-  )
-  enable_testing()
+    # googletest >= 1.10.0 provides a cmake config file -- use it if it exists
+    FIND_PACKAGE_ARGUMENTS "CONFIG"
+    )
   
   include_directories("${gtest_SOURCE_DIR}/include"
                       "${gmock_SOURCE_DIR}/include")
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
+
+  if (GTest_ADDED)
+    add_library(GTest::gtest ALIAS gtest)
+    add_library(GTest::gmock ALIAS gmock)
+    add_library(GTest::gtest_main ALIAS gtest_main)
+    add_library(GTest::gmock_main ALIAS gmock_main)
+  endif()
+
+  message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 endif(BUILD_TESTS)
 
 
-message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
+
 
 ###################################################################################################
 # - add google benchmark --------------------------------------------------------------------------
@@ -159,10 +163,8 @@ if(BUILD_BENCHMARKS)
     "RUN_HAVE_GNU_POSIX_REGEX 0" #
   )
 
-  include_directories("${benchmark_INCLUDE_DIR}")
+  #include_directories("${benchmark_INCLUDE_DIR}")
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/benchmarks)
+  message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
 
-  endif(BUILD_BENCHMARKS)
-
-message(STATUS "benchmark_SOURCE_DIR: ${benchmark_SOURCE_DIR}")
-message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
+endif(BUILD_BENCHMARKS)
