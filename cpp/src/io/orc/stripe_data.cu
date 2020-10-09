@@ -1034,7 +1034,8 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
                                       int t)
 {
   uint32_t num_vals_read = 0;
-  // Iterate till all the values are read or nothing more to read
+  // Iterates till `numvals` are read or there is nothing to read once the
+  // stream has reached its end, and can't read anything more.
   while (num_vals_read != numvals) {
     if (t == 0) {
       uint32_t maxpos  = min(bs->len, bs->pos + (BYTESTREAM_BFRSZ - 8u));
