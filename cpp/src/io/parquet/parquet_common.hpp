@@ -18,6 +18,9 @@
 
 #include <cstdint>
 
+#include <string>
+#include <vector>
+
 namespace cudf {
 namespace io {
 namespace parquet {
