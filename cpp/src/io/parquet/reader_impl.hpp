@@ -21,8 +21,8 @@
 
 #pragma once
 
-#include "parquet.h"
-#include "parquet_gpu.h"
+#include <io/parquet/parquet.hpp>
+#include <io/parquet/parquet_gpu.hpp>
 
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
@@ -144,15 +144,11 @@ class reader::impl {
    * @param chunks List of column chunk descriptors
    * @param pages List of page information
    * @param page_nesting_info The allocated nesting info structs.
-   * @param col_nesting_info Per-column, per-nesting level size and nullability information.
-   * @param num_columns Number of columns in the output
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc> const &chunks,
                              hostdevice_vector<gpu::PageInfo> &pages,
                              hostdevice_vector<gpu::PageNestingInfo> &page_nesting_info,
-                             std::vector<std::vector<std::pair<int, bool>>> &col_nesting_info,
-                             int num_columns,
                              cudaStream_t stream);
 
   /**
@@ -167,19 +163,18 @@ class reader::impl {
    *
    * @param[in,out] chunks All chunks to be decoded
    * @param[in,out] pages All pages to be decoded
-   * @param[in,out] page_nesting info Per column-chunk nesting information
-   * @param[in,out] nested_info Per-output column nesting information (size, nullability)
-   * @param[in] num_rows Maximum number of rows to read
    * @param[in] min_rows crop all rows below min_row
+   * @param[in] total_rows Maximum number of rows to read
+   * @param[in] has_lists Whether or not this data contains lists and requires
+   * a preprocess.
    * @param[in] stream Cuda stream
    */
-  void preprocess_nested_columns(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
-                                 hostdevice_vector<gpu::PageInfo> &pages,
-                                 hostdevice_vector<gpu::PageNestingInfo> &page_nesting_info,
-                                 std::vector<std::vector<std::pair<size_type, bool>>> &nested_info,
-                                 size_t min_row,
-                                 size_t total_rows,
-                                 cudaStream_t stream);
+  void preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+                          hostdevice_vector<gpu::PageInfo> &pages,
+                          size_t min_row,
+                          size_t total_rows,
+                          bool has_lists,
+                          cudaStream_t stream);
 
   /**
    * @brief Converts the page data and outputs to columns.
@@ -189,7 +184,6 @@ class reader::impl {
    * @param page_nesting Page nesting array
    * @param min_row Minimum number of rows from start
    * @param total_rows Number of rows to output
-   * @param out_buffers Output columns' device buffers
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
@@ -197,7 +191,6 @@ class reader::impl {
                         hostdevice_vector<gpu::PageNestingInfo> &page_nesting,
                         size_t min_row,
                         size_t total_rows,
-                        std::vector<column_buffer> &out_buffers,
                         cudaStream_t stream);
 
  private:
@@ -205,7 +198,13 @@ class reader::impl {
   std::vector<std::unique_ptr<datasource>> _sources;
   std::unique_ptr<aggregate_metadata> _metadata;
 
-  std::vector<std::pair<int, std::string>> _selected_columns;
+  // input columns to be processed
+  std::vector<input_column_info> _input_columns;
+  // output columns to be generated
+  std::vector<column_buffer> _output_columns;
+  // _output_columns associated schema indices
+  std::vector<int> _output_column_schemas;
+
   bool _strings_to_categorical = false;
   data_type _timestamp_type{type_id::EMPTY};
 };

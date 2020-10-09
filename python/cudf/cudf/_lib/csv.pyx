@@ -4,6 +4,7 @@ from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 
 import cudf
 
@@ -37,7 +38,6 @@ from cudf._lib.cpp.io.types cimport (
     table_with_metadata
 )
 from cudf._lib.io.utils cimport make_source_info, make_sink_info
-from cudf._lib.move cimport move
 from cudf._lib.table cimport Table
 from cudf._lib.cpp.table.table_view cimport table_view
 
@@ -266,15 +266,15 @@ cdef csv_reader_options make_csv_reader_options(
 
 
 def validate_args(
-    delimiter,
-    sep,
-    delim_whitespace,
-    decimal,
-    thousands,
-    nrows,
-    skipfooter,
-    byte_range,
-    skiprows
+    object delimiter,
+    str sep,
+    bool delim_whitespace,
+    str decimal,
+    object thousands,
+    object nrows,
+    int skipfooter,
+    object byte_range,
+    int skiprows
 ):
     if delim_whitespace:
         if delimiter is not None:
@@ -301,38 +301,38 @@ def validate_args(
 
 
 def read_csv(
-    datasource,
-    lineterminator="\n",
-    quotechar='"',
-    quoting=0,
-    doublequote=True,
-    header="infer",
-    mangle_dupe_cols=True,
-    usecols=None,
-    sep=",",
-    delimiter=None,
-    delim_whitespace=False,
-    skipinitialspace=False,
-    names=None,
-    dtype=None,
-    skipfooter=0,
-    skiprows=0,
-    dayfirst=False,
-    compression="infer",
-    thousands=None,
-    decimal=".",
-    true_values=None,
-    false_values=None,
-    nrows=None,
-    byte_range=None,
-    skip_blank_lines=True,
-    parse_dates=None,
-    comment=None,
-    na_values=None,
-    keep_default_na=True,
-    na_filter=True,
-    prefix=None,
-    index_col=None,
+    object datasource,
+    str lineterminator="\n",
+    str quotechar='"',
+    int quoting=0,
+    bool doublequote=True,
+    object header="infer",
+    bool mangle_dupe_cols=True,
+    object usecols=None,
+    str sep=",",
+    object delimiter=None,
+    bool delim_whitespace=False,
+    bool skipinitialspace=False,
+    object names=None,
+    object dtype=None,
+    int skipfooter=0,
+    int skiprows=0,
+    bool dayfirst=False,
+    str compression="infer",
+    object thousands=None,
+    str decimal=".",
+    object true_values=None,
+    object false_values=None,
+    object nrows=None,
+    object byte_range=None,
+    bool skip_blank_lines=True,
+    object parse_dates=None,
+    object comment=None,
+    object na_values=None,
+    bool keep_default_na=True,
+    bool na_filter=True,
+    object prefix=None,
+    object index_col=None,
     **kwargs,
 ):
     """
@@ -397,13 +397,12 @@ def read_csv(
 
 cpdef write_csv(
     Table table,
-    path_or_buf=None,
-    sep=",",
-    na_rep="",
-    header=True,
-    line_terminator="\n",
-    rows_per_chunk=8,
-
+    object path_or_buf=None,
+    str sep=",",
+    str na_rep="",
+    bool header=True,
+    str line_terminator="\n",
+    int rows_per_chunk=8,
 ):
     """
     Cython function to call into libcudf API, see `write_csv`.
@@ -424,7 +423,7 @@ cpdef write_csv(
     cdef string true_value_c = 'True'.encode()
     cdef string false_value_c = 'False'.encode()
     cdef unique_ptr[data_sink] data_sink_c
-    cdef sink_info sink_info_c = make_sink_info(path_or_buf, &data_sink_c)
+    cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
 
     if header is True and table._column_names is not None:
         metadata_.column_names.reserve(len(table._column_names))

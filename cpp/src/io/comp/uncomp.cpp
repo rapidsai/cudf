@@ -21,6 +21,9 @@
 #include "unbz2.h"  // bz2 uncompress
 
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
+
+using cudf::detail::host_span;
 
 namespace cudf {
 namespace io {
@@ -412,14 +415,12 @@ std::vector<char> io_uncompress_single_h2d(const void *src, size_t src_size, int
  * a vector.
  *
  * @param[in] h_data Pointer to the csv data in host memory
- * @param[in] num_bytes Size of the input data, in bytes
  * @param[in] compression String describing the compression type
  *
  * @return Vector containing the output uncompressed data
  */
-std::vector<char> getUncompressedHostData(const char *h_data,
-                                          size_t num_bytes,
-                                          const std::string &compression)
+std::vector<char> get_uncompressed_data(host_span<char const> const data,
+                                        std::string const &compression)
 {
   int comp_type = IO_UNCOMP_STREAM_TYPE_INFER;
   if (compression == "gzip")
@@ -431,7 +432,7 @@ std::vector<char> getUncompressedHostData(const char *h_data,
   else if (compression == "xz")
     comp_type = IO_UNCOMP_STREAM_TYPE_XZ;
 
-  return io_uncompress_single_h2d(h_data, num_bytes, comp_type);
+  return io_uncompress_single_h2d(data.data(), data.size(), comp_type);
 }
 
 /**

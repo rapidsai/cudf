@@ -39,8 +39,8 @@ requirements:
 test:
   requires:
     - cudatoolkit {{ cuda_version }}.*
-  commands:
-    - python -c "import cudf_kafka"
+  imports:
+    - cudf_kafka
 
 about:
   home: http://rapids.ai/

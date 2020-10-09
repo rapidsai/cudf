@@ -56,7 +56,7 @@ logger "Check GPU usage..."
 nvidia-smi
 
 logger "Activate conda env..."
-source activate gdf
+source activate rapids
 
 # Install contextvars on Python 3.6
 py_ver=$(python -c "import sys; print('.'.join(map(str, sys.version_info[:2])))")
@@ -104,6 +104,11 @@ fi
 # cuDF
 ################################################################################
 
+set +e -Eo pipefail
+EXITCODE=0
+trap "EXITCODE=1" ERR
+
+
 if hasArg --skip-tests; then
     logger "Skipping Tests..."
 else
@@ -142,3 +147,5 @@ else
     ${WORKSPACE}/ci/gpu/test-notebooks.sh 2>&1 | tee nbtest.log
     python ${WORKSPACE}/ci/utils/nbtestlog2junitxml.py nbtest.log
 fi
+
+return ${EXITCODE}

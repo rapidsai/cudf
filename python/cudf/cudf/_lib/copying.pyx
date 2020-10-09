@@ -5,13 +5,13 @@ import pandas as pd
 from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 from libc.stdint cimport int32_t, int64_t
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_scalar
 from cudf._lib.scalar cimport Scalar
 from cudf._lib.table cimport Table
-from cudf._lib.move cimport move
 from cudf._lib.scalar cimport Scalar
 from cudf._lib.table cimport Table
 
