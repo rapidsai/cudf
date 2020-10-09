@@ -86,15 +86,6 @@ endif(Boost_INCLUDE_DIR)
 # FindCUDA doesn't quite set the variables it should. RMM needs this to be set to build from CPM
 set(CUDAToolkit_INCLUDE_DIR "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
 
-#find_path(RMM_INCLUDE "rmm"
-#          HINTS "$ENV{RMM_ROOT}/include")
-
-#get_cmake_property(_variableNames VARIABLES)
-#list (SORT _variableNames)
-#foreach (_variableName ${_variableNames})
-#    message(STATUS "${_variableName}=${${_variableName}}")
-#endforeach()
-
 CPMFindPackage(
   NAME RMM
   GITHUB_REPOSITORY rapidsai/rmm
@@ -102,11 +93,6 @@ CPMFindPackage(
   GIT_TAG "branch-${CMAKE_PROJECT_VERSION_MAJOR}.${CMAKE_PROJECT_VERSION_MINOR}"
   OPTIONS (CUDAToolkit_INCLUDE_DIR ${CUDAToolkit_INCLUDE_DIR})
   )
-#set(RMM_INCLUDE "${RMM_SOURCE_DIR}/include")
-#include_directories(${RMM_INCLUDE})
-
-#message(STATUS "RMM: RMM_SOURCE_DIR set to ${RMM_SOURCE_DIR}")
-
 
 ###################################################################################################
 # - DLPACK -------------------------------------------------------------------------------------------
@@ -117,13 +103,10 @@ CPMFindPackage(
   VERSION 0.3
 )
 
-message(STATUS "DLPACK: dlpack_SOURCE_DIR set to ${dlpack_SOURCE_DIR}")
-
 ###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
-
   CPMFindPackage(
     NAME GTest
     GITHUB_REPOSITORY google/googletest
@@ -135,11 +118,9 @@ if(BUILD_TESTS)
     # googletest >= 1.10.0 provides a cmake config file -- use it if it exists
     FIND_PACKAGE_ARGUMENTS "CONFIG"
     )
-  
   include_directories("${gtest_SOURCE_DIR}/include"
                       "${gmock_SOURCE_DIR}/include")
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
-
   if (GTest_ADDED)
     add_library(GTest::gtest ALIAS gtest)
     add_library(GTest::gmock ALIAS gmock)
@@ -154,7 +135,6 @@ endif(BUILD_TESTS)
 # - add google benchmark --------------------------------------------------------------------------
 
 if(BUILD_BENCHMARKS)
-
   CPMFindPackage(
     NAME benchmark
     GITHUB_REPOSITORY google/benchmark
@@ -166,9 +146,6 @@ if(BUILD_BENCHMARKS)
     # Therefore, we just disable the feature test and assume platforms we care about have a regex impl available
     "RUN_HAVE_GNU_POSIX_REGEX 0" #
   )
-
-  #include_directories("${benchmark_INCLUDE_DIR}")
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/benchmarks)
   message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
-
 endif(BUILD_BENCHMARKS)
