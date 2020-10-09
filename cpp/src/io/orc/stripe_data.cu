@@ -1105,6 +1105,8 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
         bs->fill_count = 0;
       }
     }
+    // Adding to get all threads in sync before next read
+    __syncthreads();
   }
   return num_vals_read;
 }
