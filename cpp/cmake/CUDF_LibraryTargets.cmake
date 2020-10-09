@@ -1,3 +1,4 @@
+
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
 
@@ -80,23 +81,8 @@ add_library(cudf
             src/io/orc/stats_enc.cu
             src/io/orc/reader_impl.cu
             src/io/orc/writer_impl.cu
-            src/io/parquet/page_data.cuadd_library(rmm INTERFACE)
-            add_library(rmm::rmm ALIAS rmm)
-            
-            target_include_directories(rmm INTERFACE
-              "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-              "$<INSTALL_INTERFACE:include>"
-              )
-            
-            if(CUDA_STATIC_RUNTIME)
-              message(STATUS "Enabling static linking of cudart")
-              target_link_libraries(rmm INTERFACE CUDA::cudart_static)
-            else()
-              target_link_libraries(rmm INTERFACE CUDA::cudart)
-            endif(CUDA_STATIC_RUNTIME)
-            
-            target_link_libraries(rmm INTERFACE rmm::Thrust)
-            target_link_libraries(rmm INTERFACE spdlog::spdlog_header_only)
+            src/io/parquet/page_data.cu
+            src/io/parquet/compact_protocol_writer.cpp
             src/io/parquet/page_hdr.cu
             src/io/parquet/page_enc.cu
             src/io/parquet/page_dict.cu
@@ -108,23 +94,7 @@ add_library(cudf
             src/io/comp/brotli_dict.cpp
             src/io/comp/debrotli.cu
             src/io/comp/snap.cu
-            src/io/comp/unsnap.cuadd_library(rmm INTERFACE)
-            add_library(rmm::rmm ALIAS rmm)
-            
-            target_include_directories(rmm INTERFACE
-              "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-              "$<INSTALL_INTERFACE:include>"
-              )
-            
-            if(CUDA_STATIC_RUNTIME)
-              message(STATUS "Enabling static linking of cudart")
-              target_link_libraries(rmm INTERFACE CUDA::cudart_static)
-            else()
-              target_link_libraries(rmm INTERFACE CUDA::cudart)
-            endif(CUDA_STATIC_RUNTIME)
-            
-            target_link_libraries(rmm INTERFACE rmm::Thrust)
-            target_link_libraries(rmm INTERFACE spdlog::spdlog_header_only)
+            src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
             src/io/functions.cpp
             src/io/statistics/column_stats.cu
