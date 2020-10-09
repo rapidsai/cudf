@@ -80,6 +80,9 @@ endif(Boost_INCLUDE_DIR)
 ###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
 
+# FindCUDA doesn't quite set the variables it should. RMM needs this to be set to build from CPM
+set(CUDAToolkit_INCLUDE_DIR "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+
 CPMFindPackage(
   NAME RMM
   GITHUB_REPOSITORY rapidsai/rmm
@@ -114,13 +117,6 @@ if(BUILD_TESTS)
   include_directories("${gtest_SOURCE_DIR}/include"
                       "${gmock_SOURCE_DIR}/include")
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
-  if (GTest_ADDED)
-    add_library(GTest::gtest ALIAS gtest)
-    add_library(GTest::gmock ALIAS gmock)
-    add_library(GTest::gtest_main ALIAS gtest_main)
-    add_library(GTest::gmock_main ALIAS gmock_main)
-  endif()
-
   message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 endif(BUILD_TESTS)
 
