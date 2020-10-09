@@ -344,3 +344,21 @@ def test_orc_writer_sliced(tmpdir):
 
     df_select.to_orc(cudf_path)
     assert_eq(cudf.read_orc(cudf_path), df_select.reset_index(drop=True))
+
+
+@pytest.mark.parametrize(
+    "orc_file",
+    [
+        "TestOrcFile.decimal.same.values.orc",
+        "TestOrcFile.decimal.multiple.values.orc",
+    ],
+)
+def test_orc_reader_decimal_type(datadir, orc_file):
+    file_path = datadir / orc_file
+    pdf = pd.read_orc(file_path)
+    df = cudf.read_orc(file_path).to_pandas()
+    # Converting to strings since pandas keeps it in decimal
+    pdf["col8"] = pdf["col8"].astype("str")
+    df["col8"] = df["col8"].astype("str")
+
+    assert_eq(pdf, df)
