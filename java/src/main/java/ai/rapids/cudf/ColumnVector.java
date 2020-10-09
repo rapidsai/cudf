@@ -1010,16 +1010,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
       assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
       assert !columns[i].getType().isTimestamp() : "Unsupported column type Timestamp";
-      if(columns[i].getType() == DType.LIST) {
-        assert columns[i].getNumChildren() == 1 : "Unrecognized list column format";
-        ColumnViewAccess listDataColumn = columns[i].getChildColumnViewAccess(0);
-        assert !listDataColumn.getDataType().isDurationType() : "Unsupported column type List of Durations";
-        assert !listDataColumn.getDataType().isTimestamp() : "Unsupported column type List of Timestamp";
-        assert !listDataColumn.getDataType().isNestedType() : "Unsupported column type List of nested types";
-        listDataColumn.close();
-      } else {
-        assert !columns[i].getType().isNestedType() : "Unsupported nested type column";
-      }
+      assert !columns[i].getType().isNestedType() || columns[i].getType() == DType.LIST :
+        "Unsupported nested type column";
       columnViews[i] = columns[i].getNativeView();
     }
     return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId()));
