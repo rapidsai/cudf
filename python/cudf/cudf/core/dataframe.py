@@ -5435,7 +5435,7 @@ class DataFrame(Frame, Serializable):
         else:
             mask = None
 
-        coerced = filtered.astype(common_dtype)
+        coerced = filtered.astype(common_dtype, copy=False)
         if is_pure_dt:
             # Further convert into cupy friendly types
             coerced = coerced.astype("int64", copy=False)
