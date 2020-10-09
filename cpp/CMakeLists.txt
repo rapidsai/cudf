@@ -217,7 +217,22 @@ endif(PER_THREAD_DEFAULT_STREAM)
 
 if(BUILD_TESTS)
 
+  CPMFindPackage(
+    NAME GTEST
+    GITHUB_REPOSITORY google/googletest
+    GIT_TAG release-1.10.0
+    VERSION 1.10.0
+    OPTIONS
+      "INSTALL_GTEST OFF"
+      "gtest_force_shared_crt"
+  )
+  enable_testing()
+  
+  include_directories("${gtest_SOURCE_DIR}/include"
+                      "${gmock_SOURCE_DIR}/include")
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
 endif(BUILD_TESTS)
+
 
 message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 
@@ -226,9 +241,24 @@ message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 
 if(BUILD_BENCHMARKS)
 
+  CPMFindPackage(
+    NAME benchmark
+    GITHUB_REPOSITORY google/benchmark
+    VERSION 1.5.1
+    OPTIONS
+    "BENCHMARK_ENABLE_TESTING OFF"
+    # The REGEX feature test fails when gbench's cmake is run under CPM because it doesn't assume C++11
+    # Additionally, attempting to set the CMAKE_CXX_VERSION here doesn't propogate to the feature test build
+    # Therefore, we just disable the feature test and assume platforms we care about have a regex impl available
+    "RUN_HAVE_GNU_POSIX_REGEX 0" #
+  )
 
-endif(BUILD_BENCHMARKS)
+  include_directories("${benchmark_INCLUDE_DIR}/include")
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/benchmarks)
 
+  endif(BUILD_BENCHMARKS)
+
+message(STATUS "benchmark_SOURCE_DIR: ${benchmark_SOURCE_DIR}")
 message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
 
 ###################################################################################################
