@@ -90,6 +90,19 @@ enum statistics_freq {
 };
 
 /**
+ * @brief Detailed name information for output columns.
+ *
+ * The hierarchy of children matches the hierarchy of children in the output
+ * cudf columns.
+ */
+struct column_name_info {
+  std::string name;
+  std::vector<column_name_info> children;
+  column_name_info(std::string const& _name) : name(_name) {}
+  column_name_info() = default;
+};
+
+/**
  * @brief Table metadata for io readers/writers (primarily column names)
  * For nested types (structs, maps, unions), the ordering of names in the column_names vector
  * corresponds to a pre-order traversal of the column tree.
@@ -105,7 +118,9 @@ enum statistics_freq {
  * f5    f6
  */
 struct table_metadata {
-  std::vector<std::string> column_names;         //!< Names of columns contained in the table
+  std::vector<std::string> column_names;  //!< Names of columns contained in the table
+  std::vector<column_name_info>
+    schema_info;  //!< Detailed name information for the entire output hierarchy
   std::map<std::string, std::string> user_data;  //!< Format-dependent metadata as key-values pairs
 };
 

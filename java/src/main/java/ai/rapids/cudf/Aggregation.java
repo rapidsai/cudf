@@ -26,7 +26,9 @@ import java.util.Arrays;
  */
 public abstract class Aggregation {
     /*
-     * Should be kept in sync with AggregationJni.cpp.
+     * This should be kept in sync with AggregationJni.cpp.  Note that the nativeId here is not the
+     * same as the C++ cudf::aggregation::Kind.  They are very closely related, but both are
+     * implementation details and generally should be hidden from the end user.
      * Visible for testing.
      */
     enum Kind {
@@ -49,8 +51,10 @@ public abstract class Aggregation {
         NTH_ELEMENT(16),
         ROW_NUMBER(17),
         COLLECT(18),
-        PTX(19),
-        CUDA(20);
+        LEAD(19),
+        LAG(20),
+        PTX(21),
+        CUDA(22);
 
         final int nativeId;
 
@@ -211,6 +215,55 @@ public abstract class Aggregation {
         }
     }
 
+    private static class LeadLagAggregation extends Aggregation {
+        private final int offset;
+        private final ColumnVector defaultOutput;
+
+        LeadLagAggregation(Kind kind, int offset, ColumnVector defaultOutput) {
+            super(kind);
+            this.offset = offset;
+            this.defaultOutput = defaultOutput;
+        }
+
+        @Override
+        long createNativeInstance() {
+            // Default output comes from a different path
+            return Aggregation.createLeadLagAgg(kind.nativeId, offset);
+        }
+
+        @Override
+        public int hashCode() {
+            int ret = 31 * kind.hashCode() + offset;
+            if (defaultOutput != null) {
+                ret = 31 * ret + defaultOutput.hashCode();
+            }
+            return ret;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            } else if (other instanceof LeadLagAggregation) {
+                LeadLagAggregation o = (LeadLagAggregation) other;
+                boolean ret = o.kind == this.kind && this.offset == o.offset;
+                if (defaultOutput != null) {
+                    ret = ret && defaultOutput.equals(o.defaultOutput);
+                } else if (o.defaultOutput != null) {
+                    // defaultOutput == null and o.defaultOutput != null so they are not equal
+                    ret = false;
+                } // else they are both null which is the same and a noop.
+                return ret;
+            }
+            return false;
+        }
+
+        @Override
+        long getDefaultOutput() {
+            return defaultOutput == null ? 0 : defaultOutput.getNativeView();
+        }
+    }
+
     protected final Kind kind;
 
     protected Aggregation(Kind kind) {
@@ -223,6 +276,17 @@ public abstract class Aggregation {
      */
     public AggregationOnColumn onColumn(int columnIndex) {
         return new AggregationOnColumn(this, columnIndex);
+    }
+
+    /**
+     * Get the native view of a ColumnVector that provides default values to be used for some window
+     * aggregations when there is not enough data to do the computation.  This really only happens
+     * for a very few number of window aggregations. Also note that the ownership and life cycle of
+     * the column is controlled outside of this, so don't try to close it.
+     * @return the native view of the column vector or 0.
+     */
+    long getDefaultOutput() {
+        return 0;
     }
 
     /**
@@ -453,6 +517,42 @@ public abstract class Aggregation {
     }
 
     /**
+     * In a rolling window return the value offset entries ahead or null if it is outside of the
+     * window.
+     */
+    public static Aggregation lead(int offset) {
+        return lead(offset, null);
+    }
+
+    /**
+     * In a rolling window return the value offset entries ahead or the corresponding value from
+     * defaultOutput if it is outside of the window. Note that this does not take any ownership of
+     * defaultOutput and the caller mush ensure that defaultOutput remains valid during the life
+     * time of this aggregation operation.
+     */
+    public static Aggregation lead(int offset, ColumnVector defaultOutput) {
+        return new LeadLagAggregation(Kind.LEAD, offset, defaultOutput);
+    }
+
+    /**
+     * In a rolling window return the value offset entries behind or null if it is outside of the
+     * window.
+     */
+    public static Aggregation lag(int offset) {
+        return lag(offset, null);
+    }
+
+    /**
+     * In a rolling window return the value offset entries behind or the corresponding value from
+     * defaultOutput if it is outside of the window. Note that this does not take any ownership of
+     * defaultOutput and the caller mush ensure that defaultOutput remains valid during the life
+     * time of this aggregation operation.
+     */
+    public static Aggregation lag(int offset, ColumnVector defaultOutput) {
+        return new LeadLagAggregation(Kind.LAG, offset, defaultOutput);
+    }
+
+    /**
      * Create one of the aggregations that only needs a kind, no other parameters. This does not
      * work for all types and for code safety reasons each kind is added separately.
      */
@@ -476,5 +576,10 @@ public abstract class Aggregation {
     /**
      * Create quantile aggregation.
      */
-    private static native long createQuantAgg(int nativeId, double[] quantiles);
+    private static native long createQuantAgg(int method, double[] quantiles);
+
+    /**
+     * Create a lead or lag aggregation.
+     */
+    private static native long createLeadLagAgg(int kind, int offset);
 }

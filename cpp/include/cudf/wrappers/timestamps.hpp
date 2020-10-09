@@ -48,8 +48,9 @@ struct timestamp : time_point<Duration> {
 }  // namespace detail
 
 /**
- * @addtogroup timestamp_classes Timestamp
+ * @addtogroup timestamp_classes
  * @{
+ * @file
  */
 
 /**

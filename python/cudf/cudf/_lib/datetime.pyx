@@ -1,9 +1,9 @@
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 
-from cudf._lib.move cimport move
 from cudf._lib.column cimport Column
 
 cimport cudf._lib.cpp.datetime as libcudf_datetime

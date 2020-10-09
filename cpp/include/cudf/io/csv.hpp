@@ -31,14 +31,18 @@ namespace cudf {
 namespace io {
 
 /**
- *@breif Builder to build options for `read_csv()`.
+ * @addtogroup io_readers
+ * @{
+ * @file
+ */
+
+/**
+ *@brief Builder to build options for `read_csv()`.
  */
 class csv_reader_options_builder;
 
 /**
  * @brief Settings to use for `read_csv()`.
- *
- * @ingroup io_readers
  */
 
 class csv_reader_options {
@@ -355,7 +359,7 @@ class csv_reader_options {
   {
     if ((offset != 0) and ((_skiprows != 0) or (_skipfooter != 0) or (_nrows != -1))) {
       CUDF_FAIL(
-        "When ther is valid value in skiprows or skipfooter or nrows, offset can't have non-zero "
+        "When there is valid value in skiprows or skipfooter or nrows, offset can't have non-zero "
         "value");
     }
     _byte_range_offset = offset;
@@ -370,8 +374,8 @@ class csv_reader_options {
   {
     if ((size != 0) and ((_skiprows != 0) or (_skipfooter != 0) or (_nrows != -1))) {
       CUDF_FAIL(
-        "When ther is valid value in skiprows or skipfooter or nrows, range size can't have "
-        "non-zero value");
+        "If the value of any of skiprows, skipfooter or nrows is valid, range size cannot be "
+        "non-zero.");
     }
     _byte_range_size = size;
   }
@@ -1091,8 +1095,6 @@ class csv_reader_options_builder {
 /**
  * @brief Reads a CSV dataset into a set of columns.
  *
- * @ingroup io_readers
- *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
  *  std::string filepath = "dataset.csv";
@@ -1112,15 +1114,20 @@ table_with_metadata read_csv(
   csv_reader_options const& options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/** @} */  // end of group
 /**
- *@breif Builder to build options for `writer_csv()`.
+ * @addtogroup io_writers
+ * @{
+ * @file
+ */
+
+/**
+ *@brief Builder to build options for `writer_csv()`.
  */
 class csv_writer_options_builder;
 
 /**
  * @brief Settings to use for `write_csv()`.
- *
- * @ingroup io_writers
  */
 class csv_writer_options {
   // Specify the sink to use for writer output
@@ -1433,5 +1440,7 @@ class csv_writer_options_builder {
  */
 void write_csv(csv_writer_options const& options,
                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

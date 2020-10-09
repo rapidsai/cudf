@@ -417,34 +417,34 @@ __inline__ __device__ int64_t parseTimeDeltaFormat(const char* data, long start,
   // single pass to parse days, hour, minute, seconds, nanosecond
   long moving_pos = start;
   int32_t value   = parse_integer<int>(data, moving_pos, end);
-  if (std::is_same<T, cudf::duration_D>::value) return value;
-  while (data[moving_pos] == ' ') moving_pos++;
-  if (moving_pos >= end) return value;  // %value
-  // " days [+]"
-  const bool days_seperator = is_present(data, moving_pos, end, "days", 4);
-  while (data[moving_pos] == ' ') moving_pos++;
-  moving_pos += (data[moving_pos] == '+');
-  if (days_seperator) {
-    days = value;
-    hour = parse_integer<int>(data, moving_pos, end);
+  while (data[moving_pos] == ' ' && moving_pos <= end) moving_pos++;
+  if (std::is_same<T, cudf::duration_D>::value || moving_pos >= end) {  // %value
+    return value;
   } else {
-    hour = value;
-  }
+    // " days [+]"
+    const bool days_seperator = is_present(data, moving_pos, end, "days", 4);
+    while (data[moving_pos] == ' ' && moving_pos <= end) moving_pos++;
+    moving_pos += (data[moving_pos] == '+');
+    if (days_seperator) {
+      days = value;
+      hour = parse_integer<int>(data, moving_pos, end);
+    } else {
+      hour = value;
+    }
 
-  //:%M:%S
-  if (data[moving_pos] == sep) { minute = parse_integer<int>(data, ++moving_pos, end); }
-  if (data[moving_pos] == sep) { second = parse_integer<int>(data, ++moving_pos, end); }
-  if (std::is_same<T, cudf::duration_s>::value) {
-    return ((days * 24L + hour) * 60L + minute) * 60L + second;
-  }
-  //.n
-  if (data[moving_pos] == '.') {
-    auto start_subsecond              = moving_pos + 1;
-    nanosecond                        = parse_integer<int>(data, ++moving_pos, end);
-    int8_t num_digits                 = min(9L, moving_pos - start_subsecond);
-    constexpr int64_t powers_of_ten[] = {
-      1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
-    nanosecond *= powers_of_ten[9 - num_digits];
+    //:%M:%S
+    if (data[moving_pos] == sep) { minute = parse_integer<int>(data, ++moving_pos, end); }
+    if (data[moving_pos] == sep) { second = parse_integer<int>(data, ++moving_pos, end); }
+    if (std::is_same<T, cudf::duration_s>::value) {
+      return ((days * 24L + hour) * 60L + minute) * 60L + second;
+    } else if (data[moving_pos] == '.') {  //.n
+      auto start_subsecond              = moving_pos + 1;
+      nanosecond                        = parse_integer<int>(data, ++moving_pos, end);
+      int8_t num_digits                 = min(9L, moving_pos - start_subsecond);
+      constexpr int64_t powers_of_ten[] = {
+        1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
+      nanosecond *= powers_of_ten[9 - num_digits];
+    }
   }
 
   return cuda::std::chrono::duration_cast<T>(

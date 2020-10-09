@@ -1136,6 +1136,14 @@ def test_dataframe_hash_partition_keep_index(keep_index):
         assert_eq(exp, got)
 
 
+def test_dataframe_hash_partition_empty():
+    gdf = gd.DataFrame({"val": [1, 2], "key": [3, 2]}, index=["a", "b"])
+    parts = gdf.iloc[:0].partition_by_hash(["key"], nparts=3)
+    assert len(parts) == 3
+    for part in parts:
+        assert_eq(gdf.iloc[:0], part)
+
+
 @pytest.mark.parametrize("dtype1", utils.supported_numpy_dtypes)
 @pytest.mark.parametrize("dtype2", utils.supported_numpy_dtypes)
 def test_dataframe_concat_different_numerical_columns(dtype1, dtype2):
@@ -1372,36 +1380,38 @@ def test_from_records_index(columns, index):
     assert_eq(df, gdf)
 
 
-def test_from_gpu_matrix():
+def test_dataframe_construction_from_cupy_arrays():
     h_ary = np.array([[1, 2, 3], [4, 5, 6]], np.int32)
     d_ary = cupy.asarray(h_ary)
 
-    gdf = gd.DataFrame.from_gpu_matrix(d_ary, columns=["a", "b", "c"])
+    gdf = gd.DataFrame(d_ary, columns=["a", "b", "c"])
     df = pd.DataFrame(h_ary, columns=["a", "b", "c"])
     assert isinstance(gdf, gd.DataFrame)
 
     assert_eq(df, gdf)
 
-    gdf = gd.DataFrame.from_gpu_matrix(d_ary)
+    gdf = gd.DataFrame(d_ary)
     df = pd.DataFrame(h_ary)
     assert isinstance(gdf, gd.DataFrame)
 
     assert_eq(df, gdf)
 
-    gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=["a", "b"])
+    gdf = gd.DataFrame(d_ary, index=["a", "b"])
     df = pd.DataFrame(h_ary, index=["a", "b"])
     assert isinstance(gdf, gd.DataFrame)
 
     assert_eq(df, gdf)
 
-    gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=0)
+    gdf = gd.DataFrame(d_ary)
+    gdf = gdf.set_index(keys=0, drop=False)
     df = pd.DataFrame(h_ary)
     df = df.set_index(keys=0, drop=False)
     assert isinstance(gdf, gd.DataFrame)
 
     assert_eq(df, gdf)
 
-    gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=1)
+    gdf = gd.DataFrame(d_ary)
+    gdf = gdf.set_index(keys=1, drop=False)
     df = pd.DataFrame(h_ary)
     df = df.set_index(keys=1, drop=False)
     assert isinstance(gdf, gd.DataFrame)
@@ -1409,24 +1419,30 @@ def test_from_gpu_matrix():
     assert_eq(df, gdf)
 
 
-def test_from_gpu_matrix_wrong_dimensions():
+def test_dataframe_cupy_wrong_dimensions():
     d_ary = cupy.empty((2, 3, 4), dtype=np.int32)
     with pytest.raises(
-        ValueError, match="matrix dimension expected 2 but found 3"
+        ValueError, match="records dimension expected 1 or 2 but found: 3"
     ):
-        gd.DataFrame.from_gpu_matrix(d_ary)
+        gd.DataFrame(d_ary)
 
 
-def test_from_gpu_matrix_wrong_index():
+def test_dataframe_cupy_array_wrong_index():
     d_ary = cupy.empty((2, 3), dtype=np.int32)
 
     with pytest.raises(
-        ValueError, match="index length expected 2 but found 1"
+        ValueError,
+        match="Length mismatch: Expected axis has 2 elements, "
+        "new values have 1 elements",
     ):
-        gd.DataFrame.from_gpu_matrix(d_ary, index=["a"])
+        gd.DataFrame(d_ary, index=["a"])
 
-    with pytest.raises(KeyError):
-        gd.DataFrame.from_gpu_matrix(d_ary, index="a")
+    with pytest.raises(
+        ValueError,
+        match="Length mismatch: Expected axis has 2 elements, "
+        "new values have 1 elements",
+    ):
+        gd.DataFrame(d_ary, index="a")
 
 
 @pytest.mark.xfail(reason="constructor does not coerce index inputs")
@@ -2290,10 +2306,80 @@ def test_reset_index_inplace(pdf, gdf, drop):
     assert_eq(pdf, gdf)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "a": [1, 2, 3, 4, 5],
+            "b": ["a", "b", "c", "d", "e"],
+            "c": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    ],
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        "a",
+        ["a", "b"],
+        pd.CategoricalIndex(["I", "II", "III", "IV", "V"]),
+        pd.Series(["h", "i", "k", "l", "m"]),
+        ["b", pd.Index(["I", "II", "III", "IV", "V"])],
+        ["c", [11, 12, 13, 14, 15]],
+        pd.MultiIndex(
+            levels=[
+                ["I", "II", "III", "IV", "V"],
+                ["one", "two", "three", "four", "five"],
+            ],
+            codes=[[0, 1, 2, 3, 4], [4, 3, 2, 1, 0]],
+            names=["col1", "col2"],
+        ),
+        pd.RangeIndex(0, 5),  # corner case
+        [pd.Series(["h", "i", "k", "l", "m"]), pd.RangeIndex(0, 5)],
+        [
+            pd.MultiIndex(
+                levels=[
+                    ["I", "II", "III", "IV", "V"],
+                    ["one", "two", "three", "four", "five"],
+                ],
+                codes=[[0, 1, 2, 3, 4], [4, 3, 2, 1, 0]],
+                names=["col1", "col2"],
+            ),
+            pd.RangeIndex(0, 5),
+        ],
+    ],
+)
 @pytest.mark.parametrize("drop", [True, False])
-def test_set_index(pdf, gdf, drop):
-    for col in pdf.columns:
-        assert_eq(pdf.set_index(col, drop=drop), gdf.set_index(col, drop=drop))
+@pytest.mark.parametrize("append", [True, False])
+@pytest.mark.parametrize("inplace", [True, False])
+def test_set_index(data, index, drop, append, inplace):
+    gdf = gd.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    expected = pdf.set_index(index, inplace=inplace, drop=drop, append=append)
+    actual = gdf.set_index(index, inplace=inplace, drop=drop, append=append)
+
+    if inplace:
+        expected = pdf
+        actual = gdf
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "a": [1, 1, 2, 2, 5],
+            "b": ["a", "b", "c", "d", "e"],
+            "c": [1.0, 2.0, 3.0, 4.0, 5.0],
+        }
+    ],
+)
+@pytest.mark.parametrize("index", ["a", pd.Index([1, 1, 2, 2, 3])])
+@pytest.mark.parametrize("verify_integrity", [True])
+@pytest.mark.xfail
+def test_set_index_verify_integrity(data, index, verify_integrity):
+    gdf = gd.DataFrame(data)
+    gdf.set_index(index, verify_integrity=verify_integrity)
 
 
 @pytest.mark.parametrize("drop", [True, False])
@@ -4508,39 +4594,199 @@ def test_df_constructor_dtype(dtype):
         gd.datasets.randomdata(
             nrows=10, dtypes={"a": bool, "b": int, "c": float, "d": str}
         ),
-        pytest.param(
-            gd.DataFrame(),
-            marks=[
-                pytest.mark.xfail(
-                    reason="_apply_support_method fails on empty dataframes."
-                )
-            ],
+        gd.DataFrame(),
+        gd.DataFrame({"a": [0, 1, 2], "b": [1, None, 3]}),
+        gd.DataFrame(
+            {
+                "a": [1, 2, 3, 4],
+                "b": [7, np.NaN, 9, 10],
+                "c": [np.NaN, np.NaN, np.NaN, np.NaN],
+                "d": gd.Series([None, None, None, None], dtype="int64"),
+                "e": [100, None, 200, None],
+                "f": gd.Series([10, None, np.NaN, 11], nan_as_null=False),
+            }
         ),
-        pytest.param(
-            gd.DataFrame({"a": [0, 1, 2], "b": [1, None, 3]}),
-            marks=[
-                pytest.mark.xfail(
-                    reason="Rowwise ops do not currently support nulls."
-                )
-            ],
+        gd.DataFrame(
+            {
+                "a": [10, 11, 12, 13, 14, 15],
+                "b": gd.Series(
+                    [10, None, np.NaN, 2234, None, np.NaN], nan_as_null=False
+                ),
+            }
         ),
     ],
 )
 @pytest.mark.parametrize(
     "op", ["max", "min", "sum", "product", "mean", "var", "std"]
 )
-def test_rowwise_ops(data, op):
+@pytest.mark.parametrize("skipna", [True, False])
+def test_rowwise_ops(data, op, skipna):
     gdf = data
     pdf = gdf.to_pandas()
 
     if op in ("var", "std"):
-        expected = getattr(pdf, op)(axis=1, ddof=0)
-        got = getattr(gdf, op)(axis=1, ddof=0)
+        expected = getattr(pdf, op)(axis=1, ddof=0, skipna=skipna)
+        got = getattr(gdf, op)(axis=1, ddof=0, skipna=skipna)
     else:
-        expected = getattr(pdf, op)(axis=1)
-        got = getattr(gdf, op)(axis=1)
+        expected = getattr(pdf, op)(axis=1, skipna=skipna)
+        got = getattr(gdf, op)(axis=1, skipna=skipna)
 
     assert_eq(expected, got, check_less_precise=7)
+
+
+@pytest.mark.parametrize(
+    "op", ["max", "min", "sum", "product", "mean", "var", "std"]
+)
+def test_rowwise_ops_nullable_dtypes_all_null(op):
+    gdf = gd.DataFrame(
+        {
+            "a": [1, 2, 3, 4],
+            "b": [7, np.NaN, 9, 10],
+            "c": [np.NaN, np.NaN, np.NaN, np.NaN],
+            "d": gd.Series([None, None, None, None], dtype="int64"),
+            "e": [100, None, 200, None],
+            "f": gd.Series([10, None, np.NaN, 11], nan_as_null=False),
+        }
+    )
+
+    expected = gd.Series([None, None, None, None], dtype="float64")
+
+    if op in ("var", "std"):
+        got = getattr(gdf, op)(axis=1, ddof=0, skipna=False)
+    else:
+        got = getattr(gdf, op)(axis=1, skipna=False)
+
+    assert_eq(got.null_count, expected.null_count)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "op,expected",
+    [
+        (
+            "max",
+            gd.Series(
+                [10.0, None, np.NaN, 2234.0, None, np.NaN],
+                dtype="float64",
+                nan_as_null=False,
+            ),
+        ),
+        (
+            "min",
+            gd.Series(
+                [10.0, None, np.NaN, 13.0, None, np.NaN],
+                dtype="float64",
+                nan_as_null=False,
+            ),
+        ),
+        (
+            "sum",
+            gd.Series(
+                [20.0, None, np.NaN, 2247.0, None, np.NaN],
+                dtype="float64",
+                nan_as_null=False,
+            ),
+        ),
+        (
+            "product",
+            gd.Series(
+                [100.0, None, np.NaN, 29042.0, None, np.NaN],
+                dtype="float64",
+                nan_as_null=False,
+            ),
+        ),
+        (
+            "mean",
+            gd.Series(
+                [10.0, None, np.NaN, 1123.5, None, np.NaN],
+                dtype="float64",
+                nan_as_null=False,
+            ),
+        ),
+        (
+            "var",
+            gd.Series(
+                [0.0, None, np.NaN, 1233210.25, None, np.NaN],
+                dtype="float64",
+                nan_as_null=False,
+            ),
+        ),
+        (
+            "std",
+            gd.Series(
+                [0.0, None, np.NaN, 1110.5, None, np.NaN],
+                dtype="float64",
+                nan_as_null=False,
+            ),
+        ),
+    ],
+)
+def test_rowwise_ops_nullable_dtypes_partial_null(op, expected):
+    gdf = gd.DataFrame(
+        {
+            "a": [10, 11, 12, 13, 14, 15],
+            "b": gd.Series(
+                [10, None, np.NaN, 2234, None, np.NaN], nan_as_null=False,
+            ),
+        }
+    )
+
+    if op in ("var", "std"):
+        got = getattr(gdf, op)(axis=1, ddof=0, skipna=False)
+    else:
+        got = getattr(gdf, op)(axis=1, skipna=False)
+
+    assert_eq(got.null_count, expected.null_count)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "op,expected",
+    [
+        ("max", gd.Series([10, None, None, 2234, None, 453], dtype="int64",),),
+        ("min", gd.Series([10, None, None, 13, None, 15], dtype="int64",),),
+        ("sum", gd.Series([20, None, None, 2247, None, 468], dtype="int64",),),
+        (
+            "product",
+            gd.Series([100, None, None, 29042, None, 6795], dtype="int64",),
+        ),
+        (
+            "mean",
+            gd.Series(
+                [10.0, None, None, 1123.5, None, 234.0], dtype="float32",
+            ),
+        ),
+        (
+            "var",
+            gd.Series(
+                [0.0, None, None, 1233210.25, None, 47961.0], dtype="float32",
+            ),
+        ),
+        (
+            "std",
+            gd.Series(
+                [0.0, None, None, 1110.5, None, 219.0], dtype="float32",
+            ),
+        ),
+    ],
+)
+def test_rowwise_ops_nullable_int_dtypes(op, expected):
+    gdf = gd.DataFrame(
+        {
+            "a": [10, 11, None, 13, None, 15],
+            "b": gd.Series(
+                [10, None, 323, 2234, None, 453], nan_as_null=False,
+            ),
+        }
+    )
+
+    if op in ("var", "std"):
+        got = getattr(gdf, op)(axis=1, ddof=0, skipna=False)
+    else:
+        got = getattr(gdf, op)(axis=1, skipna=False)
+
+    assert_eq(got.null_count, expected.null_count)
+    assert_eq(got, expected)
 
 
 @pytest.mark.parametrize(
@@ -7302,3 +7548,24 @@ def test_dataframe_mode(df, numeric_only, dropna):
     actual = df.mode(numeric_only=numeric_only, dropna=dropna)
 
     assert_eq(expected, actual, check_dtype=False)
+
+
+@pytest.mark.parametrize("lhs, rhs", [("a", "a"), ("a", "b"), (1, 1.0)])
+def test_equals_names(lhs, rhs):
+    lhs = gd.DataFrame({lhs: [1, 2]})
+    rhs = gd.DataFrame({rhs: [1, 2]})
+
+    got = lhs.equals(rhs)
+    expect = lhs.to_pandas().equals(rhs.to_pandas())
+
+    assert_eq(expect, got)
+
+
+def test_equals_dtypes():
+    lhs = gd.DataFrame({"a": [1, 2.0]})
+    rhs = gd.DataFrame({"a": [1, 2]})
+
+    got = lhs.equals(rhs)
+    expect = lhs.to_pandas().equals(rhs.to_pandas())
+
+    assert_eq(expect, got)

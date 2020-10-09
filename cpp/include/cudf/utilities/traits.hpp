@@ -31,6 +31,7 @@ namespace cudf {
 /**
  * @addtogroup utility_types
  * @{
+ * @file
  */
 
 template <typename...>
@@ -625,8 +626,6 @@ constexpr bool is_logically_castable(data_type from, data_type to)
   return type_dispatcher(from, is_logically_castable_from_impl{}, to);
 }
 
-/** @} */
-
 template <typename From, typename To>
 struct is_convertible : std::is_convertible<From, To> {
 };
@@ -638,5 +637,7 @@ struct is_convertible<cudf::detail::timestamp<Duration1>, cudf::detail::timestam
   : std::is_convertible<typename cudf::detail::time_point<Duration1>::duration,
                         typename cudf::detail::time_point<Duration2>::duration> {
 };
+
+/** @} */
 
 }  // namespace cudf
