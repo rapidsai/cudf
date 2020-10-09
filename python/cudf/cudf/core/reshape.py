@@ -245,8 +245,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
         elif join == "inner" and typ is cudf.DataFrame:
             raise NotImplementedError(
-                "We do not support having multiple columns"
-                "with the same column names yet."
+                "cuDF does not support having multiple columns with"
+                "the same name."
             )
 
         assert typs.issubset(allowed_typs)
