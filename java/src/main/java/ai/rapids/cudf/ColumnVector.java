@@ -1693,8 +1693,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   /**
-   * Cast to list of bytes - ColumnVector
-   * This method converts the rows provided by the ColumnVector and casts each row to a list of bytes. Numeric and string types supported, but no timestamps.
+   * Cast to list of bytes
+   * This method converts the rows provided by the ColumnVector and casts each row to a list of
+   * bytes with endinanness reversed. Numeric and string types supported, but not timestamps.
    *
    * @return A new vector allocated on the GPU
    */
@@ -1702,6 +1703,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     return new ColumnVector(byteListCast(getNativeView(), true));
   }
 
+  /**
+   * Cast to list of bytes
+   * This method converts the rows provided by the ColumnVector and casts each row to a list
+   * of bytes. Numeric and string types supported, but not timestamps.
+   *
+   * @param config Flips the byte order (endianness) if true, retains byte order otherwise
+   * @return A new vector allocated on the GPU
+   */
   public ColumnVector asByteList(boolean config) {
     return new ColumnVector(byteListCast(getNativeView(), config));
   }
