@@ -333,12 +333,15 @@ set(PARQUET_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet_test.cpp")
 set(JSON_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/json_test.cpp")
+set(CSV_TEST_NEW_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/csv_test_new.cu")
 
 ConfigureTest(AVRO_TEST "${AVRO_TEST_SRC}")
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 ConfigureTest(ORC_TEST "${ORC_TEST_SRC}")
 ConfigureTest(PARQUET_TEST "${PARQUET_TEST_SRC}")
 ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
+ConfigureTest(CSV_TEST_NEW "${CSV_TEST_NEW_SRC}")
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
