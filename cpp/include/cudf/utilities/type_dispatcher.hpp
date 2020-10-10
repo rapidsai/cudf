@@ -85,9 +85,8 @@ using id_to_type = typename id_to_type_impl<Id>::type;
 /**
  * @brief "Returns" the corresponding type that is stored on the device when using `cudf::column`
  *
- * Only the fixed_point::rep is stored on device when a `fixed_point` is stored in a `cudf::column`.
- * For example, the `using decimal32 = fixed_point<int32_t, Radix::BASE_10>` means that `decimal32`
- * is stored as `int32_t` on device when stored in a `cudf::column`.
+ * For `decimal32`, the storage type is an `int32_t`.
+ * For `decimal64`, the storage type is an `int64_t`.
  *
  * Use this "type function" with the `using` type alias:
  * @code
