@@ -776,7 +776,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
           if (newDataLen != oldLen) {
             newDataLen = Math.min(newDataLen, maxLen);
             if (newDataLen < targetDataSize) {
-              throw new IllegalStateException("targetDataSize=" + targetDataSize + " newDataLen=" + newDataLen + " A data buffer for strings is not supported over 2GB in size");
+              throw new IllegalStateException("A data buffer for strings is not supported over 2GB in size");
             }
             HostMemoryBuffer newData = HostMemoryBuffer.allocate(newDataLen);
             data = copyBuffer(newData, data);
