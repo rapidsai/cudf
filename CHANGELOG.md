@@ -179,6 +179,7 @@
 - PR #6285 Removed unsafe `reinterpret_cast` and implicit pointer-to-bool casts
 - PR #6281 Fix unreachable code warning in datetime.cuh
 - PR #6286 Fix `read_csv` `int32` overflow 
+- PR #6466 Fix ORC reader issue with decimal type
 - PR #6310 Replace a misspelled reference to `master` branch with `main` branch in a comment in changelog.sh
 - PR #6289 Revert #6206
 - PR #6291 Fix issue related to row-wise operations in `cudf.DataFrame`
@@ -203,7 +204,7 @@
 - PR #6443 Make java apis getList and getStruct public
 - PR #6445 Add `dlpack` to run section of libcudf conda recipe to fix downstream build issues
 - PR #6450 Make java Column Builder row agnostic
-
+- PR #6309 Make all CI `.sh` scripts have a consistent set of permissions
 
 # cuDF 0.15.0 (26 Aug 2020)
 
