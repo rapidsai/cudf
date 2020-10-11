@@ -21,6 +21,7 @@
 
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
+using namespace cudf::test;
 
 class HashTest : public cudf::test::BaseFixture {
 };
@@ -36,7 +37,7 @@ TEST_F(HashTest, MultiValue)
   using limits = std::numeric_limits<int32_t>;
   fixed_width_column_wrapper<int32_t> const ints_col({0, 100, -100, limits::min(), limits::max()});
 
-  // Different truthy values should be equal
+  // Different truth values should be equal
   fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
   fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
 
@@ -81,7 +82,7 @@ TEST_F(HashTest, MultiValueNulls)
                                                       {1, 0, 0, 1, 1});
 
   // Nulls with different values should be equal
-  // Different truthy values should be equal
+  // Different truth values should be equal
   fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
   fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
 
@@ -250,7 +251,7 @@ TEST_F(MD5HashTest, MultiValueNulls)
                                                       {1, 0, 0, 1, 1});
 
   // Nulls with different values should be equal
-  // Different truthy values should be equal
+  // Different truth values should be equal
   fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
   fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
 
@@ -261,6 +262,37 @@ TEST_F(MD5HashTest, MultiValueNulls)
   auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
+}
+
+TEST_F(MD5HashTest, StringListsNulls)
+{
+  auto validity = make_counting_transform_iterator(0, [](auto i) { return i != 0; });
+
+  strings_column_wrapper const strings_col(
+    {"",
+     "A 60 character string to test MD5's message padding algorithm",
+     "A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the "
+     "MD5 hash function. This string needed to be longer. It needed to be even longer.",
+     "All work and no play makes Jack a dull boy",
+     "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
+
+  lists_column_wrapper<cudf::string_view> strings_list_col(
+    {{""},
+     {{"NULL", "A 60 character string to test MD5's message padding algorithm"}, validity},
+     {"A very long (greater than 128 bytes/char string) to test a multi hash-step data point in "
+      "the "
+      "MD5 hash function. This string needed to be longer.",
+      " It needed to be even longer."},
+     {"All ", "work ", "and", " no", " play ", "makes Jack", " a dull boy"},
+     {"!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`", "{|}~"}});
+
+  auto const input1 = cudf::table_view({strings_col});
+  auto const input2 = cudf::table_view({strings_list_col});
+
+  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
+  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
+
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
@@ -301,6 +333,62 @@ TYPED_TEST(MD5HashTestTyped, EqualityNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
+TEST_F(MD5HashTest, TestBoolListsWithNulls)
+{
+  fixed_width_column_wrapper<bool> const col1({0, 255, 255, 16, 27, 18, 100, 1, 2},
+                                              {1, 0, 0, 0, 1, 1, 1, 0, 0});
+  fixed_width_column_wrapper<bool> const col2({0, 255, 255, 32, 81, 68, 3, 101, 4},
+                                              {1, 0, 0, 1, 0, 1, 0, 1, 0});
+  fixed_width_column_wrapper<bool> const col3({0, 255, 255, 64, 49, 42, 5, 6, 102},
+                                              {1, 0, 0, 1, 1, 0, 0, 0, 1});
+
+  auto validity = make_counting_transform_iterator(0, [](auto i) { return i != 1; });
+  lists_column_wrapper<bool> const list_col(
+    {{0, 0, 0}, {1}, {}, {{1, 1, 1}, validity}, {1, 1}, {1, 1}, {1}, {1}, {1}}, validity);
+
+  auto const input1 = cudf::table_view({col1, col2, col3});
+  auto const input2 = cudf::table_view({list_col});
+
+  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
+  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
+
+  EXPECT_EQ(input1.num_rows(), output1->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
+}
+
+template <typename T>
+class MD5HashListTestTyped : public cudf::test::BaseFixture {
+};
+
+using NumericTypesNoBools = Concat<IntegralTypesNotBool, FloatingPointTypes>;
+TYPED_TEST_CASE(MD5HashListTestTyped, NumericTypesNoBools);
+
+TYPED_TEST(MD5HashListTestTyped, TestListsWithNulls)
+{
+  using T = TypeParam;
+
+  fixed_width_column_wrapper<T> const col1({0, 255, 255, 16, 27, 18, 100, 1, 2},
+                                           {1, 0, 0, 0, 1, 1, 1, 0, 0});
+  fixed_width_column_wrapper<T> const col2({0, 255, 255, 32, 81, 68, 3, 101, 4},
+                                           {1, 0, 0, 1, 0, 1, 0, 1, 0});
+  fixed_width_column_wrapper<T> const col3({0, 255, 255, 64, 49, 42, 5, 6, 102},
+                                           {1, 0, 0, 1, 1, 0, 0, 0, 1});
+
+  auto validity = make_counting_transform_iterator(0, [](auto i) { return i != 1; });
+  lists_column_wrapper<T> const list_col(
+    {{0, 0, 0}, {127}, {}, {{32, 127, 64}, validity}, {27, 49}, {18, 68}, {100}, {101}, {102}},
+    validity);
+
+  auto const input1 = cudf::table_view({col1, col2, col3});
+  auto const input2 = cudf::table_view({list_col});
+
+  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
+  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
+
+  EXPECT_EQ(input1.num_rows(), output1->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
+}
+
 template <typename T>
 class MD5HashTestFloatTyped : public cudf::test::BaseFixture {
 };
@@ -318,6 +406,28 @@ TYPED_TEST(MD5HashTestFloatTyped, TestExtremes)
   fixed_width_column_wrapper<T> const col1({T(0.0), T(100.0), T(-100.0), min, max, nan, inf, -inf});
   fixed_width_column_wrapper<T> const col2(
     {T(-0.0), T(100.0), T(-100.0), min, max, -nan, inf, -inf});
+
+  auto const input1 = cudf::table_view({col1});
+  auto const input2 = cudf::table_view({col2});
+
+  auto const output1 = cudf::hash(input1, cudf::hash_id::HASH_MD5);
+  auto const output2 = cudf::hash(input2, cudf::hash_id::HASH_MD5);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view(), true);
+}
+
+TYPED_TEST(MD5HashTestFloatTyped, TestListExtremes)
+{
+  using T = TypeParam;
+  T min   = std::numeric_limits<T>::min();
+  T max   = std::numeric_limits<T>::max();
+  T nan   = std::numeric_limits<T>::quiet_NaN();
+  T inf   = std::numeric_limits<T>::infinity();
+
+  lists_column_wrapper<T> const col1(
+    {{T(0.0)}, {T(100.0), T(-100.0)}, {min, max, nan}, {inf, -inf}});
+  lists_column_wrapper<T> const col2(
+    {{T(-0.0)}, {T(100.0), T(-100.0)}, {min, max, -nan}, {inf, -inf}});
 
   auto const input1 = cudf::table_view({col1});
   auto const input2 = cudf::table_view({col2});

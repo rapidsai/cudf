@@ -41,6 +41,7 @@ requirements:
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec>=0.6.0
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
+    - nvtx >=0.2.1
 
 test:
   requires:
