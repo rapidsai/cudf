@@ -20,12 +20,109 @@
 #include <cudf/strings/string_view.cuh>
 #include <hash/hash_constants.hpp>
 
-#include "cudf/types.hpp"
-
 using hash_value_type = uint32_t;
 
 namespace cudf {
 namespace detail {
+namespace {
+/**
+ * @brief Core MD5 algorithm implementation. Processes a single 512-bit chunk,
+ * updating the hash value so far. Does not zero out the buffer contents.
+ */
+void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state)
+{
+  uint32_t A = hash_state->hash_value[0];
+  uint32_t B = hash_state->hash_value[1];
+  uint32_t C = hash_state->hash_value[2];
+  uint32_t D = hash_state->hash_value[3];
+
+  for (unsigned int j = 0; j < 64; j++) {
+    uint32_t F;
+    uint32_t g;
+    switch (j / 16) {
+      case 0:
+        F = (B & C) | ((~B) & D);
+        g = j;
+        break;
+      case 1:
+        F = (D & B) | ((~D) & C);
+        g = (5 * j + 1) % 16;
+        break;
+      case 2:
+        F = B ^ C ^ D;
+        g = (3 * j + 5) % 16;
+        break;
+      case 3:
+        F = C ^ (B | (~D));
+        g = (7 * j) % 16;
+        break;
+    }
+
+    uint32_t buffer_element_as_int;
+    std::memcpy(&buffer_element_as_int, hash_state->buffer + g * 4, 4);
+    F = F + A + md5_hash_constants[j] + buffer_element_as_int;
+    A = D;
+    D = C;
+    C = B;
+    B = B + __funnelshift_l(F, F, md5_shift_constants[((j / 16) * 4) + (j % 4)]);
+  }
+
+  hash_state->hash_value[0] += A;
+  hash_state->hash_value[1] += B;
+  hash_state->hash_value[2] += C;
+  hash_state->hash_value[3] += D;
+
+  hash_state->buffer_length = 0;
+}
+
+/**
+ * @brief Core MD5 element processing function
+ */
+template <typename TKey>
+void CUDA_DEVICE_CALLABLE md5_process(TKey const& key, md5_intermediate_data* hash_state)
+{
+  uint32_t const len  = sizeof(TKey);
+  uint8_t const* data = reinterpret_cast<uint8_t const*>(&key);
+  hash_state->message_length += len;
+
+  // 64 bytes for the number of byt es processed in a given step
+  constexpr int md5_chunk_size = 64;
+  if (hash_state->buffer_length + len < md5_chunk_size) {
+    thrust::copy_n(thrust::seq, data, len, hash_state->buffer + hash_state->buffer_length);
+    hash_state->buffer_length += len;
+  } else {
+    uint32_t copylen = md5_chunk_size - hash_state->buffer_length;
+
+    thrust::copy_n(thrust::seq, data, copylen, hash_state->buffer + hash_state->buffer_length);
+    md5_hash_step(hash_state);
+
+    while (len > md5_chunk_size + copylen) {
+      thrust::copy_n(thrust::seq, data + copylen, md5_chunk_size, hash_state->buffer);
+      md5_hash_step(hash_state);
+      copylen += md5_chunk_size;
+    }
+
+    thrust::copy_n(thrust::seq, data + copylen, len - copylen, hash_state->buffer);
+    hash_state->buffer_length = len - copylen;
+  }
+}
+
+/**
+ * Normalization of floating point NANs and zeros helper
+ */
+template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
+T CUDA_DEVICE_CALLABLE normalize_nans_and_zeros_helper(T key)
+{
+  if (isnan(key)) {
+    return std::numeric_limits<T>::quiet_NaN();
+  } else if (key == T{0.0}) {
+    return T{0.0};
+  } else {
+    return key;
+  }
+}
+}  // namespace
+
 /**
  * Modified GPU implementation of
  * https://johnnylee-sde.github.io/Fast-unsigned-integer-to-hex-string/
@@ -49,89 +146,89 @@ void CUDA_DEVICE_CALLABLE uint32ToLowercaseHexString(uint32_t num, char* destina
   thrust::copy_n(thrust::seq, reinterpret_cast<uint8_t*>(&x), 8, destination);
 }
 
+struct MD5ListHasher {
+  template <typename T, typename std::enable_if_t<is_chrono<T>()>* = nullptr>
+  void __device__ operator()(column_device_view data_col,
+                             size_type offset_begin,
+                             size_type offset_end,
+                             md5_intermediate_data* hash_state) const
+  {
+    release_assert(false && "MD5 Unsupported chrono type column");
+  }
+
+  template <typename T, typename std::enable_if_t<!is_fixed_width<T>()>* = nullptr>
+  void __device__ operator()(column_device_view data_col,
+                             size_type offset_begin,
+                             size_type offset_end,
+                             md5_intermediate_data* hash_state) const
+  {
+    release_assert(false && "MD5 Unsupported non-fixed-width type column");
+  }
+
+  template <typename T, typename std::enable_if_t<is_floating_point<T>()>* = nullptr>
+  void __device__ operator()(column_device_view data_col,
+                             size_type offset_begin,
+                             size_type offset_end,
+                             md5_intermediate_data* hash_state) const
+  {
+    for (int i = offset_begin; i < offset_end; i++) {
+      if (!data_col.is_null(i)) {
+        md5_process(normalize_nans_and_zeros_helper<T>(data_col.element<T>(i)), hash_state);
+      }
+    }
+  }
+
+  template <typename T,
+            typename std::enable_if_t<is_fixed_width<T>() && !is_floating_point<T>() &&
+                                      !is_chrono<T>()>* = nullptr>
+  void CUDA_DEVICE_CALLABLE operator()(column_device_view data_col,
+                                       size_type offset_begin,
+                                       size_type offset_end,
+                                       md5_intermediate_data* hash_state) const
+  {
+    for (int i = offset_begin; i < offset_end; i++) {
+      if (!data_col.is_null(i)) md5_process(data_col.element<T>(i), hash_state);
+    }
+  }
+};
+
+template <>
+void CUDA_DEVICE_CALLABLE
+MD5ListHasher::operator()<string_view>(column_device_view data_col,
+                                       size_type offset_begin,
+                                       size_type offset_end,
+                                       md5_intermediate_data* hash_state) const
+{
+  for (int i = offset_begin; i < offset_end; i++) {
+    if (!data_col.is_null(i)) {
+      string_view key     = data_col.element<string_view>(i);
+      uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
+      uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
+
+      hash_state->message_length += len;
+
+      if (hash_state->buffer_length + len < 64) {
+        thrust::copy_n(thrust::seq, data, len, hash_state->buffer + hash_state->buffer_length);
+        hash_state->buffer_length += len;
+      } else {
+        uint32_t copylen = 64 - hash_state->buffer_length;
+        thrust::copy_n(thrust::seq, data, copylen, hash_state->buffer + hash_state->buffer_length);
+        md5_hash_step(hash_state);
+
+        while (len > 64 + copylen) {
+          thrust::copy_n(thrust::seq, data + copylen, 64, hash_state->buffer);
+          md5_hash_step(hash_state);
+          copylen += 64;
+        }
+
+        thrust::copy_n(thrust::seq, data + copylen, len - copylen, hash_state->buffer);
+        hash_state->buffer_length = len - copylen;
+      }
+    }
+  }
+}
+
 struct MD5Hash {
-  /**
-   * @brief Core MD5 algorithm implementation. Processes a single 512-bit chunk,
-   * updating the hash value so far. Does not zero out the buffer contents.
-   */
-  void __device__ hash_step(md5_intermediate_data* hash_state) const
-  {
-    uint32_t A = hash_state->hash_value[0];
-    uint32_t B = hash_state->hash_value[1];
-    uint32_t C = hash_state->hash_value[2];
-    uint32_t D = hash_state->hash_value[3];
-
-    for (unsigned int j = 0; j < 64; j++) {
-      uint32_t F;
-      uint32_t g;
-      switch (j / 16) {
-        case 0:
-          F = (B & C) | ((~B) & D);
-          g = j;
-          break;
-        case 1:
-          F = (D & B) | ((~D) & C);
-          g = (5 * j + 1) % 16;
-          break;
-        case 2:
-          F = B ^ C ^ D;
-          g = (3 * j + 5) % 16;
-          break;
-        case 3:
-          F = C ^ (B | (~D));
-          g = (7 * j) % 16;
-          break;
-      }
-
-      uint32_t buffer_element_as_int;
-      std::memcpy(&buffer_element_as_int, hash_state->buffer + g * 4, 4);
-      F = F + A + md5_hash_constants[j] + buffer_element_as_int;
-      A = D;
-      D = C;
-      C = B;
-      B = B + __funnelshift_l(F, F, md5_shift_constants[((j / 16) * 4) + (j % 4)]);
-    }
-
-    hash_state->hash_value[0] += A;
-    hash_state->hash_value[1] += B;
-    hash_state->hash_value[2] += C;
-    hash_state->hash_value[3] += D;
-
-    hash_state->buffer_length = 0;
-  }
-
-  /**
-   * @brief Core MD5 element processing function
-   */
-  template <typename TKey>
-  void __device__ process(TKey const& key, md5_intermediate_data* hash_state) const
-  {
-    uint32_t const len  = sizeof(TKey);
-    uint8_t const* data = reinterpret_cast<uint8_t const*>(&key);
-    hash_state->message_length += len;
-
-    // 64 bytes for the number of bytes processed in a given step
-    constexpr int md5_chunk_size = 64;
-    if (hash_state->buffer_length + len < md5_chunk_size) {
-      thrust::copy_n(thrust::seq, data, len, hash_state->buffer + hash_state->buffer_length);
-      hash_state->buffer_length += len;
-    } else {
-      uint32_t copylen = md5_chunk_size - hash_state->buffer_length;
-
-      thrust::copy_n(thrust::seq, data, copylen, hash_state->buffer + hash_state->buffer_length);
-      hash_step(hash_state);
-
-      while (len > md5_chunk_size + copylen) {
-        thrust::copy_n(thrust::seq, data + copylen, md5_chunk_size, hash_state->buffer);
-        hash_step(hash_state);
-        copylen += md5_chunk_size;
-      }
-
-      thrust::copy_n(thrust::seq, data + copylen, len - copylen, hash_state->buffer);
-      hash_state->buffer_length = len - copylen;
-    }
-  }
-
   void __device__ finalize(md5_intermediate_data* hash_state, char* result_location) const
   {
     auto const full_length = (static_cast<uint64_t>(hash_state->message_length)) << 3;
@@ -154,7 +251,7 @@ struct MD5Hash {
                      hash_state->buffer + hash_state->buffer_length + 1,
                      (md5_chunk_size - hash_state->buffer_length),
                      0x00);
-      hash_step(hash_state);
+      md5_hash_step(hash_state);
 
       thrust::fill_n(thrust::seq, hash_state->buffer, md5_chunk_size - message_length_size, 0x00);
     }
@@ -163,7 +260,7 @@ struct MD5Hash {
                    reinterpret_cast<uint8_t const*>(&full_length),
                    message_length_size,
                    hash_state->buffer + md5_chunk_size - message_length_size);
-    hash_step(hash_state);
+    md5_hash_step(hash_state);
 
 #pragma unroll
     for (int i = 0; i < 4; ++i)
@@ -191,15 +288,7 @@ struct MD5Hash {
                              size_type row_index,
                              md5_intermediate_data* hash_state) const
   {
-    T const& key = col.element<T>(row_index);
-    if (isnan(key)) {
-      T nan = std::numeric_limits<T>::quiet_NaN();
-      process(nan, hash_state);
-    } else if (key == T{0.0}) {
-      process(T{0.0}, hash_state);
-    } else {
-      process(key, hash_state);
-    }
+    md5_process(normalize_nans_and_zeros_helper<T>(col.element<T>(row_index)), hash_state);
   }
 
   template <typename T,
@@ -209,7 +298,7 @@ struct MD5Hash {
                                        size_type row_index,
                                        md5_intermediate_data* hash_state) const
   {
-    process(col.element<T>(row_index), hash_state);
+    md5_process(col.element<T>(row_index), hash_state);
   }
 };
 
@@ -230,11 +319,11 @@ void CUDA_DEVICE_CALLABLE MD5Hash::operator()<string_view>(column_device_view co
   } else {
     uint32_t copylen = 64 - hash_state->buffer_length;
     thrust::copy_n(thrust::seq, data, copylen, hash_state->buffer + hash_state->buffer_length);
-    hash_step(hash_state);
+    md5_hash_step(hash_state);
 
     while (len > 64 + copylen) {
       thrust::copy_n(thrust::seq, data + copylen, 64, hash_state->buffer);
-      hash_step(hash_state);
+      md5_hash_step(hash_state);
       copylen += 64;
     }
 
@@ -243,6 +332,26 @@ void CUDA_DEVICE_CALLABLE MD5Hash::operator()<string_view>(column_device_view co
   }
 }
 
+template <>
+void CUDA_DEVICE_CALLABLE MD5Hash::operator()<list_view>(column_device_view col,
+                                                         size_type row_index,
+                                                         md5_intermediate_data* hash_state) const
+{
+  static constexpr size_type offsets_column_index{0};
+  static constexpr size_type data_column_index{1};
+
+  column_device_view offsets = col.child(offsets_column_index);
+  column_device_view data    = col.child(data_column_index);
+
+  if (data.type().id() == type_id::LIST) release_assert(false && "Nested list unsupported");
+
+  cudf::type_dispatcher(data.type(),
+                        MD5ListHasher{},
+                        data,
+                        offsets.element<size_type>(row_index),
+                        offsets.element<size_type>(row_index + 1),
+                        hash_state);
+}
 }  // namespace detail
 }  // namespace cudf
 

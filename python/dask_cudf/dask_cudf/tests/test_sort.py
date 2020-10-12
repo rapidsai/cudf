@@ -46,6 +46,6 @@ def test_sort_repartition():
         cudf.DataFrame({"a": [0, 0, 1, 2, 3, 4, 2]}), npartitions=2
     )
 
-    new_ddf = ddf.repartition(columns="a", npartitions=3)
+    new_ddf = ddf.shuffle(on="a", ignore_index=True, npartitions=3)
 
     dd.assert_eq(len(new_ddf), len(ddf))
