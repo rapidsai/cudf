@@ -630,3 +630,26 @@ def test_series_mode(df, dropna):
     actual = df.mode(dropna=dropna)
 
     assert_eq(expected, actual, check_dtype=False)
+
+
+def test_series_map():
+    gd1 = cudf.Series(['cat', 'dog', np.nan, 'rabbit']) 
+    gd2 = cudf.Series([1, 2, 3, 4, np.nan])
+    
+    pdf1 = gd1.to_pandas()
+    pdf2 = gd2.to_pandas()
+
+    expected_dict = pdf1.map({'cat': 'kitten', 'dog': 'puppy'})
+    actual_dict = gd1.map({'cat': 'kitten', 'dog': 'puppy'})
+
+    assert_eq(expected_dict, actual_dict, check_dtype=False)
+
+    expected_series = pdf1.map(pd.Series({'cat': 'kitten', 'dog': 'puppy'}))
+    actual_series = gd1.map(cudf.Series({'cat': 'kitten', 'dog': 'puppy'}))
+
+    assert_eq(expected_series, actual_series, check_dtype=False)
+
+    expected_function = pdf2.map(lambda x: x**2)
+    actual_function = gd2.map(lambda x: x**2)
+
+    assert_eq(expected_function, actual_function, check_dtype=False)
