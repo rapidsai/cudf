@@ -124,6 +124,7 @@
 - PR #6409 Allow CuPy 8.x
 - PR #6407 Add RMM_LOGGING_LEVEL flag to Java docker build
 - PR #6438 Fetch nvcomp v1.1.0 for JNI build
+- PR #6379 Add list hashing functionality to MD5
 
 ## Bug Fixes
 
@@ -167,6 +168,7 @@
 - PR #6285 Removed unsafe `reinterpret_cast` and implicit pointer-to-bool casts
 - PR #6281 Fix unreachable code warning in datetime.cuh
 - PR #6286 Fix `read_csv` `int32` overflow 
+- PR #6466 Fix ORC reader issue with decimal type
 - PR #6310 Replace a misspelled reference to `master` branch with `main` branch in a comment in changelog.sh
 - PR #6289 Revert #6206
 - PR #6291 Fix issue related to row-wise operations in `cudf.DataFrame`
@@ -193,6 +195,7 @@
 - PR #6450 Make java Column Builder row agnostic
 - PR #6462 Bug fixes for ColumnBuilder
 
+- PR #6309 Make all CI `.sh` scripts have a consistent set of permissions
 
 # cuDF 0.15.0 (26 Aug 2020)
 
