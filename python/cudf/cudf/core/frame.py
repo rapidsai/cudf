@@ -245,12 +245,9 @@ class Frame(libcudf.table.Table):
                 for obj in objs
                 if name not in obj._column_names
             ]
-            obj = [
-                obj.drop(columns=[x])
-                for obj in objs
-                for x in names_not_in_all
-                if x in obj._column_names
-            ]
+            objs = [obj.copy(deep=False) for obj in objs]
+            for obj in objs:
+                obj.drop(columns=names_not_in_all, inplace=True, errors="ignore")
             names = [x for x in names if x not in names_not_in_all]
 
         elif join == "outer":
