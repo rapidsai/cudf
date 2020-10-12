@@ -40,7 +40,7 @@ void PQ_read(benchmark::State& state)
   cudf::size_type const run_length  = state.range(2);
   cudf_io::compression_type const compression =
     state.range(3) ? cudf_io::compression_type::SNAPPY : cudf_io::compression_type::NONE;
-  io_type const source_type = (io_type)state.range(4);
+  io_type const source_type = static_cast<io_type>(state.range(4));
 
   data_profile table_data_profile;
   table_data_profile.set_cardinality(cardinality);

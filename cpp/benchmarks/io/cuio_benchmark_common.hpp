@@ -18,27 +18,50 @@
 
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/types.hpp>
 
 #include <tests/utilities/file_utilities.hpp>
 
-enum io_type { kVoid, kFile, kBuffer };
+using cudf::io::io_type;
 
-#define RD_BENCHMARK_DEFINE_ALL_SOURCES(benchmark, name, type_or_group) \
-  benchmark(name##_file_input, type_or_group, io_type::kFile);          \
-  benchmark(name##_buffer_input, type_or_group, io_type::kBuffer);
+#define RD_BENCHMARK_DEFINE_ALL_SOURCES(benchmark, name, type_or_group)                  \
+  benchmark(name##_file_input, type_or_group, static_cast<uint32_t>(io_type::FILEPATH)); \
+  benchmark(name##_buffer_input, type_or_group, static_cast<uint32_t>(io_type::HOST_BUFFER));
 
 #define WR_BENCHMARK_DEFINE_ALL_SINKS(benchmark, name, type_or_group) \
-  benchmark(name##_no_output, type_or_group, io_type::kVoid);         \
-  benchmark(name##_file_output, type_or_group, io_type::kFile);       \
-  benchmark(name##_buffer_output, type_or_group, io_type::kBuffer);
+  benchmark(name##_no_output, type_or_group, io_type::VOID);          \
+  benchmark(name##_file_output, type_or_group, io_type::FILEPATH);    \
+  benchmark(name##_buffer_output, type_or_group, io_type::HOST_BUFFER);
 
+/**
+ * @brief Class to create a coupled `source_info` and `sink_info` of given type.
+ */
 class cuio_source_sink_pair {
  public:
   cuio_source_sink_pair(io_type type);
-
-  ~cuio_source_sink_pair() { std::remove(fname.c_str()); }
-
+  ~cuio_source_sink_pair()
+  {
+    // delete the temporary file
+    std::remove(file_name.c_str());
+  }
+  /**
+   * @brief Created a source info of the set type
+   *
+   * The `datasource` created using the returned `source_info` will read data from the same location
+   * that the result of a @ref `make_sink_info` call writes to.
+   *
+   * @return The description of the data source
+   */
   cudf::io::source_info make_source_info();
+
+  /**
+   * @brief Created a sink info of the set type
+   *
+   * The `data_sink` created using the returned `source_info` will write data to the same location
+   * that the result of a @ref `make_source_info` call reads from.
+   *
+   * @return The description of the data sink
+   */
   cudf::io::sink_info make_sink_info();
 
  private:
@@ -46,5 +69,5 @@ class cuio_source_sink_pair {
 
   io_type const type;
   std::vector<char> buffer;
-  std::string const fname;
+  std::string const file_name;
 };
