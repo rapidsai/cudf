@@ -207,6 +207,7 @@
 - PR #6445 Add `dlpack` to run section of libcudf conda recipe to fix downstream build issues
 - PR #6450 Make java Column Builder row agnostic
 - PR #6309 Make all CI `.sh` scripts have a consistent set of permissions
+- PR #6491 Remove repo URL from Java build-info
 - PR #6462 Bug fixes for ColumnBuilder
 
 
