@@ -129,7 +129,7 @@ std::unique_ptr<column> slice_strings(
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      substring_fn{d_column, d_start, d_stop, d_step, d_new_offsets, d_chars});
-  //
+
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              std::move(chars_column),
@@ -166,17 +166,18 @@ struct substring_from_fn {
   /**
    * @brief Function logic for substring_from API.
    *
-   * This does both calculate and the execute based on template parameter.
+   * This does both calculate the output size and the execute the substring.
    */
   __device__ size_type operator()(size_type idx)
   {
     if (d_column.is_null(idx)) return 0;  // null string
     string_view d_str = d_column.template element<string_view>(idx);
-    size_type length  = d_str.length();
-    size_type start   = static_cast<size_type>(starts[idx]);
+    auto const length = d_str.length();
+    auto const start  = starts[idx];
     if (start >= length) return 0;  // empty string
-    size_type stop       = static_cast<size_type>(stops[idx]);
-    size_type end        = (((stop < 0) || (stop > length)) ? length : stop);
+    auto const stop = stops[idx];
+    auto const end  = (((stop < 0) || (stop > length)) ? length : stop);
+
     string_view d_substr = d_str.substr(start, end - start);
     if (d_chars) memcpy(d_chars + d_offsets[idx], d_substr.data(), d_substr.size_bytes());
     return d_substr.size_bytes();
