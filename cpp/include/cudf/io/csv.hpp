@@ -359,7 +359,7 @@ class csv_reader_options {
   {
     if ((offset != 0) and ((_skiprows != 0) or (_skipfooter != 0) or (_nrows != -1))) {
       CUDF_FAIL(
-        "When ther is valid value in skiprows or skipfooter or nrows, offset can't have non-zero "
+        "When there is valid value in skiprows or skipfooter or nrows, offset can't have non-zero "
         "value");
     }
     _byte_range_offset = offset;
@@ -374,8 +374,8 @@ class csv_reader_options {
   {
     if ((size != 0) and ((_skiprows != 0) or (_skipfooter != 0) or (_nrows != -1))) {
       CUDF_FAIL(
-        "When ther is valid value in skiprows or skipfooter or nrows, range size can't have "
-        "non-zero value");
+        "If the value of any of skiprows, skipfooter or nrows is valid, range size cannot be "
+        "non-zero.");
     }
     _byte_range_size = size;
   }

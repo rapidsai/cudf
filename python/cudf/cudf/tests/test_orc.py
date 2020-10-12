@@ -223,8 +223,8 @@ def test_orc_read_stripes(datadir, engine):
 
 
 @pytest.mark.parametrize("num_rows", [1, 100, 3000])
-@pytest.mark.parametrize("skip_rows", [0, 1, 3000])
-def test_orc_read_rows(datadir, skip_rows, num_rows):
+@pytest.mark.parametrize("skiprows", [0, 1, 3000])
+def test_orc_read_rows(datadir, skiprows, num_rows):
     path = datadir / "TestOrcFile.decimal.orc"
     try:
         orcfile = pa.orc.ORCFile(path)
@@ -233,7 +233,7 @@ def test_orc_read_rows(datadir, skip_rows, num_rows):
 
     pdf = orcfile.read().to_pandas()
     gdf = cudf.read_orc(
-        path, engine="cudf", skip_rows=skip_rows, num_rows=num_rows
+        path, engine="cudf", skiprows=skiprows, num_rows=num_rows
     ).to_pandas()
 
     # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
@@ -242,7 +242,7 @@ def test_orc_read_rows(datadir, skip_rows, num_rows):
 
     # Slice rows out of the whole dataframe for comparison as PyArrow doesn't
     # have an API to read a subsection of rows from the file
-    pdf = pdf[skip_rows : skip_rows + num_rows]
+    pdf = pdf[skiprows : skiprows + num_rows]
 
     np.testing.assert_allclose(pdf, gdf)
 
@@ -344,3 +344,21 @@ def test_orc_writer_sliced(tmpdir):
 
     df_select.to_orc(cudf_path)
     assert_eq(cudf.read_orc(cudf_path), df_select.reset_index(drop=True))
+
+
+@pytest.mark.parametrize(
+    "orc_file",
+    [
+        "TestOrcFile.decimal.same.values.orc",
+        "TestOrcFile.decimal.multiple.values.orc",
+    ],
+)
+def test_orc_reader_decimal_type(datadir, orc_file):
+    file_path = datadir / orc_file
+    pdf = pd.read_orc(file_path)
+    df = cudf.read_orc(file_path).to_pandas()
+    # Converting to strings since pandas keeps it in decimal
+    pdf["col8"] = pdf["col8"].astype("str")
+    df["col8"] = df["col8"].astype("str")
+
+    assert_eq(pdf, df)

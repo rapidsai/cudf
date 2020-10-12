@@ -9,7 +9,6 @@ import sys
 import warnings
 from collections import OrderedDict, defaultdict
 from collections.abc import Mapping, Sequence
-from types import GeneratorType
 from typing import Any, Set
 
 import cupy
@@ -17,6 +16,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import cuda
+from nvtx import annotate
 from pandas._config import get_option
 from pandas.api.types import is_dict_like
 from pandas.io.formats import console
@@ -25,7 +25,6 @@ from pandas.io.formats.printing import pprint_thing
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
-from cudf._lib.nvtx import annotate
 from cudf.core import column, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
@@ -46,6 +45,7 @@ from cudf.utils.dtypes import (
     is_list_like,
     is_scalar,
     is_string_dtype,
+    is_struct_dtype,
     numeric_normalize_types,
 )
 from cudf.utils.utils import OrderedColumnDict
@@ -203,7 +203,7 @@ class DataFrame(Frame, Serializable):
             self._data = data
             if index is None:
                 index = as_index(range(self._data.nrows))
-            self._index = as_index(index)
+            self.index = as_index(index)
             return None
 
         if isinstance(data, DataFrame):
@@ -253,7 +253,7 @@ class DataFrame(Frame, Serializable):
                 new_df = self._from_arrays(data, index=index, columns=columns)
 
             self._data = new_df._data
-            self._index = new_df._index
+            self.index = new_df._index
             self.columns = new_df.columns
         elif hasattr(data, "__array_interface__"):
             arr_interface = data.__array_interface__
@@ -263,7 +263,7 @@ class DataFrame(Frame, Serializable):
             else:
                 new_df = self.from_records(data, index=index, columns=columns)
             self._data = new_df._data
-            self._index = new_df._index
+            self.index = new_df._index
             self.columns = new_df.columns
         else:
             if is_list_like(data):
@@ -272,7 +272,7 @@ class DataFrame(Frame, Serializable):
                         [data], index=index, columns=columns
                     )
                     self._data = new_df._data
-                    self._index = new_df._index
+                    self.index = new_df._index
                     self.columns = new_df.columns
                 elif len(data) > 0 and isinstance(data[0], Series):
                     self._init_from_series_list(
@@ -1176,7 +1176,7 @@ class DataFrame(Frame, Serializable):
         filling with `<NA>` values.
         """
         for col in df._data:
-            if is_list_dtype(df._data[col]):
+            if is_list_dtype(df._data[col]) or is_struct_dtype(df._data[col]):
                 # TODO we need to handle this
                 pass
             elif df._data[col].has_nulls:
@@ -1215,7 +1215,7 @@ class DataFrame(Frame, Serializable):
             # entire sequence/Index is to be printed.
             # Note : Pandas truncates the dimensions at the end of
             # the resulting dataframe when `display.show_dimensions`
-            # is set to truncate. Hence to display the dimentions we
+            # is set to truncate. Hence to display the dimensions we
             # need to extract maximum of `max_seq_items` and `nrows`
             # and have 1 extra value for ... to show up in the output
             # string.
@@ -2473,10 +2473,13 @@ class DataFrame(Frame, Serializable):
 
     @index.setter
     def index(self, value):
+        old_length = (
+            self._num_rows if self._index is None else len(self._index)
+        )
         if isinstance(value, cudf.core.multiindex.MultiIndex):
-            if len(self._data) > 0 and len(value) != len(self):
+            if len(self._data) > 0 and len(value) != old_length:
                 msg = (
-                    f"Length mismatch: Expected axis has {len(self)} "
+                    f"Length mismatch: Expected axis has {old_length} "
                     f"elements, new values have {len(value)} elements"
                 )
                 raise ValueError(msg)
@@ -2484,7 +2487,6 @@ class DataFrame(Frame, Serializable):
             return
 
         new_length = len(value)
-        old_length = len(self._index)
 
         if len(self._data) > 0 and new_length != old_length:
             msg = (
@@ -2624,7 +2626,7 @@ class DataFrame(Frame, Serializable):
 
     def set_index(
         self,
-        index,
+        keys,
         drop=True,
         append=False,
         inplace=False,
@@ -2634,7 +2636,7 @@ class DataFrame(Frame, Serializable):
 
         Parameters
         ----------
-        index : Index, Series-convertible, label-like, or list
+        keys : Index, Series-convertible, label-like, or list
             Index : the new index.
             Series-convertible : values for the new index.
             Label-like : Label of column to be used as index.
@@ -2718,15 +2720,15 @@ class DataFrame(Frame, Serializable):
         5  e  5.0
         """
 
-        if not isinstance(index, list):
-            index = [index]
+        if not isinstance(keys, list):
+            keys = [keys]
 
         # Preliminary type check
         col_not_found = []
         columns_to_add = []
         names = []
         to_drop = []
-        for i, col in enumerate(index):
+        for i, col in enumerate(keys):
             # Is column label
             if is_scalar(col) or isinstance(col, tuple):
                 if col in self.columns:
@@ -3001,30 +3003,6 @@ class DataFrame(Frame, Serializable):
         value = column.as_column(value)
 
         self._data.insert(name, value, loc=loc)
-
-    def add_column(self, name, data, forceindex=False):
-        """Add a column
-
-        Parameters
-        ----------
-        name : str
-            Name of column to be added.
-        data : Series, array-like
-            Values to be added.
-        """
-
-        warnings.warn(
-            "`add_column` will be removed in the future. Use `.insert`",
-            DeprecationWarning,
-        )
-
-        if name in self._data:
-            raise NameError("duplicated column name {!r}".format(name))
-
-        if isinstance(data, GeneratorType):
-            data = Series(data)
-
-        self.insert(len(self._data.names), name, data)
 
     def drop(
         self,
@@ -3866,7 +3844,6 @@ class DataFrame(Frame, Serializable):
         sort=False,
         lsuffix=None,
         rsuffix=None,
-        type="",
         method="hash",
         indicator=False,
         suffixes=("_x", "_y"),
@@ -3957,14 +3934,6 @@ class DataFrame(Frame, Serializable):
         else:
             lsuffix, rsuffix = suffixes
 
-        if type != "":
-            warnings.warn(
-                'type="' + type + '" parameter is deprecated.'
-                'Use method="' + type + '" instead.',
-                DeprecationWarning,
-            )
-            method = type
-
         lhs = self.copy(deep=False)
         rhs = right.copy(deep=False)
 
@@ -3995,7 +3964,6 @@ class DataFrame(Frame, Serializable):
         lsuffix="",
         rsuffix="",
         sort=False,
-        type="",
         method="hash",
     ):
         """Join columns with other DataFrame on index or on a key column.
@@ -4022,14 +3990,6 @@ class DataFrame(Frame, Serializable):
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
-        # Outer joins still use the old implementation
-        if type != "":
-            warnings.warn(
-                'type="' + type + '" parameter is deprecated.'
-                'Use method="' + type + '" instead.',
-                DeprecationWarning,
-            )
-            method = type
 
         lhs = self
         rhs = other
@@ -4059,7 +4019,6 @@ class DataFrame(Frame, Serializable):
         squeeze=False,
         observed=False,
         dropna=True,
-        method=None,
     ):
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
@@ -4083,11 +4042,6 @@ class DataFrame(Frame, Serializable):
                 "groupby() requires either by or level to be" "specified."
             )
 
-        if method is not None:
-            warnings.warn(
-                "The 'method' argument is deprecated and will be unused",
-                DeprecationWarning,
-            )
         return DataFrameGroupBy(
             self,
             by=by,
@@ -4109,7 +4063,7 @@ class DataFrame(Frame, Serializable):
             win_type=win_type,
         )
 
-    def query(self, expr, local_dict={}):
+    def query(self, expr, local_dict=None):
         """
         Query with a boolean expression using Numba to compile a GPU kernel.
 
@@ -4176,6 +4130,9 @@ class DataFrame(Frame, Serializable):
         # can't use `annotate` decorator here as we inspect the calling
         # environment.
         with annotate("QUERY", color="purple", domain="cudf_python"):
+            if local_dict is None:
+                local_dict = {}
+
             if self.empty:
                 return self.copy()
 
@@ -4281,7 +4238,7 @@ class DataFrame(Frame, Serializable):
         func,
         incols,
         outcols,
-        kwargs={},
+        kwargs=None,
         pessimistic_nulls=True,
         chunks=None,
         blkct=None,
@@ -4327,6 +4284,8 @@ class DataFrame(Frame, Serializable):
         --------
         DataFrame.apply_rows
         """
+        if kwargs is None:
+            kwargs = {}
         if chunks is None:
             raise ValueError("*chunks* must be defined")
         return applyutils.apply_chunks(
@@ -5205,87 +5164,6 @@ class DataFrame(Frame, Serializable):
         else:
             df._index = as_index(index)
         return df
-
-    @classmethod
-    def from_gpu_matrix(
-        self, data, index=None, columns=None, nan_as_null=False
-    ):
-        """Convert from a numba gpu ndarray.
-
-        Parameters
-        ----------
-        data : numba gpu ndarray
-        index : str, Index
-            The name of the index column in `data` or an Index itself.
-            If None, the default index is used.
-        columns : list of str
-            List of column names to include.
-
-        Returns
-        -------
-        DataFrame
-        """
-        warnings.warn(
-            "DataFrame.from_gpu_matrix will be removed in 0.16. "
-            "Please use cudf.DataFrame() to create a DataFrame "
-            "out of a gpu matrix",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
-        if data.ndim != 2:
-            raise ValueError(
-                f"matrix dimension expected 2 but found {data.ndim}"
-            )
-
-        if columns is None:
-            names = [i for i in range(data.shape[1])]
-        else:
-            if len(columns) != data.shape[1]:
-                raise ValueError(
-                    f"columns length expected {data.shape[1]} but "
-                    f"found {len(columns)}"
-                )
-            names = columns
-
-        if (
-            index is not None
-            and not isinstance(index, (str, int))
-            and len(index) != data.shape[0]
-        ):
-            raise ValueError(
-                f"index length expected {data.shape[0]} but found {len(index)}"
-            )
-
-        df = DataFrame()
-        data = cupy.asfortranarray(cupy.asarray(data))
-        for i, k in enumerate(names):
-            df._data[k] = as_column(data[:, i], nan_as_null=nan_as_null)
-
-        if index is not None:
-            if isinstance(index, (str, int)):
-                index = as_index(df[index])
-            else:
-                index = as_index(index)
-        else:
-            index = RangeIndex(start=0, stop=len(data))
-        df._index = index
-
-        return df
-
-    def to_gpu_matrix(self):
-        """Convert to a numba gpu ndarray
-
-        Returns
-        -------
-        numba gpu ndarray
-        """
-        warnings.warn(
-            "The to_gpu_matrix method will be deprecated"
-            "in the future. use as_gpu_matrix instead.",
-            DeprecationWarning,
-        )
-        return self.as_gpu_matrix()
 
     @classmethod
     def _from_columns(cls, cols, index=None, columns=None):
@@ -6534,9 +6412,7 @@ class DataFrame(Frame, Serializable):
                     else None,
                 )
             else:
-                result_df = DataFrame.from_gpu_matrix(result).set_index(
-                    self.index
-                )
+                result_df = DataFrame(result).set_index(self.index)
                 result_df.columns = prepared.columns
                 return result_df
 
@@ -6718,10 +6594,10 @@ class DataFrame(Frame, Serializable):
 
         return dlpack.to_dlpack(self)
 
-    @ioutils.doc_to_csv()
+    @ioutils.doc_dataframe_to_csv()
     def to_csv(
         self,
-        path=None,
+        path_or_buf=None,
         sep=",",
         na_rep="",
         columns=None,
@@ -6735,14 +6611,14 @@ class DataFrame(Frame, Serializable):
 
         return csv.to_csv(
             self,
-            path,
-            sep,
-            na_rep,
-            columns,
-            header,
-            index,
-            line_terminator,
-            chunksize,
+            path_or_buf=path_or_buf,
+            sep=sep,
+            na_rep=na_rep,
+            columns=columns,
+            header=header,
+            index=index,
+            line_terminator=line_terminator,
+            chunksize=chunksize,
         )
 
     @ioutils.doc_to_orc()
@@ -6821,9 +6697,7 @@ class DataFrame(Frame, Serializable):
         cov : DataFrame
         """
         cov = cupy.cov(self.values, rowvar=False)
-        df = DataFrame.from_gpu_matrix(cupy.asfortranarray(cov)).set_index(
-            self.columns
-        )
+        df = DataFrame(cupy.asfortranarray(cov)).set_index(self.columns)
         df.columns = self.columns
         return df
 
@@ -6831,9 +6705,7 @@ class DataFrame(Frame, Serializable):
         """Compute the correlation matrix of a DataFrame.
         """
         corr = cupy.corrcoef(self.values, rowvar=False)
-        df = DataFrame.from_gpu_matrix(cupy.asfortranarray(corr)).set_index(
-            self.columns
-        )
+        df = DataFrame(cupy.asfortranarray(corr)).set_index(self.columns)
         df.columns = self.columns
         return df
 
@@ -7308,7 +7180,7 @@ def _get_union_of_indices(indexes):
 def _get_union_of_series_names(series_list):
     names_list = []
     unnamed_count = 0
-    for idx, series in enumerate(series_list):
+    for series in series_list:
         if series.name is None:
             names_list.append(f"Unnamed {unnamed_count}")
             unnamed_count += 1

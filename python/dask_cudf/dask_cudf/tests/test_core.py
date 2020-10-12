@@ -4,15 +4,14 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
-from pandas.util import testing as tm
 
 import dask
 from dask import dataframe as dd
 from dask.dataframe.core import make_meta, meta_nonempty
 
-import cudf
-
 import dask_cudf as dgd
+
+import cudf
 
 
 def test_from_cudf():
@@ -335,11 +334,11 @@ def test_setitem_scalar_datetime():
 @pytest.mark.parametrize(
     "func",
     [
-        lambda: tm.makeDataFrame().reset_index(),
-        tm.makeDataFrame,
-        tm.makeMixedDataFrame,
-        tm.makeObjectSeries,
-        tm.makeTimeSeries,
+        lambda: pd._testing.makeDataFrame().reset_index(),
+        pd._testing.makeDataFrame,
+        pd._testing.makeMixedDataFrame,
+        pd._testing.makeObjectSeries,
+        pd._testing.makeTimeSeries,
     ],
 )
 def test_repr(func):
@@ -408,8 +407,8 @@ def test_repartition_hash_staged(npartitions):
     # was specifically chosen to cover changes in #4676
     npartitions_initial = 17
     ddf = dgd.from_cudf(gdf, npartitions=npartitions_initial)
-    ddf_new = ddf.repartition(
-        columns=by, npartitions=npartitions, max_branch=4
+    ddf_new = ddf.shuffle(
+        on=by, ignore_index=True, npartitions=npartitions, max_branch=4
     )
 
     # Make sure we are getting a dask_cudf dataframe
@@ -448,8 +447,11 @@ def test_repartition_hash(by, npartitions, max_branch):
     )
     gdf.d = gdf.d.astype("datetime64[ms]")
     ddf = dgd.from_cudf(gdf, npartitions=npartitions_i)
-    ddf_new = ddf.repartition(
-        columns=by, npartitions=npartitions, max_branch=max_branch
+    ddf_new = ddf.shuffle(
+        on=by,
+        ignore_index=True,
+        npartitions=npartitions,
+        max_branch=max_branch,
     )
 
     # Check that the length was preserved

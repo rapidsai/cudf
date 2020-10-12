@@ -27,8 +27,6 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 
-#include <thrust/tabulate.h>
-
 namespace cudf {
 namespace {
 // Launch configuration for optimized hash partition
@@ -258,7 +256,7 @@ __global__ void copy_block_partitions(InputIter input_iter,
   typedef cub::BlockScan<size_type, OPTIMIZED_BLOCK_SIZE> BlockScan;
   __shared__ typename BlockScan::TempStorage temp_storage;
 
-  // use ELEMENTS_PER_THREAD=2 to support upto 1024 partitions
+  // use ELEMENTS_PER_THREAD=2 to support up to 1024 partitions
   size_type temp_histo[ELEMENTS_PER_THREAD];
 
   for (int i = 0; i < ELEMENTS_PER_THREAD; ++i) {
@@ -609,6 +607,12 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   }
 }
 
+// MD5 supported leaf data type check
+bool md5_type_check(data_type dt)
+{
+  return !is_chrono(dt) && (is_fixed_width(dt) || (dt.id() == type_id::STRING));
+}
+
 }  // namespace
 
 namespace detail {
@@ -658,12 +662,13 @@ std::unique_ptr<column> md5_hash(table_view const& input,
     return output;
   }
 
+  // Accepts string and fixed width columns, or single layer list columns holding those types
   CUDF_EXPECTS(
     std::all_of(input.begin(),
                 input.end(),
                 [](auto col) {
-                  return !is_chrono(col.type()) &&
-                         (is_fixed_width(col.type()) || (col.type().id() == type_id::STRING));
+                  return md5_type_check(col.type()) ||
+                         (col.type().id() == type_id::LIST && md5_type_check(col.child(1).type()));
                 }),
     "MD5 unsupported column type");
 
@@ -681,28 +686,26 @@ std::unique_ptr<column> md5_hash(table_view const& input,
 
   rmm::device_buffer null_mask{0, stream, mr};
 
-  bool const nullable     = has_nulls(input);
   auto const device_input = table_device_view::create(input, stream);
 
   // Hash each row, hashing each element sequentially left to right
-  thrust::for_each(
-    rmm::exec_policy(stream)->on(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(input.num_rows()),
-    [d_chars, device_input = *device_input, has_nulls = nullable] __device__(auto row_index) {
-      md5_intermediate_data hash_state;
-      MD5Hash hasher = MD5Hash{};
-      for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
-        if (device_input.column(col_index).is_valid(row_index)) {
-          cudf::type_dispatcher(device_input.column(col_index).type(),
-                                hasher,
-                                device_input.column(col_index),
-                                row_index,
-                                &hash_state);
-        }
-      }
-      hasher.finalize(&hash_state, d_chars + (row_index * 32));
-    });
+  thrust::for_each(rmm::exec_policy(stream)->on(stream),
+                   thrust::make_counting_iterator(0),
+                   thrust::make_counting_iterator(input.num_rows()),
+                   [d_chars, device_input = *device_input] __device__(auto row_index) {
+                     md5_intermediate_data hash_state;
+                     MD5Hash hasher = MD5Hash{};
+                     for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
+                       if (device_input.column(col_index).is_valid(row_index)) {
+                         cudf::type_dispatcher(device_input.column(col_index).type(),
+                                               hasher,
+                                               device_input.column(col_index),
+                                               row_index,
+                                               &hash_state);
+                       }
+                     }
+                     hasher.finalize(&hash_state, d_chars + (row_index * 32));
+                   });
 
   return make_strings_column(input.num_rows(),
                              std::move(offsets_column),

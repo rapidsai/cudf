@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
@@ -29,22 +29,26 @@ requirements:
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
-    - arrow-cpp 1.0.1.*
+    - arrow-cpp 1.0.1
     - arrow-cpp-proc * cuda
-    - flatbuffers
     - boost-cpp 1.72.0
     - dlpack
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
-    - dlpack
     - arrow-cpp-proc * cuda
     - {{ pin_compatible('boost-cpp', max_pin='x.x.x') }}
+    - {{ pin_compatible('dlpack', max_pin='x.x') }}
 
 test:
   commands:
     - test -f $PREFIX/lib/libcudf.so
     - test -f $PREFIX/lib/libcudftestutil.a
     - test -f $PREFIX/include/cudf/aggregation.hpp
+    - test -f $PREFIX/include/cudf/ast/transform.hpp
+    - test -f $PREFIX/include/cudf/ast/detail/linearizer.hpp
+    - test -f $PREFIX/include/cudf/ast/detail/operators.hpp
+    - test -f $PREFIX/include/cudf/ast/linearizer.hpp
+    - test -f $PREFIX/include/cudf/ast/operators.hpp
     - test -f $PREFIX/include/cudf/binaryop.hpp
     - test -f $PREFIX/include/cudf/column/column_factories.hpp
     - test -f $PREFIX/include/cudf/column/column.hpp
@@ -82,6 +86,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/utilities/int_fastdiv.h
     - test -f $PREFIX/include/cudf/dictionary/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/encode.hpp
+    - test -f $PREFIX/include/cudf/dictionary/detail/replace.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/search.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/update_keys.hpp
     - test -f $PREFIX/include/cudf/dictionary/dictionary_column_view.hpp
@@ -175,6 +180,7 @@ test:
     - test -f $PREFIX/include/cudf/utilities/error.hpp
     - test -f $PREFIX/include/cudf/utilities/traits.hpp
     - test -f $PREFIX/include/cudf/utilities/type_dispatcher.hpp
+    - test -f $PREFIX/include/cudf/utilities/default_stream.hpp
     - test -f $PREFIX/include/cudf/wrappers/dictionary.hpp
     - test -f $PREFIX/include/cudf/wrappers/durations.hpp
     - test -f $PREFIX/include/cudf/wrappers/timestamps.hpp

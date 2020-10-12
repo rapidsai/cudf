@@ -115,7 +115,7 @@ set(SCALAR_TEST_SRC
 ConfigureTest(SCALAR_TEST "${SCALAR_TEST_SRC}")
 
 ###################################################################################################
-# - timestamps tests ----------------------------------------------------------------------------------
+# - timestamps tests ------------------------------------------------------------------------------
 
 set(TIMESTAMPS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/wrappers/timestamps_test.cu")
@@ -188,7 +188,7 @@ set(HASHING_TEST_SRC
 ConfigureTest(HASHING_TEST "${HASHING_TEST_SRC}")
 
 ###################################################################################################
-# - partitioning tests ---------------------------------------------------------------------------------
+# - partitioning tests ----------------------------------------------------------------------------
 
 set(PARTITIONING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/partitioning/hash_partition_test.cpp"
@@ -225,7 +225,7 @@ set(REDUCTION_TEST_SRC
 ConfigureTest(REDUCTION_TEST "${REDUCTION_TEST_SRC}")
 
 ###################################################################################################
-# - replace tests --------------------------------------------------------------------------
+# - replace tests ---------------------------------------------------------------------------------
 
 set(REPLACE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_tests.cpp")
@@ -375,7 +375,8 @@ set(UTILITIES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/type_list_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_utilities_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/lists_column_wrapper_tests.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/lists_column_wrapper_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/default_stream_tests.cpp")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
 
@@ -452,12 +453,20 @@ set(ROLLING_TEST_SRC
 ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 
 ###################################################################################################
-# - grouped rolling tests ---------------------------------------------------------------------------------
+# - grouped rolling tests -------------------------------------------------------------------------
 
 set(GROUPED_ROLLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/grouped_rolling/grouped_rolling_test.cpp")
 
 ConfigureTest(GROUPED_ROLLING_TEST "${GROUPED_ROLLING_TEST_SRC}")
+
+###################################################################################################
+# - lead/lag rolling tests ---------------------------------------------------------------------------------
+
+set(LEAD_LAG_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/lead_lag/lead_lag_test.cpp")
+
+ConfigureTest(LEAD_LAG_TEST "${LEAD_LAG_TEST_SRC}")
 
 ###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
@@ -481,6 +490,7 @@ ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
 # - reshape test ----------------------------------------------------------------------------------
 
 set(RESHAPE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/reshape/byte_cast_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/reshape/interleave_columns_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/reshape/tile_tests.cpp")
 
@@ -555,7 +565,7 @@ set(STRUCTS_TEST_SRC
 ConfigureTest(STRUCTS_TEST "${STRUCTS_TEST_SRC}")
 
 ###################################################################################################
-# - nvtext test ----------------------------------------------------------------------------------
+# - nvtext test -----------------------------------------------------------------------------------
 
 set(TEXT_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/text/edit_distance_tests.cpp"
@@ -581,7 +591,7 @@ set(BITMASK_TEST_SRC
 ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 
 ###################################################################################################
-# - dictionary tests ---------------------------------------------------------------------------------
+# - dictionary tests ------------------------------------------------------------------------------
 
 set(DICTIONARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/dictionary/add_keys_test.cpp"
@@ -605,6 +615,14 @@ set(ENCODE_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/encode/encode_tests.cpp")
 
 ConfigureTest(ENCODE_TEST "${ENCODE_TEST_SRC}")
+
+###################################################################################################
+# - ast tests -------------------------------------------------------------------------------------
+
+set(AST_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/ast/transform_tests.cpp")
+
+ConfigureTest(AST_TEST "${AST_TEST_SRC}")
 
 ###################################################################################################
 # - lists tests ----------------------------------------------------------------------------------

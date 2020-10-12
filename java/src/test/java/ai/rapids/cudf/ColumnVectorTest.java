@@ -385,6 +385,38 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testMD5HashLists() {
+    List<String> list1 = Arrays.asList("dE\"\u0100\t\u0101 \u0500\u0501", "\\Fg2\'");
+    List<String> list2 = Arrays.asList("A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
+    "in the MD5 hash function. This string needed to be longer.", "", null, "A 60 character string to test MD5's message padding algorithm");
+    List<String> list3 = Arrays.asList("hiJ\ud720\ud721\ud720\ud721");
+    List<String> list4 = null;
+    try (ColumnVector v = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+    new HostColumnVector.BasicType(true, DType.STRING)), list1, list2, list3, list4);
+         ColumnVector result = ColumnVector.md5Hash(v);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "675c30ce6d1b27dcb5009b01be42e9bd", "8fa29148f63c1fe9248fdc4644e3a193",
+          "1bc221b25e6c4825929e884092f4044f", "d41d8cd98f00b204e9800998ecf8427e")) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testNullReconfigureNulls() {
+    try (ColumnVector v0 = ColumnVector.fromBoxedInts(0, 100, null, null, Integer.MIN_VALUE, null);
+         ColumnVector v1 = ColumnVector.fromBoxedInts(0, 100, 1, 2, Integer.MIN_VALUE, null);
+         ColumnVector intResult = v1.mergeAndSetValidity(BinaryOp.BITWISE_AND, v0);
+         ColumnVector v2 = ColumnVector.fromStrings("0", "100", "1", "2", "MIN_VALUE", "3");
+         ColumnVector stringResult = v2.mergeAndSetValidity(BinaryOp.BITWISE_AND, v0, v1);
+         ColumnVector stringExpected = ColumnVector.fromStrings("0", "100", null, null, "MIN_VALUE", null);
+         ColumnVector noMaskResult = v2.mergeAndSetValidity(BinaryOp.BITWISE_AND)) {
+      assertColumnsAreEqual(v0, intResult);
+      assertColumnsAreEqual(stringExpected, stringResult);
+      assertColumnsAreEqual(v2, noMaskResult);
+    }
+  }
+
+  @Test
   void isNotNullTestEmptyColumn() {
     try (ColumnVector v = ColumnVector.fromBoxedInts();
          ColumnVector expected = ColumnVector.fromBoxedBooleans();
@@ -1509,6 +1541,22 @@ public class ColumnVectorTest extends CudfTestBase {
       // The rolling window produces the same result type as the input
       try (ColumnVector expected = ColumnVector.fromDoubles(4.5, 16.0 / 3, 17.0 / 3, 7, 7);
            ColumnVector result = v1.rollingWindow(Aggregation.mean(), options)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector expected = ColumnVector.fromBoxedInts(4, 7, 6, 8, null);
+           ColumnVector result = v1.rollingWindow(Aggregation.lead(1), options)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector expected = ColumnVector.fromBoxedInts(null, 5, 4, 7, 6);
+           ColumnVector result = v1.rollingWindow(Aggregation.lag(1), options)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector defaultOutput = ColumnVector.fromInts(-1, -2, -3, -4, -5);
+           ColumnVector expected = ColumnVector.fromBoxedInts(-1,  5,  4,  7,  6);
+           ColumnVector result = v1.rollingWindow(Aggregation.lag(1, defaultOutput), options)) {
         assertColumnsAreEqual(expected, result);
       }
     }
@@ -2983,15 +3031,15 @@ public class ColumnVectorTest extends CudfTestBase {
          HostColumnVector hcv1 = columnVector.copyToHost();
          ColumnVector expected = hcv1.copyToDevice()) {
       assertEquals(expected.getRowCount(), 4L, "Expected column row count is incorrect");
-      HostColumnVector.StructData retData1 = hcv1.getStruct(0, type);
-      HostColumnVector.StructData retData2 = hcv1.getStruct(1, type);
-      HostColumnVector.StructData retData3 = hcv1.getStruct(2, type);
-      HostColumnVector.StructData retData4 = hcv1.getStruct(3, type);
+      HostColumnVector.StructData retData1 = hcv1.getStruct(0);
+      HostColumnVector.StructData retData2 = hcv1.getStruct(1);
+      HostColumnVector.StructData retData3 = hcv1.getStruct(2);
+      HostColumnVector.StructData retData4 = hcv1.getStruct(3);
       assertEquals(data1, retData1.dataRecord);
       assertEquals(data2, retData2.dataRecord);
       assertEquals(data3, retData3.dataRecord);
       assertEquals(data4, retData4);
-      assertStructColumnsAreEqual(expected, columnVector, type);
+      assertStructColumnsAreEqual(expected, columnVector);
     }
   }
 
@@ -3039,7 +3087,39 @@ public class ColumnVectorTest extends CudfTestBase {
       assertFalse(longChildCol.isNull(1));
       assertTrue(longChildCol.isNull(2));
       assertTrue(longChildCol.isNull(3));
-      assertStructColumnsAreEqual(expected, columnVector, type);
+      assertStructColumnsAreEqual(expected, columnVector);
+    }
+  }
+
+  @Test
+  void testGetMapValue() {
+    List<HostColumnVector.StructData> list1 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
+    List<HostColumnVector.StructData> list2 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "c")));
+    List<HostColumnVector.StructData> list3 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("e", "d")));
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+        new HostColumnVector.BasicType(true, DType.STRING)));
+    try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3);
+         ColumnVector res = cv.getMapValue(Scalar.fromString("a"));
+         ColumnVector expected = ColumnVector.fromStrings("b", "c", null)) {
+      assertColumnsAreEqual(expected, res);
+    }
+  }
+
+  @Test
+  void testListOfStructsOfStructs() {
+    List<HostColumnVector.StructData> list1 = Arrays.asList(
+        new HostColumnVector.StructData(Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a")))));
+    List<HostColumnVector.StructData> list2 = Arrays.asList(
+        new HostColumnVector.StructData(Arrays.asList(new HostColumnVector.StructData(Arrays.asList("b")))));
+    List<HostColumnVector.StructData> list3 = Arrays.asList(
+        new HostColumnVector.StructData(Arrays.asList(new HostColumnVector.StructData(Arrays.asList("c")))));
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.StructType(true,
+        Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING)))));
+    HostColumnVector.ListType schema = new HostColumnVector.ListType(true, structType);
+    try (ColumnVector cv = ColumnVector.fromLists(schema, list1, list2, list3);
+         HostColumnVector hostColumnVector = cv.copyToHost();
+         ColumnVector expected = hostColumnVector.copyToDevice()) {
+      assertColumnsAreEqual(expected, cv);
     }
   }
 }

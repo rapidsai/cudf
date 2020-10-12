@@ -18,7 +18,6 @@ from . import (  # type: ignore
     merge,
     null_mask,
     nvtext,
-    nvtx,
     orc,
     parquet,
     partitioning,

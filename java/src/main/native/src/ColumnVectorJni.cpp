@@ -52,6 +52,7 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
+#include <map_lookup.hpp>
 
 #include "cudf_jni_apis.hpp"
 
@@ -318,7 +319,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_quantile(JNIEnv *env, j
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_rollingWindow(
-    JNIEnv *env, jclass clazz, jlong input_col, jint min_periods, jlong agg_ptr, jint preceding,
+    JNIEnv *env, jclass clazz, jlong input_col, jlong default_output_col, 
+    jint min_periods, jlong agg_ptr, jint preceding,
     jint following, jlong preceding_col, jlong following_col) {
 
   JNI_NULL_CHECK(env, input_col, "native handle is null", 0);
@@ -326,17 +328,31 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_rollingWindow(
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *n_input_col = reinterpret_cast<cudf::column_view *>(input_col);
+    cudf::column_view *n_default_output_col =
+        reinterpret_cast<cudf::column_view *>(default_output_col);
     cudf::column_view *n_preceding_col = reinterpret_cast<cudf::column_view *>(preceding_col);
     cudf::column_view *n_following_col = reinterpret_cast<cudf::column_view *>(following_col);
     cudf::aggregation * agg = reinterpret_cast<cudf::aggregation *>(agg_ptr);
 
     std::unique_ptr<cudf::column> ret;
-    if (n_preceding_col != nullptr && n_following_col != nullptr) {
-      ret = cudf::rolling_window(*n_input_col, *n_preceding_col, *n_following_col,
-              min_periods, agg->clone());
+    if (n_default_output_col != nullptr) {
+      if (n_preceding_col != nullptr && n_following_col != nullptr) {
+        CUDF_FAIL("A default output column is not currently supported with variable length preceding and following");
+        //ret = cudf::rolling_window(*n_input_col, *n_default_output_col, 
+        //        *n_preceding_col, *n_following_col, min_periods, agg->clone());
+      } else {
+        ret = cudf::rolling_window(*n_input_col, *n_default_output_col,
+                preceding, following, min_periods, agg->clone());
+      }
+
     } else {
-      ret = cudf::rolling_window(*n_input_col, preceding, following, min_periods,
-              agg->clone());
+      if (n_preceding_col != nullptr && n_following_col != nullptr) {
+        ret = cudf::rolling_window(*n_input_col, *n_preceding_col, *n_following_col,
+                min_periods, agg->clone());
+      } else {
+        ret = cudf::rolling_window(*n_input_col, preceding, following, min_periods,
+                agg->clone());
+      }
     }
     return reinterpret_cast<jlong>(ret.release());
   }
@@ -1075,6 +1091,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringReplace(JNIEnv *e
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_mapLookup(JNIEnv *env, jclass,
+                                                                       jlong map_column_view,
+                                                                       jlong lookup_key) {
+  JNI_NULL_CHECK(env, map_column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, lookup_key, "target string scalar is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
+    cudf::string_scalar *ss_key = reinterpret_cast<cudf::string_scalar *>(lookup_key);
+
+    std::unique_ptr<cudf::column> result = cudf::jni::map_lookup(*cv, *ss_key);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringReplaceWithBackrefs(
     JNIEnv *env,
     jclass,
@@ -1191,6 +1223,36 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_normalizeNANsAndZeros(J
     cudf::jni::auto_set_device(env);
     return reinterpret_cast<jlong>(
         cudf::normalize_nans_and_zeros(*reinterpret_cast<column_view *>(input_column)).release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_bitwiseMergeAndSetValidity(JNIEnv *env, jobject j_object, jlong base_column, jlongArray column_handles, jint bin_op) {
+  JNI_NULL_CHECK(env, base_column, "base column native handle is null", 0);
+  JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
+  try {
+    cudf::column_view *original_column = reinterpret_cast<cudf::column_view *>(base_column);
+    std::unique_ptr<cudf::column> copy(new cudf::column(*original_column));
+    cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
+
+    if (n_cudf_columns.size() == 0) {
+      rmm::device_buffer null_mask{0};
+      copy->set_null_mask(null_mask);
+      return reinterpret_cast<jlong>(copy.release());
+    }
+
+    std::vector<cudf::column_view> column_views;
+    std::transform(n_cudf_columns.data(), n_cudf_columns.data() + n_cudf_columns.size(),
+                   std::back_inserter(column_views),
+                   [](auto const &p_column) { return *p_column; });
+    cudf::table_view *input_table = new cudf::table_view(column_views);
+
+    cudf::binary_operator op = static_cast<cudf::binary_operator>(bin_op);
+    if(op == cudf::binary_operator::BITWISE_AND) {
+      copy->set_null_mask(cudf::bitmask_and(*input_table));
+    }
+
+    return reinterpret_cast<jlong>(copy.release());
   }
   CATCH_STD(env, 0);
 }

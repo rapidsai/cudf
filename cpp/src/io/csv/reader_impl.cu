@@ -29,6 +29,7 @@
 #include <cudf/strings/replace.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <algorithm>
 #include <iostream>
@@ -38,6 +39,9 @@
 
 using std::string;
 using std::vector;
+
+using cudf::detail::device_span;
+using cudf::detail::host_span;
 
 namespace cudf {
 namespace io {
@@ -206,40 +210,34 @@ table_with_metadata reader::impl::read(cudaStream_t stream)
 
   // Transfer source data to GPU
   if (!source_->is_empty()) {
-    const char *h_uncomp_data = nullptr;
-    size_t h_uncomp_size      = 0;
-
     auto data_size = (map_range_size != 0) ? map_range_size : source_->size();
     auto buffer    = source_->host_read(range_offset, data_size);
 
+    auto h_data = host_span<char const>(  //
+      reinterpret_cast<const char *>(buffer->data()),
+      buffer->size());
+
     std::vector<char> h_uncomp_data_owner;
-    if (compression_type_ == "none") {
-      // Do not use the owner vector here to avoid extra copy
-      h_uncomp_data = reinterpret_cast<const char *>(buffer->data());
-      h_uncomp_size = buffer->size();
-    } else {
-      h_uncomp_data_owner = getUncompressedHostData(
-        reinterpret_cast<const char *>(buffer->data()), buffer->size(), compression_type_);
-      h_uncomp_data = h_uncomp_data_owner.data();
-      h_uncomp_size = h_uncomp_data_owner.size();
+
+    if (compression_type_ != "none") {
+      h_uncomp_data_owner = get_uncompressed_data(h_data, compression_type_);
+      h_data              = h_uncomp_data_owner;
     }
     // None of the parameters for row selection is used, we are parsing the entire file
     const bool load_whole_file = range_offset == 0 && range_size == 0 && skip_rows <= 0 &&
                                  skip_end_rows <= 0 && num_rows == -1;
 
     // With byte range, find the start of the first data row
-    size_t const data_start_offset =
-      (range_offset != 0) ? find_first_row_start(h_uncomp_data, h_uncomp_size) : 0;
+    size_t const data_start_offset = (range_offset != 0) ? find_first_row_start(h_data) : 0;
 
     // TODO: Allow parsing the header outside the mapped range
     CUDF_EXPECTS((range_offset == 0 || opts_.get_header() < 0),
                  "byte_range offset with header not supported");
 
     // Gather row offsets
-    gather_row_offsets(h_uncomp_data,
-                       h_uncomp_size,
+    gather_row_offsets(h_data,
                        data_start_offset,
-                       (range_size) ? range_size : h_uncomp_size,
+                       (range_size) ? range_size : h_data.size(),
                        (skip_rows > 0) ? skip_rows : 0,
                        num_rows,
                        load_whole_file,
@@ -333,36 +331,16 @@ table_with_metadata reader::impl::read(cudaStream_t stream)
   // Return empty table rather than exception if nothing to load
   if (num_active_cols_ == 0) { return {std::make_unique<table>(), {}}; }
 
-  std::vector<data_type> column_types = gather_column_types(stream);
+  auto metadata     = table_metadata{};
+  auto out_columns  = std::vector<std::unique_ptr<cudf::column>>();
+  auto column_types = gather_column_types(stream);
 
-  auto metadata = table_metadata{};
-
-  // Alloc output; columns' data memory is still expected for empty dataframe
-  std::vector<column_buffer> out_buffers;
-  out_buffers.reserve(column_types.size());
-  for (int col = 0, active_col = 0; col < num_actual_cols_; ++col) {
-    if (h_column_flags_[col] & column_parse::enabled) {
-      // Replace EMPTY dtype with STRING
-      if (column_types[active_col].id() == type_id::EMPTY) {
-        column_types[active_col] = data_type{type_id::STRING};
-      }
-      const bool is_final_allocation = column_types[active_col].id() != type_id::STRING;
-      out_buffers.emplace_back(column_types[active_col],
-                               num_records_,
-                               true,
-                               stream,
-                               is_final_allocation ? mr_ : rmm::mr::get_current_device_resource());
-      metadata.column_names.emplace_back(col_names_[col]);
-      active_col++;
-    }
-  }
-
-  auto out_columns = std::vector<std::unique_ptr<cudf::column>>();
   out_columns.reserve(column_types.size());
-  if (num_records_ != 0) {
-    decode_data(column_types, out_buffers, stream);
 
+  if (num_records_ != 0) {
+    auto out_buffers = decode_data(column_types, stream);
     for (size_t i = 0; i < column_types.size(); ++i) {
+      metadata.column_names.emplace_back(out_buffers[i].name);
       if (column_types[i].id() == type_id::STRING && opts.quotechar != '\0' &&
           opts.doublequote == true) {
         // PANDAS' default behavior of enabling doublequote for two consecutive
@@ -383,21 +361,26 @@ table_with_metadata reader::impl::read(cudaStream_t stream)
     for (size_t i = 0; i < column_types.size(); ++i) {
       out_columns.emplace_back(make_empty_column(column_types[i]));
     }
+    // Handle empty metadata
+    for (int col = 0; col < num_actual_cols_; ++col) {
+      if (h_column_flags_[col] & column_parse::enabled) {
+        metadata.column_names.emplace_back(col_names_[col]);
+      }
+    }
   }
   return {std::make_unique<table>(std::move(out_columns)), std::move(metadata)};
 }
 
-size_t reader::impl::find_first_row_start(const char *h_data, size_t h_size)
+size_t reader::impl::find_first_row_start(host_span<char const> const data)
 {
   // For now, look for the first terminator (assume the first terminator isn't within a quote)
   // TODO: Attempt to infer this from the data
   size_t pos = 0;
-  while (pos < h_size && h_data[pos] != opts.terminator) { ++pos; }
-  return std::min(pos + 1, h_size);
+  while (pos < data.size() && data[pos] != opts.terminator) { ++pos; }
+  return std::min(pos + 1, data.size());
 }
 
-void reader::impl::gather_row_offsets(const char *h_data,
-                                      size_t h_size,
+void reader::impl::gather_row_offsets(host_span<char const> const data,
                                       size_t range_begin,
                                       size_t range_end,
                                       size_t skip_rows,
@@ -406,41 +389,40 @@ void reader::impl::gather_row_offsets(const char *h_data,
                                       cudaStream_t stream)
 {
   constexpr size_t max_chunk_bytes = 64 * 1024 * 1024;  // 64MB
-  size_t buffer_size               = std::min(max_chunk_bytes, h_size);
+  size_t buffer_size               = std::min(max_chunk_bytes, data.size());
   size_t max_blocks =
     std::max<size_t>((buffer_size / cudf::io::csv::gpu::rowofs_block_bytes) + 1, 2);
   hostdevice_vector<uint64_t> row_ctx(max_blocks);
-  size_t buffer_pos  = std::min(range_begin - std::min(range_begin, sizeof(char)), h_size);
-  size_t pos         = std::min(range_begin, h_size);
+  size_t buffer_pos  = std::min(range_begin - std::min(range_begin, sizeof(char)), data.size());
+  size_t pos         = std::min(range_begin, data.size());
   size_t header_rows = (opts_.get_header() >= 0) ? opts_.get_header() + 1 : 0;
   uint64_t ctx       = 0;
 
   // For compatibility with the previous parser, a row is considered in-range if the
   // previous row terminator is within the given range
-  range_end += (range_end < h_size);
+  range_end += (range_end < data.size());
   data_.resize(0);
   row_offsets_.resize(0);
-  data_.reserve((load_whole_file) ? h_size : std::min(buffer_size * 2, h_size));
+  data_.reserve((load_whole_file) ? data.size() : std::min(buffer_size * 2, data.size()));
   do {
-    size_t target_pos = std::min(pos + max_chunk_bytes, h_size);
+    size_t target_pos = std::min(pos + max_chunk_bytes, data.size());
     size_t chunk_size = target_pos - pos;
 
-    data_.insert(data_.end(), h_data + buffer_pos + data_.size(), h_data + target_pos);
+    data_.insert(data_.end(), data.begin() + buffer_pos + data_.size(), data.begin() + target_pos);
 
     // Pass 1: Count the potential number of rows in each character block for each
     // possible parser state at the beginning of the block.
-    uint32_t num_blocks = cudf::io::csv::gpu::gather_row_offsets(row_ctx.device_ptr(),
-                                                                 nullptr,
-                                                                 data_.data().get(),
+    uint32_t num_blocks = cudf::io::csv::gpu::gather_row_offsets(opts,
+                                                                 row_ctx.device_ptr(),
+                                                                 device_span<uint64_t>(),
+                                                                 data_,
                                                                  chunk_size,
                                                                  pos,
                                                                  buffer_pos,
-                                                                 h_size,
+                                                                 data.size(),
                                                                  range_begin,
                                                                  range_end,
                                                                  skip_rows,
-                                                                 0,
-                                                                 opts,
                                                                  stream);
     CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
                              row_ctx.device_ptr(),
@@ -459,29 +441,29 @@ void reader::impl::gather_row_offsets(const char *h_data,
     size_t total_rows = ctx >> 2;
     if (total_rows > skip_rows) {
       // At least one row in range in this batch
-      size_t num_row_offsets = total_rows - skip_rows;
-      row_offsets_.resize(num_row_offsets);
+      row_offsets_.resize(total_rows - skip_rows);
+
       CUDA_TRY(cudaMemcpyAsync(row_ctx.device_ptr(),
                                row_ctx.host_ptr(),
                                num_blocks * sizeof(uint64_t),
                                cudaMemcpyHostToDevice,
                                stream));
+
       // Pass 2: Output row offsets
-      cudf::io::csv::gpu::gather_row_offsets(row_ctx.device_ptr(),
-                                             row_offsets_.data().get(),
-                                             data_.data().get(),
+      cudf::io::csv::gpu::gather_row_offsets(opts,
+                                             row_ctx.device_ptr(),
+                                             row_offsets_,
+                                             data_,
                                              chunk_size,
                                              pos,
                                              buffer_pos,
-                                             h_size,
+                                             data.size(),
                                              range_begin,
                                              range_end,
                                              skip_rows,
-                                             num_row_offsets,
-                                             opts,
                                              stream);
       // With byte range, we want to keep only one row out of the specified range
-      if (range_end < h_size) {
+      if (range_end < data.size()) {
         CUDA_TRY(cudaMemcpyAsync(row_ctx.host_ptr(),
                                  row_ctx.device_ptr(),
                                  num_blocks * sizeof(uint64_t),
@@ -492,18 +474,19 @@ void reader::impl::gather_row_offsets(const char *h_data,
         for (uint32_t i = 0; i < num_blocks; i++) { rows_out_of_range += row_ctx[i]; }
         if (rows_out_of_range != 0) {
           // Keep one row out of range (used to infer length of previous row)
-          num_row_offsets -= std::min(rows_out_of_range - 1, num_row_offsets);
-          row_offsets_.resize(num_row_offsets);
+          auto new_row_offsets_size =
+            row_offsets_.size() - std::min(rows_out_of_range - 1, row_offsets_.size());
+          row_offsets_.resize(new_row_offsets_size);
           // Implies we reached the end of the range
           break;
         }
       }
       // num_rows does not include blank rows
       if (num_rows >= 0) {
-        if (num_row_offsets > header_rows + static_cast<size_t>(num_rows)) {
+        if (row_offsets_.size() > header_rows + static_cast<size_t>(num_rows)) {
           size_t num_blanks =
-            cudf::io::csv::gpu::count_blank_rows(row_offsets_, data_, opts, stream);
-          if (num_row_offsets - num_blanks > header_rows + static_cast<size_t>(num_rows)) {
+            cudf::io::csv::gpu::count_blank_rows(opts, data_, row_offsets_, stream);
+          if (row_offsets_.size() - num_blanks > header_rows + static_cast<size_t>(num_rows)) {
             // Got the desired number of rows
             break;
           }
@@ -518,11 +501,11 @@ void reader::impl::gather_row_offsets(const char *h_data,
       }
     }
     pos = target_pos;
-  } while (pos < h_size);
+  } while (pos < data.size());
 
   // Eliminate blank rows
   if (row_offsets_.size() != 0) {
-    cudf::io::csv::gpu::remove_blank_rows(row_offsets_, data_, opts, stream);
+    cudf::io::csv::gpu::remove_blank_rows(opts, data_, row_offsets_, stream);
   }
   // Remove header rows and extract header
   const size_t header_row_index = std::max<size_t>(header_rows, 1) - 1;
@@ -535,8 +518,9 @@ void reader::impl::gather_row_offsets(const char *h_data,
     CUDA_TRY(cudaStreamSynchronize(stream));
     const auto header_start = buffer_pos + row_ctx[0];
     const auto header_end   = buffer_pos + row_ctx[1];
-    CUDF_EXPECTS(header_start <= header_end && header_end <= h_size, "Invalid csv header location");
-    header_.assign(h_data + header_start, h_data + header_end);
+    CUDF_EXPECTS(header_start <= header_end && header_end <= data.size(),
+                 "Invalid csv header location");
+    header_.assign(data.begin() + header_start, data.begin() + header_end);
     if (header_rows > 0) {
       row_offsets_.erase(row_offsets_.begin(), row_offsets_.begin() + header_rows);
     }
@@ -555,14 +539,8 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
     } else {
       d_column_flags_ = h_column_flags_;
 
-      auto column_stats = cudf::io::csv::gpu::detect_column_types(data_.data().get(),
-                                                                  row_offsets_.data().get(),
-                                                                  num_records_,
-                                                                  num_actual_cols_,
-                                                                  num_active_cols_,
-                                                                  opts,
-                                                                  d_column_flags_.data().get(),
-                                                                  stream);
+      auto column_stats = cudf::io::csv::gpu::detect_column_types(
+        opts, data_, d_column_flags_, row_offsets_, num_active_cols_, stream);
 
       CUDA_TRY(cudaStreamSynchronize(stream));
 
@@ -655,13 +633,38 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
     }
   }
 
+  for (size_t i = 0; i < dtypes.size(); i++) {
+    // Replace EMPTY dtype with STRING
+    if (dtypes[i].id() == type_id::EMPTY) { dtypes[i] = data_type{type_id::STRING}; }
+  }
+
   return dtypes;
 }
 
-void reader::impl::decode_data(const std::vector<data_type> &column_types,
-                               std::vector<column_buffer> &out_buffers,
-                               cudaStream_t stream)
+std::vector<column_buffer> reader::impl::decode_data(std::vector<data_type> const &column_types,
+                                                     cudaStream_t stream)
 {
+  // Alloc output; columns' data memory is still expected for empty dataframe
+  std::vector<column_buffer> out_buffers;
+
+  out_buffers.reserve(column_types.size());
+
+  for (int col = 0, active_col = 0; col < num_actual_cols_; ++col) {
+    if (h_column_flags_[col] & column_parse::enabled) {
+      const bool is_final_allocation = column_types[active_col].id() != type_id::STRING;
+      auto out_buffer =
+        column_buffer(column_types[active_col],
+                      num_records_,
+                      true,
+                      stream,
+                      is_final_allocation ? mr_ : rmm::mr::get_current_device_resource());
+
+      out_buffer.name = col_names_[col];
+      out_buffers.emplace_back(std::move(out_buffer));
+      active_col++;
+    }
+  }
+
   thrust::host_vector<void *> h_data(num_active_cols_);
   thrust::host_vector<bitmask_type *> h_valid(num_active_cols_);
 
@@ -675,19 +678,14 @@ void reader::impl::decode_data(const std::vector<data_type> &column_types,
   rmm::device_vector<bitmask_type *> d_valid = h_valid;
   d_column_flags_                            = h_column_flags_;
 
-  CUDA_TRY(cudf::io::csv::gpu::DecodeRowColumnData(data_.data().get(),
-                                                   row_offsets_.data().get(),
-                                                   num_records_,
-                                                   num_actual_cols_,
-                                                   opts,
-                                                   d_column_flags_.data().get(),
-                                                   d_dtypes.data().get(),
-                                                   d_data.data().get(),
-                                                   d_valid.data().get(),
-                                                   stream));
+  cudf::io::csv::gpu::decode_row_column_data(
+    opts, data_, d_column_flags_, row_offsets_, d_dtypes, d_data, d_valid, stream);
+
   CUDA_TRY(cudaStreamSynchronize(stream));
 
   for (int i = 0; i < num_active_cols_; ++i) { out_buffers[i].null_count() = UNKNOWN_NULL_COUNT; }
+
+  return out_buffers;
 }
 
 reader::impl::impl(std::unique_ptr<datasource> source,

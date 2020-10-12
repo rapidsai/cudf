@@ -101,7 +101,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     }
 
     @Override
+    @Deprecated
     public long getNumRows() {
+      return offHeap.getNativeRowCount(viewHandle);
+    }
+
+    @Override
+    public long getRowCount() {
       return offHeap.getNativeRowCount(viewHandle);
     }
 
@@ -309,6 +315,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   /**
    * Returns the number of rows in this vector.
    */
+  @Override
   public long getRowCount() {
     return rows;
   }
@@ -382,7 +389,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     long currNullCount = 0l;
     boolean needsCleanup = true;
     try {
-      long currRows = deviceCvPointer.getNumRows();
+      long currRows = deviceCvPointer.getRowCount();
       DType currType = deviceCvPointer.getDataType();
       currData = deviceCvPointer.getDataBuffer();
       currOffsets = deviceCvPointer.getOffsetBuffer();
@@ -449,19 +456,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       BaseDeviceMemoryBuffer data = null;
       DType type = this.type;
       Long rows = this.rows;
-      // hardcoded for lists for now
-      ColumnViewAccess leafChildWithData = getChildColumnViewAccess(0);
-      // Data sits in the leaf column of the list, we get that data buffer for copying,
-      // identifying leaf column by the fact that its children is null
-      while (leafChildWithData != null && leafChildWithData.getNumChildren() != 0) {
-        ColumnViewAccess tmp = leafChildWithData.getChildColumnViewAccess(0);
-        leafChildWithData.close();
-        leafChildWithData = tmp;
-      }
-      if (leafChildWithData != null) {
-        data = (BaseDeviceMemoryBuffer) leafChildWithData.getDataBuffer();
-      } else if (type != DType.STRUCT) {
-        data = offHeap.getData();
+      if (!type.isNestedType()) {
+        data = getDataBuffer();
       }
       boolean needsCleanup = true;
       try {
@@ -514,9 +510,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
           return ret;
         }
       } finally {
-        if (leafChildWithData != null) {
-          leafChildWithData.close();
-        }
         if (data != null) {
           data.close();
         }
@@ -978,6 +971,28 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   /**
+   * Create a deep copy of the column while replacing the null mask. The resultant null mask is the
+   * bitwise merge of null masks in the columns given as arguments.
+   *
+   * @param mergeOp binary operator, currently only BITWISE_AND is supported.
+   * @param columns array of columns whose null masks are merged, must have identical number of rows.
+   * @return the new ColumnVector with merged null mask.
+   */
+  public ColumnVector mergeAndSetValidity(BinaryOp mergeOp, ColumnVector... columns) {
+    assert mergeOp == BinaryOp.BITWISE_AND : "Only BITWISE_AND supported right now";
+    long[] columnViews = new long[columns.length];
+    long size = getRowCount();
+
+    for(int i = 0; i < columns.length; i++) {
+      assert columns[i] != null : "Column vectors passed may not be null";
+      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
+      columnViews[i] = columns[i].getNativeView();
+    }
+
+    return new ColumnVector(bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId));
+  }
+
+  /**
    * Create a new vector containing the MD5 hash of each row in the table.
    *
    * @param columns array of columns to hash, must have identical number of rows.
@@ -987,18 +1002,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     if (columns.length < 1) {
       throw new IllegalArgumentException("MD5 hashing requires at least 1 column of input");
     }
-    long[] column_views = new long[columns.length];
+    long[] columnViews = new long[columns.length];
     long size = columns[0].getRowCount();
 
     for(int i = 0; i < columns.length; i++) {
       assert columns[i] != null : "Column vectors passed may not be null";
-      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must have the same number of rows";
+      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
       assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
       assert !columns[i].getType().isTimestamp() : "Unsupported column type Timestamp";
-      column_views[i] = columns[i].getNativeView();
+      assert !columns[i].getType().isNestedType() || columns[i].getType() == DType.LIST :
+        "Unsupported nested type column";
+      columnViews[i] = columns[i].getNativeView();
     }
-
-    return new ColumnVector(hash(column_views, HashType.HASH_MD5.getNativeId()));
+    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1590,6 +1606,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     try {
       return new ColumnVector(
               rollingWindow(this.getNativeView(),
+                      op.getDefaultOutput(),
                       options.getMinPeriods(),
                       nativePtr,
                       options.getPreceding(),
@@ -2601,6 +2618,20 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     return new Table(extractRe(this.getNativeView(), pattern));
   }
 
+  /** For a column of type List<Struct<String, String>> and a passed in String key, return a string column
+   * for all the values in the struct that match the key, null otherwise.
+   * @param key the String scalar to lookup in the column
+   * @return a string column of values or nulls based on the lookup result
+   */
+  public ColumnVector getMapValue(Scalar key) {
+
+    assert type == DType.LIST : "column type must be a LIST";
+    assert key != null : "target string may not be null";
+    assert key.getType() == DType.STRING : "target string must be a string scalar";
+
+    return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -2814,6 +2845,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   private static native long stringConcatenation(long[] columnViews, long separator, long narep);
 
   /**
+   * Native method for map lookup over a column of List<Struct<String,String>>
+   * @param columnView the column view handle of the map
+   * @param key the string scalar that is the key for lookup
+   * @return a string column handle of the resultant
+   * @throws CudfException
+   */
+  private static native long mapLookup(long columnView, long key) throws CudfException;
+  /**
    * Native method to add zeros as padding to the left of each string.
    */
   private static native long zfill(long nativeHandle, int width);
@@ -2854,9 +2893,15 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   private static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
 
-  private static native long rollingWindow(long viewHandle, int min_periods, long aggPtr,
-                                           int preceding, int following,
-                                           long preceding_col, long following_col);
+  private static native long rollingWindow(
+      long viewHandle,
+      long defaultOutputHandle,
+      int min_periods,
+      long aggPtr,
+      int preceding,
+      int following,
+      long preceding_col,
+      long following_col);
 
   private static native long nansToNulls(long viewHandle) throws CudfException;
 
@@ -2921,13 +2966,25 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   /**
    * Native method to normalize the various bitwise representations of NAN and zero.
    * 
-   * All occurences of -NaN are converted to NaN. Likewise, all -0.0 are converted to 0.0.
+   * All occurrences of -NaN are converted to NaN. Likewise, all -0.0 are converted to 0.0.
    * 
    * @param viewHandle `long` representation of pointer to input column_view.
    * @return Pointer to a new `column` of normalized values.
    * @throws CudfException On failure to normalize.
    */
   private static native long normalizeNANsAndZeros(long viewHandle) throws CudfException;
+
+  /**
+   * Native method to deep copy a column while replacing the null mask. The null mask is the
+   * bitwise merge of the null masks in the columns given as arguments.
+   *
+   * @param baseHandle column view of the column that is deep copied.
+   * @param viewHandles array of views whose null masks are merged, must have identical row counts.
+   * @param mergeOp Binary Op integer native ID, currently only BITWISE_AND is supported.
+   * @return native handle of the copied cudf column with replaced null mask.
+   */
+  private static native long bitwiseMergeAndSetValidity(long baseHandle, long[] viewHandles,
+                                                        int nullConfig) throws CudfException;
 
   /**
    * Native method to hash each row of the given table. Hashing function dispatched on the
@@ -3016,7 +3073,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   @Override
   public BaseDeviceMemoryBuffer getDataBuffer() {
-    if (!type.isNestedType()) {
+    if (type.isNestedType()) {
       throw new IllegalStateException(" Lists and Structs at top level have no data");
     }
     return offHeap.getData();
@@ -3039,6 +3096,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   @Override
+  @Deprecated
   public long getNumRows() {
     return offHeap.getNativeRowCount();
   }

@@ -1137,6 +1137,14 @@ def test_dataframe_hash_partition_keep_index(keep_index):
         assert_eq(exp, got)
 
 
+def test_dataframe_hash_partition_empty():
+    gdf = gd.DataFrame({"val": [1, 2], "key": [3, 2]}, index=["a", "b"])
+    parts = gdf.iloc[:0].partition_by_hash(["key"], nparts=3)
+    assert len(parts) == 3
+    for part in parts:
+        assert_eq(gdf.iloc[:0], part)
+
+
 @pytest.mark.parametrize("dtype1", utils.supported_numpy_dtypes)
 @pytest.mark.parametrize("dtype2", utils.supported_numpy_dtypes)
 def test_dataframe_concat_different_numerical_columns(dtype1, dtype2):
@@ -1373,36 +1381,38 @@ def test_from_records_index(columns, index):
     assert_eq(df, gdf)
 
 
-def test_from_gpu_matrix():
+def test_dataframe_construction_from_cupy_arrays():
     h_ary = np.array([[1, 2, 3], [4, 5, 6]], np.int32)
     d_ary = cupy.asarray(h_ary)
 
-    gdf = gd.DataFrame.from_gpu_matrix(d_ary, columns=["a", "b", "c"])
+    gdf = gd.DataFrame(d_ary, columns=["a", "b", "c"])
     df = pd.DataFrame(h_ary, columns=["a", "b", "c"])
     assert isinstance(gdf, gd.DataFrame)
 
     assert_eq(df, gdf)
 
-    gdf = gd.DataFrame.from_gpu_matrix(d_ary)
+    gdf = gd.DataFrame(d_ary)
     df = pd.DataFrame(h_ary)
     assert isinstance(gdf, gd.DataFrame)
 
     assert_eq(df, gdf)
 
-    gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=["a", "b"])
+    gdf = gd.DataFrame(d_ary, index=["a", "b"])
     df = pd.DataFrame(h_ary, index=["a", "b"])
     assert isinstance(gdf, gd.DataFrame)
 
     assert_eq(df, gdf)
 
-    gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=0)
+    gdf = gd.DataFrame(d_ary)
+    gdf = gdf.set_index(keys=0, drop=False)
     df = pd.DataFrame(h_ary)
     df = df.set_index(keys=0, drop=False)
     assert isinstance(gdf, gd.DataFrame)
 
     assert_eq(df, gdf)
 
-    gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=1)
+    gdf = gd.DataFrame(d_ary)
+    gdf = gdf.set_index(keys=1, drop=False)
     df = pd.DataFrame(h_ary)
     df = df.set_index(keys=1, drop=False)
     assert isinstance(gdf, gd.DataFrame)
@@ -1410,24 +1420,30 @@ def test_from_gpu_matrix():
     assert_eq(df, gdf)
 
 
-def test_from_gpu_matrix_wrong_dimensions():
+def test_dataframe_cupy_wrong_dimensions():
     d_ary = cupy.empty((2, 3, 4), dtype=np.int32)
     with pytest.raises(
-        ValueError, match="matrix dimension expected 2 but found 3"
+        ValueError, match="records dimension expected 1 or 2 but found: 3"
     ):
-        gd.DataFrame.from_gpu_matrix(d_ary)
+        gd.DataFrame(d_ary)
 
 
-def test_from_gpu_matrix_wrong_index():
+def test_dataframe_cupy_array_wrong_index():
     d_ary = cupy.empty((2, 3), dtype=np.int32)
 
     with pytest.raises(
-        ValueError, match="index length expected 2 but found 1"
+        ValueError,
+        match="Length mismatch: Expected axis has 2 elements, "
+        "new values have 1 elements",
     ):
-        gd.DataFrame.from_gpu_matrix(d_ary, index=["a"])
+        gd.DataFrame(d_ary, index=["a"])
 
-    with pytest.raises(KeyError):
-        gd.DataFrame.from_gpu_matrix(d_ary, index="a")
+    with pytest.raises(
+        ValueError,
+        match="Length mismatch: Expected axis has 2 elements, "
+        "new values have 1 elements",
+    ):
+        gd.DataFrame(d_ary, index="a")
 
 
 @pytest.mark.xfail(reason="constructor does not coerce index inputs")

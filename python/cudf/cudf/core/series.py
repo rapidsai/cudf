@@ -10,12 +10,12 @@ from uuid import uuid4
 import cupy
 import numpy as np
 import pandas as pd
+from nvtx import annotate
 from pandas._config import get_option
 from pandas.api.types import is_dict_like
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.nvtx import annotate
 from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
 from cudf.core.column import (
@@ -978,7 +978,7 @@ class Series(Frame, Serializable):
         return self.to_string()
 
     def __repr__(self):
-        width, height = get_terminal_size()
+        _, height = get_terminal_size()
         max_rows = (
             height
             if get_option("display.max_rows") == 0
@@ -4018,18 +4018,12 @@ class Series(Frame, Serializable):
         group_keys=True,
         as_index=None,
         dropna=True,
-        method=None,
     ):
         if group_keys is not True:
             raise NotImplementedError(
                 "The group_keys keyword is not yet implemented"
             )
         else:
-            if method is not None:
-                warnings.warn(
-                    "The 'method' argument is deprecated and will be unused",
-                    DeprecationWarning,
-                )
             return SeriesGroupBy(
                 self, by=by, level=level, dropna=dropna, sort=sort
             )
