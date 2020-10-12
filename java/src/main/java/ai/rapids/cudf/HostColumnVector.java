@@ -757,7 +757,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
           targetDataSize = data == null ? estimatedRows * type.getSizeInBytes() : rows * type.getSizeInBytes();
         }
       }
-      // data
+
       if (targetDataSize > 0) {
         if (data == null) {
           data = HostMemoryBuffer.allocate(targetDataSize);
