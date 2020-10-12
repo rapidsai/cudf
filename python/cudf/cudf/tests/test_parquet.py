@@ -12,6 +12,7 @@ import pyarrow as pa
 import pytest
 from packaging import version
 from pyarrow import parquet as pq
+import cupy
 
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
@@ -908,11 +909,13 @@ def test_parquet_reader_list_large_multi_rowgroup(tmpdir):
     num_categories = 1_000
     row_group_size = 1000
 
+    cupy.random.seed(0)
+
     # generate a random pairing of doc: category
     documents = cudf.DataFrame(
         {
-            "document_id": np.random.randint(num_docs, size=num_rows),
-            "category_id": np.random.randint(num_categories, size=num_rows),
+            "document_id": cupy.random.randint(num_docs, size=num_rows),
+            "category_id": cupy.random.randint(num_categories, size=num_rows),
         }
     )
 
