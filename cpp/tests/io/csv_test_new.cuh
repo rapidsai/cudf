@@ -1,19 +1,21 @@
 #pragma once
 
-#include <algorithm>
-#include <cstdint>
-#include <type_traits>
-
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/utilities/span.hpp>
+
+#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/device_scalar.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+#include <thrust/scan.h>
 
 #include <cub/block/block_load.cuh>
 #include <cub/block/block_reduce.cuh>
-#include "cudf/detail/utilities/cuda.cuh"
-#include "cudf/utilities/span.hpp"
-#include "rmm/thrust_rmm_allocator.h"
+
+#include <algorithm>
+#include <cstdint>
+#include <type_traits>
 
 // ===== Row + Column Count ========================================================================
 
@@ -138,10 +140,10 @@ __global__ void reduce_kernel(device_span<uint32_t> input, device_span<uint32_t>
   // } temp_storage;
 
   uint32_t block_offset = blockIdx.x * blockDim.x;
-  uint32_t num_valid    = input.size() - block_offset;
+  uint32_t valid_items  = input.size() - block_offset;
   uint32_t thread_data[ITEMS_PER_THREAD];
 
-  BlockLoad(block_load_temp_storage).Load(input, thread_data, num_valid, 0);
+  BlockLoad(block_load_temp_storage).Load(input, thread_data, valid_items, 0);
 
   auto block_result = BlockReduce(block_reduce_temp_storage).Sum(thread_data);
 
@@ -169,4 +171,120 @@ uint32_t reduce(device_span<uint32_t> d_input)
   for (auto item : h_temp_block_storage) { res += item; }
 
   return h_temp_block_storage[0];
+}
+
+template <int BLOCK_DIM_X, int ITEMS_PER_THREAD>
+__global__ void find_count_kernel(device_span<uint8_t const> input,
+                                  device_span<uint32_t> output_sizes,
+                                  uint8_t needle)
+{
+  using BlockLoad   = typename cub::BlockLoad<uint8_t,
+                                            BLOCK_DIM_X,
+                                            ITEMS_PER_THREAD,
+                                            cub::BlockLoadAlgorithm::BLOCK_LOAD_TRANSPOSE>;
+  using BlockReduce = typename cub::BlockReduce<uint32_t, BLOCK_DIM_X>;
+
+  // __shared__ union {
+  typename BlockLoad::TempStorage temp_storage_a;
+  typename BlockReduce::TempStorage temp_storage_b;
+  // } temp_storage;
+
+  uint8_t thread_data[ITEMS_PER_THREAD];
+
+  uint32_t block_offset = blockIdx.x * blockDim.x;
+  uint32_t valid_items  = input.size() - block_offset;
+
+  BlockLoad(temp_storage_a).Load(input.data() + block_offset, thread_data, valid_items);
+
+  uint32_t count = 0;
+
+  for (auto i = 0; i < valid_items; i++) {  //
+    count += thread_data[i] == needle;
+  }
+
+  count = BlockReduce(temp_storage_b).Sum(count);
+
+  if (threadIdx.x == 0) {  //
+    output_sizes[blockIdx.x + 1] = count;
+  }
+}
+
+template <int BLOCK_DIM_X, int ITEMS_PER_THREAD>
+__global__ void find_kernel(device_span<uint8_t const> input,
+                            device_span<uint32_t const> output_offsets,
+                            device_span<uint32_t> output,
+                            uint8_t needle)
+{
+  using BlockLoad   = typename cub::BlockLoad<uint8_t,
+                                            BLOCK_DIM_X,
+                                            ITEMS_PER_THREAD,
+                                            cub::BlockLoadAlgorithm::BLOCK_LOAD_TRANSPOSE>;
+  using BlockReduce = typename cub::BlockReduce<uint32_t, BLOCK_DIM_X>;
+
+  typename BlockLoad::TempStorage temp_storage_a;
+  typename BlockReduce::TempStorage temp_storage_b;
+
+  uint8_t thread_data[ITEMS_PER_THREAD];
+
+  uint32_t block_offset = blockIdx.x * blockDim.x;
+  uint32_t valid_items  = input.size() - block_offset;
+
+  BlockLoad(temp_storage_a).Load(input.data() + block_offset, thread_data, valid_items);
+
+  uint32_t count = 0;
+
+  for (auto i = 0; i < valid_items; i++) {  //
+    count += thread_data[i] == needle;
+  }
+
+  count = BlockReduce(temp_storage_b).Sum(count);
+
+  auto output_offset = output_offsets[blockIdx.x];
+
+  for (auto i = 0; i < valid_items; i++) {  //
+    if (thread_data[i] == needle) { output[output_offset++] = 9; }
+  }
+
+  output[0] = 7;
+}
+
+rmm::device_vector<uint32_t> find(device_span<uint8_t const> d_input,
+                                  uint8_t needle,
+                                  cudaStream_t stream = 0)
+{
+  enum { BLOCK_DIM_X = 4, ITEMS_PER_THREAD = 1 };
+
+  cudf::detail::grid_1d grid(d_input.size(), BLOCK_DIM_X, ITEMS_PER_THREAD);
+
+  // include leading zero in offsets
+  auto d_output_offsets = rmm::device_vector<uint32_t>(grid.num_blocks + 1);
+
+  auto find_count_kernel_inst = find_count_kernel<BLOCK_DIM_X, ITEMS_PER_THREAD>;
+
+  find_count_kernel_inst<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(  //
+    d_input,
+    d_output_offsets,
+    needle);
+
+  // convert block result sizes to block result offsets.
+  thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
+                         d_output_offsets.begin(),
+                         d_output_offsets.end(),
+                         d_output_offsets.begin());
+
+  return d_output_offsets;
+
+  // auto d_results = rmm::device_vector<uint32_t>(d_output_offsets.back());
+
+  // auto find_kernel_inst = find_kernel<BLOCK_DIM_X, ITEMS_PER_THREAD>;
+
+  // find_kernel_inst<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(  //
+  //   d_input,
+  //   d_output_offsets,
+  //   d_results,
+  //   needle);
+
+  // cudaStreamSynchronize(stream);
+
+  // return d_results;
 }

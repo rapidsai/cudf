@@ -56,7 +56,7 @@ constexpr uint32_t csvparse_block_dim = 128;
  *
  * @return True if the input is whitespace, False otherwise
  */
-__device__ __inline__ bool is_whitespace(char c) { return c == '\t' || c == ' '; }
+inline constexpr bool is_whitespace(char c) { return c == '\t' || c == ' '; }
 
 /*
  * @brief Scans a character stream within a range, and adjusts the start and end
@@ -69,10 +69,10 @@ __device__ __inline__ bool is_whitespace(char c) { return c == '\t' || c == ' ';
  *
  * @return Adjusted or unchanged start_idx and end_idx
  */
-__device__ __inline__ void trim_field_start_end(const char *data,
-                                                long *start,
-                                                long *end,
-                                                char quotechar = '\0')
+inline constexpr void trim_field_start_end(const char *data,
+                                           long *start,
+                                           long *end,
+                                           char quotechar = '\0')
 {
   while ((*start < *end) && is_whitespace(data[*start])) { (*start)++; }
   if ((*start < *end) && data[*start] == quotechar) { (*start)++; }
@@ -89,7 +89,7 @@ __device__ __inline__ void trim_field_start_end(const char *data,
  *
  * @return `true` if it is digit-like, `false` otherwise
  */
-__device__ __inline__ bool is_digit(char c, bool is_hex = false)
+inline constexpr bool is_digit(char c, bool is_hex = false)
 {
   if (c >= '0' && c <= '9') return true;
 
@@ -122,7 +122,7 @@ __device__ __inline__ bool is_digit(char c, bool is_hex = false)
  *
  * @return `true` if it is date-like, `false` otherwise
  */
-__device__ __inline__ bool is_datetime(
+inline constexpr bool is_datetime(
   long len, long decimal_count, long colon_count, long dash_count, long slash_count)
 {
   // Must not exceed count of longest month (September) plus `T` time indicator
@@ -151,7 +151,7 @@ __device__ __inline__ bool is_datetime(
  *
  * @return `true` if it is floating point-like, `false` otherwise
  */
-__device__ __inline__ bool is_floatingpoint(
+inline constexpr bool is_floatingpoint(
   long len, long digit_count, long decimal_count, long dash_count, long exponent_count)
 {
   // Can't have more than one exponent and one decimal point
