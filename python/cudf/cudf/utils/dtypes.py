@@ -506,7 +506,7 @@ def _get_nan_for_dtype(dtype):
 def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
 
     error = TypeError(
-        f"{op} not supported between " f"{dtype_l} and {dtype_r} scalars"
+        f"{op} not supported between {dtype_l} and {dtype_r} scalars"
     )
 
     to_numpy_ops = {
