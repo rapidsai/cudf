@@ -116,56 +116,22 @@ struct csv_type_deduction_sum_factory {
 // ===== PARSER ACCESS PATTERN =====================================================================
 
 template <cub::BlockLoadAlgorithm ALGORITHM, int BLOCK_DIM_X, int ITEMS_PER_THREAD = 128>
-__global__ void supercool_access_pattern_kernel(uint8_t const* input,
-                                                uint64_t input_size,
-                                                csv_dimensional_sum* output)
+__global__ void reduce_kernel(uint32_t const* input, uint64_t input_size, uint64_t* output)
 {
-  // each thread must know
-  // - starting offset
-  // - starting row
-  // - starting column
-  // - starting context (inside/outside quoted text)
-
   using BlockLoad   = typename cub::BlockLoad<uint8_t, BLOCK_DIM_X, ITEMS_PER_THREAD, ALGORITHM>;
   using BlockReduce = typename cub::
     BlockReduce<csv_dimensional_sum, BLOCK_DIM_X, cub::BlockReduceAlgorithm::BLOCK_REDUCE_RAKING>;
-
-  // __shared__ typename BlockLoad::TempStorage temp_storage;
-  // Load relevant data
 
   __shared__ union TempStorage {
     typename BlockLoad::TempStorage block_load;
     typename BlockReduce::TempStorage block_reduce;
   } temp_storage;
 
-  // BlockLoad(temp_storage).Load(InputIteratorT block_itr, InputT (&items)[ITEMS_PER_THREAD]);
-  // BlockLoad(temp_storage).Load(InputIteratorT block_itr, InputT (&items)[ITEMS_PER_THREAD], int
-  // valid_items); BlockLoad(temp_storage).Load(InputIteratorT block_itr, InputT
-  // (&items)[ITEMS_PER_THREAD], int valid_items, DefaultT oob_default);
-
-  // Thread Scan
-
-  uint8_t thread_data[ITEMS_PER_THREAD];
+  uint32_t thread_data[ITEMS_PER_THREAD];
   auto const block_offset = blockIdx.x * blockDim.x;
-  // auto const thread_offset =  block_offset + threadIdx.x;
-  // auto const input_size_remainder = input_size - block_offset;
+  auto const num_valid    = input_size - block_offset;
 
-  BlockLoad(temp_storage).Load(input, thread_data, input_size - block_offset);
+  BlockLoad(temp_storage).Load(input, thread_data, num_valid, 0);
 
-  uint8_t prev = '\0';
-  bool toggle;
-  csv_dim dimensions[2];
-
-  for (int i = 0; i < ITEMS_PER_THREAD; i++) {
-    auto const current = thread_data[i];
-    if (prev == '\\') {
-      // this char is escaped, so skip it.
-      prev = current;
-      continue;
-    }
-
-    csv_dimensional_sum::incorperate_next_char(dimensions, toggle, prev, current);
-  }
-
-  auto result = csv_dimensional_sum{prev, toggle, {dimensions[0], dimensions[1]}};
+  auto block_result = BlockReduce(temp_storage).Sum(thread_data, num_valid);
 }

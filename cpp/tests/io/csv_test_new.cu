@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 
-class JsonReaderTest : public cudf::test::BaseFixture {
+class CsvReaderTest : public cudf::test::BaseFixture {
 };
 
 void expect_eq(csv_dim const& expected, csv_dim const& actual)
@@ -34,7 +34,7 @@ void expect_eq(csv_dimensional_sum const& expected, csv_dimensional_sum const& a
   expect_eq(expected.dimensions[1], actual.dimensions[1]);
 }
 
-TEST_F(JsonReaderTest, CanCountCommas)
+TEST_F(CsvReaderTest, CanCountCommas)
 {
   using _     = csv_dimensional_sum;
   auto result = _{'x'} + _{','};
@@ -42,7 +42,7 @@ TEST_F(JsonReaderTest, CanCountCommas)
   expect_eq({',', false, {{1}, {0}}}, result);
 }
 
-TEST_F(JsonReaderTest, CanIgnoreEscapedCommas)
+TEST_F(CsvReaderTest, CanIgnoreEscapedCommas)
 {
   using _     = csv_dimensional_sum;
   auto result = _{'\\'} + _{','};
@@ -50,7 +50,7 @@ TEST_F(JsonReaderTest, CanIgnoreEscapedCommas)
   expect_eq({',', false, {{0}, {0}}}, result);
 }
 
-TEST_F(JsonReaderTest, CanIgnorePreviousCommas)
+TEST_F(CsvReaderTest, CanIgnorePreviousCommas)
 {
   using _     = csv_dimensional_sum;
   auto result = _{','} + _{'x'};
@@ -58,7 +58,7 @@ TEST_F(JsonReaderTest, CanIgnorePreviousCommas)
   expect_eq({'x', false, {{0}, {0}}}, result);
 }
 
-TEST_F(JsonReaderTest, CanToggleOnDoubleQuote)
+TEST_F(CsvReaderTest, CanToggleOnDoubleQuote)
 {
   using _     = csv_dimensional_sum;
   auto result = _{','} + _{'"'};
@@ -78,21 +78,21 @@ csv_dimensional_sum csv_scan_state_reduce(std::string input)
   return result;
 }
 
-TEST_F(JsonReaderTest, CanCombineMultiple)
+TEST_F(CsvReaderTest, CanCombineMultiple)
 {
   auto result = csv_scan_state_reduce("a,\"b,c\",d");
 
   expect_eq({'d', false, {{2}, {1}}}, result);
 }
 
-TEST_F(JsonReaderTest, CanCombineMultiple2)
+TEST_F(CsvReaderTest, CanCombineMultiple2)
 {
   auto result = csv_scan_state_reduce("Christopher, \"Hello, World\", Harris");
 
   expect_eq({'s', false, {{2}, {1}}}, result);
 }
 
-TEST_F(JsonReaderTest, CanCombineMultiple3)
+TEST_F(CsvReaderTest, CanCombineMultiple3)
 {
   auto input = std::string("Christopher,\n\n \"Hello,\\n\n World\", Harris,,,,");
 
@@ -108,7 +108,7 @@ TEST_F(JsonReaderTest, CanCombineMultiple3)
 
 // ===== TYPE INFERENCE ============================================================================
 
-TEST_F(JsonReaderTest, CanDeduceValueTypeInteger)
+TEST_F(CsvReaderTest, CanDeduceValueTypeInteger)
 {
   auto input = std::string("12349851");
 
@@ -122,7 +122,7 @@ TEST_F(JsonReaderTest, CanDeduceValueTypeInteger)
   EXPECT_EQ(csv_column_type::integer, result.type);
 }
 
-TEST_F(JsonReaderTest, CanDeduceValueTypeString)
+TEST_F(CsvReaderTest, CanDeduceValueTypeString)
 {
   auto input = std::string("123x49851");
 
