@@ -348,61 +348,6 @@ class CompactProtocolReader {
   const uint8_t *m_end  = nullptr;
 };
 
-/**
- * @brief Class for parsing Parquet's Thrift Compact Protocol encoded metadata
- *
- * This class takes in the Parquet structs and outputs a Thrift-encoded binary blob
- *
- **/
-class CompactProtocolWriter {
- public:
-  CompactProtocolWriter() { m_buf = nullptr; }
-  CompactProtocolWriter(std::vector<uint8_t> *output) { m_buf = output; }
-  void putb(uint8_t v) { m_buf->push_back(v); }
-  void putb(const uint8_t *raw, uint32_t len)
-  {
-    for (uint32_t i = 0; i < len; i++) m_buf->push_back(raw[i]);
-  }
-  uint32_t put_uint(uint64_t v)
-  {
-    int l = 1;
-    while (v > 0x7f) {
-      putb(static_cast<uint8_t>(v | 0x80));
-      v >>= 7;
-      l++;
-    }
-    putb(static_cast<uint8_t>(v));
-    return l;
-  }
-  uint32_t put_int(int64_t v)
-  {
-    int64_t s = (v < 0);
-    return put_uint(((v ^ -s) << 1) + s);
-  }
-  void put_fldh(int f, int cur, int t)
-  {
-    if (f > cur && f <= cur + 15)
-      putb(((f - cur) << 4) | t);
-    else {
-      putb(t);
-      put_int(f);
-    }
-  }
-
- public:
-#define DECL_CPW_STRUCT(st) size_t write(const st *)
-  DECL_CPW_STRUCT(FileMetaData);
-  DECL_CPW_STRUCT(SchemaElement);
-  DECL_CPW_STRUCT(RowGroup);
-  DECL_CPW_STRUCT(KeyValue);
-  DECL_CPW_STRUCT(ColumnChunk);
-  DECL_CPW_STRUCT(ColumnChunkMetaData);
-#undef DECL_CPW_STRUCT
-
- protected:
-  std::vector<uint8_t> *m_buf;
-};
-
 }  // namespace parquet
 }  // namespace io
 }  // namespace cudf
