@@ -971,6 +971,28 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   /**
+   * Create a deep copy of the column while replacing the null mask. The resultant null mask is the
+   * bitwise merge of null masks in the columns given as arguments.
+   *
+   * @param mergeOp binary operator, currently only BITWISE_AND is supported.
+   * @param columns array of columns whose null masks are merged, must have identical number of rows.
+   * @return the new ColumnVector with merged null mask.
+   */
+  public ColumnVector mergeAndSetValidity(BinaryOp mergeOp, ColumnVector... columns) {
+    assert mergeOp == BinaryOp.BITWISE_AND : "Only BITWISE_AND supported right now";
+    long[] columnViews = new long[columns.length];
+    long size = getRowCount();
+
+    for(int i = 0; i < columns.length; i++) {
+      assert columns[i] != null : "Column vectors passed may not be null";
+      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
+      columnViews[i] = columns[i].getNativeView();
+    }
+
+    return new ColumnVector(bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId));
+  }
+
+  /**
    * Create a new vector containing the MD5 hash of each row in the table.
    *
    * @param columns array of columns to hash, must have identical number of rows.
@@ -980,18 +1002,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     if (columns.length < 1) {
       throw new IllegalArgumentException("MD5 hashing requires at least 1 column of input");
     }
-    long[] column_views = new long[columns.length];
+    long[] columnViews = new long[columns.length];
     long size = columns[0].getRowCount();
 
     for(int i = 0; i < columns.length; i++) {
       assert columns[i] != null : "Column vectors passed may not be null";
-      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must have the same number of rows";
+      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
       assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
       assert !columns[i].getType().isTimestamp() : "Unsupported column type Timestamp";
-      column_views[i] = columns[i].getNativeView();
+      assert !columns[i].getType().isNestedType() || columns[i].getType() == DType.LIST :
+        "Unsupported nested type column";
+      columnViews[i] = columns[i].getNativeView();
     }
-
-    return new ColumnVector(hash(column_views, HashType.HASH_MD5.getNativeId()));
+    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1583,6 +1606,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     try {
       return new ColumnVector(
               rollingWindow(this.getNativeView(),
+                      op.getDefaultOutput(),
                       options.getMinPeriods(),
                       nativePtr,
                       options.getPreceding(),
@@ -2869,9 +2893,15 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   private static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
 
-  private static native long rollingWindow(long viewHandle, int min_periods, long aggPtr,
-                                           int preceding, int following,
-                                           long preceding_col, long following_col);
+  private static native long rollingWindow(
+      long viewHandle,
+      long defaultOutputHandle,
+      int min_periods,
+      long aggPtr,
+      int preceding,
+      int following,
+      long preceding_col,
+      long following_col);
 
   private static native long nansToNulls(long viewHandle) throws CudfException;
 
@@ -2943,6 +2973,18 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * @throws CudfException On failure to normalize.
    */
   private static native long normalizeNANsAndZeros(long viewHandle) throws CudfException;
+
+  /**
+   * Native method to deep copy a column while replacing the null mask. The null mask is the
+   * bitwise merge of the null masks in the columns given as arguments.
+   *
+   * @param baseHandle column view of the column that is deep copied.
+   * @param viewHandles array of views whose null masks are merged, must have identical row counts.
+   * @param mergeOp Binary Op integer native ID, currently only BITWISE_AND is supported.
+   * @return native handle of the copied cudf column with replaced null mask.
+   */
+  private static native long bitwiseMergeAndSetValidity(long baseHandle, long[] viewHandles,
+                                                        int nullConfig) throws CudfException;
 
   /**
    * Native method to hash each row of the given table. Hashing function dispatched on the
