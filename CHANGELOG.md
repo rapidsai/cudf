@@ -197,6 +197,7 @@
 - PR #6491 Remove repo URL from Java build-info
 - PR #6462 Bug fixes for ColumnBuilder
 
+
 # cuDF 0.15.0 (26 Aug 2020)
 
 ## New Features
