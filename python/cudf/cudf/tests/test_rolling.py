@@ -151,14 +151,17 @@ def test_rolling_count_with_offset():
     gsr = cudf.from_pandas(psr)
     assert_eq(
         getattr(gsr.rolling("2s"), "count")().fillna(-1),
-        pd.Series([1, 2, 2, 1, 0, 1],
-                  index=[
-                      pd.Timestamp("20190101 09:00:00"),
-                      pd.Timestamp("20190101 09:00:01"),
-                      pd.Timestamp("20190101 09:00:02"),
-                      pd.Timestamp("20190101 09:00:04"),
-                      pd.Timestamp("20190101 09:00:07"),
-                      pd.Timestamp("20190101 09:00:08")]),
+        pd.Series(
+            [1, 2, 2, 1, 0, 1],
+            index=[
+                pd.Timestamp("20190101 09:00:00"),
+                pd.Timestamp("20190101 09:00:01"),
+                pd.Timestamp("20190101 09:00:02"),
+                pd.Timestamp("20190101 09:00:04"),
+                pd.Timestamp("20190101 09:00:07"),
+                pd.Timestamp("20190101 09:00:08"),
+            ],
+        ),
         check_dtype=False,
     )
 
