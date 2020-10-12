@@ -1246,6 +1246,109 @@ TEST_F(CsvReaderTest, DatesWithWriter)
   check_timestamp_column(input_table.column(0), result_table.column(0));
 }
 
+TEST_F(CsvReaderTest, DatesStringWithWriter)
+{
+  {
+    auto filepath = temp_env->get_temp_dir() + "DatesStringWithWriter_D.csv";
+
+    auto input_column    = column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{1};
+    auto expected_column = column_wrapper<cudf::string_view>{"1970-01-02"};
+
+    cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
+
+    // TODO need to add a dayfirst flag?
+    write_csv_helper(filepath, input_table, false);
+
+    cudf_io::csv_reader_options in_opts =
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath}).names({"A"}).header(-1);
+    auto result = cudf_io::read_csv(in_opts);
+
+    const auto result_table = result.tbl->view();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column, result_table.column(0));
+  }
+
+  {
+    auto filepath = temp_env->get_temp_dir() + "DatesStringWithWriter_s.csv";
+
+    auto input_column    = column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{123234585};
+    auto expected_column = column_wrapper<cudf::string_view>{"1973-11-27T07:49:45Z"};
+
+    cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
+
+    // TODO need to add a dayfirst flag?
+    write_csv_helper(filepath, input_table, false);
+
+    cudf_io::csv_reader_options in_opts =
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath}).names({"A"}).header(-1);
+    auto result = cudf_io::read_csv(in_opts);
+
+    const auto result_table = result.tbl->view();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column, result_table.column(0));
+  }
+
+  {
+    auto filepath = temp_env->get_temp_dir() + "DatesStringWithWriter_ms.csv";
+
+    auto input_column    = column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>{123234585};
+    auto expected_column = column_wrapper<cudf::string_view>{"1970-01-02T10:13:54.585Z"};
+
+    cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
+
+    // TODO need to add a dayfirst flag?
+    write_csv_helper(filepath, input_table, false);
+
+    cudf_io::csv_reader_options in_opts =
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath}).names({"A"}).header(-1);
+    auto result = cudf_io::read_csv(in_opts);
+
+    const auto result_table = result.tbl->view();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column, result_table.column(0));
+  }
+
+  {
+    auto filepath = temp_env->get_temp_dir() + "DatesStringWithWriter_us.csv";
+
+    auto input_column    = column_wrapper<cudf::timestamp_us, cudf::timestamp_us::rep>{123234585};
+    auto expected_column = column_wrapper<cudf::string_view>{"1970-01-01T00:02:03.234585Z"};
+
+    cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
+
+    // TODO need to add a dayfirst flag?
+    write_csv_helper(filepath, input_table, false);
+
+    cudf_io::csv_reader_options in_opts =
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath}).names({"A"}).header(-1);
+    auto result = cudf_io::read_csv(in_opts);
+
+    const auto result_table = result.tbl->view();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column, result_table.column(0));
+  }
+
+  {
+    auto filepath = temp_env->get_temp_dir() + "DatesStringWithWriter_ns.csv";
+
+    auto input_column    = column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep>{123234585};
+    auto expected_column = column_wrapper<cudf::string_view>{"1970-01-01T00:00:00.123234585Z"};
+
+    cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
+
+    // TODO need to add a dayfirst flag?
+    write_csv_helper(filepath, input_table, false);
+
+    cudf_io::csv_reader_options in_opts =
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath}).names({"A"}).header(-1);
+    auto result = cudf_io::read_csv(in_opts);
+
+    const auto result_table = result.tbl->view();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column, result_table.column(0));
+  }
+}
+
 TEST_F(CsvReaderTest, FloatingPointWithWriter)
 {
   auto filepath = temp_env->get_temp_dir() + "FloatingPointWithWriter.csv";
