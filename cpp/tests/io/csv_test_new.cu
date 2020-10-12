@@ -1,7 +1,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
-#include "csv_test_new.hpp"
+#include "csv_test_new.cuh"
 
 #include <cudf/utilities/span.hpp>
 
@@ -10,110 +10,65 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
-#include <cub/block/block_reduce.cuh>
+#include <thrust/transform_reduce.h>
 
 #include <algorithm>
 #include <numeric>
+#include <string>
 #include <vector>
-
-using cudf::detail::device_span;
 
 class JsonReaderTest : public cudf::test::BaseFixture {
 };
 
-struct csv_scan_state {
-  uint8_t c;
-  bool toggle;
-  uint32_t num_commas_curr;
-  uint32_t num_commas_swap;
-
-  constexpr csv_scan_state operator+(csv_scan_state rhs)
-  {
-    auto lhs = *this;
-
-    auto const next_is_comma = lhs.c != '\\' && rhs.c == ',';
-    auto const next_is_quote = lhs.c != '\\' && rhs.c == '"';
-
-    if (lhs.toggle != rhs.toggle) {
-      // rectify
-      auto temp           = lhs.num_commas_curr;
-      lhs.num_commas_curr = lhs.num_commas_swap;
-      lhs.num_commas_swap = temp;
-    }
-
-    if (next_is_comma) {
-      // increment due to comma found
-      rhs.num_commas_curr += 1;
-    }
-
-    return {rhs.c,
-            next_is_quote ? not rhs.toggle : rhs.toggle,
-            lhs.num_commas_curr + rhs.num_commas_curr,
-            lhs.num_commas_swap + rhs.num_commas_swap};
-  }
-
-  constexpr uint32_t operator~() { return toggle ? num_commas_swap : num_commas_curr; }
-};
-
-__global__ void doot(device_span<uint8_t const> input, csv_scan_state* output)
+void expect_eq(csv_dim const& expected, csv_dim const& actual)
 {
-  // // Specialize BlockReduce for a 1D block of 128 threads on type int
-  // // Allocate shared memory for BlockReduce
-  // typedef cub::BlockReduce<csv_scan_state, 128> BlockReduce;
-  // __shared__ typename BlockReduce::TempStorage temp_storage;
-  // // // Obtain a segment of consecutive items that are blocked across threads
-  // csv_scan_state thread_data[1];
-  // // // Compute the block-wide sum for thread0
-
-  // thread_data[threadIdx.x] = {input[threadIdx.x]};
-
-  // int aggregate =
-  //   BlockReduce(temp_storage).Reduce(thread_data, csv_scan_state_reducer{}, int num_valid);
+  EXPECT_EQ(expected.num_columns, actual.num_columns);
+  EXPECT_EQ(expected.num_rows, actual.num_rows);
 }
 
-void expect_eq(csv_scan_state expected, csv_scan_state actual)
+void expect_eq(csv_dimensional_sum const& expected, csv_dimensional_sum const& actual)
 {
   EXPECT_EQ(expected.c, actual.c);
   EXPECT_EQ(expected.toggle, actual.toggle);
-  EXPECT_EQ(expected.num_commas_curr, actual.num_commas_curr);
-  EXPECT_EQ(expected.num_commas_swap, actual.num_commas_swap);
+  expect_eq(expected.dimensions[0], actual.dimensions[0]);
+  expect_eq(expected.dimensions[1], actual.dimensions[1]);
 }
 
 TEST_F(JsonReaderTest, CanCountCommas)
 {
-  using _     = csv_scan_state;
+  using _     = csv_dimensional_sum;
   auto result = _{'x'} + _{','};
 
-  expect_eq({',', false, 1, 0}, result);
+  expect_eq({',', false, {{1}, {0}}}, result);
 }
 
 TEST_F(JsonReaderTest, CanIgnoreEscapedCommas)
 {
-  using _     = csv_scan_state;
+  using _     = csv_dimensional_sum;
   auto result = _{'\\'} + _{','};
 
-  expect_eq({',', false, 0, 0}, result);
+  expect_eq({',', false, {{0}, {0}}}, result);
 }
 
 TEST_F(JsonReaderTest, CanIgnorePreviousCommas)
 {
-  using _     = csv_scan_state;
+  using _     = csv_dimensional_sum;
   auto result = _{','} + _{'x'};
 
-  expect_eq({'x', false, 0, 0}, result);
+  expect_eq({'x', false, {{0}, {0}}}, result);
 }
 
 TEST_F(JsonReaderTest, CanToggleOnDoubleQuote)
 {
-  using _     = csv_scan_state;
+  using _     = csv_dimensional_sum;
   auto result = _{','} + _{'"'};
 
-  expect_eq({'"', true, 0, 0}, result);
+  expect_eq({'"', true, {{0}, {0}}}, result);
 }
 
-csv_scan_state csv_scan_state_reduce(std::string input)
+csv_dimensional_sum csv_scan_state_reduce(std::string input)
 {
-  using _     = csv_scan_state;
+  using _     = csv_dimensional_sum;
   auto result = _{static_cast<uint8_t>(input[0])};
 
   for (char c : input.substr(1)) {  //
@@ -127,20 +82,58 @@ TEST_F(JsonReaderTest, CanCombineMultiple)
 {
   auto result = csv_scan_state_reduce("a,\"b,c\",d");
 
-  expect_eq({'d', false, 2, 1}, result);
+  expect_eq({'d', false, {{2}, {1}}}, result);
 }
 
 TEST_F(JsonReaderTest, CanCombineMultiple2)
 {
   auto result = csv_scan_state_reduce("Christopher, \"Hello, World\", Harris");
 
-  expect_eq({'s', false, 2, 1}, result);
+  expect_eq({'s', false, {{2}, {1}}}, result);
 }
 
 TEST_F(JsonReaderTest, CanCombineMultiple3)
 {
-  EXPECT_EQ(static_cast<uint32_t>(6),
-            ~csv_scan_state_reduce("Christopher, \"Hello, World\", Harris,,,,"));
+  auto input = std::string("Christopher,\n\n \"Hello,\\n\n World\", Harris,,,,");
+
+  // can't reliably use reduce here, because it "does not support" non-commutative operators.
+  auto result = thrust::transform_reduce(input.c_str(),
+                                         input.c_str() + input.size(),
+                                         csv_dimensional_sum_factory{},
+                                         csv_dimensional_sum::identity(),
+                                         thrust::plus<csv_dimensional_sum>());
+
+  expect_eq({',', false, {{6, 2}, {1, 1}}}, result);
+}
+
+// ===== TYPE INFERENCE ============================================================================
+
+TEST_F(JsonReaderTest, CanDeduceValueTypeInteger)
+{
+  auto input = std::string("12349851");
+
+  // can't reliably use reduce here, because it "does not support" non-commutative operators.
+  auto result = thrust::transform_reduce(input.c_str(),
+                                         input.c_str() + input.size(),
+                                         csv_type_deduction_sum_factory{},
+                                         csv_type_deduction_sum::identity(),
+                                         thrust::plus<csv_type_deduction_sum>());
+
+  EXPECT_EQ(csv_column_type::integer, result.type);
+}
+
+TEST_F(JsonReaderTest, CanDeduceValueTypeString)
+{
+  auto input = std::string("123x49851");
+
+  // can't reliably use reduce here, because it "does not support" non-commutative operators.
+  auto result = thrust::transform_reduce(input.c_str(),
+                                         input.c_str() + input.size(),
+                                         csv_type_deduction_sum_factory{},
+                                         csv_type_deduction_sum::identity(),
+                                         thrust::plus<csv_type_deduction_sum>());
+
+  EXPECT_EQ(csv_column_type::string, result.type);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
