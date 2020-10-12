@@ -1,69 +1,32 @@
+/*
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <thrust/count.h>
-
-#include <memory>
 
 namespace cudf {
 namespace detail {
-
-struct dispatch_map_type {
-  template <typename map_type, std::enable_if_t<is_index_type<map_type>()>* = nullptr>
-  std::unique_ptr<table> operator()(
-    table_view const& source_table,
-    column_view const& gather_map,
-    size_type num_destination_rows,
-    out_of_bounds_policy bounds,
-    negative_index_policy neg_indices,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-    cudaStream_t stream                 = 0)
-  {
-    if (bounds == out_of_bounds_policy::FAIL) {
-      cudf::size_type begin =
-        neg_indices == negative_index_policy::ALLOWED ? -source_table.num_rows() : 0;
-      CUDF_EXPECTS(num_destination_rows ==
-                     thrust::count_if(rmm::exec_policy()->on(0),
-                                      gather_map.begin<map_type>(),
-                                      gather_map.end<map_type>(),
-                                      bounds_checker<map_type>{begin, source_table.num_rows()}),
-                   "Index out of bounds.");
-    }
-
-    if (neg_indices == negative_index_policy::ALLOWED) {
-      auto idx_converter = index_converter<map_type>{source_table.num_rows()};
-      return gather(source_table,
-                    thrust::make_transform_iterator(gather_map.begin<map_type>(), idx_converter),
-                    thrust::make_transform_iterator(gather_map.end<map_type>(), idx_converter),
-                    bounds == out_of_bounds_policy::IGNORE,
-                    mr,
-                    stream);
-    } else {
-      return gather(source_table,
-                    gather_map.begin<map_type>(),
-                    gather_map.end<map_type>(),
-                    bounds == out_of_bounds_policy::IGNORE,
-                    mr,
-                    stream);
-    }
-  }
-
-  template <typename map_type,
-            typename... Args,
-            std::enable_if_t<not is_index_type<map_type>()>* = nullptr>
-  std::unique_ptr<table> operator()(Args&&... args)
-  {
-    CUDF_FAIL("Gather map must be an integral type.");
-  }
-};  // namespace detail
 
 std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
@@ -74,17 +37,37 @@ std::unique_ptr<table> gather(table_view const& source_table,
 {
   CUDF_EXPECTS(gather_map.has_nulls() == false, "gather_map contains nulls");
 
-  std::unique_ptr<table> destination_table = cudf::type_dispatcher(gather_map.type(),
-                                                                   dispatch_map_type{},
-                                                                   source_table,
-                                                                   gather_map,
-                                                                   gather_map.size(),
-                                                                   bounds,
-                                                                   neg_indices,
-                                                                   mr,
-                                                                   stream);
+  // create index type normalizing iterator for the gather_map
+  auto map_begin = indexalator_factory::make_input_iterator(gather_map);
+  auto map_end   = map_begin + gather_map.size();
 
-  return destination_table;
+  if (bounds == out_of_bounds_policy::FAIL) {
+    cudf::size_type begin =
+      neg_indices == negative_index_policy::ALLOWED ? -source_table.num_rows() : 0;
+    cudf::size_type end = source_table.num_rows();
+    CUDF_EXPECTS(gather_map.size() == thrust::count_if(rmm::exec_policy(stream)->on(stream),
+                                                       map_begin,
+                                                       map_end,
+                                                       [begin, end] __device__(size_type index) {
+                                                         return ((index >= begin) && (index < end));
+                                                       }),
+                 "Index out of bounds.");
+  }
+
+  if (neg_indices == negative_index_policy::ALLOWED) {
+    cudf::size_type n_rows = source_table.num_rows();
+    auto idx_converter     = [n_rows] __device__(size_type in) {
+      return ((in % n_rows) + n_rows) % n_rows;
+    };
+    return gather(source_table,
+                  thrust::make_transform_iterator(map_begin, idx_converter),
+                  thrust::make_transform_iterator(map_end, idx_converter),
+                  bounds == out_of_bounds_policy::IGNORE,
+                  mr,
+                  stream);
+  }
+  return gather(
+    source_table, map_begin, map_end, bounds == out_of_bounds_policy::IGNORE, mr, stream);
 }
 
 }  // namespace detail
