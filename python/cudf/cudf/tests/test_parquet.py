@@ -925,7 +925,7 @@ def test_parquet_reader_list_large_multi_rowgroup(tmpdir):
     fname = tmpdir.join(
         "test_parquet_reader_list_large_multi_rowgroup.parquet"
     )
-    expect.to_pandas().to_parquet(fname)
+    expect.to_pandas().to_parquet(fname, row_group_size=row_group_size)
     got = cudf.read_parquet(fname)
 
     assert_eq(expect, got)
