@@ -173,6 +173,11 @@ cdef class Scalar:
             self._device_value_current = True
         return self.c_value.get() 
         
+    cdef unique_ptr[scalar] get_c_ptr(self):
+        if not self._device_value_current:
+            self.set_device_value(self._host_value, self._host_dtype)
+            self._device_value_current = True
+            return move(self.c_value)
 
     cpdef bool is_valid(self):
         """

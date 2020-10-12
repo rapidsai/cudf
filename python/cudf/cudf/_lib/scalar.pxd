@@ -14,6 +14,7 @@ cdef class Scalar:
     cdef object _host_dtype
 
     cdef scalar* get_c_value(self)
+    cdef unique_ptr[scalar] get_c_ptr(self)
 
     @staticmethod
     cdef Scalar from_unique_ptr(unique_ptr[scalar] ptr)
