@@ -21,6 +21,8 @@
 - PR #6139 Add column conversion to big endian byte list.
 - PR #6220 Add `list_topics()` to supply list of underlying Kafka connection topics
 - PR #6254 Add `cudf::make_dictionary_from_scalar` factory function
+- PR #6262 Add nth_element series aggregation with null handling
+- PR #6277 Add support for LEAD/LAG window functions for fixed-width types
 - PR #6318 Add support for reading Struct and map types from Parquet files
 - PR #6315 Native code for string-map lookups, for cudf-java
 - PR #6302 Add custom dataframe accessors
@@ -101,6 +103,8 @@
 - PR #6273 Update JNI to use ORC options builder
 - PR #6293 Replace shuffle warp reduce with cub calls
 - PR #6287 Make java aggregate API follow C++ API
+- PR #6299 Add lead and lag to java
+- PR #6303 Use cudf test dtypes so timedelta tests are determinstic
 - PR #6327 Add dictionary specialization to `cudf::replace_nulls`
 - PR #6306 Remove cpw macros from page encode kernels
 - PR #6375 Parallelize Cython compilation in addition to Cythonization
@@ -108,6 +112,7 @@
 - PR #6326 Simplify interal csv/json kernel parameters
 - PR #6308 Add dictionary support to cudf::scatter with scalar
 - PR #6367 Add JNI bindings for byte casting
+- PR #6346 Remove macros from CompactProtocolWriter
 - PR #6312 Conda recipe dependency cleanup
 - PR #6347 Add dictionary support to cudf::copy_range
 - PR #6332 Add support to return csv as string when `path=None` in `to_csv`
@@ -120,6 +125,8 @@
 - PR #6409 Allow CuPy 8.x
 - PR #6407 Add RMM_LOGGING_LEVEL flag to Java docker build
 - PR #6438 Fetch nvcomp v1.1.0 for JNI build
+- PR #6379 Add list hashing functionality to MD5
+- PR #6498 Add helper method to ColumnBuilder with some nits
 
 ## Bug Fixes
 
@@ -163,6 +170,7 @@
 - PR #6285 Removed unsafe `reinterpret_cast` and implicit pointer-to-bool casts
 - PR #6281 Fix unreachable code warning in datetime.cuh
 - PR #6286 Fix `read_csv` `int32` overflow 
+- PR #6466 Fix ORC reader issue with decimal type
 - PR #6310 Replace a misspelled reference to `master` branch with `main` branch in a comment in changelog.sh
 - PR #6289 Revert #6206
 - PR #6291 Fix issue related to row-wise operations in `cudf.DataFrame`
@@ -187,6 +195,9 @@
 - PR #6443 Make java apis getList and getStruct public
 - PR #6445 Add `dlpack` to run section of libcudf conda recipe to fix downstream build issues
 - PR #6450 Make java Column Builder row agnostic
+- PR #6309 Make all CI `.sh` scripts have a consistent set of permissions
+- PR #6491 Remove repo URL from Java build-info
+- PR #6462 Bug fixes for ColumnBuilder
 
 
 # cuDF 0.15.0 (26 Aug 2020)
@@ -273,6 +284,7 @@
 - PR #5815 LIST Support for ColumnVector
 - PR #5931 Support for `add_calendrical_months` API
 - PR #5992 Add support for `.dt.strftime`
+- PR #6075 Parquet writer - add support for nested LIST columns
 
 ## Improvements
 
