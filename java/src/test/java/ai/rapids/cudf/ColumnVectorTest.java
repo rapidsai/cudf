@@ -385,6 +385,38 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testMD5HashLists() {
+    List<String> list1 = Arrays.asList("dE\"\u0100\t\u0101 \u0500\u0501", "\\Fg2\'");
+    List<String> list2 = Arrays.asList("A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
+    "in the MD5 hash function. This string needed to be longer.", "", null, "A 60 character string to test MD5's message padding algorithm");
+    List<String> list3 = Arrays.asList("hiJ\ud720\ud721\ud720\ud721");
+    List<String> list4 = null;
+    try (ColumnVector v = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+    new HostColumnVector.BasicType(true, DType.STRING)), list1, list2, list3, list4);
+         ColumnVector result = ColumnVector.md5Hash(v);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "675c30ce6d1b27dcb5009b01be42e9bd", "8fa29148f63c1fe9248fdc4644e3a193",
+          "1bc221b25e6c4825929e884092f4044f", "d41d8cd98f00b204e9800998ecf8427e")) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testNullReconfigureNulls() {
+    try (ColumnVector v0 = ColumnVector.fromBoxedInts(0, 100, null, null, Integer.MIN_VALUE, null);
+         ColumnVector v1 = ColumnVector.fromBoxedInts(0, 100, 1, 2, Integer.MIN_VALUE, null);
+         ColumnVector intResult = v1.mergeAndSetValidity(BinaryOp.BITWISE_AND, v0);
+         ColumnVector v2 = ColumnVector.fromStrings("0", "100", "1", "2", "MIN_VALUE", "3");
+         ColumnVector stringResult = v2.mergeAndSetValidity(BinaryOp.BITWISE_AND, v0, v1);
+         ColumnVector stringExpected = ColumnVector.fromStrings("0", "100", null, null, "MIN_VALUE", null);
+         ColumnVector noMaskResult = v2.mergeAndSetValidity(BinaryOp.BITWISE_AND)) {
+      assertColumnsAreEqual(v0, intResult);
+      assertColumnsAreEqual(stringExpected, stringResult);
+      assertColumnsAreEqual(v2, noMaskResult);
+    }
+  }
+
+  @Test
   void isNotNullTestEmptyColumn() {
     try (ColumnVector v = ColumnVector.fromBoxedInts();
          ColumnVector expected = ColumnVector.fromBoxedBooleans();
