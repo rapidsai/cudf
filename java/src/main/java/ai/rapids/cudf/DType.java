@@ -63,8 +63,8 @@ public enum DType {
   DURATION_NANOSECONDS(8, 21, "int64"),
   //DICTIONARY32(4, 22, "NO IDEA"),
 
-  //DECIMAL32(4, 25, "decimal32"),
-  //DECIMAL64(8, 26, "decimal64"),
+  DECIMAL32(4, 25, "decimal32"),
+  DECIMAL64(8, 26, "decimal64"),
   STRING(0, 23, "str"),
   LIST(0, 24, "list"),
   STRUCT(0, 27, "struct");

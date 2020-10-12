@@ -46,6 +46,9 @@ public class ScalarTest extends CudfTestBase {
   @Test
   public void testNull() {
     for (DType type : DType.values()) {
+      if(type == DType.DECIMAL32 || type == DType.DECIMAL64) {
+        continue;
+      }
       if (!type.isNestedType()) {
         try (Scalar s = Scalar.fromNull(type)) {
           assertEquals(type, s.getType());
