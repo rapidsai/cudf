@@ -7,10 +7,10 @@ from numbers import Number
 import cupy
 import numpy as np
 import pandas as pd
+from nvtx import annotate
 from pandas._config import get_option
 
 import cudf
-from cudf._lib.nvtx import annotate
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,

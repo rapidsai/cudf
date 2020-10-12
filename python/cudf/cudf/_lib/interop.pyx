@@ -138,14 +138,14 @@ def to_arrow(Table input_table,
     """
 
     cdef vector[column_metadata] cpp_metadata = gather_metadata(metadata)
-    cdef table_view input = (
+    cdef table_view input_table_view = (
         input_table.view() if keep_index else input_table.data_view()
     )
 
     cdef shared_ptr[CTable] cpp_arrow_table
     with nogil:
         cpp_arrow_table = cpp_to_arrow(
-            input, cpp_metadata
+            input_table_view, cpp_metadata
         )
 
     return pyarrow_wrap_table(cpp_arrow_table)
