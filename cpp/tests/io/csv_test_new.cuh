@@ -4,12 +4,16 @@
 #include <cstdint>
 #include <type_traits>
 
+#include <cudf/detail/utilities/cuda.cuh>
+
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <cub/block/block_load.cuh>
 #include <cub/block/block_reduce.cuh>
-#include "cudf/detail/utilities/device_atomics.cuh"
+#include "cudf/detail/utilities/cuda.cuh"
+#include "cudf/utilities/span.hpp"
+#include "rmm/thrust_rmm_allocator.h"
 
 // ===== Row + Column Count ========================================================================
 
@@ -115,23 +119,54 @@ struct csv_type_deduction_sum_factory {
 
 // ===== PARSER ACCESS PATTERN =====================================================================
 
-template <cub::BlockLoadAlgorithm ALGORITHM, int BLOCK_DIM_X, int ITEMS_PER_THREAD = 128>
-__global__ void reduce_kernel(uint32_t const* input, uint64_t input_size, uint64_t* output)
+using cudf::detail::device_span;
+
+template <int BLOCK_DIM_X, int ITEMS_PER_THREAD>
+__global__ void reduce_kernel(device_span<uint32_t> input, device_span<uint32_t> output)
 {
-  using BlockLoad   = typename cub::BlockLoad<uint8_t, BLOCK_DIM_X, ITEMS_PER_THREAD, ALGORITHM>;
-  using BlockReduce = typename cub::
-    BlockReduce<csv_dimensional_sum, BLOCK_DIM_X, cub::BlockReduceAlgorithm::BLOCK_REDUCE_RAKING>;
+  using BlockLoad =  //
+    typename cub::BlockLoad<uint32_t, BLOCK_DIM_X, ITEMS_PER_THREAD, cub::BLOCK_LOAD_DIRECT>;
+  using BlockReduce =  //
+    typename cub::BlockReduce<uint32_t, BLOCK_DIM_X, cub::BLOCK_REDUCE_RAKING>;
 
-  __shared__ union TempStorage {
-    typename BlockLoad::TempStorage block_load;
-    typename BlockReduce::TempStorage block_reduce;
-  } temp_storage;
+  __shared__ typename BlockLoad::TempStorage block_load_temp_storage;
+  __shared__ typename BlockReduce::TempStorage block_reduce_temp_storage;
 
+  // __shared__ union {
+  //   typename BlockLoad::TempStorage block_load;
+  //   typename BlockReduce::TempStorage block_reduce;
+  // } temp_storage;
+
+  uint32_t block_offset = blockIdx.x * blockDim.x;
+  uint32_t num_valid    = input.size() - block_offset;
   uint32_t thread_data[ITEMS_PER_THREAD];
-  auto const block_offset = blockIdx.x * blockDim.x;
-  auto const num_valid    = input_size - block_offset;
 
-  BlockLoad(temp_storage).Load(input, thread_data, num_valid, 0);
+  BlockLoad(block_load_temp_storage).Load(input, thread_data, num_valid, 0);
 
-  auto block_result = BlockReduce(temp_storage).Sum(thread_data, num_valid);
+  auto block_result = BlockReduce(block_reduce_temp_storage).Sum(thread_data);
+
+  if (threadIdx.x == 0) { output[blockIdx.x] = block_result; }
+}
+
+uint32_t reduce(device_span<uint32_t> d_input)
+{
+  enum { BLOCK_DIM_X = 32, ITEMS_PER_THREAD = 8 };
+
+  cudf::detail::grid_1d grid(d_input.size(), BLOCK_DIM_X, ITEMS_PER_THREAD);
+
+  rmm::device_vector<uint32_t> d_temp_blockstorage(grid.num_blocks);
+
+  auto kernel = reduce_kernel<BLOCK_DIM_X, ITEMS_PER_THREAD>;
+
+  kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, 0>>>(  //
+    d_input,
+    d_temp_blockstorage);
+
+  thrust::host_vector<uint32_t> h_temp_block_storage = d_temp_blockstorage;
+
+  uint32_t res = 0;
+
+  for (auto item : h_temp_block_storage) { res += item; }
+
+  return h_temp_block_storage[0];
 }

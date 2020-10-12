@@ -136,4 +136,13 @@ TEST_F(CsvReaderTest, CanDeduceValueTypeString)
   EXPECT_EQ(csv_column_type::string, result.type);
 }
 
+TEST_F(CsvReaderTest, X)
+{
+  rmm::device_vector<uint32_t> d_input = std::vector<uint32_t>{0, 0, 0, 0, 5, 0, 0, 0, 0, 0};
+
+  auto result = reduce(d_input);
+
+  EXPECT_EQ(static_cast<uint32_t>(5), result);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
