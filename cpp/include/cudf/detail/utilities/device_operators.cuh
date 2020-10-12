@@ -222,6 +222,15 @@ struct DeviceXor {
   }
 };
 
+/**
+ * @brief Operator for calculating Lead/Lag window function.
+ */
+struct DeviceLeadLag {
+  const size_type row_offset;
+
+  explicit CUDA_HOST_DEVICE_CALLABLE DeviceLeadLag(size_type offset_) : row_offset(offset_) {}
+};
+
 }  // namespace cudf
 
 #endif

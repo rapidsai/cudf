@@ -45,6 +45,7 @@ from cudf.utils.dtypes import (
     is_list_like,
     is_scalar,
     is_string_dtype,
+    is_struct_dtype,
     numeric_normalize_types,
 )
 from cudf.utils.utils import OrderedColumnDict
@@ -1175,7 +1176,7 @@ class DataFrame(Frame, Serializable):
         filling with `<NA>` values.
         """
         for col in df._data:
-            if is_list_dtype(df._data[col]):
+            if is_list_dtype(df._data[col]) or is_struct_dtype(df._data[col]):
                 # TODO we need to handle this
                 pass
             elif df._data[col].has_nulls:

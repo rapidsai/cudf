@@ -18,6 +18,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/concatenate.hpp>
@@ -161,15 +162,6 @@ inline auto random_values(size_t size)
   std::generate_n(values.begin(), size, [&]() { return T{dist(engine)}; });
 
   return values;
-}
-
-// Helper function to compare two tables
-void CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view const& lhs, cudf::table_view const& rhs)
-{
-  EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
-  auto expected = lhs.begin();
-  auto result   = rhs.begin();
-  while (result != rhs.end()) { CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected++, *result++); }
 }
 
 }  // namespace
@@ -451,19 +443,41 @@ TEST_F(ParquetWriterTest, SlicedTable)
   column_wrapper<cudf::string_view> col1{strings.begin(), strings.end()};
   column_wrapper<float> col2{seq_col2.begin(), seq_col2.end(), validity};
 
+  using lcw = cudf::test::lists_column_wrapper<uint64_t>;
+  lcw col3{{9, 8}, {7, 6, 5}, {}, {4}, {3, 2, 1, 0}, {20, 21, 22, 23, 24}, {}, {66, 666}};
+
+  // [[[NULL,2,NULL,4]], [[NULL,6,NULL], [8,9]]]
+  // [NULL, [[13],[14,15,16]],  NULL]
+  // [NULL, [], NULL, [[]]]
+  // NULL
+  // [[[NULL,2,NULL,4]], [[NULL,6,NULL], [8,9]]]
+  // [NULL, [[13],[14,15,16]],  NULL]
+  // [[[]]]
+  // [NULL, [], NULL, [[]]]
+  auto valids  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto valids2 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+  lcw col4{{
+             {{{{1, 2, 3, 4}, valids}}, {{{5, 6, 7}, valids}, {8, 9}}},
+             {{{{10, 11}, {12}}, {{13}, {14, 15, 16}}, {{17, 18}}}, valids},
+             {{lcw{lcw{}}, lcw{}, lcw{}, lcw{lcw{}}}, valids},
+             lcw{lcw{lcw{}}},
+             {{{{1, 2, 3, 4}, valids}}, {{{5, 6, 7}, valids}, {8, 9}}},
+             {{{{10, 11}, {12}}, {{13}, {14, 15, 16}}, {{17, 18}}}, valids},
+             lcw{lcw{lcw{}}},
+             {{lcw{lcw{}}, lcw{}, lcw{}, lcw{lcw{}}}, valids},
+           },
+           valids2};
+
   cudf_io::table_metadata expected_metadata;
   expected_metadata.column_names.emplace_back("col_other");
   expected_metadata.column_names.emplace_back("col_string");
   expected_metadata.column_names.emplace_back("col_another");
+  expected_metadata.column_names.emplace_back("col_list");
+  expected_metadata.column_names.emplace_back("col_multi_level_list");
 
-  std::vector<std::unique_ptr<column>> cols;
-  cols.push_back(col0.release());
-  cols.push_back(col1.release());
-  cols.push_back(col2.release());
-  auto expected = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(3, expected->num_columns());
+  auto expected = table_view({col0, col1, col2, col3, col4});
 
-  auto expected_slice = cudf::slice(expected->view(), {2, static_cast<cudf::size_type>(num_rows)});
+  auto expected_slice = cudf::slice(expected, {2, static_cast<cudf::size_type>(num_rows) - 1});
 
   auto filepath = temp_env->get_temp_filepath("SlicedTable.parquet");
   cudf_io::parquet_writer_options out_opts =
@@ -476,6 +490,104 @@ TEST_F(ParquetWriterTest, SlicedTable)
   auto result = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice, result.tbl->view());
+  EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+}
+
+TEST_F(ParquetWriterTest, ListColumn)
+{
+  auto valids  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto valids2 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+
+  using lcw = cudf::test::lists_column_wrapper<int32_t>;
+
+  // [NULL, 2, NULL]
+  // []
+  // [4, 5]
+  // NULL
+  lcw col0{{{{1, 2, 3}, valids}, {}, {4, 5}, {}}, valids2};
+
+  // [[1, 2, 3], [], [4, 5], [], [0, 6, 0]]
+  // [[7, 8]]
+  // []
+  // [[]]
+  lcw col1{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, {{7, 8}}, lcw{}, lcw{lcw{}}};
+
+  // [[1, 2, 3], [], [4, 5], NULL, [0, 6, 0]]
+  // [[7, 8]]
+  // []
+  // [[]]
+  lcw col2{{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, valids2}, {{7, 8}}, lcw{}, lcw{lcw{}}};
+
+  // [[1, 2, 3], [], [4, 5], NULL, [NULL, 6, NULL]]
+  // [[7, 8]]
+  // []
+  // [[]]
+  using dlcw = cudf::test::lists_column_wrapper<double>;
+  dlcw col3{{{{1., 2., 3.}, {}, {4., 5.}, {}, {{0., 6., 0.}, valids}}, valids2},
+            {{7., 8.}},
+            dlcw{},
+            dlcw{dlcw{}}};
+
+  // TODO: uint16_t lists are not read properly in parquet reader
+  // [[1, 2, 3], [], [4, 5], NULL, [0, 6, 0]]
+  // [[7, 8]]
+  // []
+  // NULL
+  // using ui16lcw = cudf::test::lists_column_wrapper<uint16_t>;
+  // cudf::test::lists_column_wrapper<uint16_t> col4{
+  //   {{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, valids2}, {{7, 8}}, ui16lcw{}, ui16lcw{ui16lcw{}}},
+  //   valids2};
+
+  // [[1, 2, 3], [], [4, 5], NULL, [NULL, 6, NULL]]
+  // [[7, 8]]
+  // []
+  // NULL
+  lcw col5{
+    {{{{1, 2, 3}, {}, {4, 5}, {}, {{0, 6, 0}, valids}}, valids2}, {{7, 8}}, lcw{}, lcw{lcw{}}},
+    valids2};
+
+  using strlcw = cudf::test::lists_column_wrapper<cudf::string_view>;
+  cudf::test::lists_column_wrapper<cudf::string_view> col6{
+    {{"Monday", "Monday", "Friday"}, {}, {"Monday", "Friday"}, {}, {"Sunday", "Funday"}},
+    {{"bee", "sting"}},
+    strlcw{},
+    strlcw{strlcw{}}};
+
+  // [[[NULL,2,NULL,4]], [[NULL,6,NULL], [8,9]]]
+  // [NULL, [[13],[14,15,16]],  NULL]
+  // [NULL, [], NULL, [[]]]
+  // NULL
+  lcw col7{{
+             {{{{1, 2, 3, 4}, valids}}, {{{5, 6, 7}, valids}, {8, 9}}},
+             {{{{10, 11}, {12}}, {{13}, {14, 15, 16}}, {{17, 18}}}, valids},
+             {{lcw{lcw{}}, lcw{}, lcw{}, lcw{lcw{}}}, valids},
+             lcw{lcw{lcw{}}},
+           },
+           valids2};
+
+  cudf_io::table_metadata expected_metadata;
+  expected_metadata.column_names.emplace_back("col_list_int_0");
+  expected_metadata.column_names.emplace_back("col_list_list_int_1");
+  expected_metadata.column_names.emplace_back("col_list_list_int_nullable_2");
+  expected_metadata.column_names.emplace_back("col_list_list_nullable_double_nullable_3");
+  // expected_metadata.column_names.emplace_back("col_list_list_uint16_4");
+  expected_metadata.column_names.emplace_back("col_list_nullable_list_nullable_int_nullable_5");
+  expected_metadata.column_names.emplace_back("col_list_list_string_6");
+  expected_metadata.column_names.emplace_back("col_list_list_list_7");
+
+  table_view expected({col0, col1, col2, col3, /* col4, */ col5, col6, col7});
+
+  auto filepath = temp_env->get_temp_filepath("ListColumn.parquet");
+  auto out_opts = cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+                    .metadata(&expected_metadata)
+                    .compression(cudf_io::compression_type::NONE);
+
+  cudf_io::write_parquet(out_opts);
+
+  auto in_opts = cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+  auto result  = cudf_io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 

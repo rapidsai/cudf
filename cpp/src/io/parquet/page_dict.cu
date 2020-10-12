@@ -326,7 +326,7 @@ __global__ void __launch_bounds__(block_size, 1)
 /**
  * @brief Launches kernel for building chunk dictionaries
  *
- * @param[in] chunks Column chunks
+ * @param[in,out] chunks Column chunks
  * @param[in] dev_scratch Device scratch data (kDictScratchSize per dictionary)
  * @param[in] num_chunks Number of column chunks
  * @param[in] stream CUDA stream to use, default 0
