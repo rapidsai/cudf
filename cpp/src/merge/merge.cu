@@ -18,6 +18,7 @@
 #include <cudf/detail/merge.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/dictionary/detail/merge.hpp>
 #include <cudf/strings/detail/merge.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -231,7 +232,7 @@ namespace detail {
 // and the 2 columns to merge
 //
 struct column_merger {
-  using index_vector = rmm::device_vector<index_type>;
+  //  using index_vector = rmm::device_vector<index_type>;
   explicit column_merger(
     index_vector const& row_order,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
@@ -338,7 +339,17 @@ template <>
 std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(column_view const& lcol,
                                                                       column_view const& rcol) const
 {
-  CUDF_FAIL("dictionary not supported yet");
+  auto result = cudf::dictionary::detail::merge(cudf::dictionary_column_view(lcol),
+                                                cudf::dictionary_column_view(rcol),
+                                                dv_row_order_,
+                                                mr_,
+                                                stream_);
+  // set the validity mask
+  if (lcol.has_nulls() || rcol.has_nulls()) {
+    auto merged_view = result->mutable_view();
+    materialize_bitmask(lcol, rcol, merged_view, dv_row_order_.data().get(), stream_);
+  }
+  return result;
 }
 
 using table_ptr_type = std::unique_ptr<cudf::table>;

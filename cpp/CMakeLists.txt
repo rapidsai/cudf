@@ -594,6 +594,7 @@ add_library(cudf
             src/scalar/scalar_factories.cpp
             src/dictionary/add_keys.cu
             src/dictionary/detail/concatenate.cu
+            src/dictionary/detail/merge.cu
             src/dictionary/dictionary_column_view.cpp
             src/dictionary/dictionary_factories.cu
             src/dictionary/decode.cu
