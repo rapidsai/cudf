@@ -605,12 +605,14 @@ def test_concat_join(ignore_index, sort, join, axis):
         {"x": range(10, 20), "y": list(map(float, range(10, 20)))}
     )
     pdf3 = pd.DataFrame({"v": [1, 2], "x": [1, 2], "y": [1, 2], "z": [1, 2]})
-    pdf4 = pd.DataFrame({"a": [1, 2], "b": [1, 2], "c": [1, 2], "d": [1, 2]})
+    pdf4 = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    pdf5 = pd.DataFrame({"c": [7, 8, 9], "d": [10, 11, 12]})
 
     gdf1 = gd.from_pandas(pdf1)
     gdf2 = gd.from_pandas(pdf2)
     gdf3 = gd.from_pandas(pdf3)
     gdf4 = gd.from_pandas(pdf4)
+    gdf5 = gd.from_pandas(pdf5)
     # Make empty frame
     gdf_empty1 = gdf2[:0]
     assert len(gdf_empty1) == 0
@@ -646,8 +648,8 @@ def test_concat_join(ignore_index, sort, join, axis):
     )
 
     assert_eq(
-        pd.concat([pdf1, pdf4], sort=sort, join=join, ignore_index=ignore_index, axis=axis),
-        gd.concat([gdf1, gdf4], sort=sort, join=join, ignore_index=ignore_index, axis=axis),
+        pd.concat([pdf4, pdf5], sort=sort, join=join, axis=axis),
+        gd.concat([gdf4, gdf5], sort=sort, join=join, axis=axis),
     )
 
     s1 = gd.Series(["a", "b", "c"])
