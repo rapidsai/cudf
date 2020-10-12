@@ -95,10 +95,10 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
 @pytest.mark.parametrize(
     "agg",
     [
-        "sum",
+        pytest.param("sum"),
         pytest.param("min"),
         pytest.param("max"),
-        "mean",
+        pytest.param("mean"),
         pytest.param(
             "count",  # Does not follow similar conventions as
             # with non-offset columns
@@ -124,6 +124,41 @@ def test_rolling_with_offset(agg):
     assert_eq(
         getattr(psr.rolling("2s"), agg)().fillna(-1),
         getattr(gsr.rolling("2s"), agg)().fillna(-1),
+        check_dtype=False,
+    )
+
+
+def test_rolling_count_with_offset():
+    """
+    This test covers the xfail case from test_rolling_with_offset["count"].
+    It is expected that count should return a non-Nan value, even if
+    the counted value is a Nan, unless the min-periods condition
+    is not met.
+    This behaviour is consistent with counts for rolling-windows,
+    in the non-offset window case.
+    """
+    psr = pd.Series(
+        [1, 2, 4, 4, np.nan, 9],
+        index=[
+            pd.Timestamp("20190101 09:00:00"),
+            pd.Timestamp("20190101 09:00:01"),
+            pd.Timestamp("20190101 09:00:02"),
+            pd.Timestamp("20190101 09:00:04"),
+            pd.Timestamp("20190101 09:00:07"),
+            pd.Timestamp("20190101 09:00:08"),
+        ],
+    )
+    gsr = cudf.from_pandas(psr)
+    assert_eq(
+        getattr(gsr.rolling("2s"), "count")().fillna(-1),
+        pd.Series([1, 2, 2, 1, 0, 1],
+                  index=[
+                      pd.Timestamp("20190101 09:00:00"),
+                      pd.Timestamp("20190101 09:00:01"),
+                      pd.Timestamp("20190101 09:00:02"),
+                      pd.Timestamp("20190101 09:00:04"),
+                      pd.Timestamp("20190101 09:00:07"),
+                      pd.Timestamp("20190101 09:00:08")]),
         check_dtype=False,
     )
 
