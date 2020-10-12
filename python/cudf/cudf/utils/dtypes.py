@@ -504,7 +504,6 @@ def _get_nan_for_dtype(dtype):
 
 
 def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
-
     error = TypeError(
         f"{op} not supported between {dtype_l} and {dtype_r} scalars"
     )
@@ -546,6 +545,7 @@ def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
 # the operands can be safely cast to. These are those lookups,
 # modified slightly for cuDF's rules
 _ADD_TYPES = [
+    "???",
     "BBB",
     "HHH",
     "III",
@@ -556,7 +556,6 @@ _ADD_TYPES = [
     "lll",
     "fff",
     "ddd",
-    "???",
     "mMM",
     "MmM",
     "mmm",
@@ -585,6 +584,7 @@ _SUB_TYPES = [
     "Lmm",
 ]
 _MUL_TYPES = [
+    "???",
     "BBB",
     "HHH",
     "III",
@@ -595,18 +595,17 @@ _MUL_TYPES = [
     "lll",
     "fff",
     "ddd",
-    "???",
     "mLm",
     "Lmm",
     "mlm",
     "lmm",
 ]
 _FLOORDIV_TYPES = [
+    "bbb",
     "BBB",
     "HHH",
     "III",
     "LLL",
-    "bbb",
     "hhh",
     "iii",
     "lll",
