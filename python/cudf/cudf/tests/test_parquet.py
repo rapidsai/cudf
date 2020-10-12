@@ -901,6 +901,55 @@ def test_parquet_reader_list_large_mixed(tmpdir):
     assert_eq(expect, got, check_dtype=False)
 
 
+def test_parquet_reader_list_large_multi_rowgroup(tmpdir):
+    # > 800 row groups
+    num_rows = 2_000_000
+    num_docs = num_rows / 2
+    num_categories = 1_000
+    row_group_size = 1000
+
+    # generate a random pairing of doc: category
+    documents = cudf.DataFrame(
+        {
+            "document_id": np.random.randint(num_docs, size=num_rows),
+            "category_id": np.random.randint(num_categories, size=num_rows),
+        }
+    )
+
+    # group categories by document_id to create a list column
+    expect = documents.groupby("document_id").agg({"category_id": ["collect"]})
+    expect.columns = expect.columns.get_level_values(0)
+    expect.reset_index(inplace=True)
+
+    # round trip the dataframe to/from parquet
+    fname = tmpdir.join(
+        "test_parquet_reader_list_large_multi_rowgroup.parquet"
+    )
+    expect.to_pandas().to_parquet(fname)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got)
+
+
+def test_parquet_reader_list_large_multi_rowgroup_nulls(tmpdir):
+    # 200 row groups
+    num_rows = 200000
+    row_group_size = 1000
+
+    expect = cudf.DataFrame(
+        {"a": list_gen(int_gen, 0, num_rows, 3, 2, include_validity=True)}
+    )
+
+    # round trip the dataframe to/from parquet
+    fname = tmpdir.join(
+        "test_parquet_reader_list_large_multi_rowgroup_nulls.parquet"
+    )
+    expect.to_pandas().to_parquet(fname, row_group_size=row_group_size)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("skip", range(0, 128))
 def test_parquet_reader_list_skiprows(skip, tmpdir):
     num_rows = 128
