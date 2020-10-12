@@ -5,10 +5,10 @@ from numbers import Number
 
 import numpy as np
 import pandas as pd
+from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar, as_scalar
 from cudf.core.column import column, string
 from cudf.utils.dtypes import is_scalar
