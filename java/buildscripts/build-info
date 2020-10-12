@@ -26,7 +26,6 @@ echo_build_properties() {
   echo revision=$(git rev-parse HEAD)
   echo branch=$(git rev-parse --abbrev-ref HEAD)
   echo date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  echo url=$(git config --get remote.origin.url)
 }
 
 echo_build_properties $1
