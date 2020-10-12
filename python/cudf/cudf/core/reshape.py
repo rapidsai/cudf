@@ -228,25 +228,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
 
-        if join == "inner" and typ is cudf.Series:
-            for i, obj in enumerate(objs):
-                if not obj.name:
-                    obj.name = i
-            result = (
-                objs[0]
-                .to_frame()
-                .join(objs[1].to_frame(), on="index", how="inner")
-            )
-            for obj in objs[2:]:
-                result = result.join(obj.to_frame(), on="index", how="inner")
-            return result
-
-        elif join == "inner" and typ is cudf.DataFrame:
-            raise NotImplementedError(
-                "cuDF does not support having multiple columns with"
-                "the same name."
-            )
-
         assert typs.issubset(allowed_typs)
         if not typs.issubset(allowed_typs):
             raise TypeError(
@@ -255,7 +236,10 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         df = cudf.DataFrame()
         _normalize_series_and_dataframe(objs, axis=axis)
 
-        objs, match_index = _align_objs(objs)
+        if join == "inner":
+            objs, match_index = _align_objs(objs, how="inner")
+        else:
+            objs, match_index = _align_objs(objs)
 
         for idx, o in enumerate(objs):
             if not ignore_index and idx == 0:
