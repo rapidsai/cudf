@@ -10,6 +10,7 @@
 - PR #6504 Update Java bindings version to 0.17-SNAPSHOT
 
 ## Bug Fixes
+- PR #6506 Fix DateTime type value truncation while writing to csv
 
 
 # cuDF 0.16.0 (Date TBD)
