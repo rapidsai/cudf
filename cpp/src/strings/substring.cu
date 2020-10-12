@@ -156,6 +156,11 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
 namespace detail {
 namespace {
 
+/**
+ * @brief Function logic for substring_from API.
+ *
+ * This does both calculates the output size and executes the substring.
+ */
 struct substring_from_fn {
   const column_device_view d_column;
   const cudf::detail::input_indexalator starts;
@@ -163,11 +168,6 @@ struct substring_from_fn {
   const int32_t* d_offsets{};
   char* d_chars{};
 
-  /**
-   * @brief Function logic for substring_from API.
-   *
-   * This does both calculate the output size and the execute the substring.
-   */
   __device__ size_type operator()(size_type idx)
   {
     if (d_column.is_null(idx)) return 0;  // null string
@@ -184,6 +184,20 @@ struct substring_from_fn {
   }
 };
 
+/**
+ * @brief Common utility function for the slice_strings APIs.
+ *
+ * It wraps calling the functors appropriately to build the output strings column.
+ *
+ * The input iterators may have unique position values per string in `d_column`.
+ *
+ * @param d_column Input strings column to substring.
+ * @param null_count Number of nulls for the output column.
+ * @param starts Start positions index iterator.
+ * @param stops Stop positions index iterator.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
 std::unique_ptr<column> compute_substrings_from_fn(column_device_view const& d_column,
                                                    size_type null_count,
                                                    cudf::detail::input_indexalator starts,
