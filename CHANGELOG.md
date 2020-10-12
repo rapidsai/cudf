@@ -125,6 +125,7 @@
 - PR #6407 Add RMM_LOGGING_LEVEL flag to Java docker build
 - PR #6438 Fetch nvcomp v1.1.0 for JNI build
 - PR #6379 Add list hashing functionality to MD5
+- PR #6498 Add helper method to ColumnBuilder with some nits
 
 ## Bug Fixes
 

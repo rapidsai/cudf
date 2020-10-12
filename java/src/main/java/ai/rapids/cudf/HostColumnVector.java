@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.StringJoiner;
 import java.util.function.Consumer;
 
 /**
@@ -1023,8 +1024,17 @@ public final class HostColumnVector extends HostColumnVectorCore {
       return childBuilders.get(index);
     }
 
+    /**
+     * Finish and create the immutable ColumnVector, copied to the device.
+     */
+    public final ColumnVector buildAndPutOnDevice() {
+      try (HostColumnVector tmp = build()) {
+        return tmp.copyToDevice();
+      }
+    }
+
     @Override
-    public void close() throws Exception {
+    public void close() {
       if (!built) {
         if (data != null) {
           data.close();
@@ -1040,6 +1050,25 @@ public final class HostColumnVector extends HostColumnVectorCore {
         }
         built = true;
       }
+    }
+
+    @Override
+    public String toString() {
+      StringJoiner sj = new StringJoiner(",");
+      for (ColumnBuilder cb : childBuilders) {
+        sj.add(cb.toString());
+      }
+      return "ColumnBuilder{" +
+          "type=" + type +
+          ", children=" + sj.toString() +
+          ", data=" + data +
+          ", valid=" + valid +
+          ", currentIndex=" + currentIndex +
+          ", nullCount=" + nullCount +
+          ", estimatedRows=" + estimatedRows +
+          ", populatedRows=" + rows +
+          ", built=" + built +
+          '}';
     }
   }
 
