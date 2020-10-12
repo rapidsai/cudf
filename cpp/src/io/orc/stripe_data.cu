@@ -1046,7 +1046,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
         pos += varint_length<uint4>(bs, pos);
         if (pos > maxpos) break;
         *reinterpret_cast<volatile int32_t *>(&vals[n]) = lastpos;
-        lastpos                       = pos;
+        lastpos                                         = pos;
       }
       scratch->num_vals = n;
       bytestream_flush_bytes(bs, lastpos - bs->pos);

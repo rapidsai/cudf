@@ -196,16 +196,14 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
       len = dtype_len;
       if (dtype != BOOLEAN) {
         if (dtype == BYTE_ARRAY) {
-          const char *ptr =
-            static_cast<const nvstrdesc_s *>(s->col.column_data_base)[val_idx].ptr;
+          const char *ptr = static_cast<const nvstrdesc_s *>(s->col.column_data_base)[val_idx].ptr;
           uint32_t count =
             (uint32_t) reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[val_idx]
               .count;
           len += count;
           hash = nvstr_init_hash(reinterpret_cast<const uint8_t *>(ptr), count);
         } else if (dtype_len_in == 8) {
-          hash =
-            uint64_init_hash(static_cast<const uint64_t *>(s->col.column_data_base)[val_idx]);
+          hash = uint64_init_hash(static_cast<const uint64_t *>(s->col.column_data_base)[val_idx]);
         } else {
           hash = uint32_init_hash(
             (dtype_len_in == 4)
