@@ -20,7 +20,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/cxxopts.hpp>
-#include <tests/utilities/file_utilities.hpp>
+#include <cudf_test/file_utilities.hpp>
 
 #include <rmm/mr/device/binning_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>

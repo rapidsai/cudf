@@ -20,7 +20,7 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/types.hpp>
 
-#include <tests/utilities/file_utilities.hpp>
+#include <cudf_test/file_utilities.hpp>
 
 using cudf::io::io_type;
 
