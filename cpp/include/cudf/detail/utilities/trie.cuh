@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,9 @@
  *
  */
 
-#ifndef TRIE_CUH
-#define TRIE_CUH
+#pragma once
+
+#include <cudf/utilities/span.hpp>
 
 #include <deque>
 #include <string>
@@ -29,6 +30,8 @@
 
 #include <cuda_runtime.h>
 #include <thrust/host_vector.h>
+
+using cudf::detail::device_span;
 
 static constexpr char trie_terminating_character = '\n';
 
@@ -126,11 +129,11 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(
  *
  * @return Boolean value, true if string is found, false otherwise
  */
-__host__ __device__ inline bool serializedTrieContains(const SerialTrieNode *trie,
-                                                       const char *key,
-                                                       size_t key_len)
+__host__ __device__ inline bool serialized_trie_contains(device_span<SerialTrieNode const> trie,
+                                                         char const *key,
+                                                         size_t key_len)
 {
-  if (trie == nullptr) return false;
+  if (trie.data() == nullptr) return false;
   int curr_node = 0;
   for (size_t i = 0; i < key_len; ++i) {
     // Don't jump away from root node
@@ -147,5 +150,3 @@ __host__ __device__ inline bool serializedTrieContains(const SerialTrieNode *tri
   // Even if the node is present, return true only if that node is at the end of a word
   return trie[curr_node].is_leaf;
 }
-
-#endif  // TRIE_CUH

@@ -19,6 +19,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/lists/extract.hpp>
+#include <cudf/reshape.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/filling.hpp>
@@ -776,6 +777,19 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castTo(JNIEnv *env, job
     } else {
       result = cudf::cast(*column, n_data_type);
     }
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_byteListCast(JNIEnv *env, jobject j_object,
+                                                                jlong handle, jboolean endianness_config) {
+  JNI_NULL_CHECK(env, handle, "native handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
+    cudf::flip_endianness config(static_cast<cudf::flip_endianness>(endianness_config));
+    std::unique_ptr<cudf::column> result = byte_cast(*column, config);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
