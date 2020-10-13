@@ -70,6 +70,7 @@
 - PR #6060 Add support for all types in `Series.describe` and `DataFrame.describe`
 - PR #6051 Add builder API for cuIO `parquet_writer_options` and `parquet_reader_options`
 - PR #6067 Added compute codes for aarch64 devices
+- PR #5861 `fixed_point` Column Optimization (store `scale` in `data_type`)
 - PR #6083 Small cleanup
 - PR #6355 Make sure PTDS mode is compatible between libcudf and JNI
 - PR #6120 Consolidate functionality in NestedHostColumnVector and HostColumnVector

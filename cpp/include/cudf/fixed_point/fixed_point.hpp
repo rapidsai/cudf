@@ -39,7 +39,7 @@ namespace numeric {
 template <typename T>
 struct strong_typedef {
   T _t;
-  CUDA_HOST_DEVICE_CALLABLE explicit strong_typedef(T t) : _t(t) {}
+  CUDA_HOST_DEVICE_CALLABLE explicit constexpr strong_typedef(T t) : _t(t) {}
   CUDA_HOST_DEVICE_CALLABLE operator T() const { return _t; }
 };
 /** \endcond */
@@ -289,6 +289,8 @@ class fixed_point {
   scale_type _scale;
 
  public:
+  using rep = Rep;
+
   /**
    * @brief Constructor that will perform shifting to store value appropriately
    *
@@ -342,6 +344,11 @@ class fixed_point {
   CUDA_HOST_DEVICE_CALLABLE explicit constexpr operator U() const
   {
     return detail::shift<Rep, Rad>(static_cast<U>(_value), detail::negate(_scale));
+  }
+
+  CUDA_HOST_DEVICE_CALLABLE operator scaled_integer<Rep>() const
+  {
+    return scaled_integer<Rep>{_value, _scale};
   }
 
   /**
