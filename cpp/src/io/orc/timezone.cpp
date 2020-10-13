@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 #include "timezone.h"
+
 #include <algorithm>
 #include <fstream>
+
+#include <cudf/utilities/error.hpp>
 
 namespace cudf {
 namespace io {
@@ -315,176 +318,169 @@ static int64_t GetGmtOffset(const std::vector<int64_t> &table, int64_t ts)
  *transitions repeat forever with 400 year cycle)
  * @param[in] timezone_name standard timezone name (for example, "US/Pacific")
  *
- * @return true if successful, false if failed to find/parse the timezone information
+ * @return TODO
  **/
-bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string &timezone_name)
+std::vector<int64_t> BuildTimezoneTransitionTable(std::string const &timezone_name)
 {
   using std::ios_base;
-  std::string tz_filename("/usr/share/zoneinfo/");
-  std::ifstream fin;
-  std::vector<localtime_type_record_s> ttype;
-  std::vector<int64_t> transition_times;
-  std::vector<uint8_t> ttime_idx;
-  std::vector<uint8_t> posix_tz_string;
+
+  if (timezone_name == "UTC" || !timezone_name.length()) {
+    // Return an empty table for UTC
+    return {};
+  }
   tzif_hdr_s tzh = {0};
-  bool hdr64     = false;
   size_t earliest_std_idx;
   int64_t future_dstoff, future_stdoff, future_time;
 
-  table.resize(0);
-  if (timezone_name == "UTC" || !timezone_name.length()) {
-    // Return an empty table for UTC
-    return true;
-  }
-  tz_filename += timezone_name;
-#ifdef _MSC_VER
-  for (size_t i = 0; i < tz_filename.length(); i++) {
-    if (tz_filename[i] == '/') { tz_filename[i] = '\\'; }
-  }
-#endif
+  std::string const tz_filename = "/usr/share/zoneinfo/" + timezone_name;
+
+  std::ifstream fin;
   fin.open(tz_filename, ios_base::in | ios_base::binary | ios_base::ate);
-  if (fin) {
-    size_t file_size           = fin.tellg(), file_pos;
-    dst_transition_s dst_start = {0}, dst_end = {0};
-    fin.seekg(0);
-    fin.read(reinterpret_cast<char *>(&tzh), sizeof(tzh));
-    if (fin.fail() || tzh.magic != TZIF_MAGIC) { return false; }
-    // Convert fields to little endian
-    tzh.isutccnt = bswap_32(tzh.isutccnt);
-    tzh.isstdcnt = bswap_32(tzh.isstdcnt);
-    tzh.leapcnt  = bswap_32(tzh.leapcnt);
-    tzh.timecnt  = bswap_32(tzh.timecnt);
-    tzh.typecnt  = bswap_32(tzh.typecnt);
-    tzh.charcnt  = bswap_32(tzh.charcnt);
-    // Check for 64-bit header
-    if (tzh.version != 0) {
-      size_t ofs64 = tzh.timecnt * 5 + tzh.typecnt * 6 + tzh.charcnt + tzh.leapcnt * 8 +
-                     tzh.isstdcnt + tzh.isutccnt;
-      if (ofs64 + sizeof(tzh) < file_size) {
-        fin.seekg(ofs64, ios_base::cur);
-        hdr64 = true;
-        if (fin.fail() || tzh.magic != TZIF_MAGIC) { return false; }
-        fin.read(reinterpret_cast<char *>(&tzh), sizeof(tzh));
-        // Convert fields to little endian
-        tzh.isutccnt = bswap_32(tzh.isutccnt);
-        tzh.isstdcnt = bswap_32(tzh.isstdcnt);
-        tzh.leapcnt  = bswap_32(tzh.leapcnt);
-        tzh.timecnt  = bswap_32(tzh.timecnt);
-        tzh.typecnt  = bswap_32(tzh.typecnt);
-        tzh.charcnt  = bswap_32(tzh.charcnt);
-      }
+  CUDF_EXPECTS(fin, "Failed to open the timezone file.");
+  auto const file_size = fin.tellg();
+  fin.seekg(0);
+  fin.read(reinterpret_cast<char *>(&tzh), sizeof(tzh));
+  CUDF_EXPECTS(!fin.fail() && tzh.magic == TZIF_MAGIC, "Error reading time zones file header.");
+
+  // Convert fields to little endian
+  tzh.isutccnt = bswap_32(tzh.isutccnt);
+  tzh.isstdcnt = bswap_32(tzh.isstdcnt);
+  tzh.leapcnt  = bswap_32(tzh.leapcnt);
+  tzh.timecnt  = bswap_32(tzh.timecnt);
+  tzh.typecnt  = bswap_32(tzh.typecnt);
+  tzh.charcnt  = bswap_32(tzh.charcnt);
+
+  // Check for 64-bit header
+  bool hdr64 = false;
+  if (tzh.version != 0) {
+    size_t const ofs64 = tzh.timecnt * 5 + tzh.typecnt * 6 + tzh.charcnt + tzh.leapcnt * 8 +
+                         tzh.isstdcnt + tzh.isutccnt;
+    if (ofs64 + sizeof(tzh) < file_size) {
+      fin.seekg(ofs64, ios_base::cur);
+      hdr64 = true;
+      fin.read(reinterpret_cast<char *>(&tzh), sizeof(tzh));
+      // Convert fields to little endian
+      tzh.isutccnt = bswap_32(tzh.isutccnt);
+      tzh.isstdcnt = bswap_32(tzh.isstdcnt);
+      tzh.leapcnt  = bswap_32(tzh.leapcnt);
+      tzh.timecnt  = bswap_32(tzh.timecnt);
+      tzh.typecnt  = bswap_32(tzh.typecnt);
+      tzh.charcnt  = bswap_32(tzh.charcnt);
     }
-    // Read transition times (convert from 32-bit to 64-bit if necessary)
-    if (tzh.timecnt > 0) {
-      if (tzh.timecnt > file_size) { return false; }
-      transition_times.resize(tzh.timecnt);
-      ttime_idx.resize(tzh.timecnt);
-      if (hdr64) {
-        int64_t *tt64 = transition_times.data();
-        fin.read(reinterpret_cast<char *>(tt64), tzh.timecnt * sizeof(int64_t));
-        for (uint32_t i = 0; i < tzh.timecnt; i++) { tt64[i] = bswap_64(tt64[i]); }
-      } else {
-        int64_t *tt64 = transition_times.data();
-        int32_t *tt32 = reinterpret_cast<int32_t *>(tt64);
-        fin.read(reinterpret_cast<char *>(tt32), tzh.timecnt * sizeof(int32_t));
-        for (uint32_t i = tzh.timecnt; i > 0;) {
-          --i;
-          tt64[i] = (int32_t)bswap_32(tt32[i]);
-        }
-      }
-      fin.read(reinterpret_cast<char *>(ttime_idx.data()), tzh.timecnt * sizeof(uint8_t));
-    }
-    // Read time types
-    if (tzh.typecnt <= 0 || tzh.typecnt > file_size / sizeof(localtime_type_record_s)) {
-      return false;
-    } else {
-      ttype.resize(tzh.typecnt);
-      fin.read(reinterpret_cast<char *>(ttype.data()),
-               tzh.typecnt * sizeof(localtime_type_record_s));
-      if (fin.fail()) { return false; }
-      for (uint32_t i = 0; i < tzh.typecnt; i++) {
-        ttype[i].utcoff = (int32_t)bswap_32(ttype[i].utcoff);
-      }
-    }
-    // Read posix TZ string
-    fin.seekg(tzh.charcnt + tzh.leapcnt * ((hdr64) ? 12 : 8) + tzh.isstdcnt + tzh.isutccnt,
-              ios_base::cur);
-    file_pos = fin.tellg();
-    if (file_pos + 1 < file_size) {
-      posix_tz_string.resize(file_size - file_pos);
-      fin.read(reinterpret_cast<char *>(posix_tz_string.data()), file_size - file_pos);
-    }
-    fin.close();
-    // Allocate transition table, add one entry for ancient rule, and 800 entries for future rules
-    // (2 transitions/year)
-    table.resize((1 + (size_t)tzh.timecnt + 400 * 2) * 2 + 1);
-    earliest_std_idx = 0;
-    for (size_t t = 0; t < tzh.timecnt; t++) {
-      int64_t ttime = transition_times[t];
-      int64_t utcoff;
-      uint32_t idx = ttime_idx[t];
-      if (idx >= tzh.typecnt) {
-        // Out-of-range type index
-        return false;
-      }
-      utcoff                 = ttype[idx].utcoff;
-      table[(1 + t) * 2 + 1] = ttime;
-      table[(1 + t) * 2 + 2] = utcoff;
-      if (!earliest_std_idx && !ttype[idx].isdst) { earliest_std_idx = 1 + t; }
-    }
-    if (!earliest_std_idx) { earliest_std_idx = 1; }
-    table[1] = table[earliest_std_idx * 2 + 1];
-    table[2] = table[earliest_std_idx * 2 + 2];
-    // Generate entries for times after the last transition
-    future_stdoff = table[(tzh.timecnt * 2) + 2];
-    future_dstoff = future_stdoff;
-    if (posix_tz_string.size() > 0) {
-      const uint8_t *cur = posix_tz_string.data();
-      const uint8_t *end = cur + posix_tz_string.size();
-      cur                = posix_parse_name(cur, end);
-      cur                = posix_parse_offset(cur, end, &future_stdoff);
-      future_stdoff      = -future_stdoff;
-      if (cur + 1 < end) {
-        // Parse Daylight Saving Time information
-        cur = posix_parse_name(cur, end);
-        if (cur < end && *cur != ',') {
-          cur           = posix_parse_offset(cur, end, &future_dstoff);
-          future_dstoff = -future_dstoff;
-        } else {
-          future_dstoff = future_stdoff + 60 * 60;
-        }
-        cur = posix_parse_transition(cur, end, &dst_start);
-        cur = posix_parse_transition(cur, end, &dst_end);
-      } else {
-        future_dstoff = future_stdoff;
-      }
-    }
-    // Add 2 entries per year for 400 years
-    future_time = 0;
-    for (size_t t = 0; t < 800; t += 2) {
-      uint32_t year          = 1970 + ((int)t >> 1);
-      int64_t dst_start_time = GetTransitionTime(&dst_start, year);
-      int64_t dst_end_time   = GetTransitionTime(&dst_end, year);
-      if (dst_start_time < dst_end_time) {
-        table[(1 + tzh.timecnt + t) * 2 + 1] = future_time + dst_start_time - future_stdoff;
-        table[(1 + tzh.timecnt + t) * 2 + 2] = future_dstoff;
-        table[(1 + tzh.timecnt + t) * 2 + 3] = future_time + dst_end_time - future_dstoff;
-        table[(1 + tzh.timecnt + t) * 2 + 4] = future_stdoff;
-      } else {
-        table[(1 + tzh.timecnt + t) * 2 + 1] = future_time + dst_end_time - future_dstoff;
-        table[(1 + tzh.timecnt + t) * 2 + 2] = future_stdoff;
-        table[(1 + tzh.timecnt + t) * 2 + 3] = future_time + dst_start_time - future_stdoff;
-        table[(1 + tzh.timecnt + t) * 2 + 4] = future_dstoff;
-      }
-      future_time += (365 + IsLeapYear(year)) * 24 * 60 * 60;
-    }
-    // Add gmt offset
-    table[0] = GetGmtOffset(table, ORC_UTC_OFFSET);
-  } else {
-    // printf("Failed to open \"%s\"\n", tz_filename.c_str());
-    return false;
   }
-  return true;
+  CUDF_EXPECTS(tzh.typecnt > 0 && tzh.typecnt <= file_size / sizeof(localtime_type_record_s),
+               "Invalid number number of time types in timezone file.");
+  CUDF_EXPECTS(tzh.timecnt <= file_size,
+               "Number of transition times is larger than the file size.");
+
+  // Read transition times (convert from 32-bit to 64-bit if necessary)
+  std::vector<int64_t> transition_times;
+  std::vector<uint8_t> ttime_idx;
+  if (tzh.timecnt > 0) {
+    if (hdr64) {
+      transition_times.resize(tzh.timecnt);
+      fin.read(reinterpret_cast<char *>(transition_times.data()),
+               transition_times.size() * sizeof(int64_t));
+      for (auto &tt : transition_times) { tt = bswap_64(tt); }
+    } else {
+      std::vector<int32_t> tt32(tzh.timecnt);
+      fin.read(reinterpret_cast<char *>(tt32.data()), tt32.size() * sizeof(int32_t));
+      std::transform(
+        tt32.cbegin(), tt32.cend(), std::back_inserter(transition_times), [](auto &tt) {
+          return bswap_32(tt);
+        });
+    }
+
+    ttime_idx.resize(tzh.timecnt);
+    fin.read(reinterpret_cast<char *>(ttime_idx.data()), tzh.timecnt * sizeof(uint8_t));
+  }
+
+  // Read time types
+  std::vector<localtime_type_record_s> ttype(tzh.typecnt);
+  fin.read(reinterpret_cast<char *>(ttype.data()), tzh.typecnt * sizeof(localtime_type_record_s));
+  CUDF_EXPECTS(!fin.fail(), "Failed to read time types from the time zone file.");
+  for (uint32_t i = 0; i < tzh.typecnt; i++) {
+    ttype[i].utcoff = (int32_t)bswap_32(ttype[i].utcoff);
+  }
+
+  // Read posix TZ string
+  std::vector<uint8_t> posix_tz_string;
+  fin.seekg(tzh.charcnt + tzh.leapcnt * ((hdr64) ? 12 : 8) + tzh.isstdcnt + tzh.isutccnt,
+            ios_base::cur);
+  auto const file_pos = fin.tellg();
+  if (file_size - file_pos > 1) {
+    posix_tz_string.resize(file_size - file_pos);
+    fin.read(reinterpret_cast<char *>(posix_tz_string.data()), file_size - file_pos);
+  }
+  fin.close();
+
+  // Allocate transition table, add one entry for ancient rule, and 800 entries for future rules
+  // (2 transitions/year)
+  std::vector<int64_t> ttable((1 + (size_t)tzh.timecnt + 400 * 2) * 2 + 1);
+  earliest_std_idx = 0;
+  for (size_t t = 0; t < tzh.timecnt; t++) {
+    int64_t ttime = transition_times[t];
+    int64_t utcoff;
+    uint32_t idx = ttime_idx[t];
+    CUDF_EXPECTS(idx < tzh.typecnt, "Out-of-range type index");
+    utcoff                  = ttype[idx].utcoff;
+    ttable[(1 + t) * 2 + 1] = ttime;
+    ttable[(1 + t) * 2 + 2] = utcoff;
+    if (!earliest_std_idx && !ttype[idx].isdst) { earliest_std_idx = 1 + t; }
+  }
+  if (!earliest_std_idx) { earliest_std_idx = 1; }
+  ttable[1] = ttable[earliest_std_idx * 2 + 1];
+  ttable[2] = ttable[earliest_std_idx * 2 + 2];
+
+  // Generate entries for times after the last transition
+  future_stdoff = ttable[(tzh.timecnt * 2) + 2];
+  future_dstoff = future_stdoff;
+
+  dst_transition_s dst_start = {0}, dst_end = {0};
+  if (posix_tz_string.size() > 0) {
+    const uint8_t *cur = posix_tz_string.data();
+    const uint8_t *end = cur + posix_tz_string.size();
+    cur                = posix_parse_name(cur, end);
+    cur                = posix_parse_offset(cur, end, &future_stdoff);
+    future_stdoff      = -future_stdoff;
+    if (cur + 1 < end) {
+      // Parse Daylight Saving Time information
+      cur = posix_parse_name(cur, end);
+      if (cur < end && *cur != ',') {
+        cur           = posix_parse_offset(cur, end, &future_dstoff);
+        future_dstoff = -future_dstoff;
+      } else {
+        future_dstoff = future_stdoff + 60 * 60;
+      }
+      cur = posix_parse_transition(cur, end, &dst_start);
+      cur = posix_parse_transition(cur, end, &dst_end);
+    } else {
+      future_dstoff = future_stdoff;
+    }
+  }
+  // Add 2 entries per year for 400 years
+  future_time = 0;
+  for (size_t t = 0; t < 800; t += 2) {
+    uint32_t year          = 1970 + ((int)t >> 1);
+    int64_t dst_start_time = GetTransitionTime(&dst_start, year);
+    int64_t dst_end_time   = GetTransitionTime(&dst_end, year);
+    if (dst_start_time < dst_end_time) {
+      ttable[(1 + tzh.timecnt + t) * 2 + 1] = future_time + dst_start_time - future_stdoff;
+      ttable[(1 + tzh.timecnt + t) * 2 + 2] = future_dstoff;
+      ttable[(1 + tzh.timecnt + t) * 2 + 3] = future_time + dst_end_time - future_dstoff;
+      ttable[(1 + tzh.timecnt + t) * 2 + 4] = future_stdoff;
+    } else {
+      ttable[(1 + tzh.timecnt + t) * 2 + 1] = future_time + dst_end_time - future_dstoff;
+      ttable[(1 + tzh.timecnt + t) * 2 + 2] = future_stdoff;
+      ttable[(1 + tzh.timecnt + t) * 2 + 3] = future_time + dst_start_time - future_stdoff;
+      ttable[(1 + tzh.timecnt + t) * 2 + 4] = future_dstoff;
+    }
+    future_time += (365 + IsLeapYear(year)) * 24 * 60 * 60;
+  }
+  // Add gmt offset
+  ttable[0] = GetGmtOffset(ttable, ORC_UTC_OFFSET);
+
+  return ttable;
 }
 
 }  // namespace io

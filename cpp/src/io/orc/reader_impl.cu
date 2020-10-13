@@ -767,12 +767,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       }
 
       // Setup table for converting timestamp columns from local to UTC time
-      std::vector<int64_t> tz_table;
-      if (_has_timestamp_column) {
-        CUDF_EXPECTS(
-          BuildTimezoneTransitionTable(tz_table, selected_stripes[0].second->writerTimezone),
-          "Cannot setup timezone LUT");
-      }
+      std::vector<int64_t> tz_table =
+        _has_timestamp_column
+          ? BuildTimezoneTransitionTable(selected_stripes[0].second->writerTimezone)
+          : std::vector<int64_t>{};
 
       std::vector<column_buffer> out_buffers;
       for (size_t i = 0; i < column_types.size(); ++i) {
