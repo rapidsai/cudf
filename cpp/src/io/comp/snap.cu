@@ -266,9 +266,9 @@ extern "C" __global__ void __launch_bounds__(128)
   const uint8_t *src;
 
   if (!t) {
-    const uint8_t *src = reinterpret_cast<const uint8_t *>(inputs[blockIdx.x].srcDevice);
+    const uint8_t *src = static_cast<const uint8_t *>(inputs[blockIdx.x].srcDevice);
     uint32_t src_len   = static_cast<uint32_t>(inputs[blockIdx.x].srcSize);
-    uint8_t *dst       = reinterpret_cast<uint8_t *>(inputs[blockIdx.x].dstDevice);
+    uint8_t *dst       = static_cast<uint8_t *>(inputs[blockIdx.x].dstDevice);
     uint32_t dst_len   = static_cast<uint32_t>(inputs[blockIdx.x].dstSize);
     uint8_t *end       = dst + dst_len;
     s->src             = src;
