@@ -181,8 +181,8 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
     if (isNull(rowIndex)) {
       return null;
     }
-    int start = getStartListOffset(rowIndex);
-    int end = getEndListOffset(rowIndex);
+    int start = (int)getStartListOffset(rowIndex);
+    int end = (int)getEndListOffset(rowIndex);
     int size = end - start;
     byte[] rawData = new byte[size];
     if (size > 0) {
@@ -301,14 +301,14 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    * Get the starting byte offset for the string at index
    * Wraps getStartListOffset for backwards compatibility
    */
-  int getStartStringOffset(long index) {
+  long getStartStringOffset(long index) {
     return getStartListOffset(index);
   }
 
   /**
-   * Get the starting element offset for the list at index
+   * Get the starting element offset for the list or string at index
    */
-  int getStartListOffset(long index) {
+  long getStartListOffset(long index) {
     assert type == DType.STRING || type == DType.LIST: type +
       " is not a supported string or list type.";
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
@@ -319,14 +319,14 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    * Get the ending byte offset for the string at index.
    * Wraps getEndListOffset for backwards compatibility
    */
-  int getEndStringOffset(long index) {
+  long getEndStringOffset(long index) {
     return getEndListOffset(index);
   }
 
   /**
-   * Get the ending element offset for the list at index.
+   * Get the ending element offset for the list or string at index.
    */
-  int getEndListOffset(long index) {
+  long getEndListOffset(long index) {
     assert type == DType.STRING || type == DType.LIST: type +
       " is not a supported string or list type.";
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
@@ -378,8 +378,8 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   public byte[] getUTF8(long index) {
     assert type == DType.STRING : type + " is not a supported string type.";
     assertsForGet(index);
-    int start = getStartListOffset(index);
-    int size = getEndListOffset(index) - start;
+    int start = (int)getStartListOffset(index);
+    int size = (int)getEndListOffset(index) - start;
     byte[] rawData = new byte[size];
     if (size > 0) {
       offHeap.data.getBytes(rawData, 0, start, size);
@@ -397,10 +397,12 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   }
 
   /**
+   * WARNING: Special case for lists of int8 or uint8, does not support null list values or lists
+   *
    * Get array of bytes at index from a list column of int8 or uint8. The column may not be a list
    * of lists and may not have nulls.
    */
-  public byte[] getByteList(long rowIndex) {
+  public byte[] getBytesFromList(long rowIndex) {
     assert type == DType.LIST : type + " is not a supported list of bytes type.";
     HostColumnVectorCore listData = children.get(0);
     assert listData.type == DType.INT8 || listData.type == DType.UINT8  : type +
@@ -408,8 +410,8 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
     assert !listData.hasNulls() : "byte list column with nulls are not supported";
     assertsForGet(rowIndex);
 
-    int start = getStartListOffset(rowIndex);
-    int end = getEndListOffset(rowIndex);
+    int start = (int)getStartListOffset(rowIndex);
+    int end = (int)getEndListOffset(rowIndex);
     int size = end - start;
 
     byte[] result = new byte[size];
@@ -424,8 +426,8 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
     assert rowIndex < rows;
     assert type == DType.LIST;
     List retList = new ArrayList();
-    int start =  getStartListOffset(rowIndex);
-    int end = getEndListOffset(rowIndex);
+    int start = (int)getStartListOffset(rowIndex);
+    int end = (int)getEndListOffset(rowIndex);
     // check if null or empty
     if (isNull(rowIndex)) {
       return null;
