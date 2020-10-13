@@ -2,11 +2,13 @@
 #include <cudf_test/cudf_gtest.hpp>
 
 #include "csv_test_new.cuh"
+#include "inclusive_scan_copy_if.cuh"
 
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
+#include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
@@ -163,6 +165,62 @@ TEST_F(CsvReaderTest, CanGatherPositions)
   EXPECT_EQ(static_cast<uint32_t>(16), h_indices[4]);
   EXPECT_EQ(static_cast<uint32_t>(21), h_indices[5]);
   EXPECT_EQ(static_cast<uint32_t>(24), h_indices[6]);
+}
+
+template <typename T>
+struct reduce_functor {
+  inline constexpr bool operator()(T const& lhs, T const& rhs) { return rhs; }
+};
+
+template <typename T>
+struct needle_functor {
+  T needle;
+  bool invert = false;
+  inline constexpr bool operator()(T const& value)
+  {
+    return invert ? not(value == needle) : value == needle;
+  }
+};
+
+TEST_F(CsvReaderTest, CanGatherReducePositions)
+{
+  auto input = std::string("00__1___0__0_1__01___0__0_1");
+  rmm::device_vector<uint8_t> d_input(input.c_str(), input.c_str() + input.size());
+
+  auto d_output = inclusive_scan_copy_if<uint8_t>(device_span<uint8_t>(d_input),  //
+                                                  reduce_functor<uint8_t>(),
+                                                  needle_functor<uint8_t>{'1', false},
+                                                  0);
+
+  thrust::host_vector<uint32_t> h_indices = d_output;
+
+  ASSERT_EQ(static_cast<uint32_t>(4), h_indices.size());
+
+  EXPECT_EQ(static_cast<uint32_t>(4), h_indices[0]);
+  EXPECT_EQ(static_cast<uint32_t>(13), h_indices[1]);
+  EXPECT_EQ(static_cast<uint32_t>(17), h_indices[2]);
+  EXPECT_EQ(static_cast<uint32_t>(26), h_indices[3]);
+}
+
+TEST_F(CsvReaderTest, CanGatherReducePositions2)
+{
+  auto input = std::string("0100000100000010010001");
+  rmm::device_vector<uint8_t> d_input(input.c_str(), input.c_str() + input.size());
+
+  auto d_output = inclusive_scan_copy_if<uint8_t>(device_span<uint8_t>(d_input),  //
+                                                  reduce_functor<uint8_t>(),
+                                                  needle_functor<uint8_t>{'0', true},
+                                                  0);
+
+  thrust::host_vector<uint32_t> h_indices = d_output;
+
+  ASSERT_EQ(static_cast<uint32_t>(5), h_indices.size());
+
+  EXPECT_EQ(static_cast<uint32_t>(1), h_indices[0]);
+  EXPECT_EQ(static_cast<uint32_t>(7), h_indices[1]);
+  EXPECT_EQ(static_cast<uint32_t>(14), h_indices[2]);
+  EXPECT_EQ(static_cast<uint32_t>(17), h_indices[3]);
+  EXPECT_EQ(static_cast<uint32_t>(21), h_indices[4]);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
