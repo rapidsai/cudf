@@ -149,6 +149,8 @@ class Scalar(libcudf.scalar.Scalar):
         return self._scalar_unaop("__neg__")
 
     def __repr__(self):
+        # str() fixes a numpy bug with NaT
+        # https://github.com/numpy/numpy/issues/17552
         return f"Scalar({str(self.value)}, dtype={self.dtype})"
 
     def _binop_result_dtype_or_error(self, other, op):
