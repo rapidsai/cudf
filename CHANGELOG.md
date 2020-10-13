@@ -124,6 +124,7 @@
 - PR #6346 Remove macros from CompactProtocolWriter
 - PR #6312 Conda recipe dependency cleanup
 - PR #6347 Add dictionary support to cudf::copy_range
+- PR #6352 Add specific Topic support for Kafka "list_topics()" metadata requests
 - PR #6332 Add support to return csv as string when `path=None` in `to_csv`
 - PR #6358 Add Parquet fuzz tests with varying function parameters
 - PR #6369 Add dictionary support to `cudf::find_and_replace`
@@ -135,6 +136,8 @@
 - PR #6407 Add RMM_LOGGING_LEVEL flag to Java docker build
 - PR #6438 Fetch nvcomp v1.1.0 for JNI build
 - PR #6275 Update to official libcu++ on Github
+- PR #6379 Add list hashing functionality to MD5
+- PR #6498 Add helper method to ColumnBuilder with some nits
 
 ## Bug Fixes
 
@@ -178,12 +181,14 @@
 - PR #6285 Removed unsafe `reinterpret_cast` and implicit pointer-to-bool casts
 - PR #6281 Fix unreachable code warning in datetime.cuh
 - PR #6286 Fix `read_csv` `int32` overflow 
+- PR #6466 Fix ORC reader issue with decimal type
 - PR #6310 Replace a misspelled reference to `master` branch with `main` branch in a comment in changelog.sh
 - PR #6289 Revert #6206
 - PR #6291 Fix issue related to row-wise operations in `cudf.DataFrame`
 - PR #6304 Fix span_tests.cu includes
 - PR #6331 Avoids materializing `RangeIndex` during frame concatnation (when not needed)
 - PR #6278 Add filter tests for struct columns
+- PR #6344 Fix rolling-window count for null input
 - PR #6353 Rename `skip_rows` parameter to `skiprows` in `read_parquet`, `read_avro` and `read_orc`
 - PR #6361 Detect overflow in hash join
 - PR #6397 Fix `build.sh` when `PARALLEL_LEVEL` environment variable isn't set
@@ -202,6 +207,9 @@
 - PR #6443 Make java apis getList and getStruct public
 - PR #6445 Add `dlpack` to run section of libcudf conda recipe to fix downstream build issues
 - PR #6450 Make java Column Builder row agnostic
+- PR #6309 Make all CI `.sh` scripts have a consistent set of permissions
+- PR #6491 Remove repo URL from Java build-info
+- PR #6462 Bug fixes for ColumnBuilder
 
 
 # cuDF 0.15.0 (26 Aug 2020)
