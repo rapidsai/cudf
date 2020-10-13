@@ -1,8 +1,10 @@
+import re
 from contextlib import contextmanager
 
 import cupy
 import numpy as np
 import pandas as pd
+import pytest
 from pandas import testing as tm
 
 import cudf
@@ -111,6 +113,46 @@ def assert_neq(left, right, **kwargs):
         pass
     else:
         raise AssertionError
+
+
+def assert_exception(reference_func, actual_func, compare_error_message=True):
+    """Compares if two functions raise same exception or not.
+
+    Parameters
+    ----------
+    reference_func : callable
+        A callable function to obtain the Exception.
+    actual_func : callable
+        A callable function to compare the Exception
+        obtained by calling ``reference_func``.
+    compare_error_message : boolean, default True
+        Whether to compare the error messages raised
+        when calling both ``reference_func`` and
+        ``actual_func`` or not.
+
+    Returns
+    -------
+    None
+        If exceptions raised by ``reference_func`` and
+        ``actual_func`` match.
+
+    Raises
+    ------
+    AssertionError
+        If call to ``reference_func`` doesn't raise any Exception.
+    """
+    try:
+        reference_func()
+    except KeyboardInterrupt:
+        raise
+    except Exception as e:
+        with pytest.raises(
+            type(e),
+            match=re.escape(str(e)) if compare_error_message is True else None,
+        ):
+            actual_func()
+    else:
+        raise AssertionError("Expected to fail with an Exception.")
 
 
 def gen_rand(dtype, size, **kwargs):

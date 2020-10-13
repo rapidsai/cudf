@@ -22,6 +22,7 @@ from cudf.tests.utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_eq,
+    assert_exception,
     does_not_raise,
     gen_rand,
 )
@@ -7756,10 +7757,7 @@ def test_dataframe_error_equality(df1, df2, op):
     gdf1 = gd.from_pandas(df1)
     gdf2 = gd.from_pandas(df2)
 
-    try:
-        df1.getattr(op)(df2)
-    except Exception as e:
-        with pytest.raises(type(e), match=e.__str__()):
-            gdf1.getattr(op)(gdf2)
-    else:
-        raise AssertionError(f"Expected {op} to fail for {df1} and {df2}")
+    expected_function = lambda: getattr(df1, op)(df2)  # noqa: E731
+    actual_function = lambda: getattr(gdf1, op)(gdf2)  # noqa: E731
+
+    assert_exception(expected_function, actual_function)

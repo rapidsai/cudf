@@ -12,6 +12,7 @@ from cudf.tests.utils import (
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
     assert_eq,
+    assert_exception,
 )
 
 
@@ -646,10 +647,7 @@ def test_series_error_equality(sr1, sr2, op):
     gsr1 = cudf.from_pandas(sr1)
     gsr2 = cudf.from_pandas(sr2)
 
-    try:
-        sr1.getattr(op)(sr2)
-    except Exception as e:
-        with pytest.raises(type(e), match=e.__str__()):
-            gsr1.getattr(op)(gsr2)
-    else:
-        raise AssertionError(f"Expected {op} to fail for {sr1} and {sr2}")
+    expected_function = lambda: getattr(sr1, op)(sr2)  # noqa: E731
+    actual_function = lambda: getattr(gsr1, op)(gsr2)  # noqa: E731
+
+    assert_exception(expected_function, actual_function)
