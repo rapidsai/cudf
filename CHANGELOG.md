@@ -138,6 +138,7 @@
 - PR #6400 Removed unused variables
 - PR #6409 Allow CuPy 8.x
 - PR #6407 Add RMM_LOGGING_LEVEL flag to Java docker build
+- PR #6425 Factor out csv parse_options creation to pure function
 - PR #6438 Fetch nvcomp v1.1.0 for JNI build
 - PR #6379 Add list hashing functionality to MD5
 - PR #6498 Add helper method to ColumnBuilder with some nits
