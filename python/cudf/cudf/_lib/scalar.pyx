@@ -86,8 +86,10 @@ cdef class Scalar:
         self._initialize_cache(value, dtype)
 
     def _initialize_cache(self, value, dtype):
-        self._host_value = value
-
+        if is_null_host_scalar(value):
+            self._host_value = cudf.NA
+        else:
+            self._host_value = value
         # need to save the host dtype, because this determines
         # the codepath for setting the device value later
         self._host_dtype = dtype
@@ -148,10 +150,7 @@ cdef class Scalar:
         Returns a host copy of the underlying device scalar.
         """
         if self._host_value_current:
-            if self.is_valid():
-                return self._host_value
-            else:
-                return cudf.NA
+            return self._host_value
         else:
             result = self.get_device_value()
             self._host_value = result
