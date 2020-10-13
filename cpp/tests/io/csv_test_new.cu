@@ -268,4 +268,31 @@ TEST_F(CsvReaderTest, CanGatherReducePositions3)
   EXPECT_EQ(static_cast<uint32_t>(9), h_indices[4]);
 }
 
+TEST_F(CsvReaderTest, CanGatherReducePositions4)
+{
+  auto input = std::vector<int>(256);
+  std::iota(input.begin(), input.end(), 0);
+
+  auto input_state = std::vector<ascend_state>(input.size());
+
+  std::transform(  //
+    input.begin(),
+    input.end(),
+    input_state.begin(),
+    [](int value) -> ascend_state { return {value}; });
+
+  rmm::device_vector<ascend_state> d_input_state(input_state.begin(), input_state.end());
+
+  auto d_output = inclusive_scan_copy_if<ascend_state>(d_input_state,  //
+                                                       ascend_reduce_functor{},
+                                                       ascend_detect_functor{},
+                                                       0);
+
+  thrust::host_vector<uint32_t> h_indices = d_output;
+
+  ASSERT_EQ(static_cast<uint32_t>(input.size()), h_indices.size());
+
+  for (uint64_t i = 0; i < input.size(); i++) { EXPECT_EQ(static_cast<uint32_t>(i), h_indices[i]); }
+}
+
 CUDF_TEST_PROGRAM_MAIN()

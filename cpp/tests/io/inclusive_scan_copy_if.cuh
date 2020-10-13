@@ -1,5 +1,10 @@
 #include "csv_test_new.cuh"
 
+// f(a)    -> b // upgrade input to state
+// f(b, a) -> b // integrate input to state
+// f(b, b) -> b // merge state with state
+// f(b)    -> c // downgrade state to output
+
 template <typename T,
           typename ReduceOp,
           typename UnaryPredicate,
@@ -11,18 +16,20 @@ __global__ void inclusive_scan_copy_if_kernel(device_span<T> input,
                                               ReduceOp reduce_op,
                                               UnaryPredicate predicate_op)
 {
-  using BlockLoad   = typename cub::BlockLoad<  //
+  using BlockLoad      = typename cub::BlockLoad<  //
     T,
     BLOCK_DIM_X,
     ITEMS_PER_THREAD,
     cub::BlockLoadAlgorithm::BLOCK_LOAD_TRANSPOSE>;
-  using BlockReduce = typename cub::BlockReduce<uint32_t, BLOCK_DIM_X>;
-  using BlockScan   = typename cub::BlockScan<uint32_t, BLOCK_DIM_X>;
+  using BlockReduce    = typename cub::BlockReduce<uint32_t, BLOCK_DIM_X>;
+  using BlockScan      = typename cub::BlockScan<uint32_t, BLOCK_DIM_X>;
+  using BlockScanValue = typename cub::BlockScan<T, BLOCK_DIM_X>;
 
   __shared__ union {
     typename BlockLoad::TempStorage load;
     typename BlockReduce::TempStorage reduce;
     typename BlockScan::TempStorage scan;
+    typename BlockScanValue::TempStorage value;
   } temp_storage;
 
   T thread_data[ITEMS_PER_THREAD];
@@ -31,54 +38,44 @@ __global__ void inclusive_scan_copy_if_kernel(device_span<T> input,
   uint32_t const thread_offset = threadIdx.x * ITEMS_PER_THREAD;
   uint32_t valid_items         = input.size() - block_offset;
 
-  BlockLoad(temp_storage.load).Load(input.data() + block_offset, thread_data, valid_items);
+  BlockLoad(temp_storage.load)  //
+    .Load(input.data() + block_offset, thread_data, valid_items);
+
+  BlockScanValue(temp_storage.value)  //
+    .InclusiveScan(thread_data, thread_data, reduce_op);
 
   uint32_t count_thread = 0;
 
-  // incorperate, predicate, assign
-
-  if (thread_offset < valid_items) {
-    if (predicate_op(thread_data[0])) {  //
-      count_thread++;
-    }
-  }
-
-  for (auto i = 1; i < ITEMS_PER_THREAD; i++) {
+  for (auto i = 0; i < ITEMS_PER_THREAD; i++) {
     if (thread_offset + i >= valid_items) { break; }
-    thread_data[i] = reduce_op(thread_data[i - 1], thread_data[i]);
     if (predicate_op(thread_data[i])) {  //
       count_thread++;
     }
   }
+  uint32_t count_block;
+  uint32_t thread_output_offset;
+
+  BlockScan(temp_storage.scan).InclusiveSum(count_thread, thread_output_offset, count_block);
+
+  // we used inclusive scan to get the sum for count_block, but we need the exclusive scan for
+  // thread output offset. We can get that by subtracting count_thread.
+  thread_output_offset = thread_output_offset - count_thread;
 
   if (output.data() == nullptr) {
     // This is the first pass, so just return the block sums.
-
-    uint32_t count_block = BlockReduce(temp_storage.reduce).Sum(count_thread);
-
+    // TODO: incorperate cross-thread and cross-block reduction and predicate
     if (threadIdx.x == 0) { block_temp[blockIdx.x + 1] = count_block; }
 
     return;
   }
 
-  // This is the second pass.
+  // scan + copy_if
 
   uint32_t const block_output_offset = block_temp[blockIdx.x];
-  uint32_t thread_output_offset;
-
-  BlockScan(temp_storage.scan).ExclusiveSum(count_thread, thread_output_offset);
 
   for (auto i = 0; i < ITEMS_PER_THREAD; i++) {
     if (thread_offset + i >= valid_items) { break; }
     if (predicate_op(thread_data[i])) {
-      printf("b(%i) t(%i) [%i + %i] = %i + %i | tdata(%i)\n",
-             blockIdx.x,
-             threadIdx.x,
-             block_output_offset,
-             thread_output_offset,
-             block_offset,
-             thread_offset,
-             thread_data[i]);
       output[block_output_offset + thread_output_offset++] = block_offset + thread_offset + i;
     }
   }
