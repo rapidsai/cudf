@@ -1984,7 +1984,7 @@ public class ColumnVectorTest extends CudfTestBase {
         ColumnVector expected = ColumnVector.fromLists(new HostColumnVector.ListType(true,
           new HostColumnVector.BasicType(true, DType.INT8)), list1, list2, list3, list4, list5,
           list6, list7, list8)) {
-      assertColumnsAreEqual(res, expected);
+      assertColumnsAreEqual(expected, res);
     }
   }
 
@@ -2000,7 +2000,7 @@ public class ColumnVectorTest extends CudfTestBase {
         ColumnVector res = cv.asByteList(true);
         ColumnVector expected = ColumnVector.fromLists(new HostColumnVector.ListType(true,
           new HostColumnVector.BasicType(true, DType.UINT8)), list1, list2, list3, list4, list5)) {
-      assertColumnsAreEqual(res, expected);
+      assertColumnsAreEqual(expected, res);
     }
   }
 
@@ -2018,7 +2018,7 @@ public class ColumnVectorTest extends CudfTestBase {
         ColumnVector res = cv.asByteList(false);
         ColumnVector expected = ColumnVector.fromLists(new HostColumnVector.ListType(true,
           new HostColumnVector.BasicType(true, DType.UINT8)), list1, list2, list3, list4, list5, list6)) {
-      assertColumnsAreEqual(res, expected);
+      assertColumnsAreEqual(expected, res);
     }
   }
 
@@ -2030,7 +2030,7 @@ public class ColumnVectorTest extends CudfTestBase {
         HostColumnVector hostRes = bytes.copyToHost()) {
       byte[] result = hostRes.getBytesFromList(0);
       for(int i = 0; i < result.length; i++) {
-        assertEquals(result[i], list.get(i).byteValue());
+        assertEquals(list.get(i).byteValue(), result[i]);
       }
     }
   }
