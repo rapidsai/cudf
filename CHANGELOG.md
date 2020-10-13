@@ -180,6 +180,7 @@
 - PR #6344 Fix rolling-window count for null input
 - PR #6353 Rename `skip_rows` parameter to `skiprows` in `read_parquet`, `read_avro` and `read_orc`
 - PR #6361 Detect overflow in hash join
+- PR #6386 Removed c-style pointer casts and redundant `reinterpret_cast`s in cudf::io
 - PR #6397 Fix `build.sh` when `PARALLEL_LEVEL` environment variable isn't set
 - PR #6366 Fix Warp Reduce calls in cuio statistics calculation to account for NaNs
 - PR #6345 Fix ambiguous constructor compile error with devtoolset
@@ -199,6 +200,7 @@
 - PR #6309 Make all CI `.sh` scripts have a consistent set of permissions
 - PR #6491 Remove repo URL from Java build-info
 - PR #6462 Bug fixes for ColumnBuilder
+
 
 
 # cuDF 0.15.0 (26 Aug 2020)
