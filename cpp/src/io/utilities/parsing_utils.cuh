@@ -18,6 +18,11 @@
 
 #include <cudf/detail/utilities/trie.cuh>
 #include <cudf/io/types.hpp>
+#include <cudf/utilities/span.hpp>
+
+#include <rmm/thrust_rmm_allocator.h>
+
+using cudf::detail::device_span;
 
 namespace cudf {
 namespace io {
@@ -25,7 +30,7 @@ namespace io {
  * @brief Structure for holding various options used when parsing and
  * converting CSV/json data to cuDF data type values.
  */
-struct ParseOptions {
+struct parse_options_view {
   char delimiter;
   char terminator;
   char quotechar;
@@ -36,10 +41,45 @@ struct ParseOptions {
   bool doublequote;
   bool dayfirst;
   bool skipblanklines;
-  SerialTrieNode* trueValuesTrie;
-  SerialTrieNode* falseValuesTrie;
-  SerialTrieNode* naValuesTrie;
+  device_span<SerialTrieNode const> trie_true;
+  device_span<SerialTrieNode const> trie_false;
+  device_span<SerialTrieNode const> trie_na;
   bool multi_delimiter;
+};
+
+struct parse_options {
+  char delimiter;
+  char terminator;
+  char quotechar;
+  char decimal;
+  char thousands;
+  char comment;
+  bool keepquotes;
+  bool doublequote;
+  bool dayfirst;
+  bool skipblanklines;
+  rmm::device_vector<SerialTrieNode> trie_true;
+  rmm::device_vector<SerialTrieNode> trie_false;
+  rmm::device_vector<SerialTrieNode> trie_na;
+  bool multi_delimiter;
+
+  parse_options_view view()
+  {
+    return {delimiter,
+            terminator,
+            quotechar,
+            decimal,
+            thousands,
+            comment,
+            keepquotes,
+            doublequote,
+            dayfirst,
+            skipblanklines,
+            trie_true,
+            trie_false,
+            trie_na,
+            multi_delimiter};
+  }
 };
 
 namespace gpu {
@@ -60,7 +100,7 @@ namespace gpu {
  */
 __device__ __inline__ char const* seek_field_end(char const* begin,
                                                  char const* end,
-                                                 ParseOptions const& opts,
+                                                 parse_options_view const& opts,
                                                  bool escape_char = false)
 {
   bool quotation   = false;
@@ -183,7 +223,9 @@ __inline__ __device__ bool is_infinity(char const* start, char const* end)
  * @return The parsed and converted value
  */
 template <typename T, int base = 10>
-__inline__ __device__ T parse_numeric(const char* begin, const char* end, ParseOptions const& opts)
+__inline__ __device__ T parse_numeric(const char* begin,
+                                      const char* end,
+                                      parse_options_view const& opts)
 {
   T value{};
   bool all_digits_valid = true;

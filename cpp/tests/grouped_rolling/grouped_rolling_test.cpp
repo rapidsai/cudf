@@ -281,7 +281,7 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
         if (include_nulls || !input.nullable() || cudf::bit_is_set(valid_mask, j)) count++;
       }
 
-      ref_valid[i] = (count >= min_periods);
+      ref_valid[i] = ((end_index - start_index) >= min_periods);
       if (ref_valid[i]) ref_data[i] = count;
     }
 
@@ -861,7 +861,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
         if (include_nulls || !input.nullable() || cudf::bit_is_set(valid_mask, j)) count++;
       }
 
-      ref_valid[i] = (count >= min_periods);
+      ref_valid[i] = ((end_index - start_index) >= min_periods);
       if (ref_valid[i]) ref_data[i] = count;
     }
 

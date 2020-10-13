@@ -632,6 +632,9 @@ set_target_properties(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
 
+# Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
+target_compile_definitions(cudf PRIVATE JITIFY_PRINT_LOG=0)
+
 # Creates executable stringify and uses it to convert types.h to c-str for use in JIT code
 add_executable(stringify "${JITIFY_INCLUDE_DIR}/stringify.cpp")
 execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}

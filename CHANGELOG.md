@@ -4,12 +4,16 @@
 
 ## Improvements
 
+- PR #6415 Support `datetime64` in row-wise op
 - PR #6457 Replace index type-dispatch call with indexalator in `cudf::gather`
 - PR #6413 Replace Python NVTX package with conda-forge source
 - PR #6442 Remove deprecated `DataFrame.from_gpu_matrix`, `DataFrame.to_gpu_matrix`, `DataFrame.add_column` APIs and method parameters
 - PR #6502 Add dictionary support to `cudf::merge`
+- PR #6504 Update Java bindings version to 0.17-SNAPSHOT
 
 ## Bug Fixes
+
+ - PR #6509 Disable JITIFY log printing
 
 
 # cuDF 0.16.0 (Date TBD)
@@ -128,6 +132,7 @@
 - PR #6346 Remove macros from CompactProtocolWriter
 - PR #6312 Conda recipe dependency cleanup
 - PR #6347 Add dictionary support to cudf::copy_range
+- PR #6352 Add specific Topic support for Kafka "list_topics()" metadata requests
 - PR #6332 Add support to return csv as string when `path=None` in `to_csv`
 - PR #6358 Add Parquet fuzz tests with varying function parameters
 - PR #6369 Add dictionary support to `cudf::find_and_replace`
@@ -137,8 +142,10 @@
 - PR #6400 Removed unused variables
 - PR #6409 Allow CuPy 8.x
 - PR #6407 Add RMM_LOGGING_LEVEL flag to Java docker build
+- PR #6425 Factor out csv parse_options creation to pure function
 - PR #6438 Fetch nvcomp v1.1.0 for JNI build
 - PR #6379 Add list hashing functionality to MD5
+- PR #6498 Add helper method to ColumnBuilder with some nits
 
 ## Bug Fixes
 
@@ -189,8 +196,10 @@
 - PR #6304 Fix span_tests.cu includes
 - PR #6331 Avoids materializing `RangeIndex` during frame concatnation (when not needed)
 - PR #6278 Add filter tests for struct columns
+- PR #6344 Fix rolling-window count for null input
 - PR #6353 Rename `skip_rows` parameter to `skiprows` in `read_parquet`, `read_avro` and `read_orc`
 - PR #6361 Detect overflow in hash join
+- PR #6386 Removed c-style pointer casts and redundant `reinterpret_cast`s in cudf::io
 - PR #6397 Fix `build.sh` when `PARALLEL_LEVEL` environment variable isn't set
 - PR #6366 Fix Warp Reduce calls in cuio statistics calculation to account for NaNs
 - PR #6345 Fix ambiguous constructor compile error with devtoolset
@@ -208,6 +217,10 @@
 - PR #6445 Add `dlpack` to run section of libcudf conda recipe to fix downstream build issues
 - PR #6450 Make java Column Builder row agnostic
 - PR #6309 Make all CI `.sh` scripts have a consistent set of permissions
+- PR #6491 Remove repo URL from Java build-info
+- PR #6462 Bug fixes for ColumnBuilder
+
+
 
 # cuDF 0.15.0 (26 Aug 2020)
 

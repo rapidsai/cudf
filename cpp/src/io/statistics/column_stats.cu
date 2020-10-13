@@ -163,25 +163,19 @@ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Stora
     if (is_valid) {
       switch (dtype) {
         case dtype_int32:
-        case dtype_date32:
-          v = reinterpret_cast<const int32_t *>(s->col.column_data_base)[row];
-          break;
+        case dtype_date32: v = static_cast<const int32_t *>(s->col.column_data_base)[row]; break;
         case dtype_int64:
-        case dtype_decimal64:
-          v = reinterpret_cast<const int64_t *>(s->col.column_data_base)[row];
-          break;
-        case dtype_int16:
-          v = reinterpret_cast<const int16_t *>(s->col.column_data_base)[row];
-          break;
+        case dtype_decimal64: v = static_cast<const int64_t *>(s->col.column_data_base)[row]; break;
+        case dtype_int16: v = static_cast<const int16_t *>(s->col.column_data_base)[row]; break;
         case dtype_timestamp64:
-          v = reinterpret_cast<const int64_t *>(s->col.column_data_base)[row];
+          v = static_cast<const int64_t *>(s->col.column_data_base)[row];
           if (s->col.ts_scale < -1) {
             v /= -s->col.ts_scale;
           } else if (s->col.ts_scale > 1) {
             v *= s->col.ts_scale;
           }
           break;
-        default: v = reinterpret_cast<const int8_t *>(s->col.column_data_base)[row]; break;
+        default: v = static_cast<const int8_t *>(s->col.column_data_base)[row]; break;
       }
       vmin = min(vmin, v);
       vmax = max(vmax, v);
@@ -253,9 +247,9 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
                           : 0;
     if (is_valid) {
       if (dtype == dtype_float64) {
-        v = reinterpret_cast<const double *>(s->col.column_data_base)[row];
+        v = static_cast<const double *>(s->col.column_data_base)[row];
       } else {
-        v = reinterpret_cast<const float *>(s->col.column_data_base)[row];
+        v = static_cast<const float *>(s->col.column_data_base)[row];
       }
       if (v < vmin) { vmin = v; }
       if (v > vmax) { vmax = v; }
@@ -332,7 +326,7 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &s
                           ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1
                           : 0;
     if (is_valid) {
-      const nvstrdesc_s *str_col = reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base);
+      const nvstrdesc_s *str_col = static_cast<const nvstrdesc_s *>(s->col.column_data_base);
       uint32_t len               = (uint32_t)str_col[row].count;
       const char *ptr            = str_col[row].ptr;
       len_sum += len;
