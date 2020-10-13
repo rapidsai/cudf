@@ -343,7 +343,7 @@ std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lh
 };
 
 /**
- * @brief Returns `true` if `binary_opeator` `op` is a basic arithmetic binary operation
+ * @brief Returns `true` if `binary_operator` `op` is a basic arithmetic binary operation
  */
 bool is_basic_arithmetic_binop(binary_operator op)
 {
@@ -354,7 +354,7 @@ bool is_basic_arithmetic_binop(binary_operator op)
 }
 
 /**
- * @brief Returns `true` if `binary_opeator` `op` is a comparison binary operation
+ * @brief Returns `true` if `binary_operator` `op` is a comparison binary operation
  */
 bool is_comparison_binop(binary_operator op)
 {
@@ -367,7 +367,7 @@ bool is_comparison_binop(binary_operator op)
 }
 
 /**
- * @brief Returns `true` if `binary_opeator` `op` is supported by `fixed_point`
+ * @brief Returns `true` if `binary_operator` `op` is supported by `fixed_point`
  */
 bool is_supported_fixed_point_binop(binary_operator op)
 {
@@ -570,7 +570,7 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
 {
   using namespace numeric;
 
-  CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsopported fixed_point binary operation");
+  CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
   CUDF_EXPECTS(lhs.type().id() == rhs.type().id(),
                "Both columns must be of the same fixed_point type");
 
