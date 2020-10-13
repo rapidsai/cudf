@@ -3744,10 +3744,19 @@ class DataFrame(Frame, Serializable):
 
 
     def agg(self, aggs):
-        result = cudf.DataFrame()
-        for agg in aggs:
-            result[agg] = getattr(self,agg)()
-        return result
+        if isinstance(aggs, list):
+            result = cudf.DataFrame()
+            for agg in aggs:
+                result[agg] = getattr(self,agg)()
+        elif isinstance(aggs, str):
+            result = cudf.DataFrame()
+            result[aggs] = getattr(self, agg)()
+        else:
+            raise ValueError("argument must be a string or list")
+        
+        dtypes = [self[col].dtype for col in self._column_names]
+        common_dtype = np.find_common_type(dtypes)
+        return result.astype(common_dtype).T 
 
 
     def nlargest(self, n, columns, keep="first"):

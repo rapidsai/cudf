@@ -7563,11 +7563,48 @@ def test_equals_dtypes():
     assert_eq(expect, got)
 
 
-def test_agg_for_dataframes():
-    pdf = pd.DataFrame({"a": [3,5,6]})
-    gdf = gd.DataFrame({"a": [3,5,6]})
+@pytest.mark.parametrize("data",[
+                                {"a":[1,2,3], 
+                                 "b":[3.0, 4.0, 5.0], 
+                                 "c":[True, True, False],
+                                },
 
-    got = pdf.agg("sum")
-    expect = gdf.agg("sum")
+                                {"a":[1.0,2.0,3.0],
+                                 "b":[3.0, 4.0, 5.0],
+                                 "c":[True, True, False],
+                                },
+
+                                {"a":[1,2,3],
+                                 "b":[3,4,5],
+                                 "c":[True, True, False],
+                                },
+
+                                {"a":[1,2,3],
+                                 "b":[True, True, False],
+                                 "c":[False, True, False],
+                                },
+
+                                {"a":[1.0,2.0,3.0],
+                                 "b":[True, True, False],
+                                 "c":[False, True, False],
+                                },
+
+                                {"a":[1,2,3],
+                                 "b":[3,4,5],
+                                 "c":[2.0, 3.0, 4.0],
+                                },
+
+                                {"a":[1,2,3],
+                                 "b":[2.0, 3.0, 4.0],
+                                 "c":[5.0, 6.0, 4.0],
+                                },
+                                ],
+                        )                  
+def test_agg_for_dataframes(data):
+    pdf = pd.DataFrame(data)
+    gdf = gd.DataFrame(data)
+
+    expect = pdf.agg(min,['sum'])
+    got = gdf.agg(min,['sum'])
 
     assert_eq(expect, got)
