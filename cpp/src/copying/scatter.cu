@@ -297,7 +297,7 @@ std::unique_ptr<table> scatter(std::vector<std::unique_ptr<scalar>> const& sourc
                  target.begin(),
                  result.begin(),
                  [=](auto const& source_scalar, auto const& target_col) {
-                   return type_dispatcher(source_scalar->type(),
+                   return type_dispatcher(target_col.type(),
                                           scatter_functor,
                                           source_scalar,
                                           scatter_iter,
