@@ -39,7 +39,7 @@ class temp_directory {
 
   static int rm_files(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb)
   {
-    return remove(pathname);
+    return std::remove(pathname);
   }
 
   ~temp_directory()
