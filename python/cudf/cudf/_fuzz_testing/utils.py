@@ -2,6 +2,8 @@
 
 import random
 
+import fastavro
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 
@@ -101,3 +103,56 @@ def compare_content(a, b):
         raise ValueError(
             f"Contents of two files are different:\n left: {a} \n right: {b}"
         )
+
+
+PANDAS_TO_AVRO_TYPES = {
+    np.dtype("int8"): "int",
+    pd.Int8Dtype(): "int",
+    pd.Int16Dtype(): "int",
+    pd.Int32Dtype(): "int",
+    pd.Int64Dtype(): "long",
+    pd.BooleanDtype(): "boolean",
+    np.dtype("bool_"): "boolean",
+    np.dtype("int16"): "int",
+    np.dtype("int32"): "int",
+    np.dtype("int64"): "long",
+    np.dtype("O"): "string",
+    np.dtype("float32"): "float",
+    np.dtype("float64"): "double",
+    np.dtype("<M8[ns]"): {"type": "long", "logicalType": "timestamp-millis"},
+    np.dtype("<M8[ms]"): {"type": "long", "logicalType": "timestamp-millis"},
+    np.dtype("<M8[us]"): {"type": "long", "logicalType": "timestamp-micros"},
+}
+
+
+def get_dtype_info(dtype):
+    if dtype in PANDAS_TO_AVRO_TYPES:
+        return PANDAS_TO_AVRO_TYPES[dtype]
+    else:
+        print(dtype)
+        raise TypeError(
+            "Unsupported dtype according to avro spec:"
+            " https://avro.apache.org/docs/current/spec.html"
+        )
+
+
+def get_schema(df):
+
+    fields = [
+        {"name": col_name, "type": get_dtype_info(col_dtype)}
+        for col_name, col_dtype in df.dtypes.items()
+    ]
+    schema = {"type": "record", "name": "Root", "fields": fields}
+    return schema
+
+
+def pandas_to_avro(df, file_name=None, file_io_obj=None):
+    schema = get_schema(df)
+    avro_schema = fastavro.parse_schema(schema)
+
+    records = df.to_dict("records")
+    if file_name is not None:
+        with open(file_name, "wb") as out:
+            fastavro.writer(out, avro_schema, records)
+    elif file_io_obj is not None:
+        fastavro.writer(file_io_obj, avro_schema, records)
