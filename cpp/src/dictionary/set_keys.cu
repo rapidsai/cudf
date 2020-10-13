@@ -165,9 +165,6 @@ std::vector<std::unique_ptr<column>> match_dictionaries(std::vector<dictionary_c
   return result;
 }
 
-/**
- * @copydoc match_dictionaries(std::vector<table_view>,rmm::mr::device_memory_resource,cudaStream_t)
- */
 std::pair<std::vector<std::unique_ptr<column>>, std::vector<table_view>> match_dictionaries(
   std::vector<table_view> tables, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
 {

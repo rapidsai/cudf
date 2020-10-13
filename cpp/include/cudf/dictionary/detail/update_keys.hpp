@@ -25,6 +25,8 @@ namespace detail {
 /**
  * @copydoc cudf::dictionary::add_keys(dictionary_column_view const&,column_view
  * const&,mm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> add_keys(
   dictionary_column_view const& dictionary_column,
@@ -35,6 +37,8 @@ std::unique_ptr<column> add_keys(
 /**
  * @copydoc cudf::dictionary::remove_keys(dictionary_column_view const&,column_view
  * const&,mm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> remove_keys(
   dictionary_column_view const& dictionary_column,
@@ -45,6 +49,8 @@ std::unique_ptr<column> remove_keys(
 /**
  * @copydoc cudf::dictionary::remove_unused_keys(dictionary_column_view
  * const&,mm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> remove_unused_keys(
   dictionary_column_view const& dictionary_column,
@@ -54,6 +60,8 @@ std::unique_ptr<column> remove_unused_keys(
 /**
  * @copydoc cudf::dictionary::set_keys(dictionary_column_view
  * const&,mm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> set_keys(
   dictionary_column_view const& dictionary_column,
