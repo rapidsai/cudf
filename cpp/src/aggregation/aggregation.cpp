@@ -66,7 +66,7 @@ std::unique_ptr<aggregation> make_sum_of_squares_aggregation()
 /// Factory to create a MEAN aggregation
 std::unique_ptr<aggregation> make_mean_aggregation()
 {
-  return std::make_unique<aggregation>(aggregation::MEAN);
+  return std::make_unique<detail::mean_aggregation>(aggregation::MEAN);
 }
 /// Factory to create a VARIANCE aggregation
 std::unique_ptr<aggregation> make_variance_aggregation(size_type ddof)

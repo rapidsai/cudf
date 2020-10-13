@@ -27,6 +27,18 @@
 
 namespace cudf {
 namespace detail {
+
+class compound_aggregation {
+  // TODO (not really needed?) : virtual public aggregation {
+ public:
+  // compound_aggregation(aggregation::Kind a) : aggregation{a} {}
+  virtual std::vector<aggregation> get_simple_aggregations() const
+  {
+    return {};
+    // return {*this};
+  }
+};
+
 /**
  * @brief A wrapper to simplify inheritance of virtual methods from aggregation
  *
@@ -112,9 +124,29 @@ struct lead_lag_aggregation final : derived_aggregation<lead_lag_aggregation> {
 /**
  * @brief Derived class for specifying a standard deviation/variance aggregation
  */
-struct std_var_aggregation final : derived_aggregation<std_var_aggregation> {
-  std_var_aggregation(aggregation::Kind k, size_type ddof) : derived_aggregation{k}, _ddof{ddof} {}
+struct mean_aggregation final : compound_aggregation, aggregation {
+  mean_aggregation(aggregation::Kind k) : compound_aggregation{}, aggregation{k} {}
+
+  std::vector<aggregation> get_simple_aggregations() const override
+  {
+    return {aggregation{aggregation::SUM}, aggregation{aggregation::COUNT_VALID}};
+  }
+};
+
+/**
+ * @brief Derived class for specifying a standard deviation/variance aggregation
+ */
+struct std_var_aggregation final : derived_aggregation<std_var_aggregation>, compound_aggregation {
+  std_var_aggregation(aggregation::Kind k, size_type ddof)
+    : derived_aggregation{k}, compound_aggregation{}, _ddof{ddof}
+  {
+  }
   size_type _ddof;  ///< Delta degrees of freedom
+
+  std::vector<aggregation> get_simple_aggregations() const override
+  {
+    return {aggregation{aggregation::SUM}, aggregation{aggregation::COUNT_VALID}};
+  }
 
  protected:
   friend class derived_aggregation<std_var_aggregation>;

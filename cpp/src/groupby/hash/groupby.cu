@@ -56,11 +56,15 @@ namespace {
  * @brief List of aggregation operations that can be computed with a hash-based
  * implementation.
  */
-constexpr std::array<aggregation::Kind, 7> hash_aggregations{
+constexpr std::array<aggregation::Kind, 8> hash_aggregations{
     aggregation::SUM, aggregation::MIN, aggregation::MAX,
     aggregation::COUNT_VALID, aggregation::COUNT_ALL,
     aggregation::ARGMIN, aggregation::ARGMAX,
     aggregation::MEAN};
+
+//Could be hash: SUM, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL, ANY, ALL, SUM_OF_SQUARES,
+// Compound: MEAN(SUM, COUNT_VALID), VARIANCE, STD(MEAN (SUM, COUNT_VALID), COUNT_VALID),
+// ARGMAX, ARGMIN
 
 template <class T, size_t N>
 constexpr bool array_contains(std::array<T, N> const& haystack, T needle) {
@@ -89,48 +93,117 @@ bool constexpr is_hash_aggregation(aggregation::Kind t)
          (t == aggregation::ARGMIN) or (t == aggregation::ARGMAX) or (t == aggregation::MEAN);
 }
 
-// flatten aggs to filter in single pass aggs
-std::tuple<table_view, std::vector<aggregation::Kind>, std::vector<size_t>>
-flatten_single_pass_aggs(std::vector<aggregation_request> const& requests)
-{
+struct flatten_to_single_pass_aggregation {
   std::vector<column_view> columns;
   std::vector<aggregation::Kind> agg_kinds;
   std::vector<size_t> col_ids;
 
+ private:
+  // TODO: should work only for non-compound_aggregation classes? how?
+  void insert_agg(size_t i, column_view const& request_values, aggregation::Kind k)
+  {
+    agg_kinds.push_back(k);
+    columns.push_back(request_values);
+    col_ids.push_back(i);
+  }
+
+  // TODO: should work only for non-compound_aggregation classes? how? dynamic_cast?
+  void insert_simple_aggs(size_t i, column_view const& request_values, aggregation const& agg)
+  {
+    insert_agg(i, request_values, agg.kind);
+  }
+
+  void insert_simple_aggs(size_t i,
+                          column_view const& request_values,
+                          cudf::detail::compound_aggregation const& agg)
+  {
+    for (auto const& agg_s : agg.get_simple_aggregations())
+      insert_agg(i, request_values, agg_s.kind);
+  }
+
+ public:
+  template <aggregation::Kind k>
+  void operator()(size_t i, column_view const& request_values, aggregation const& agg)
+  {
+    if (is_hash_aggregation(agg.kind)) {
+      if (is_fixed_width(request_values.type())) { insert_simple_aggs(i, request_values, agg); }
+    }
+  }
+
+  auto get_flattened()
+  {
+    return std::make_tuple(table_view(columns), std::move(agg_kinds), std::move(col_ids));
+  }
+};
+
+template <>
+void flatten_to_single_pass_aggregation::operator()<aggregation::COUNT_VALID>(
+  size_t i, column_view const& request_values, aggregation const& agg)
+{
+  insert_simple_aggs(i, request_values, agg);
+}
+template <>
+void flatten_to_single_pass_aggregation::operator()<aggregation::COUNT_ALL>(
+  size_t i, column_view const& request_values, aggregation const& agg)
+{
+  insert_simple_aggs(i, request_values, agg);
+}
+
+template <>
+void flatten_to_single_pass_aggregation::operator()<aggregation::MIN>(
+  size_t i, column_view const& request_values, aggregation const& agg)
+{
+  if (request_values.type().id() == type_id::STRING) {
+    insert_simple_aggs(i, request_values, {aggregation::ARGMIN});
+  } else {
+    insert_simple_aggs(i, request_values, agg);
+  }
+}
+
+template <>
+void flatten_to_single_pass_aggregation::operator()<aggregation::MAX>(
+  size_t i, column_view const& request_values, aggregation const& agg)
+{
+  if (request_values.type().id() == type_id::STRING) {
+    insert_simple_aggs(i, request_values, {aggregation::ARGMAX});
+  } else {
+    insert_simple_aggs(i, request_values, agg);
+  }
+}
+
+template <>
+void flatten_to_single_pass_aggregation::operator()<aggregation::MEAN>(
+  size_t i, column_view const& request_values, aggregation const& agg)
+{
+  auto mean_agg = static_cast<cudf::detail::mean_aggregation const&>(agg);
+  insert_simple_aggs(
+    i, request_values, static_cast<cudf::detail::compound_aggregation const&>(mean_agg));
+}
+
+template <>
+void flatten_to_single_pass_aggregation::operator()<aggregation::VARIANCE>(
+  size_t i, column_view const& request_values, aggregation const& agg)
+{
+  auto var_agg = static_cast<cudf::detail::std_var_aggregation const&>(agg);
+  insert_simple_aggs(
+    i, request_values, static_cast<cudf::detail::compound_aggregation const&>(var_agg));
+}
+
+// flatten aggs to filter in single pass aggs
+std::tuple<table_view, std::vector<aggregation::Kind>, std::vector<size_t>>
+flatten_single_pass_aggs(std::vector<aggregation_request> const& requests)
+{
+  flatten_to_single_pass_aggregation flattened{};
   for (size_t i = 0; i < requests.size(); i++) {
     auto const& request = requests[i];
     auto const& agg_v   = request.aggregations;
 
-    auto insert_agg = [&agg_kinds, &columns, &col_ids, &request, i](aggregation::Kind k) {
-      agg_kinds.push_back(k);
-      columns.push_back(request.values);
-      col_ids.push_back(i);
-    };
-
     for (auto&& agg : agg_v) {
-      if (is_hash_aggregation(agg->kind)) {
-        if (is_fixed_width(request.values.type()) or agg->kind == aggregation::COUNT_VALID or
-            agg->kind == aggregation::COUNT_ALL) {
-          if (agg->kind == aggregation::MEAN) {
-            insert_agg(aggregation::SUM);
-            insert_agg(aggregation::COUNT_VALID);
-          } else {
-            insert_agg(agg->kind);
-          }
-        } else if (request.values.type().id() == type_id::STRING) {
-          // For string type, only ARGMIN, ARGMAX, MIN, and MAX are supported
-          if (agg->kind == aggregation::ARGMIN or agg->kind == aggregation::ARGMAX) {
-            insert_agg(agg->kind);
-          } else if (agg->kind == aggregation::MIN) {
-            insert_agg(aggregation::ARGMIN);
-          } else if (agg->kind == aggregation::MAX) {
-            insert_agg(aggregation::ARGMAX);
-          }
-        }
-      }
+      aggregation_dispatcher(agg->kind, flattened, i, request.values, *agg);
     }
   }
-  return std::make_tuple(table_view(columns), std::move(agg_kinds), std::move(col_ids));
+  return flattened.get_flattened();
+  // return std::make_tuple(table_view(columns), std::move(agg_kinds), std::move(col_ids));
 }
 
 /**
