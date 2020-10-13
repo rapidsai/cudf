@@ -181,8 +181,8 @@ inline __device__ uint64_t unaligned_load64(const uint8_t *p)
 template <unsigned int nthreads, bool sync_before_store>
 inline __device__ void memcpy_block(void *dstv, const void *srcv, uint32_t len, uint32_t t)
 {
-  uint8_t *dst       = reinterpret_cast<uint8_t *>(dstv);
-  const uint8_t *src = reinterpret_cast<const uint8_t *>(srcv);
+  uint8_t *dst       = static_cast<uint8_t *>(dstv);
+  const uint8_t *src = static_cast<const uint8_t *>(srcv);
   uint32_t dst_align_bytes, src_align_bytes, src_align_bits;
   // Align output to 32-bit
   dst_align_bytes = 3 & -reinterpret_cast<intptr_t>(dst);

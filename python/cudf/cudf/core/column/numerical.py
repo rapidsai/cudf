@@ -3,11 +3,11 @@
 from numbers import Number
 
 import numpy as np
+from nvtx import annotate
 from pandas.api.types import is_integer_dtype
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.nvtx import annotate
 from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.scalar import Scalar
 from cudf.core.buffer import Buffer
