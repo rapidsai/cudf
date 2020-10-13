@@ -761,19 +761,19 @@ __global__ void __launch_bounds__(block_size)
       lengths_to_positions(s->buf.u32, 512, t);
       __syncthreads();
       if (valid) {
-        int nz_idx          = (s->nnz + s->buf.u32[t] - 1) & (maxnumvals - 1);
-        const uint8_t *base = reinterpret_cast<const uint8_t *>(s->chunk.column_data_base);
+        int nz_idx       = (s->nnz + s->buf.u32[t] - 1) & (maxnumvals - 1);
+        void const *base = s->chunk.column_data_base;
         switch (s->chunk.type_kind) {
           case INT:
           case DATE:
-          case FLOAT: s->vals.u32[nz_idx] = reinterpret_cast<const uint32_t *>(base)[row]; break;
+          case FLOAT: s->vals.u32[nz_idx] = static_cast<const uint32_t *>(base)[row]; break;
           case DOUBLE:
-          case LONG: s->vals.u64[nz_idx] = reinterpret_cast<const uint64_t *>(base)[row]; break;
-          case SHORT: s->vals.u32[nz_idx] = reinterpret_cast<const uint16_t *>(base)[row]; break;
+          case LONG: s->vals.u64[nz_idx] = static_cast<const uint64_t *>(base)[row]; break;
+          case SHORT: s->vals.u32[nz_idx] = static_cast<const uint16_t *>(base)[row]; break;
           case BOOLEAN:
-          case BYTE: s->vals.u8[nz_idx] = reinterpret_cast<const uint8_t *>(base)[row]; break;
+          case BYTE: s->vals.u8[nz_idx] = static_cast<const uint8_t *>(base)[row]; break;
           case TIMESTAMP: {
-            int64_t ts       = reinterpret_cast<const int64_t *>(base)[row];
+            int64_t ts       = static_cast<const int64_t *>(base)[row];
             int32_t ts_scale = kTimeScale[min(s->chunk.scale, 9)];
             int64_t seconds  = ts / ts_scale;
             int32_t nanos    = (ts - seconds * ts_scale);
@@ -804,12 +804,12 @@ __global__ void __launch_bounds__(block_size)
           }
           case STRING:
             if (s->chunk.encoding_kind == DICTIONARY_V2) {
-              uint32_t dict_idx = reinterpret_cast<const uint32_t *>(base)[row];
+              uint32_t dict_idx = static_cast<const uint32_t *>(base)[row];
               if (dict_idx > 0x7fffffffu)
-                dict_idx = reinterpret_cast<const uint32_t *>(base)[dict_idx & 0x7fffffffu];
+                dict_idx = static_cast<const uint32_t *>(base)[dict_idx & 0x7fffffffu];
               s->vals.u32[nz_idx] = dict_idx;
             } else {
-              const nvstrdesc_s *str_desc = reinterpret_cast<const nvstrdesc_s *>(base) + row;
+              const nvstrdesc_s *str_desc = static_cast<const nvstrdesc_s *>(base) + row;
               const char *ptr             = str_desc->ptr;
               uint32_t count              = static_cast<uint32_t>(str_desc->count);
               s->u.strenc.str_data[s->buf.u32[t] - 1] = ptr;
@@ -952,7 +952,7 @@ __global__ void __launch_bounds__(block_size)
     chunks[group_id * num_columns + col_id].strm_len[t] = s->strm_pos[t];
     if (!s->chunk.streams[t]) {
       chunks[group_id * num_columns + col_id].streams[t] =
-        reinterpret_cast<uint8_t *>(const_cast<void *>(s->chunk.column_data_base)) +
+        static_cast<uint8_t *>(const_cast<void *>(s->chunk.column_data_base)) +
         s->chunk.start_row * s->chunk.dtype_len;
     }
   }
@@ -999,7 +999,7 @@ __global__ void __launch_bounds__(block_size)
     s->nrows         = s->u.dict_stripe.num_strings;
     s->cur_row       = 0;
   }
-  str_desc  = reinterpret_cast<const nvstrdesc_s *>(s->u.dict_stripe.column_data_base);
+  str_desc  = static_cast<const nvstrdesc_s *>(s->u.dict_stripe.column_data_base);
   dict_data = s->u.dict_stripe.dict_data;
   __syncthreads();
   if (s->chunk.encoding_kind != DICTIONARY_V2) {
@@ -1204,13 +1204,13 @@ __global__ void __launch_bounds__(1024) gpuCompactCompressedBlocks(StripeStream 
       uint32_t blk_size24;
       if (dst_len >= src_len) {
         // Copy from uncompressed source
-        src                    = reinterpret_cast<const uint8_t *>(blk_in->srcDevice);
+        src                    = static_cast<const uint8_t *>(blk_in->srcDevice);
         blk_out->bytes_written = src_len;
         dst_len                = src_len;
         blk_size24             = dst_len * 2 + 1;
       } else {
         // Compressed block
-        src        = reinterpret_cast<const uint8_t *>(blk_in->dstDevice);
+        src        = static_cast<const uint8_t *>(blk_in->dstDevice);
         blk_size24 = dst_len * 2 + 0;
       }
       dst[0]     = static_cast<uint8_t>(blk_size24 >> 0);

@@ -701,7 +701,7 @@ class custom_test_data_sink : public cudf::io::data_sink {
 
   void host_write(void const* data, size_t size) override
   {
-    outfile_.write(reinterpret_cast<char const*>(data), size);
+    outfile_.write(static_cast<char const*>(data), size);
   }
 
   bool supports_device_write() const override { return true; }
@@ -712,7 +712,7 @@ class custom_test_data_sink : public cudf::io::data_sink {
     CUDA_TRY(cudaMallocHost(&ptr, size));
     CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
-    outfile_.write(reinterpret_cast<char const*>(ptr), size);
+    outfile_.write(ptr, size);
     CUDA_TRY(cudaFreeHost(ptr));
   }
 
@@ -1131,10 +1131,7 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
 
   virtual ~custom_test_memmap_sink() { mm_writer->flush(); }
 
-  void host_write(void const* data, size_t size) override
-  {
-    mm_writer->host_write(reinterpret_cast<char const*>(data), size);
-  }
+  void host_write(void const* data, size_t size) override { mm_writer->host_write(data, size); }
 
   bool supports_device_write() const override { return supports_device_writes; }
 
@@ -1144,7 +1141,7 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
     CUDA_TRY(cudaMallocHost(&ptr, size));
     CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream));
     CUDA_TRY(cudaStreamSynchronize(stream));
-    mm_writer->host_write(reinterpret_cast<char const*>(ptr), size);
+    mm_writer->host_write(ptr, size);
     CUDA_TRY(cudaFreeHost(ptr));
   }
 
