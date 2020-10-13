@@ -205,7 +205,8 @@ extern "C" __global__ void __launch_bounds__(128)
   if (chunk < num_chunks) {
     // NOTE: Assumes that sizeof(ColumnChunkDesc) <= 128
     if (t < sizeof(ColumnChunkDesc) / sizeof(uint32_t)) {
-      ((uint32_t *)&bs->ck)[t] = ((const uint32_t *)&chunks[chunk])[t];
+      reinterpret_cast<uint32_t *>(&bs->ck)[t] =
+        reinterpret_cast<const uint32_t *>(&chunks[chunk])[t];
     }
   }
   __syncthreads();
@@ -273,7 +274,8 @@ extern "C" __global__ void __launch_bounds__(128)
       if (index_out >= 0 && index_out < max_num_pages) {
         // NOTE: Assumes that sizeof(PageInfo) <= 128
         if (t < sizeof(PageInfo) / sizeof(uint32_t)) {
-          ((uint32_t *)(page_info + index_out))[t] = ((const uint32_t *)&bs->page)[t];
+          reinterpret_cast<uint32_t *>(page_info + index_out)[t] =
+            reinterpret_cast<const uint32_t *>(&bs->page)[t];
         }
       }
       num_values = SHFL0(num_values);
@@ -309,7 +311,7 @@ extern "C" __global__ void __launch_bounds__(128)
   if (chunk < num_chunks) {
     // NOTE: Assumes that sizeof(ColumnChunkDesc) <= 128
     if (t < sizeof(ColumnChunkDesc) / sizeof(uint32_t)) {
-      ((uint32_t *)ck)[t] = ((const uint32_t *)&chunks[chunk])[t];
+      reinterpret_cast<uint32_t *>(ck)[t] = reinterpret_cast<const uint32_t *>(&chunks[chunk])[t];
     }
   }
   __syncthreads();
@@ -333,7 +335,7 @@ extern "C" __global__ void __launch_bounds__(128)
         }
       }
       // TODO: Could store 8 entries in shared mem, then do a single warp-wide store
-      dict_index[i].ptr   = (const char *)(dict + pos + 4);
+      dict_index[i].ptr   = reinterpret_cast<const char *>(dict + pos + 4);
       dict_index[i].count = len;
     }
   }
