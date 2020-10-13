@@ -147,30 +147,22 @@ TEST_F(CsvReaderTest, X)
 
 TEST_F(CsvReaderTest, CanGatherPositions)
 {
-  auto input = std::string("n__n___nn___n__n");
+  auto input = std::string("00______0__0____0____0__0__");
   rmm::device_vector<uint8_t> d_input(input.c_str(), input.c_str() + input.size());
 
-  auto d_indices = find(d_input, 'n');
+  auto d_output = find(d_input, '0');
 
-  thrust::host_vector<uint32_t> h_indices = d_indices;
+  thrust::host_vector<uint32_t> h_indices = d_output;
 
-  // expected counts...
-  EXPECT_EQ(static_cast<uint32_t>(5), h_indices.size());
+  EXPECT_EQ(static_cast<uint32_t>(7), h_indices.size());
+
   EXPECT_EQ(static_cast<uint32_t>(0), h_indices[0]);
-
-  EXPECT_EQ(static_cast<uint32_t>(2), h_indices[1]);
-  EXPECT_EQ(static_cast<uint32_t>(3), h_indices[2]);
-  EXPECT_EQ(static_cast<uint32_t>(4), h_indices[3]);
-  EXPECT_EQ(static_cast<uint32_t>(6), h_indices[4]);
-
-  // // expected indices...
-  // EXPECT_EQ(static_cast<uint32_t>(6), h_indices.size());
-  // EXPECT_EQ(static_cast<uint32_t>(0), h_indices[0]);
-  // EXPECT_EQ(static_cast<uint32_t>(3), h_indices[1]);
-  // EXPECT_EQ(static_cast<uint32_t>(7), h_indices[2]);
-  // EXPECT_EQ(static_cast<uint32_t>(8), h_indices[3]);
-  // EXPECT_EQ(static_cast<uint32_t>(12), h_indices[4]);
-  // EXPECT_EQ(static_cast<uint32_t>(15), h_indices[5]);
+  EXPECT_EQ(static_cast<uint32_t>(1), h_indices[1]);
+  EXPECT_EQ(static_cast<uint32_t>(8), h_indices[2]);
+  EXPECT_EQ(static_cast<uint32_t>(11), h_indices[3]);
+  EXPECT_EQ(static_cast<uint32_t>(16), h_indices[4]);
+  EXPECT_EQ(static_cast<uint32_t>(21), h_indices[5]);
+  EXPECT_EQ(static_cast<uint32_t>(24), h_indices[6]);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

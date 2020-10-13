@@ -12,6 +12,7 @@
 
 #include <cub/block/block_load.cuh>
 #include <cub/block/block_reduce.cuh>
+#include <cub/block/block_scan.cuh>
 
 #include <algorithm>
 #include <cstdint>
@@ -150,6 +151,11 @@ __global__ void reduce_kernel(device_span<uint32_t> input, device_span<uint32_t>
   if (threadIdx.x == 0) { output[blockIdx.x] = block_result; }
 }
 
+inline constexpr int div_round_up(int dividend, int divsor)
+{
+  return dividend / divsor + (dividend % divsor) != 0;
+}
+
 uint32_t reduce(device_span<uint32_t> d_input)
 {
   enum { BLOCK_DIM_X = 32, ITEMS_PER_THREAD = 8 };
@@ -174,96 +180,111 @@ uint32_t reduce(device_span<uint32_t> d_input)
 }
 
 template <int BLOCK_DIM_X, int ITEMS_PER_THREAD>
-__global__ void find_count_kernel(device_span<uint8_t const> input,
-                                  device_span<uint32_t> output_sizes,
-                                  uint8_t needle)
-{
-  using BlockLoad   = typename cub::BlockLoad<uint8_t,
-                                            BLOCK_DIM_X,
-                                            ITEMS_PER_THREAD,
-                                            cub::BlockLoadAlgorithm::BLOCK_LOAD_TRANSPOSE>;
-  using BlockReduce = typename cub::BlockReduce<uint32_t, BLOCK_DIM_X>;
-
-  // __shared__ union {
-  typename BlockLoad::TempStorage temp_storage_a;
-  typename BlockReduce::TempStorage temp_storage_b;
-  // } temp_storage;
-
-  uint8_t thread_data[ITEMS_PER_THREAD];
-
-  uint32_t block_offset = blockIdx.x * blockDim.x;
-  uint32_t valid_items  = input.size() - block_offset;
-
-  BlockLoad(temp_storage_a).Load(input.data() + block_offset, thread_data, valid_items);
-
-  uint32_t count = 0;
-
-  for (auto i = 0; i < valid_items; i++) {  //
-    count += thread_data[i] == needle;
-  }
-
-  count = BlockReduce(temp_storage_b).Sum(count);
-
-  if (threadIdx.x == 0) {  //
-    output_sizes[blockIdx.x + 1] = count;
-  }
-}
-
-template <int BLOCK_DIM_X, int ITEMS_PER_THREAD>
 __global__ void find_kernel(device_span<uint8_t const> input,
-                            device_span<uint32_t const> output_offsets,
+                            device_span<uint32_t> temp_block_storage,
                             device_span<uint32_t> output,
                             uint8_t needle)
 {
+  if (threadIdx.x == 0) {
+    printf("find_kernel<%i, %i>: bidx(%i)\n", BLOCK_DIM_X, ITEMS_PER_THREAD, blockIdx.x);
+  }
+
   using BlockLoad   = typename cub::BlockLoad<uint8_t,
                                             BLOCK_DIM_X,
                                             ITEMS_PER_THREAD,
                                             cub::BlockLoadAlgorithm::BLOCK_LOAD_TRANSPOSE>;
   using BlockReduce = typename cub::BlockReduce<uint32_t, BLOCK_DIM_X>;
+  using BlockScan   = typename cub::BlockScan<uint32_t, BLOCK_DIM_X>;
 
-  typename BlockLoad::TempStorage temp_storage_a;
-  typename BlockReduce::TempStorage temp_storage_b;
+  __shared__ union {
+    typename BlockLoad::TempStorage load;
+    typename BlockReduce::TempStorage reduce;
+    typename BlockScan::TempStorage scan;
+  } temp_storage;
 
   uint8_t thread_data[ITEMS_PER_THREAD];
 
-  uint32_t block_offset = blockIdx.x * blockDim.x;
+  uint32_t block_offset = (blockIdx.x * blockDim.x) * ITEMS_PER_THREAD;
   uint32_t valid_items  = input.size() - block_offset;
 
-  BlockLoad(temp_storage_a).Load(input.data() + block_offset, thread_data, valid_items);
-
-  uint32_t count = 0;
-
-  for (auto i = 0; i < valid_items; i++) {  //
-    count += thread_data[i] == needle;
+  if (threadIdx.x == 0) {
+    printf("BlockLoad(temp_storage.load).Load(input.data() + %i, thread_data, %i);\n",
+           block_offset,
+           valid_items);
   }
 
-  count = BlockReduce(temp_storage_b).Sum(count);
+  BlockLoad(temp_storage.load).Load(input.data() + block_offset, thread_data, valid_items);
 
-  auto output_offset = output_offsets[blockIdx.x];
+  uint32_t count_thread = 0;
 
-  for (auto i = 0; i < valid_items; i++) {  //
-    if (thread_data[i] == needle) { output[output_offset++] = 9; }
+  for (auto i = 0; i < valid_items && i < ITEMS_PER_THREAD; i++) {  //
+    if (thread_data[i] == needle) {
+      printf("bidx(%i) tidx(%i): needle @ thread_data[%i]\n", blockIdx.x, threadIdx.x, i);
+      count_thread++;
+    }
   }
 
-  output[0] = 7;
+  if (output.data() == nullptr) {
+    // This is the first pass, so just return the block sums.
+
+    uint32_t count_block = BlockReduce(temp_storage.reduce).Sum(count_thread);
+
+    if (threadIdx.x == 0) {  //
+
+      printf("bidx(%i) tidx(%i): temp_block_storage[blockIdx.x + 1] = %i;\n",
+             blockIdx.x,
+             threadIdx.x,
+             count_block);
+      temp_block_storage[blockIdx.x + 1] = count_block;
+    }
+
+    return;
+  }
+
+  if (threadIdx.x == 0) {
+    printf("bidx(%i) tidx(%i): entering second pass\n", blockIdx.x, threadIdx.x);
+  }
+
+  // This is the second pass.
+
+  uint32_t block_output_offset  = temp_block_storage[blockIdx.x];
+  uint32_t thread_output_offset = 0;
+
+  BlockScan(temp_storage.scan).ExclusiveSum(count_thread, thread_output_offset);
+
+  // printf("bidx(%i) tidx(%i): exc\n", blockIdx.x, threadIdx.x);
+
+  for (auto i = 0; i < valid_items && i < ITEMS_PER_THREAD; i++) {
+    if (thread_data[i] == needle) {
+      printf("bidx(%i) tidx(%i): output[%i + %i] = %i + %i;\n",
+             blockIdx.x,
+             threadIdx.x,
+             block_output_offset,
+             thread_output_offset,
+             block_offset,
+             threadIdx.x * ITEMS_PER_THREAD + i);
+      output[block_output_offset + thread_output_offset++] =
+        block_offset + threadIdx.x * ITEMS_PER_THREAD + i;
+    }
+  }
 }
 
-rmm::device_vector<uint32_t> find(device_span<uint8_t const> d_input,
-                                  uint8_t needle,
-                                  cudaStream_t stream = 0)
+rmm::device_vector<uint32_t>  //
+find(device_span<uint8_t const> d_input, uint8_t needle, cudaStream_t stream = 0)
 {
-  enum { BLOCK_DIM_X = 4, ITEMS_PER_THREAD = 1 };
+  enum { BLOCK_DIM_X = 4, ITEMS_PER_THREAD = 4 };
 
   cudf::detail::grid_1d grid(d_input.size(), BLOCK_DIM_X, ITEMS_PER_THREAD);
 
   // include leading zero in offsets
   auto d_output_offsets = rmm::device_vector<uint32_t>(grid.num_blocks + 1);
 
-  auto find_count_kernel_inst = find_count_kernel<BLOCK_DIM_X, ITEMS_PER_THREAD>;
+  auto kernel = find_kernel<BLOCK_DIM_X, ITEMS_PER_THREAD>;
 
-  find_count_kernel_inst<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(  //
+  kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(  //
     d_input,
     d_output_offsets,
+    device_span<uint32_t>(),
     needle);
 
   // convert block result sizes to block result offsets.
@@ -272,19 +293,17 @@ rmm::device_vector<uint32_t> find(device_span<uint8_t const> d_input,
                          d_output_offsets.end(),
                          d_output_offsets.begin());
 
-  return d_output_offsets;
+  // return d_output_offsets;
 
-  // auto d_results = rmm::device_vector<uint32_t>(d_output_offsets.back());
+  auto d_results = rmm::device_vector<uint32_t>(d_output_offsets.back());
 
-  // auto find_kernel_inst = find_kernel<BLOCK_DIM_X, ITEMS_PER_THREAD>;
+  kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(  //
+    d_input,
+    d_output_offsets,
+    d_results,
+    needle);
 
-  // find_kernel_inst<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(  //
-  //   d_input,
-  //   d_output_offsets,
-  //   d_results,
-  //   needle);
+  cudaStreamSynchronize(stream);
 
-  // cudaStreamSynchronize(stream);
-
-  // return d_results;
+  return d_results;
 }
