@@ -321,6 +321,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         """ Wraps dask.dataframe DataFrame.repartition method.
         Uses DataFrame.shuffle if `columns=` is specified.
         """
+        # TODO: Remove this function in future(0.17 release)
         columns = kwargs.pop("columns", None)
         if columns:
             warnings.warn(
