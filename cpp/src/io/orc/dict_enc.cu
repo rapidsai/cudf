@@ -406,7 +406,7 @@ __global__ void __launch_bounds__(block_size)
   dict_data   = s->stripe.dict_data;
   if (!dict_data) return;
   dict_index      = s->stripe.dict_index;
-  str_data        = reinterpret_cast<const nvstrdesc_s *>(s->stripe.column_data_base);
+  str_data        = static_cast<const nvstrdesc_s *>(s->stripe.column_data_base);
   dict_char_count = 0;
   for (uint32_t i = 0; i < num_strings; i += block_size) {
     uint32_t cur = (i + t < num_strings) ? dict_data[i + t] : 0;
@@ -500,7 +500,7 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes,
     if (stripes_host[i].dict_data != nullptr) {
       thrust::device_ptr<uint32_t> p = thrust::device_pointer_cast(stripes_host[i].dict_data);
       const nvstrdesc_s *str_data =
-        reinterpret_cast<const nvstrdesc_s *>(stripes_host[i].column_data_base);
+        static_cast<const nvstrdesc_s *>(stripes_host[i].column_data_base);
       // NOTE: Requires the --expt-extended-lambda nvcc flag
       thrust::sort(rmm::exec_policy(stream)->on(stream),
                    p,
