@@ -235,13 +235,12 @@ if(ARROW_INCLUDE_DIR AND ARROW_LIB AND ARROW_CUDA_LIB)
 endif(ARROW_INCLUDE_DIR AND ARROW_LIB AND ARROW_CUDA_LIB)
 
 ###################################################################################################
-# - copy libcu++ ------------------------------------------------------------------------------------
+# - copy libcu++ ----------------------------------------------------------------------------------
 
-file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcudacxx")
-file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcxx/include")
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include")
 
-file(INSTALL ${LIBCUDACXX_INCLUDE_DIR} DESTINATION "${CMAKE_BINARY_DIR}/include/libcudacxx/")
-file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION "${CMAKE_BINARY_DIR}/include/libcxx/include/")
+file(INSTALL "${LIBCUDACXX_INCLUDE_DIR}/" DESTINATION "${CMAKE_BINARY_DIR}/include/libcudacxx")  # `${LIBCUDACXX_INCLUDE_DIR}/` specifies that the contents of this directory will be installed (not the directory itself)
+file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION "${CMAKE_BINARY_DIR}/include/libcxx")
 
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------

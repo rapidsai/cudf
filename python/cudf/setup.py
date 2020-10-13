@@ -51,7 +51,7 @@ extensions = [
             os.path.join(CUDF_ROOT, "_deps/libcudacxx-src/include"),
             os.path.join(
                 os.path.dirname(sysconfig.get_path("include")),
-                "libcudf/libcudacxx/include",
+                "libcudf/libcudacxx",
             ),
             os.path.dirname(sysconfig.get_path("include")),
             np.get_include(),
