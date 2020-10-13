@@ -548,7 +548,6 @@ struct check_datetime_format {
   }
 };
 
-//
 std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& strings,
                                            std::string const& format,
                                            cudaStream_t stream,
