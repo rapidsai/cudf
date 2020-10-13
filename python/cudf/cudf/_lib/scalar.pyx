@@ -42,7 +42,6 @@ from cudf._lib.cpp.scalar.scalar cimport (
     string_scalar
 )
 cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.cpp.scalar.scalar_factories cimport make_numeric_scalar
 
 cdef class _ScalarUptrWrapper:
     pass
