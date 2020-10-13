@@ -159,7 +159,7 @@ namespace {
 /**
  * @brief Function logic for substring_from API.
  *
- * This does both calculates the output size and executes the substring.
+ * This both calculates the output size and executes the substring.
  */
 struct substring_from_fn {
   const column_device_view d_column;
