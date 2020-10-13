@@ -114,6 +114,7 @@
 - PR #6346 Remove macros from CompactProtocolWriter
 - PR #6312 Conda recipe dependency cleanup
 - PR #6347 Add dictionary support to cudf::copy_range
+- PR #6352 Add specific Topic support for Kafka "list_topics()" metadata requests
 - PR #6332 Add support to return csv as string when `path=None` in `to_csv`
 - PR #6358 Add Parquet fuzz tests with varying function parameters
 - PR #6369 Add dictionary support to `cudf::find_and_replace`
@@ -176,9 +177,10 @@
 - PR #6304 Fix span_tests.cu includes
 - PR #6331 Avoids materializing `RangeIndex` during frame concatnation (when not needed)
 - PR #6278 Add filter tests for struct columns
-- PR #6386 Removed c-style pointer casts and redundant `reinterpret_cast`s in cudf::io
+- PR #6344 Fix rolling-window count for null input
 - PR #6353 Rename `skip_rows` parameter to `skiprows` in `read_parquet`, `read_avro` and `read_orc`
 - PR #6361 Detect overflow in hash join
+- PR #6386 Removed c-style pointer casts and redundant `reinterpret_cast`s in cudf::io
 - PR #6397 Fix `build.sh` when `PARALLEL_LEVEL` environment variable isn't set
 - PR #6366 Fix Warp Reduce calls in cuio statistics calculation to account for NaNs
 - PR #6345 Fix ambiguous constructor compile error with devtoolset
