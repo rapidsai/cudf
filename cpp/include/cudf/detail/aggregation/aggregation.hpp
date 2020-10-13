@@ -92,6 +92,23 @@ struct quantile_aggregation final : derived_aggregation<quantile_aggregation> {
   }
 };
 
+struct lead_lag_aggregation final : derived_aggregation<lead_lag_aggregation> {
+  lead_lag_aggregation(Kind kind, size_type offset)
+    : derived_aggregation{offset < 0 ? (kind == LAG ? LEAD : LAG) : kind},
+      row_offset{std::abs(offset)}
+  {
+  }
+
+  size_type row_offset;
+
+ protected:
+  friend class derived_aggregation<lead_lag_aggregation>;
+
+  bool operator==(lead_lag_aggregation const& rhs) const { return row_offset == rhs.row_offset; }
+
+  size_t hash_impl() const { return std::hash<size_type>()(row_offset); }
+};
+
 /**
  * @brief Derived class for specifying a standard deviation/variance aggregation
  */
@@ -361,6 +378,18 @@ struct target_type_impl<Source, aggregation::COLLECT> {
   using type = cudf::list_view;
 };
 
+// Always use Source for LEAD
+template <typename Source>
+struct target_type_impl<Source, aggregation::LEAD> {
+  using type = Source;
+};
+
+// Always use Source for LAG
+template <typename Source>
+struct target_type_impl<Source, aggregation::LAG> {
+  using type = Source;
+};
+
 /**
  * @brief Helper alias to get the accumulator type for performing aggregation
  * `k` on elements of type `Source`
@@ -448,6 +477,10 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kin
       return f.template operator()<aggregation::ROW_NUMBER>(std::forward<Ts>(args)...);
     case aggregation::COLLECT:
       return f.template operator()<aggregation::COLLECT>(std::forward<Ts>(args)...);
+    case aggregation::LEAD:
+      return f.template operator()<aggregation::LEAD>(std::forward<Ts>(args)...);
+    case aggregation::LAG:
+      return f.template operator()<aggregation::LAG>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");

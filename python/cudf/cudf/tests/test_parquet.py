@@ -1465,6 +1465,51 @@ def test_parquet_writer_sliced(tmpdir):
     assert_eq(cudf.read_parquet(cudf_path), df_select.reset_index(drop=True))
 
 
+def test_parquet_writer_list_basic(tmpdir):
+    expect = pd.DataFrame({"a": [[[1, 2], [3, 4]], None, [[5, 6], None]]})
+    fname = tmpdir.join("test_parquet_writer_list_basic.parquet")
+
+    gdf = cudf.from_pandas(expect)
+
+    gdf.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    got = pd.read_parquet(fname)
+    assert_eq(expect, got)
+
+
+def test_parquet_writer_list_large(tmpdir):
+    expect = pd.DataFrame({"a": list_gen(int_gen, 0, 256, 80, 50)})
+    fname = tmpdir.join("test_parquet_writer_list_large.parquet")
+
+    gdf = cudf.from_pandas(expect)
+
+    gdf.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    got = pd.read_parquet(fname)
+    assert_eq(expect, got)
+
+
+def test_parquet_writer_list_large_mixed(tmpdir):
+    expect = pd.DataFrame(
+        {
+            "a": list_gen(string_gen, 0, 128, 80, 50),
+            "b": list_gen(int_gen, 0, 128, 80, 50),
+            "c": list_gen(int_gen, 0, 128, 80, 50, include_validity=True),
+            "d": list_gen(string_gen, 0, 128, 80, 50, include_validity=True),
+        }
+    )
+    fname = tmpdir.join("test_parquet_writer_list_large_mixed.parquet")
+    gdf = cudf.from_pandas(expect)
+
+    gdf.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    got = pd.read_parquet(fname)
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 def test_parquet_nullable_boolean(tmpdir, engine):
     pandas_path = tmpdir.join("pandas_bools.parquet")

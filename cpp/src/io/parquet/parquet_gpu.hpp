@@ -23,7 +23,15 @@
 #include <io/parquet/parquet_common.hpp>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
+
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/lists/lists_column_view.hpp>
+
+#include <cudf/types.hpp>
 #include <vector>
+
+#include <rmm/device_scalar.hpp>
+#include <rmm/device_uvector.hpp>
 
 namespace cudf {
 namespace io {
@@ -210,9 +218,18 @@ struct EncColumnDesc : stats_column_desc {
   uint32_t *dict_data;     //!< Dictionary data (unique row indices)
   uint8_t physical_type;   //!< physical data type
   uint8_t converted_type;  //!< logical data type
+  // TODO (dm): Evaluate if this is sufficient. At 4 bits, this allows a maximum 16 level nesting
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
                        //!< levels
-  uint8_t pad;
+  size_type const *const
+    *nesting_offsets;  //!< If column is a nested type, contains offset array of each nesting level
+  size_type nesting_levels;  //!< Number of nesting levels in column. 0 means no nesting.
+  size_type num_values;  //!< Number of data values in column. Different from num_rows in case of
+                         //!< nested columns
+
+  size_type const *level_offsets;  //!< Offset array for per-row pre-calculated rep/def level values
+  uint8_t const *rep_values;       //!< Pre-calculated repetition level values
+  uint8_t const *def_values;       //!< Pre-calculated definition level values
 };
 
 #define MAX_PAGE_FRAGMENT_SIZE 5000  //!< Max number of rows in a page fragment
@@ -223,10 +240,12 @@ struct EncColumnDesc : stats_column_desc {
 struct PageFragment {
   uint32_t fragment_data_size;  //!< Size of fragment data in bytes
   uint32_t dict_data_size;      //!< Size of dictionary for this fragment
-  uint16_t num_rows;            //!< Number of rows in fragment
-  uint16_t non_nulls;           //!< Number of non-null values
-  uint16_t num_dict_vals;       //!< Number of unique dictionary entries
-  uint16_t pad;
+  uint32_t num_values;  //!< Number of values in fragment. Different from num_rows for nested type
+  uint32_t num_leaf_values;  //!< Number of leaf values in fragment. Does not include nulls at
+                             //!< non-leaf level
+  uint32_t non_nulls;        //!< Number of non-null values
+  uint16_t num_rows;         //!< Number of rows in fragment
+  uint16_t num_dict_vals;    //!< Number of unique dictionary entries
 };
 
 /**
@@ -244,6 +263,9 @@ struct EncPage {
   uint32_t max_data_size;    //!< Maximum size of coded page data (excluding header)
   uint32_t start_row;        //!< First row of page
   uint32_t num_rows;         //!< Rows in page
+  uint32_t num_leaf_values;  //!< Values in page. Different from num_rows in case of nested types
+  uint32_t num_values;  //!< Number of def/rep level values in page. Includes null/empty elements in
+                        //!< non-leaf levels
 };
 
 /// Size of hash used for building dictionaries
@@ -286,16 +308,17 @@ struct EncColumnChunk {
   uint32_t compressed_size;       //!< Compressed buffer size
   uint32_t start_row;             //!< First row of chunk
   uint32_t num_rows;              //!< Number of rows in chunk
-  uint32_t first_fragment;        //!< First fragment of chunk
-  uint32_t first_page;            //!< First page of chunk
-  uint32_t num_pages;             //!< Number of pages in chunk
-  uint32_t dictionary_id;         //!< Dictionary id for this chunk
-  uint8_t is_compressed;          //!< Nonzero if the chunk uses compression
-  uint8_t has_dictionary;         //!< Nonzero if the chunk uses dictionary encoding
-  uint16_t num_dict_fragments;    //!< Number of fragments using dictionary
-  uint32_t dictionary_size;       //!< Size of dictionary
-  uint32_t total_dict_entries;    //!< Total number of entries in dictionary
-  uint32_t ck_stat_size;          //!< Size of chunk-level statistics (included in 1st page header)
+  uint32_t num_values;      //!< Number of values in chunk. Different from num_rows for nested types
+  uint32_t first_fragment;  //!< First fragment of chunk
+  uint32_t first_page;      //!< First page of chunk
+  uint32_t num_pages;       //!< Number of pages in chunk
+  uint32_t dictionary_id;   //!< Dictionary id for this chunk
+  uint8_t is_compressed;    //!< Nonzero if the chunk uses compression
+  uint8_t has_dictionary;   //!< Nonzero if the chunk uses dictionary encoding
+  uint16_t num_dict_fragments;  //!< Number of fragments using dictionary
+  uint32_t dictionary_size;     //!< Size of dictionary
+  uint32_t total_dict_entries;  //!< Total number of entries in dictionary
+  uint32_t ck_stat_size;        //!< Size of chunk-level statistics (included in 1st page header)
 };
 
 /**
@@ -374,6 +397,39 @@ cudaError_t DecodePageData(hostdevice_vector<PageInfo> &pages,
                            size_t num_rows,
                            size_t min_row,
                            cudaStream_t stream = (cudaStream_t)0);
+
+/**
+ * @brief Dremel data that describes one nested type column
+ *
+ * @see get_dremel_data()
+ */
+struct dremel_data {
+  rmm::device_uvector<size_type> dremel_offsets;
+  rmm::device_uvector<uint8_t> rep_level;
+  rmm::device_uvector<uint8_t> def_level;
+
+  size_type leaf_col_offset;
+  size_type leaf_data_size;
+};
+
+/**
+ * @brief Get the dremel offsets and repetition and definition levels for a LIST column
+ *
+ * Dremel offsets are the per row offsets into the repetition and definition level arrays for a
+ * column.
+ * Example:
+ * ```
+ * col            = {{1, 2, 3}, { }, {5, 6}}
+ * dremel_offsets = { 0,         3,   4,  6}
+ * rep_level      = { 0, 1, 1,   0,   0, 1}
+ * def_level      = { 1, 1, 1,   0,   1, 1}
+ * ```
+ * @param col Column of LIST type
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ *
+ * @return A struct containing dremel data
+ */
+dremel_data get_dremel_data(column_view h_col, cudaStream_t stream = (cudaStream_t)0);
 
 /**
  * @brief Launches kernel for initializing encoder page fragments

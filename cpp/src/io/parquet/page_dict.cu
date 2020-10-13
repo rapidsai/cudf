@@ -204,18 +204,18 @@ __global__ void __launch_bounds__(block_size, 1)
         row = frag_start_row + s->frag_dict[i + t];
         len = dtype_len;
         if (dtype == BYTE_ARRAY) {
-          const char *ptr = reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].ptr;
-          uint32_t count =
-            (uint32_t) reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].count;
+          const char *ptr = static_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].ptr;
+          uint32_t count  = static_cast<uint32_t>(
+            static_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].count);
           len += count;
           hash = nvstr_hash16(reinterpret_cast<const uint8_t *>(ptr), count);
           // Walk the list of rows with the same hash
           next_addr = &s->hashmap[hash];
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
             const char *ptr2 =
-              reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].ptr;
+              static_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].ptr;
             uint32_t count2 =
-              reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].count;
+              static_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].count;
             if (count2 == count && nvstr_is_equal(ptr, count, ptr2, count2)) {
               is_dupe = 1;
               break;
@@ -226,14 +226,14 @@ __global__ void __launch_bounds__(block_size, 1)
           uint64_t val;
 
           if (dtype_len_in == 8) {
-            val  = reinterpret_cast<const uint64_t *>(s->col.column_data_base)[row];
+            val  = static_cast<const uint64_t *>(s->col.column_data_base)[row];
             hash = uint64_hash16(val);
           } else {
             val = (dtype_len_in == 4)
-                    ? reinterpret_cast<const uint32_t *>(s->col.column_data_base)[row]
+                    ? static_cast<const uint32_t *>(s->col.column_data_base)[row]
                     : (dtype_len_in == 2)
-                        ? reinterpret_cast<const uint16_t *>(s->col.column_data_base)[row]
-                        : reinterpret_cast<const uint8_t *>(s->col.column_data_base)[row];
+                        ? static_cast<const uint16_t *>(s->col.column_data_base)[row]
+                        : static_cast<const uint8_t *>(s->col.column_data_base)[row];
             hash = uint32_hash16(val);
           }
           // Walk the list of rows with the same hash
@@ -241,12 +241,12 @@ __global__ void __launch_bounds__(block_size, 1)
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
             uint64_t val2 =
               (dtype_len_in == 8)
-                ? reinterpret_cast<const uint64_t *>(s->col.column_data_base)[next - 1]
+                ? static_cast<const uint64_t *>(s->col.column_data_base)[next - 1]
                 : (dtype_len_in == 4)
-                    ? reinterpret_cast<const uint32_t *>(s->col.column_data_base)[next - 1]
+                    ? static_cast<const uint32_t *>(s->col.column_data_base)[next - 1]
                     : (dtype_len_in == 2)
-                        ? reinterpret_cast<const uint16_t *>(s->col.column_data_base)[next - 1]
-                        : reinterpret_cast<const uint8_t *>(s->col.column_data_base)[next - 1];
+                        ? static_cast<const uint16_t *>(s->col.column_data_base)[next - 1]
+                        : static_cast<const uint8_t *>(s->col.column_data_base)[next - 1];
             if (val2 == val) {
               is_dupe = 1;
               break;
@@ -326,7 +326,7 @@ __global__ void __launch_bounds__(block_size, 1)
 /**
  * @brief Launches kernel for building chunk dictionaries
  *
- * @param[in] chunks Column chunks
+ * @param[in,out] chunks Column chunks
  * @param[in] dev_scratch Device scratch data (kDictScratchSize per dictionary)
  * @param[in] num_chunks Number of column chunks
  * @param[in] stream CUDA stream to use, default 0
