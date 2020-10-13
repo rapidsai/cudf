@@ -7732,3 +7732,34 @@ def test_equals_dtypes():
     expect = lhs.to_pandas().equals(rhs.to_pandas())
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "df1",
+    [
+        pd.DataFrame({"a": [10, 11, 12]}, index=["a", "b", "z"]),
+        pd.DataFrame({"z": ["a"]}),
+    ],
+)
+@pytest.mark.parametrize(
+    "df2",
+    [
+        pd.DataFrame(),
+        pd.DataFrame({"a": ["a", "a", "c", "z", "A"], "z": [1, 2, 3, 4, 5]}),
+    ],
+)
+@pytest.mark.parametrize(
+    "op",
+    ["__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__gt__", "__ge__"],
+)
+def test_dataframe_error_equality(df1, df2, op):
+    gdf1 = gd.from_pandas(df1)
+    gdf2 = gd.from_pandas(df2)
+
+    try:
+        df1.getattr(op)(df2)
+    except Exception as e:
+        with pytest.raises(type(e), match=e.__str__()):
+            gdf1.getattr(op)(gdf2)
+    else:
+        raise AssertionError(f"Expected {op} to fail for {df1} and {df2}")

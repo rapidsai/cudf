@@ -630,3 +630,26 @@ def test_series_mode(df, dropna):
     actual = df.mode(dropna=dropna)
 
     assert_eq(expected, actual, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "sr1", [pd.Series([10, 11, 12], index=["a", "b", "z"]), pd.Series(["a"])]
+)
+@pytest.mark.parametrize(
+    "sr2", [pd.Series([]), pd.Series(["a", "a", "c", "z", "A"])]
+)
+@pytest.mark.parametrize(
+    "op",
+    ["__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__gt__", "__ge__"],
+)
+def test_series_error_equality(sr1, sr2, op):
+    gsr1 = cudf.from_pandas(sr1)
+    gsr2 = cudf.from_pandas(sr2)
+
+    try:
+        sr1.getattr(op)(sr2)
+    except Exception as e:
+        with pytest.raises(type(e), match=e.__str__()):
+            gsr1.getattr(op)(gsr2)
+    else:
+        raise AssertionError(f"Expected {op} to fail for {sr1} and {sr2}")
