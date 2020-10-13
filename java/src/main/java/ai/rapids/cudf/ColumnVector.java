@@ -3313,6 +3313,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       return DType.fromNative(getNativeTypeId(someViewHandle));
     }
 
+    /*public DataType getNativeDataType() {
+      return DataType.fromNative(getNativeTypeId(getViewHandle()), getNativeScale(getViewHandle()))
+    }*/
+
     public int getNativeScale() {
       return getNativeTypeScale(getViewHandle());
     }

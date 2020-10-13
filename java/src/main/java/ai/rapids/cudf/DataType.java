@@ -15,6 +15,8 @@
  */
 package ai.rapids.cudf;
 
+import java.io.IOException;
+
 public class DataType {
 
   DType typeId;
@@ -25,5 +27,26 @@ public class DataType {
      typeId =id;
      scale = fp_scale;
    }
+  private static native long makeNativeType(int typeId, int scale);
+
+  public class NativeDataType implements AutoCloseable {
+    long nativeType;
+    // build native data_type in constructors
+    public NativeDataType(DType id) {
+      this.nativeType = DataType.makeNativeType(id.nativeId, 0);
+    }
+    public NativeDataType(DType id, int decimalScale) {
+      this.nativeType = DataType.makeNativeType(id.nativeId, decimalScale);;
+    }
+    public long returnNativeId() {
+      return this.nativeType;
+    }
+
+    public void close() throws IOException {
+      // call native delete method to clean up native data_type
+      //deleteNativeType
+
+    }
+  }
 
 }
