@@ -7,16 +7,18 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 
 
 cdef class Scalar:
-    cdef unique_ptr[scalar] c_value
+    cdef _ScalarUptrWrapper uptr
     cdef bool _host_value_current
     cdef bool _device_value_current
     cdef object _host_value
     cdef object _host_dtype
 
-    cdef scalar* get_c_value(self)
-    cdef unique_ptr[scalar] get_c_ptr(self)
+    cdef _ScalarUptrWrapper get_uptr(self)
 
     @staticmethod
     cdef Scalar from_unique_ptr(unique_ptr[scalar] ptr)
 
     cpdef bool is_valid(Scalar s)
+
+cdef class _ScalarUptrWrapper:
+    cdef unique_ptr[scalar] _device_uptr

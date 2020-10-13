@@ -35,11 +35,11 @@ def slice_strings(Column source_strings,
     cdef Scalar step_scalar = as_scalar(step, np.int32)
 
     cdef numeric_scalar[size_type]* start_numeric_scalar = \
-        <numeric_scalar[size_type]*>(start_scalar.get_c_value())
+        <numeric_scalar[size_type]*>(start_scalar.get_uptr()._device_uptr.get())
     cdef numeric_scalar[size_type]* end_numeric_scalar = \
-        <numeric_scalar[size_type]*>(end_scalar.get_c_value())
+        <numeric_scalar[size_type]*>(end_scalar.get_uptr()._device_uptr.get())
     cdef numeric_scalar[size_type]* step_numeric_scalar = \
-        <numeric_scalar[size_type]*>(step_scalar.get_c_value())
+        <numeric_scalar[size_type]*>(step_scalar.get_uptr()._device_uptr.get())
 
     with nogil:
         c_result = move(cpp_slice_strings(
@@ -95,11 +95,11 @@ def get(Column source_strings,
     cdef Scalar step_scalar = as_scalar(step, np.int32)
 
     cdef numeric_scalar[size_type]* start_numeric_scalar = \
-        <numeric_scalar[size_type]*>(start_scalar.get_c_value())
+        <numeric_scalar[size_type]*>(start_scalar.get_uptr()._device_uptr.get())
     cdef numeric_scalar[size_type]* end_numeric_scalar = \
-        <numeric_scalar[size_type]*>(end_scalar.get_c_value())
+        <numeric_scalar[size_type]*>(end_scalar.get_uptr()._device_uptr.get())
     cdef numeric_scalar[size_type]* step_numeric_scalar = \
-        <numeric_scalar[size_type]*>(step_scalar.get_c_value())
+        <numeric_scalar[size_type]*>(step_scalar.get_uptr()._device_uptr.get())
 
     with nogil:
         c_result = move(cpp_slice_strings(

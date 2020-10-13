@@ -34,7 +34,7 @@ def slice_replace(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(repl.get_c_value())
+    cdef string_scalar* scalar_str = <string_scalar*>(repl.get_uptr()._device_uptr.get())
 
     with nogil:
         c_result = move(cpp_replace_slice(
@@ -57,7 +57,7 @@ def insert(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(repl.get_c_value())
+    cdef string_scalar* scalar_str = <string_scalar*>(repl.get_uptr()._device_uptr.get())
 
     with nogil:
         c_result = move(cpp_replace_slice(
@@ -83,8 +83,8 @@ def replace(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_target = <string_scalar*>(target.get_c_value())
-    cdef string_scalar* scalar_repl = <string_scalar*>(repl.get_c_value())
+    cdef string_scalar* scalar_target = <string_scalar*>(target.get_uptr()._device_uptr.get())
+    cdef string_scalar* scalar_repl = <string_scalar*>(repl.get_uptr()._device_uptr.get())
 
     with nogil:
         c_result = move(cpp_replace(

@@ -44,7 +44,13 @@ from cudf._lib.cpp.scalar.scalar cimport (
 cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.cpp.scalar.scalar_factories cimport make_numeric_scalar
 
+cdef class _ScalarUptrWrapper:
+    pass
+
 cdef class Scalar:
+
+    def __cinit__(self):
+        self.uptr = _ScalarUptrWrapper()
 
     def __init__(self, value, dtype=None):
         """
@@ -95,16 +101,16 @@ cdef class Scalar:
         valid = not is_null_host_scalar(value)
 
         if pd.api.types.is_string_dtype(dtype):
-            _set_string_from_np_string(self.c_value, value, valid)
+            _set_string_from_np_string(self.uptr._device_uptr, value, valid)
         elif pd.api.types.is_numeric_dtype(dtype):
-            _set_numeric_from_np_scalar(self.c_value, value, dtype, valid)
+            _set_numeric_from_np_scalar(self.uptr._device_uptr, value, dtype, valid)
         elif pd.api.types.is_datetime64_dtype(dtype):
             _set_datetime64_from_np_scalar(
-                self.c_value, value, dtype, valid
+                self.uptr._device_uptr, value, dtype, valid
             )
         elif pd.api.types.is_timedelta64_dtype(dtype):
             _set_timedelta64_from_np_scalar(
-                self.c_value, value, dtype, valid
+                self.uptr._device_uptr, value, dtype, valid
             )
         else:
             raise ValueError(
@@ -114,13 +120,13 @@ cdef class Scalar:
     
     def get_device_value(self):
         if pd.api.types.is_string_dtype(self.dtype):
-            result = _get_py_string_from_string(self.c_value)
+            result = _get_py_string_from_string(self.uptr._device_uptr)
         elif pd.api.types.is_numeric_dtype(self.dtype):
-            result = _get_np_scalar_from_numeric(self.c_value)
+            result = _get_np_scalar_from_numeric(self.uptr._device_uptr)
         elif pd.api.types.is_datetime64_dtype(self.dtype):
-            result = _get_np_scalar_from_timestamp64(self.c_value)
+            result = _get_np_scalar_from_timestamp64(self.uptr._device_uptr)
         elif pd.api.types.is_timedelta64_dtype(self.dtype):
-            result = _get_np_scalar_from_timedelta64(self.c_value)
+            result = _get_np_scalar_from_timedelta64(self.uptr._device_uptr)
         else:
             raise ValueError(
                 "Could not convert cudf::scalar to a Python value"
@@ -134,7 +140,7 @@ cdef class Scalar:
         The NumPy dtype corresponding to the data type of the underlying
         device scalar.
         """
-        cdef libcudf_types.data_type cdtype = self.get_c_value()[0].type()
+        cdef libcudf_types.data_type cdtype = self.get_uptr()._device_uptr.get()[0].type()
         return cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]
 
     @property
@@ -167,23 +173,17 @@ cdef class Scalar:
 
     
 
-    cdef scalar* get_c_value(self):
+    cdef _ScalarUptrWrapper get_uptr(self):
         if not self._device_value_current:
             self.set_device_value(self._host_value, self._host_dtype)
             self._device_value_current = True
-        return self.c_value.get() 
+        return self.uptr
         
-    cdef unique_ptr[scalar] get_c_ptr(self):
-        if not self._device_value_current:
-            self.set_device_value(self._host_value, self._host_dtype)
-            self._device_value_current = True
-            return move(self.c_value)
-
     cpdef bool is_valid(self):
         """
         Returns if the Scalar is valid or not(i.e., <NA>).
         """
-        return self.get_c_value()[0].is_valid()
+        return self.get_uptr()._device_uptr.get()[0].is_valid()
 
     def __repr__(self):
         if self.value is cudf.NA:
@@ -197,7 +197,7 @@ cdef class Scalar:
         Construct a Scalar object from a unique_ptr<cudf::scalar>.
         """
         cdef Scalar s = Scalar.__new__(Scalar)
-        s.c_value = move(ptr)
+        s.uptr._device_uptr = move(ptr)
         s._device_value_current = True
         s._host_value_current = False
         return s

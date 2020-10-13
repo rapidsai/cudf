@@ -30,7 +30,7 @@ def replace_tokens(Column strings,
     cdef column_view c_targets = targets.view()
     cdef column_view c_replacements = replacements.view()
 
-    cdef string_scalar* c_delimiter = <string_scalar*>delimiter.get_c_value()
+    cdef string_scalar* c_delimiter = <string_scalar*>delimiter.get_uptr()._device_uptr.get()
     cdef unique_ptr[column] c_result
 
     with nogil:
@@ -58,8 +58,8 @@ def filter_tokens(Column strings,
     """
 
     cdef column_view c_strings = strings.view()
-    cdef string_scalar* c_repl = <string_scalar*>replacement.get_c_value()
-    cdef string_scalar* c_delimiter = <string_scalar*>delimiter.get_c_value()
+    cdef string_scalar* c_repl = <string_scalar*>replacement.get_uptr()._device_uptr.get()
+    cdef string_scalar* c_delimiter = <string_scalar*>delimiter.get_uptr()._device_uptr.get()
     cdef unique_ptr[column] c_result
 
     with nogil:
