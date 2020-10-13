@@ -236,10 +236,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         df = cudf.DataFrame()
         _normalize_series_and_dataframe(objs, axis=axis)
 
-        if join == "inner":
-            objs, match_index = _align_objs(objs, how="inner")
-        else:
-            objs, match_index = _align_objs(objs)
+        objs, match_index = _align_objs(objs, how=join)
 
         for idx, o in enumerate(objs):
             if not ignore_index and idx == 0:
