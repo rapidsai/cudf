@@ -12,6 +12,8 @@
 
 ## Bug Fixes
 
+ - PR #6509 Disable JITIFY log printing
+
 
 # cuDF 0.16.0 (Date TBD)
 
