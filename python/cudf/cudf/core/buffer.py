@@ -1,6 +1,7 @@
 import functools
 import operator
 import pickle
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -11,7 +12,13 @@ from cudf.core.abc import Serializable
 
 
 class Buffer(Serializable):
-    def __init__(self, data=None, size=None, owner=None):
+    ptr: int
+    size: int
+    _owner: Any
+
+    def __init__(
+        self, data: Any = None, size: Optional[int] = None, owner: Any = None
+    ):
         """
         A Buffer represents a device memory allocation.
 
@@ -56,15 +63,15 @@ class Buffer(Serializable):
                 raise TypeError("data must be Buffer, array-like or integer")
             self._init_from_array_like(np.asarray(data), owner)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.size
 
     @property
-    def nbytes(self):
+    def nbytes(self) -> int:
         return self.size
 
     @property
-    def __cuda_array_interface__(self):
+    def __cuda_array_interface__(self) -> dict:
         intf = {
             "data": (self.ptr, False),
             "shape": (self.size,),
@@ -101,8 +108,8 @@ class Buffer(Serializable):
                 f"Cannot construct Buffer from {data.__class__.__name__}"
             )
 
-    def serialize(self):
-        header = {}
+    def serialize(self) -> Tuple[dict, list]:
+        header = {}  # type: Dict[Any, Any]
         header["type-serialized"] = pickle.dumps(type(self))
         header["constructor-kwargs"] = {}
         header["desc"] = self.__cuda_array_interface__.copy()
@@ -111,7 +118,7 @@ class Buffer(Serializable):
         return header, frames
 
     @classmethod
-    def deserialize(cls, header, frames):
+    def deserialize(cls, header, frames) -> "Buffer":
         buf = cls(frames[0], **header["constructor-kwargs"])
 
         if header["desc"]["shape"] != buf.__cuda_array_interface__["shape"]:
@@ -126,7 +133,7 @@ class Buffer(Serializable):
         return buf
 
     @classmethod
-    def empty(cls, size):
+    def empty(cls, size) -> "Buffer":
         dbuf = DeviceBuffer(size=size)
         return Buffer(dbuf)
 
