@@ -32,8 +32,6 @@
 #include <type_traits>
 #include <vector>
 
-#include <thrust/transform.h>
-
 using namespace numeric;
 
 struct FixedPointTest : public cudf::test::BaseFixture {

@@ -70,7 +70,6 @@ std::string get_type_name(data_type type)
 {
   // TODO: Remove in JIT type utils PR
   switch (type.id()) {
-    case type_id::BOOL8: return CUDF_STRINGIFY(bool);
     case type_id::LIST: return CUDF_STRINGIFY(List);
     case type_id::DECIMAL32: return CUDF_STRINGIFY(int32_t);
     case type_id::DECIMAL64: return CUDF_STRINGIFY(int64_t);

@@ -176,7 +176,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
  * @tparam ElementFrom The element type used to create elements of type `ElementTo`
  * (non-`fixed-point`)
  * @tparam InputIterator Iterator type for `begin` and `end`
- * @param begin Begining of the sequence of elements
+ * @param begin Beginning of the sequence of elements
  * @param end End of the sequence of elements
  * @return rmm::device_buffer Buffer containing all elements in the range `[begin,end)`
  **/
@@ -201,7 +201,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
  * @tparam ElementTo The element type that is being created (`fixed_point` specialization)
  * @tparam ElementFrom The element type used to create elements of type `ElementTo` (`fixed_point`)
  * @tparam InputIterator Iterator type for `begin` and `end`
- * @param begin Begining of the sequence of elements
+ * @param begin Beginning of the sequence of elements
  * @param end End of the sequence of elements
  * @return rmm::device_buffer Buffer containing all elements in the range `[begin,end)`
  **/

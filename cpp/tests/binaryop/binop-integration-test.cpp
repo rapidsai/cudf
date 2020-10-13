@@ -2176,7 +2176,7 @@ TEST_F(BinaryOperationIntegrationTest, ATan2_Vector_Vector_FP64_SI32_SI64)
 //   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 // }
 
-// TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiplySalar)
+// TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiplyScalar)
 // {
 //   using namespace numeric;
 //   using decimalXX = TypeParam;
