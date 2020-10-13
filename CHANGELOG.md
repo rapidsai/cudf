@@ -12,7 +12,8 @@
 
 ## Bug Fixes
 
- - PR #6509 Disable JITIFY log printing
+- PR #6509 Disable JITIFY log printing
+- PR #6517 Handle index equality in `Series` and `DataFrame` equality checks
 
 
 # cuDF 0.16.0 (Date TBD)
