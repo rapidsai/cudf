@@ -592,8 +592,35 @@ def test_concat_dataframe_with_multiIndex(df1, df2):
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("sort", [True, False])
 @pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0, 1])
-def test_concat_join(ignore_index, sort, join, axis):
+def test_concat_join(ignore_index, sort, join):
+    pdf1 = pd.DataFrame(
+        {
+            "x": range(10),
+            "y": list(map(float, range(10))),
+            "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        }
+    )
+    pdf2 = pd.DataFrame(
+        {"x": range(10, 20), "y": list(map(float, range(10, 20)))}
+    )
+
+    gdf1 = gd.from_pandas(pdf1)
+    gdf2 = gd.from_pandas(pdf2)
+
+    assert_eq(
+        pd.concat(
+            [pdf1, pdf2], sort=sort, join=join, ignore_index=ignore_index
+        ),
+        gd.concat(
+            [gdf1, gdf2], sort=sort, join=join, ignore_index=ignore_index
+        ),
+    )
+
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("join", ["inner", "outer"])
+def test_concat_join_many_df_and_empty_df(ignore_index, sort, join):
     pdf1 = pd.DataFrame(
         {
             "x": range(10),
@@ -605,27 +632,14 @@ def test_concat_join(ignore_index, sort, join, axis):
         {"x": range(10, 20), "y": list(map(float, range(10, 20)))}
     )
     pdf3 = pd.DataFrame({"v": [1, 2], "x": [1, 2], "y": [1, 2], "z": [1, 2]})
-    pdf4 = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    pdf5 = pd.DataFrame({"c": [7, 8, 9], "d": [10, 11, 12]})
 
     gdf1 = gd.from_pandas(pdf1)
     gdf2 = gd.from_pandas(pdf2)
     gdf3 = gd.from_pandas(pdf3)
-    gdf4 = gd.from_pandas(pdf4)
-    gdf5 = gd.from_pandas(pdf5)
     # Make empty frame
     gdf_empty1 = gdf2[:0]
     assert len(gdf_empty1) == 0
     pdf_empty1 = gdf_empty1.to_pandas()
-
-    assert_eq(
-        pd.concat(
-            [pdf1, pdf2], sort=sort, join=join, ignore_index=ignore_index
-        ),
-        gd.concat(
-            [gdf1, gdf2], sort=sort, join=join, ignore_index=ignore_index
-        ),
-    )
 
     assert_eq(
         pd.concat(
@@ -642,20 +656,66 @@ def test_concat_join(ignore_index, sort, join, axis):
         ),
     )
 
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("join", ["inner", "outer"])
+def test_concat_join_one_df(ignore_index, sort, join):
+    pdf1 = pd.DataFrame(
+        {
+            "x": range(10),
+            "y": list(map(float, range(10))),
+            "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        }
+    )
+
+    gdf1 = gd.from_pandas(pdf1)
+
     assert_eq(
         pd.concat([pdf1], sort=sort, join=join, ignore_index=ignore_index),
         gd.concat([gdf1], sort=sort, join=join, ignore_index=ignore_index),
     )
 
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("join", ["inner", "outer"])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_concat_join_no_overlapping_columns(ignore_index, sort, join, axis):
+    pdf4 = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    pdf5 = pd.DataFrame({"c": [7, 8, 9], "d": [10, 11, 12]})
+
+    gdf4 = gd.from_pandas(pdf4)
+    gdf5 = gd.from_pandas(pdf5)
+
     assert_eq(
-        pd.concat([pdf4, pdf5], sort=sort, join=join, axis=axis),
-        gd.concat([gdf4, gdf5], sort=sort, join=join, axis=axis),
+        pd.concat(
+            [pdf4, pdf5],
+            sort=sort,
+            join=join,
+            ignore_index=ignore_index,
+            axis=axis,
+        ),
+        gd.concat(
+            [gdf4, gdf5],
+            sort=sort,
+            join=join,
+            ignore_index=ignore_index,
+            axis=axis,
+        ),
     )
 
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("join", ["inner", "outer"])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_concat_join_series(ignore_index, sort, join, axis):
     s1 = gd.Series(["a", "b", "c"])
     s2 = gd.Series(["a", "b"])
     s3 = gd.Series(["a", "b", "c", "d"])
     s4 = gd.Series()
+
     ps1 = s1.to_pandas()
     ps2 = s2.to_pandas()
     ps3 = s3.to_pandas()

@@ -255,9 +255,11 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         result_columns = objs[0].columns
         for o in objs[1:]:
             result_columns = result_columns.append(o.columns)
-
-        df.columns = result_columns.unique()
         if ignore_index:
+            df.columns = cudf.RangeIndex(len(result_columns.unique()))
+        else:
+            df.columns = result_columns.unique()
+        if ignore_index and not join == "inner":
             df.index = cudf.RangeIndex(len(objs[0]))
             return df
         elif not match_index:
@@ -295,13 +297,25 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 result = objs[0].copy()
             return result
         else:
-            return cudf.DataFrame._concat(
+            result = cudf.DataFrame._concat(
                 objs,
                 axis=axis,
                 join=join,
                 ignore_index=ignore_index,
                 sort=sort,
             )
+            if ignore_index and join == "inner" and result.empty:
+                for obj in objs[1:]:
+                    result.index = cudf.RangeIndex(len(objs[0]) + len(obj))
+                return result
+            else:
+                return cudf.DataFrame._concat(
+                    objs,
+                    axis=axis,
+                    join=join,
+                    ignore_index=ignore_index,
+                    sort=sort,
+                )
     elif typ is cudf.Series:
         objs = [obj for obj in objs if len(obj)]
         if len(objs) == 0:
