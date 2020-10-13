@@ -5,6 +5,7 @@
 ## Improvements
 
 - PR #6471 Replace index type-dispatch call with indexalator in cudf::strings::substring
+- PR #6461 Replace index type-dispatch call with indexalator in cudf::scatter
 - PR #6415 Support `datetime64` in row-wise op
 - PR #6457 Replace index type-dispatch call with indexalator in `cudf::gather`
 - PR #6413 Replace Python NVTX package with conda-forge source
@@ -129,6 +130,7 @@
 - PR #6303 Use cudf test dtypes so timedelta tests are deterministic
 - PR #6326 Simplify interal csv/json kernel parameters
 - PR #6308 Add dictionary support to cudf::scatter with scalar
+- PR #6367 Add JNI bindings for byte casting
 - PR #6346 Remove macros from CompactProtocolWriter
 - PR #6312 Conda recipe dependency cleanup
 - PR #6347 Add dictionary support to cudf::copy_range
