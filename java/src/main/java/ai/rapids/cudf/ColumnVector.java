@@ -1717,6 +1717,29 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   /**
+   * Cast to list of bytes
+   * This method converts the rows provided by the ColumnVector and casts each row to a list of
+   * bytes with endinanness reversed. Numeric and string types supported, but not timestamps.
+   *
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asByteList() {
+    return new ColumnVector(byteListCast(getNativeView(), true));
+  }
+
+  /**
+   * Cast to list of bytes
+   * This method converts the rows provided by the ColumnVector and casts each row to a list
+   * of bytes. Numeric and string types supported, but not timestamps.
+   *
+   * @param config Flips the byte order (endianness) if true, retains byte order otherwise
+   * @return A new vector allocated on the GPU
+   */
+  public ColumnVector asByteList(boolean config) {
+    return new ColumnVector(byteListCast(getNativeView(), config));
+  }
+
+  /**
    * Cast to unsigned Byte - ColumnVector
    * This method takes the value provided by the ColumnVector and casts to byte
    * When casting from a Date, Timestamp, or Boolean to a byte type the underlying numerical
@@ -2868,6 +2891,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   private static native long extractListElement(long nativeView, int index);
 
   private static native long castTo(long nativeHandle, int type);
+
+  private static native long byteListCast(long nativeHandle, boolean config);
 
   private static native long[] slice(long nativeHandle, int[] indices) throws CudfException;
 
