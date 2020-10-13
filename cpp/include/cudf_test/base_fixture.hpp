@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <random>
+
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf_test/cudf_gtest.hpp>

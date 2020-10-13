@@ -16,8 +16,6 @@
 
 #include <benchmarks/io/cuio_benchmark_common.hpp>
 
-#include <cstdio>
-#include <iostream>
 #include <string>
 
 #include <unistd.h>
