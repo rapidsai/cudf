@@ -16,24 +16,6 @@ install_requires = ["numba", "cython"]
 
 cython_files = ["cudf/**/*.pyx"]
 
-libraries = [
-    "cudf",
-    "cudf_base",
-    "cudf_ast",
-    "cudf_comms",
-    "cudf_hash",
-    "cudf_interop",
-    "cudf_io",
-    "cudf_join",
-    "cudf_merge",
-    "cudf_partitioning",
-    "cudf_reductions",
-    "cudf_replace",
-    "cudf_reshape",
-    "cudf_rolling",
-    "cudf_transpose"
-]
-
 CUDA_HOME = os.environ.get("CUDA_HOME", False)
 if not CUDA_HOME:
     path_to_cuda_gdb = shutil.which("cuda-gdb")
@@ -80,7 +62,7 @@ extensions = [
             pa.get_library_dirs()
             + [get_python_lib(), os.path.join(os.sys.prefix, "lib")]
         ),
-        libraries=libraries + pa.get_libraries() + ["arrow_cuda"],
+        libraries=["cudf"] + pa.get_libraries() + ["arrow_cuda"],
         language="c++",
         extra_compile_args=["-std=c++14"],
     )
