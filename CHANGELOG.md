@@ -13,6 +13,7 @@
 ## Bug Fixes
 
  - PR #6509 Disable JITIFY log printing
+ - PR #6519 Fix end-of-string marking boundary condition in subword-tokenizer
 
 
 # cuDF 0.16.0 (Date TBD)
