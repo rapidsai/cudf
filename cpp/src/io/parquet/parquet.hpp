@@ -44,6 +44,95 @@ struct file_ender_s {
   uint32_t magic;
 };
 
+// thrift generated code simplified.
+struct StringType { };
+struct MapType { };
+struct ListType { };
+struct EnumType { };
+struct DecimalType {
+  int32_t scale     = 0;
+  int32_t precision = 0;
+};
+struct DateType { };
+
+struct MilliSeconds { };
+struct MicroSeconds { };
+typedef struct _TimeUnit__isset {
+  _TimeUnit__isset() : MILLIS(false), MICROS(false) {}
+  bool MILLIS :1;
+  bool MICROS :1;
+} _TimeUnit__isset;
+
+struct TimeUnit {
+  _TimeUnit__isset __isset;
+  MilliSeconds MILLIS;
+  MicroSeconds MICROS;
+};
+
+
+struct TimeType {
+  bool isAdjustedToUTC = false;
+  TimeUnit unit;
+};
+struct TimestampType {
+  bool isAdjustedToUTC = false;
+  TimeUnit unit;
+};
+struct IntType {
+  int8_t bitWidth = 0;
+  bool isSigned   = false;
+};
+struct NullType { };
+struct JsonType { };
+struct BsonType { };
+
+// thrift generated code simplified.
+typedef struct _LogicalType__isset {
+  _LogicalType__isset()
+    : STRING(false),
+      MAP(false),
+      LIST(false),
+      ENUM(false),
+      DECIMAL(false),
+      DATE(false),
+      TIME(false),
+      TIMESTAMP(false),
+      INTEGER(false),
+      UNKNOWN(false),
+      JSON(false),
+      BSON(false)
+  {
+  }
+  bool STRING : 1;
+  bool MAP : 1;
+  bool LIST : 1;
+  bool ENUM : 1;
+  bool DECIMAL : 1;
+  bool DATE : 1;
+  bool TIME : 1;
+  bool TIMESTAMP : 1;
+  bool INTEGER : 1;
+  bool UNKNOWN : 1;
+  bool JSON : 1;
+  bool BSON : 1;
+} _LogicalType__isset;
+
+struct LogicalType {
+  _LogicalType__isset __isset;
+  StringType STRING;
+  MapType MAP;
+  ListType LIST;
+  EnumType ENUM;
+  DecimalType DECIMAL;
+  DateType DATE;
+  TimeType TIME;
+  TimestampType TIMESTAMP;
+  IntType INTEGER;
+  NullType UNKNOWN;
+  JsonType JSON;
+  BsonType BSON;
+};
+
 /**
  * @brief Struct for describing an element/field in the Parquet format schema
  *
@@ -53,6 +142,7 @@ struct file_ender_s {
 struct SchemaElement {
   Type type                    = UNDEFINED_TYPE;
   ConvertedType converted_type = UNKNOWN;
+  LogicalType logical_type;
   int32_t type_length =
     0;  // Byte length of FIXED_LENGTH_BYTE_ARRAY elements, or maximum bit length for other types
   FieldRepetitionType repetition_type = REQUIRED;
@@ -313,12 +403,14 @@ class CompactProtocolReader {
     return sz;
   }
   bool skip_struct_field(int t, int depth = 0);
+  bool skip_struct_field2(int t, int depth = 0);
 
  public:
   // Generate Thrift structure parsing routines
 #define DECL_PARQUET_STRUCT(st) bool read(st *)
   DECL_PARQUET_STRUCT(FileMetaData);
   DECL_PARQUET_STRUCT(SchemaElement);
+  DECL_PARQUET_STRUCT(LogicalType);
   DECL_PARQUET_STRUCT(RowGroup);
   DECL_PARQUET_STRUCT(ColumnChunk);
   DECL_PARQUET_STRUCT(ColumnChunkMetaData);
