@@ -26,7 +26,7 @@ namespace {
 template <typename T>
 std::vector<T> split(T const& input, size_type column_size, std::vector<size_type> const& splits)
 {
-  if (splits.size() == 0 or column_size == 0) { return std::vector<T>{input}; }
+  if (splits.empty() or column_size == 0) { return std::vector<T>{input}; }
   CUDF_EXPECTS(splits.back() <= column_size, "splits can't exceed size of input columns");
 
   // If the size is not zero, the split will always start at `0`

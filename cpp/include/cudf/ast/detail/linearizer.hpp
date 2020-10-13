@@ -54,7 +54,7 @@ enum class device_data_reference_type {
  * by the `row_evaluator`.
  *
  */
-struct device_data_reference {
+struct alignas(8) device_data_reference {
   device_data_reference(device_data_reference_type reference_type,
                         cudf::data_type data_type,
                         cudf::size_type data_index,
