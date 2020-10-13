@@ -12,7 +12,7 @@ __global__ void inclusive_scan_copy_if_kernel(device_span<T> input,
                                               UnaryPredicate predicate_op)
 {
   using BlockLoad   = typename cub::BlockLoad<  //
-    uint8_t,
+    T,
     BLOCK_DIM_X,
     ITEMS_PER_THREAD,
     cub::BlockLoadAlgorithm::BLOCK_LOAD_TRANSPOSE>;
@@ -25,7 +25,7 @@ __global__ void inclusive_scan_copy_if_kernel(device_span<T> input,
     typename BlockScan::TempStorage scan;
   } temp_storage;
 
-  uint8_t thread_data[ITEMS_PER_THREAD];
+  T thread_data[ITEMS_PER_THREAD];
 
   uint32_t const block_offset  = (blockIdx.x * blockDim.x) * ITEMS_PER_THREAD;
   uint32_t const thread_offset = threadIdx.x * ITEMS_PER_THREAD;
@@ -37,8 +37,15 @@ __global__ void inclusive_scan_copy_if_kernel(device_span<T> input,
 
   // incorperate, predicate, assign
 
-  for (auto i = 0; i < ITEMS_PER_THREAD; i++) {
+  if (thread_offset < valid_items) {
+    if (predicate_op(thread_data[0])) {  //
+      count_thread++;
+    }
+  }
+
+  for (auto i = 1; i < ITEMS_PER_THREAD; i++) {
     if (thread_offset + i >= valid_items) { break; }
+    thread_data[i] = reduce_op(thread_data[i - 1], thread_data[i]);
     if (predicate_op(thread_data[i])) {  //
       count_thread++;
     }

@@ -169,7 +169,7 @@ TEST_F(CsvReaderTest, CanGatherPositions)
 
 template <typename T>
 struct reduce_functor {
-  inline constexpr bool operator()(T const& lhs, T const& rhs) { return rhs; }
+  inline constexpr T operator()(T const& lhs, T const& rhs) { return rhs; }
 };
 
 template <typename T>
@@ -221,6 +221,51 @@ TEST_F(CsvReaderTest, CanGatherReducePositions2)
   EXPECT_EQ(static_cast<uint32_t>(14), h_indices[2]);
   EXPECT_EQ(static_cast<uint32_t>(17), h_indices[3]);
   EXPECT_EQ(static_cast<uint32_t>(21), h_indices[4]);
+}
+
+struct ascend_state {
+  int value;
+  bool did_ascend;
+};
+
+struct ascend_reduce_functor {
+  inline constexpr ascend_state operator()(ascend_state const& lhs, ascend_state const& rhs)
+  {
+    return {rhs.value, rhs.value > lhs.value};
+  }
+};
+
+struct ascend_detect_functor {
+  inline constexpr bool operator()(ascend_state const& state) { return state.did_ascend; }
+};
+
+TEST_F(CsvReaderTest, CanGatherReducePositions3)
+{
+  auto input       = std::vector<int>{1, 6, 9, 5, 4, 8, 3, 2, 8, 9};
+  auto input_state = std::vector<ascend_state>(input.size());
+
+  std::transform(  //
+    input.begin(),
+    input.end(),
+    input_state.begin(),
+    [](int value) -> ascend_state { return {value}; });
+
+  rmm::device_vector<ascend_state> d_input_state(input_state.begin(), input_state.end());
+
+  auto d_output = inclusive_scan_copy_if<ascend_state>(d_input_state,  //
+                                                       ascend_reduce_functor{},
+                                                       ascend_detect_functor{},
+                                                       0);
+
+  thrust::host_vector<uint32_t> h_indices = d_output;
+
+  ASSERT_EQ(static_cast<uint32_t>(5), h_indices.size());
+
+  EXPECT_EQ(static_cast<uint32_t>(1), h_indices[0]);
+  EXPECT_EQ(static_cast<uint32_t>(2), h_indices[1]);
+  EXPECT_EQ(static_cast<uint32_t>(5), h_indices[2]);
+  EXPECT_EQ(static_cast<uint32_t>(8), h_indices[3]);
+  EXPECT_EQ(static_cast<uint32_t>(9), h_indices[4]);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
