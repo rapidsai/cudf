@@ -23,13 +23,6 @@
 namespace cudf {
 namespace io {
 // NOTE: Assumes little-endian platform
-#ifdef _MSC_VER
-#define bswap_32(v) _byteswap_ulong(v)
-#define bswap_64(v) _byteswap_uint64(v)
-#else
-#define bswap_32(v) __builtin_bswap32(v)
-#define bswap_64(v) __builtin_bswap64(v)
-#endif
 
 #define TZIF_MAGIC (('T' << 0) | ('Z' << 8) | ('i' << 16) | ('f' << 24))
 
@@ -38,18 +31,18 @@ namespace io {
 #pragma pack(push, 1)
 /**
  * @brief 32-bit TZif header
- **/
+ */
 struct tzif_hdr_s {
-  uint32_t magic;          // "TZif"
-  uint8_t version;         // 0:version1, '2':version2, '3':version3
-  uint8_t reserved15[15];  // unused, reserved for future use
-  uint32_t isutccnt;       // number of UTC/local indicators contained in the body
-  uint32_t isstdcnt;       // number of standard/wall indicators contained in the body
-  uint32_t leapcnt;        // number of leap second records contained in the body
-  uint32_t timecnt;        // number of transition times contained in the body
-  uint32_t typecnt;  // number of local time type Records contained in the body - MUST NOT be zero
-  uint32_t charcnt;  // total number of octets used by the set of time zone designations contained
-                     // in the body
+  uint32_t magic;          ///< "TZif"
+  uint8_t version;         ///< 0:version1, '2':version2, '3':version3
+  uint8_t reserved15[15];  ///< unused, reserved for future use
+  uint32_t isutccnt;       ///< number of UTC/local indicators contained in the body
+  uint32_t isstdcnt;       ///< number of standard/wall indicators contained in the body
+  uint32_t leapcnt;        ///< number of leap second records contained in the body
+  uint32_t timecnt;        ///< number of transition times contained in the body
+  uint32_t typecnt;  ///< number of local time type Records contained in the body - MUST NOT be zero
+  uint32_t charcnt;  ///< total number of octets used by the set of time zone designations contained
+                     ///< in the body
 };
 
 struct localtime_type_record_s {
@@ -311,15 +304,6 @@ static int64_t GetGmtOffset(const std::vector<int64_t> &table, int64_t ts)
   return table[first * 2 + 2];
 }
 
-/**
- * @brief Creates a transition table to convert ORC timestamps to UTC
- *
- * @param[out] table output table (1st entry = gmtOffset, 2 int64_t per transition, last 800
- *transitions repeat forever with 400 year cycle)
- * @param[in] timezone_name standard timezone name (for example, "US/Pacific")
- *
- * @return TODO
- **/
 std::vector<int64_t> BuildTimezoneTransitionTable(std::string const &timezone_name)
 {
   using std::ios_base;
@@ -328,27 +312,25 @@ std::vector<int64_t> BuildTimezoneTransitionTable(std::string const &timezone_na
     // Return an empty table for UTC
     return {};
   }
-  tzif_hdr_s tzh = {0};
-  size_t earliest_std_idx;
-  int64_t future_dstoff, future_stdoff, future_time;
 
   std::string const tz_filename = "/usr/share/zoneinfo/" + timezone_name;
-
   std::ifstream fin;
   fin.open(tz_filename, ios_base::in | ios_base::binary | ios_base::ate);
   CUDF_EXPECTS(fin, "Failed to open the timezone file.");
   auto const file_size = fin.tellg();
   fin.seekg(0);
+
+  tzif_hdr_s tzh{};
   fin.read(reinterpret_cast<char *>(&tzh), sizeof(tzh));
   CUDF_EXPECTS(!fin.fail() && tzh.magic == TZIF_MAGIC, "Error reading time zones file header.");
 
   // Convert fields to little endian
-  tzh.isutccnt = bswap_32(tzh.isutccnt);
-  tzh.isstdcnt = bswap_32(tzh.isstdcnt);
-  tzh.leapcnt  = bswap_32(tzh.leapcnt);
-  tzh.timecnt  = bswap_32(tzh.timecnt);
-  tzh.typecnt  = bswap_32(tzh.typecnt);
-  tzh.charcnt  = bswap_32(tzh.charcnt);
+  tzh.isutccnt = __builtin_bswap32(tzh.isutccnt);
+  tzh.isstdcnt = __builtin_bswap32(tzh.isstdcnt);
+  tzh.leapcnt  = __builtin_bswap32(tzh.leapcnt);
+  tzh.timecnt  = __builtin_bswap32(tzh.timecnt);
+  tzh.typecnt  = __builtin_bswap32(tzh.typecnt);
+  tzh.charcnt  = __builtin_bswap32(tzh.charcnt);
 
   // Check for 64-bit header
   bool hdr64 = false;
@@ -360,12 +342,12 @@ std::vector<int64_t> BuildTimezoneTransitionTable(std::string const &timezone_na
       hdr64 = true;
       fin.read(reinterpret_cast<char *>(&tzh), sizeof(tzh));
       // Convert fields to little endian
-      tzh.isutccnt = bswap_32(tzh.isutccnt);
-      tzh.isstdcnt = bswap_32(tzh.isstdcnt);
-      tzh.leapcnt  = bswap_32(tzh.leapcnt);
-      tzh.timecnt  = bswap_32(tzh.timecnt);
-      tzh.typecnt  = bswap_32(tzh.typecnt);
-      tzh.charcnt  = bswap_32(tzh.charcnt);
+      tzh.isutccnt = __builtin_bswap32(tzh.isutccnt);
+      tzh.isstdcnt = __builtin_bswap32(tzh.isstdcnt);
+      tzh.leapcnt  = __builtin_bswap32(tzh.leapcnt);
+      tzh.timecnt  = __builtin_bswap32(tzh.timecnt);
+      tzh.typecnt  = __builtin_bswap32(tzh.typecnt);
+      tzh.charcnt  = __builtin_bswap32(tzh.charcnt);
     }
   }
   CUDF_EXPECTS(tzh.typecnt > 0 && tzh.typecnt <= file_size / sizeof(localtime_type_record_s),
@@ -374,33 +356,28 @@ std::vector<int64_t> BuildTimezoneTransitionTable(std::string const &timezone_na
                "Number of transition times is larger than the file size.");
 
   // Read transition times (convert from 32-bit to 64-bit if necessary)
-  std::vector<int64_t> transition_times;
-  std::vector<uint8_t> ttime_idx;
-  if (tzh.timecnt > 0) {
-    if (hdr64) {
-      transition_times.resize(tzh.timecnt);
-      fin.read(reinterpret_cast<char *>(transition_times.data()),
-               transition_times.size() * sizeof(int64_t));
-      for (auto &tt : transition_times) { tt = bswap_64(tt); }
-    } else {
-      std::vector<int32_t> tt32(tzh.timecnt);
-      fin.read(reinterpret_cast<char *>(tt32.data()), tt32.size() * sizeof(int32_t));
-      std::transform(
-        tt32.cbegin(), tt32.cend(), std::back_inserter(transition_times), [](auto &tt) {
-          return bswap_32(tt);
-        });
-    }
-
-    ttime_idx.resize(tzh.timecnt);
-    fin.read(reinterpret_cast<char *>(ttime_idx.data()), tzh.timecnt * sizeof(uint8_t));
+  std::vector<int64_t> transition_times(tzh.timecnt);
+  if (hdr64) {
+    fin.read(reinterpret_cast<char *>(transition_times.data()),
+             transition_times.size() * sizeof(int64_t));
+    for (auto &tt : transition_times) { tt = __builtin_bswap64(tt); }
+  } else {
+    std::vector<int32_t> tt32(tzh.timecnt);
+    fin.read(reinterpret_cast<char *>(tt32.data()), tt32.size() * sizeof(int32_t));
+    std::transform(tt32.cbegin(), tt32.cend(), std::back_inserter(transition_times), [](auto &tt) {
+      return __builtin_bswap32(tt);
+    });
   }
+
+  std::vector<uint8_t> ttime_idx(tzh.timecnt);
+  fin.read(reinterpret_cast<char *>(ttime_idx.data()), tzh.timecnt * sizeof(uint8_t));
 
   // Read time types
   std::vector<localtime_type_record_s> ttype(tzh.typecnt);
   fin.read(reinterpret_cast<char *>(ttype.data()), tzh.typecnt * sizeof(localtime_type_record_s));
   CUDF_EXPECTS(!fin.fail(), "Failed to read time types from the time zone file.");
   for (uint32_t i = 0; i < tzh.typecnt; i++) {
-    ttype[i].utcoff = (int32_t)bswap_32(ttype[i].utcoff);
+    ttype[i].utcoff = __builtin_bswap32(ttype[i].utcoff);
   }
 
   // Read posix TZ string
@@ -412,18 +389,16 @@ std::vector<int64_t> BuildTimezoneTransitionTable(std::string const &timezone_na
     posix_tz_string.resize(file_size - file_pos);
     fin.read(reinterpret_cast<char *>(posix_tz_string.data()), file_size - file_pos);
   }
-  fin.close();
 
   // Allocate transition table, add one entry for ancient rule, and 800 entries for future rules
   // (2 transitions/year)
   std::vector<int64_t> ttable((1 + (size_t)tzh.timecnt + 400 * 2) * 2 + 1);
-  earliest_std_idx = 0;
+  size_t earliest_std_idx = 0;
   for (size_t t = 0; t < tzh.timecnt; t++) {
-    int64_t ttime = transition_times[t];
-    int64_t utcoff;
-    uint32_t idx = ttime_idx[t];
+    auto const ttime = transition_times[t];
+    auto const idx   = ttime_idx[t];
     CUDF_EXPECTS(idx < tzh.typecnt, "Out-of-range type index");
-    utcoff                  = ttype[idx].utcoff;
+    auto const utcoff       = ttype[idx].utcoff;
     ttable[(1 + t) * 2 + 1] = ttime;
     ttable[(1 + t) * 2 + 2] = utcoff;
     if (!earliest_std_idx && !ttype[idx].isdst) { earliest_std_idx = 1 + t; }
@@ -433,10 +408,11 @@ std::vector<int64_t> BuildTimezoneTransitionTable(std::string const &timezone_na
   ttable[2] = ttable[earliest_std_idx * 2 + 2];
 
   // Generate entries for times after the last transition
-  future_stdoff = ttable[(tzh.timecnt * 2) + 2];
-  future_dstoff = future_stdoff;
+  auto future_stdoff = ttable[(tzh.timecnt * 2) + 2];
+  auto future_dstoff = future_stdoff;
 
-  dst_transition_s dst_start = {0}, dst_end = {0};
+  dst_transition_s dst_start{};
+  dst_transition_s dst_end{};
   if (posix_tz_string.size() > 0) {
     const uint8_t *cur = posix_tz_string.data();
     const uint8_t *end = cur + posix_tz_string.size();
@@ -459,11 +435,11 @@ std::vector<int64_t> BuildTimezoneTransitionTable(std::string const &timezone_na
     }
   }
   // Add 2 entries per year for 400 years
-  future_time = 0;
+  int64_t future_time = 0;
   for (size_t t = 0; t < 800; t += 2) {
-    uint32_t year          = 1970 + ((int)t >> 1);
-    int64_t dst_start_time = GetTransitionTime(&dst_start, year);
-    int64_t dst_end_time   = GetTransitionTime(&dst_end, year);
+    uint32_t const year          = 1970 + ((int)t >> 1);
+    int64_t const dst_start_time = GetTransitionTime(&dst_start, year);
+    int64_t const dst_end_time   = GetTransitionTime(&dst_end, year);
     if (dst_start_time < dst_end_time) {
       ttable[(1 + tzh.timecnt + t) * 2 + 1] = future_time + dst_start_time - future_stdoff;
       ttable[(1 + tzh.timecnt + t) * 2 + 2] = future_dstoff;
