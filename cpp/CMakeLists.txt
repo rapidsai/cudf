@@ -240,8 +240,8 @@ endif(ARROW_INCLUDE_DIR AND ARROW_LIB AND ARROW_CUDA_LIB)
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcudacxx")
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcxx/include")
 
-file(INSTALL ${LIBCUDACXX_INCLUDE_DIR} DESTINATION ${CMAKE_BINARY_DIR}/include/libcudacxx/)
-file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION ${CMAKE_BINARY_DIR}/include/libcxx/include/)
+file(INSTALL ${LIBCUDACXX_INCLUDE_DIR} DESTINATION "${CMAKE_BINARY_DIR}/include/libcudacxx/")
+file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION "${CMAKE_BINARY_DIR}/include/libcxx/include/")
 
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
@@ -624,19 +624,14 @@ set(
 
 # generate names of cudf library modules based on source tree under cpp/src
 foreach(CUDF_MODULE_DIR IN LISTS CUDF_MODULE_LIST)
-    string(
-        REPLACE "/" ";"  # replace "/" with ";", forcing cmake to interpret output as list of directory elements
-            MODULE_DIR_LEAVES
-            ${CUDF_MODULE_DIR}
-    )
-    list(REVERSE MODULE_DIR_LEAVES)  # reverse the list of directory elements
-    list(GET MODULE_DIR_LEAVES 0 CUDF_MODULE_NAME)  # name cudf library module after source directory under cpp/src
+    get_filename_component(CUDF_MODULE_NAME ${CUDF_MODULE_DIR} NAME)
     add_library_module(${CUDF_NAMESPACE} ${CUDF_MODULE_NAME} ${CUDF_MODULE_DIR})
     target_link_libraries("${CUDF_NAMESPACE}_${CUDF_MODULE_NAME}" "${CUDF_NAMESPACE}::base")
     list(APPEND CUDF_MODULES "${CUDF_NAMESPACE}_${CUDF_MODULE_NAME}")
 endforeach()
 
 add_library(cudf ${CUDF_PROXY_SRC})
+# `-Wl,--no-as-needed`: link libraries to cudf even if no symbols in that library are called
 target_link_options(cudf PRIVATE "LINKER:--no-as-needed")
 set_target_properties(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
 add_library(cudf::cudf ALIAS cudf)
