@@ -342,7 +342,9 @@ std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lh
   }
 };
 
-// TODO DOCS
+/**
+ * @brief Returns `true` if `binary_opeator` `op` is a basic arithmetic binary operation
+ */
 bool is_basic_arithmetic_binop(binary_operator op)
 {
   return op == binary_operator::ADD or  ///< operator +
@@ -351,7 +353,9 @@ bool is_basic_arithmetic_binop(binary_operator op)
          op == binary_operator::DIV;    ///< operator / using common type of lhs and rhs
 }
 
-// TODO DOCS
+/**
+ * @brief Returns `true` if `binary_opeator` `op` is a comparison binary operation
+ */
 bool is_comparison_binop(binary_operator op)
 {
   return op == binary_operator::EQUAL or        ///< operator ==
@@ -362,10 +366,12 @@ bool is_comparison_binop(binary_operator op)
          op == binary_operator::GREATER_EQUAL;  ///< operator >=
 }
 
-// TODO DOCS
+/**
+ * @brief Returns `true` if `binary_opeator` `op` is supported by `fixed_point`
+ */
 bool is_supported_fixed_point_binop(binary_operator op)
 {
-  return is_basic_arithmetic_binop(op) or is_comparison_binop(op);
+  return false;  // is_basic_arithmetic_binop(op) or is_comparison_binop(op);
 }
 
 /**
