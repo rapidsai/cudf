@@ -33,13 +33,22 @@ class CudfKafkaClient:
 
         self.kafka_meta_client = KafkaDatasource(self.kafka_confs)
 
-    def list_topics(self):
+    def list_topics(self, specific_topic=None):
 
         """
         List the topics associated with the underlying Kafka Broker connection.
+
+        Parameters
+        ----------
+        specific_topic : str,
+            If specified this is the only topic that metadata information will
+            be retrieved for. Otherwise metadata for all topics in the
+            broker will be retrieved.
         """
 
-        return self.kafka_meta_client.list_topics()
+        return self.kafka_meta_client.list_topics(
+            b"" if specific_topic is None else specific_topic.encode()
+        )
 
     def unsubscribe(self):
 
