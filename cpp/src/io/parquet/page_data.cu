@@ -1821,8 +1821,8 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
   // 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
   //
   // We also need to preserve key-relative page ordering, so we need to use a stable sort.
-  thrust::device_vector<int> page_keys(pages.size());
-  thrust::device_vector<int> page_index(pages.size());
+  rmm::device_uvector<int> page_keys(pages.size(), stream);
+  rmm::device_uvector<int> page_index(pages.size(), stream);
   {
     thrust::transform(rmm::exec_policy(stream)->on(stream),
                       pages.device_ptr(),
@@ -1831,11 +1831,10 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
                       [] __device__(PageInfo const &page) { return page.src_col_schema; });
 
     thrust::sequence(rmm::exec_policy(stream)->on(stream), page_index.begin(), page_index.end());
-    int *keys = page_keys.data().get();
     thrust::stable_sort_by_key(rmm::exec_policy(stream)->on(stream),
-                               keys,
-                               keys + pages.size(),
-                               page_index.data().get(),
+                               page_keys.begin(),
+                               page_keys.end(),
+                               page_index.begin(),
                                thrust::less<int>());
   }
 
@@ -1878,10 +1877,10 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
       // compute per-page start offset
       thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream),
                                     page_keys.begin(),
-                                    page_keys.begin() + pages.size(),
+                                    page_keys.end(),
                                     size_input,
                                     start_offset_output_iterator{pages.device_ptr(),
-                                                                 page_index.data().get(),
+                                                                 page_index.begin(),
                                                                  0,
                                                                  static_cast<int>(src_col_schema),
                                                                  static_cast<int>(l_idx)});

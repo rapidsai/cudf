@@ -903,8 +903,8 @@ def test_parquet_reader_list_large_mixed(tmpdir):
 
 
 def test_parquet_reader_list_large_multi_rowgroup(tmpdir):
-    # > 800 row groups
-    num_rows = 2_000_000
+    # > 40 row groups
+    num_rows = 100000
     num_docs = num_rows / 2
     num_categories = 1_000
     row_group_size = 1000
@@ -935,8 +935,8 @@ def test_parquet_reader_list_large_multi_rowgroup(tmpdir):
 
 
 def test_parquet_reader_list_large_multi_rowgroup_nulls(tmpdir):
-    # 200 row groups
-    num_rows = 200000
+    # 25 row groups
+    num_rows = 25000
     row_group_size = 1000
 
     expect = cudf.DataFrame(
