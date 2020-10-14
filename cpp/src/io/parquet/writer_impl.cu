@@ -19,6 +19,7 @@
  * @brief cuDF-IO parquet writer class implementation
  */
 
+#include <io/parquet/compact_protocol_writer.hpp>
 #include "writer_impl.hpp"
 
 #include <cudf/column/column_device_view.cuh>
@@ -996,8 +997,8 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
   rmm::device_vector<gpu::EncPage> pages(num_pages);
   rmm::device_vector<statistics_chunk> page_stats(num_stats_bfr);
   for (uint32_t b = 0, r = 0; b < (uint32_t)batch_list.size(); b++) {
-    uint8_t *bfr   = reinterpret_cast<uint8_t *>(uncomp_bfr.data());
-    uint8_t *bfr_c = reinterpret_cast<uint8_t *>(comp_bfr.data());
+    uint8_t *bfr   = static_cast<uint8_t *>(uncomp_bfr.data());
+    uint8_t *bfr_c = static_cast<uint8_t *>(comp_bfr.data());
     for (uint32_t j = 0; j < batch_list[b]; j++, r++) {
       for (int i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk *ck = &chunks[r * num_columns + i];
@@ -1122,7 +1123,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;
   buffer_.resize(0);
-  fendr.footer_len = static_cast<uint32_t>(cpw.write(&state.md));
+  fendr.footer_len = static_cast<uint32_t>(cpw.write(state.md));
   fendr.magic      = PARQUET_MAGIC;
   out_sink_->host_write(buffer_.data(), buffer_.size());
   out_sink_->host_write(&fendr, sizeof(fendr));
@@ -1138,7 +1139,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write_chunked_end(
     for (auto &rowgroup : state.md.row_groups) {
       for (auto &col : rowgroup.columns) { col.file_path = column_chunks_file_path; }
     }
-    fendr.footer_len = static_cast<uint32_t>(cpw.write(&state.md));
+    fendr.footer_len = static_cast<uint32_t>(cpw.write(state.md));
     buffer_.insert(buffer_.end(),
                    reinterpret_cast<const uint8_t *>(&fendr),
                    reinterpret_cast<const uint8_t *>(&fendr) + sizeof(fendr));
@@ -1227,7 +1228,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
   output.insert(output.end(),
                 reinterpret_cast<const uint8_t *>(&fhdr),
                 reinterpret_cast<const uint8_t *>(&fhdr) + sizeof(fhdr));
-  fendr.footer_len = static_cast<uint32_t>(cpw.write(&md));
+  fendr.footer_len = static_cast<uint32_t>(cpw.write(md));
   fendr.magic      = PARQUET_MAGIC;
   output.insert(output.end(),
                 reinterpret_cast<const uint8_t *>(&fendr),

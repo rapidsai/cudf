@@ -209,10 +209,12 @@ class numeric_scalar_device_view : public detail::fixed_width_scalar_device_view
  * @brief A type of scalar_device_view that stores a pointer to a fixed_point value
  */
 template <typename T>
-class fixed_point_scalar_device_view : public detail::fixed_width_scalar_device_view<T> {
+class fixed_point_scalar_device_view : public detail::scalar_device_view_base {
  public:
-  fixed_point_scalar_device_view(data_type type, T* data, bool* is_valid)
-    : detail::fixed_width_scalar_device_view<T>(type, data, is_valid)
+  using rep_type = typename T::rep;
+
+  fixed_point_scalar_device_view(data_type type, rep_type* data, bool* is_valid)
+    : detail::scalar_device_view_base(type, is_valid)
   {
   }
 };

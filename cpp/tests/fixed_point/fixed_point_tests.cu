@@ -15,10 +15,15 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <algorithm>
@@ -534,6 +539,45 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
   thrust::host_vector<int32_t> vec3_host = vec3;
 
   EXPECT_EQ(vec2, vec3);
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointColumnWrapper)
+{
+  using namespace numeric;
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+  using RepType   = TypeParam;
+
+  // fixed_point_column_wrapper
+  auto const w = cudf::test::fixed_point_column_wrapper<RepType>{{1, 2, 3, 4}, scale_type{0}};
+
+  // fixed_width_column_wrapper
+  auto const ONE   = decimalXX{1, scale_type{0}};
+  auto const TWO   = decimalXX{2, scale_type{0}};
+  auto const THREE = decimalXX{3, scale_type{0}};
+  auto const FOUR  = decimalXX{4, scale_type{0}};
+
+  auto const vec = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
+  auto const col = cudf::test::fixed_width_column_wrapper<decimalXX>(vec.begin(), vec.end());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col, w);
+}
+
+TYPED_TEST(FixedPointTestBothReps, NoScaleOrWrongTypeID)
+{
+  auto const null_mask = cudf::create_null_mask(0, cudf::mask_state::ALL_NULL);
+
+  EXPECT_THROW(cudf::make_fixed_point_column(cudf::data_type{cudf::type_id::INT32}, 0, null_mask),
+               cudf::logic_error);
+}
+
+TYPED_TEST(FixedPointTestBothReps, SimpleFixedPointColumnWrapper)
+{
+  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+
+  auto const a = cudf::test::fixed_point_column_wrapper<int32_t>{{11, 22, 33}, scale_type{-1}};
+  auto const b = cudf::test::fixed_point_column_wrapper<int32_t>{{110, 220, 330}, scale_type{-2}};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(a, b);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

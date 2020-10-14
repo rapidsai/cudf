@@ -385,6 +385,38 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testMD5HashLists() {
+    List<String> list1 = Arrays.asList("dE\"\u0100\t\u0101 \u0500\u0501", "\\Fg2\'");
+    List<String> list2 = Arrays.asList("A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
+    "in the MD5 hash function. This string needed to be longer.", "", null, "A 60 character string to test MD5's message padding algorithm");
+    List<String> list3 = Arrays.asList("hiJ\ud720\ud721\ud720\ud721");
+    List<String> list4 = null;
+    try (ColumnVector v = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+    new HostColumnVector.BasicType(true, DType.STRING)), list1, list2, list3, list4);
+         ColumnVector result = ColumnVector.md5Hash(v);
+         ColumnVector expected = ColumnVector.fromStrings(
+          "675c30ce6d1b27dcb5009b01be42e9bd", "8fa29148f63c1fe9248fdc4644e3a193",
+          "1bc221b25e6c4825929e884092f4044f", "d41d8cd98f00b204e9800998ecf8427e")) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testNullReconfigureNulls() {
+    try (ColumnVector v0 = ColumnVector.fromBoxedInts(0, 100, null, null, Integer.MIN_VALUE, null);
+         ColumnVector v1 = ColumnVector.fromBoxedInts(0, 100, 1, 2, Integer.MIN_VALUE, null);
+         ColumnVector intResult = v1.mergeAndSetValidity(BinaryOp.BITWISE_AND, v0);
+         ColumnVector v2 = ColumnVector.fromStrings("0", "100", "1", "2", "MIN_VALUE", "3");
+         ColumnVector stringResult = v2.mergeAndSetValidity(BinaryOp.BITWISE_AND, v0, v1);
+         ColumnVector stringExpected = ColumnVector.fromStrings("0", "100", null, null, "MIN_VALUE", null);
+         ColumnVector noMaskResult = v2.mergeAndSetValidity(BinaryOp.BITWISE_AND)) {
+      assertColumnsAreEqual(v0, intResult);
+      assertColumnsAreEqual(stringExpected, stringResult);
+      assertColumnsAreEqual(v2, noMaskResult);
+    }
+  }
+
+  @Test
   void isNotNullTestEmptyColumn() {
     try (ColumnVector v = ColumnVector.fromBoxedInts();
          ColumnVector expected = ColumnVector.fromBoxedBooleans();
@@ -1511,6 +1543,22 @@ public class ColumnVectorTest extends CudfTestBase {
            ColumnVector result = v1.rollingWindow(Aggregation.mean(), options)) {
         assertColumnsAreEqual(expected, result);
       }
+
+      try (ColumnVector expected = ColumnVector.fromBoxedInts(4, 7, 6, 8, null);
+           ColumnVector result = v1.rollingWindow(Aggregation.lead(1), options)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector expected = ColumnVector.fromBoxedInts(null, 5, 4, 7, 6);
+           ColumnVector result = v1.rollingWindow(Aggregation.lag(1), options)) {
+        assertColumnsAreEqual(expected, result);
+      }
+
+      try (ColumnVector defaultOutput = ColumnVector.fromInts(-1, -2, -3, -4, -5);
+           ColumnVector expected = ColumnVector.fromBoxedInts(-1,  5,  4,  7,  6);
+           ColumnVector result = v1.rollingWindow(Aggregation.lag(1, defaultOutput), options)) {
+        assertColumnsAreEqual(expected, result);
+      }
     }
   }
 
@@ -1912,6 +1960,78 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector unsupported_ns_string_times = ColumnVector.fromStrings(NEG_TIME_NS_STRING);
          ColumnVector unsupported_ns_timestamps = ColumnVector.timestampSecondsFromLongs(NEG_TIME_NS)) {
       assertColumnsAreEqual(unsupported_ns_string_times, unsupported_ns_timestamps);
+    }
+  }
+
+  @Test
+  void testCastStringToByteList() {
+    List<Byte> list1 = Arrays.asList((byte)0x54, (byte)0x68, (byte)0xc3, (byte)0xa9, (byte)0x73,
+      (byte)0xc3, (byte)0xa9);
+    List<Byte> list2 = null;
+    List<Byte> list3 = Arrays.asList((byte)0x0d, (byte)0xed, (byte)0x9c, (byte)0xa0, (byte)0xc3,
+      (byte)0xa9, (byte)0xed, (byte)0x9c, (byte)0xa1);
+    List<Byte> list4 = Arrays.asList((byte)0x41, (byte)0x52, (byte)0xc3, (byte)0xa9);
+    List<Byte> list5 = Arrays.asList((byte)0x5c, (byte)0x54, (byte)0x48, (byte)0x45, (byte)0x09,
+      (byte)0x38, (byte)0xed, (byte)0x9c, (byte)0xa0);
+    List<Byte> list6 = Arrays.asList((byte)0x74, (byte)0xc3, (byte)0xa9, (byte)0x73, (byte)0x74,
+      (byte)0x20, (byte)0x73, (byte)0x74, (byte)0x72, (byte)0x69, (byte)0x6e, (byte)0x67, (byte)0x73);
+    List<Byte> list7 = Arrays.asList();
+    List<Byte> list8 = Arrays.asList((byte)0xc3, (byte)0xa9, (byte)0xc3, (byte)0xa9);
+
+    try(ColumnVector cv = ColumnVector.fromStrings("Thésé", null, "\r\ud720é\ud721", "ARé",
+    "\\THE\t8\ud720", "tést strings", "", "éé");
+        ColumnVector res = cv.asByteList(true);
+        ColumnVector expected = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(true, DType.INT8)), list1, list2, list3, list4, list5,
+          list6, list7, list8)) {
+      assertColumnsAreEqual(expected, res);
+    }
+  }
+
+  @Test
+  void testCastIntegerToByteList() {
+    List<Byte> list1 = Arrays.asList((byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00);
+    List<Byte> list2 = Arrays.asList((byte)0x00, (byte)0x00, (byte)0x00, (byte)0x64);
+    List<Byte> list3 = Arrays.asList((byte)0xff, (byte)0xff, (byte)0xff, (byte)0x9c);
+    List<Byte> list4 = Arrays.asList((byte)0x80, (byte)0x00, (byte)0x00, (byte)0x00);
+    List<Byte> list5 = Arrays.asList((byte)0x7f, (byte)0xff, (byte)0xff, (byte)0xff);
+
+    try(ColumnVector cv = ColumnVector.fromBoxedInts(0, 100, -100, Integer.MIN_VALUE, Integer.MAX_VALUE);
+        ColumnVector res = cv.asByteList(true);
+        ColumnVector expected = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(true, DType.UINT8)), list1, list2, list3, list4, list5)) {
+      assertColumnsAreEqual(expected, res);
+    }
+  }
+
+  @Test
+  void testCastFloatToByteList() {
+    List<Byte> list1 = Arrays.asList((byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00);
+    List<Byte> list2 = Arrays.asList((byte)0x00, (byte)0x00, (byte)0xc8, (byte)0x42);
+    List<Byte> list3 = Arrays.asList((byte)0x00, (byte)0x00, (byte)0xc8, (byte)0xc2);
+    List<Byte> list4 = Arrays.asList((byte)0x00, (byte)0x00, (byte)0xc0, (byte)0x7f);
+    List<Byte> list5 = Arrays.asList((byte)0xff, (byte)0xff, (byte)0x7f, (byte)0x7f);
+    List<Byte> list6 = Arrays.asList((byte)0x00, (byte)0x00, (byte)0x80, (byte)0xff);
+
+    try(ColumnVector cv = ColumnVector.fromBoxedFloats((float)0.0, (float)100.0, (float)-100.0,
+          -Float.NaN, Float.MAX_VALUE, Float.NEGATIVE_INFINITY);
+        ColumnVector res = cv.asByteList(false);
+        ColumnVector expected = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(true, DType.UINT8)), list1, list2, list3, list4, list5, list6)) {
+      assertColumnsAreEqual(expected, res);
+    }
+  }
+
+  @Test
+  void testGetBytesFromList() {
+    List<Byte> list = Arrays.asList((byte)0x41, (byte)0x52, (byte)0xc3, (byte)0xa9);
+    try(ColumnVector cv = ColumnVector.fromStrings("ARé");
+        ColumnVector bytes = cv.asByteList(false);
+        HostColumnVector hostRes = bytes.copyToHost()) {
+      byte[] result = hostRes.getBytesFromList(0);
+      for(int i = 0; i < result.length; i++) {
+        assertEquals(list.get(i).byteValue(), result[i]);
+      }
     }
   }
 
