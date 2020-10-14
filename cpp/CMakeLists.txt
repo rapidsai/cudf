@@ -21,6 +21,8 @@ if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
 endif(NOT CMAKE_CUDA_COMPILER)
 
+include(cmake/CPM.cmake)
+
 ###################################################################################################
 # - build type ------------------------------------------------------------------------------------
 
@@ -789,10 +791,22 @@ message(STATUS "RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
 target_compile_definitions(cudf PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_LOGGING_LEVEL})
 
 ###################################################################################################
+# - nvtx ------------------------------------------------------------------------------------------
+CPMAddPackage(
+    NAME NVTX
+    GITHUB_REPOSITORY jrhemstad/NVTX # Use NVIDIA/NVTX once cmake overhaul is merged
+    GIT_TAG cmake-overhaul
+    SOURCE_SUBDIR cpp
+    OPTIONS
+       "BUILD_TESTS Off" 
+       "BUILD_BENCHMARKS Off"
+)
+
+###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cuDF
-target_link_libraries(cudf arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(cudf arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} nvtx3-cpp)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
