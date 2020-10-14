@@ -602,12 +602,13 @@ foreach(CUDF_BASE_MODULE_DIR IN LISTS CUDF_BASE_MODULE_LIST)
 endforeach()
 
 # create the base module library
+message(STATUS "Adding cudf module: base with name ${CUDF_NAMESPACE}_base")
 add_library("${CUDF_NAMESPACE}_base" ${CUDF_BASE_SRC})
 # ensure that libraries linked to the base module are done regardless of need; 
 set_target_properties("${CUDF_NAMESPACE}_base" PROPERTIES BUILD_RPATH "\$ORIGIN")
 # per-thread default stream
 if(PER_THREAD_DEFAULT_STREAM)
-    target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM)
+    target_compile_definitions("${CUDF_NAMESPACE}_base" PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM)
 endif()
 # nvtx
 if(NOT USE_NVTX)
@@ -637,11 +638,13 @@ set(
 # generate names of cudf library modules based on source tree under cpp/src
 foreach(CUDF_MODULE_DIR IN LISTS CUDF_MODULE_LIST)
     get_filename_component(CUDF_MODULE_NAME ${CUDF_MODULE_DIR} NAME)
+    message(STATUS "Adding cudf module: ${CUDF_MODULE_NAME} with name ${CUDF_NAMESPACE}_${CUDF_MODULE_NAME}")
     add_library_module(${CUDF_NAMESPACE} ${CUDF_MODULE_NAME} ${CUDF_MODULE_DIR})
     target_link_libraries("${CUDF_NAMESPACE}_${CUDF_MODULE_NAME}" "${CUDF_NAMESPACE}::base")
     list(APPEND CUDF_MODULES "${CUDF_NAMESPACE}_${CUDF_MODULE_NAME}")
 endforeach()
 
+message(STATUS "Generating proxy library: cudf")
 add_library(cudf ${CUDF_PROXY_SRC})
 # `-Wl,--no-as-needed`: link libraries to cudf even if no symbols in that library are called
 target_link_options(cudf PRIVATE "LINKER:--no-as-needed")
