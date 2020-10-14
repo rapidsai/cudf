@@ -392,9 +392,6 @@ endif(CONDA_LINK_DIRS)
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
 
-# Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
-target_compile_definitions(cudf PRIVATE JITIFY_PRINT_LOG=0)
-
 # Creates executable stringify and uses it to convert types.h to c-str for use in JIT code
 add_executable(stringify "${JITIFY_INCLUDE_DIR}/stringify.cpp")
 execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
@@ -545,24 +542,33 @@ message(STATUS "RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
 
+set(CUDF_NAMESPACE "cudf")
+
 # define a function that populates the namespace with modules from the cudf source tree (cpp/src)
-function(add_library_module MODULE MODULE_DIR)
-    file(GLOB_RECURSE MODULE_SRC "${MODULE_DIR}/*")
-    add_library("cudf_${MODULE}" ${MODULE_SRC})
-    set_target_properties("cudf_${MODULE}" PROPERTIES BUILD_RPATH "\$ORIGIN")
-    target_link_libraries("cudf_${MODULE}" arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
-    add_dependencies("cudf_${MODULE}" stringify_run)
+function(add_library_module NAMESPACE MODULE MODULE_SOURCE_DIRS)
+    foreach(MODULE_SOURCE_DIR IN LISTS MODULE_SOURCE_DIRS)
+        file(GLOB_RECURSE MODULE_SOURCE "${MODULE_SOURCE_DIR}/*")
+        list(APPEND MODULE_SRC ${MODULE_SOURCE})
+    endforeach()
+    message(STATUS "Adding library module with name ${MODULE} under namespace ${NAMESPACE} ...")
+    message(STATUS "Using sources: ${MODULE_SRC}")
+    add_library("${NAMESPACE}_${MODULE}" "${MODULE_SRC}")
+    set_target_properties("${NAMESPACE}_${MODULE}" PROPERTIES BUILD_RPATH "\$ORIGIN")
+    # Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
+    target_compile_definitions("${NAMESPACE}_${MODULE}" PRIVATE "JITIFY_PRINT_LOG=0")
     # per-thread default stream
     if(PER_THREAD_DEFAULT_STREAM)
-        target_compile_definitions("cudf_${MODULE}" PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM)
+        target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM)
     endif()
     # nvtx
     if(NOT USE_NVTX)
-        target_compile_definitions("cudf_${MODULE}" PUBLIC NVTX_DISABLE)
+        target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC NVTX_DISABLE)
     endif()
     # spdlog level
-    target_compile_definitions("cudf_${MODULE}" PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGING_LEVEL}")
-    add_library("cudf::${MODULE}" ALIAS "cudf_${MODULE}")
+    target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGING_LEVEL}")
+    add_dependencies("${NAMESPACE}_${MODULE}" stringify_run)
+    target_link_libraries("${NAMESPACE}_${MODULE}" arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+    add_library("${NAMESPACE}::${MODULE}" ALIAS "${NAMESPACE}_${MODULE}")
 endfunction()
 
 # define a list of modules for the base library
@@ -594,28 +600,8 @@ set(
         "${CMAKE_SOURCE_DIR}/src/utilities"
 )
 
-# create a list of sources for cudf base module
-foreach(CUDF_BASE_MODULE_DIR IN LISTS CUDF_BASE_MODULE_LIST)
-    file(GLOB_RECURSE CUDF_BASE_FILES "${CUDF_BASE_MODULE_DIR}/*")
-    list(APPEND CUDF_BASE_SRC ${CUDF_BASE_FILES})
-endforeach()
-
-# create the base module library
-message(STATUS "Adding cudf module: base with name cudf_base")
-add_library("cudf_base" ${CUDF_BASE_SRC})
-# ensure that libraries linked to the base module are done regardless of need; 
-set_target_properties("cudf_base" PROPERTIES BUILD_RPATH "\$ORIGIN")
-# per-thread default stream
-if(PER_THREAD_DEFAULT_STREAM)
-    target_compile_definitions("cudf_base" PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM)
-endif()
-# nvtx
-if(NOT USE_NVTX)
-    target_compile_definitions("cudf_base" PUBLIC "NVTX_DISABLE")
-endif()
-add_dependencies("cudf_base" stringify_run)
-target_link_libraries("cudf_base" arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
-add_library("cudf::base" ALIAS "cudf_base")
+set(CUDF_BASE_NAME "base")
+add_library_module("${CUDF_NAMESPACE}" "${CUDF_BASE_NAME}" "${CUDF_BASE_MODULE_LIST}")
 
 set(
     CUDF_MODULE_LIST
@@ -637,25 +623,25 @@ set(
 # generate names of cudf library modules based on source tree under cpp/src
 foreach(CUDF_MODULE_DIR IN LISTS CUDF_MODULE_LIST)
     get_filename_component(CUDF_MODULE_NAME ${CUDF_MODULE_DIR} NAME)
-    message(STATUS "Adding cudf module: ${CUDF_MODULE_NAME} with name ${CUDF_NAMESPACE}_${CUDF_MODULE_NAME}")
-    add_library_module(${CUDF_MODULE_NAME} ${CUDF_MODULE_DIR})
-    target_link_libraries("cudf_${CUDF_MODULE_NAME}" "cudf::base")
-    list(APPEND CUDF_MODULES "cudf_${CUDF_MODULE_NAME}")
+    add_library_module(${CUDF_NAMESPACE} ${CUDF_MODULE_NAME} ${CUDF_MODULE_DIR})
+    target_link_libraries("${CUDF_NAMESPACE}_${CUDF_MODULE_NAME}" "${CUDF_NAMESPACE}::${CUDF_BASE_NAME}")
+    list(APPEND CUDF_MODULES "${CUDF_NAMESPACE}_${CUDF_MODULE_NAME}")
 endforeach()
 
+set(CUDF_PROXY_NAME "${CUDF_NAMESPACE}")
 set(CUDF_PROXY_SRC "${CMAKE_BINARY_DIR}/cudf.cpp")  # this file will be generated
 message(STATUS "Generating proxy library: cudf")
-file(WRITE ${CUDF_PROXY_SRC} "// This file is generated by ${CMAKE_CURRENT_LIST_FILE} \n")
-add_library(cudf ${CUDF_PROXY_SRC})
+file(WRITE "${CUDF_PROXY_SRC}" "// This file is generated by ${CMAKE_CURRENT_LIST_FILE} \n")
+add_library("${CUDF_PROXY_NAME}" "${CUDF_PROXY_SRC}")
 # `-Wl,--no-as-needed`: link libraries to cudf even if no symbols in that library are called
-target_link_options(cudf PRIVATE "LINKER:--no-as-needed")
-set_target_properties(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
-add_library(cudf::cudf ALIAS cudf)
+target_link_options("${CUDF_PROXY_NAME}" PRIVATE "LINKER:--no-as-needed")
+set_target_properties("${CUDF_PROXY_NAME}" PROPERTIES BUILD_RPATH "\$ORIGIN")
+add_library("${CUDF_PROXY_NAME}::${CUDF_PROXY_NAME}" ALIAS "${CUDF_PROXY_NAME}")
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudf cudf_base ${CUDF_MODULES})
+target_link_libraries("${CUDF_PROXY_NAME}" "${CUDF_NAMESPACE}::${CUDF_BASE_NAME}" "${CUDF_MODULES}")
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
