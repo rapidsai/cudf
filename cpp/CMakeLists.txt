@@ -650,7 +650,6 @@ add_library(cudf ${CUDF_PROXY_SRC})
 target_link_options(cudf PRIVATE "LINKER:--no-as-needed")
 set_target_properties(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
 add_library(cudf::cudf ALIAS cudf)
-add_dependencies(cudf stringify_run)
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
