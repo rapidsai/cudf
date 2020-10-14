@@ -482,7 +482,7 @@ template <typename Storage>
 __device__ void snappy_process_symbols(unsnap_state_s *s, int t, Storage &temp_storage)
 {
   const uint8_t *literal_base = s->base;
-  uint8_t *out                = reinterpret_cast<uint8_t *>(s->in.dstDevice);
+  uint8_t *out                = static_cast<uint8_t *>(s->in.dstDevice);
   int batch                   = 0;
 
   do {
@@ -622,7 +622,7 @@ __global__ void __launch_bounds__(block_size)
   if (t < BATCH_COUNT) { s->q.batch_len[t] = 0; }
   __syncthreads();
   if (!t) {
-    const uint8_t *cur = reinterpret_cast<const uint8_t *>(s->in.srcDevice);
+    const uint8_t *cur = static_cast<const uint8_t *>(s->in.srcDevice);
     const uint8_t *end = cur + s->in.srcSize;
     s->error           = 0;
 #if LOG_CYCLECOUNT

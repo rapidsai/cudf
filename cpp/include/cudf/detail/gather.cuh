@@ -44,8 +44,6 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/logical.h>
 
-#include <cub/cub.cuh>
-
 namespace cudf {
 namespace detail {
 
@@ -174,14 +172,16 @@ struct column_gatherer_impl {
                                      cudaStream_t stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    size_type num_destination_rows      = std::distance(gather_map_begin, gather_map_end);
-    cudf::mask_allocation_policy policy = cudf::mask_allocation_policy::NEVER;
-    std::unique_ptr<column> destination_column =
-      cudf::detail::allocate_like(source_column, num_destination_rows, policy, mr, stream);
+    auto const num_rows = cudf::distance(gather_map_begin, gather_map_end);
+    auto const policy   = cudf::mask_allocation_policy::NEVER;
+    auto destination_column =
+      cudf::detail::allocate_like(source_column, num_rows, policy, mr, stream);
 
-    gather_helper(source_column.data<Element>(),
+    using Type = device_storage_type_t<Element>;
+
+    gather_helper(source_column.data<Type>(),
                   source_column.size(),
-                  destination_column->mutable_view().data<Element>(),
+                  destination_column->mutable_view().template begin<Type>(),
                   gather_map_begin,
                   gather_map_end,
                   nullify_out_of_bounds,

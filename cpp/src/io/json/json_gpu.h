@@ -49,7 +49,7 @@ using col_map_type = concurrent_unordered_map<uint32_t, cudf::size_type>;
  * @param[out] num_valid_fields The numbers of valid fields in columns
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-void convert_json_to_columns(ParseOptions const &options,
+void convert_json_to_columns(parse_options_view const &options,
                              device_span<char const> data,
                              device_span<uint64_t const> row_offsets,
                              device_span<data_type const> column_types,
@@ -72,7 +72,7 @@ void convert_json_to_columns(ParseOptions const &options,
  *
  * @returns The count for each column data type
  */
-std::vector<cudf::io::json::column_info> detect_data_types(ParseOptions const &options,
+std::vector<cudf::io::json::column_info> detect_data_types(parse_options_view const &options,
                                                            device_span<char const> data,
                                                            device_span<uint64_t const> row_offsets,
                                                            bool do_set_null_count,
@@ -90,7 +90,7 @@ std::vector<cudf::io::json::column_info> detect_data_types(ParseOptions const &o
  * @param[out] keys_info optional, information (offset, length, hash) for each found key
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-void collect_keys_info(ParseOptions const &options,
+void collect_keys_info(parse_options_view const &options,
                        device_span<char const> data,
                        device_span<uint64_t const> row_offsets,
                        unsigned long long int *keys_cnt,
