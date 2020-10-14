@@ -48,8 +48,8 @@ __global__ void inclusive_scan_copy_if_kernel(device_span<T> input,
 
   BlockScanValue(temp_storage.value).InclusiveScan(thread_data, thread_data, reduce_op, get);
 
-  BlockScanValue(temp_storage.value)  //
-    .InclusiveScan(thread_data, thread_data, reduce_op);
+  // BlockScanValue(temp_storage.value)  //
+  //   .InclusiveScan(thread_data, thread_data, reduce_op);
 
   uint32_t count_thread = 0;
 
@@ -96,7 +96,10 @@ inclusive_scan_copy_if(device_span<T> d_input,
                        cudaStream_t stream = 0)
 {
   {
-    enum { BLOCK_DIM_X = 2, ITEMS_PER_THREAD = 2 };
+    // enum { BLOCK_DIM_X = 1, ITEMS_PER_THREAD = 8 };  // 1b * 1t * 8i : [pass]
+    // enum { BLOCK_DIM_X = 8, ITEMS_PER_THREAD = 1 };  // 1b * 8t * 1i : [pass]
+    // enum { BLOCK_DIM_X = 1, ITEMS_PER_THREAD = 4 };  // 2b * 1t * 4i : [fail]
+    enum { BLOCK_DIM_X = 2, ITEMS_PER_THREAD = 2 };  // 2b * 2t * 2i [fail]
 
     cudf::detail::grid_1d grid(d_input.size(), BLOCK_DIM_X, ITEMS_PER_THREAD);
 
