@@ -852,7 +852,7 @@ class Series(Frame, Serializable):
 
         Examples
         --------
-        >>> s = pd.Series(['cat', 'dog', np.nan, 'rabbit'])
+        >>> s = cudf.Series(['cat', 'dog', np.nan, 'rabbit'])
         >>> s
         0      cat
         1      dog
