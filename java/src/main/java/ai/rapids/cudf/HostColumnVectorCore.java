@@ -121,7 +121,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * Returns the list of child host column vectors for a given host side column
    */
-  List<HostColumnVectorCore> getNestedChildren() {
+  public List<HostColumnVectorCore> getNestedChildren() {
     return children;
   }
 
