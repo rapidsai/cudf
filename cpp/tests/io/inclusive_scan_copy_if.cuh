@@ -96,7 +96,7 @@ inclusive_scan_copy_if(device_span<T> d_input,
                        cudaStream_t stream = 0)
 {
   {
-    enum { BLOCK_DIM_X = 3, ITEMS_PER_THREAD = 7 };
+    enum { BLOCK_DIM_X = 2, ITEMS_PER_THREAD = 2 };
 
     cudf::detail::grid_1d grid(d_input.size(), BLOCK_DIM_X, ITEMS_PER_THREAD);
 
