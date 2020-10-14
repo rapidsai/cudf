@@ -18,7 +18,8 @@ from cudf._lib.scalar cimport Scalar
 def generate_ngrams(Column strings, int ngrams, Scalar separator):
     cdef column_view c_strings = strings.view()
     cdef size_type c_ngrams = ngrams
-    cdef string_scalar* c_separator = <string_scalar*>separator.get_uptr()._device_uptr.get()
+    cdef string_scalar* c_separator = <string_scalar*>separator\
+        .get_uptr()._device_uptr.get()
     cdef unique_ptr[column] c_result
 
     with nogil:

@@ -82,7 +82,8 @@ def replace_nulls_scalar(Column input_col, Scalar replacement_value):
     """
 
     cdef column_view input_col_view = input_col.view()
-    cdef scalar* replacement_value_scalar = replacement_value.get_uptr()._device_uptr.get()
+    cdef scalar* replacement_value_scalar = replacement_value\
+        .get_uptr()._device_uptr.get()
 
     cdef unique_ptr[column] c_result
     with nogil:

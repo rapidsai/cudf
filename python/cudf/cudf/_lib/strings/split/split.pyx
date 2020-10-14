@@ -30,7 +30,9 @@ def split(Column source_strings,
     """
     cdef unique_ptr[table] c_result
     cdef column_view source_view = source_strings.view()
-    cdef string_scalar* scalar_str = <string_scalar*>(delimiter.get_uptr()._device_uptr.get())
+    cdef string_scalar* scalar_str = <string_scalar*>(
+        delimiter.get_uptr()._device_uptr.get()
+    )
 
     with nogil:
         c_result = move(cpp_split(
@@ -55,7 +57,9 @@ def rsplit(Column source_strings,
     """
     cdef unique_ptr[table] c_result
     cdef column_view source_view = source_strings.view()
-    cdef string_scalar* scalar_str = <string_scalar*>(delimiter.get_uptr()._device_uptr.get())
+    cdef string_scalar* scalar_str = <string_scalar*>(
+        delimiter.get_uptr()._device_uptr.get()
+    )
 
     with nogil:
         c_result = move(cpp_rsplit(

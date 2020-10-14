@@ -26,7 +26,9 @@ def strip(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(repl.get_uptr()._device_uptr.get())
+    cdef string_scalar* scalar_str = <string_scalar*>(
+        repl.get_uptr()._device_uptr.get()
+    )
 
     with nogil:
         c_result = move(cpp_strip(
@@ -48,7 +50,9 @@ def lstrip(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(repl.get_uptr()._device_uptr.get())
+    cdef string_scalar* scalar_str = <string_scalar*>(
+        repl.get_uptr()._device_uptr.get()
+    )
 
     with nogil:
         c_result = move(cpp_strip(
@@ -70,7 +74,9 @@ def rstrip(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(repl.get_uptr()._device_uptr.get())
+    cdef string_scalar* scalar_str = <string_scalar*>(
+        repl.get_uptr()._device_uptr.get()
+    )
 
     with nogil:
         c_result = move(cpp_strip(

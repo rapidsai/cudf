@@ -32,7 +32,9 @@ def concatenate(Table source_strings,
 
     cdef string_scalar* scalar_separator = \
         <string_scalar*>(separator.get_uptr()._device_uptr.get())
-    cdef string_scalar* scalar_narep = <string_scalar*>(narep.get_uptr()._device_uptr.get())
+    cdef string_scalar* scalar_narep = <string_scalar*>(
+        narep.get_uptr()._device_uptr.get()
+    )
 
     with nogil:
         c_result = move(cpp_concatenate(
@@ -57,7 +59,9 @@ def join(Column source_strings,
 
     cdef string_scalar* scalar_separator = \
         <string_scalar*>(separator.get_uptr()._device_uptr.get())
-    cdef string_scalar* scalar_narep = <string_scalar*>(narep.get_uptr()._device_uptr.get())
+    cdef string_scalar* scalar_narep = <string_scalar*>(
+        narep.get_uptr()._device_uptr.get()
+    )
 
     with nogil:
         c_result = move(cpp_join_strings(

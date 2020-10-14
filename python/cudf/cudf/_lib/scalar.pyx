@@ -74,8 +74,9 @@ cdef class Scalar:
                     "dtype required when constructing a null scalar"
                 )
             if isinstance(value, (np.datetime64, np.timedelta64)):
-                if np.isnat(value) and np.datetime_data(value.dtype)[0] == 'generic':
-                    raise TypeError("Can't create a NaT scalar without a dtype")
+                if np.isnat(value)
+                and np.datetime_data(value.dtype)[0] == 'generic':
+                    raise TypeError("Need a dtype to build a NaT Scalar")
                 else:
                     dtype = value.dtype
             else:
@@ -104,7 +105,10 @@ cdef class Scalar:
         if pd.api.types.is_string_dtype(dtype):
             _set_string_from_np_string(self.uptr._device_uptr, value, valid)
         elif pd.api.types.is_numeric_dtype(dtype):
-            _set_numeric_from_np_scalar(self.uptr._device_uptr, value, dtype, valid)
+            _set_numeric_from_np_scalar(self.uptr._device_uptr,
+                                        value,
+                                        dtype,
+                                        valid)
         elif pd.api.types.is_datetime64_dtype(dtype):
             _set_datetime64_from_np_scalar(
                 self.uptr._device_uptr, value, dtype, valid
@@ -118,7 +122,7 @@ cdef class Scalar:
                 f"Cannot convert value of type "
                 f"{type(value).__name__} to cudf scalar"
             )
-    
+
     def get_device_value(self):
         if pd.api.types.is_string_dtype(self.dtype):
             result = _get_py_string_from_string(self.uptr._device_uptr)
@@ -134,14 +138,14 @@ cdef class Scalar:
             )
         return result
 
-
     @property
     def dtype(self):
         """
         The NumPy dtype corresponding to the data type of the underlying
         device scalar.
         """
-        cdef libcudf_types.data_type cdtype = self.get_uptr()._device_uptr.get()[0].type()
+        cdef libcudf_types.data_type cdtype = self.get_uptr()\
+                          ._device_uptr.get()[0].type()
         return cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]
 
     @property
@@ -169,14 +173,12 @@ cdef class Scalar:
         elif self._device_value_current and not self._host_value_current:
             self._host_value = self.get_device_value()
 
-    
-
     cdef _ScalarUptrWrapper get_uptr(self):
         if not self._device_value_current:
             self.set_device_value(self._host_value, self._host_dtype)
             self._device_value_current = True
         return self.uptr
-        
+
     cpdef bool is_valid(self):
         """
         Returns if the Scalar is valid or not(i.e., <NA>).
@@ -418,6 +420,7 @@ def as_scalar(val, dtype=None):
             return Scalar(val.value, dtype)
     else:
         return Scalar(value=val, dtype=dtype)
+
 
 def is_null_host_scalar(slr):
     if slr is None or slr is cudf.NA:
