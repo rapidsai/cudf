@@ -243,7 +243,7 @@ class DatetimeColumn(column.ColumnBase):
             fill_value = column.as_column(fill_value, nan_as_null=False)
 
         result = libcudf.replace.replace_nulls(self, fill_value)
-        if isinstance(fill_value, np.datetime64) and np.isnat(fill_value):
+        if isinstance(fill_value, cudf.Scalar) and fill_value.dtype.type == np.datetime64 and np.isnat(fill_value.value):
             # If the value we are filling is np.datetime64("NAT")
             # we set the same mask as current column.
             # However where there are "<NA>" in the
