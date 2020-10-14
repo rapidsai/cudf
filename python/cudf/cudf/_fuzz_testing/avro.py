@@ -1,9 +1,10 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import copy
 import io
 import logging
 import random
+
+import numpy as np
 
 import cudf
 from cudf._fuzz_testing.io import IOFuzz
@@ -54,12 +55,8 @@ class AvroReader(IOFuzz):
                 - cudf.utils.dtypes.DATETIME_TYPES
             )
 
-            # Currently there is no way to write
-            # null values(None/pd.Na/pd.NAT) to avro
-            # Hence generating data with 0 null frequency.
-            # TODO: Replace pandas null values with None
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
-                self, dtypes_list, null_frequency_override=0
+                self, dtypes_list
             )
             self._current_params["dtypes_meta"] = dtypes_meta
             seed = random.randint(0, 2 ** 32 - 1)
@@ -86,3 +83,18 @@ class AvroReader(IOFuzz):
         if self._current_buffer is not None:
             with open(file_name + "_crash.avro", "wb") as crash_dataset:
                 crash_dataset.write(self._current_buffer)
+
+    def get_rand_params(self, params):
+        params_dict = {}
+        for param, values in params.items():
+            if param == "columns" and values is None:
+                col_size = self._rand(len(self._df.columns))
+                params_dict[param] = list(
+                    np.unique(np.random.choice(self._df.columns, col_size))
+                )
+            elif param in ("skiprows", "num_rows"):
+                params_dict[param] = self._rand(len(self._df.columns))
+            else:
+                params_dict[param] = np.random.choice(values)
+        self._current_params["test_kwargs"] = params_dict
+        return params_dict

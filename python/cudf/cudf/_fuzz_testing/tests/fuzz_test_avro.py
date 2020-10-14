@@ -9,10 +9,15 @@ from cudf._fuzz_testing.utils import run_test
 from cudf.tests.utils import assert_eq
 
 
-@pythonfuzz(data_handle=AvroReader)
-def avro_reader_test(input_tuple):
+@pythonfuzz(
+    data_handle=AvroReader,
+    params={"columns": None, "skiprows": None, "num_rows": None},
+)
+def avro_reader_test(input_tuple, columns, skiprows, num_rows):
     pdf, parquet_buffer = input_tuple
-    gdf = cudf.read_avro(parquet_buffer)
+    gdf = cudf.read_avro(
+        parquet_buffer, columns=columns, skiprows=skiprows, num_rows=num_rows
+    )
     assert_eq(pdf, gdf)
 
 
