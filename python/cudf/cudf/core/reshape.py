@@ -307,7 +307,18 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 ignore_index=ignore_index,
                 sort=sort,
             )
+            contains_empty_df = [obj for obj in objs if obj.empty]
+            no_overlap = False
+            if result._column_names == set(result._column_names):
+                no_overlap = True
             if ignore_index and join == "inner" and result.empty:
+                indexes = []
+                for obj in objs:
+                    indexes.append(len(obj.index))
+                    result.index = cudf.RangeIndex(sum(indexes))
+                return result
+            elif ignore_index and join == "inner" and contains_empty_df and no_overlap:
+                result = cudf.DataFrame()
                 indexes = []
                 for obj in objs:
                     indexes.append(len(obj.index))
