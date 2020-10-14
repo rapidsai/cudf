@@ -4794,6 +4794,169 @@ def test_rowwise_ops_nullable_int_dtypes(op, expected):
 @pytest.mark.parametrize(
     "data",
     [
+        {
+            "t1": gd.Series(
+                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ms]"
+            ),
+            "t2": gd.Series(
+                ["1940-08-31 06:00:00", "2020-08-02 10:00:00"], dtype="<M8[ms]"
+            ),
+        },
+        {
+            "t1": gd.Series(
+                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ms]"
+            ),
+            "t2": gd.Series(
+                ["1940-08-31 06:00:00", "2020-08-02 10:00:00"], dtype="<M8[ns]"
+            ),
+            "t3": gd.Series(
+                ["1960-08-31 06:00:00", "2030-08-02 10:00:00"], dtype="<M8[s]"
+            ),
+        },
+        {
+            "t1": gd.Series(
+                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ms]"
+            ),
+            "t2": gd.Series(
+                ["1940-08-31 06:00:00", "2020-08-02 10:00:00"], dtype="<M8[us]"
+            ),
+        },
+        {
+            "t1": gd.Series(
+                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ms]"
+            ),
+            "t2": gd.Series(
+                ["1940-08-31 06:00:00", "2020-08-02 10:00:00"], dtype="<M8[ms]"
+            ),
+            "i1": gd.Series([1001, 2002], dtype="int64"),
+        },
+        {
+            "t1": gd.Series(
+                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ms]"
+            ),
+            "t2": gd.Series(["1940-08-31 06:00:00", None], dtype="<M8[ms]"),
+            "i1": gd.Series([1001, 2002], dtype="int64"),
+        },
+        {
+            "t1": gd.Series(
+                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ms]"
+            ),
+            "i1": gd.Series([1001, 2002], dtype="int64"),
+            "f1": gd.Series([-100.001, 123.456], dtype="float64"),
+        },
+        {
+            "t1": gd.Series(
+                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ms]"
+            ),
+            "i1": gd.Series([1001, 2002], dtype="int64"),
+            "f1": gd.Series([-100.001, 123.456], dtype="float64"),
+            "b1": gd.Series([True, False], dtype="bool"),
+        },
+    ],
+)
+@pytest.mark.parametrize("op", ["max", "min"])
+@pytest.mark.parametrize("skipna", [True, False])
+def test_rowwise_ops_datetime_dtypes(data, op, skipna):
+
+    gdf = gd.DataFrame(data)
+
+    pdf = gdf.to_pandas()
+
+    got = getattr(gdf, op)(axis=1, skipna=skipna)
+    expected = getattr(pdf, op)(axis=1, skipna=skipna)
+
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data,op,skipna",
+    [
+        (
+            {
+                "t1": gd.Series(
+                    ["2020-08-01 09:00:00", "1920-05-01 10:30:00"],
+                    dtype="<M8[ms]",
+                ),
+                "t2": gd.Series(
+                    ["1940-08-31 06:00:00", None], dtype="<M8[ms]"
+                ),
+            },
+            "max",
+            True,
+        ),
+        (
+            {
+                "t1": gd.Series(
+                    ["2020-08-01 09:00:00", "1920-05-01 10:30:00"],
+                    dtype="<M8[ms]",
+                ),
+                "t2": gd.Series(
+                    ["1940-08-31 06:00:00", None], dtype="<M8[ms]"
+                ),
+            },
+            "min",
+            False,
+        ),
+        (
+            {
+                "t1": gd.Series(
+                    ["2020-08-01 09:00:00", "1920-05-01 10:30:00"],
+                    dtype="<M8[ms]",
+                ),
+                "t2": gd.Series(
+                    ["1940-08-31 06:00:00", None], dtype="<M8[ms]"
+                ),
+            },
+            "min",
+            True,
+        ),
+    ],
+)
+def test_rowwise_ops_datetime_dtypes_2(data, op, skipna):
+
+    gdf = gd.DataFrame(data)
+
+    pdf = gdf.to_pandas()
+
+    got = getattr(gdf, op)(axis=1, skipna=skipna)
+    expected = getattr(pdf, op)(axis=1, skipna=skipna)
+
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        (
+            {
+                "t1": pd.Series(
+                    ["2020-08-01 09:00:00", "1920-05-01 10:30:00"],
+                    dtype="<M8[ns]",
+                ),
+                "t2": pd.Series(
+                    ["1940-08-31 06:00:00", pd.NaT], dtype="<M8[ns]"
+                ),
+            }
+        )
+    ],
+)
+def test_rowwise_ops_datetime_dtypes_pdbug(data):
+    """
+    Pandas bug: https://github.com/pandas-dev/pandas/issues/36907
+    """
+    pdf = pd.DataFrame(data)
+    gdf = gd.from_pandas(pdf)
+
+    expected = pdf.max(axis=1, skipna=False)
+    got = gdf.max(axis=1, skipna=False)
+
+    with pytest.raises(AssertionError, match="numpy array are different"):
+        assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
         [5.0, 6.0, 7.0],
         "single value",
         np.array(1, dtype="int64"),

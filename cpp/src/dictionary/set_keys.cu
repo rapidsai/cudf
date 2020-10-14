@@ -29,6 +29,8 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/binary_search.h>
+#include <algorithm>
+#include <iterator>
 
 namespace cudf {
 namespace dictionary {
@@ -161,6 +163,50 @@ std::vector<std::unique_ptr<column>> match_dictionaries(std::vector<dictionary_c
     return set_keys(col, keys_view, mr, stream);
   });
   return result;
+}
+
+std::pair<std::vector<std::unique_ptr<column>>, std::vector<table_view>> match_dictionaries(
+  std::vector<table_view> tables, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+{
+  // Make a copy of all the column views from each table_view
+  std::vector<std::vector<column_view>> updated_columns;
+  std::transform(tables.begin(), tables.end(), std::back_inserter(updated_columns), [](auto& t) {
+    return std::vector<column_view>(t.begin(), t.end());
+  });
+
+  // Each column in a table must match in type.
+  // Once a dictionary column is found, all the corresponding column_views in the
+  // other table_views are matched. The matched column_views then replace the originals.
+  std::vector<std::unique_ptr<column>> dictionary_columns;
+  auto first_table = tables.front();
+  for (size_type col_idx = 0; col_idx < first_table.num_columns(); ++col_idx) {
+    auto col = first_table.column(col_idx);
+    if (col.type().id() == type_id::DICTIONARY32) {
+      std::vector<dictionary_column_view> dict_views;  // hold all column_views at col_idx
+      std::transform(
+        tables.begin(), tables.end(), std::back_inserter(dict_views), [col_idx](auto& t) {
+          return dictionary_column_view(t.column(col_idx));
+        });
+      // now match the keys in these dictionary columns
+      auto dict_cols = dictionary::detail::match_dictionaries(dict_views, mr, stream);
+      // replace the updated_columns vector entries for the set of columns at col_idx
+      auto dict_col_idx = 0;
+      for (auto& v : updated_columns) v[col_idx] = dict_cols[dict_col_idx++]->view();
+      // move the updated dictionary columns into the main output vector
+      std::move(dict_cols.begin(), dict_cols.end(), std::back_inserter(dictionary_columns));
+    }
+  }
+  // All the new column_views are in now updated_columns.
+
+  // Rebuild the table_views from the column_views.
+  std::vector<table_view> updated_tables;
+  std::transform(updated_columns.begin(),
+                 updated_columns.end(),
+                 std::back_inserter(updated_tables),
+                 [](auto& v) { return table_view{v}; });
+
+  // Return the new dictionary columns and table_views
+  return {std::move(dictionary_columns), std::move(updated_tables)};
 }
 
 }  // namespace detail

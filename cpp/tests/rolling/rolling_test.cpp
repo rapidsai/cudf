@@ -106,8 +106,8 @@ TEST_F(RollingStringTest, MinPeriods)
   cudf::test::strings_column_wrapper expected_max(
     {"This", "test", "test", "test", "test", "string", "string", "string", "string"},
     {0, 0, 0, 0, 1, 1, 1, 0, 0});
-  fixed_width_column_wrapper<size_type> expected_count_val({0, 2, 2, 2, 3, 3, 3, 3, 2},
-                                                           {0, 0, 0, 0, 1, 1, 1, 0, 0});
+  fixed_width_column_wrapper<size_type> expected_count_val({1, 2, 1, 2, 3, 3, 3, 2, 2},
+                                                           {1, 1, 1, 1, 1, 1, 1, 1, 0});
   fixed_width_column_wrapper<size_type> expected_count_all({3, 4, 4, 4, 4, 4, 4, 3, 2},
                                                            {0, 1, 1, 1, 1, 1, 1, 0, 0});
 
@@ -248,7 +248,7 @@ class RollingTest : public cudf::test::BaseFixture {
         if (include_nulls || !input.nullable() || cudf::bit_is_set(valid_mask, j)) count++;
       }
 
-      ref_valid[i] = (count >= min_periods);
+      ref_valid[i] = ((end_index - start_index) >= min_periods);
       if (ref_valid[i]) ref_data[i] = count;
     }
 

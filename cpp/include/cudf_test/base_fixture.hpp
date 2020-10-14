@@ -16,10 +16,13 @@
 
 #pragma once
 
+#include <random>
+
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/cxxopts.hpp>
+#include <cudf_test/file_utilities.hpp>
 
 #include <rmm/mr/device/binning_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
@@ -27,9 +30,6 @@
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
-
-#include <ftw.h>
-#include <random>
 
 namespace cudf {
 namespace test {
@@ -175,34 +175,6 @@ class UniformRandomGenerator {
   Engine rng;                   ///< Random generator
 };
 
-class temp_directory {
-  std::string _path;
-
- public:
-  temp_directory(const std::string &base_name)
-  {
-    std::string dir_template("/tmp");
-    if (const char *env_p = std::getenv("WORKSPACE")) dir_template = env_p;
-    dir_template += "/" + base_name + ".XXXXXX";
-    auto const tmpdirptr = mkdtemp(const_cast<char *>(dir_template.data()));
-    if (tmpdirptr == nullptr) CUDF_FAIL("Temporary directory creation failure: " + dir_template);
-    _path = dir_template + "/";
-  }
-
-  static int rm_files(const char *pathname, const struct stat *sbuf, int type, struct FTW *ftwb)
-  {
-    return remove(pathname);
-  }
-
-  ~temp_directory()
-  {
-    // TODO: should use std::filesystem instead, once C++17 support added
-    nftw(_path.c_str(), rm_files, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
-  }
-
-  const std::string &path() const { return _path; }
-};
-
 /**
  * @brief Provides temporary directory for temporary test files.
  *
@@ -211,7 +183,7 @@ class temp_directory {
  * ::testing::Environment* const temp_env =
  *    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment);
  * ```
- **/
+ */
 class TempDirTestEnvironment : public ::testing::Environment {
   temp_directory const tmpdir{"gtest"};
 
