@@ -894,12 +894,12 @@ class Series(Frame, Serializable):
             result = self.replace(arg)
             for i in range(len(self)):
                 if self[i] not in arg.keys():
-                    result[i] = np.nan
+                    result[i] = None
         elif isinstance(arg, cudf.Series):
             result = self.replace(arg.index, arg)
             for i in range(len(self)):
                 if self[i] not in arg.index:
-                    result[i] = np.nan
+                    result[i] = None
         
         elif is_string_dtype(self._column.dtype) or isinstance(
             self._column, cudf.core.column.CategoricalColumn
