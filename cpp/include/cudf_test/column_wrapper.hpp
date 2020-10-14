@@ -27,6 +27,7 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
@@ -145,26 +146,79 @@ struct fixed_width_type_converter {
 };
 
 /**
- * @brief Creates a `device_buffer` containing the elements in the range
- * `[begin,end)`.
+ * @brief Creates a `device_buffer` containing the elements in the range `[begin,end)`.
  *
- * @tparam ElementTo The type of element that is being created
- * @tparam ElementFrom The type of element that is used to create elements of type `ElementTo`
+ * @tparam ElementTo The element type that is being created (non-`fixed_point`)
+ * @tparam ElementFrom The element type used to create elements of type `ElementTo`
  * @tparam InputIterator Iterator type for `begin` and `end`
  * @param begin Beginning of the sequence of elements
  * @param end End of the sequence of elements
- * @return rmm::device_buffer Buffer containing all elements in the range
- *`[begin,end)`
+ * @return rmm::device_buffer Buffer containing all elements in the range `[begin,end)`
  **/
-template <typename ElementTo, typename ElementFrom, typename InputIterator>
+template <typename ElementTo,
+          typename ElementFrom,
+          typename InputIterator,
+          typename std::enable_if_t<not cudf::is_fixed_point<ElementTo>()>* = nullptr>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
   static_assert(cudf::is_fixed_width<ElementTo>(), "Unexpected non-fixed width type.");
   auto transformer     = fixed_width_type_converter<ElementFrom, ElementTo>{};
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
-  auto const size      = std::distance(begin, end);
+  auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<ElementTo>(transform_begin, transform_begin + size);
   return rmm::device_buffer{elements.data(), size * sizeof(ElementTo)};
+}
+
+/**
+ * @brief Creates a `device_buffer` containing the elements in the range `[begin,end)`.
+ *
+ * @tparam ElementTo The element type that is being created (`fixed_point` specialization)
+ * @tparam ElementFrom The element type used to create elements of type `ElementTo`
+ * (non-`fixed-point`)
+ * @tparam InputIterator Iterator type for `begin` and `end`
+ * @param begin Beginning of the sequence of elements
+ * @param end End of the sequence of elements
+ * @return rmm::device_buffer Buffer containing all elements in the range `[begin,end)`
+ **/
+template <typename ElementTo,
+          typename ElementFrom,
+          typename InputIterator,
+          typename std::enable_if_t<not cudf::is_fixed_point<ElementFrom>() and
+                                    cudf::is_fixed_point<ElementTo>()>* = nullptr>
+rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
+{
+  using RepType        = typename ElementTo::rep;
+  auto transformer     = fixed_width_type_converter<ElementFrom, RepType>{};
+  auto transform_begin = thrust::make_transform_iterator(begin, transformer);
+  auto const size      = cudf::distance(begin, end);
+  auto const elements  = thrust::host_vector<RepType>(transform_begin, transform_begin + size);
+  return rmm::device_buffer{elements.data(), size * sizeof(RepType)};
+}
+
+/**
+ * @brief Creates a `device_buffer` containing the elements in the range `[begin,end)`.
+ *
+ * @tparam ElementTo The element type that is being created (`fixed_point` specialization)
+ * @tparam ElementFrom The element type used to create elements of type `ElementTo` (`fixed_point`)
+ * @tparam InputIterator Iterator type for `begin` and `end`
+ * @param begin Beginning of the sequence of elements
+ * @param end End of the sequence of elements
+ * @return rmm::device_buffer Buffer containing all elements in the range `[begin,end)`
+ **/
+template <typename ElementTo,
+          typename ElementFrom,
+          typename InputIterator,
+          typename std::enable_if_t<cudf::is_fixed_point<ElementFrom>() and
+                                    cudf::is_fixed_point<ElementTo>()>* = nullptr>
+rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
+{
+  using namespace numeric;
+  using RepType = typename ElementTo::rep;
+  auto to_rep   = [](ElementTo fp) { return static_cast<scaled_integer<RepType>>(fp).value; };
+  auto transformer_begin = thrust::make_transform_iterator(begin, to_rep);
+  auto const size        = cudf::distance(begin, end);
+  auto const elements = thrust::host_vector<RepType>(transformer_begin, transformer_begin + size);
+  return rmm::device_buffer{elements.data(), size * sizeof(RepType)};
 }
 
 /**
@@ -183,12 +237,13 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 template <typename ValidityIterator>
 std::vector<bitmask_type> make_null_mask_vector(ValidityIterator begin, ValidityIterator end)
 {
-  cudf::size_type size = std::distance(begin, end);
-  auto num_words       = cudf::bitmask_allocation_size_bytes(size) / sizeof(bitmask_type);
-  std::vector<bitmask_type> null_mask(num_words, 0);
-  for (auto i = 0; i < size; ++i) {
-    if (*(begin + i)) { set_bit_unsafe(null_mask.data(), i); }
-  }
+  auto const size      = cudf::distance(begin, end);
+  auto const num_words = cudf::bitmask_allocation_size_bytes(size) / sizeof(bitmask_type);
+
+  auto null_mask = std::vector<bitmask_type>(num_words, 0);
+  for (auto i = 0; i < size; ++i)
+    if (*(begin + i)) set_bit_unsafe(null_mask.data(), i);
+
   return null_mask;
 }
 
@@ -285,7 +340,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   template <typename InputIterator>
   fixed_width_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
   {
-    cudf::size_type size = std::distance(begin, end);
+    auto const size = cudf::distance(begin, end);
     wrapped.reset(new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
                                    size,
                                    detail::make_elements<ElementTo, SourceElementT>(begin, end)});
@@ -318,8 +373,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   fixed_width_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator v)
     : column_wrapper{}
   {
-    cudf::size_type size = std::distance(begin, end);
-
+    auto const size = cudf::distance(begin, end);
     wrapped.reset(new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
                                    size,
                                    detail::make_elements<ElementTo, SourceElementT>(begin, end),
@@ -444,6 +498,33 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
     auto v =
       thrust::make_transform_iterator(elements.begin(), [](auto const& e) { return e.second; });
     wrapped = fixed_width_column_wrapper<ElementTo, ElementFrom>(begin, end, v).release();
+  }
+};
+
+template <typename Rep>
+class fixed_point_column_wrapper : public detail::column_wrapper {
+ public:
+  template <typename FixedPointRepIterator>
+  fixed_point_column_wrapper(FixedPointRepIterator begin,
+                             FixedPointRepIterator end,
+                             numeric::scale_type scale)
+    : column_wrapper{}
+  {
+    CUDF_EXPECTS(numeric::is_supported_representation_type<Rep>(), "not valid representation type");
+
+    auto const size         = cudf::distance(begin, end);
+    auto const elements     = thrust::host_vector<Rep>(begin, end);
+    auto const is_decimal32 = std::is_same<Rep, int32_t>::value;
+    auto const id           = is_decimal32 ? type_id::DECIMAL32 : type_id::DECIMAL64;
+    auto const data_type    = cudf::data_type{id, static_cast<int32_t>(scale)};
+
+    wrapped.reset(
+      new cudf::column{data_type, size, rmm::device_buffer{elements.data(), size * sizeof(Rep)}});
+  }
+
+  fixed_point_column_wrapper(std::initializer_list<Rep> values, numeric::scale_type scale)
+    : fixed_point_column_wrapper(std::cbegin(values), std::cend(values), scale)
+  {
   }
 };
 
@@ -926,8 +1007,8 @@ class lists_column_wrapper : public detail::column_wrapper {
     // generate offsets
     size_type count = 0;
     std::vector<size_type> offsetv;
-    std::transform(cols.begin(),
-                   cols.end(),
+    std::transform(cols.cbegin(),
+                   cols.cend(),
                    valids,
                    std::back_inserter(offsetv),
                    [&](cudf::column_view const& col, bool valid) {
@@ -943,10 +1024,12 @@ class lists_column_wrapper : public detail::column_wrapper {
 
     // concatenate them together, skipping children that are null.
     std::vector<column_view> children;
-    for (size_t idx = 0; idx < cols.size(); idx++) {
-      if (!valids[idx]) { continue; }
-      children.push_back(cols[idx]);
-    }
+    thrust::copy_if(std::cbegin(cols),
+                    std::cend(cols),
+                    valids,  // stencil
+                    std::back_inserter(children),
+                    thrust::identity<bool>{});
+
     auto data = children.empty() ? cudf::empty_like(expected_hierarchy) : concatenate(children);
 
     // increment depth
@@ -1074,9 +1157,9 @@ class lists_column_wrapper : public detail::column_wrapper {
                          // "a List<List<List<int>>> that's empty at the top level"
                          //
                          // { {{{1, 2, 3}}}, {4, 5, 6} }
-                         // In this case, row 1 is a a concrete List<int> with actual values.  There
-                         // is no way to rectify the differences so we will treat it as a true
-                         // column mismatch.
+                         // In this case, row 1 is a a concrete List<int> with actual values.
+                         // There is no way to rectify the differences so we will treat it as a
+                         // true column mismatch.
                          CUDF_EXPECTS(l.wrapped->size() == 0, "Mismatch in column types!");
                          stubs.push_back(empty_like(expected_hierarchy));
                        } else {
@@ -1227,7 +1310,7 @@ class structs_column_wrapper : public detail::column_wrapper {
   template <typename V>
   void init(std::vector<std::unique_ptr<cudf::column>>&& child_columns, V validity_iterator)
   {
-    size_type num_rows = child_columns.empty() ? 0 : child_columns[0]->size();
+    size_type const num_rows = child_columns.empty() ? 0 : child_columns[0]->size();
 
     CUDF_EXPECTS(std::all_of(child_columns.begin(),
                              child_columns.end(),
