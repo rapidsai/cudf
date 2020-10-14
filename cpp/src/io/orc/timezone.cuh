@@ -15,6 +15,10 @@
  */
 #pragma once
 
+#include <cudf/utilities/span.hpp>
+
+#include <thrust/device_vector.h>
+
 #include <stdint.h>
 #include <string>
 #include <vector>
@@ -22,9 +26,17 @@
 namespace cudf {
 namespace io {
 
-struct tz_transition_table {
-  std::vector<int64_t> ttimes;
-  std::vector<int32_t> offsets;
+struct timezone_table_view {
+  int32_t gmt_offset;
+  cudf::detail::device_span<int64_t const> ttimes;
+  cudf::detail::device_span<int32_t const> offsets;
+};
+
+struct timezone_table {
+  int32_t gmt_offset = 0;
+  rmm::device_vector<int64_t> ttimes;
+  rmm::device_vector<int32_t> offsets;
+  timezone_table_view view() const { return {gmt_offset, ttimes, offsets}; }
 };
 
 /**
@@ -35,7 +47,7 @@ struct tz_transition_table {
  * @return The transition table (1st entry = gmtOffset, 2 int64_t per transition, last 800
  * transitions repeat forever with 400 year cycle)
  */
-std::vector<int64_t> BuildTimezoneTransitionTable(std::string const& timezone_name);
+timezone_table BuildTimezoneTransitionTable(std::string const& timezone_name);
 
 }  // namespace io
 }  // namespace cudf

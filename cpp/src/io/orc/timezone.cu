@@ -220,12 +220,12 @@ static const uint8_t *posix_parse_number(const uint8_t *cur, const uint8_t *end,
  *
  * @return position after parsing the UTC offset
  **/
-static const uint8_t *posix_parse_offset(const uint8_t *cur, const uint8_t *end, int64_t *putcoff)
+static const uint8_t *posix_parse_offset(const uint8_t *cur, const uint8_t *end, int32_t *putcoff)
 {
   int64_t v = 0;
   if (cur < end) {
-    int64_t scale = 60 * 60;
-    int sign      = *cur;
+    auto scale = 60 * 60;
+    int sign   = *cur;
     cur += (sign == '-' || sign == '+');
     cur = posix_parse_number(cur, end, &v);
     v *= scale;
@@ -254,11 +254,11 @@ static const uint8_t *posix_parse_transition(const uint8_t *cur,
                                              const uint8_t *end,
                                              dst_transition_s *ptrans)
 {
-  int type  = 0;
-  int month = 0;
-  int week  = 0;
-  int day   = 0;
-  int time  = 2 * 60 * 60;
+  int type     = 0;
+  int month    = 0;
+  int week     = 0;
+  int day      = 0;
+  int32_t time = 2 * 60 * 60;
   if (cur + 2 <= end && *cur == ',') {
     int64_t v;
     type = cur[1];
@@ -278,10 +278,7 @@ static const uint8_t *posix_parse_transition(const uint8_t *cur,
       cur = posix_parse_number(cur, end, &v);
       day = (int)v;
     }
-    if (cur < end && *cur == '/') {
-      cur  = posix_parse_offset(cur + 1, end, &v);
-      time = (int)v;
-    }
+    if (cur < end && *cur == '/') { cur = posix_parse_offset(cur + 1, end, &time); }
   }
   ptrans->type  = type;
   ptrans->month = month;
@@ -356,27 +353,24 @@ static int64_t GetTransitionTime(const dst_transition_s *trans, int year)
 /**
  * @brief Returns the gmt offset for a given date
  *
- * @param[in] table timezone conversion table
+ * @param[in] TODO
  * @param[in] ts ORC timestamp
  *
  * @return gmt offset
  **/
-static int64_t GetGmtOffset(const std::vector<int64_t> &table, int64_t ts)
+static int32_t GetGmtOffset(int64_t const *ttimes, int32_t const *offsets, size_t count, int64_t ts)
 {
-  uint32_t num_entries = (uint32_t)(table.size() - 400 >> 1);
   uint32_t dst_cycle   = 800;
-  int64_t first_transition, last_transition;
-  uint32_t first, last;
+  uint32_t num_entries = (uint32_t)(count - dst_cycle);
+  uint32_t first = 0, last = 0;
 
-  first_transition = table[1];
-  last_transition  = table[(num_entries - 1) * 2 + 1];
+  auto const first_transition = ttimes[0];
+  auto const last_transition  = ttimes[num_entries - 1];
   if (ts <= first_transition) {
-    return table[0 * 2 + 2];
+    return offsets[0];
   } else if (ts <= last_transition) {
     first = 0;
     last  = num_entries - 1;
-  } else if (!dst_cycle) {
-    return table[(num_entries - 1) * 2 + 2];
   } else {
     // Apply 400-year cycle rule
     const int64_t k400Years = (365 * 400 + (100 - 3)) * 24 * 60 * 60ll;
@@ -384,12 +378,12 @@ static int64_t GetGmtOffset(const std::vector<int64_t> &table, int64_t ts)
     if (ts < 0) { ts += k400Years; }
     first = num_entries;
     last  = num_entries + dst_cycle - 1;
-    if (ts < table[num_entries * 2 + 1]) { return table[last * 2 + 2]; }
+    if (ts < ttimes[num_entries]) { return offsets[last]; }
   }
   // Binary search the table from first to last for ts
   do {
     uint32_t mid = first + ((last - first + 1) >> 1);
-    int64_t tmid = table[mid * 2 + 1];
+    int64_t tmid = ttimes[mid];
     if (tmid <= ts) {
       first = mid;
     } else {
@@ -397,10 +391,10 @@ static int64_t GetGmtOffset(const std::vector<int64_t> &table, int64_t ts)
       last = mid;
     }
   } while (first < last);
-  return table[first * 2 + 2];
+  return offsets[first];
 }
 
-std::vector<int64_t> BuildTimezoneTransitionTable(std::string const &timezone_name)
+timezone_table BuildTimezoneTransitionTable(std::string const &timezone_name)
 {
   if (timezone_name == "UTC" || !timezone_name.length()) {
     // Return an empty table for UTC
@@ -411,23 +405,24 @@ std::vector<int64_t> BuildTimezoneTransitionTable(std::string const &timezone_na
 
   // Allocate transition table, add one entry for ancient rule, and 800 entries for future rules
   // (2 transitions/year)
-  std::vector<int64_t> ttable((1 + (size_t)tz.timecnt() + 400 * 2) * 2 + 1);
+  std::vector<int64_t> ttimes(1 + (size_t)tz.timecnt() + 400 * 2);
+  std::vector<int32_t> offsets(1 + (size_t)tz.timecnt() + 400 * 2);
   size_t earliest_std_idx = 0;
   for (size_t t = 0; t < tz.timecnt(); t++) {
     auto const ttime = tz.transition_times[t];
     auto const idx   = tz.ttime_idx[t];
     CUDF_EXPECTS(idx < tz.typecnt(), "Out-of-range type index");
-    auto const utcoff       = tz.ttype[idx].utcoff;
-    ttable[(1 + t) * 2 + 1] = ttime;
-    ttable[(1 + t) * 2 + 2] = utcoff;
+    auto const utcoff = tz.ttype[idx].utcoff;
+    ttimes[1 + t]     = ttime;
+    offsets[1 + t]    = utcoff;
     if (!earliest_std_idx && !tz.ttype[idx].isdst) { earliest_std_idx = 1 + t; }
   }
   if (!earliest_std_idx) { earliest_std_idx = 1; }
-  ttable[1] = ttable[earliest_std_idx * 2 + 1];
-  ttable[2] = ttable[earliest_std_idx * 2 + 2];
+  ttimes[0]  = ttimes[earliest_std_idx];
+  offsets[0] = offsets[earliest_std_idx];
 
   // Generate entries for times after the last transition
-  auto future_stdoff = ttable[(tz.timecnt() * 2) + 2];
+  auto future_stdoff = offsets[tz.timecnt()];
   auto future_dstoff = future_stdoff;
 
   dst_transition_s dst_start{};
@@ -453,29 +448,33 @@ std::vector<int64_t> BuildTimezoneTransitionTable(std::string const &timezone_na
       future_dstoff = future_stdoff;
     }
   }
+
   // Add 2 entries per year for 400 years
   int64_t future_time = 0;
   for (size_t t = 0; t < 800; t += 2) {
     uint32_t const year          = 1970 + ((int)t >> 1);
     int64_t const dst_start_time = GetTransitionTime(&dst_start, year);
     int64_t const dst_end_time   = GetTransitionTime(&dst_end, year);
+    auto const dst_idx           = 1 + tz.timecnt() + t;
+
+    ttimes[dst_idx]      = future_time + dst_end_time - future_dstoff;
+    offsets[dst_idx]     = future_stdoff;
+    ttimes[dst_idx + 1]  = future_time + dst_start_time - future_stdoff;
+    offsets[dst_idx + 1] = future_dstoff;
     if (dst_start_time < dst_end_time) {
-      ttable[(1 + tz.timecnt() + t) * 2 + 1] = future_time + dst_start_time - future_stdoff;
-      ttable[(1 + tz.timecnt() + t) * 2 + 2] = future_dstoff;
-      ttable[(1 + tz.timecnt() + t) * 2 + 3] = future_time + dst_end_time - future_dstoff;
-      ttable[(1 + tz.timecnt() + t) * 2 + 4] = future_stdoff;
-    } else {
-      ttable[(1 + tz.timecnt() + t) * 2 + 1] = future_time + dst_end_time - future_dstoff;
-      ttable[(1 + tz.timecnt() + t) * 2 + 2] = future_stdoff;
-      ttable[(1 + tz.timecnt() + t) * 2 + 3] = future_time + dst_start_time - future_stdoff;
-      ttable[(1 + tz.timecnt() + t) * 2 + 4] = future_dstoff;
+      std::swap(ttimes[dst_idx], ttimes[dst_idx + 1]);
+      std::swap(offsets[dst_idx], offsets[dst_idx + 1]);
     }
+
     future_time += (365 + IsLeapYear(year)) * 24 * 60 * 60;
   }
   // Add gmt offset
-  ttable[0] = GetGmtOffset(ttable, ORC_UTC_OFFSET);
+  timezone_table tz_table;
+  tz_table.gmt_offset = GetGmtOffset(ttimes.data(), offsets.data(), ttimes.size(), ORC_UTC_OFFSET);
+  tz_table.ttimes     = ttimes;
+  tz_table.offsets    = offsets;
 
-  return ttable;
+  return tz_table;
 }
 
 }  // namespace io

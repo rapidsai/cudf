@@ -521,7 +521,7 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
                                       size_t num_dicts,
                                       size_t skip_rows,
                                       size_t num_rows,
-                                      const std::vector<int64_t> &timezone_table,
+                                      timezone_table const &tz_table,
                                       const rmm::device_vector<gpu::RowGroup> &row_groups,
                                       size_t row_index_stride,
                                       std::vector<column_buffer> &out_buffers,
@@ -542,9 +542,6 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
   // Allocate global dictionary for deserializing
   rmm::device_vector<gpu::DictionaryEntry> global_dict(num_dicts);
 
-  // Allocate timezone transition table timestamp conversion
-  rmm::device_vector<int64_t> tz_table = timezone_table;
-
   CUDA_TRY(cudaMemcpyAsync(
     chunks.device_ptr(), chunks.host_ptr(), chunks.memory_size(), cudaMemcpyHostToDevice, stream));
   CUDA_TRY(gpu::DecodeNullsAndStringDictionaries(chunks.device_ptr(),
@@ -560,8 +557,7 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
                                     num_stripes,
                                     num_rows,
                                     skip_rows,
-                                    tz_table.data().get(),
-                                    tz_table.size(),
+                                    tz_table.view(),
                                     row_groups.data().get(),
                                     row_groups.size() / num_columns,
                                     row_index_stride,
@@ -767,10 +763,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       }
 
       // Setup table for converting timestamp columns from local to UTC time
-      std::vector<int64_t> const tz_table =
+      auto const tz_table =
         _has_timestamp_column
           ? BuildTimezoneTransitionTable(selected_stripes[0].second->writerTimezone)
-          : std::vector<int64_t>{};
+          : timezone_table{};
 
       std::vector<column_buffer> out_buffers;
       for (size_t i = 0; i < column_types.size(); ++i) {

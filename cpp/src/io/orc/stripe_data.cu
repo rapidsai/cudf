@@ -102,15 +102,12 @@ struct orc_nulldec_state_s {
 };
 
 struct orc_datadec_state_s {
-  uint32_t cur_row;             // starting row of current batch
-  uint32_t end_row;             // ending row of this chunk (start_row + num_rows)
-  uint32_t max_vals;            // max # of non-zero values to decode in this batch
-  uint32_t nrows;               // # of rows in current batch (up to NTHREADS)
-  uint32_t buffered_count;      // number of buffered values in the secondary data stream
-  uint32_t tz_num_entries;      // number of entries in timezone table
-  int64_t first_tz_transition;  // first transition in timezone table
-  int64_t last_tz_transition;   // last transition in timezone table
-  int64_t utc_epoch;            // kORCTimeToUTC - gmtOffset
+  uint32_t cur_row;         // starting row of current batch
+  uint32_t end_row;         // ending row of this chunk (start_row + num_rows)
+  uint32_t max_vals;        // max # of non-zero values to decode in this batch
+  uint32_t nrows;           // # of rows in current batch (up to NTHREADS)
+  uint32_t buffered_count;  // number of buffered values in the secondary data stream
+  int64_t utc_epoch;        // kORCTimeToUTC - gmtOffset
   RowGroup index;
 };
 
@@ -1404,38 +1401,36 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, i
  *
  * @return UTC time in seconds
  *
- **/
-static __device__ int64_t ConvertToUTC(const orc_datadec_state_s *s,
-                                       const int64_t *table,
+ */
+static __device__ int32_t GetGmtOffset(int64_t const *ttimes,
+                                       int32_t const *offsets,
+                                       size_t count,
                                        int64_t ts)
 {
-  uint32_t num_entries     = s->tz_num_entries;
-  uint32_t dst_cycle       = 800;
-  int64_t first_transition = s->first_tz_transition;
-  int64_t last_transition  = s->last_tz_transition;
-  int64_t tsbase;
-  uint32_t first, last;
+  uint32_t dst_cycle   = 800;
+  uint32_t num_entries = (uint32_t)(count - dst_cycle);
+  uint32_t first = 0, last = 0;
 
+  auto const first_transition = ttimes[0];
+  auto const last_transition  = ttimes[num_entries - 1];
   if (ts <= first_transition) {
-    return ts + table[0 * 2 + 2];
+    return offsets[0];
   } else if (ts <= last_transition) {
-    first  = 0;
-    last   = num_entries - 1;
-    tsbase = ts;
-  }  else {
+    first = 0;
+    last  = num_entries - 1;
+  } else {
     // Apply 400-year cycle rule
     const int64_t k400Years = (365 * 400 + (100 - 3)) * 24 * 60 * 60ll;
-    tsbase                  = ts;
     ts %= k400Years;
     if (ts < 0) { ts += k400Years; }
     first = num_entries;
     last  = num_entries + dst_cycle - 1;
-    if (ts < table[num_entries * 2 + 1]) { return tsbase + table[last * 2 + 2]; }
+    if (ts < ttimes[num_entries]) { return offsets[last]; }
   }
   // Binary search the table from first to last for ts
   do {
     uint32_t mid = first + ((last - first + 1) >> 1);
-    int64_t tmid = table[mid * 2 + 1];
+    int64_t tmid = ttimes[mid];
     if (tmid <= ts) {
       first = mid;
     } else {
@@ -1443,7 +1438,7 @@ static __device__ int64_t ConvertToUTC(const orc_datadec_state_s *s,
       last = mid;
     }
   } while (first < last);
-  return tsbase + table[first * 2 + 2];
+  return offsets[first];
 }
 
 /**
@@ -1463,7 +1458,6 @@ static const __device__ __constant__ uint32_t kTimestampNanoScale[8] = {
  * @param[in] max_num_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  * @param[in] num_chunks Number of column chunks (num_columns * num_stripes)
- * @param[in] tz_len Length of timezone translation table (number of pairs)
  * @param[in] num_rowgroups Number of row groups in row index data
  * @param[in] rowidx_stride Row index stride
  *
@@ -1472,12 +1466,11 @@ static const __device__ __constant__ uint32_t kTimestampNanoScale[8] = {
 extern "C" __global__ void __launch_bounds__(NTHREADS)
   gpuDecodeOrcColumnData(ColumnDesc *chunks,
                          DictionaryEntry *global_dictionary,
-                         int64_t *tz_table,
+                         timezone_table_view tz_table,
                          const RowGroup *row_groups,
                          size_t max_num_rows,
                          size_t first_row,
                          uint32_t num_columns,
-                         uint32_t tz_len,
                          uint32_t num_rowgroups,
                          uint32_t rowidx_stride)
 {
@@ -1529,11 +1522,8 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
       s->top.data.end_row = min(s->top.data.end_row, s->chunk.start_row + rowidx_stride);
     }
     if (!IS_DICTIONARY(s->chunk.encoding_kind)) { s->chunk.dictionary_start = 0; }
-    if (tz_len > 0) {
-      s->top.data.tz_num_entries = tz_len - 800;
-      s->top.data.utc_epoch = kORCTimeToUTC - tz_table[0];
-      s->top.data.first_tz_transition = tz_table[1];
-      s->top.data.last_tz_transition  = tz_table[(s->top.data.tz_num_entries - 1) * 2 + 1];
+    if (tz_table.ttimes.size() != 0) {
+      s->top.data.utc_epoch = kORCTimeToUTC - tz_table.gmt_offset;
     } else {
       s->top.data.utc_epoch = kORCTimeToUTC;
     }
@@ -1793,7 +1783,12 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
               int64_t seconds = s->vals.i64[t + vals_skipped] + s->top.data.utc_epoch;
               uint32_t nanos  = secondary_val;
               nanos           = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
-              if (tz_len > 0) { seconds = ConvertToUTC(&s->top.data, tz_table, seconds); }
+              if (tz_table.ttimes.size() != 0) {
+                seconds += GetGmtOffset(tz_table.ttimes.begin(),
+                                        tz_table.offsets.begin(),
+                                        tz_table.ttimes.size(),
+                                        seconds);
+              }
               if (seconds < 0 && nanos != 0) { seconds -= 1; }
               if (s->chunk.ts_clock_rate)
                 static_cast<int64_t *>(data_out)[row] =
@@ -1867,7 +1862,6 @@ cudaError_t __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  * @param[in] tz_table Timezone translation table
- * @param[in] tz_len Length of timezone translation table
  * @param[in] row_groups Optional row index data
  * @param[in] num_rowgroups Number of row groups in row index data
  * @param[in] rowidx_stride Row index stride
@@ -1881,8 +1875,7 @@ cudaError_t __host__ DecodeOrcColumnData(ColumnDesc *chunks,
                                          uint32_t num_stripes,
                                          size_t max_num_rows,
                                          size_t first_row,
-                                         int64_t *tz_table,
-                                         size_t tz_len,
+                                         timezone_table_view tz_table,
                                          const RowGroup *row_groups,
                                          uint32_t num_rowgroups,
                                          uint32_t rowidx_stride,
@@ -1899,7 +1892,6 @@ cudaError_t __host__ DecodeOrcColumnData(ColumnDesc *chunks,
                                                              max_num_rows,
                                                              first_row,
                                                              num_columns,
-                                                             (uint32_t)(tz_len >> 1),
                                                              num_rowgroups,
                                                              rowidx_stride);
   return cudaSuccess;
