@@ -148,6 +148,7 @@ fi
 if buildAll || hasArg libcudf; then
     mkdir -p ${LIB_BUILD_DIR}
     cd ${LIB_BUILD_DIR}
+    cat $REPODIR/cpp/CMakeLists.txt
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           ${GPU_ARCH} \
           -DUSE_NVTX=${BUILD_NVTX} \
