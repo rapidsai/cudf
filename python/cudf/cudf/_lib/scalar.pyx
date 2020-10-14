@@ -74,8 +74,9 @@ cdef class Scalar:
                     "dtype required when constructing a null scalar"
                 )
             if isinstance(value, (np.datetime64, np.timedelta64)):
-                if np.isnat(value)
-                and np.datetime_data(value.dtype)[0] == 'generic':
+                if np.isnat(value) and np.datetime_data(
+                    value.dtype
+                    )[0] == 'generic':
                     raise TypeError("Need a dtype to build a NaT Scalar")
                 else:
                     dtype = value.dtype
