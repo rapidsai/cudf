@@ -133,7 +133,7 @@ col_map_ptr_type create_col_names_hash_map(column_view column_name_hashes, cudaS
  *
  * @return std::unique_ptr<table> cudf table with three columns (offsets, lenghts, hashes)
  */
-std::unique_ptr<table> create_json_keys_info_table(const ParseOptions &options,
+std::unique_ptr<table> create_json_keys_info_table(const parse_options_view &options,
                                                    device_span<char const> const data,
                                                    device_span<uint64_t const> const row_offsets,
                                                    cudaStream_t stream)
@@ -209,7 +209,7 @@ std::pair<std::vector<std::string>, col_map_ptr_type> reader::impl::get_json_obj
   cudaStream_t stream)
 {
   auto info = create_json_keys_info_table(
-    opts_,
+    opts_.view(),
     device_span<char const>(static_cast<char const *>(data_.data()), data_.size()),
     rec_starts_,
     stream);
@@ -508,7 +508,7 @@ void reader::impl::set_data_types(cudaStream_t stream)
     auto const do_set_null_count = key_to_col_idx_map_ != nullptr;
 
     auto const h_column_infos = cudf::io::json::gpu::detect_data_types(
-      opts_,
+      opts_.view(),
       device_span<char const>(static_cast<char const *>(data_.data()), data_.size()),
       rec_starts_,
       do_set_null_count,
@@ -576,7 +576,7 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
   rmm::device_vector<cudf::size_type> d_valid_counts(num_columns, 0);
 
   cudf::io::json::gpu::convert_json_to_columns(
-    opts_,
+    opts_.view(),
     device_span<char const>(static_cast<char const *>(data_.data()), data_.size()),
     rec_starts_,
     d_dtypes,
@@ -622,14 +622,9 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 {
   CUDF_EXPECTS(options_.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
 
-  d_trie_true_         = createSerializedTrie({"true"});
-  opts_.trueValuesTrie = d_trie_true_.data().get();
-
-  d_trie_false_         = createSerializedTrie({"false"});
-  opts_.falseValuesTrie = d_trie_false_.data().get();
-
-  d_trie_na_         = createSerializedTrie({"null"});
-  opts_.naValuesTrie = d_trie_na_.data().get();
+  opts_.trie_true  = createSerializedTrie({"true"});
+  opts_.trie_false = createSerializedTrie({"false"});
+  opts_.trie_na    = createSerializedTrie({"null"});
 
   opts_.dayfirst = options.is_enabled_dayfirst();
 }

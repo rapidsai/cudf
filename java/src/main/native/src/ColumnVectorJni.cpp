@@ -19,6 +19,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/lists/extract.hpp>
+#include <cudf/reshape.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/filling.hpp>
@@ -781,6 +782,19 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castTo(JNIEnv *env, job
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_byteListCast(JNIEnv *env, jobject j_object,
+                                                                jlong handle, jboolean endianness_config) {
+  JNI_NULL_CHECK(env, handle, "native handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
+    cudf::flip_endianness config(static_cast<cudf::flip_endianness>(endianness_config));
+    std::unique_ptr<cudf::column> result = byte_cast(*column, config);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringTimestampToTimestamp(
     JNIEnv *env, jobject j_object, jlong handle, jint time_unit, jstring formatObj) {
   JNI_NULL_CHECK(env, handle, "column is null", 0);
@@ -1223,6 +1237,36 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_normalizeNANsAndZeros(J
     cudf::jni::auto_set_device(env);
     return reinterpret_cast<jlong>(
         cudf::normalize_nans_and_zeros(*reinterpret_cast<column_view *>(input_column)).release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_bitwiseMergeAndSetValidity(JNIEnv *env, jobject j_object, jlong base_column, jlongArray column_handles, jint bin_op) {
+  JNI_NULL_CHECK(env, base_column, "base column native handle is null", 0);
+  JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
+  try {
+    cudf::column_view *original_column = reinterpret_cast<cudf::column_view *>(base_column);
+    std::unique_ptr<cudf::column> copy(new cudf::column(*original_column));
+    cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
+
+    if (n_cudf_columns.size() == 0) {
+      rmm::device_buffer null_mask{0};
+      copy->set_null_mask(null_mask);
+      return reinterpret_cast<jlong>(copy.release());
+    }
+
+    std::vector<cudf::column_view> column_views;
+    std::transform(n_cudf_columns.data(), n_cudf_columns.data() + n_cudf_columns.size(),
+                   std::back_inserter(column_views),
+                   [](auto const &p_column) { return *p_column; });
+    cudf::table_view *input_table = new cudf::table_view(column_views);
+
+    cudf::binary_operator op = static_cast<cudf::binary_operator>(bin_op);
+    if(op == cudf::binary_operator::BITWISE_AND) {
+      copy->set_null_mask(cudf::bitmask_and(*input_table));
+    }
+
+    return reinterpret_cast<jlong>(copy.release());
   }
   CATCH_STD(env, 0);
 }

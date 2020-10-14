@@ -118,7 +118,7 @@ template <typename T>
 struct FixedWidthScalarFactory : public ScalarFactoryTest {
 };
 
-TYPED_TEST_CASE(FixedWidthScalarFactory, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(FixedWidthScalarFactory, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(FixedWidthScalarFactory, ValueProvided)
 {
@@ -132,6 +132,28 @@ TYPED_TEST(FixedWidthScalarFactory, ValueProvided)
   EXPECT_EQ(s->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(numeric_s->value(), value);
   EXPECT_TRUE(numeric_s->is_valid());
+  EXPECT_TRUE(s->is_valid());
+}
+
+template <typename T>
+struct FixedPointScalarFactory : public ScalarFactoryTest {
+};
+
+TYPED_TEST_CASE(FixedPointScalarFactory, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointScalarFactory, ValueProvided)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto const rep_value = static_cast<typename decimalXX::rep>(123);
+  auto const s =
+    cudf::make_fixed_point_scalar<decimalXX>(123, scale_type{-2}, this->stream(), this->mr());
+  auto const fp_s = static_cast<cudf::scalar_type_t<decimalXX>*>(s.get());
+
+  EXPECT_EQ(s->type(), cudf::data_type{cudf::type_to_id<decimalXX>()});
+  EXPECT_EQ(fp_s->value(), rep_value);
+  EXPECT_TRUE(fp_s->is_valid());
   EXPECT_TRUE(s->is_valid());
 }
 

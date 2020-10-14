@@ -1,9 +1,9 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import numpy as np
 import pandas as pd
+from nvtx import annotate
 
 import cudf
-from cudf._lib.nvtx import annotate
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
