@@ -202,6 +202,7 @@
 - PR #6309 Make all CI `.sh` scripts have a consistent set of permissions
 - PR #6491 Remove repo URL from Java build-info
 - PR #6462 Bug fixes for ColumnBuilder
+- PR #6497 Fixes a data corruption issue reading list columns from Parquet files with multiple row groups.
 
 
 
