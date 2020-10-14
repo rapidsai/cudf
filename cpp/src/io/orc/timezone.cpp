@@ -365,15 +365,11 @@ static int64_t GetTransitionTime(const dst_transition_s *trans, int year)
  **/
 static int64_t GetGmtOffset(const std::vector<int64_t> &table, int64_t ts)
 {
-  uint32_t num_entries = (uint32_t)(table.size() >> 1);
-  uint32_t dst_cycle   = 0;
+  uint32_t num_entries = (uint32_t)(table.size() - 400 >> 1);
+  uint32_t dst_cycle   = 800;
   int64_t first_transition, last_transition;
   uint32_t first, last;
-  if (num_entries > 800)  // 2 entries/year for 400 years
-  {
-    num_entries -= 800;
-    dst_cycle = 800;
-  }
+
   first_transition = table[1];
   last_transition  = table[(num_entries - 1) * 2 + 1];
   if (ts <= first_transition) {

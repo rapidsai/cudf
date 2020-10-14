@@ -108,7 +108,6 @@ struct orc_datadec_state_s {
   uint32_t nrows;               // # of rows in current batch (up to NTHREADS)
   uint32_t buffered_count;      // number of buffered values in the secondary data stream
   uint32_t tz_num_entries;      // number of entries in timezone table
-  uint32_t tz_dst_cycle;        // number of entries in timezone daylight savings cycle
   int64_t first_tz_transition;  // first transition in timezone table
   int64_t last_tz_transition;   // last transition in timezone table
   int64_t utc_epoch;            // kORCTimeToUTC - gmtOffset
@@ -1411,7 +1410,7 @@ static __device__ int64_t ConvertToUTC(const orc_datadec_state_s *s,
                                        int64_t ts)
 {
   uint32_t num_entries     = s->tz_num_entries;
-  uint32_t dst_cycle       = s->tz_dst_cycle;
+  uint32_t dst_cycle       = 800;
   int64_t first_transition = s->first_tz_transition;
   int64_t last_transition  = s->last_tz_transition;
   int64_t tsbase;
@@ -1423,9 +1422,7 @@ static __device__ int64_t ConvertToUTC(const orc_datadec_state_s *s,
     first  = 0;
     last   = num_entries - 1;
     tsbase = ts;
-  } else if (!dst_cycle) {
-    return ts + table[(num_entries - 1) * 2 + 2];
-  } else {
+  }  else {
     // Apply 400-year cycle rule
     const int64_t k400Years = (365 * 400 + (100 - 3)) * 24 * 60 * 60ll;
     tsbase                  = ts;
@@ -1533,19 +1530,10 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
     }
     if (!IS_DICTIONARY(s->chunk.encoding_kind)) { s->chunk.dictionary_start = 0; }
     if (tz_len > 0) {
-      if (tz_len > 800)  // 2 entries/year for 400 years
-      {
-        s->top.data.tz_num_entries = tz_len - 800;
-        s->top.data.tz_dst_cycle   = 800;
-      } else {
-        s->top.data.tz_num_entries = tz_len;
-        s->top.data.tz_dst_cycle   = 0;
-      }
+      s->top.data.tz_num_entries = tz_len - 800;
       s->top.data.utc_epoch = kORCTimeToUTC - tz_table[0];
-      if (tz_len > 0) {
-        s->top.data.first_tz_transition = tz_table[1];
-        s->top.data.last_tz_transition  = tz_table[(s->top.data.tz_num_entries - 1) * 2 + 1];
-      }
+      s->top.data.first_tz_transition = tz_table[1];
+      s->top.data.last_tz_transition  = tz_table[(s->top.data.tz_num_entries - 1) * 2 + 1];
     } else {
       s->top.data.utc_epoch = kORCTimeToUTC;
     }
