@@ -313,8 +313,7 @@ endif(JITIFY_USE_CACHE)
 option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 if(PER_THREAD_DEFAULT_STREAM)
     message(STATUS "Using per-thread default stream")
-    add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
-endif(PER_THREAD_DEFAULT_STREAM)
+endif()
 
 ###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
@@ -522,10 +521,7 @@ add_custom_target(stringify_run DEPENDS
 option(USE_NVTX "Build with NVTX support" ON)
 if(USE_NVTX)
     message(STATUS "Using Nvidia Tools Extension")
-else()
-    # Makes NVTX APIs no-ops
-    add_compile_definitions(NVTX_DISABLE)
-endif(USE_NVTX)
+endif()
 
 option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
 if(HT_DEFAULT_ALLOCATOR)
@@ -557,6 +553,15 @@ function(add_library_module NAMESPACE MODULE MODULE_DIR)
     set_target_properties("${NAMESPACE}_${MODULE}" PROPERTIES BUILD_RPATH "\$ORIGIN")
     target_link_libraries("${NAMESPACE}_${MODULE}" arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
     add_dependencies("${NAMESPACE}_${MODULE}" stringify_run)
+    # per-thread default stream
+    if(PER_THREAD_DEFAULT_STREAM)
+        target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM)
+    endif()
+    # nvtx
+    if(NOT USE_NVTX)
+        target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC NVTX_DISABLE)
+    endif()
+    # spdlog level
     target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGING_LEVEL}")
     add_library("${NAMESPACE}::${MODULE}" ALIAS "${NAMESPACE}_${MODULE}")
 endfunction()
@@ -600,9 +605,17 @@ endforeach()
 add_library("${CUDF_NAMESPACE}_base" ${CUDF_BASE_SRC})
 # ensure that libraries linked to the base module are done regardless of need; 
 set_target_properties("${CUDF_NAMESPACE}_base" PROPERTIES BUILD_RPATH "\$ORIGIN")
-add_library("${CUDF_NAMESPACE}::base" ALIAS "${CUDF_NAMESPACE}_base")
+# per-thread default stream
+if(PER_THREAD_DEFAULT_STREAM)
+    target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM)
+endif()
+# nvtx
+if(NOT USE_NVTX)
+    target_compile_definitions("${CUDF_NAMESPACE}_base" PUBLIC "NVTX_DISABLE")
+endif()
 add_dependencies("${CUDF_NAMESPACE}_base" stringify_run)
 target_link_libraries("${CUDF_NAMESPACE}_base" arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+add_library("${CUDF_NAMESPACE}::base" ALIAS "${CUDF_NAMESPACE}_base")
 
 set(
     CUDF_MODULE_LIST
