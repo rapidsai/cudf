@@ -4,6 +4,7 @@
 
 ## Improvements
 
+- PR #6432 Add dictionary support to `cudf::upper_bound` and `cudf::lower_bound`
 - PR #6461 Replace index type-dispatch call with indexalator in cudf::scatter
 - PR #6415 Support `datetime64` in row-wise op
 - PR #6457 Replace index type-dispatch call with indexalator in `cudf::gather`
