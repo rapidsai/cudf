@@ -115,7 +115,13 @@ def assert_neq(left, right, **kwargs):
         raise AssertionError
 
 
-def assert_exception(reference_func, actual_func, compare_error_message=True):
+def assert_exceptions_equal(
+    reference_func,
+    actual_func,
+    reference_func_args=None,
+    actual_func_args=None,
+    compare_error_message=True,
+):
     """Compares if two functions raise same exception or not.
 
     Parameters
@@ -125,6 +131,12 @@ def assert_exception(reference_func, actual_func, compare_error_message=True):
     actual_func : callable
         A callable function to compare the Exception
         obtained by calling ``reference_func``.
+    reference_func_args : dict, default None
+        Function arguments to be passed into
+        ``reference_func``.
+    actual_func_args : dict, default None
+        Function arguments to be passed into
+        ``actual_func``.
     compare_error_message : boolean, default True
         Whether to compare the error messages raised
         when calling both ``reference_func`` and
@@ -141,8 +153,15 @@ def assert_exception(reference_func, actual_func, compare_error_message=True):
     AssertionError
         If call to ``reference_func`` doesn't raise any Exception.
     """
+
+    if reference_func_args is None:
+        reference_func_args = {}
+
+    if actual_func_args is None:
+        actual_func_args = {}
+
     try:
-        reference_func()
+        reference_func(**reference_func_args)
     except KeyboardInterrupt:
         raise
     except Exception as e:
@@ -150,7 +169,7 @@ def assert_exception(reference_func, actual_func, compare_error_message=True):
             type(e),
             match=re.escape(str(e)) if compare_error_message is True else None,
         ):
-            actual_func()
+            actual_func(**actual_func_args)
     else:
         raise AssertionError("Expected to fail with an Exception.")
 

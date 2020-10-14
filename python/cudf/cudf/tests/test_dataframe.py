@@ -22,7 +22,7 @@ from cudf.tests.utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_eq,
-    assert_exception,
+    assert_exceptions_equal,
     does_not_raise,
     gen_rand,
 )
@@ -7751,13 +7751,17 @@ def test_equals_dtypes():
 )
 @pytest.mark.parametrize(
     "op",
-    ["__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__gt__", "__ge__"],
+    [
+        operator.eq,
+        operator.ne,
+        operator.lt,
+        operator.gt,
+        operator.le,
+        operator.ge,
+    ],
 )
 def test_dataframe_error_equality(df1, df2, op):
     gdf1 = gd.from_pandas(df1)
     gdf2 = gd.from_pandas(df2)
 
-    expected_function = lambda: getattr(df1, op)(df2)  # noqa: E731
-    actual_function = lambda: getattr(gdf1, op)(gdf2)  # noqa: E731
-
-    assert_exception(expected_function, actual_function)
+    assert_exceptions_equal(op, op, [df1, df2], [gdf1, gdf2])

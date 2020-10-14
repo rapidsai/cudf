@@ -1,4 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
+import operator
 import re
 from string import ascii_letters, digits
 
@@ -12,7 +13,7 @@ from cudf.tests.utils import (
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
     assert_eq,
-    assert_exception,
+    assert_exceptions_equal,
 )
 
 
@@ -641,13 +642,17 @@ def test_series_mode(df, dropna):
 )
 @pytest.mark.parametrize(
     "op",
-    ["__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__gt__", "__ge__"],
+    [
+        operator.eq,
+        operator.ne,
+        operator.lt,
+        operator.gt,
+        operator.le,
+        operator.ge,
+    ],
 )
 def test_series_error_equality(sr1, sr2, op):
     gsr1 = cudf.from_pandas(sr1)
     gsr2 = cudf.from_pandas(sr2)
 
-    expected_function = lambda: getattr(sr1, op)(sr2)  # noqa: E731
-    actual_function = lambda: getattr(gsr1, op)(gsr2)  # noqa: E731
-
-    assert_exception(expected_function, actual_function)
+    assert_exceptions_equal(op, op, [sr1, sr2], [gsr1, gsr2])
