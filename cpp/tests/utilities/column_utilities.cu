@@ -25,7 +25,8 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
+#include "cudf/utilities/type_dispatcher.hpp"
+
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
@@ -33,13 +34,12 @@
 
 #include <jit/type.h>
 
-#include <sstream>
-
 #include <thrust/equal.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 
 #include <numeric>
+#include <sstream>
 
 namespace cudf {
 namespace test {
@@ -164,13 +164,12 @@ std::string differences_message(thrust::device_vector<int> const& differences,
     auto diff_table   = cudf::gather(source_table, diff_column);
 
     //  Need to pull back the differences
-    std::vector<std::string> h_left_strings  = to_strings(diff_table->get_column(0));
-    std::vector<std::string> h_right_strings = to_strings(diff_table->get_column(1));
+    auto const h_left_strings  = to_strings(diff_table->get_column(0));
+    auto const h_right_strings = to_strings(diff_table->get_column(1));
 
-    for (size_t i = 0; i < differences.size(); ++i) {
+    for (size_t i = 0; i < differences.size(); ++i)
       buffer << depth_str << "lhs[" << differences[i] << "] = " << h_left_strings[i] << ", rhs["
              << differences[i] << "] = " << h_right_strings[i] << std::endl;
-    }
 
     return buffer.str();
   } else {
@@ -564,15 +563,10 @@ struct column_view_printer {
                   std::string const& indent)
   {
     auto const h_data = cudf::test::to_host<Element>(col);
-
-    out.resize(col.size());
-    std::transform(thrust::make_counting_iterator(size_type{0}),
-                   thrust::make_counting_iterator(col.size()),
-                   out.begin(),
-                   [&](auto idx) {
-                     auto const d = static_cast<double>(h_data.first[idx]);
-                     return std::to_string(d);
-                   });
+    std::transform(std::cbegin(h_data.first),
+                   std::cend(h_data.first),
+                   std::back_inserter(out),
+                   [](auto const& fp) { return std::to_string(static_cast<double>(fp)); });
   }
 
   template <typename Element,
