@@ -655,4 +655,4 @@ def test_series_error_equality(sr1, sr2, op):
     gsr1 = cudf.from_pandas(sr1)
     gsr2 = cudf.from_pandas(sr2)
 
-    assert_exceptions_equal(op, op, [sr1, sr2], [gsr1, gsr2])
+    assert_exceptions_equal(op, op, ([sr1, sr2], {}), ([gsr1, gsr2], {}))

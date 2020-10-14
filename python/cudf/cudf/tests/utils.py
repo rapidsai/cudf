@@ -118,8 +118,8 @@ def assert_neq(left, right, **kwargs):
 def assert_exceptions_equal(
     reference_func,
     actual_func,
-    reference_func_args=None,
-    actual_func_args=None,
+    reference_func_arg_tuple=None,
+    actual_func_arg_tuple=None,
     compare_error_message=True,
 ):
     """Compares if two functions raise same exception or not.
@@ -131,11 +131,13 @@ def assert_exceptions_equal(
     actual_func : callable
         A callable function to compare the Exception
         obtained by calling ``reference_func``.
-    reference_func_args : dict, default None
-        Function arguments to be passed into
+    reference_func_arg_tuple : tuple, default None
+        Tuple containing positional arguments at first position,
+        and key-word arguments at second position that need to be passed into
         ``reference_func``.
-    actual_func_args : dict, default None
-        Function arguments to be passed into
+    actual_func_arg_tuple : tuple, default None
+        Tuple containing positional arguments at first position,
+        and key-word arguments at second position that need to be passed into
         ``actual_func``.
     compare_error_message : boolean, default True
         Whether to compare the error messages raised
@@ -154,14 +156,20 @@ def assert_exceptions_equal(
         If call to ``reference_func`` doesn't raise any Exception.
     """
 
-    if reference_func_args is None:
-        reference_func_args = {}
+    if reference_func_arg_tuple is None:
+        reference_func_args = []
+        reference_func_kwargs = {}
+    else:
+        reference_func_args, reference_func_kwargs = reference_func_arg_tuple
 
-    if actual_func_args is None:
-        actual_func_args = {}
+    if actual_func_arg_tuple is None:
+        actual_func_args = []
+        actual_func_kwargs = {}
+    else:
+        actual_func_args, actual_func_kwargs = actual_func_arg_tuple
 
     try:
-        reference_func(**reference_func_args)
+        reference_func(*reference_func_args, **reference_func_kwargs)
     except KeyboardInterrupt:
         raise
     except Exception as e:
@@ -169,7 +177,7 @@ def assert_exceptions_equal(
             type(e),
             match=re.escape(str(e)) if compare_error_message is True else None,
         ):
-            actual_func(**actual_func_args)
+            actual_func(*actual_func_args, **actual_func_kwargs)
     else:
         raise AssertionError("Expected to fail with an Exception.")
 
