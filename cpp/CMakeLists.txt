@@ -543,23 +543,23 @@ message(STATUS "RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
 # - library targets -------------------------------------------------------------------------------
 
 # define a function that populates the namespace with modules from the cudf source tree (cpp/src)
-function(add_library_module NAMESPACE MODULE MODULE_DIR)
+function(add_library_module MODULE MODULE_DIR)
     file(GLOB_RECURSE MODULE_SRC "${MODULE_DIR}/*")
-    add_library("${NAMESPACE}_${MODULE}" ${MODULE_SRC})
-    set_target_properties("${NAMESPACE}_${MODULE}" PROPERTIES BUILD_RPATH "\$ORIGIN")
-    target_link_libraries("${NAMESPACE}_${MODULE}" arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
-    add_dependencies("${NAMESPACE}_${MODULE}" stringify_run)
+    add_library("cudf_${MODULE}" ${MODULE_SRC})
+    set_target_properties("cudf_${MODULE}" PROPERTIES BUILD_RPATH "\$ORIGIN")
+    target_link_libraries("cudf_${MODULE}" arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+    add_dependencies("cudf_${MODULE}" stringify_run)
     # per-thread default stream
     if(PER_THREAD_DEFAULT_STREAM)
-        target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM)
+        target_compile_definitions("cudf_${MODULE}" PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM)
     endif()
     # nvtx
     if(NOT USE_NVTX)
-        target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC NVTX_DISABLE)
+        target_compile_definitions("cudf_${MODULE}" PUBLIC NVTX_DISABLE)
     endif()
     # spdlog level
-    target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGING_LEVEL}")
-    add_library("${NAMESPACE}::${MODULE}" ALIAS "${NAMESPACE}_${MODULE}")
+    target_compile_definitions("cudf_${MODULE}" PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGING_LEVEL}")
+    add_library("cudf::${MODULE}" ALIAS "cudf_${MODULE}")
 endfunction()
 
 # define a list of modules for the base library
@@ -635,7 +635,7 @@ set(
 foreach(CUDF_MODULE_DIR IN LISTS CUDF_MODULE_LIST)
     get_filename_component(CUDF_MODULE_NAME ${CUDF_MODULE_DIR} NAME)
     message(STATUS "Adding cudf module: ${CUDF_MODULE_NAME} with name ${CUDF_NAMESPACE}_${CUDF_MODULE_NAME}")
-    add_library_module("cudf" ${CUDF_MODULE_NAME} ${CUDF_MODULE_DIR})
+    add_library_module(${CUDF_MODULE_NAME} ${CUDF_MODULE_DIR})
     target_link_libraries("cudf_${CUDF_MODULE_NAME}" "cudf::base")
     list(APPEND CUDF_MODULES "cudf_${CUDF_MODULE_NAME}")
 endforeach()
