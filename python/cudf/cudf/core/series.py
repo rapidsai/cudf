@@ -900,7 +900,7 @@ class Series(Frame, Serializable):
             for i in range(len(self)):
                 if self[i] not in arg.index:
                     result[i] = None
-        
+
         elif is_string_dtype(self._column.dtype) or isinstance(
             self._column, cudf.core.column.CategoricalColumn
         ):
@@ -910,7 +910,7 @@ class Series(Frame, Serializable):
             )
         else:
             result = self.applymap(arg)
-            result = result.astype('float64')
+            result = result.astype("float64")
         return result
 
     def __getitem__(self, arg):
