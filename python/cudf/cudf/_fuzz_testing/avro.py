@@ -93,7 +93,9 @@ class AvroReader(IOFuzz):
                     np.unique(np.random.choice(self._df.columns, col_size))
                 )
             elif param in ("skiprows", "num_rows"):
-                params_dict[param] = self._rand(len(self._df.columns))
+                params_dict[param] = np.random.choice(
+                    [None, self._rand(len(self._df))]
+                )
             else:
                 params_dict[param] = np.random.choice(values)
         self._current_params["test_kwargs"] = params_dict
