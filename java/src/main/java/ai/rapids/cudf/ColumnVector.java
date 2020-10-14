@@ -3767,14 +3767,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     return build(DType.FLOAT64, values.length, (b) -> b.appendArray(values));
   }
 
- /* public static ColumnVector fromDecimal32(int... values) {
-        return build(DType.DECIMAL32, values.length, (b) -> b.appendArray(values));
-      }
-
-          public static ColumnVector fromDecimal64(long... values) {
-     return build(DType.DECIMAL64, values.length, (b) -> b.appendArray(values));
-      }*/
-
   /**
    * Create a new vector from the given values.
    */
@@ -3966,14 +3958,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   public static ColumnVector fromBoxedDoubles(Double... values) {
     return build(DType.FLOAT64, values.length, (b) -> b.appendBoxed(values));
   }
-
-  /*public static ColumnVector fromBoxedDecimals32(Integer... values) {
-        return build(DType.DECIMAL32, values.length, (b) -> b.appendBoxed(values));
-      }
-
-          public static ColumnVector fromBoxedDecimals64(Long... values) {
-       return build(DType.DECIMAL64, values.length, (b) -> b.appendBoxed(values));
-      }*/
 
   /**
    * Create a new vector from the given values.  This API supports inline nulls,

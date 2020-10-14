@@ -271,7 +271,7 @@ public class TableTest extends CudfTestBase {
     assertTrue(input.getData() == null);
     boolean hasNestedTypeChildren = false;
     for (HostColumnVectorCore expectedChild : expected.getNestedChildren()) {
-      if (expectedChild.type.isNestedType()) {
+      if (expectedChild.type.typeId.isNestedType()) {
         hasNestedTypeChildren = true;
       }
     }

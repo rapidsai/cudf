@@ -185,18 +185,18 @@ public final class HostColumnVector extends HostColumnVectorCore {
    */
   public ColumnVector copyToDevice() {
     if (rows == 0) {
-      return new ColumnVector(type, 0, Optional.of(0L), null, null, null);
+      return new ColumnVector(type.typeId, 0, Optional.of(0L), null, null, null);
     }
     // The simplest way is just to copy the buffers and pass them down.
     DeviceMemoryBuffer data = null;
     DeviceMemoryBuffer valid = null;
     DeviceMemoryBuffer offsets = null;
     try {
-      if (!type.isNestedType()) {
+      if (!type.typeId.isNestedType()) {
         HostMemoryBuffer hdata = this.offHeap.data;
         if (hdata != null) {
-          long dataLen = rows * type.sizeInBytes;
-          if (type == DType.STRING) {
+          long dataLen = rows * type.typeId.sizeInBytes;
+          if (type.typeId == DType.STRING) {
             // This needs a different type
             dataLen = getEndStringOffset(rows - 1);
             if (dataLen == 0 && getNullCount() == 0) {
@@ -222,13 +222,13 @@ public final class HostColumnVector extends HostColumnVectorCore {
           offsets.copyFromHostBuffer(hoff, 0, offsetsLen);
         }
 
-        ColumnVector ret = new ColumnVector(type, rows, nullCount, data, valid, offsets);
+        ColumnVector ret = new ColumnVector(type.typeId, rows, nullCount, data, valid, offsets);
         data = null;
         valid = null;
         offsets = null;
         return ret;
       } else {
-        return ColumnVector.createNestedColumnVector(type, (int) rows, offHeap.data, offHeap.valid, offHeap.offsets, nullCount, children);
+        return ColumnVector.createNestedColumnVector(type.typeId, (int) rows, offHeap.data, offHeap.valid, offHeap.offsets, nullCount, children);
       }
     } finally {
       if (data != null) {
@@ -403,26 +403,6 @@ public final class HostColumnVector extends HostColumnVectorCore {
   public static HostColumnVector fromLongs(long... values) {
     return build(DType.INT64, values.length, (b) -> b.appendArray(values));
   }
-
-
- /* public static HostColumnVector fromDecimal32(int... values) {
-        return build(DType.DECIMAL32, values.length, (b) -> b.appendArray(values));
-     }
-
-         public static HostColumnVector fromDecimal64(long... values) {
-        return build(DType.DECIMAL64, values.length, (b) -> b.appendArray(values));
-     }
-
-
-        public static HostColumnVector fromBoxedDecimals32(Integer... values) {
-    return build(DType.DECIMAL32, values.length, (b) -> b.appendBoxed(values));
-      }
-
-         public static HostColumnVector fromBoxedDecimals64(Long... values) {
-       return build(DType.DECIMAL64, values.length, (b) -> b.appendBoxed(values));
-  }*/
-
-
 
   /**
    * Create a new vector from the given values.
@@ -1469,7 +1449,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
      */
     public final Builder append(HostColumnVector columnVector) {
       assert columnVector.rows <= (rows - currentIndex);
-      assert columnVector.type == type;
+      assert columnVector.type.typeId == type;
 
       if (type == DType.STRING) {
         throw new UnsupportedOperationException(
