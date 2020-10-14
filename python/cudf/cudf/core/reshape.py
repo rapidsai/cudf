@@ -305,8 +305,10 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 sort=sort,
             )
             if ignore_index and join == "inner" and result.empty:
-                for obj in objs[1:]:
-                    result.index = cudf.RangeIndex(len(objs[0]) + len(obj))
+                indexes = []
+                for obj in objs:
+                    indexes.append(len(obj.index))
+                    result.index = cudf.RangeIndex(sum(indexes))
                 return result
             else:
                 return cudf.DataFrame._concat(
