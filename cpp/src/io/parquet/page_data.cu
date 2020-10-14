@@ -1730,7 +1730,9 @@ struct chunk_row_output_iter {
 };
 
 struct start_offset_output_iterator {
-  PageInfo *p;
+  PageInfo *pages;
+  int *page_indices;
+  int cur_index;
   int src_col_schema;
   int nesting_depth;
   int empty               = 0;
@@ -1742,21 +1744,21 @@ struct start_offset_output_iterator {
 
   start_offset_output_iterator operator+ __host__ __device__(int i)
   {
-    return start_offset_output_iterator{p + i, src_col_schema, nesting_depth};
+    return start_offset_output_iterator{
+      pages, page_indices, cur_index + i, src_col_schema, nesting_depth};
   }
 
-  void operator++ __host__ __device__() { p++; }
+  void operator++ __host__ __device__() { cur_index++; }
 
-  reference operator[] __device__(int i) { return dereference(p + i); }
-  reference operator*__device__() { return dereference(p); }
+  reference operator[] __device__(int i) { return dereference(cur_index + i); }
+  reference operator*__device__() { return dereference(cur_index); }
 
  private:
-  reference __device__ dereference(PageInfo *p)
+  reference __device__ dereference(int index)
   {
-    if (p->src_col_schema != src_col_schema || p->flags & PAGEINFO_FLAGS_DICTIONARY) {
-      return empty;
-    }
-    return p->nesting[nesting_depth].page_start_value;
+    PageInfo const &p = pages[page_indices[index]];
+    if (p.src_col_schema != src_col_schema || p.flags & PAGEINFO_FLAGS_DICTIONARY) { return empty; }
+    return p.nesting[nesting_depth].page_start_value;
   }
 };
 
@@ -1804,6 +1806,39 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
   // back, this value will get overwritten later on).
   pages.device_to_host(stream, true);
 
+  // ordering of pages is by input column schema, repeated across row groups.  so
+  // if we had 3 columns, each with 2 pages, and 1 row group, our schema values might look like
+  //
+  // 1, 1, 2, 2, 3, 3
+  //
+  // However, if we had more than one row group, the pattern would be
+  //
+  // 1, 1, 2, 2, 3, 3, 1, 1, 2, 2, 3, 3
+  // ^ row group 0     |
+  //                   ^ row group 1
+  //
+  // To use exclusive_scan_by_key, the ordering we actually want is
+  //
+  // 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
+  //
+  // We also need to preserve key-relative page ordering, so we need to use a stable sort.
+  rmm::device_uvector<int> page_keys(pages.size(), stream);
+  rmm::device_uvector<int> page_index(pages.size(), stream);
+  {
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+                      pages.device_ptr(),
+                      pages.device_ptr() + pages.size(),
+                      page_keys.begin(),
+                      [] __device__(PageInfo const &page) { return page.src_col_schema; });
+
+    thrust::sequence(rmm::exec_policy(stream)->on(stream), page_index.begin(), page_index.end());
+    thrust::stable_sort_by_key(rmm::exec_policy(stream)->on(stream),
+                               page_keys.begin(),
+                               page_keys.end(),
+                               page_index.begin(),
+                               thrust::less<int>());
+  }
+
   // compute output column sizes by examining the pages of the -input- columns
   for (size_t idx = 0; idx < input_columns.size(); idx++) {
     auto const &input_col = input_columns[idx];
@@ -1815,15 +1850,18 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
       auto &out_buf = (*cols)[input_col.nesting[l_idx]];
       cols          = &out_buf.children;
 
+      // size iterator. indexes pages by sorted order
       auto size_input = thrust::make_transform_iterator(
-        pages.device_ptr(), [src_col_schema, l_idx] __device__(PageInfo const &page) {
+        page_index.begin(),
+        [src_col_schema, l_idx, pages = pages.device_ptr()] __device__(int index) {
+          auto const &page = pages[index];
           if (page.src_col_schema != src_col_schema || page.flags & PAGEINFO_FLAGS_DICTIONARY) {
             return 0;
           }
           return page.nesting[l_idx].size;
         });
 
-      // column size
+      // compute column size.
       // for struct columns, higher levels of the output columns are shared between input
       // columns. so don't compute any given level more than once.
       if (out_buf.size == 0) {
@@ -1837,16 +1875,16 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
         out_buf.create(size, stream, mr);
       }
 
-      // per-page start offset
-      auto key_input = thrust::make_transform_iterator(
-        pages.device_ptr(), [] __device__(PageInfo const &page) { return page.src_col_schema; });
-      thrust::exclusive_scan_by_key(
-        rmm::exec_policy(stream)->on(stream),
-        key_input,
-        key_input + pages.size(),
-        size_input,
-        start_offset_output_iterator{
-          pages.device_ptr(), static_cast<int>(src_col_schema), static_cast<int>(l_idx)});
+      // compute per-page start offset
+      thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream),
+                                    page_keys.begin(),
+                                    page_keys.end(),
+                                    size_input,
+                                    start_offset_output_iterator{pages.device_ptr(),
+                                                                 page_index.begin(),
+                                                                 0,
+                                                                 static_cast<int>(src_col_schema),
+                                                                 static_cast<int>(l_idx)});
     }
   }
 

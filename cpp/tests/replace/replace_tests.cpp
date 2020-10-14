@@ -23,11 +23,12 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/dictionary/encode.hpp>
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/replace.hpp>
+#include "cudf/fixed_point/fixed_point.hpp"
 
 #include <thrust/device_vector.h>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <gtest/gtest.h>
 #include <cstdlib>
@@ -548,10 +549,10 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReplace)
   auto const TWO = decimalXX{2, scale_type{0}};
   auto const sz  = std::size_t{1000};
 
-  auto vec1       = std::vector<decimalXX>(sz);
-  auto const vec2 = std::vector<decimalXX>(sz, TWO);
-
-  std::generate(vec1.begin(), vec1.end(), [&, i = 0]() mutable { return ++i % 2 ? ONE : TWO; });
+  auto mod2            = [&](auto e) { return e % 2 ? ONE : TWO; };
+  auto transform_begin = cudf::test::make_counting_transform_iterator(0, mod2);
+  auto const vec1      = std::vector<decimalXX>(transform_begin, transform_begin + sz);
+  auto const vec2      = std::vector<decimalXX>(sz, TWO);
 
   auto const to_replace  = std::vector<decimalXX>{ONE};
   auto const replacement = std::vector<decimalXX>{TWO};

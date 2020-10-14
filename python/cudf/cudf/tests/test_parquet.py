@@ -12,6 +12,7 @@ import pyarrow as pa
 import pytest
 from packaging import version
 from pyarrow import parquet as pq
+import cupy
 
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
@@ -899,6 +900,57 @@ def test_parquet_reader_list_large_mixed(tmpdir):
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
     assert_eq(expect, got, check_dtype=False)
+
+
+def test_parquet_reader_list_large_multi_rowgroup(tmpdir):
+    # > 40 row groups
+    num_rows = 100000
+    num_docs = num_rows / 2
+    num_categories = 1_000
+    row_group_size = 1000
+
+    cupy.random.seed(0)
+
+    # generate a random pairing of doc: category
+    documents = cudf.DataFrame(
+        {
+            "document_id": cupy.random.randint(num_docs, size=num_rows),
+            "category_id": cupy.random.randint(num_categories, size=num_rows),
+        }
+    )
+
+    # group categories by document_id to create a list column
+    expect = documents.groupby("document_id").agg({"category_id": ["collect"]})
+    expect.columns = expect.columns.get_level_values(0)
+    expect.reset_index(inplace=True)
+
+    # round trip the dataframe to/from parquet
+    fname = tmpdir.join(
+        "test_parquet_reader_list_large_multi_rowgroup.parquet"
+    )
+    expect.to_pandas().to_parquet(fname, row_group_size=row_group_size)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got)
+
+
+def test_parquet_reader_list_large_multi_rowgroup_nulls(tmpdir):
+    # 25 row groups
+    num_rows = 25000
+    row_group_size = 1000
+
+    expect = cudf.DataFrame(
+        {"a": list_gen(int_gen, 0, num_rows, 3, 2, include_validity=True)}
+    )
+
+    # round trip the dataframe to/from parquet
+    fname = tmpdir.join(
+        "test_parquet_reader_list_large_multi_rowgroup_nulls.parquet"
+    )
+    expect.to_pandas().to_parquet(fname, row_group_size=row_group_size)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("skip", range(0, 128))
