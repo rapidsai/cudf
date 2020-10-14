@@ -28,7 +28,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
-import java.math.BigDecimal;
 
 import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
 
@@ -130,8 +129,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     NativeDepsLoader.loadNativeDeps();
   }
 
-  private final DataType type = new DataType(DType.EMPTY, 0);
- // private int scale = 0;
+  private final DataType type;
   private final OffHeapState offHeap;
   private final long rows;
   private Optional<Long> nullCount = Optional.empty();
@@ -146,13 +144,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   public ColumnVector(long nativePointer) {
     assert nativePointer != 0;
     offHeap = new OffHeapState(nativePointer);
-    //scale = offHeap.getNativeScale();
     MemoryCleaner.register(this, offHeap);
-    this.type.typeId = offHeap.getNativeType();
     this.rows = offHeap.getNativeRowCount();
-    /*if(offHeap.getNativeType() == DType.DECIMAL32 || offHeap.getNativeType() == DType.DECIMAL64) {
-        this.type.scale = offHeap.getNativeScale() ;
-    }*/
+
+    if (offHeap.getNativeType() == DType.DECIMAL32 || offHeap.getNativeType() == DType.DECIMAL64) {
+      this.type = new DataType(offHeap.getNativeType(), offHeap.getNativeScale());
+    } else {
+      this.type = new DataType(offHeap.getNativeType());
+    }
     this.refCount = 0;
     incRefCountInternal(true);
   }
@@ -180,15 +179,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     }
 
     long[] children = new long[] {};
-    int scale = 0;
-    offHeap = new OffHeapState(new DataType(type, scale), (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer, null, children);
+    DataType dataType = new DataType(type);
+    offHeap = new OffHeapState(dataType, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer, null, children);
     MemoryCleaner.register(this, offHeap);
     this.rows = rows;
     this.nullCount = nullCount;
-    this.type.typeId = type;
-    /*if(offHeap.getNativeType() == DType.DECIMAL32 || offHeap.getNativeType() == DType.DECIMAL64) {
-      this.type.scale = offHeap.getNativeScale() ;
-    }*/
+    this.type = dataType;
 
     this.refCount = 0;
     incRefCountInternal(true);
@@ -197,21 +193,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   public ColumnVector(DataType type, long rows, Optional<Long> nullCount,
                       DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
                       DeviceMemoryBuffer offsetBuffer) {
-    assert type.typeId != DType.LIST : "This constructor should not be used for list type";
-    if (type.typeId != DType.STRING) {
-      assert offsetBuffer == null : "offsets are only supported for STRING";
-    }
+    assert type.typeId == DType.DECIMAL32 || type.typeId == DType.DECIMAL64 : "This constructor should be used only for Decimal types";
 
     long[] children = new long[] {};
     offHeap = new OffHeapState(type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer, null, children);
     MemoryCleaner.register(this, offHeap);
     this.rows = rows;
     this.nullCount = nullCount;
-    this.type.typeId = type.typeId;
-    //this.scale = offHeap.getNativeRowCount();
-    /*if(offHeap.getNativeType() == DType.DECIMAL32 || offHeap.getNativeType() == DType.DECIMAL64) {
-      this.type.scale = offHeap.getNativeScale() ;//offHeap.getNativeRowCount();
-    }*/
+    this.type = type;
 
     this.refCount = 0;
     incRefCountInternal(true);
@@ -231,13 +220,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     for (int i = 0; i < nestedColumnVectors.size(); i++) {
       childHandles[i] = nestedColumnVectors.get(i).getViewHandle();
     }
-    int scale = 0;
-    offHeap = new OffHeapState(new DataType(type, scale), (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer,
+    DataType dataType = new DataType(type);
+    offHeap = new OffHeapState(dataType, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer,
         toClose, childHandles);
     MemoryCleaner.register(this, offHeap);
     this.rows = rows;
     this.nullCount = nullCount;
-    this.type.typeId = type;
+    this.type = dataType;
 
     this.refCount = 0;
     incRefCountInternal(true);
@@ -254,7 +243,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   private ColumnVector(long viewAddress, DeviceMemoryBuffer contiguousBuffer) {
     offHeap = new OffHeapState(viewAddress, contiguousBuffer);
     MemoryCleaner.register(this, offHeap);
-    this.type.typeId = offHeap.getNativeType();
+    this.type = new DataType(offHeap.getNativeType());
     this.rows = offHeap.getNativeRowCount();
     // TODO we may want to ask for the null count anyways...
     this.nullCount = Optional.empty();

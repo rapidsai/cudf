@@ -19,34 +19,13 @@ import java.io.IOException;
 
 public class DataType {
 
-  DType typeId;
-  int scale;
-   public DataType(DType id) {typeId = id; }
+  final DType typeId;
+  int scale = 0;
 
-   public DataType(DType id,  int fp_scale) {
-     typeId =id;
-     scale = fp_scale;
-   }
-  private static native long makeNativeType(int typeId, int scale);
+  public DataType(DType id) { typeId = id; }
 
-  public class NativeDataType implements AutoCloseable {
-    long nativeType;
-    // build native data_type in constructors
-    public NativeDataType(DType id) {
-      this.nativeType = DataType.makeNativeType(id.nativeId, 0);
-    }
-    public NativeDataType(DType id, int decimalScale) {
-      this.nativeType = DataType.makeNativeType(id.nativeId, decimalScale);;
-    }
-    public long returnNativeId() {
-      return this.nativeType;
-    }
-
-    public void close() throws IOException {
-      // call native delete method to clean up native data_type
-      //deleteNativeType
-
-    }
+  public DataType(DType id, int decimalScale) {
+    typeId = id;
+    scale = decimalScale;
   }
-
 }
