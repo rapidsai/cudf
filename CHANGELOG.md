@@ -11,6 +11,7 @@
 - PR #6413 Replace Python NVTX package with conda-forge source
 - PR #6442 Remove deprecated `DataFrame.from_gpu_matrix`, `DataFrame.to_gpu_matrix`, `DataFrame.add_column` APIs and method parameters
 - PR #6504 Update Java bindings version to 0.17-SNAPSHOT
+- PR #6489 Add `AVRO` fuzz tests with varying function parameters
 
 ## Bug Fixes
 
