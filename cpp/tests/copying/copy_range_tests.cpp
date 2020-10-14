@@ -58,7 +58,7 @@ class CopyRangeTypedTestFixture : public cudf::test::BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(CopyRangeTypedTestFixture, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(CopyRangeTypedTestFixture, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNulls)
 {

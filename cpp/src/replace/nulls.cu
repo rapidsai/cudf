@@ -285,7 +285,8 @@ struct replace_nulls_functor {
  *        `replace_nulls` with the appropriate data types.
  */
 struct replace_nulls_scalar_kernel_forwarder {
-  template <typename col_type, std::enable_if_t<cudf::is_fixed_width<col_type>()>* = nullptr>
+  template <typename col_type,
+            typename std::enable_if_t<cudf::is_fixed_width<col_type>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            cudf::scalar const& replacement,
                                            rmm::mr::device_memory_resource* mr,
@@ -296,16 +297,17 @@ struct replace_nulls_scalar_kernel_forwarder {
       cudf::allocate_like(input, cudf::mask_allocation_policy::NEVER, mr);
     auto output_view = output->mutable_view();
 
+    using Type       = cudf::device_storage_type_t<col_type>;
     using ScalarType = cudf::scalar_type_t<col_type>;
     auto s1          = static_cast<ScalarType const&>(replacement);
     auto device_in   = cudf::column_device_view::create(input);
 
-    replace_nulls_functor<col_type> func(s1.data());
+    auto func = replace_nulls_functor<Type>{s1.data()};
     thrust::transform(rmm::exec_policy(stream)->on(stream),
-                      input.data<col_type>(),
-                      input.data<col_type>() + input.size(),
+                      input.data<Type>(),
+                      input.data<Type>() + input.size(),
                       cudf::detail::make_validity_iterator(*device_in),
-                      output_view.data<col_type>(),
+                      output_view.data<Type>(),
                       func);
     return output;
   }

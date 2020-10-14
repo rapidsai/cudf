@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- PR #6432 Add dictionary support to `cudf::upper_bound` and `cudf::lower_bound`
+- PR #6461 Replace index type-dispatch call with indexalator in cudf::scatter
 - PR #6415 Support `datetime64` in row-wise op
 - PR #6457 Replace index type-dispatch call with indexalator in `cudf::gather`
 - PR #6413 Replace Python NVTX package with conda-forge source
@@ -14,6 +16,7 @@
 ## Bug Fixes
 
  - PR #6509 Disable JITIFY log printing
+ - PR #6519 Fix end-of-string marking boundary condition in subword-tokenizer
 
 
 # cuDF 0.16.0 (Date TBD)
@@ -70,6 +73,7 @@
 - PR #6060 Add support for all types in `Series.describe` and `DataFrame.describe`
 - PR #6051 Add builder API for cuIO `parquet_writer_options` and `parquet_reader_options`
 - PR #6067 Added compute codes for aarch64 devices
+- PR #5861 `fixed_point` Column Optimization (store `scale` in `data_type`)
 - PR #6083 Small cleanup
 - PR #6355 Make sure PTDS mode is compatible between libcudf and JNI
 - PR #6120 Consolidate functionality in NestedHostColumnVector and HostColumnVector
@@ -129,6 +133,7 @@
 - PR #6303 Use cudf test dtypes so timedelta tests are deterministic
 - PR #6326 Simplify interal csv/json kernel parameters
 - PR #6308 Add dictionary support to cudf::scatter with scalar
+- PR #6367 Add JNI bindings for byte casting
 - PR #6346 Remove macros from CompactProtocolWriter
 - PR #6312 Conda recipe dependency cleanup
 - PR #6347 Add dictionary support to cudf::copy_range
@@ -219,6 +224,7 @@
 - PR #6309 Make all CI `.sh` scripts have a consistent set of permissions
 - PR #6491 Remove repo URL from Java build-info
 - PR #6462 Bug fixes for ColumnBuilder
+- PR #6497 Fixes a data corruption issue reading list columns from Parquet files with multiple row groups.
 
 
 
