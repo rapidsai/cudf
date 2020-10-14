@@ -15,6 +15,7 @@
 #include <thrust/transform_reduce.h>
 
 #include <algorithm>
+#include <limits>
 #include <numeric>
 #include <string>
 #include <vector>
@@ -224,7 +225,7 @@ TEST_F(CsvReaderTest, CanGatherReducePositions2)
 }
 
 struct ascend_state {
-  int value;
+  int value = std::numeric_limits<int>::max();
   bool did_ascend;
 };
 
@@ -290,9 +291,11 @@ TEST_F(CsvReaderTest, CanGatherReducePositions4)
 
   thrust::host_vector<uint32_t> h_indices = d_output;
 
-  ASSERT_EQ(static_cast<uint32_t>(input.size()), h_indices.size());
+  ASSERT_EQ(static_cast<uint32_t>(input.size() - 1), h_indices.size());
 
-  for (uint64_t i = 0; i < input.size(); i++) { EXPECT_EQ(static_cast<uint32_t>(i), h_indices[i]); }
+  for (uint64_t i = 0; i < input.size() - 1; i++) {
+    EXPECT_EQ(static_cast<uint32_t>(i + 1), h_indices[i]);
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()
