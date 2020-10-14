@@ -35,7 +35,7 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
  * @brief Does the binop need to know if an operand is null/invalid to perform special
  * processing?
  */
-inline bool null_using_binop(binary_operator op)
+inline bool is_null_dependent(binary_operator op)
 {
   return op == binary_operator::NULL_EQUALS || op == binary_operator::NULL_MIN ||
          op == binary_operator::NULL_MAX;

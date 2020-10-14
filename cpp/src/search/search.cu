@@ -93,8 +93,12 @@ std::unique_ptr<column> search_ordered(table_view const& t,
                  "Mismatch between number of columns and null precedence.");
   }
 
-  auto d_t      = table_device_view::create(t, stream);
-  auto d_values = table_device_view::create(values, stream);
+  // This utility will ensure all corresponding dictionary columns have matching keys.
+  // It will return any new dictionary columns created as well as updated table_views.
+  auto matched = dictionary::detail::match_dictionaries(
+    {t, values}, rmm::mr::get_current_device_resource(), stream);
+  auto d_t      = table_device_view::create(matched.second.front(), stream);
+  auto d_values = table_device_view::create(matched.second.back(), stream);
   auto count_it = thrust::make_counting_iterator<size_type>(0);
 
   rmm::device_vector<order> d_column_order(column_order.begin(), column_order.end());
@@ -143,24 +147,25 @@ struct contains_scalar_dispatch {
   {
     CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
 
+    using Type       = device_storage_type_t<Element>;
     using ScalarType = cudf::scalar_type_t<Element>;
     auto d_col       = column_device_view::create(col, stream);
     auto s           = static_cast<const ScalarType*>(&value);
 
     if (col.has_nulls()) {
       auto found_iter = thrust::find(rmm::exec_policy(stream)->on(stream),
-                                     d_col->pair_begin<Element, true>(),
-                                     d_col->pair_end<Element, true>(),
+                                     d_col->pair_begin<Type, true>(),
+                                     d_col->pair_end<Type, true>(),
                                      thrust::make_pair(s->value(), true));
 
-      return found_iter != d_col->pair_end<Element, true>();
+      return found_iter != d_col->pair_end<Type, true>();
     } else {
-      auto found_iter = thrust::find(rmm::exec_policy(stream)->on(stream),
-                                     d_col->begin<Element>(),
-                                     d_col->end<Element>(),
+      auto found_iter = thrust::find(rmm::exec_policy(stream)->on(stream),  //
+                                     d_col->begin<Type>(),
+                                     d_col->end<Type>(),
                                      s->value());
 
-      return found_iter != d_col->end<Element>();
+      return found_iter != d_col->end<Type>();
     }
   }
 };

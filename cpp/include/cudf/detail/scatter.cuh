@@ -87,13 +87,15 @@ struct column_scatterer_impl {
     auto result      = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
 
+    using Type = device_storage_type_t<Element>;
+
     // NOTE use source.begin + scatter rows rather than source.end in case the
     // scatter map is smaller than the number of source rows
     thrust::scatter(rmm::exec_policy(stream)->on(stream),
-                    source.begin<Element>(),
-                    source.begin<Element>() + std::distance(scatter_map_begin, scatter_map_end),
+                    source.begin<Type>(),
+                    source.begin<Type>() + cudf::distance(scatter_map_begin, scatter_map_end),
                     scatter_map_begin,
-                    result_view.begin<Element>());
+                    result_view.begin<Type>());
 
     return result;
   }
