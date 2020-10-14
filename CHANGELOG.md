@@ -2,6 +2,8 @@
 
 ## New Features
 
+-PR #6534 Use NVTX from GitHub instead of vendoring.
+
 ## Improvements
 
 - PR #6432 Add dictionary support to `cudf::upper_bound` and `cudf::lower_bound`
