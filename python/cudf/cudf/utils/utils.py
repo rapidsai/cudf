@@ -10,10 +10,11 @@ from numba import njit
 import rmm
 
 import cudf
+from cudf._lib.column import make_column_from_scalar
 from cudf.core import column
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import to_cudf_compatible_scalar
-from cudf._lib.column import make_column_from_scalar
+
 mask_dtype = np.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
 

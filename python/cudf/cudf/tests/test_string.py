@@ -160,7 +160,7 @@ def test_string_repr(ps_gs, item):
     if got_out is not cudf.NA and len(got_out) > 1:
         expect = expect.replace("None", "<NA>")
 
-    assert expect == got or (expect == 'None' and got == '<NA>')
+    assert expect == got or (expect == "None" and got == "<NA>")
 
 
 @pytest.mark.parametrize(

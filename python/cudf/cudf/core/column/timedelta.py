@@ -251,7 +251,7 @@ class TimeDeltaColumn(column.ColumnBase):
     def default_na_value(self):
         """Returns the default NA value for this column
         """
-        return cudf.Scalar(np.timedelta64('NaT', self._time_unit))
+        return cudf.Scalar(np.timedelta64("NaT", self._time_unit))
 
     @property
     def time_unit(self):
