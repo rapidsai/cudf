@@ -701,7 +701,7 @@ struct rolling_window_launcher {
     // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
     auto output_table = detail::gather(table_view{{input}},
                                        output->view(),
-                                       detail::out_of_bounds_policy::IGNORE,
+                                       out_of_bounds_policy::IGNORE,
                                        detail::negative_index_policy::NOT_ALLOWED,
                                        stream,
                                        mr);

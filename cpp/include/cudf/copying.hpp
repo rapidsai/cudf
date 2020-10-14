@@ -34,6 +34,15 @@ namespace cudf {
  */
 
 /**
+ * @brief How to treat out of bounds indices. 
+ * 
+ * `NULLIFY` means to nullify output values corresponding to out-of-bounds gather_map values. 
+ * `IGNORE` means to ignore values in `gather_map` that are out of bounds.
+ */
+
+enum class out_of_bounds_policy : int8_t { NULLIFY, IGNORE };
+
+/**
  * @brief Gathers the specified rows (including null values) of a set of columns.
  *
  * @ingroup copy_gather
@@ -64,7 +73,7 @@ namespace cudf {
 std::unique_ptr<table> gather(
   table_view const& source_table,
   column_view const& gather_map,
-  bool check_bounds                   = false,
+  out_of_bounds_policy bounds         = out_of_bounds_policy::NULLIFY,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
