@@ -329,7 +329,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, cudaStream_t s
                                                              device_tokens_per_word.data());
   CHECK_CUDA(stream);
 
-  cudf::detail::grid_1d const grid_mark{static_cast<cudf::size_type>(num_strings),
+  cudf::detail::grid_1d const grid_mark{static_cast<cudf::size_type>(num_strings + 1),
                                         THREADS_PER_BLOCK};
   detail::mark_string_start_and_ends<<<grid_mark.num_blocks,
                                        grid_mark.num_threads_per_block,

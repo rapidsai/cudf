@@ -4,6 +4,7 @@
 
 ## Improvements
 
+- PR #6432 Add dictionary support to `cudf::upper_bound` and `cudf::lower_bound`
 - PR #6461 Replace index type-dispatch call with indexalator in cudf::scatter
 - PR #6415 Support `datetime64` in row-wise op
 - PR #6457 Replace index type-dispatch call with indexalator in `cudf::gather`
@@ -14,6 +15,7 @@
 ## Bug Fixes
 
  - PR #6509 Disable JITIFY log printing
+ - PR #6519 Fix end-of-string marking boundary condition in subword-tokenizer
 
 
 # cuDF 0.16.0 (Date TBD)
@@ -221,6 +223,7 @@
 - PR #6309 Make all CI `.sh` scripts have a consistent set of permissions
 - PR #6491 Remove repo URL from Java build-info
 - PR #6462 Bug fixes for ColumnBuilder
+- PR #6497 Fixes a data corruption issue reading list columns from Parquet files with multiple row groups.
 
 
 
