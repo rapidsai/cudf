@@ -123,13 +123,6 @@ def generate_valid_scalar_unaop_combos():
     float_ops = [op for op in _unaops if op is not operator.invert]
     results += list(itertools.product(float_values, float_dtypes, float_ops))
 
-    string_values = ["a", "abc"]
-    string_dtypes = ["object"]
-    string_ops = [operator.not_]
-    results += list(
-        itertools.product(string_values, string_dtypes, string_ops)
-    )
-
     bool_values = [True, False]
     bool_dtypes = ["bool"]
     bool_ops = _unaops
@@ -149,7 +142,25 @@ def test_scalar_unary_operations(slr, dtype, op):
     assert expect == got.value
 
     # f16 for small ints with ceil and float
-    if expect.dtype == np.dtype('float16'):
-        assert(got.dtype == np.dtype('float32'))
+    if expect.dtype == np.dtype("float16"):
+        assert got.dtype == np.dtype("float32")
     else:
         assert expect.dtype == got.dtype
+
+
+def test_scalar_logical():
+    T = cudf.Scalar(True)
+    F = cudf.Scalar(False)
+
+    assert T
+    assert not F
+
+    assert T and T
+    assert not (T and F)
+    assert not (F and T)
+    assert not (F and F)
+
+    assert T or T
+    assert T or F
+    assert F or T
+    assert not (F or F)

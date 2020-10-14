@@ -521,8 +521,8 @@ def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
 
     # special rules for string
     if dtype_l == "object" or dtype_r == "object":
-        if (dtype_l == dtype_r == "object") and op == '__add__':
-            return 'str'
+        if (dtype_l == dtype_r == "object") and op == "__add__":
+            return "str"
         else:
             raise error
 
@@ -536,6 +536,7 @@ def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
             return outtype
 
     raise error
+
 
 def find_common_type(dtypes):
     """
@@ -579,9 +580,9 @@ def find_common_type(dtypes):
 
 
 # Type dispatch loops similar to what are found in `np.add.types`
-# In NumPy, whether or not an op can be performed between two 
+# In NumPy, whether or not an op can be performed between two
 # operands is determined by checking to see if NumPy has a c/c++
-# loop specifically for adding those two operands built in. If 
+# loop specifically for adding those two operands built in. If
 # not it will search lists like these for a loop for types that
 # the operands can be safely cast to. These are those lookups,
 # modified slightly for cuDF's rules

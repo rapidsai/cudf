@@ -7,7 +7,6 @@ from cudf.core.index import Index
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
-    is_datetime_dtype,
     to_cudf_compatible_scalar,
 )
 
@@ -163,9 +162,9 @@ class Scalar(libcudf.scalar.Scalar):
 
         # datetime handling
         if out_dtype in "Mm":
-            if self.dtype.char in "Mm" and not other.dtype.char in "Mm":
+            if self.dtype.char in "Mm" and other.dtype.char not in "Mm":
                 return self.dtype
-            if other.dtype.char in "Mm" and not self.dtype.char in "Mm":
+            if other.dtype.char in "Mm" and self.dtype.char not in "Mm":
                 return other.dtype
             else:
                 if (

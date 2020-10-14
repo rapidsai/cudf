@@ -4,7 +4,7 @@ from __future__ import division
 
 import operator
 import random
-from itertools import combinations, product
+from itertools import product
 
 import numpy as np
 import pandas as pd
@@ -15,7 +15,6 @@ from cudf.core import Series
 from cudf.core.index import as_index
 from cudf.tests import utils
 from cudf.utils.dtypes import (
-    ALL_TYPES,
     BOOL_TYPES,
     DATETIME_TYPES,
     FLOAT_TYPES,
@@ -873,10 +872,8 @@ def test_ufunc_ops(lhs, rhs, ops):
         )
 
 
-
-
 def dtype_scalar(val, dtype):
-    if dtype == 'str':
+    if dtype == "str":
         return str(val)
     dtype = np.dtype(dtype)
     if dtype.type in {np.datetime64, np.timedelta64}:
@@ -962,12 +959,12 @@ def test_scalar_add(dtype_l, dtype_r):
     lval_gpu = cudf.Scalar(test_value, dtype=dtype_l)
     rval_gpu = cudf.Scalar(test_value, dtype=dtype_r)
 
-    #expect = np.add(lval_host, rval_host)
+    # expect = np.add(lval_host, rval_host)
     expect = lval_host + rval_host
     got = lval_gpu + rval_gpu
 
     assert expect == got.value
-    if not dtype_l == dtype_r == 'str':
+    if not dtype_l == dtype_r == "str":
         assert expect.dtype == got.dtype
 
 
@@ -1302,13 +1299,13 @@ def test_scalar_truediv(dtype_l, dtype_r):
     assert expect == got.value
 
     # numpy bug
-    
-    
+
     if np.dtype(dtype_l).itemsize <= 2 and np.dtype(dtype_r).itemsize <= 2:
-        assert(expect.dtype == 'float64' and got.dtype == 'float32')
+        assert expect.dtype == "float64" and got.dtype == "float32"
     else:
         assert expect.dtype == got.dtype
-    #assert expect.dtype == got.dtype
+    # assert expect.dtype == got.dtype
+
 
 @pytest.mark.parametrize("dtype_l,dtype_r", make_scalar_truediv_data_invalid())
 def test_scalar_truediv_invalid(dtype_l, dtype_r):

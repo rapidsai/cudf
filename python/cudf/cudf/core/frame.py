@@ -1321,7 +1321,11 @@ class Frame(libcudf.table.Table):
         copy_data = self._data.copy(deep=True)
 
         for name in copy_data.keys():
-            if name in value and value[name] is not None and value[name] is not cudf.NA:
+            if (
+                name in value
+                and value[name] is not None
+                and value[name] is not cudf.NA
+            ):
                 copy_data[name] = copy_data[name].fillna(value[name],)
 
         result = self._from_table(Frame(copy_data, self._index))
