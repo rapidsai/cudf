@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "nvtx3.hpp"
+#include <nvtx3/nvtx3.hpp>
 
 namespace cudf {
 /**
