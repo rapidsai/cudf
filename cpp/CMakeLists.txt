@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.16.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.17.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -630,6 +630,9 @@ set_target_properties(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
+
+# Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
+target_compile_definitions(cudf PRIVATE JITIFY_PRINT_LOG=0)
 
 # Creates executable stringify and uses it to convert types.h to c-str for use in JIT code
 add_executable(stringify "${JITIFY_INCLUDE_DIR}/stringify.cpp")
