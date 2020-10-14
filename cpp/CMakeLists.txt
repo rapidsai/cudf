@@ -797,6 +797,7 @@ CPMAddPackage(
     GITHUB_REPOSITORY jrhemstad/NVTX # Use NVIDIA/NVTX once cmake overhaul is merged
     GIT_TAG cmake-overhaul
     SOURCE_SUBDIR cpp
+    GIT_SHALLOW TRUE
     OPTIONS
        "BUILD_TESTS Off" 
        "BUILD_BENCHMARKS Off"
