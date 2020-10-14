@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "timezone.h"
+#include "timezone.cuh"
 
 #include <algorithm>
 #include <fstream>
@@ -64,7 +64,7 @@ struct tzif {
   auto timecnt() const { return header.timecnt; }
   auto typecnt() const { return header.typecnt; }
 
-  void read_header(std::ifstream &input_file, int file_size)
+  void read_header(std::ifstream &input_file, size_t file_size)
   {
     input_file.read(reinterpret_cast<char *>(&header), sizeof(header));
     CUDF_EXPECTS(!input_file.fail() && header.magic == TZIF_MAGIC,
@@ -330,11 +330,9 @@ static int64_t GetTransitionTime(const dst_transition_s *trans, int year)
   int day   = trans->day;
 
   if (trans->type == 'M') {
-    static uint8_t month_lut[12]  = {1, 4, 4, 0, 2, 5, 0, 3, 6, 1, 4, 6};
-    static uint8_t century_lut[4] = {6, 4, 2, 0};
-    int is_leap                   = IsLeapYear(year);
-    int month                     = std::min(std::max(trans->month, 1), 12);
-    int week                      = std::min(std::max(trans->week, 1), 52);
+    int is_leap = IsLeapYear(year);
+    int month   = std::min(std::max(trans->month, 1), 12);
+    int week    = std::min(std::max(trans->week, 1), 52);
     // Compute day of week
     int adjustedMonth = (month + 9) % 12 + 1;
     int adjustedYear  = year - (month <= 2);

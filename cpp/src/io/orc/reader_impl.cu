@@ -20,7 +20,7 @@
  **/
 
 #include "reader_impl.hpp"
-#include "timezone.h"
+#include "timezone.cuh"
 
 #include <io/comp/gpuinflate.h>
 

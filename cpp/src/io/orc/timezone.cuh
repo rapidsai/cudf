@@ -21,6 +21,12 @@
 
 namespace cudf {
 namespace io {
+
+struct tz_transition_table {
+  std::vector<int64_t> ttimes;
+  std::vector<int32_t> offsets;
+};
+
 /**
  * @brief Creates a transition table to convert ORC timestamps to UTC.
  *
