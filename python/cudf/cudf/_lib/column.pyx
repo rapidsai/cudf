@@ -59,14 +59,14 @@ cdef class Column:
     The *dtype* indicates the Column's element type.
     """
     def __init__(
-            self,
-            object data,
-            int size,
-            object dtype,
-            object mask=None,
-            int offset=0,
-            object null_count=None,
-            object children=()
+        self,
+        object data,
+        int size,
+        object dtype,
+        object mask=None,
+        int offset=0,
+        object null_count=None,
+        object children=()
     ):
 
         self._size = size

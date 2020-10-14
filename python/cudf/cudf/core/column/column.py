@@ -4,6 +4,7 @@ import pickle
 import warnings
 from numbers import Number
 from types import SimpleNamespace
+from typing import Tuple
 
 import cupy
 import numpy as np
@@ -22,6 +23,7 @@ from cudf._lib.null_mask import (
 from cudf._lib.scalar import as_scalar
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 from cudf._lib.transform import bools_to_mask
+from cudf._typing import Dtype
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
@@ -46,13 +48,13 @@ from cudf.utils.utils import mask_dtype
 class ColumnBase(Column, Serializable):
     def __init__(
         self,
-        data,
-        size,
-        dtype,
-        mask=None,
-        offset=0,
-        null_count=None,
-        children=(),
+        data: Buffer,
+        size: int,
+        dtype: Dtype,
+        mask: Buffer = None,
+        offset: int = 0,
+        null_count: int = None,
+        children: Tuple["ColumnBase", ...] = (),
     ):
         """
         Parameters
@@ -1334,7 +1336,13 @@ def column_empty(row_count, dtype="object", masked=False):
 
 
 def build_column(
-    data, dtype, mask=None, size=None, offset=0, null_count=None, children=()
+    data: Buffer,
+    dtype: Dtype,
+    size: int,
+    mask: Buffer = None,
+    offset: int = 0,
+    null_count: int = None,
+    children: Tuple[ColumnBase, ...] = (),
 ):
     """
     Build a Column of the appropriate type from the given parameters
