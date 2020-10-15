@@ -185,14 +185,14 @@ public final class HostColumnVector extends HostColumnVectorCore {
    */
   public ColumnVector copyToDevice() {
     if (rows == 0) {
-      return new ColumnVector(type.typeId, 0, Optional.of(0L), null, null, null);
+      return new ColumnVector(type, 0, Optional.of(0L), null, null, null);
     }
     // The simplest way is just to copy the buffers and pass them down.
     DeviceMemoryBuffer data = null;
     DeviceMemoryBuffer valid = null;
     DeviceMemoryBuffer offsets = null;
     try {
-      if (!type.typeId.isNestedType()) {
+      if (!type.isNestedType()) {
         HostMemoryBuffer hdata = this.offHeap.data;
         if (hdata != null) {
           long dataLen = rows * type.typeId.sizeInBytes;
@@ -222,13 +222,13 @@ public final class HostColumnVector extends HostColumnVectorCore {
           offsets.copyFromHostBuffer(hoff, 0, offsetsLen);
         }
 
-        ColumnVector ret = new ColumnVector(type.typeId, rows, nullCount, data, valid, offsets);
+        ColumnVector ret = new ColumnVector(type, rows, nullCount, data, valid, offsets);
         data = null;
         valid = null;
         offsets = null;
         return ret;
       } else {
-        return ColumnVector.createNestedColumnVector(type.typeId, (int) rows, offHeap.data, offHeap.valid, offHeap.offsets, nullCount, children);
+        return ColumnVector.createNestedColumnVector(type, (int) rows, offHeap.data, offHeap.valid, offHeap.offsets, nullCount, children);
       }
     } finally {
       if (data != null) {
@@ -1200,7 +1200,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public final Builder append(int value) {
-      assert type.typeId.isBackedByInt();
+      assert type.isBackedByInt();
       assert currentIndex < rows;
       data.setInt(currentIndex * type.typeId.sizeInBytes, value);
       currentIndex++;
@@ -1208,7 +1208,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public final Builder append(long value) {
-      assert type.typeId.isBackedByLong();
+      assert type.isBackedByLong();
       assert currentIndex < rows;
       data.setLong(currentIndex * type.typeId.sizeInBytes, value);
       currentIndex++;
@@ -1281,14 +1281,14 @@ public final class HostColumnVector extends HostColumnVectorCore {
 
     public Builder appendArray(byte... values) {
       assert (values.length + currentIndex) <= rows;
-      assert type.typeId == DType.INT8 || type.typeId == DType.UINT8 || type.typeId == DType.BOOL8;
+      assert type.isBackedByByte();
       data.setBytes(currentIndex * type.typeId.sizeInBytes, values, 0, values.length);
       currentIndex += values.length;
       return this;
     }
 
     public Builder appendArray(short... values) {
-      assert type.typeId == DType.INT16 || type.typeId == DType.UINT16;
+      assert type.isBackedByShort();
       assert (values.length + currentIndex) <= rows;
       data.setShorts(currentIndex * type.typeId.sizeInBytes, values, 0, values.length);
       currentIndex += values.length;
@@ -1296,7 +1296,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public Builder appendArray(int... values) {
-      assert type.typeId.isBackedByInt();
+      assert type.isBackedByInt();
       assert (values.length + currentIndex) <= rows;
       data.setInts(currentIndex * type.typeId.sizeInBytes, values, 0, values.length);
       currentIndex += values.length;
@@ -1304,7 +1304,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public Builder appendArray(long... values) {
-      assert type.typeId.isBackedByLong();
+      assert type.isBackedByLong();
       assert (values.length + currentIndex) <= rows;
       data.setLongs(currentIndex * type.typeId.sizeInBytes, values, 0, values.length);
       currentIndex += values.length;

@@ -286,8 +286,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    * Get the value at index.
    */
   public byte getByte(long index) {
-    assert type.typeId == DType.INT8 || type.typeId == DType.UINT8 || type.typeId == DType.BOOL8 : type +
-        " is not stored as a byte.";
+    assert type.isBackedByByte() : type + " is not stored as a byte.";
     assertsForGet(index);
     return offHeap.data.getByte(index * type.typeId.sizeInBytes);
   }
@@ -296,7 +295,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    * Get the value at index.
    */
   public final short getShort(long index) {
-    assert type.typeId == DType.INT16 || type.typeId == DType.UINT16 : type + " is not stored as a short.";
+    assert type.isBackedByShort() : type + " is not stored as a short.";
     assertsForGet(index);
     return offHeap.data.getShort(index * type.typeId.sizeInBytes);
   }

@@ -15,8 +15,6 @@
  */
 package ai.rapids.cudf;
 
-import java.io.IOException;
-
 public class DataType {
 
   final DType typeId;
@@ -28,4 +26,21 @@ public class DataType {
     typeId = id;
     scale = decimalScale;
   }
+
+  public boolean isTimestamp() { return typeId.isTimestamp();}
+
+  public boolean hasTimeResolution() { return typeId.hasTimeResolution(); }
+
+  public boolean isBackedByInt() { return typeId.isBackedByInt(); }
+
+  public boolean isBackedByLong() { return typeId.isBackedByLong(); }
+
+  public boolean isBackedByShort() { return typeId.isBackedByShort(); }
+
+  public boolean isBackedByByte() { return typeId.isBackedByByte(); }
+
+  public boolean isNestedType() { return typeId.isNestedType(); }
+
+  public int getNativeId() { return typeId.getNativeId(); }
+
 }

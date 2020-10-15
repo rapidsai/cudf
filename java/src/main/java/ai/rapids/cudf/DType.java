@@ -63,10 +63,10 @@ public enum DType {
   DURATION_NANOSECONDS(8, 21, "int64"),
   //DICTIONARY32(4, 22, "NO IDEA"),
 
-  DECIMAL32(4, 25, "decimal32"),
-  DECIMAL64(8, 26, "decimal64"),
   STRING(0, 23, "str"),
   LIST(0, 24, "list"),
+  DECIMAL32(4, 25, "decimal32"),
+  DECIMAL64(8, 26, "decimal64"),
   STRUCT(0, 27, "struct");
 
   private static final DType[] D_TYPES = DType.values();
@@ -120,6 +120,23 @@ public enum DType {
   public boolean isBackedByLong() {
     return LONGS.contains(this);
   }
+
+  /**
+   * Returns true if this type is backed by short type
+   * Namely this method will return true for the following types
+   *       DType.INT16,
+   *       DType.UINT16
+   */
+  public boolean isBackedByShort() { return SHORTS.contains(this); }
+
+  /**
+   * Returns true if this type is backed by byte type
+   * Namely this method will return true for the following types
+   *       DType.INT8,
+   *       DType.UINT8,
+   *       DType.BOOL8
+   */
+  public boolean isBackedByByte() { return BYTES.contains(this); }
 
   /**
    * Returns true for duration types
@@ -196,6 +213,17 @@ public enum DType {
       DType.UINT32,
       DType.DURATION_DAYS,
       DType.TIMESTAMP_DAYS
+  );
+
+  private static final EnumSet<DType> SHORTS = EnumSet.of(
+      DType.INT16,
+      DType.UINT16
+  );
+
+  private static final EnumSet<DType> BYTES = EnumSet.of(
+          DType.INT8,
+          DType.UINT8,
+          DType.BOOL8
   );
 
   private static final EnumSet<DType> NESTED_TYPE = EnumSet.of(

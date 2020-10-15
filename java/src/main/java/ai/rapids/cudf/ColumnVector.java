@@ -142,11 +142,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     offHeap = new OffHeapState(nativePointer);
     MemoryCleaner.register(this, offHeap);
     this.rows = offHeap.getNativeRowCount();
+    DType nativeType = offHeap.getNativeType();
 
-    if (offHeap.getNativeType() == DType.DECIMAL32 || offHeap.getNativeType() == DType.DECIMAL64) {
-      this.type = new DataType(offHeap.getNativeType(), offHeap.getNativeScale());
+    if (nativeType == DType.DECIMAL32 || nativeType == DType.DECIMAL64) {
+      this.type = new DataType(nativeType, offHeap.getNativeScale());
     } else {
-      this.type = new DataType(offHeap.getNativeType());
+      this.type = new DataType(nativeType);
     }
     this.refCount = 0;
     incRefCountInternal(true);
@@ -189,7 +190,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   public ColumnVector(DataType type, long rows, Optional<Long> nullCount,
                       DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
                       DeviceMemoryBuffer offsetBuffer) {
-    assert type.typeId == DType.DECIMAL32 || type.typeId == DType.DECIMAL64 : "This constructor should be used only for Decimal types";
 
     long[] children = new long[] {};
     offHeap = new OffHeapState(type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer, null, children);
@@ -223,6 +223,31 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     this.rows = rows;
     this.nullCount = nullCount;
     this.type = dataType;
+
+    this.refCount = 0;
+    incRefCountInternal(true);
+  }
+
+  public ColumnVector(DataType type, long rows, Optional<Long> nullCount,
+                      DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
+                      DeviceMemoryBuffer offsetBuffer, List<NestedColumnVector> nestedColumnVectors) {
+    if (type.typeId != DType.STRING && type.typeId != DType.LIST) {
+      assert offsetBuffer == null : "offsets are only supported for STRING, LISTS";
+    }
+    List<DeviceMemoryBuffer> toClose = new ArrayList<>();
+    long[] childHandles = new long[nestedColumnVectors.size()];
+    for (NestedColumnVector ncv : nestedColumnVectors) {
+      toClose.addAll(ncv.getBuffersToClose());
+    }
+    for (int i = 0; i < nestedColumnVectors.size(); i++) {
+      childHandles[i] = nestedColumnVectors.get(i).getViewHandle();
+    }
+    offHeap = new OffHeapState(type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer,
+            toClose, childHandles);
+    MemoryCleaner.register(this, offHeap);
+    this.rows = rows;
+    this.nullCount = nullCount;
+    this.type = type;
 
     this.refCount = 0;
     incRefCountInternal(true);
@@ -1048,7 +1073,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * @return - A new INT16 vector allocated on the GPU.
    */
   public ColumnVector year() {
-    assert type.typeId.isTimestamp();
+    assert type.isTimestamp();
     return new ColumnVector(year(getNativeView()));
   }
 
@@ -1060,7 +1085,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * @return - A new INT16 vector allocated on the GPU.
    */
   public ColumnVector month() {
-    assert type.typeId.isTimestamp();
+    assert type.isTimestamp();
     return new ColumnVector(month(getNativeView()));
   }
 
@@ -1072,7 +1097,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * @return - A new INT16 vector allocated on the GPU.
    */
   public ColumnVector day() {
-    assert type.typeId.isTimestamp();
+    assert type.isTimestamp();
     return new ColumnVector(day(getNativeView()));
   }
 
@@ -1084,7 +1109,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * @return - A new INT16 vector allocated on the GPU.
    */
   public ColumnVector hour() {
-    assert type.typeId.hasTimeResolution();
+    assert type.hasTimeResolution();
     return new ColumnVector(hour(getNativeView()));
   }
 
@@ -1096,7 +1121,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * @return - A new INT16 vector allocated on the GPU.
    */
   public ColumnVector minute() {
-    assert type.typeId.hasTimeResolution();
+    assert type.hasTimeResolution();
     return new ColumnVector(minute(getNativeView()));
   }
 
@@ -1108,7 +1133,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * @return A new INT16 vector allocated on the GPU.
    */
   public ColumnVector second() {
-    assert type.typeId.hasTimeResolution();
+    assert type.hasTimeResolution();
     return new ColumnVector(second(getNativeView()));
   }
 
@@ -1120,7 +1145,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * @return A new INT16 vector allocated on the GPU. Monday=1, ..., Sunday=7
    */
   public ColumnVector weekDay() {
-    assert type.typeId.isTimestamp();
+    assert type.isTimestamp();
     return new ColumnVector(weekDay(getNativeView()));
   }
 
@@ -1132,7 +1157,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * @return A new TIMESTAMP_DAYS vector allocated on the GPU.
    */
   public ColumnVector lastDayOfMonth() {
-    assert type.typeId.isTimestamp();
+    assert type.isTimestamp();
     return new ColumnVector(lastDayOfMonth(getNativeView()));
   }
 
@@ -1144,7 +1169,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * @return A new INT16 vector allocated on the GPU. The value is between [1, {365-366}]
    */
   public ColumnVector dayOfYear() {
-    assert type.typeId.isTimestamp();
+    assert type.isTimestamp();
     return new ColumnVector(dayOfYear(getNativeView()));
   }
 
@@ -2067,7 +2092,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asStrings(String format) {
-    assert type.typeId.isTimestamp() : "unsupported conversion from non-timestamp DType";
+    assert type.isTimestamp() : "unsupported conversion from non-timestamp DType";
     assert format != null || format.isEmpty(): "Format string may not be NULL or empty";
 
     return new ColumnVector(timestampToStringTimestamp(this.getNativeView(), format));
@@ -3138,7 +3163,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   @Override
   public ColumnViewAccess getChildColumnViewAccess(int childIndex) {
-    if (!type.typeId.isNestedType()) {
+    if (!type.isNestedType()) {
       return null;
     }
     long childColumnView = getChildCvPointer(getNativeView(), childIndex);
@@ -3148,7 +3173,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   @Override
   public BaseDeviceMemoryBuffer getDataBuffer() {
-    if (type.typeId.isNestedType()) {
+    if (type.isNestedType()) {
       throw new IllegalStateException(" Lists and Structs at top level have no data");
     }
     return offHeap.getData();
@@ -3178,7 +3203,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   @Override
   public int getNumChildren() {
-    if (!type.typeId.isNestedType()) {
+    if (!type.isNestedType()) {
       return 0;
     }
     return getNativeNumChildren(getNativeView());
@@ -3425,6 +3450,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   public static ColumnVector createNestedColumnVector(DType type, int rows, HostMemoryBuffer data, HostMemoryBuffer valid, HostMemoryBuffer offsets,
                                                       Optional<Long> nullCount, List<HostColumnVectorCore> child) {
+    return NestedColumnVector.createColumnVector(new DataType(type), rows, data, valid, offsets, nullCount, child);
+  }
+
+  public static ColumnVector createNestedColumnVector(DataType type, int rows, HostMemoryBuffer data, HostMemoryBuffer valid, HostMemoryBuffer offsets,
+                                                      Optional<Long> nullCount, List<HostColumnVectorCore> child) {
     return NestedColumnVector.createColumnVector(type, rows, data, valid, offsets, nullCount, child);
   }
 
@@ -3461,14 +3491,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
      * @param child the host side nested column vector list
      * @return new ColumnVector of type LIST at the moment
      */
-    static ColumnVector createColumnVector(DType type, int rows, HostMemoryBuffer data,
+    static ColumnVector createColumnVector(DataType type, int rows, HostMemoryBuffer data,
         HostMemoryBuffer valid, HostMemoryBuffer offsets, Optional<Long> nullCount, List<HostColumnVectorCore> child) {
       List<NestedColumnVector> devChildren = new ArrayList<>();
       for (HostColumnVectorCore c : child) {
         devChildren.add(createNewNestedColumnVector(c));
       }
       int mainColRows = rows;
-      DType mainColType = type;
+      DataType mainColType = type;
       HostMemoryBuffer mainColValid = valid;
       HostMemoryBuffer mainColOffsets = offsets;
       DeviceMemoryBuffer mainDataDevBuff = null;
