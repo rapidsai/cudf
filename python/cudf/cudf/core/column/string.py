@@ -5,6 +5,7 @@ import warnings
 import cupy
 import numpy as np
 import pandas as pd
+from numba import cuda
 from nvtx import annotate
 
 import cudf
@@ -4491,6 +4492,10 @@ class StringColumn(column.ColumnBase):
                 (self.base_children[0].size - 1)
                 / self.base_children[0].dtype.itemsize
             )
+
+    @property
+    def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
+        raise ValueError("Cannot get an array view of a StringColumn")
 
     def sum(self, skipna=None, dtype=None, min_count=0):
         result_col = self._process_for_reduction(

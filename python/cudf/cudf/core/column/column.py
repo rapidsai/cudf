@@ -53,25 +53,17 @@ class ColumnBase(Column, Serializable):
         return cudf.core.frame.Frame({None: self.copy(deep=False)})
 
     @property
-    def data_array_view(self):
+    def data_array_view(self) -> "cuda.devicearray.DeviceNDArray":
         """
         View the data as a device array object
         """
-        if self.dtype == "object":
-            raise ValueError("Cannot get an array view of a StringColumn")
-
-        if is_categorical_dtype(self.dtype):
-            return self.codes.data_array_view
-        else:
-            dtype = self.dtype
-
         result = cuda.as_cuda_array(self.data)
         # Workaround until `.view(...)` can change itemsize
         # xref: https://github.com/numba/numba/issues/4829
         result = cuda.devicearray.DeviceNDArray(
-            shape=(result.nbytes // dtype.itemsize,),
-            strides=(dtype.itemsize,),
-            dtype=dtype,
+            shape=(result.nbytes // self.dtype.itemsize,),
+            strides=(self.dtype.itemsize,),
+            dtype=self.dtype,
             gpu_data=result.gpu_data,
         )
         return result

@@ -3,6 +3,7 @@ import pickle
 
 import numpy as np
 import pandas as pd
+from numba import cuda
 
 import cudf
 from cudf import _lib as libcudf
@@ -103,6 +104,10 @@ class CategoricalAccessor(ColumnMethodsMixin):
         Whether the categories have an ordered relationship.
         """
         return self._column.ordered
+
+    @property
+    def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
+        return self.codes.data_array_view
 
     def as_ordered(self, **kwargs):
         """
