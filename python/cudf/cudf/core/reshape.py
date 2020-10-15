@@ -260,10 +260,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         else:
             df.columns = result_columns.unique()
         if ignore_index and not join == "inner":
-            indexes = []
-            for obj in objs:
-                indexes.append(len(obj.index))
-            df.index = cudf.RangeIndex(max(indexes))
+            df.index = cudf.RangeIndex(max(len(obj) for obj in objs)
             return df
         elif not match_index:
             return df.sort_index()
