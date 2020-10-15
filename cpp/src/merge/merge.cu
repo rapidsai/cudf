@@ -338,13 +338,13 @@ std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(column_vie
 {
   auto result = cudf::dictionary::detail::merge(cudf::dictionary_column_view(lcol),
                                                 cudf::dictionary_column_view(rcol),
-                                                dv_row_order_,
+                                                row_order_,
                                                 mr_,
                                                 stream_);
   // set the validity mask
   if (lcol.has_nulls() || rcol.has_nulls()) {
     auto merged_view = result->mutable_view();
-    materialize_bitmask(lcol, rcol, merged_view, dv_row_order_.data().get(), stream_);
+    materialize_bitmask(lcol, rcol, merged_view, row_order_.data().get(), stream_);
   }
   return result;
 }
