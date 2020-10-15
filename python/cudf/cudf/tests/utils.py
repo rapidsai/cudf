@@ -116,10 +116,11 @@ def assert_neq(left, right, **kwargs):
 
 
 def assert_exceptions_equal(
-    reference_func,
-    actual_func,
-    reference_func_arg_tuple=None,
-    actual_func_arg_tuple=None,
+lfunc,
+rfunc,
+lfunc_args_and_kwargs,
+rfunc_args_and_kwargs,
+compare_error_message
     compare_error_message=True,
 ):
     """Compares if two functions raise same exception or not.
