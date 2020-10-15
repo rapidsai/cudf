@@ -2,11 +2,12 @@ from __future__ import division
 
 import itertools
 import operator
+import re
 
 import numpy as np
 import pandas as pd
 import pytest
-import re
+
 import cudf
 from cudf.core import Series
 from cudf.tests import utils
@@ -165,10 +166,14 @@ def test_scalar_logical():
     assert F or T
     assert not (F or F)
 
+
 def test_scalar_no_negative_bools():
     x = cudf.Scalar(True)
-    with pytest.raises(TypeError, match=re.escape(
-        "Boolean scalars in cuDF do not "\
-        "support negation, use logical not"
-        )):
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "Boolean scalars in cuDF do not "
+            "support negation, use logical not"
+        ),
+    ):
         -x
