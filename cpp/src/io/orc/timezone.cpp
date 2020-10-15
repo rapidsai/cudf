@@ -160,68 +160,98 @@ struct dst_transition_s {
 #pragma pack(pop)
 
 /**
- * @brief Moves the parser past a name from the posix TZ string.
- *
- * @param cur current position in TZ string
- * @param end end of TZ string
+ * @brief Posix TZ parser
  */
-static void posix_skip_name(const char **cur, const char *end)
+template <class Container>
+class posix_parser {
+ public:
+  posix_parser(Container const &tz_string) : cur{tz_string.begin()}, end{tz_string.end()} {}
+
+  /**
+   * @brief Advances the parser past a name from the posix TZ string.
+   */
+  void skip_name();
+
+  /**
+   * @brief Parses a number from the posix TZ string.
+   *
+   * @return Parsed number
+   */
+  int64_t parse_number();
+
+  /**
+   * @brief Parses a UTC offset from the posix TZ string.
+   *
+   * @return Parsed offset
+   */
+  int32_t parse_offset();
+
+  /**
+   * @brief Parses a DST transition time from the posix TZ string.
+   *
+   * @return Parsed transition time
+   */
+  dst_transition_s parse_transition();
+
+  /**
+   * @brief Returns the remaining number of characters in the input.
+   */
+  auto remaining_char_cnt() const { return end - cur; }
+
+  /**
+   * @brief Returns the next character in the input.
+   */
+  char next_character() const { return *cur; }
+
+ private:
+  typename Container::const_iterator cur;
+  typename Container::const_iterator const end;
+};
+
+template <class Container>
+void posix_parser<Container>::skip_name()
 {
-  if (*cur < end) {
-    auto c = **cur;
+  if (cur < end) {
+    auto c = *cur;
     if (c == '<') {
-      ++(*cur);
-      while (*cur < end) {
-        if (*(*cur)++ == '>') { break; }
+      ++cur;
+      while (cur < end) {
+        if (*cur++ == '>') { break; }
       }
     } else {
       while ((c < '0' || c > '9') && (c != '-') && (c != '+') && (c != ',')) {
-        if (++(*cur) >= end) { break; }
-        c = **cur;
+        if (++cur >= end) { break; }
+        c = *cur;
       }
     }
   }
 }
 
-/**
- * @brief Parses a number from the posix TZ string.
- *
- * @param cur current position in TZ string; advances past the parsed offset
- * @param end end of TZ string
- *
- * @return Parsed number
- */
-static int64_t posix_parse_number(const char **cur, const char *end)
+template <class Container>
+int64_t posix_parser<Container>::parse_number()
 {
   int64_t v = 0;
-  while (*cur < end) {
-    auto const c = **cur - '0';
+  while (cur < end) {
+    auto const c = *cur - '0';
     if (c > 9u) { break; }
     v = v * 10 + c;
-    (*cur)++;
+    ++cur;
   }
   return v;
 }
 
-/**
- * @brief Parses a UTC offset from the posix TZ string.
- *
- * @param cur current position in TZ string; advances past the parsed offset
- * @param end end of TZ string
- *
- * @return Parsed offset
- */
-static int32_t posix_parse_offset(const char **cur, const char *end)
+template <class Container>
+int32_t posix_parser<Container>::parse_offset()
 {
-  if (*cur < end) {
+  if (cur < end) {
     auto scale      = 60 * 60;
-    auto const sign = **cur;
-    *cur += (sign == '-' || sign == '+');
-    auto v = posix_parse_number(cur, end);
+    auto const sign = *cur;
+    cur += (sign == '-' || sign == '+');
+    auto v = parse_number();
     v *= scale;
-    while (*cur < end && scale > 1 && **cur == ':') {
-      ++(*cur);
-      auto const v2 = posix_parse_number(cur, end);
+    while (cur < end && scale > 1 && *cur == ':') {
+      ++cur;
+      auto const v2 = parse_number();
       scale /= 60;
       v += v2 * scale;
     }
@@ -231,39 +261,32 @@ static int32_t posix_parse_offset(const char **cur, const char *end)
   return 0;
 }
 
-/**
- * @brief Parses a DST transition time from the posix TZ string.
- *
- * @param cur current position in TZ string; advances past the parsed offset
- * @param end end of TZ string
- *
- * @return Parsed transition time
- */
-static dst_transition_s posix_parse_transition(char const **cur, char const *end)
+template <class Container>
+dst_transition_s posix_parser<Container>::parse_transition()
 {
-  if (*cur + 2 <= end && **cur == ',') {
-    char const type = *cur[1];
+  if (cur + 2 <= end && *cur == ',') {
+    char const type = cur[1];
     int month       = 0;
     int week        = 0;
     int day         = 0;
     cur += (type == 'M' || type == 'J') ? 2 : 1;
     if (type == 'M') {
-      month = posix_parse_number(cur, end);
-      if (*cur < end && **cur == '.') {
-        ++(*cur);
-        week = posix_parse_number(cur, end);
-        if (*cur < end && **cur == '.') {
-          ++(*cur);
-          day = posix_parse_number(cur, end);
+      month = parse_number();
+      if (cur < end && *cur == '.') {
+        ++cur;
+        week = parse_number();
+        if (cur < end && *cur == '.') {
+          ++cur;
+          day = parse_number();
         }
       }
     } else {
-      day = posix_parse_number(cur, end);
+      day = parse_number();
     }
     int32_t time = 2 * 60 * 60;
-    if (*cur < end && **cur == '/') {
-      ++(*cur);
-      time = posix_parse_offset(cur, end);
+    if (cur < end && *cur == '/') {
+      ++cur;
+      time = parse_offset();
     }
     return {type, month, week, day, time};
   }
@@ -362,20 +385,19 @@ timezone_table build_timezone_transition_table(std::string const &timezone_name)
   dst_transition_s dst_start{};
   dst_transition_s dst_end{};
   if (tz.posix_tz_string.size() > 0) {
-    auto cur = tz.posix_tz_string.data();
-    auto end = cur + tz.posix_tz_string.size();
-    posix_skip_name(&cur, end);
-    future_stdoff = -posix_parse_offset(&cur, end);
-    if (cur + 1 < end) {
+    posix_parser<decltype(tz.posix_tz_string)> parser(tz.posix_tz_string);
+    parser.skip_name();
+    future_stdoff = -parser.parse_offset();
+    if (parser.remaining_char_cnt() > 1) {
       // Parse Daylight Saving Time information
-      posix_skip_name(&cur, end);
-      if (cur < end && *cur != ',') {
-        future_dstoff = -posix_parse_offset(&cur, end);
+      parser.skip_name();
+      if (parser.remaining_char_cnt() > 0 && parser.next_character() != ',') {
+        future_dstoff = -parser.parse_offset();
       } else {
         future_dstoff = future_stdoff + 60 * 60;
       }
-      dst_start = posix_parse_transition(&cur, end);
-      dst_end   = posix_parse_transition(&cur, end);
+      dst_start = parser.parse_transition();
+      dst_end   = parser.parse_transition();
     } else {
       future_dstoff = future_stdoff;
     }
