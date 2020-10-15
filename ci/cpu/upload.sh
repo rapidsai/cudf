@@ -4,6 +4,10 @@
 
 set -e
 
+# Setup 'gpuci_retry' for upload retries (results in 3 total attempts)
+export GPUCI_RETRY_MAX=2
+export GPUCI_RETRY_SLEEP=30
+
 # Set default label options if they are not defined elsewhere
 export LABEL_OPTION=${LABEL_OPTION:-"--label main"}
 
