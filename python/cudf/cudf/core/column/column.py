@@ -1302,7 +1302,8 @@ def column_empty(row_count, dtype="object", masked=False):
 def build_column(
     data: Buffer,
     dtype: Dtype,
-    size: int,
+    *,
+    size: int = None,
     mask: Buffer = None,
     offset: int = 0,
     null_count: int = None,
@@ -1380,8 +1381,8 @@ def build_column(
     elif is_struct_dtype(dtype):
         return cudf.core.column.StructColumn(
             data=data,
-            size=size,
             dtype=dtype,
+            size=size,
             mask=mask,
             null_count=null_count,
             children=children,

@@ -245,10 +245,10 @@ cdef class Column:
             )
 
         return cudf.core.column.build_column(
-            self.data,
-            self.dtype,
-            mask,
-            self.size,
+            data=self.data,
+            dtype=self.dtype,
+            mask=mask,
+            size=self.size,
             offset=0,
             children=self.children
         )
@@ -554,13 +554,13 @@ cdef class Column:
         children = tuple(children)
 
         result = cudf.core.column.build_column(
-            data,
-            dtype,
-            mask,
-            size,
-            offset,
-            null_count,
-            tuple(children)
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+            children=tuple(children)
         )
 
         return result
