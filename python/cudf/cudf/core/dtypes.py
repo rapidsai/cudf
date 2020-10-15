@@ -22,7 +22,7 @@ class CategoricalDtype(ExtensionDtype):
         self.ordered = ordered
 
     @property
-    def categories(self) -> cudf.core.index.Index:
+    def categories(self) -> "cudf.core.index.Index":
         if self._categories is None:
             return cudf.core.index.as_index(
                 cudf.core.column.column_empty(0, dtype="object", masked=False)
