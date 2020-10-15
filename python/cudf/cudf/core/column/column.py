@@ -23,7 +23,7 @@ from cudf._lib.null_mask import (
 from cudf._lib.scalar import as_scalar
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 from cudf._lib.transform import bools_to_mask
-from cudf._typing import Dtype
+from cudf._typing import Dtype, ScalarObj
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype
@@ -121,7 +121,7 @@ class ColumnBase(Column, Serializable):
 
         return cupy.asarray(self.data_array_view)
 
-    def clip(self, lo, hi) -> "ColumnBase":
+    def clip(self, lo: ScalarObj, hi: ScalarObj) -> "ColumnBase":
         return libcudf.replace.clip(self, lo, hi)
 
     def equals(self, other, check_dtypes=False):

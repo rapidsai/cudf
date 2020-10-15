@@ -8,8 +8,9 @@ from numba import cuda
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
+from cudf._typing import ScalarObj
 from cudf.core.buffer import Buffer
-from cudf.core.column import ColumnBase, column
+from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import (
@@ -702,7 +703,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         )
 
 
-class CategoricalColumn(ColumnBase):
+class CategoricalColumn(column.ColumnBase):
     """Implements operations for Columns of Categorical type
     """
 
@@ -952,7 +953,7 @@ class CategoricalColumn(ColumnBase):
         """
         raise NotImplementedError("cudf.Categorical is not yet implemented")
 
-    def clip(self, lo, hi) -> "ColumnBase":
+    def clip(self, lo: ScalarObj, hi: ScalarObj) -> "column.ColumnBase":
         return (
             self.astype(self.categories.dtype).clip(lo, hi).astype(self.dtype)
         )
