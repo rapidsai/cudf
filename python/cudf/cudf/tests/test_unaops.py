@@ -6,7 +6,7 @@ import operator
 import numpy as np
 import pandas as pd
 import pytest
-
+import re
 import cudf
 from cudf.core import Series
 from cudf.tests import utils
@@ -125,7 +125,7 @@ def generate_valid_scalar_unaop_combos():
 
     bool_values = [True, False]
     bool_dtypes = ["bool"]
-    bool_ops = _unaops
+    bool_ops = [op for op in _unaops if op is not operator.neg]
     results += list(itertools.product(bool_values, bool_dtypes, bool_ops))
 
     return results
@@ -164,3 +164,11 @@ def test_scalar_logical():
     assert T or F
     assert F or T
     assert not (F or F)
+
+def test_scalar_no_negative_bools():
+    x = cudf.Scalar(True)
+    with pytest.raises(TypeError, match=re.escape(
+        "Boolean scalars in cuDF do not "\
+        "support negation, use logical not"
+        )):
+        -x

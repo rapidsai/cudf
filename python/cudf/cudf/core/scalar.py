@@ -200,12 +200,12 @@ class Scalar(libcudf.scalar.Scalar):
     def _unaop_result_type_or_error(self, op):
         if op == "__neg__" and self.dtype == "bool":
             raise TypeError(
-                "Boolean scalars in cuDF, do not support"
-                "negation, use logical not"
+                "Boolean scalars in cuDF do not support"
+                " negation, use logical not"
             )
 
         if op in {"__ceil__", "__floor__"}:
-            if self.dtype.char in "bBhHf":
+            if self.dtype.char in "bBhHf?":
                 return np.dtype("float32")
             else:
                 return np.dtype("float64")
