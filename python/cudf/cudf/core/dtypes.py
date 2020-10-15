@@ -13,7 +13,7 @@ from cudf._typing import Dtype
 
 
 class CategoricalDtype(ExtensionDtype):
-    def __init__(self, categories, ordered: bool = None) -> None:
+    def __init__(self, categories=None, ordered: bool = None) -> None:
         """
         dtype similar to pd.CategoricalDtype with the categories
         stored on the GPU.

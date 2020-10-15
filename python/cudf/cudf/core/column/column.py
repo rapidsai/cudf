@@ -2,6 +2,7 @@
 
 import pickle
 import warnings
+from collections.abc import MutableSequence
 from numbers import Number
 from types import SimpleNamespace
 from typing import Tuple
@@ -151,8 +152,11 @@ class ColumnBase(Column, Serializable):
             n += self.mask.size
         return n
 
+    def cat(self, parent=None):
+        raise NotImplementedError()
+
     @classmethod
-    def _concat(cls, objs, dtype=None):
+    def _concat(cls, objs: "MutableSequence[ColumnBase]", dtype=None):
         if len(objs) == 0:
             dtype = pd.api.types.pandas_dtype(dtype)
             if is_categorical_dtype(dtype):
@@ -935,7 +939,7 @@ class ColumnBase(Column, Serializable):
             raise NotImplementedError(msg)
         return cpp_distinct_count(self, ignore_nulls=dropna)
 
-    def astype(self, dtype, **kwargs):
+    def astype(self, dtype, **kwargs) -> "ColumnBase":
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
         elif pd.api.types.pandas_dtype(dtype).type in {
