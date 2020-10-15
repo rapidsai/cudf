@@ -4,14 +4,11 @@ from cudf._typing import DtypeObj, Dtype
 from cudf.core.buffer import Buffer
 
 
-BufferOrNone = Union[Buffer, None]
-
-
 class Column:
-    _data: BufferOrNone
-    _mask: BufferOrNone
-    _base_data: BufferOrNone
-    _base_mask: BufferOrNone
+    _data: Buffer
+    _mask: Buffer
+    _base_data: Buffer
+    _base_mask: Buffer
     _dtype: DtypeObj
     _offset: int
     _null_count: int
@@ -43,7 +40,7 @@ class Column:
         ...
 
     @property
-    def base_data(self) -> BufferOrNone:
+    def base_data(self) -> Buffer:
         ...
 
     @property
@@ -51,14 +48,14 @@ class Column:
         ...
 
     @property
-    def data(self) -> BufferOrNone:
+    def data(self) -> Buffer:
         ...
 
     @property
     def data_ptr(self) -> int:
         ...
 
-    def set_base_data(self, value: BufferOrNone) -> None:
+    def set_base_data(self, value: Buffer) -> None:
         ...
 
     @property
@@ -70,7 +67,7 @@ class Column:
         ...
 
     @property
-    def base_mask(self) -> BufferOrNone:
+    def base_mask(self) -> Buffer:
         ...
 
     @property
@@ -78,17 +75,17 @@ class Column:
         ...
 
     @property
-    def mask(self) -> BufferOrNone:
+    def mask(self) -> Buffer:
         ...
 
     @property
     def mask_ptr(self) -> int:
         ...
 
-    def set_base_mask(self, value: BufferOrNone) -> None:
+    def set_base_mask(self, value: Buffer) -> None:
         ...
 
-    def set_mask(self, value: BufferOrNone) -> None:
+    def set_mask(self, value: Buffer) -> None:
         ...
 
     @property
