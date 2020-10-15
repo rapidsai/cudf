@@ -45,7 +45,7 @@ struct dictinit_state_s {
 /**
  * @brief Return a 12-bit hash from a byte sequence
  */
-static inline __device__ uint32_t nvstr_init_hash(char const *ptr, uint32_t len)
+static inline __device__ uint32_t nvstr_init_hash(const uint8_t *ptr, uint32_t len)
 {
   if (len != 0) {
     return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << INIT_HASH_BITS) - 1);
@@ -120,9 +120,12 @@ __global__ void __launch_bounds__(block_size, 2)
   } temp_storage;
 
   dictinit_state_s *const s = &state_g;
-  uint32_t const col_id     = blockIdx.x;
-  uint32_t const group_id   = blockIdx.y;
-  uint32_t const t          = threadIdx.x;
+  uint32_t col_id           = blockIdx.x;
+  uint32_t group_id         = blockIdx.y;
+  const nvstrdesc_s *ck_data;
+  uint32_t *dict_data;
+  uint32_t nnz, start_row, dict_char_count;
+  int t = threadIdx.x;
 
   if (t < sizeof(DictionaryChunk) / sizeof(uint32_t)) {
     ((volatile uint32_t *)&s->chunk)[t] =
@@ -140,25 +143,24 @@ __global__ void __launch_bounds__(block_size, 2)
     s->chunk.string_char_count = 0;
     s->total_dupes             = 0;
   }
-  auto nnz           = s->nnz;
-  auto dict_data     = s->chunk.dict_data;
-  auto start_row     = s->chunk.start_row;
-  auto const ck_data = static_cast<const nvstrdesc_s *>(s->chunk.column_data_base) + start_row;
+  nnz       = s->nnz;
+  dict_data = s->chunk.dict_data;
+  start_row = s->chunk.start_row;
+  ck_data   = static_cast<const nvstrdesc_s *>(s->chunk.column_data_base) + start_row;
   for (uint32_t i = 0; i < nnz; i += block_size) {
-    uint32_t ck_row = 0;
-    uint32_t hash   = 0;
-    uint32_t len    = 0;
+    uint32_t ck_row = 0, len = 0, hash;
+    const uint8_t *ptr = 0;
     if (i + t < nnz) {
       ck_row = s->dict[i + t];
+      ptr    = reinterpret_cast<const uint8_t *>(ck_data[ck_row].ptr);
       len    = ck_data[ck_row].count;
-      hash   = nvstr_init_hash(ck_data[ck_row].ptr, len);
+      hash   = nvstr_init_hash(ptr, len);
     }
     len = half_warp_reduce(temp_storage.half[t / 32]).Sum(len);
     if (!(t & 0xf)) { s->scratch_red[t >> 4] = len; }
     __syncthreads();
     if (t < 32) {
-      // TODO: rename len
-      auto const len = warp_reduce(temp_storage.full[t / 32]).Sum(s->scratch_red[t]);
+      len = warp_reduce(temp_storage.full[t / 32]).Sum(s->scratch_red[t]);
       if (t == 0) s->chunk.string_char_count += len;
     }
     if (i + t < nnz) {
@@ -204,13 +206,15 @@ __global__ void __launch_bounds__(block_size, 2)
   }
   // Put the indices back in hash order
   for (uint32_t i = 0; i < nnz; i += block_size) {
-    uint32_t ck_row  = 0;
-    uint32_t hash    = 0;
-    uint32_t pos_old = 0;
-    uint32_t sh      = 0;
+    uint32_t ck_row = 0, pos = 0, hash = 0, pos_old, pos_new, sh, colliding_row;
+    bool collision;
     if (i + t < nnz) {
+      const uint8_t *ptr;
+      uint32_t len;
       ck_row  = dict_data[i + t] - start_row;
-      hash    = nvstr_init_hash(ck_data[ck_row].ptr, ck_data[ck_row].count);
+      ptr     = reinterpret_cast<const uint8_t *>(ck_data[ck_row].ptr);
+      len     = (uint32_t)ck_data[ck_row].count;
+      hash    = nvstr_init_hash(ptr, len);
       sh      = (hash & 1) ? 16 : 0;
       pos_old = s->map.u16[hash];
     }
@@ -218,18 +222,15 @@ __global__ void __launch_bounds__(block_size, 2)
     // behavior for the first row in the hash map that will be used for early duplicate detection
     // The lack of 16-bit atomicMin makes this a bit messy...
     __syncthreads();
-
-    uint32_t pos = 0;
     if (i + t < nnz) {
       pos          = (atomicAdd(&s->map.u32[hash >> 1], 1 << sh) >> sh) & 0xffff;
       s->dict[pos] = ck_row;
     }
     __syncthreads();
-    bool collision         = false;
-    uint32_t colliding_row = 0;
+    collision = false;
     if (i + t < nnz) {
-      auto const pos_new = s->map.u16[hash];
-      collision          = (pos != pos_old && pos_new > pos_old + 1);
+      pos_new   = s->map.u16[hash];
+      collision = (pos != pos_old && pos_new > pos_old + 1);
       if (collision) { colliding_row = s->dict[pos_old]; }
     }
     __syncthreads();
@@ -251,26 +252,26 @@ __global__ void __launch_bounds__(block_size, 2)
   __syncthreads();
   // Now that the strings are ordered by hash, compare every string with the first entry in the hash
   // map, the position of the first string can be inferred from the hash map counts
-  auto dict_char_count = 0;
+  dict_char_count = 0;
   for (uint32_t i = 0; i < nnz; i += block_size) {
-    uint32_t ck_row     = 0;
-    uint32_t ck_row_ref = 0;
-    uint32_t is_dupe    = 0;
+    uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0, dupe_mask, dupes_before;
     if (i + t < nnz) {
-      ck_row          = s->dict[i + t];
-      auto const str1 = ck_data[ck_row].ptr;
-      auto const len1 = (uint32_t)ck_data[ck_row].count;
-      auto const hash = nvstr_init_hash(str1, len1);
-      ck_row_ref      = s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0];
+      const char *str1, *str2;
+      uint32_t len1, len2, hash;
+      ck_row     = s->dict[i + t];
+      str1       = ck_data[ck_row].ptr;
+      len1       = (uint32_t)ck_data[ck_row].count;
+      hash       = nvstr_init_hash(reinterpret_cast<const uint8_t *>(str1), len1);
+      ck_row_ref = s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0];
       if (ck_row_ref != ck_row) {
-        auto const str2 = ck_data[ck_row_ref].ptr;
-        auto const len2 = (uint32_t)ck_data[ck_row_ref].count;
-        is_dupe         = nvstr_is_equal(str1, len1, str2, len2);
+        str2    = ck_data[ck_row_ref].ptr;
+        len2    = (uint32_t)ck_data[ck_row_ref].count;
+        is_dupe = nvstr_is_equal(str1, len1, str2, len2);
         dict_char_count += (is_dupe) ? 0 : len1;
       }
     }
-    auto const dupe_mask = BALLOT(is_dupe);
-    auto dupes_before    = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
+    dupe_mask    = BALLOT(is_dupe);
+    dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
     if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(dupe_mask); }
     __syncthreads();
     if (t < 32) {
