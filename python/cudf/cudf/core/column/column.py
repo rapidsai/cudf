@@ -121,10 +121,15 @@ class ColumnBase(Column, Serializable):
 
         return cupy.asarray(self.data_array_view)
 
+    def binary_operator(
+        self, binop: str, rhs: "ColumnBase", reflect=False
+    ) -> "ColumnBase":
+        raise NotImplementedError()
+
     def clip(self, lo: ScalarObj, hi: ScalarObj) -> "ColumnBase":
         return libcudf.replace.clip(self, lo, hi)
 
-    def equals(self, other, check_dtypes=False):
+    def equals(self, other: "ColumnBase", check_dtypes: bool = False) -> bool:
         if self is other:
             return True
         if other is None or len(self) != len(other):
@@ -134,13 +139,13 @@ class ColumnBase(Column, Serializable):
                 return False
         return self.binary_operator("eq", other).min()
 
-    def all(self):
+    def all(self) -> bool:
         return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
 
-    def any(self):
+    def any(self) -> bool:
         return bool(libcudf.reduce.reduce("any", self, dtype=np.bool_))
 
-    def __sizeof__(self):
+    def __sizeof__(self) -> int:
         n = self.data.size
         if self.nullable:
             n += self.mask.size
