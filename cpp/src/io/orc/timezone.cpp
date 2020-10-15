@@ -61,19 +61,22 @@ struct timezone_file {
   auto timecnt() const { return header.timecnt; }
   auto typecnt() const { return header.typecnt; }
 
-  void read_header(std::ifstream &input_file, size_t file_size)
+  void header_to_little_endian()
   {
-    input_file.read(reinterpret_cast<char *>(&header), sizeof(header));
-    CUDF_EXPECTS(!input_file.fail() && header.magic == TZIF_MAGIC,
-                 "Error reading time zones file header.");
-
-    // Convert fields to little endian
     header.isutccnt = __builtin_bswap32(header.isutccnt);
     header.isstdcnt = __builtin_bswap32(header.isstdcnt);
     header.leapcnt  = __builtin_bswap32(header.leapcnt);
     header.timecnt  = __builtin_bswap32(header.timecnt);
     header.typecnt  = __builtin_bswap32(header.typecnt);
     header.charcnt  = __builtin_bswap32(header.charcnt);
+  }
+
+  void read_header(std::ifstream &input_file, size_t file_size)
+  {
+    input_file.read(reinterpret_cast<char *>(&header), sizeof(header));
+    CUDF_EXPECTS(!input_file.fail() && header.magic == TZIF_MAGIC,
+                 "Error reading time zones file header.");
+    header_to_little_endian();
 
     // Check for 64-bit header
     if (header.version != 0) {
@@ -83,13 +86,7 @@ struct timezone_file {
         input_file.seekg(ofs64, std::ios_base::cur);
         is_header_from_64bit = true;
         input_file.read(reinterpret_cast<char *>(&header), sizeof(header));
-        // Convert fields to little endian
-        header.isutccnt = __builtin_bswap32(header.isutccnt);
-        header.isstdcnt = __builtin_bswap32(header.isstdcnt);
-        header.leapcnt  = __builtin_bswap32(header.leapcnt);
-        header.timecnt  = __builtin_bswap32(header.timecnt);
-        header.typecnt  = __builtin_bswap32(header.typecnt);
-        header.charcnt  = __builtin_bswap32(header.charcnt);
+        header_to_little_endian();
       }
     }
     CUDF_EXPECTS(
@@ -358,77 +355,73 @@ timezone_table build_timezone_transition_table(std::string const &timezone_name)
     return {};
   }
 
-  timezone_file const tz(timezone_name);
+  timezone_file const tzf(timezone_name);
 
-  // Allocate transition table, add one entry for ancient rule, and 800 entries for future rules
-  // (2 transitions/year)
-  std::vector<int64_t> ttimes(1 + tz.timecnt() + cycle_entry_cnt);
-  std::vector<int32_t> offsets(1 + tz.timecnt() + cycle_entry_cnt);
+  std::vector<int64_t> ttimes(1);
+  std::vector<int32_t> offsets(1);
+  // One ancient rule entry, one per TZ file entry, 2 entries per year in the future cycle
+  ttimes.reserve(1 + tzf.timecnt() + cycle_entry_cnt);
+  offsets.reserve(1 + tzf.timecnt() + cycle_entry_cnt);
   size_t earliest_std_idx = 0;
-  for (size_t t = 0; t < tz.timecnt(); t++) {
-    auto const ttime = tz.transition_times[t];
-    auto const idx   = tz.ttime_idx[t];
-    CUDF_EXPECTS(idx < tz.typecnt(), "Out-of-range type index");
-    auto const utcoff = tz.ttype[idx].utcoff;
-    ttimes[1 + t]     = ttime;
-    offsets[1 + t]    = utcoff;
-    if (!earliest_std_idx && !tz.ttype[idx].isdst) { earliest_std_idx = 1 + t; }
+  for (size_t t = 0; t < tzf.timecnt(); t++) {
+    auto const ttime = tzf.transition_times[t];
+    auto const idx   = tzf.ttime_idx[t];
+    CUDF_EXPECTS(idx < tzf.typecnt(), "Out-of-range type index");
+    auto const utcoff = tzf.ttype[idx].utcoff;
+    ttimes.push_back(ttime);
+    offsets.push_back(utcoff);
+    if (!earliest_std_idx && !tzf.ttype[idx].isdst) { earliest_std_idx = ttimes.size() - 1; }
   }
   if (!earliest_std_idx) { earliest_std_idx = 1; }
   ttimes[0]  = ttimes[earliest_std_idx];
   offsets[0] = offsets[earliest_std_idx];
 
   // Generate entries for times after the last transition
-  auto future_stdoff = offsets[tz.timecnt()];
-  auto future_dstoff = future_stdoff;
-
+  auto future_std_offset = offsets[tzf.timecnt()];
+  auto future_dst_offset = future_std_offset;
   dst_transition_s dst_start{};
   dst_transition_s dst_end{};
-  if (tz.posix_tz_string.size() > 0) {
-    posix_parser<decltype(tz.posix_tz_string)> parser(tz.posix_tz_string);
+  if (!tzf.posix_tz_string.empty()) {
+    posix_parser<decltype(tzf.posix_tz_string)> parser(tzf.posix_tz_string);
     parser.skip_name();
-    future_stdoff = -parser.parse_offset();
+    future_std_offset = -parser.parse_offset();
     if (parser.remaining_char_cnt() > 1) {
       // Parse Daylight Saving Time information
       parser.skip_name();
       if (parser.remaining_char_cnt() > 0 && parser.next_character() != ',') {
-        future_dstoff = -parser.parse_offset();
+        future_dst_offset = -parser.parse_offset();
       } else {
-        future_dstoff = future_stdoff + 60 * 60;
+        future_dst_offset = future_std_offset + 60 * 60;
       }
       dst_start = parser.parse_transition();
       dst_end   = parser.parse_transition();
     } else {
-      future_dstoff = future_stdoff;
+      future_dst_offset = future_std_offset;
     }
   }
 
-  // Add 2 entries per year for 400 years
-  int64_t future_time = 0;
-  for (size_t t = 0; t < 800; t += 2) {
-    uint32_t const year          = 1970 + ((int)t >> 1);
+  // Add entries to fill the transition cycle
+  int64_t year_timestamp = 0;
+  for (uint32_t year = 1970; year < 1970 + cycle_entry_cnt; ++year) {
     int64_t const dst_start_time = get_transition_time(dst_start, year);
     int64_t const dst_end_time   = get_transition_time(dst_end, year);
-    auto const dst_idx           = 1 + tz.timecnt() + t;
 
-    ttimes[dst_idx]      = future_time + dst_end_time - future_dstoff;
-    offsets[dst_idx]     = future_stdoff;
-    ttimes[dst_idx + 1]  = future_time + dst_start_time - future_stdoff;
-    offsets[dst_idx + 1] = future_dstoff;
-    if (dst_start_time < dst_end_time) {
-      std::swap(ttimes[dst_idx], ttimes[dst_idx + 1]);
-      std::swap(offsets[dst_idx], offsets[dst_idx + 1]);
+    // Two entries per year, since there are two transitions
+    ttimes.push_back(year_timestamp + dst_end_time - future_dst_offset);
+    offsets.push_back(future_std_offset);
+    ttimes.push_back(year_timestamp + dst_start_time - future_std_offset);
+    offsets.push_back(future_dst_offset);
+
+    // Swap the newly added transitions if in descending order
+    if (ttimes.rbegin()[1] > ttimes.rbegin()[0]) {
+      std::swap(ttimes.rbegin()[0], ttimes.rbegin()[1]);
+      std::swap(offsets.rbegin()[0], offsets.rbegin()[1]);
     }
 
-    future_time += (365 + is_leap_year(year)) * 24 * 60 * 60;
+    year_timestamp += (365 + is_leap_year(year)) * 24 * 60 * 60;
   }
-  // Add gmt offset
-  timezone_table tz_table;
-  tz_table.gmt_offset = get_gmt_offset(ttimes, offsets, ORC_UTC_OFFSET);
-  tz_table.ttimes     = ttimes;
-  tz_table.offsets    = offsets;
 
-  return tz_table;
+  return {get_gmt_offset(ttimes, offsets, ORC_UTC_OFFSET), ttimes, offsets};
 }
 
 }  // namespace io
