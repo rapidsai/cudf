@@ -77,6 +77,11 @@ CUDA_HOST_DEVICE_CALLABLE int32_t get_gmt_offset_impl(int64_t const *ttimes,
   }
 }
 
+/**
+ * @brief Host `get_gmt_offset` interface.
+ *
+ * Implemented in `get_gmt_offset_impl`.
+ */
 inline __host__ int32_t get_gmt_offset(cudf::detail::host_span<int64_t const> ttimes,
                                        cudf::detail::host_span<int32_t const> offsets,
                                        int64_t ts)
@@ -86,6 +91,11 @@ inline __host__ int32_t get_gmt_offset(cudf::detail::host_span<int64_t const> tt
   return get_gmt_offset_impl(ttimes.begin(), offsets.begin(), ttimes.size(), ts);
 }
 
+/**
+ * @brief Device `get_gmt_offset` interface.
+ *
+ * Implemented in `get_gmt_offset_impl`.
+ */
 inline __device__ int32_t get_gmt_offset(cudf::detail::device_span<int64_t const> ttimes,
                                          cudf::detail::device_span<int32_t const> offsets,
                                          int64_t ts)
