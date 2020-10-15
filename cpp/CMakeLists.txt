@@ -522,7 +522,7 @@ add_custom_target(stringify_run DEPENDS
 option(USE_NVTX "Build with NVTX support" ON)
 if(USE_NVTX)
     message(STATUS "Using Nvidia Tools Extension")
-endif()
+endif(USE_NVTX)
 
 option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
 if(HT_DEFAULT_ALLOCATOR)
