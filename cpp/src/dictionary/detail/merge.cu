@@ -21,7 +21,6 @@
 #include <cudf/dictionary/detail/merge.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
-#include <cudf/null_mask.hpp>
 
 namespace cudf {
 namespace dictionary {
