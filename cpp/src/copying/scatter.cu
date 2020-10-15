@@ -103,8 +103,10 @@ struct column_scalar_scatterer_impl {
     auto result      = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
 
+    using Type = device_storage_type_t<Element>;
+
     // Use permutation iterator with constant index to dereference scalar data
-    auto scalar_impl = static_cast<scalar_type_t<Element>*>(source.get());
+    auto scalar_impl = static_cast<scalar_type_t<Type>*>(source.get());
     auto scalar_iter =
       thrust::make_permutation_iterator(scalar_impl->data(), thrust::make_constant_iterator(0));
 
@@ -112,7 +114,7 @@ struct column_scalar_scatterer_impl {
                     scalar_iter,
                     scalar_iter + scatter_rows,
                     scatter_iter,
-                    result_view.begin<Element>());
+                    result_view.begin<Type>());
 
     return result;
   }
