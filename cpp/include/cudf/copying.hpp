@@ -74,7 +74,6 @@ std::unique_ptr<table> gather(
   table_view const& source_table,
   column_view const& gather_map,
   out_of_bounds_policy bounds         = out_of_bounds_policy::NULLIFY,
-  bool wrap_around                    = false,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

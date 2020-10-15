@@ -64,13 +64,12 @@ std::unique_ptr<table> gather(table_view const& source_table,
 std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
                               out_of_bounds_policy bounds,
-                              bool wrap_around,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
-  auto index_policy = wrap_around ? detail::negative_index_policy::NOT_ALLOWED
-                                          : detail::negative_index_policy::ALLOWED;
+  auto index_policy = is_unsigned(gather_map.type()) ? detail::negative_index_policy::NOT_ALLOWED
+                                                     : detail::negative_index_policy::ALLOWED;
 
   return detail::gather(
     source_table,
