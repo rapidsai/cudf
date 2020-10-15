@@ -559,7 +559,7 @@ function(add_library_module NAMESPACE MODULE MODULE_SOURCE_DIRS)
     # per-thread default stream
     if(PER_THREAD_DEFAULT_STREAM)
         target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM)
-    endif()
+    endif(PER_THREAD_DEFAULT_STREAM)
     # nvtx
     if(NOT USE_NVTX)
         target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC NVTX_DISABLE)
