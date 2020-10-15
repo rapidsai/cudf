@@ -4,15 +4,19 @@
 
 ## Improvements
 
+- PR #6432 Add dictionary support to `cudf::upper_bound` and `cudf::lower_bound`
 - PR #6461 Replace index type-dispatch call with indexalator in cudf::scatter
 - PR #6415 Support `datetime64` in row-wise op
 - PR #6457 Replace index type-dispatch call with indexalator in `cudf::gather`
 - PR #6413 Replace Python NVTX package with conda-forge source
 - PR #6442 Remove deprecated `DataFrame.from_gpu_matrix`, `DataFrame.to_gpu_matrix`, `DataFrame.add_column` APIs and method parameters
+- PR #6485 Add File IO to cuIO benchmarks
 - PR #6504 Update Java bindings version to 0.17-SNAPSHOT
 - PR #6540 Add dictionary support to `cudf::unary_operation`
+- PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
 
 ## Bug Fixes
+- PR #6506 Fix DateTime type value truncation while writing to csv
 
  - PR #6509 Disable JITIFY log printing
  - PR #6519 Fix end-of-string marking boundary condition in subword-tokenizer
