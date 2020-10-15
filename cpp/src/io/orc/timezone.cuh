@@ -44,7 +44,11 @@ static constexpr uint32_t cycle_entry_cnt = 2 * 400;
 /**
  * @brief Returns the GMT offset for a given date and given timezone table.
  *
- * @param TODO
+ * @param ttimes Transition times; trailing @ref `cycle_entry_cnt` entires are used for all times
+ * beyond the one covered by the TZif file
+ * @param offsets Time offsets in specific intervals; trailing `cycle_entry_cnt` entires are used
+ * for all times beyond the one covered by the TZif file
+ * @param count Number of elements in @ref ttimes and @ref offsets
  * @param ts ORC timestamp
  *
  * @return GMT offset
@@ -101,9 +105,9 @@ struct timezone_table {
  *
  * Assumes little-endian platform
  *
- * @param[in] timezone_name standard timezone name (for example, "US/Pacific")
+ * @param timezone_name standard timezone name (for example, "US/Pacific")
  *
- * @return The transition table (TODO)
+ * @return The transition table for the given timezone
  */
 timezone_table build_timezone_transition_table(std::string const &timezone_name);
 
