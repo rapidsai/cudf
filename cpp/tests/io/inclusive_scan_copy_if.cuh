@@ -9,6 +9,7 @@
 #include <cub/block/block_store.cuh>
 
 #include <cstdint>
+#include "cudf/utilities/error.hpp"
 
 using cudf::detail::device_span;
 
@@ -91,7 +92,7 @@ __global__ void kernel_pass_1(  //
                    block_value_aggregate);
 
   if (threadIdx.x == 0) {  //
-    printf("bid(%i) tid(%i) assigning block_value_aggregate\n", blockIdx.x);
+    // printf("bid(%i) tid(%i) assigning block_value_aggregate\n", blockIdx.x);
     block_temp_values[blockIdx.x + 1] = block_value_aggregate;
   }
 }
@@ -113,20 +114,16 @@ __global__ void kernel_pass_2(  //
     typename Policy::template BlockStore<T>::TempStorage store_value;
   } temp_storage;
 
-  auto block_offset = ITEMS_PER_THREAD * blockIdx.x * blockDim.x;
+  // auto block_offset = ITEMS_PER_THREAD * blockIdx.x * blockDim.x;
   // auto thread_offset = ITEMS_PER_THREAD * threadIdx.x;
-  auto valid_values = block_temp_values.size() - block_offset;
+  // auto valid_values = block_temp_values.size() - block_offset;
+  auto valid_values = block_temp_values.size();
 
   T thread_values[ITEMS_PER_THREAD];
 
-  printf("bid(%i) tid(%i) block offset (should be zero): %i",  //
-         blockIdx.x,
-         threadIdx.x,
-         block_offset);
-
   // load
   Policy::template BlockLoad<T>(temp_storage.load_value)  //
-    .Load(block_temp_values.data() + block_offset,        //
+    .Load(block_temp_values.data(),                       //
           thread_values,
           valid_values);
 
@@ -138,7 +135,7 @@ __global__ void kernel_pass_2(  //
 
   // store
   Policy::template BlockStore<T>(temp_storage.store_value)  //
-    .Store(block_temp_values.data() + block_offset,         //
+    .Store(block_temp_values.data(),                        //
            thread_values,
            valid_values);
 }
@@ -183,8 +180,7 @@ __global__ void kernel_pass_3(  //
                    scan_op,
                    prefix_op);
 
-  uint32_t count = predicate_op(block_seed);
-  // uint32_t count = 0;
+  uint32_t count = 0;
 
   for (uint32_t i = 0; i < ITEMS_PER_THREAD; i++) {
     count += thread_offset + i < valid_values and predicate_op(thread_values[i]);
@@ -194,9 +190,11 @@ __global__ void kernel_pass_3(  //
             .Sum(count);
 
   if (threadIdx.x == 0) {  //
-    printf("bid(%i) tid(%i) block-wide count: %i\n", blockIdx.x, threadIdx.x, count);
+    // printf("bid(%i) tid(%i) block-wide count: %u\n", blockIdx.x, threadIdx.x, count);
     block_temp_counts[blockIdx.x + 1] = count;
   }
+
+  __syncthreads();
 }
 
 template <typename Policy,
@@ -206,7 +204,6 @@ template <typename Policy,
           int BLOCK_DIM_X      = Policy::BLOCK_DIM_X,
           int ITEMS_PER_THREAD = Policy::ITEMS_PER_THREAD>
 __global__ void kernel_pass_4(  //
-  device_span<T> block_temp_values,
   device_span<uint32_t> block_temp_counts,
   ScanOp scan_op,
   PredicateOp predicate_op)
@@ -218,25 +215,32 @@ __global__ void kernel_pass_4(  //
     typename Policy::template BlockLoad<uint32_t>::TempStorage load_count;
   } temp_storage;
 
-  auto block_offset = ITEMS_PER_THREAD * blockIdx.x * blockDim.x;
-  auto valid_values = block_temp_values.size() - block_offset;
+  auto valid_values = block_temp_counts.size();
 
   uint32_t thread_counts[ITEMS_PER_THREAD];
 
   // load
   Policy::template BlockLoad<uint32_t>(temp_storage.load_count)  //
-    .Load(block_temp_counts.data() + block_offset,               //
+    .Load(block_temp_counts.data(),                              //
           thread_counts,
           valid_values);
+
+  // for (uint32_t i = 0; i < ITEMS_PER_THREAD; i++) {
+  //   printf("bid(%i) tid(%i) %i: %u\n", blockIdx.x, threadIdx.x, valid_values, thread_counts[i]);
+  // }
 
   // scan
   Policy::template BlockScan<uint32_t>(temp_storage.scan_count)  //
     .InclusiveSum(thread_counts,                                 //
                   thread_counts);
 
+  // for (uint32_t i = 0; i < ITEMS_PER_THREAD; i++) {
+  //   printf("bid(%i) tid(%i) %i: %u\n", blockIdx.x, threadIdx.x, valid_values, thread_counts[i]);
+  // }
+
   // store
   Policy::template BlockStore<uint32_t>(temp_storage.store_count)  //
-    .Store(block_temp_counts.data() + block_offset,                //
+    .Store(block_temp_counts.data(),                               //
            thread_counts,
            valid_values);
 }
@@ -250,8 +254,8 @@ template <typename Policy,
 __global__ void kernel_pass_5(  //
   device_span<T> input,
   device_span<uint32_t> output,
-  device_span<T> block_temp_value,
-  device_span<uint32_t> block_temp_count,
+  device_span<T> block_temp_values,
+  device_span<uint32_t> block_temp_counts,
   ScanOp scan_op,
   PredicateOp predicate_op)
 {
@@ -259,8 +263,8 @@ __global__ void kernel_pass_5(  //
   __shared__ union {
     typename Policy::template BlockLoad<T>::TempStorage load_value;
     typename Policy::template BlockScan<T>::TempStorage scan_value;
+    typename Policy::template BlockLoad<uint32_t>::TempStorage load_count;
     typename Policy::template BlockScan<uint32_t>::TempStorage scan_count;
-    typename Policy::template BlockReduce<uint32_t>::TempStorage reduce_count;
   } temp_storage;
 
   auto block_offset  = ITEMS_PER_THREAD * blockIdx.x * blockDim.x;
@@ -268,47 +272,54 @@ __global__ void kernel_pass_5(  //
   auto valid_values  = input.size() - block_offset;
 
   T thread_values[ITEMS_PER_THREAD];
-  T block_seed = block_temp_value[blockIdx.x];
 
+  // load
   Policy::template BlockLoad<T>(temp_storage.load_value)  //
     .Load(input.data() + block_offset,                    //
           thread_values);
 
-  auto prefix_op = doop<T>{block_seed};
-
+  // scan
+  T block_values_seed = block_temp_values[blockIdx.x];
+  auto prefix_op      = doop<T>{block_values_seed};
   Policy::template BlockScan<T>(temp_storage.scan_value)  //
     .InclusiveScan(thread_values,                         //
                    thread_values,
                    scan_op,
                    prefix_op);
 
-  if (output.data() == nullptr) {
-    // first pass wants to know how many elements this block contributes.
-    uint32_t count = block_temp_count[blockIdx.x];
+  // scatter
+  // TODO: scatter to temp storage, then use BlockStore.
+  uint32_t block_counts_seed = block_temp_counts[blockIdx.x];
 
-    for (uint32_t i = 0; i < ITEMS_PER_THREAD; i++) {
-      count += thread_offset + i < valid_values and predicate_op(thread_values[i]);
+  uint32_t count = 0;
+
+  for (uint32_t i = 0; i < ITEMS_PER_THREAD; i++) {
+    count += thread_offset + i < valid_values and predicate_op(thread_values[i]);
+  }
+
+  Policy::template BlockScan<uint32_t>(temp_storage.scan_count)  //
+    .ExclusiveSum(count, count);
+
+  for (uint32_t i = 0; i < ITEMS_PER_THREAD; i++) {
+    if (thread_offset + i < valid_values and predicate_op(thread_values[i])) {
+      // printf("bid(%i) tid(%i) [%i] = %i + %i + %i\n",
+      //        blockIdx.x,
+      //        threadIdx.x,
+      //        block_counts_seed,
+      //        block_offset,
+      //        thread_offset,
+      //        i);
+      output[block_counts_seed++ + count] = block_offset + thread_offset + i;
     }
-
-    Policy::template BlockScan<uint32_t>(temp_storage.scan_count)  //
-      .InclusiveSum(count, count);
-
-    printf("bid(%i) tid(%i) block-wide count: %i (%i) from block seed\n",
-           blockIdx.x,
-           threadIdx.x,
-           count,
-           block_temp_count[blockIdx.x]);
-
-    if (threadIdx.x == 0) { block_temp_count[blockIdx.x + 1] = count; }
   }
 }
 
-void sync()
-{
-  cudaDeviceSynchronize();
-  printf("synced\n");
-  cudaDeviceSynchronize();
-}
+// void sync(std::string message)
+// {
+//   cudaDeviceSynchronize();
+//   printf("synced\n===== %s =====\n", message.c_str());
+//   cudaDeviceSynchronize();
+// }
 
 /**
  * @brief inclusive_scan + copy_if
@@ -329,63 +340,50 @@ void sync()
  */
 template <typename T,
           typename ScanOp,
-          typename PredicateOp,
-          typename PrintOp>
+          typename PredicateOp>
 rmm::device_vector<uint32_t>  //
 inclusive_scan_copy_if(device_span<T> input,
                        ScanOp scan_op,
                        PredicateOp predicate_op,
-                       PrintOp print_op,
                        cudaStream_t stream = 0)
 {
-  // enum { BLOCK_DIM_X = 1, ITEMS_PER_THREAD = 8 };  // 1b * 1t * 8i : [pass]
-  // enum { BLOCK_DIM_X = 8, ITEMS_PER_THREAD = 1 };  // 1b * 8t * 1i : [pass]
-  // enum { BLOCK_DIM_X = 1, ITEMS_PER_THREAD = 4 };  // 2b * 1t * 4i : [fail]
-  enum { BLOCK_DIM_X = 2, ITEMS_PER_THREAD = 2 };  // 2b * 2t * 2i : [fail]
+  // enum { BLOCK_DIM_X = 1, ITEMS_PER_THREAD = 8 };  // 1b * 1t * 8i
+  // enum { BLOCK_DIM_X = 8, ITEMS_PER_THREAD = 1 };  // 1b * 8t * 1i
+  // enum { BLOCK_DIM_X = 1, ITEMS_PER_THREAD = 4 };  // 2b * 1t * 4i
+  enum {  //
+    BLOCK_DIM_X      = 128,
+    ITEMS_PER_THREAD = 32,
+    ITEMS_PER_BLOCK  = BLOCK_DIM_X * ITEMS_PER_THREAD
+  };
 
   using Policy = InclusiveScanCopyIfPolicy<T, ScanOp, PredicateOp, BLOCK_DIM_X, ITEMS_PER_THREAD>;
 
   cudf::detail::grid_1d grid(input.size(), BLOCK_DIM_X, ITEMS_PER_THREAD);
-  auto x = (grid.num_blocks / ITEMS_PER_THREAD) + (grid.num_blocks % ITEMS_PER_THREAD != 0);
+  auto num_temp_values = grid.num_blocks + 1;
 
-  auto d_block_temp_values = rmm::device_vector<T>(grid.num_blocks + 1);
-  auto d_block_temp_counts = rmm::device_vector<uint32_t>(grid.num_blocks + 1);
-  auto h_block_temp_values = thrust::host_vector<T>();
-  auto h_block_temp_counts = thrust::host_vector<uint32_t>();
+  // TODO: use single-pass chained-scan prefix scan and support any number of inputs.
+  CUDF_EXPECTS(num_temp_values < ITEMS_PER_BLOCK, "too many inputs.");
+
+  auto d_block_temp_values = rmm::device_vector<T>(num_temp_values);
+  auto d_block_temp_counts = rmm::device_vector<uint32_t>(num_temp_values);
   auto kernel_phase_1      = kernel_pass_1<Policy>;
   auto kernel_phase_2      = kernel_pass_2<Policy>;
   auto kernel_phase_3      = kernel_pass_3<Policy>;
   auto kernel_phase_4      = kernel_pass_4<Policy>;
   auto kernel_phase_5      = kernel_pass_5<Policy>;
 
-  sync();
-
-  // block-wise aggregates
+  // local aggregates
   kernel_phase_1<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(  //
     input,
     d_block_temp_values,
     scan_op);
 
-  sync();
-
-  print_op(static_cast<thrust::host_vector<T>>(d_block_temp_values),  //
-           static_cast<thrust::host_vector<uint32_t>>(d_block_temp_counts));
-
-  sync();
-
-  // device-wise aggregates
-  kernel_phase_2<<<1, x, 0, stream>>>(  //
+  // global aggregates
+  kernel_phase_2<<<1, grid.num_threads_per_block, 0, stream>>>(  //
     d_block_temp_values,
     scan_op);
 
-  sync();
-
-  print_op(static_cast<thrust::host_vector<T>>(d_block_temp_values),  //
-           static_cast<thrust::host_vector<uint32_t>>(d_block_temp_counts));
-
-  sync();
-
-  // block-wise count
+  // local counts
   kernel_phase_3<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(  //
     input,
     d_block_temp_values,
@@ -393,39 +391,15 @@ inclusive_scan_copy_if(device_span<T> input,
     scan_op,
     predicate_op);
 
-  sync();
-
-  print_op(static_cast<thrust::host_vector<T>>(d_block_temp_values),  //
-           static_cast<thrust::host_vector<uint32_t>>(d_block_temp_counts));
-
-  sync();
-
-  // device-wise count
-  kernel_phase_4<<<1, x, 0, stream>>>(  //
-    d_block_temp_values,
+  // global counts
+  kernel_phase_4<<<1, grid.num_threads_per_block, 0, stream>>>(  //
     d_block_temp_counts,
     scan_op,
     predicate_op);
 
-  sync();
-
-  print_op(static_cast<thrust::host_vector<T>>(d_block_temp_values),  //
-           static_cast<thrust::host_vector<uint32_t>>(d_block_temp_counts));
-
-  sync();
-
-  // device-wise gather
+  // global indices gather
   auto num_results = static_cast<uint32_t>(d_block_temp_counts.back());
   auto output      = rmm::device_vector<uint32_t>(num_results);
-
-  printf("num results: %u\n", num_results);
-
-  sync();
-
-  print_op(static_cast<thrust::host_vector<T>>(d_block_temp_values),  //
-           static_cast<thrust::host_vector<uint32_t>>(d_block_temp_counts));
-
-  sync();
 
   kernel_phase_5<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(  //
     input,
@@ -434,8 +408,6 @@ inclusive_scan_copy_if(device_span<T> input,
     d_block_temp_counts,
     scan_op,
     predicate_op);
-
-  sync();
 
   return output;
 }
