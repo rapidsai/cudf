@@ -40,7 +40,7 @@ import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
 public final class ColumnVector implements AutoCloseable, BinaryOperable, ColumnViewAccess<BaseDeviceMemoryBuffer> {
   private static final Logger log = LoggerFactory.getLogger(ColumnVector.class);
 
-  public class DeviceColumnViewAccess implements ColumnViewAccess<BaseDeviceMemoryBuffer> {
+  public static class DeviceColumnViewAccess implements ColumnViewAccess<BaseDeviceMemoryBuffer> {
 
     protected long viewHandle;
 
@@ -73,42 +73,38 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
      */
     @Override
     public BaseDeviceMemoryBuffer getDataBuffer() {
-      long[] values = getNativeDataPointer(viewHandle);
-      if (values[0] == 0) {
-        return null;
-      }
-      return new DeviceMemoryBufferView(values[0], values[1]);
+      return ColumnVector.getDataBuffer(viewHandle);
     }
 
     @Override
     public BaseDeviceMemoryBuffer getOffsetBuffer() {
-      return offHeap.getNativeOffsetsPointer(viewHandle);
+      return ColumnVector.getOffsetsBuffer(viewHandle);
     }
 
     @Override
     public BaseDeviceMemoryBuffer getValidityBuffer() {
-      return offHeap.getNativeValidPointer(viewHandle);
+      return ColumnVector.getValidityBuffer(viewHandle);
     }
 
     @Override
     public long getNullCount() {
-      return  offHeap.getNativeNullCount(viewHandle);
+      return ColumnVector.getNativeNullCount(viewHandle);
     }
 
     @Override
     public DType getDataType() {
-      return offHeap.getNativeType(viewHandle);
+      return DType.fromNative(getNativeTypeId(viewHandle));
     }
 
     @Override
     @Deprecated
     public long getNumRows() {
-      return offHeap.getNativeRowCount(viewHandle);
+      return getNativeRowCount(viewHandle);
     }
 
     @Override
     public long getRowCount() {
-      return offHeap.getNativeRowCount(viewHandle);
+      return getNativeRowCount(viewHandle);
     }
 
     @Override
@@ -116,7 +112,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       if (!getDataType().isNestedType()) {
         return 0;
       }
-      return offHeap.getNumChildren(viewHandle);
+      return getNativeNumChildren(viewHandle);
     }
 
     @Override
@@ -3064,13 +3060,14 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   private static native void deleteColumnView(long viewHandle) throws CudfException;
 
-  private static native long[] getNativeDataPointer(long viewHandle) throws CudfException;
+  private static native long getNativeDataAddress(long viewHandle) throws CudfException;
+  private static native long getNativeDataLength(long viewHandle) throws CudfException;
 
-  private static native long[] getNativeOffsetsPointer(long viewHandle) throws CudfException;
+  private static native long getNativeOffsetsAddress(long viewHandle) throws CudfException;
+  private static native long getNativeOffsetsLength(long viewHandle) throws CudfException;
 
-  private static native long[] getNativeOffsetPointers(long viewHandle) throws CudfException;
-
-  private static native long[] getNativeValidPointer(long viewHandle) throws CudfException;
+  private static native long getNativeValidityAddress(long viewHandle) throws CudfException;
+  private static native long getNativeValidityLength(long viewHandle) throws CudfException;
 
   private static native long makeCudfColumnView(int type, int scale, long data, long dataSize, long offsets,
       long valid, int nullCount, int size, long[] childHandle);
@@ -3106,6 +3103,33 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   private static native long getNativeColumnView(long cudfColumnHandle) throws CudfException;
 
   private static native long makeEmptyCudfColumn(int type, int scale);
+
+  private static DeviceMemoryBufferView getDataBuffer(long viewHandle) {
+    long address = getNativeDataAddress(viewHandle);
+    if (address == 0) {
+      return null;
+    }
+    long length = getNativeDataLength(viewHandle);
+    return new DeviceMemoryBufferView(address, length);
+  }
+
+  private static DeviceMemoryBufferView getValidityBuffer(long viewHandle) {
+    long address = getNativeValidityAddress(viewHandle);
+    if (address == 0) {
+      return null;
+    }
+    long length = getNativeValidityLength(viewHandle);
+    return new DeviceMemoryBufferView(address, length);
+  }
+
+  private static DeviceMemoryBufferView getOffsetsBuffer(long viewHandle) {
+    long address = getNativeOffsetsAddress(viewHandle);
+    if (address == 0) {
+      return null;
+    }
+    long length = getNativeOffsetsLength(viewHandle);
+    return new DeviceMemoryBufferView(address, length);
+  }
 
   @Override
   public long getColumnViewAddress() {
@@ -3157,7 +3181,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     if (!type.typeId.isNestedType()) {
       return 0;
     }
-    return offHeap.getNumChildren(getNativeView());
+    return getNativeNumChildren(getNativeView());
   }
 
   /**
@@ -3193,9 +3217,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
      */
     public OffHeapState(long columnHandle) {
       this.columnHandle = columnHandle;
-      this.toClose.add(getNativeDataPointer());
-      this.toClose.add(getNativeValidPointer());
-      this.toClose.add(getNativeOffsetsPointer());
+      this.toClose.add(getData());
+      this.toClose.add(getValid());
+      this.toClose.add(getOffsets());
     }
 
     /**
@@ -3258,19 +3282,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       return ColumnVector.getNativeRowCount(getViewHandle());
     }
 
-    public long getNativeRowCount(long someViewHandle) {
-      return ColumnVector.getNativeRowCount(someViewHandle);
-    }
-
     public long getNativeNullCount() {
       if (viewHandle != 0) {
         return ColumnVector.getNativeNullCount(getViewHandle());
       }
       return getNativeNullCountColumn(columnHandle);
-    }
-
-    public long getNativeNullCount(long someViewHandle) {
-      return ColumnVector.getNativeNullCount(someViewHandle);
     }
 
     private void setNativeNullCount(int nullCount) throws CudfException {
@@ -3279,80 +3295,24 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       setNativeNullCountColumn(columnHandle, nullCount);
     }
 
-    private DeviceMemoryBufferView getNativeValidPointer() {
-      long[] values = ColumnVector.getNativeValidPointer(getViewHandle());
-      if (values[0] == 0) {
-        return null;
-      }
-      return new DeviceMemoryBufferView(values[0], values[1]);
-    }
-
-    private DeviceMemoryBufferView getNativeDataPointer() {
-      long[] values = ColumnVector.getNativeDataPointer(getViewHandle());
-      if (values[0] == 0) {
-        return null;
-      }
-      return new DeviceMemoryBufferView(values[0], values[1]);
-    }
-
-    private DeviceMemoryBufferView getNativeOffsetsPointer() {
-      long[] values = ColumnVector.getNativeOffsetsPointer(getViewHandle());
-      if (values[0] == 0) {
-        return null;
-      }
-      return new DeviceMemoryBufferView(values[0], values[1]);
-    }
-
-    private DeviceMemoryBufferView getNativeOffsetsPointer(long someViewHandle) {
-      long[] values = ColumnVector.getNativeOffsetsPointer(someViewHandle);
-      if (values[0] == 0) {
-        return null;
-      }
-      return new DeviceMemoryBufferView(values[0], values[1]);
-    }
-
-    private DeviceMemoryBufferView getNativeValidPointer(long someViewHandle) {
-      long[] values = ColumnVector.getNativeValidPointer(someViewHandle);
-      if (values[0] == 0) {
-        return null;
-      }
-      return new DeviceMemoryBufferView(values[0], values[1]);
-    }
-
     public DType getNativeType() {
       return DType.fromNative(getNativeTypeId(getViewHandle()));
     }
-
-    public DType getNativeType(long someViewHandle) {
-      return DType.fromNative(getNativeTypeId(someViewHandle));
-    }
-
-    /*public DataType getNativeDataType() {
-      return DataType.fromNative(getNativeTypeId(getViewHandle()), getNativeScale(getViewHandle()))
-    }*/
 
     public int getNativeScale() {
       return getNativeTypeScale(getViewHandle());
     }
 
-    public int getNativeScale(long someViewHandle) {
-      return getNativeTypeScale(someViewHandle);
-    }
-
-    public int getNumChildren(long someViewHandle) {
-      return getNativeNumChildren(someViewHandle);
-    }
-
     public BaseDeviceMemoryBuffer getData() {
-      return getNativeDataPointer();
+      return getDataBuffer(getViewHandle());
     }
 
     public BaseDeviceMemoryBuffer getValid() {
-      return getNativeValidPointer();
+      return getValidityBuffer(getViewHandle());
     }
 
     public BaseDeviceMemoryBuffer getOffsets() {
-      return getNativeOffsetsPointer();
+      return getOffsetsBuffer(getViewHandle());
     }
 
     @Override
