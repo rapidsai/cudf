@@ -42,8 +42,8 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
   std::vector<uint8_t> validity(length);
   std::vector<bool> bool_validity(length);
   std::vector<uint8_t> bool_data_validity;
-  cudf::size_type length_of_indvidual_list = 3;
-  cudf::size_type length_of_list           = length_of_indvidual_list * length;
+  cudf::size_type length_of_individual_list = 3;
+  cudf::size_type length_of_list            = length_of_individual_list * length;
   std::vector<int64_t> list_int64_data(length_of_list);
   std::vector<uint8_t> list_int64_data_validity(length_of_list);
   std::vector<int32_t> list_offsets(length + 1);
@@ -63,8 +63,8 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
                  [](auto val) { return rand() % 7 != 0 ? 1 : 0; });
   std::generate(list_offsets.begin(),
                 list_offsets.end(),
-                [length_of_indvidual_list, val = -1 * length_of_indvidual_list]() mutable {
-                  return val += length_of_indvidual_list;
+                [length_of_individual_list, val = -1 * length_of_individual_list]() mutable {
+                  return val += length_of_individual_list;
                 });
   std::transform(bool_data.cbegin(), bool_data.cend(), bool_data.begin(), [](auto val) {
     return rand() % 7 != 0 ? true : false;
