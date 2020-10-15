@@ -722,21 +722,23 @@ def test_concat_join_no_overlapping_columns_more(
             "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
         }
     )
+    pdf_empty = pd.DataFrame()
 
     gdf4 = gd.from_pandas(pdf4)
     gdf5 = gd.from_pandas(pdf5)
     gdf6 = gd.from_pandas(pdf6)
+    gdf_empty = gd.from_pandas(pdf_empty)
 
     assert_eq(
         pd.concat(
-            [pdf4, pdf5, pdf6],
+            [pdf4, pdf5, pdf6,pdf_empty],
             sort=sort,
             join=join,
             ignore_index=ignore_index,
             axis=axis,
         ),
         gd.concat(
-            [gdf4, gdf5, gdf6],
+            [gdf4, gdf5, gdf6,gdf_empty],
             sort=sort,
             join=join,
             ignore_index=ignore_index,
@@ -746,7 +748,7 @@ def test_concat_join_no_overlapping_columns_more(
 
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
+@pytest.mark.parametrize("join", ["inner", 'outer'])
 @pytest.mark.parametrize("axis", [0, 1])
 def test_concat_join_no_overlapping_columns_empty_df(
     ignore_index, sort, join, axis
