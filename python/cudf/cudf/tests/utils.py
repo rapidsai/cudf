@@ -118,8 +118,8 @@ def assert_neq(left, right, **kwargs):
 def assert_exceptions_equal(
     lfunc,
     rfunc,
-    lfunc_args_and_kwargs,
-    rfunc_args_and_kwargs,
+    lfunc_args_and_kwargs=None,
+    rfunc_args_and_kwargs=None,
     compare_error_message=True,
 ):
     """Compares if two functions ``lfunc`` and ``rfunc`` raise
