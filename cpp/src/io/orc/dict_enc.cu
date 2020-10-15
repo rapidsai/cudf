@@ -204,10 +204,10 @@ __global__ void __launch_bounds__(block_size, 2)
   }
   // Put the indices back in hash order
   for (uint32_t i = 0; i < nnz; i += block_size) {
-    uint32_t ck_row        = 0;
-    uint32_t hash          = 0;
-    uint32_t pos_old       = 0;
-    uint32_t sh            = 0;
+    uint32_t ck_row  = 0;
+    uint32_t hash    = 0;
+    uint32_t pos_old = 0;
+    uint32_t sh      = 0;
     if (i + t < nnz) {
       ck_row  = dict_data[i + t] - start_row;
       hash    = nvstr_init_hash(ck_data[ck_row].ptr, ck_data[ck_row].count);
@@ -218,7 +218,7 @@ __global__ void __launch_bounds__(block_size, 2)
     // behavior for the first row in the hash map that will be used for early duplicate detection
     // The lack of 16-bit atomicMin makes this a bit messy...
     __syncthreads();
-    
+
     uint32_t pos = 0;
     if (i + t < nnz) {
       pos          = (atomicAdd(&s->map.u32[hash >> 1], 1 << sh) >> sh) & 0xffff;
