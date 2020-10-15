@@ -1,4 +1,5 @@
 import re
+from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
 
 import cupy
@@ -189,7 +190,10 @@ def _get_args_kwars_for_assert_exceptions(func_args_and_kwargs):
             elif isinstance(func_args_and_kwargs[0], Mapping):
                 func_kwargs = func_args_and_kwargs[0]
             else:
-                raise ValueError("length 1 func_args_and_kwargs must be either a Sequence or a Mapping")
+                raise ValueError(
+                    "length 1 func_args_and_kwargs must be "
+                    "either a Sequence or a Mapping"
+                )
         elif len(func_args_and_kwargs) == 2:
             func_args, func_kwargs = func_args_and_kwargs
         else:
