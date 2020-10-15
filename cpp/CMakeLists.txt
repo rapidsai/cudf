@@ -314,7 +314,7 @@ endif(JITIFY_USE_CACHE)
 option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 if(PER_THREAD_DEFAULT_STREAM)
     message(STATUS "Using per-thread default stream")
-endif()
+endif(PER_THREAD_DEFAULT_STREAM)
 
 ###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
