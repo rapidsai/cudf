@@ -15,10 +15,11 @@
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
 
 ## Bug Fixes
-- PR #6506 Fix DateTime type value truncation while writing to csv
 
- - PR #6509 Disable JITIFY log printing
- - PR #6519 Fix end-of-string marking boundary condition in subword-tokenizer
+- PR #6506 Fix DateTime type value truncation while writing to csv
+- PR #6509 Disable JITIFY log printing
+- PR #6517 Handle index equality in `Series` and `DataFrame` equality checks
+- PR #6519 Fix end-of-string marking boundary condition in subword-tokenizer
 
 
 # cuDF 0.16.0 (Date TBD)
