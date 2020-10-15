@@ -15,6 +15,7 @@
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
 
 ## Bug Fixes
+- PR #6506 Fix DateTime type value truncation while writing to csv
 
 - PR #6509 Disable JITIFY log printing
 - PR #6517 Handle index equality in `Series` and `DataFrame` equality checks

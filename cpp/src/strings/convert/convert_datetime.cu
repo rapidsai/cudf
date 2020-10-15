@@ -544,8 +544,9 @@ struct datetime_formatter {
 
     // common utility for setting time components from a subsecond unit value
     auto subsecond_fn = [&](int64_t subsecond_base) {
-      timeparts[TP_SUBSECOND] = modulo_time(timestamp, subsecond_base);
-      timestamp               = timestamp / subsecond_base;
+      auto subsecond          = modulo_time(timestamp, subsecond_base);
+      timestamp               = timestamp / subsecond_base - ((timestamp < 0) and (subsecond != 0));
+      timeparts[TP_SUBSECOND] = subsecond;
       timeparts[TP_HOUR]      = modulo_time(scale_time(timestamp, 3600), 24);
       timeparts[TP_MINUTE]    = modulo_time(scale_time(timestamp, 60), 60);
       timeparts[TP_SECOND]    = modulo_time(timestamp, 60);
