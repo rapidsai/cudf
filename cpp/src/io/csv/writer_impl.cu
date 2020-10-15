@@ -303,7 +303,19 @@ struct column_to_strings_fn {
   std::enable_if_t<cudf::is_timestamp<column_type>(), std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
-    std::string format{"%Y-%m-%dT%H:%M:%SZ"};  // same as default for `from_timestamp`
+    std::string format = [&]() {
+      if (std::is_same<cudf::timestamp_s, column_type>::value) {
+        return std::string{"%Y-%m-%dT%H:%M:%SZ"};
+      } else if (std::is_same<cudf::timestamp_ms, column_type>::value) {
+        return std::string{"%Y-%m-%dT%H:%M:%S.%3fZ"};
+      } else if (std::is_same<cudf::timestamp_us, column_type>::value) {
+        return std::string{"%Y-%m-%dT%H:%M:%S.%6fZ"};
+      } else if (std::is_same<cudf::timestamp_ns, column_type>::value) {
+        return std::string{"%Y-%m-%dT%H:%M:%S.%9fZ"};
+      } else {
+        return std::string{"%Y-%m-%d"};
+      }
+    }();
 
     // handle the cases where delimiter / line-terminator can be
     // "-" or ":", in which case they are to be dropped from the format:

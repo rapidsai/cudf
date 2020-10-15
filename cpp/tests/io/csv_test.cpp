@@ -42,6 +42,8 @@
 
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <cudf/strings/convert/convert_datetime.hpp>
+#include <cudf/unary.hpp>
 
 namespace cudf_io = cudf::io;
 
@@ -1244,6 +1246,113 @@ TEST_F(CsvReaderTest, DatesWithWriter)
   const auto result_table = result.tbl->view();
 
   check_timestamp_column(input_table.column(0), result_table.column(0));
+}
+
+TEST_F(CsvReaderTest, DatesStringWithWriter)
+{
+  {
+    auto filepath = temp_env->get_temp_dir() + "DatesStringWithWriter_D.csv";
+
+    auto input_column = column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{-106751, 106751};
+    auto expected_column = column_wrapper<cudf::string_view>{"1677-09-22", "2262-04-11"};
+
+    cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
+
+    write_csv_helper(filepath, input_table, false);
+
+    cudf_io::csv_reader_options in_opts =
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath}).names({"A"}).header(-1);
+    auto result = cudf_io::read_csv(in_opts);
+
+    const auto result_table = result.tbl->view();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column, result_table.column(0));
+  }
+
+  {
+    auto filepath = temp_env->get_temp_dir() + "DatesStringWithWriter_s.csv";
+
+    auto input_column =
+      column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{-9223372036, 9223372036};
+    auto expected_column =
+      column_wrapper<cudf::string_view>{"1677-09-21T00:12:44Z", "2262-04-11T23:47:16Z"};
+
+    cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
+
+    write_csv_helper(filepath, input_table, false);
+
+    cudf_io::csv_reader_options in_opts =
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath}).names({"A"}).header(-1);
+    auto result = cudf_io::read_csv(in_opts);
+
+    const auto result_table = result.tbl->view();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column, result_table.column(0));
+  }
+
+  {
+    auto filepath = temp_env->get_temp_dir() + "DatesStringWithWriter_ms.csv";
+
+    auto input_column =
+      column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>{-9223372036854, 9223372036854};
+    auto expected_column =
+      column_wrapper<cudf::string_view>{"1677-09-21T00:12:43.146Z", "2262-04-11T23:47:16.854Z"};
+
+    cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
+
+    write_csv_helper(filepath, input_table, false);
+
+    cudf_io::csv_reader_options in_opts =
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath}).names({"A"}).header(-1);
+    auto result = cudf_io::read_csv(in_opts);
+
+    const auto result_table = result.tbl->view();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column, result_table.column(0));
+  }
+
+  {
+    auto filepath = temp_env->get_temp_dir() + "DatesStringWithWriter_us.csv";
+
+    auto input_column = column_wrapper<cudf::timestamp_us, cudf::timestamp_us::rep>{
+      -9223372036854775, 9223372036854775};
+    auto cast_column     = cudf::strings::from_timestamps(input_column, "%Y-%m-%dT%H:%M:%S.%fZ");
+    auto expected_column = column_wrapper<cudf::string_view>{"1677-09-21T00:12:43.145225Z",
+                                                             "2262-04-11T23:47:16.854775Z"};
+
+    cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
+
+    write_csv_helper(filepath, input_table, false);
+
+    cudf_io::csv_reader_options in_opts =
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath}).names({"A"}).header(-1);
+    auto result = cudf_io::read_csv(in_opts);
+
+    const auto result_table = result.tbl->view();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column, result_table.column(0));
+  }
+
+  {
+    auto filepath = temp_env->get_temp_dir() + "DatesStringWithWriter_ns.csv";
+
+    auto input_column = column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep>{
+      -9223372036854775807, 9223372036854775807};
+    auto expected_column = column_wrapper<cudf::string_view>{"1677-09-21T00:12:43.145224193Z",
+                                                             "2262-04-11T23:47:16.854775807Z"};
+
+    cudf::table_view input_table(std::vector<cudf::column_view>{input_column});
+
+    write_csv_helper(filepath, input_table, false);
+
+    cudf_io::csv_reader_options in_opts =
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath}).names({"A"}).header(-1);
+    auto result = cudf_io::read_csv(in_opts);
+
+    const auto result_table = result.tbl->view();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column, result_table.column(0));
+  }
 }
 
 TEST_F(CsvReaderTest, FloatingPointWithWriter)
