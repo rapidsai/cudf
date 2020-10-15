@@ -56,7 +56,7 @@ struct timezone_file {
   std::vector<int64_t> transition_times;
   std::vector<uint8_t> ttime_idx;
   std::vector<localtime_type_record_s> ttype;
-  std::vector<uint8_t> posix_tz_string;
+  std::vector<char> posix_tz_string;
 
   auto timecnt() const { return header.timecnt; }
   auto typecnt() const { return header.typecnt; }
@@ -145,211 +145,192 @@ struct timezone_file {
     auto const file_pos = fin.tellg();
     if (file_size - file_pos > 1) {
       posix_tz_string.resize(file_size - file_pos);
-      fin.read(reinterpret_cast<char *>(posix_tz_string.data()), file_size - file_pos);
+      fin.read(posix_tz_string.data(), file_size - file_pos);
     }
   }
 };
 
 struct dst_transition_s {
-  int type;   // Transition type ('J','M' or day)
+  char type;  // Transition type ('J','M' or day)
   int month;  // Month of transition
   int week;   // Week of transition
   int day;    // Day of transition
-  int time;   // Time of day
+  int time;   // Time of day (seconds)
 };
 #pragma pack(pop)
 
 /**
- * @brief Parse a name from the posix TZ string
+ * @brief Moves the parser past a name from the posix TZ string.
  *
- * @param[in] cur current position in TZ string
- * @param[in] end end of TZ string
- *
- * @return position after parsing the name
- **/
-static const uint8_t *posix_parse_name(const uint8_t *cur, const uint8_t *end)
+ * @param cur current position in TZ string
+ * @param end end of TZ string
+ */
+static void posix_skip_name(const char **cur, const char *end)
 {
-  if (cur < end) {
-    int c = *cur;
+  if (*cur < end) {
+    auto c = **cur;
     if (c == '<') {
-      cur++;
-      while (cur < end) {
-        if (*cur++ == '>') { break; }
+      ++(*cur);
+      while (*cur < end) {
+        if (*(*cur)++ == '>') { break; }
       }
     } else {
       while ((c < '0' || c > '9') && (c != '-') && (c != '+') && (c != ',')) {
-        if (++cur >= end) { break; }
-        c = *cur;
+        if (++(*cur) >= end) { break; }
+        c = **cur;
       }
     }
   }
-  return cur;
 }
 
 /**
- * @brief Parse a number from the posix TZ string
+ * @brief Parses a number from the posix TZ string.
  *
- * @param[in] cur current position in TZ string
- * @param[in] end end of TZ string
- * @param[out] pval pointer to result
+ * @param cur current position in TZ string; advances past the parsed offset
+ * @param end end of TZ string
  *
- * @return position after parsing the number
- **/
-static const uint8_t *posix_parse_number(const uint8_t *cur, const uint8_t *end, int64_t *pval)
+ * @return Parsed number
+ */
+static int64_t posix_parse_number(const char **cur, const char *end)
 {
   int64_t v = 0;
-  while (cur < end) {
-    uint32_t c = *cur - '0';
+  while (*cur < end) {
+    auto const c = **cur - '0';
     if (c > 9u) { break; }
     v = v * 10 + c;
-    cur++;
+    (*cur)++;
   }
-  *pval = v;
-  return cur;
+  return v;
 }
 
 /**
- * @brief Parse a UTC offset from the posix TZ string
+ * @brief Parses a UTC offset from the posix TZ string.
  *
- * @param[in] cur current position in TZ string
- * @param[in] end end of TZ string
- * @param[out] putcoff pointer to UTC offset
+ * @param cur current position in TZ string; advances past the parsed offset
+ * @param end end of TZ string
  *
- * @return position after parsing the UTC offset
- **/
-static const uint8_t *posix_parse_offset(const uint8_t *cur, const uint8_t *end, int32_t *putcoff)
+ * @return Parsed offset
+ */
+static int32_t posix_parse_offset(const char **cur, const char *end)
 {
-  int64_t v = 0;
-  if (cur < end) {
-    auto scale = 60 * 60;
-    int sign   = *cur;
-    cur += (sign == '-' || sign == '+');
-    cur = posix_parse_number(cur, end, &v);
+  if (*cur < end) {
+    auto scale      = 60 * 60;
+    auto const sign = **cur;
+    *cur += (sign == '-' || sign == '+');
+    auto v = posix_parse_number(cur, end);
     v *= scale;
-    while (cur < end && scale > 1 && *cur == ':') {
-      int64_t v2;
-      cur = posix_parse_number(cur + 1, end, &v2);
+    while (*cur < end && scale > 1 && **cur == ':') {
+      ++(*cur);
+      auto const v2 = posix_parse_number(cur, end);
       scale /= 60;
       v += v2 * scale;
     }
     if (sign == '-') { v = -v; }
+    return v;
   }
-  *putcoff = v;
-  return cur;
+  return 0;
 }
 
 /**
- * @brief Parse a DST transition time from the posix TZ string
+ * @brief Parses a DST transition time from the posix TZ string.
  *
- * @param[in] cur current position in TZ string
- * @param[in] end end of TZ string
- * @param[out] ptrans pointer to resulting transition
+ * @param cur current position in TZ string; advances past the parsed offset
+ * @param end end of TZ string
  *
- * @return position after parsing the transition
- **/
-static const uint8_t *posix_parse_transition(const uint8_t *cur,
-                                             const uint8_t *end,
-                                             dst_transition_s *ptrans)
+ * @return Parsed transition time
+ */
+static dst_transition_s posix_parse_transition(char const **cur, char const *end)
 {
-  int type     = 0;
-  int month    = 0;
-  int week     = 0;
-  int day      = 0;
-  int32_t time = 2 * 60 * 60;
-  if (cur + 2 <= end && *cur == ',') {
-    int64_t v;
-    type = cur[1];
+  if (*cur + 2 <= end && **cur == ',') {
+    char const type = *cur[1];
+    int month       = 0;
+    int week        = 0;
+    int day         = 0;
     cur += (type == 'M' || type == 'J') ? 2 : 1;
     if (type == 'M') {
-      cur   = posix_parse_number(cur, end, &v);
-      month = (int)v;
-      if (cur < end && *cur == '.') {
-        cur  = posix_parse_number(cur + 1, end, &v);
-        week = (int)v;
-        if (cur < end && *cur == '.') {
-          cur = posix_parse_number(cur + 1, end, &v);
-          day = (int)v;
+      month = posix_parse_number(cur, end);
+      if (*cur < end && **cur == '.') {
+        ++(*cur);
+        week = posix_parse_number(cur, end);
+        if (*cur < end && **cur == '.') {
+          ++(*cur);
+          day = posix_parse_number(cur, end);
         }
       }
     } else {
-      cur = posix_parse_number(cur, end, &v);
-      day = (int)v;
+      day = posix_parse_number(cur, end);
     }
-    if (cur < end && *cur == '/') { cur = posix_parse_offset(cur + 1, end, &time); }
+    int32_t time = 2 * 60 * 60;
+    if (*cur < end && **cur == '/') {
+      ++(*cur);
+      time = posix_parse_offset(cur, end);
+    }
+    return {type, month, week, day, time};
   }
-  ptrans->type  = type;
-  ptrans->month = month;
-  ptrans->week  = week;
-  ptrans->day   = day;
-  ptrans->time  = time;
-  return cur;
+  return {};
 }
 
 /**
- * @brief Check if a year is a leap year
- *
- * @param[in] year year
- *
- * @return 1 if leap year, zero otherwise
- **/
-static int is_leap_year(uint32_t year)
+ * @brief Checks if a given year is a leap year.
+ */
+static bool is_leap_year(uint32_t year)
 {
   return ((year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0)));
 }
 
 /**
- * @brief Return the number of days in a month
- *
- * @param[in] month month (1..12)
- * @param[in] is_leap 1 if leap year
- *
- * @return number of days in the month
- **/
-static int DaysInMonth(int month, int is_leap)
+ * @brief Returns the number of days in a month.
+ */
+static int days_in_month(int month, bool is_leap_year)
 {
-  return (month == 2) ? 28 + is_leap : (30 + ((0x55aa >> month) & 1));
+  CUDF_EXPECTS(month > 0 && month <= 12, "Invalid month");
+
+  if (month == 2) return 28 + is_leap_year;
+  return 30 + ((0b1010110101010 >> month) & 1);
 }
 
 /**
- * @brief Convert a daylight saving transition time to a number of seconds
+ * @brief Converts a daylight saving transition time to a number of seconds.
  *
- * @param[in] trans transition day information
- * @param[in] year year of transition
+ * @param trans transition day information
+ * @param year year of transition
  *
  * @return transition time in seconds from the beginning of the year
- **/
-static int64_t get_transition_time(const dst_transition_s *trans, int year)
+ */
+static int64_t get_transition_time(dst_transition_s const &trans, int year)
 {
-  int64_t t = trans->time;
-  int day   = trans->day;
+  auto day = trans.day;
 
-  if (trans->type == 'M') {
-    int is_leap = is_leap_year(year);
-    int month   = std::min(std::max(trans->month, 1), 12);
-    int week    = std::min(std::max(trans->week, 1), 52);
+  if (trans.type == 'M') {
+    auto const is_leap = is_leap_year(year);
+    auto const month   = std::min(std::max(trans.month, 1), 12);
+    auto week          = std::min(std::max(trans.week, 1), 52);
+
     // Compute day of week
-    int adjustedMonth = (month + 9) % 12 + 1;
-    int adjustedYear  = year - (month <= 2);
-    int dayOfWeek     = ((26 * adjustedMonth - 2) / 10 + 1 + (adjustedYear % 100) +
-                     (adjustedYear % 100) / 4 + (adjustedYear / 400) - 2 * (adjustedYear / 100)) %
-                    7;
-    if (dayOfWeek < 0) { dayOfWeek += 7; }
-    day -= dayOfWeek;
+    auto const adjusted_month = (month + 9) % 12 + 1;
+    auto const adjusted_year  = year - (month <= 2);
+    auto day_of_week =
+      ((26 * adjusted_month - 2) / 10 + 1 + (adjusted_year % 100) + (adjusted_year % 100) / 4 +
+       (adjusted_year / 400) - 2 * (adjusted_year / 100)) %
+      7;
+    if (day_of_week < 0) { day_of_week += 7; }
+    day -= day_of_week;
     if (day < 0) { day += 7; }
-    while (week > 1 && day + 7 < DaysInMonth(month, is_leap)) {
+    while (week > 1 && day + 7 < days_in_month(month, is_leap)) {
       week--;
       day += 7;
     }
-    for (int m = 1; m < month; m++) { day += DaysInMonth(m, is_leap); }
-  } else if (trans->type == 'J') {
+    for (int m = 1; m < month; m++) { day += days_in_month(m, is_leap); }
+  } else if (trans.type == 'J') {
     day += (day > 60 && is_leap_year(year));
   }
-  return t + day * 24 * 60 * 60;
+
+  return trans.time + day * 24 * 60 * 60;
 }
 
 timezone_table build_timezone_transition_table(std::string const &timezone_name)
 {
-  if (timezone_name == "UTC" || !timezone_name.length()) {
+  if (timezone_name == "UTC" || timezone_name.empty()) {
     // Return an empty table for UTC
     return {};
   }
@@ -381,22 +362,20 @@ timezone_table build_timezone_transition_table(std::string const &timezone_name)
   dst_transition_s dst_start{};
   dst_transition_s dst_end{};
   if (tz.posix_tz_string.size() > 0) {
-    const uint8_t *cur = tz.posix_tz_string.data();
-    const uint8_t *end = cur + tz.posix_tz_string.size();
-    cur                = posix_parse_name(cur, end);
-    cur                = posix_parse_offset(cur, end, &future_stdoff);
-    future_stdoff      = -future_stdoff;
+    auto cur = tz.posix_tz_string.data();
+    auto end = cur + tz.posix_tz_string.size();
+    posix_skip_name(&cur, end);
+    future_stdoff = -posix_parse_offset(&cur, end);
     if (cur + 1 < end) {
       // Parse Daylight Saving Time information
-      cur = posix_parse_name(cur, end);
+      posix_skip_name(&cur, end);
       if (cur < end && *cur != ',') {
-        cur           = posix_parse_offset(cur, end, &future_dstoff);
-        future_dstoff = -future_dstoff;
+        future_dstoff = -posix_parse_offset(&cur, end);
       } else {
         future_dstoff = future_stdoff + 60 * 60;
       }
-      cur = posix_parse_transition(cur, end, &dst_start);
-      cur = posix_parse_transition(cur, end, &dst_end);
+      dst_start = posix_parse_transition(&cur, end);
+      dst_end   = posix_parse_transition(&cur, end);
     } else {
       future_dstoff = future_stdoff;
     }
@@ -406,8 +385,8 @@ timezone_table build_timezone_transition_table(std::string const &timezone_name)
   int64_t future_time = 0;
   for (size_t t = 0; t < 800; t += 2) {
     uint32_t const year          = 1970 + ((int)t >> 1);
-    int64_t const dst_start_time = get_transition_time(&dst_start, year);
-    int64_t const dst_end_time   = get_transition_time(&dst_end, year);
+    int64_t const dst_start_time = get_transition_time(dst_start, year);
+    int64_t const dst_end_time   = get_transition_time(dst_end, year);
     auto const dst_idx           = 1 + tz.timecnt() + t;
 
     ttimes[dst_idx]      = future_time + dst_end_time - future_dstoff;
