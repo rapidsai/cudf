@@ -297,11 +297,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         else:
             df.columns = result_columns.unique()
         if ignore_index and not join == "inner":
-<<<<<<< HEAD
             df.index = cudf.RangeIndex(max(len(obj) for obj in objs))
-=======
-            df.index = cudf.RangeIndex(max(len(obj) for obj in objs)
->>>>>>> 2e170682abc97aa906fb54f6653cc83ce1ac4eac
             return df
         elif not match_index:
             return df.sort_index()
