@@ -351,8 +351,8 @@ inclusive_copy_if(device_span<T> input,
   // enum { BLOCK_DIM_X = 8, ITEMS_PER_THREAD = 1 };  // 1b * 8t * 1i
   // enum { BLOCK_DIM_X = 1, ITEMS_PER_THREAD = 4 };  // 2b * 1t * 4i
   enum {  //
-    BLOCK_DIM_X      = 128,
-    ITEMS_PER_THREAD = 32,
+    BLOCK_DIM_X      = 16,
+    ITEMS_PER_THREAD = 16,
     ITEMS_PER_BLOCK  = BLOCK_DIM_X * ITEMS_PER_THREAD
   };
 

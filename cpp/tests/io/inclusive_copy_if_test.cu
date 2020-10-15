@@ -176,4 +176,105 @@ TEST_F(InclusiveCopyIfTest, CanInclusiveScanCopy4)
   }
 }
 
+template <typename T, size_t N>
+constexpr size_t array_size(T (&)[N])
+{
+  return N;
+}
+
+struct matcher_state {
+  uint8_t c;
+  uint32_t prev;
+  uint32_t next;
+  bool is_identity = true;
+
+  static constexpr uint8_t pattern[] = "hand";
+
+  static inline constexpr int find(uint8_t c)
+  {
+    for (uint64_t i = 0; i < array_size(pattern); i++) {
+      if (pattern[i] == c) { return i; }
+    }
+
+    return -1;
+  }
+
+  inline constexpr matcher_state()  //
+    : c(0),                         //
+      prev(0),
+      next(0),
+      is_identity(true)
+  {
+  }
+  inline constexpr matcher_state(uint8_t value)  //
+    : c(value),                                  //                    //
+      prev(0),
+      next(0),
+      is_identity(false)
+  {  //
+    auto m = find(c);
+    prev   = max(0, m);
+    next   = m + 1;
+  }
+
+  inline constexpr matcher_state(uint8_t value, uint32_t prev, uint32_t next)  //
+    : c(value),                                                                //
+      prev(prev),
+      next(next),
+      is_identity(false)
+  {
+  }
+
+  struct scan {
+    inline constexpr matcher_state operator()(  //
+      matcher_state const& lhs,
+      matcher_state const& rhs) const
+    {
+      if (lhs.is_identity) { return rhs; }
+      if (rhs.is_identity) { return lhs; }
+
+      if (lhs.next == rhs.prev) {
+        return matcher_state(lhs.c, lhs.prev, rhs.next);
+      } else {
+        return matcher_state(lhs.c, 0, 0);
+      }
+
+      return {};
+    }
+  };
+
+  struct predicate {
+    inline constexpr bool operator()(matcher_state const& state)
+    {
+      return state.prev == 0 and state.next == array_size(pattern);
+    }
+  };
+};
+
+TEST_F(InclusiveCopyIfTest, CanScanBytes)
+{
+  auto input = std::string("can you give me a hand with this?");
+
+  auto h_input = std::vector<matcher_state>(input.size());
+
+  std::transform(  //
+    input.begin(),
+    input.end(),
+    h_input.begin(),
+    [](uint8_t c) { return matcher_state(c); });
+
+  rmm::device_vector<matcher_state> d_input = h_input;
+
+  auto d_output = inclusive_copy_if<matcher_state>(  //
+    device_span<matcher_state>(d_input),
+    matcher_state::scan(),
+    matcher_state::predicate());
+
+  thrust::host_vector<uint32_t> h_indices = d_output;
+
+  ASSERT_EQ(static_cast<uint32_t>(1), h_indices.size());
+
+  EXPECT_EQ(static_cast<uint32_t>(18), h_indices[0]);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
