@@ -1,3 +1,26 @@
+# cuDF 0.17.0 (Date TBD)
+
+## New Features
+
+## Improvements
+
+- PR #6432 Add dictionary support to `cudf::upper_bound` and `cudf::lower_bound`
+- PR #6461 Replace index type-dispatch call with indexalator in cudf::scatter
+- PR #6415 Support `datetime64` in row-wise op
+- PR #6457 Replace index type-dispatch call with indexalator in `cudf::gather`
+- PR #6413 Replace Python NVTX package with conda-forge source
+- PR #6442 Remove deprecated `DataFrame.from_gpu_matrix`, `DataFrame.to_gpu_matrix`, `DataFrame.add_column` APIs and method parameters
+- PR #6485 Add File IO to cuIO benchmarks
+- PR #6504 Update Java bindings version to 0.17-SNAPSHOT
+- PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
+
+## Bug Fixes
+- PR #6506 Fix DateTime type value truncation while writing to csv
+
+ - PR #6509 Disable JITIFY log printing
+ - PR #6519 Fix end-of-string marking boundary condition in subword-tokenizer
+
+
 # cuDF 0.16.0 (Date TBD)
 
 ## New Features
@@ -127,6 +150,7 @@
 - PR #6400 Removed unused variables
 - PR #6409 Allow CuPy 8.x
 - PR #6407 Add RMM_LOGGING_LEVEL flag to Java docker build
+- PR #6425 Factor out csv parse_options creation to pure function
 - PR #6438 Fetch nvcomp v1.1.0 for JNI build
 - PR #6379 Add list hashing functionality to MD5
 - PR #6498 Add helper method to ColumnBuilder with some nits
