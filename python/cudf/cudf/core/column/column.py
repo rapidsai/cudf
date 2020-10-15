@@ -46,34 +46,6 @@ from cudf.utils.utils import mask_dtype
 
 
 class ColumnBase(Column, Serializable):
-    def __init__(
-        self,
-        data: Buffer,
-        size: int,
-        dtype: Dtype,
-        mask: Buffer = None,
-        offset: int = 0,
-        null_count: int = None,
-        children: Tuple["ColumnBase", ...] = (),
-    ):
-        """
-        Parameters
-        ----------
-        data : Buffer
-        dtype
-            The type associated with the data Buffer
-        mask : Buffer, optional
-        children : tuple, optional
-        """
-        super().__init__(
-            data,
-            size=size,
-            dtype=dtype,
-            mask=mask,
-            offset=offset,
-            children=children,
-        )
-
     def as_frame(self):
         """
         Converts a Column to Frame
