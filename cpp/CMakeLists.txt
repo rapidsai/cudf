@@ -454,7 +454,6 @@ add_library(cudf
             src/unary/null_ops.cu
             src/unary/nan_ops.cu
             src/unary/math_ops.cu
-            src/unary/unary_ops.cuh
             src/io/avro/avro_gpu.cu
             src/io/avro/avro.cpp
             src/io/avro/reader_impl.cu
