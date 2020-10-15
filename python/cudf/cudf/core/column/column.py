@@ -46,7 +46,7 @@ from cudf.utils.utils import mask_dtype
 
 
 class ColumnBase(Column, Serializable):
-    def as_frame(self):
+    def as_frame(self) -> "cudf.core.frame.Frame":
         """
         Converts a Column to Frame
         """
@@ -69,7 +69,7 @@ class ColumnBase(Column, Serializable):
         return result
 
     @property
-    def mask_array_view(self):
+    def mask_array_view(self) -> "cuda.devicearray.DeviceNDArray":
         """
         View the mask as a device array
         """
@@ -86,10 +86,10 @@ class ColumnBase(Column, Serializable):
         )
         return result
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.size
 
-    def to_pandas(self, index=None, **kwargs):
+    def to_pandas(self, index=None, **kwargs) -> "pd.Series":
         if str(self.dtype) in NUMERIC_TYPES and self.null_count == 0:
             pd_series = pd.Series(cupy.asnumpy(self.values))
         else:
@@ -102,14 +102,14 @@ class ColumnBase(Column, Serializable):
         cudf.utils.utils.raise_iteration_error(obj=self)
 
     @property
-    def values_host(self):
+    def values_host(self) -> "np.ndarray":
         """
         Return a numpy representation of the Column.
         """
         return self.data_array_view.copy_to_host()
 
     @property
-    def values(self):
+    def values(self) -> "cupy.ndarray":
         """
         Return a CuPy representation of the Column.
         """
@@ -121,12 +121,8 @@ class ColumnBase(Column, Serializable):
 
         return cupy.asarray(self.data_array_view)
 
-    def clip(self, lo, hi):
-        if is_categorical_dtype(self):
-            input_col = self.astype(self.categories.dtype)
-            return libcudf.replace.clip(input_col, lo, hi).astype(self.dtype)
-        else:
-            return libcudf.replace.clip(self, lo, hi)
+    def clip(self, lo, hi) -> "ColumnBase":
+        return libcudf.replace.clip(self, lo, hi)
 
     def equals(self, other, check_dtypes=False):
         if self is other:
@@ -152,7 +148,6 @@ class ColumnBase(Column, Serializable):
 
     @classmethod
     def _concat(cls, objs, dtype=None):
-
         if len(objs) == 0:
             dtype = pd.api.types.pandas_dtype(dtype)
             if is_categorical_dtype(dtype):
@@ -453,7 +448,7 @@ class ColumnBase(Column, Serializable):
         return len(self) - self.null_count
 
     @property
-    def nullmask(self):
+    def nullmask(self) -> Buffer:
         """The gpu buffer for the null-mask
         """
         if self.nullable:

@@ -9,7 +9,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
 from cudf.core.buffer import Buffer
-from cudf.core.column import column
+from cudf.core.column import ColumnBase, column
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import (
@@ -702,7 +702,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         )
 
 
-class CategoricalColumn(column.ColumnBase):
+class CategoricalColumn(ColumnBase):
     """Implements operations for Columns of Categorical type
     """
 
@@ -951,6 +951,11 @@ class CategoricalColumn(column.ColumnBase):
         Return a CuPy representation of the CategoricalColumn.
         """
         raise NotImplementedError("cudf.Categorical is not yet implemented")
+
+    def clip(self, lo, hi) -> "ColumnBase":
+        return (
+            self.astype(self.categories.dtype).clip(lo, hi).astype(self.dtype)
+        )
 
     @property
     def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
