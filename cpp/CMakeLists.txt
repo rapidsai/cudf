@@ -563,7 +563,7 @@ function(add_library_module NAMESPACE MODULE MODULE_SOURCE_DIRS)
     # nvtx
     if(NOT USE_NVTX)
         target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC NVTX_DISABLE)
-    endif()
+    endif(NOT USE_NVTX)
     # spdlog level
     target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGING_LEVEL}")
     add_dependencies("${NAMESPACE}_${MODULE}" stringify_run)
