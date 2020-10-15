@@ -1328,17 +1328,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeCudfColumnView(
       // data is the second child
 
       cudf::size_type *offsets = reinterpret_cast<cudf::size_type *>(j_offset);
-      cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32, scale}, size + 1, offsets);
-      cudf::column_view data_column(cudf::data_type{cudf::type_id::INT8, scale}, j_data_size, data);
-      ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::STRING, scale}, size, nullptr, valid,
+      cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets);
+      cudf::column_view data_column(cudf::data_type{cudf::type_id::INT8}, j_data_size, data);
+      ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::STRING}, size, nullptr, valid,
                                       j_null_count, 0, {offsets_column, data_column}));
     } else if (n_type == cudf::type_id::LIST) {
       JNI_NULL_CHECK(env, j_offset, "offset is null", 0);
       cudf::jni::native_jpointerArray<cudf::column_view> children(env, j_children);
       JNI_ARG_CHECK(env, (children.size() != 0), "LIST children size is 0", 0);
       cudf::size_type *offsets = reinterpret_cast<cudf::size_type *>(j_offset);
-      cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32, scale}, size + 1, offsets);
-      ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::LIST, scale}, size, nullptr, valid,
+      cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets);
+      ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::LIST}, size, nullptr, valid,
         j_null_count, 0, {offsets_column, *children[0]}));
    } else if (n_type == cudf::type_id::STRUCT) {
      cudf::jni::native_jpointerArray<cudf::column_view> children(env, j_children);
@@ -1346,7 +1346,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeCudfColumnView(
      for (int i = 0; i < children.size(); i++) {
        children_vector[i] = *children[i];
      }
-     ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::STRUCT, scale}, size, nullptr, valid,
+     ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::STRUCT}, size, nullptr, valid,
        j_null_count, 0, children_vector));
    } else {
      ret.reset(new cudf::column_view(n_data_type, size, data, valid, j_null_count));
@@ -1370,8 +1370,8 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeTypeId(JNIEnv *
 }
 
 JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeTypeScale(JNIEnv *env,
-                                                                        jobject j_object,
-                                                                        jlong handle) {
+                                                                           jclass,
+                                                                           jlong handle) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
