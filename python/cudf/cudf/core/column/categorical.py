@@ -105,10 +105,6 @@ class CategoricalAccessor(ColumnMethodsMixin):
         """
         return self._column.ordered
 
-    @property
-    def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
-        return self.codes.data_array_view
-
     def as_ordered(self, **kwargs):
         """
         Set the Categorical to be ordered.
@@ -955,6 +951,10 @@ class CategoricalColumn(column.ColumnBase):
         Return a CuPy representation of the CategoricalColumn.
         """
         raise NotImplementedError("cudf.Categorical is not yet implemented")
+
+    @property
+    def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
+        return self.codes.data_array_view
 
     def unique(self):
         codes = self.as_numerical.unique()
