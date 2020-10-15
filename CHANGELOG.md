@@ -135,7 +135,6 @@
 - PR #6303 Use cudf test dtypes so timedelta tests are deterministic
 - PR #6326 Simplify interal csv/json kernel parameters
 - PR #6308 Add dictionary support to cudf::scatter with scalar
-- PR #6336 Add `join` functionality in cudf concat 
 - PR #6367 Add JNI bindings for byte casting
 - PR #6346 Remove macros from CompactProtocolWriter
 - PR #6312 Conda recipe dependency cleanup
@@ -154,6 +153,7 @@
 - PR #6438 Fetch nvcomp v1.1.0 for JNI build
 - PR #6379 Add list hashing functionality to MD5
 - PR #6498 Add helper method to ColumnBuilder with some nits
+- PR #6336 Add `join` functionality in cudf concat 
 
 ## Bug Fixes
 
