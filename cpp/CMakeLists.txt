@@ -15,6 +15,13 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
+# CMP0104 is a CMake policy that was added in CMake 3.18 that automatically sets the CUDA_ARCHITECTURES 
+# property of all targets to CMAKE_CUDA_ARCHITECTURES which if not set by the user, defaults to the 
+# oldest supported architecture of nvcc (Maxwell, 52 for CUDA 11.0).
+# By setting the policy to OLD it reverts to the pre CMake 3.18 behavior where CUDA_ARCHITECTURES 
+# is not implicitly set, so we can continue to use the nvcc compiler flags as we're currently doing. 
+cmake_policy(SET CMP0104 OLD)
+
 project(CUDA_DATAFRAME VERSION 0.17.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
