@@ -18,11 +18,8 @@
 #include <algorithm>
 #include <fstream>
 
-#include <cudf/utilities/error.hpp>
-
 namespace cudf {
 namespace io {
-// NOTE: Assumes little-endian platform
 
 #define TZIF_MAGIC (('T' << 0) | ('Z' << 8) | ('i' << 16) | ('f' << 24))
 
@@ -350,50 +347,6 @@ static int64_t GetTransitionTime(const dst_transition_s *trans, int year)
   return t + day * 24 * 60 * 60;
 }
 
-/**
- * @brief Returns the gmt offset for a given date
- *
- * @param[in] TODO
- * @param[in] ts ORC timestamp
- *
- * @return gmt offset
- **/
-static int32_t GetGmtOffset(int64_t const *ttimes, int32_t const *offsets, size_t count, int64_t ts)
-{
-  uint32_t dst_cycle   = 800;
-  uint32_t num_entries = (uint32_t)(count - dst_cycle);
-  uint32_t first = 0, last = 0;
-
-  auto const first_transition = ttimes[0];
-  auto const last_transition  = ttimes[num_entries - 1];
-  if (ts <= first_transition) {
-    return offsets[0];
-  } else if (ts <= last_transition) {
-    first = 0;
-    last  = num_entries - 1;
-  } else {
-    // Apply 400-year cycle rule
-    const int64_t k400Years = (365 * 400 + (100 - 3)) * 24 * 60 * 60ll;
-    ts %= k400Years;
-    if (ts < 0) { ts += k400Years; }
-    first = num_entries;
-    last  = num_entries + dst_cycle - 1;
-    if (ts < ttimes[num_entries]) { return offsets[last]; }
-  }
-  // Binary search the table from first to last for ts
-  do {
-    uint32_t mid = first + ((last - first + 1) >> 1);
-    int64_t tmid = ttimes[mid];
-    if (tmid <= ts) {
-      first = mid;
-    } else {
-      if (mid == last) { break; }
-      last = mid;
-    }
-  } while (first < last);
-  return offsets[first];
-}
-
 timezone_table BuildTimezoneTransitionTable(std::string const &timezone_name)
 {
   if (timezone_name == "UTC" || !timezone_name.length()) {
@@ -470,7 +423,7 @@ timezone_table BuildTimezoneTransitionTable(std::string const &timezone_name)
   }
   // Add gmt offset
   timezone_table tz_table;
-  tz_table.gmt_offset = GetGmtOffset(ttimes.data(), offsets.data(), ttimes.size(), ORC_UTC_OFFSET);
+  tz_table.gmt_offset = get_gmt_offset(ttimes, offsets, ORC_UTC_OFFSET);
   tz_table.ttimes     = ttimes;
   tz_table.offsets    = offsets;
 

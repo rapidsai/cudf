@@ -1393,55 +1393,6 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, i
 }
 
 /**
- * @brief Convert seconds from writer timezone to UTC
- *
- * @param[in] s Orc data decoder state
- * @param[in] table Timezone translation table
- * @param[in] ts Local time in seconds
- *
- * @return UTC time in seconds
- *
- */
-static __device__ int32_t GetGmtOffset(int64_t const *ttimes,
-                                       int32_t const *offsets,
-                                       size_t count,
-                                       int64_t ts)
-{
-  uint32_t dst_cycle   = 800;
-  uint32_t num_entries = (uint32_t)(count - dst_cycle);
-  uint32_t first = 0, last = 0;
-
-  auto const first_transition = ttimes[0];
-  auto const last_transition  = ttimes[num_entries - 1];
-  if (ts <= first_transition) {
-    return offsets[0];
-  } else if (ts <= last_transition) {
-    first = 0;
-    last  = num_entries - 1;
-  } else {
-    // Apply 400-year cycle rule
-    const int64_t k400Years = (365 * 400 + (100 - 3)) * 24 * 60 * 60ll;
-    ts %= k400Years;
-    if (ts < 0) { ts += k400Years; }
-    first = num_entries;
-    last  = num_entries + dst_cycle - 1;
-    if (ts < ttimes[num_entries]) { return offsets[last]; }
-  }
-  // Binary search the table from first to last for ts
-  do {
-    uint32_t mid = first + ((last - first + 1) >> 1);
-    int64_t tmid = ttimes[mid];
-    if (tmid <= ts) {
-      first = mid;
-    } else {
-      if (mid == last) { break; }
-      last = mid;
-    }
-  } while (first < last);
-  return offsets[first];
-}
-
-/**
  * @brief Trailing zeroes for decoding timestamp nanoseconds
  *
  **/
@@ -1784,10 +1735,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
               uint32_t nanos  = secondary_val;
               nanos           = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
               if (tz_table.ttimes.size() != 0) {
-                seconds += GetGmtOffset(tz_table.ttimes.begin(),
-                                        tz_table.offsets.begin(),
-                                        tz_table.ttimes.size(),
-                                        seconds);
+                seconds += get_gmt_offset(tz_table.ttimes, tz_table.offsets, seconds);
               }
               if (seconds < 0 && nanos != 0) { seconds -= 1; }
               if (s->chunk.ts_clock_rate)
