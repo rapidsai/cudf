@@ -465,7 +465,7 @@ add_library(cudf
             src/io/json/reader_impl.cu
             src/io/json/json_gpu.cu
             src/io/orc/orc.cpp
-            src/io/orc/timezone.cu
+            src/io/orc/timezone.cpp
             src/io/orc/stripe_data.cu
             src/io/orc/stripe_init.cu
             src/io/orc/stripe_enc.cu
