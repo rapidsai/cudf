@@ -31,7 +31,7 @@ namespace cudf {
 namespace io {
 
 struct timezone_table_view {
-  int32_t gmt_offset;
+  int32_t gmt_offset = 0;
   cudf::detail::device_span<int64_t const> ttimes;
   cudf::detail::device_span<int32_t const> offsets;
 };
@@ -105,7 +105,7 @@ struct timezone_table {
  *
  * @return The transition table (TODO)
  */
-timezone_table BuildTimezoneTransitionTable(std::string const &timezone_name);
+timezone_table build_timezone_transition_table(std::string const &timezone_name);
 
 }  // namespace io
 }  // namespace cudf

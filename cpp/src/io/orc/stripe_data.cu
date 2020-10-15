@@ -1473,11 +1473,9 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
       s->top.data.end_row = min(s->top.data.end_row, s->chunk.start_row + rowidx_stride);
     }
     if (!IS_DICTIONARY(s->chunk.encoding_kind)) { s->chunk.dictionary_start = 0; }
-    if (tz_table.ttimes.size() != 0) {
-      s->top.data.utc_epoch = kORCTimeToUTC - tz_table.gmt_offset;
-    } else {
-      s->top.data.utc_epoch = kORCTimeToUTC;
-    }
+
+    s->top.data.utc_epoch = kORCTimeToUTC - tz_table.gmt_offset;
+
     bytestream_init(&s->bs, s->chunk.streams[CI_DATA], s->chunk.strm_len[CI_DATA]);
     bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
   }

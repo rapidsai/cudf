@@ -36,7 +36,7 @@ struct localtime_type_record_s {
 /**
  * @brief 32-bit TZif header
  */
-struct tzif_header {
+struct timezone_file_header {
   uint32_t magic;          ///< "TZif"
   uint8_t version;         ///< 0:version1, '2':version2, '3':version3
   uint8_t reserved15[15];  ///< unused, reserved for future use
@@ -49,8 +49,8 @@ struct tzif_header {
                      ///< in the body
 };
 
-struct tzif {
-  tzif_header header;
+struct timezone_file {
+  timezone_file_header header;
   bool is_header_from_64bit = false;
 
   std::vector<int64_t> transition_times;
@@ -99,7 +99,7 @@ struct tzif {
                  "Number of transition times is larger than the file size.");
   }
 
-  tzif(std::string const &timezone_name)
+  timezone_file(std::string const &timezone_name)
   {
     using std::ios_base;
 
@@ -292,7 +292,7 @@ static const uint8_t *posix_parse_transition(const uint8_t *cur,
  *
  * @return 1 if leap year, zero otherwise
  **/
-static int IsLeapYear(uint32_t year)
+static int is_leap_year(uint32_t year)
 {
   return ((year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0)));
 }
@@ -318,13 +318,13 @@ static int DaysInMonth(int month, int is_leap)
  *
  * @return transition time in seconds from the beginning of the year
  **/
-static int64_t GetTransitionTime(const dst_transition_s *trans, int year)
+static int64_t get_transition_time(const dst_transition_s *trans, int year)
 {
   int64_t t = trans->time;
   int day   = trans->day;
 
   if (trans->type == 'M') {
-    int is_leap = IsLeapYear(year);
+    int is_leap = is_leap_year(year);
     int month   = std::min(std::max(trans->month, 1), 12);
     int week    = std::min(std::max(trans->week, 1), 52);
     // Compute day of week
@@ -342,24 +342,24 @@ static int64_t GetTransitionTime(const dst_transition_s *trans, int year)
     }
     for (int m = 1; m < month; m++) { day += DaysInMonth(m, is_leap); }
   } else if (trans->type == 'J') {
-    day += (day > 60 && IsLeapYear(year));
+    day += (day > 60 && is_leap_year(year));
   }
   return t + day * 24 * 60 * 60;
 }
 
-timezone_table BuildTimezoneTransitionTable(std::string const &timezone_name)
+timezone_table build_timezone_transition_table(std::string const &timezone_name)
 {
   if (timezone_name == "UTC" || !timezone_name.length()) {
     // Return an empty table for UTC
     return {};
   }
 
-  tzif const tz(timezone_name);
+  timezone_file const tz(timezone_name);
 
   // Allocate transition table, add one entry for ancient rule, and 800 entries for future rules
   // (2 transitions/year)
-  std::vector<int64_t> ttimes(1 + (size_t)tz.timecnt() + 400 * 2);
-  std::vector<int32_t> offsets(1 + (size_t)tz.timecnt() + 400 * 2);
+  std::vector<int64_t> ttimes(1 + tz.timecnt() + cycle_entry_cnt);
+  std::vector<int32_t> offsets(1 + tz.timecnt() + cycle_entry_cnt);
   size_t earliest_std_idx = 0;
   for (size_t t = 0; t < tz.timecnt(); t++) {
     auto const ttime = tz.transition_times[t];
@@ -406,8 +406,8 @@ timezone_table BuildTimezoneTransitionTable(std::string const &timezone_name)
   int64_t future_time = 0;
   for (size_t t = 0; t < 800; t += 2) {
     uint32_t const year          = 1970 + ((int)t >> 1);
-    int64_t const dst_start_time = GetTransitionTime(&dst_start, year);
-    int64_t const dst_end_time   = GetTransitionTime(&dst_end, year);
+    int64_t const dst_start_time = get_transition_time(&dst_start, year);
+    int64_t const dst_end_time   = get_transition_time(&dst_end, year);
     auto const dst_idx           = 1 + tz.timecnt() + t;
 
     ttimes[dst_idx]      = future_time + dst_end_time - future_dstoff;
@@ -419,7 +419,7 @@ timezone_table BuildTimezoneTransitionTable(std::string const &timezone_name)
       std::swap(offsets[dst_idx], offsets[dst_idx + 1]);
     }
 
-    future_time += (365 + IsLeapYear(year)) * 24 * 60 * 60;
+    future_time += (365 + is_leap_year(year)) * 24 * 60 * 60;
   }
   // Add gmt offset
   timezone_table tz_table;

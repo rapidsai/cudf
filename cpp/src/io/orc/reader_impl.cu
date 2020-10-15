@@ -765,7 +765,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       // Setup table for converting timestamp columns from local to UTC time
       auto const tz_table =
         _has_timestamp_column
-          ? BuildTimezoneTransitionTable(selected_stripes[0].second->writerTimezone)
+          ? build_timezone_transition_table(selected_stripes[0].second->writerTimezone)
           : timezone_table{};
 
       std::vector<column_buffer> out_buffers;
