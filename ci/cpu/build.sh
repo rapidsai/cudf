@@ -15,6 +15,10 @@ export HOME=$WORKSPACE
 # Determine CUDA release version
 export CUDA_REL=${CUDA_VERSION%.*}
 
+# Setup 'gpuci_retry' for build retries (results in 2 total attempts)
+export GPUCI_RETRY_MAX=1
+export GPUCI_RETRY_SLEEP=30
+
 # Switch to project root; also root of repo checkout
 cd $WORKSPACE
 
@@ -52,22 +56,22 @@ conda config --set ssl_verify False
 ################################################################################
 
 gpuci_logger "Build conda pkg for libcudf"
-conda build conda/recipes/libcudf
+gpuci_retry conda build conda/recipes/libcudf
 
 gpuci_logger "Build conda pkg for libcudf_kafka"
-conda build conda/recipes/libcudf_kafka
+gpuci_retry conda build conda/recipes/libcudf_kafka
 
 gpuci_logger "Build conda pkg for cudf"
-conda build conda/recipes/cudf --python=$PYTHON
+gpuci_retry conda build conda/recipes/cudf --python=$PYTHON
 
 gpuci_logger "Build conda pkg for dask-cudf"
-conda build conda/recipes/dask-cudf --python=$PYTHON
+gpuci_retry conda build conda/recipes/dask-cudf --python=$PYTHON
 
 gpuci_logger "Build conda pkg for cudf_kafka"
-conda build conda/recipes/cudf_kafka --python=$PYTHON
+gpuci_retry conda build conda/recipes/cudf_kafka --python=$PYTHON
 
 gpuci_logger "Build conda pkg for custreamz"
-conda build conda/recipes/custreamz --python=$PYTHON
+gpuci_retry conda build conda/recipes/custreamz --python=$PYTHON
 
 ################################################################################
 # UPLOAD - Conda packages
