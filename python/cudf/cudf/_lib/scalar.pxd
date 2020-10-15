@@ -8,8 +8,7 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 
 cdef class Scalar:
     cdef _ScalarUptrWrapper uptr
-    cdef bool _host_value_current
-    cdef bool _device_value_current
+
     cdef object _host_value
     cdef object _host_dtype
 

@@ -96,9 +96,11 @@ cdef class Scalar:
         # the codepath for setting the device value later
         self._host_dtype = dtype
 
-        # do not copy to device until needed
-        self._host_value_current = True
-        self._device_value_current = False
+    def _host_value_current(self):
+        return self._host_value is not None
+
+    def _device_value_current(self):
+        return self.uptr._device_uptr != NULL
 
     def set_device_value(self, value, dtype):
         valid = not is_null_host_scalar(value)
@@ -154,12 +156,11 @@ cdef class Scalar:
         """
         Returns a host copy of the underlying device scalar.
         """
-        if self._host_value_current:
+        if self._host_value_current():
             return self._host_value
         else:
             result = self.get_device_value()
             self._host_value = result
-            self._host_value_current = True
             return result
 
     def _sync(self):
@@ -167,17 +168,16 @@ cdef class Scalar:
         If the cache is not synched, copy either the device or host value
         to the host or device respectively. If cache is valid, do nothing
         """
-        if self._host_value_current and self._device_value_current:
+        if self._host_value_current() and self._device_value_current():
             return
-        elif self._host_value_current and not self._device_value_current:
+        elif self._host_value_current() and not self._device_value_current():
             self.set_device_value(self._host_value, self._host_dtype)
-        elif self._device_value_current and not self._host_value_current:
+        elif self._device_value_current() and not self._host_value_current():
             self._host_value = self.get_device_value()
 
     cdef _ScalarUptrWrapper get_uptr(self):
-        if not self._device_value_current:
+        if not self._device_value_current():
             self.set_device_value(self._host_value, self._host_dtype)
-            self._device_value_current = True
         return self.uptr
 
     cpdef bool is_valid(self):
@@ -198,9 +198,9 @@ cdef class Scalar:
         Construct a Scalar object from a unique_ptr<cudf::scalar>.
         """
         cdef Scalar s = Scalar.__new__(Scalar)
+        s._host_value = None
         s.uptr._device_uptr = move(ptr)
-        s._device_value_current = True
-        s._host_value_current = False
+
         return s
 
 
