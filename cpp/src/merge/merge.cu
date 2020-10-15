@@ -19,6 +19,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/merge.hpp>
+#include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/strings/detail/merge.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -443,10 +444,16 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
   CUDF_EXPECTS(key_cols.size() == column_order.size(),
                "Mismatched size between key_cols and column_order");
 
+  // This utility will ensure all corresponding dictionary columns have matching keys.
+  // It will return any new dictionary columns created as well as updated table_views.
+  auto matched = cudf::dictionary::detail::match_dictionaries(
+    tables_to_merge, rmm::mr::get_current_device_resource(), stream);
+  auto merge_tables = matched.second;
+
   // A queue of (table view, table) pairs
   std::priority_queue<merge_queue_item> merge_queue;
   // The table pointer is null if we do not own the table (input tables)
-  std::for_each(tables_to_merge.begin(), tables_to_merge.end(), [&](auto const& table) {
+  std::for_each(merge_tables.begin(), merge_tables.end(), [&](auto const& table) {
     if (table.num_rows() > 0) merge_queue.emplace(table, table_ptr_type());
   });
 

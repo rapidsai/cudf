@@ -60,11 +60,11 @@ std::unique_ptr<column> merge(dictionary_column_view const& lcol,
                     });
 
   // build dictionary; the validity mask is updated by the caller
-  return make_dictionary_column(std::make_unique<column>(lcol.keys(), stream, mr),
-                                std::move(indices_column),
-                                lcol.has_nulls() ? copy_bitmask(lcol.parent(), stream, mr)
-                                                 : copy_bitmask(rcol.parent(), stream, mr),
-                                lcol.null_count() + rcol.null_count());
+  return make_dictionary_column(
+    std::make_unique<column>(lcol.keys(), stream, mr),
+    std::move(indices_column),
+    rmm::device_buffer{lcol.has_nulls() || rcol.has_nulls() ? size_t{merged_size} : 0, stream, mr},
+    lcol.null_count() + rcol.null_count());
 }
 
 }  // namespace detail
