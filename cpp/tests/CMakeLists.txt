@@ -344,11 +344,11 @@ ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 ConfigureTest(CSV_TEST_NEW "${CSV_TEST_NEW_SRC}")
 
 ###################################################################################################
-# - inclusive_scan_copy_if tests ------------------------------------------------------------------
-set(INCLUSIVE_SCAN_COPY_IF_TEST_SRC
-"${CMAKE_CURRENT_SOURCE_DIR}/io/inclusive_scan_copy_if_test.cu")
+# - inclusive_copy_if tests -----------------------------------------------------------------------
+set(INCLUSIVE_COPY_IF_TEST_SRC
+"${CMAKE_CURRENT_SOURCE_DIR}/io/inclusive_copy_if_test.cu")
 
-ConfigureTest(INCLUSIVE_SCAN_COPY_IF_TEST "${INCLUSIVE_SCAN_COPY_IF_TEST_SRC}")
+ConfigureTest(INCLUSIVE_COPY_IF_TEST "${INCLUSIVE_COPY_IF_TEST_SRC}")
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------

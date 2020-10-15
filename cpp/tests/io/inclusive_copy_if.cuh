@@ -24,7 +24,7 @@ template <typename T_,
           typename PredicateOp_,
           int BLOCK_DIM_X_,
           int ITEMS_PER_THREAD_>
-struct InclusiveScanCopyIfPolicy {
+struct InclusiveCopyIfPolicy {
   static constexpr int BLOCK_DIM_X      = BLOCK_DIM_X_;
   static constexpr int ITEMS_PER_THREAD = ITEMS_PER_THREAD_;
   using T                               = T_;
@@ -342,10 +342,10 @@ template <typename T,
           typename ScanOp,
           typename PredicateOp>
 rmm::device_vector<uint32_t>  //
-inclusive_scan_copy_if(device_span<T> input,
-                       ScanOp scan_op,
-                       PredicateOp predicate_op,
-                       cudaStream_t stream = 0)
+inclusive_copy_if(device_span<T> input,
+                  ScanOp scan_op,
+                  PredicateOp predicate_op,
+                  cudaStream_t stream = 0)
 {
   // enum { BLOCK_DIM_X = 1, ITEMS_PER_THREAD = 8 };  // 1b * 1t * 8i
   // enum { BLOCK_DIM_X = 8, ITEMS_PER_THREAD = 1 };  // 1b * 8t * 1i
@@ -356,7 +356,7 @@ inclusive_scan_copy_if(device_span<T> input,
     ITEMS_PER_BLOCK  = BLOCK_DIM_X * ITEMS_PER_THREAD
   };
 
-  using Policy = InclusiveScanCopyIfPolicy<T, ScanOp, PredicateOp, BLOCK_DIM_X, ITEMS_PER_THREAD>;
+  using Policy = InclusiveCopyIfPolicy<T, ScanOp, PredicateOp, BLOCK_DIM_X, ITEMS_PER_THREAD>;
 
   cudf::detail::grid_1d grid(input.size(), BLOCK_DIM_X, ITEMS_PER_THREAD);
   auto num_temp_values = grid.num_blocks + 1;
