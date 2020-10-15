@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import re
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
@@ -199,6 +201,17 @@ def _get_args_kwars_for_assert_exceptions(func_args_and_kwargs):
                     "either a Sequence or a Mapping"
                 )
         elif len(func_args_and_kwargs) == 2:
+            if not isinstance(func_args_and_kwargs[0], Sequence):
+                raise ValueError(
+                    "Positional argument at 1st position of "
+                    "func_args_and_kwargs should be a sequence."
+                )
+            if not isinstance(func_args_and_kwargs[1], Mapping):
+                raise ValueError(
+                    "Key-word argument at 2nd position of "
+                    "func_args_and_kwargs should be a dictionary mapping."
+                )
+
             func_args, func_kwargs = func_args_and_kwargs
         else:
             raise ValueError("func_args_and_kwargs must be of length 1 or 2")
