@@ -136,11 +136,15 @@ def assert_exceptions_equal(
     lfunc_args_and_kwargs : tuple, default None
         Tuple containing positional arguments at first position,
         and key-word arguments at second position that need to be passed into
-        ``lfunc``.
+        ``lfunc``. If the tuple is of length 1, it must either contain
+        positional arguments(as a Sequence) or key-word arguments(as a Mapping
+        dict).
     rfunc_args_and_kwargs : tuple, default None
         Tuple containing positional arguments at first position,
         and key-word arguments at second position that need to be passed into
-        ``rfunc``.
+        ``rfunc``. If the tuple is of length 1, it must either contain
+        positional arguments(as a Sequence) or key-word arguments(as a Mapping
+        dict).
     compare_error_message : boolean, default True
         Whether to compare the error messages raised
         when calling both ``lfunc`` and
