@@ -116,61 +116,56 @@ def assert_neq(left, right, **kwargs):
 
 
 def assert_exceptions_equal(
-lfunc,
-rfunc,
-lfunc_args_and_kwargs,
-rfunc_args_and_kwargs,
-compare_error_message
+    lfunc,
+    rfunc,
+    lfunc_args_and_kwargs,
+    rfunc_args_and_kwargs,
     compare_error_message=True,
 ):
-    """Compares if two functions raise same exception or not.
+    """Compares if two functions ``lfunc`` and ``rfunc`` raise
+    same exception or not.
 
     Parameters
     ----------
-    reference_func : callable
+    lfunc : callable
         A callable function to obtain the Exception.
-    actual_func : callable
+    rfunc : callable
         A callable function to compare the Exception
-        obtained by calling ``reference_func``.
-    reference_func_arg_tuple : tuple, default None
+        obtained by calling ``rfunc``.
+    lfunc_args_and_kwargs : tuple, default None
         Tuple containing positional arguments at first position,
         and key-word arguments at second position that need to be passed into
-        ``reference_func``.
-    actual_func_arg_tuple : tuple, default None
+        ``lfunc``.
+    rfunc_args_and_kwargs : tuple, default None
         Tuple containing positional arguments at first position,
         and key-word arguments at second position that need to be passed into
-        ``actual_func``.
+        ``rfunc``.
     compare_error_message : boolean, default True
         Whether to compare the error messages raised
-        when calling both ``reference_func`` and
-        ``actual_func`` or not.
+        when calling both ``lfunc`` and
+        ``rfunc`` or not.
 
     Returns
     -------
     None
-        If exceptions raised by ``reference_func`` and
-        ``actual_func`` match.
+        If exceptions raised by ``lfunc`` and
+        ``rfunc`` match.
 
     Raises
     ------
     AssertionError
-        If call to ``reference_func`` doesn't raise any Exception.
+        If call to ``lfunc`` doesn't raise any Exception.
     """
 
-    if reference_func_arg_tuple is None:
-        reference_func_args = []
-        reference_func_kwargs = {}
-    else:
-        reference_func_args, reference_func_kwargs = reference_func_arg_tuple
-
-    if actual_func_arg_tuple is None:
-        actual_func_args = []
-        actual_func_kwargs = {}
-    else:
-        actual_func_args, actual_func_kwargs = actual_func_arg_tuple
+    lfunc_args, lfunc_kwargs = _get_args_kwars_for_assert_exceptions(
+        lfunc_args_and_kwargs
+    )
+    rfunc_args, rfunc_kwargs = _get_args_kwars_for_assert_exceptions(
+        rfunc_args_and_kwargs
+    )
 
     try:
-        reference_func(*reference_func_args, **reference_func_kwargs)
+        lfunc(*lfunc_args, **lfunc_kwargs)
     except KeyboardInterrupt:
         raise
     except Exception as e:
@@ -178,9 +173,22 @@ compare_error_message
             type(e),
             match=re.escape(str(e)) if compare_error_message is True else None,
         ):
-            actual_func(*actual_func_args, **actual_func_kwargs)
+            rfunc(*rfunc_args, **rfunc_kwargs)
     else:
         raise AssertionError("Expected to fail with an Exception.")
+
+
+def _get_args_kwars_for_assert_exceptions(func_args_and_kwargs):
+    if func_args_and_kwargs is None:
+        return [], {}
+    else:
+        if len(func_args_and_kwargs) == 1:
+            func_args, func_kwargs = func_args_and_kwargs[0], {}
+        elif len(func_args_and_kwargs) == 2:
+            func_args, func_kwargs = func_args_and_kwargs
+        else:
+            raise ValueError("func_args_and_kwargs must be of length 1 or 2")
+        return func_args, func_kwargs
 
 
 def gen_rand(dtype, size, **kwargs):

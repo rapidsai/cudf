@@ -7764,4 +7764,4 @@ def test_dataframe_error_equality(df1, df2, op):
     gdf1 = gd.from_pandas(df1)
     gdf2 = gd.from_pandas(df2)
 
-    assert_exceptions_equal(op, op, ([df1, df2], {}), ([gdf1, gdf2], {}))
+    assert_exceptions_equal(op, op, ([df1, df2],), ([gdf1, gdf2],))
