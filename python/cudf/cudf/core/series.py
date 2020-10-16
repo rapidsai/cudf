@@ -1071,6 +1071,12 @@ class Series(Frame, Serializable):
 
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
+            if fn in cudf.utils.utils._EQUALITY_OPS:
+                if not self.index.equals(other.index):
+                    raise ValueError(
+                        "Can only compare identically-labeled "
+                        "Series objects"
+                    )
             lhs, rhs = _align_indices([self, other], allow_non_unique=True)
         else:
             lhs, rhs = self, other

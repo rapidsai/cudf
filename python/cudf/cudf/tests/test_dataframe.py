@@ -22,6 +22,7 @@ from cudf.tests.utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_eq,
+    assert_exceptions_equal,
     does_not_raise,
     gen_rand,
 )
@@ -7732,3 +7733,35 @@ def test_equals_dtypes():
     expect = lhs.to_pandas().equals(rhs.to_pandas())
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "df1",
+    [
+        pd.DataFrame({"a": [10, 11, 12]}, index=["a", "b", "z"]),
+        pd.DataFrame({"z": ["a"]}),
+    ],
+)
+@pytest.mark.parametrize(
+    "df2",
+    [
+        pd.DataFrame(),
+        pd.DataFrame({"a": ["a", "a", "c", "z", "A"], "z": [1, 2, 3, 4, 5]}),
+    ],
+)
+@pytest.mark.parametrize(
+    "op",
+    [
+        operator.eq,
+        operator.ne,
+        operator.lt,
+        operator.gt,
+        operator.le,
+        operator.ge,
+    ],
+)
+def test_dataframe_error_equality(df1, df2, op):
+    gdf1 = gd.from_pandas(df1)
+    gdf2 = gd.from_pandas(df2)
+
+    assert_exceptions_equal(op, op, ([df1, df2],), ([gdf1, gdf2],))
