@@ -50,34 +50,21 @@ std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_table
 
   std::vector<std::unique_ptr<cudf::column>> columns;
 
-  std::transform(int64_data.cbegin(), int64_data.cend(), int64_data.begin(), [](auto val) {
-    return rand() % 500000;
-  });
-  std::transform(
-    list_int64_data.cbegin(), list_int64_data.cend(), list_int64_data.begin(), [](auto val) {
-      return rand() % 500000;
+  std::generate(int64_data.begin(), int64_data.end(), []() { return rand() % 500000; });
+  std::generate(list_int64_data.begin(), list_int64_data.end(), []() { return rand() % 500000; });
+  auto validity_generator = []() { return rand() % 7 != 0; };
+  std::generate(
+    list_int64_data_validity.begin(), list_int64_data_validity.end(), validity_generator);
+  // cudf::size_type n = 0;
+  std::generate(
+    list_offsets.begin(), list_offsets.end(), [length_of_individual_list, n = 0]() mutable {
+      return (n++) * length_of_individual_list;
     });
-  std::transform(list_int64_data_validity.cbegin(),
-                 list_int64_data_validity.cend(),
-                 list_int64_data_validity.begin(),
-                 [](auto val) { return rand() % 7 != 0 ? 1 : 0; });
-  std::generate(list_offsets.begin(),
-                list_offsets.end(),
-                [length_of_individual_list, val = -1 * length_of_individual_list]() mutable {
-                  return val += length_of_individual_list;
-                });
-  std::transform(bool_data.cbegin(), bool_data.cend(), bool_data.begin(), [](auto val) {
-    return rand() % 7 != 0 ? true : false;
-  });
-  std::transform(string_data.cbegin(), string_data.cend(), string_data.begin(), [](auto val) {
-    return rand() % 7 != 0 ? "CUDF" : "Rocks";
-  });
-  std::transform(validity.cbegin(), validity.cend(), validity.begin(), [](auto val) {
-    return rand() % 7 != 0 ? 1 : 0;
-  });
-  std::transform(bool_validity.cbegin(), bool_validity.cend(), bool_validity.begin(), [](auto val) {
-    return rand() % 7 != 0 ? true : false;
-  });
+  std::generate(bool_data.begin(), bool_data.end(), validity_generator);
+  std::generate(
+    string_data.begin(), string_data.end(), []() { return rand() % 7 != 0 ? "CUDF" : "Rocks"; });
+  std::generate(validity.begin(), validity.end(), validity_generator);
+  std::generate(bool_validity.begin(), bool_validity.end(), validity_generator);
 
   std::transform(bool_validity.cbegin(),
                  bool_validity.cend(),
@@ -248,9 +235,8 @@ TYPED_TEST(ToArrowTestDurationsTest, DurationTable)
 
 TEST_F(ToArrowTest, NestedList)
 {
-  auto valids = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return i % 3 != 0 ? true : false; });
-  auto col = cudf::test::lists_column_wrapper<int64_t>(
+  auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 3 != 0; });
+  auto col    = cudf::test::lists_column_wrapper<int64_t>(
     {{{{{1, 2}, valids}, {{3, 4}, valids}, {5}}, {{6}, {{7, 8, 9}, valids}}}, valids});
   cudf::table_view input_view({col});
 

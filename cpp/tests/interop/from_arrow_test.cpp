@@ -131,9 +131,8 @@ TYPED_TEST(FromArrowTestDurationsTest, DurationTable)
 
 TEST_F(FromArrowTest, NestedList)
 {
-  auto valids = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return i % 3 != 0 ? true : false; });
-  auto col = cudf::test::lists_column_wrapper<int64_t>(
+  auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 3 != 0; });
+  auto col    = cudf::test::lists_column_wrapper<int64_t>(
     {{{{{1, 2}, valids}, {{3, 4}, valids}, {5}}, {{6}, {{7, 8, 9}, valids}}}, valids});
   cudf::table_view expected_table_view({col});
 
