@@ -72,6 +72,9 @@ TYPED_TEST(UnaryLogicalOpsTest, SimpleLogicalNotWithNullMask)
   cudf::test::fixed_width_column_wrapper<bool> expected{{false, true, false, false}, {1, 0, 1, 1}};
   auto output = cudf::unary_operation(input, cudf::unary_op::NOT);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
+  auto encoded = cudf::dictionary::encode(input);
+  output       = cudf::unary_operation(encoded->view(), cudf::unary_op::NOT);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 TYPED_TEST(UnaryLogicalOpsTest, EmptyLogicalNot)
