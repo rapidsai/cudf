@@ -13,6 +13,7 @@
 - PR #6485 Add File IO to cuIO benchmarks
 - PR #6504 Update Java bindings version to 0.17-SNAPSHOT
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
+- RP #6546 Cleaning up `for` loops with `make_counting_transform_iterator`
 
 ## Bug Fixes
 - PR #6506 Fix DateTime type value truncation while writing to csv
