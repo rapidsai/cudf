@@ -37,7 +37,9 @@ gpuci_logger "Check versions..."
 python --version
 $CC --version
 $CXX --version
-conda list
+conda info
+conda config --show-sources
+conda list --show-channel-urls
 
 
 #libcudf Doxygen build

@@ -86,7 +86,9 @@ logger "Check versions..."
 python --version
 $CC --version
 $CXX --version
-conda list
+conda info
+conda config --show-sources
+conda list --show-channel-urls
 
 ################################################################################
 # BUILD - Build libcudf, cuDF and dask_cudf from source
