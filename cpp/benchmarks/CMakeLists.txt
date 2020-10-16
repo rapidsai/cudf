@@ -15,7 +15,8 @@ function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
     add_executable(${CMAKE_BENCH_NAME}
                    ${CMAKE_BENCH_SRC}
                    "${CMAKE_CURRENT_SOURCE_DIR}/synchronization/synchronization.cpp"
-                   "${CMAKE_SOURCE_DIR}/tests/utilities/base_fixture.cpp")
+                   "${CMAKE_SOURCE_DIR}/tests/utilities/base_fixture.cpp"
+                   "${CMAKE_SOURCE_DIR}/benchmarks/io/cuio_benchmark_common.cpp")
     set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_link_libraries(${CMAKE_BENCH_NAME} benchmark benchmark_main pthread cudf_datagen cudf)
     set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
