@@ -28,11 +28,6 @@ gpuci_logger "Activate conda env..."
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
 
-# TODO: Move installs to docs-build-env meta package
-gpuci_conda_retry install -c anaconda beautifulsoup4 jq
-pip install sphinx-markdown-tables
-
-
 gpuci_logger "Check versions..."
 python --version
 $CC --version
