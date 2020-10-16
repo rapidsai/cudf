@@ -82,6 +82,22 @@ TEST_F(MergeDictionaryTest, Merge2Columns)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_1, decoded1->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_2, decoded2->view());
+
+  left_view  = cudf::table_view{{left1->view(), left_w2}};
+  right_view = cudf::table_view{{right1->view(), right_w2}};
+  result     = cudf::merge({left_view, right_view}, key_cols, column_order, null_precedence);
+  decoded1   = cudf::dictionary::decode(result->get_column(0).view());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_1, decoded1->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_2, result->get_column(1).view());
+
+  left_view  = cudf::table_view{{left_w1, left2->view()}};
+  right_view = cudf::table_view{{right_w1, right2->view()}};
+  result     = cudf::merge({left_view, right_view}, key_cols, column_order, null_precedence);
+  decoded2   = cudf::dictionary::decode(result->get_column(1).view());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_1, result->get_column(0).view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_2, decoded2->view());
 }
 
 TEST_F(MergeDictionaryTest, WithNulls)
@@ -115,5 +131,21 @@ TEST_F(MergeDictionaryTest, WithNulls)
     {1000, 1000, 800, 1000, 800, 800, 400, 0, 0, 500, 500, 100, 100},
     {1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_1, decoded1->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_2, decoded2->view());
+
+  left_view  = cudf::table_view{{left1->view(), left_w2}};
+  right_view = cudf::table_view{{right1->view(), right_w2}};
+  result     = cudf::merge({left_view, right_view}, key_cols, column_order, null_precedence);
+  decoded1   = cudf::dictionary::decode(result->get_column(0).view());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_1, decoded1->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_2, result->get_column(1).view());
+
+  left_view  = cudf::table_view{{left_w1, left2->view()}};
+  right_view = cudf::table_view{{right_w1, right2->view()}};
+  result     = cudf::merge({left_view, right_view}, key_cols, column_order, null_precedence);
+  decoded2   = cudf::dictionary::decode(result->get_column(1).view());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_1, result->get_column(0).view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_2, decoded2->view());
 }
