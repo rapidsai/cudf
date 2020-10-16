@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <rmm/thrust_rmm_allocator.h>
 #include <cudf/copying.hpp>
 #include <cudf/detail/merge.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -24,6 +23,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 
+#include <rmm/thrust_rmm_allocator.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/merge.h>
@@ -32,9 +32,9 @@
 #include <queue>
 #include <vector>
 
-namespace {  // anonym.
-
-using namespace cudf;
+namespace cudf {
+namespace detail {
+namespace {
 
 using detail::side;
 using index_type = detail::index_type;
@@ -225,15 +225,11 @@ rmm::device_vector<index_type> generate_merged_indices(
 
 }  // namespace
 
-namespace cudf {
-namespace detail {
-// generate merged column
-// given row order of merged tables
-//(ordered according to indices of key_cols)
-// and the 2 columns to merge
-//
+/**
+ * @brief Generate merged column given row-order of merged tables
+ *  (ordered according to indices of key_cols) and the 2 columns to merge.
+ */
 struct column_merger {
-  //  using index_vector = rmm::device_vector<index_type>;
   explicit column_merger(
     index_vector const& row_order,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
