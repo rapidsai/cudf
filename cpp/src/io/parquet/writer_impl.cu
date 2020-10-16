@@ -920,8 +920,8 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
           num_dictionaries++;
         }
       }
-      ck->has_dictionary                                           = dict_enable;
-      state.md.row_groups[global_r].columns[i].meta_data.type      = state.md.schema[1 + i].type;
+      ck->has_dictionary                                      = dict_enable;
+      state.md.row_groups[global_r].columns[i].meta_data.type = parquet_columns[i].physical_type();
       state.md.row_groups[global_r].columns[i].meta_data.encodings = {Encoding::PLAIN,
                                                                       Encoding::RLE};
       if (dict_enable) {

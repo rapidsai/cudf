@@ -23,6 +23,7 @@ namespace io {
 namespace parquet {
 namespace gpu {
 // Minimal thrift implementation for parsing page headers
+// https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md
 
 static const __device__ __constant__ uint8_t g_list2struct[16] = {0,
                                                                   1,
@@ -51,6 +52,13 @@ struct byte_stream_s {
   ColumnChunkDesc ck;
 };
 
+/**
+ * @brief Get current byte from the byte stream
+ *
+ * @param[in] bs Byte stream
+ *
+ * @return Current byte pointed to by the byte stream
+ */
 inline __device__ unsigned int getb(byte_stream_s *bs)
 {
   return (bs->cur < bs->end) ? *bs->cur++ : 0;
@@ -62,6 +70,17 @@ inline __device__ void skip_bytes(byte_stream_s *bs, size_t bytecnt)
   bs->cur += bytecnt;
 }
 
+/**
+ * @brief Decode unsigned integer from a byte stream using VarInt encoding
+ *
+ * Concatenate least significant 7 bits of each byte to form a 32 bit
+ * integer. Most significant bit of each byte indicates if more bytes
+ * are to be used to form the number.
+ *
+ * @param[in] bs Byte stream
+ *
+ * @return Decoded 32 bit integer
+ */
 __device__ uint32_t get_u32(byte_stream_s *bs)
 {
   uint32_t v = 0, l = 0, c;
@@ -73,13 +92,24 @@ __device__ uint32_t get_u32(byte_stream_s *bs)
   return v;
 }
 
+/**
+ * @brief Decode signed integer from a byte stream using zigzag encoding
+ *
+ * The number n encountered in a byte stream translates to
+ * -1^(n%2) * ceil(n/2), with the exception of 0 which remains the same.
+ * i.e. 0, 1, 2, 3, 4, 5 etc convert to 0, -1, 1, -2, 2 respectively.
+ *
+ * @param[in] bs Byte stream
+ *
+ * @return Decoded 32 bit integer
+ */
 inline __device__ int32_t get_i32(byte_stream_s *bs)
 {
   uint32_t u = get_u32(bs);
   return (int32_t)((u >> 1u) ^ -(int32_t)(u & 1));
 }
 
-__device__ void skip_struct_field(byte_stream_s *bs, int t)
+__device__ void skip_struct_field(byte_stream_s *bs, int field_type)
 {
   int struct_depth = 0;
   int rep_cnt      = 0;
@@ -88,16 +118,16 @@ __device__ void skip_struct_field(byte_stream_s *bs, int t)
     if (rep_cnt != 0) {
       rep_cnt--;
     } else if (struct_depth != 0) {
-      int c;
+      unsigned int c;
       do {
         c = getb(bs);
         if (!c) --struct_depth;
       } while (!c && struct_depth);
       if (!struct_depth) break;
-      t = c & 0xf;
+      field_type = c & 0xf;
       if (!(c & 0xf0)) get_i32(bs);
     }
-    switch (t) {
+    switch (field_type) {
       case ST_FLD_TRUE:
       case ST_FLD_FALSE: break;
       case ST_FLD_I16:
@@ -108,11 +138,11 @@ __device__ void skip_struct_field(byte_stream_s *bs, int t)
       case ST_FLD_BINARY: skip_bytes(bs, get_u32(bs)); break;
       case ST_FLD_LIST:
       case ST_FLD_SET: {  // NOTE: skipping a list of lists is not handled
-        int c = getb(bs);
-        int n = c >> 4;
+        auto const c = getb(bs);
+        int n        = c >> 4;
         if (n == 0xf) n = get_u32(bs);
-        t = g_list2struct[c & 0xf];
-        if (t == ST_FLD_STRUCT)
+        field_type = g_list2struct[c & 0xf];
+        if (field_type == ST_FLD_STRUCT)
           struct_depth += n;
         else
           rep_cnt = n;
@@ -122,22 +152,29 @@ __device__ void skip_struct_field(byte_stream_s *bs, int t)
   } while (rep_cnt || struct_depth);
 }
 
+/**
+ * @brief Functor to set value to 32 bit integer read from byte stream
+ *
+ * @return True if field type is not int32
+ */
 struct ParquetFieldInt32 {
   int field;
   int32_t &val;
 
   __device__ ParquetFieldInt32(int f, int32_t &v) : field(f), val(v) {}
 
-  inline __device__ bool operator()(byte_stream_s *bs, int t)
+  inline __device__ bool operator()(byte_stream_s *bs, int field_type)
   {
     val = get_i32(bs);
-    if (t != ST_FLD_I32)
-      return true;
-    else
-      return false;
+    return (field_type != ST_FLD_I32);
   }
 };
 
+/**
+ * @brief Functor to set value to enum read from byte stream
+ *
+ * @return True if field type is not int32
+ */
 template <typename Enum>
 struct ParquetFieldEnum {
   int field;
@@ -145,16 +182,19 @@ struct ParquetFieldEnum {
 
   __device__ ParquetFieldEnum(int f, Enum &v) : field(f), val(v) {}
 
-  inline __device__ bool operator()(byte_stream_s *bs, int t)
+  inline __device__ bool operator()(byte_stream_s *bs, int field_type)
   {
     val = static_cast<Enum>(get_i32(bs));
-    if (t != ST_FLD_I32)
-      return true;
-    else
-      return false;
+    return (field_type != ST_FLD_I32);
   }
 };
 
+/**
+ * @brief Functor to run operator on byte stream
+ *
+ * @return True if field type is not struct type or if the calling operator
+ * fails
+ */
 template <typename Operator>
 struct ParquetFieldStruct {
   int field;
@@ -162,27 +202,37 @@ struct ParquetFieldStruct {
 
   __device__ ParquetFieldStruct(int f) : field(f) {}
 
-  inline __device__ bool operator()(byte_stream_s *bs, int t)
+  inline __device__ bool operator()(byte_stream_s *bs, int field_type)
   {
-    if ((t != ST_FLD_STRUCT) || !op(bs))
-      return true;
-    else
-      return false;
+    return ((field_type != ST_FLD_STRUCT) || !op(bs));
   }
 };
 
+/**
+ * @brief Functor to run an operator
+ *
+ * The purpose of this functor is to replace a switch case. If the field in
+ * the argument is equal to the field specified in any element of the tuple
+ * of operators then it is run with the byte stream and field type arguments.
+ *
+ * If the field does not match any of the functors then skip_struct_field is
+ * called over the byte stream.
+ *
+ * @return Return value of the selected operator or false if no operator
+ * matched the field value
+ */
 template <int index>
 struct FunctionSwitchImpl {
   template <typename... Operator>
   static inline __device__ bool run(byte_stream_s *bs,
-                                    int t,
-                                    const int &fld,
+                                    int field_type,
+                                    const int &field,
                                     thrust::tuple<Operator...> &ops)
   {
-    if (fld == thrust::get<index>(ops).field) {
-      return thrust::get<index>(ops)(bs, t);
+    if (field == thrust::get<index>(ops).field) {
+      return thrust::get<index>(ops)(bs, field_type);
     } else {
-      return FunctionSwitchImpl<index - 1>::run(bs, t, fld, ops);
+      return FunctionSwitchImpl<index - 1>::run(bs, field_type, field, ops);
     }
   }
 };
@@ -191,32 +241,41 @@ template <>
 struct FunctionSwitchImpl<0> {
   template <typename... Operator>
   static inline __device__ bool run(byte_stream_s *bs,
-                                    int t,
-                                    const int &fld,
+                                    int field_type,
+                                    const int &field,
                                     thrust::tuple<Operator...> &ops)
   {
-    if (fld == thrust::get<0>(ops).field) {
-      return thrust::get<0>(ops)(bs, t);
+    if (field == thrust::get<0>(ops).field) {
+      return thrust::get<0>(ops)(bs, field_type);
     } else {
-      skip_struct_field(bs, t);
+      skip_struct_field(bs, field_type);
       return false;
     }
   }
 };
 
+/**
+ * @brief Function to parse page header based on the tuple of functors provided
+ *
+ * Bytes are read from the byte stream and the field delta and field type are
+ * matched up against user supplied reading functors. If they match then the
+ * corresponding values are written to references pointed to by the functors.
+ *
+ * @return Returns false if an unexpected field is encountered while reading
+ * byte stream. Otherwise true is returned.
+ */
 template <typename... Operator>
-inline __device__ bool function_builder(thrust::tuple<Operator...> &op, byte_stream_s *bs)
+inline __device__ bool parse_header(thrust::tuple<Operator...> &op, byte_stream_s *bs)
 {
   constexpr int index = thrust::tuple_size<thrust::tuple<Operator...>>::value - 1;
-  int fld             = 0;
-  for (;;) {
-    int c, t, f;
-    c = getb(bs);
-    if (!c) break;
-    f                  = c >> 4;
-    t                  = c & 0xf;
-    fld                = (f) ? fld + f : get_i32(bs);
-    bool exit_function = FunctionSwitchImpl<index>::run(bs, t, fld, op);
+  int field           = 0;
+  while (true) {
+    auto const current_byte = getb(bs);
+    if (!current_byte) break;
+    int const field_delta = current_byte >> 4;
+    int const field_type  = current_byte & 0xf;
+    field                 = field_delta ? field + field_delta : get_i32(bs);
+    bool exit_function    = FunctionSwitchImpl<index>::run(bs, field_type, field, op);
     if (exit_function) { return false; }
   }
   return true;
@@ -229,7 +288,7 @@ struct gpuParseDataPageHeader {
                                  ParquetFieldEnum<Encoding>(2, bs->page.encoding),
                                  ParquetFieldEnum<Encoding>(3, bs->page.definition_level_encoding),
                                  ParquetFieldEnum<Encoding>(4, bs->page.repetition_level_encoding));
-    return function_builder(op, bs);
+    return parse_header(op, bs);
   }
 };
 
@@ -238,7 +297,7 @@ struct gpuParseDictionaryPageHeader {
   {
     auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
                                  ParquetFieldEnum<Encoding>(2, bs->page.encoding));
-    return function_builder(op, bs);
+    return parse_header(op, bs);
   }
 };
 
@@ -250,7 +309,7 @@ struct gpuParseDataPageHeaderV2 {
                                  ParquetFieldEnum<Encoding>(4, bs->page.encoding),
                                  ParquetFieldEnum<Encoding>(5, bs->page.definition_level_encoding),
                                  ParquetFieldEnum<Encoding>(6, bs->page.repetition_level_encoding));
-    return function_builder(op, bs);
+    return parse_header(op, bs);
   }
 };
 
@@ -263,7 +322,7 @@ struct gpuParsePageHeader {
                                  ParquetFieldStruct<gpuParseDataPageHeader>(5),
                                  ParquetFieldStruct<gpuParseDictionaryPageHeader>(7),
                                  ParquetFieldStruct<gpuParseDataPageHeaderV2>(8));
-    return function_builder(op, bs);
+    return parse_header(op, bs);
   }
 };
 

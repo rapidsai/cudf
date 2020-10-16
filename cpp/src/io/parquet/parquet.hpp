@@ -361,6 +361,11 @@ class CompactProtocolReader {
   friend class ParquetFieldStructBlob;
 };
 
+/**
+ * @brief Functor to set value to 32 bit integer read from CompactProtocolReader
+ *
+ * @return True if field type is not int32
+ */
 class ParquetFieldInt32 {
   int field_val;
   int32_t &val;
@@ -368,18 +373,20 @@ class ParquetFieldInt32 {
  public:
   ParquetFieldInt32(int f, int32_t &v) : field_val(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader *cpr, int *c, int t)
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
   {
     val = cpr->get_i32();
-    if (t != ST_FLD_I32)
-      return true;
-    else
-      return false;
+    return (field_type != ST_FLD_I32);
   }
 
   int &field(void) { return field_val; }
 };
 
+/**
+ * @brief Functor to set value to 64 bit integer read from CompactProtocolReader
+ *
+ * @return True if field type is not int32 or int64
+ */
 class ParquetFieldInt64 {
   int field_val;
   int64_t &val;
@@ -387,18 +394,21 @@ class ParquetFieldInt64 {
  public:
   ParquetFieldInt64(int f, int64_t &v) : field_val(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader *cpr, int *c, int t)
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
   {
     val = cpr->get_i64();
-    if (t < ST_FLD_I16 || t > ST_FLD_I64)
-      return true;
-    else
-      return false;
+    return (field_type < ST_FLD_I16 || field_type > ST_FLD_I64);
   }
 
   int &field(void) { return field_val; }
 };
 
+/**
+ * @brief Functor to read a vector of structures from CompactProtocolReader
+ *
+ * @return True if field types mismatch or if the process of reading a
+ * struct fails
+ */
 template <typename T>
 class ParquetFieldStructListFunctor {
   int field_val;
@@ -407,14 +417,13 @@ class ParquetFieldStructListFunctor {
  public:
   ParquetFieldStructListFunctor(int f, std::vector<T> &v) : field_val(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader *cpr, int *c, int t)
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
   {
-    if (t != ST_FLD_LIST) return true;
+    if (field_type != ST_FLD_LIST) return true;
 
-    int n;
-    (*c) = cpr->getb();
-    if (((*c) & 0xf) != ST_FLD_STRUCT) return true;
-    n = (*c) >> 4;
+    int current_byte = cpr->getb();
+    if ((current_byte & 0xf) != ST_FLD_STRUCT) return true;
+    int n = current_byte >> 4;
     if (n == 0xf) n = cpr->get_u32();
     val.resize(n);
     for (int32_t i = 0; i < n; i++) {
@@ -433,6 +442,12 @@ ParquetFieldStructListFunctor<T> ParquetFieldStructList(int f, std::vector<T> &v
   return ParquetFieldStructListFunctor<T>(f, v);
 }
 
+/**
+ * @brief Functor to read a string from CompactProtocolReader
+ *
+ * @return True if field type mismatches or if size of string exceeds bounds
+ * of the CompactProtocolReader
+ */
 class ParquetFieldString {
   int field_val;
   std::string &val;
@@ -440,21 +455,28 @@ class ParquetFieldString {
  public:
   ParquetFieldString(int f, std::string &v) : field_val(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader *cpr, int *c, int t)
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
   {
-    if (t != ST_FLD_BINARY) return true;
+    if (field_type != ST_FLD_BINARY) return true;
     uint32_t n = cpr->get_u32();
     if (n < (size_t)(cpr->m_end - cpr->m_cur)) {
       val.assign((const char *)cpr->m_cur, n);
       cpr->m_cur += n;
-    } else
+      return false;
+    } else {
       return true;
-    return false;
+    }
   }
 
   int &field(void) { return field_val; }
 };
 
+/**
+ * @brief Functor to read a structure from CompactProtocolReader
+ *
+ * @return True if field types mismatch or if the process of reading a
+ * struct fails
+ */
 template <typename T>
 class ParquetFieldStructFunctor {
   int field_val;
@@ -463,12 +485,9 @@ class ParquetFieldStructFunctor {
  public:
   ParquetFieldStructFunctor(int f, T &v) : field_val(f), val(v) {}
 
-  inline bool operator()(CompactProtocolReader *cpr, int *c, int t)
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
   {
-    if (t != ST_FLD_STRUCT || !(cpr->read(&val)))
-      return true;
-    else
-      return false;
+    return (field_type != ST_FLD_STRUCT || !(cpr->read(&val)));
   }
 
   int &field(void) { return field_val; }
@@ -480,6 +499,11 @@ ParquetFieldStructFunctor<T> ParquetFieldStruct(int f, T &v)
   return ParquetFieldStructFunctor<T>(f, v);
 }
 
+/**
+ * @brief Functor to set value to enum read from CompactProtocolReader
+ *
+ * @return True if field type is not int32
+ */
 template <typename Enum>
 class ParquetFieldEnum {
   int field_val;
@@ -487,18 +511,21 @@ class ParquetFieldEnum {
 
  public:
   ParquetFieldEnum(int f, Enum &v) : field_val(f), val(v) {}
-  inline bool operator()(CompactProtocolReader *cpr, int *c, int t)
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
   {
     val = static_cast<Enum>(cpr->get_i32());
-    if (t != ST_FLD_I32)
-      return true;
-    else
-      return false;
+    return (field_type != ST_FLD_I32);
   }
 
   int &field(void) { return field_val; }
 };
 
+/**
+ * @brief Functor to read a vector of enums from CompactProtocolReader
+ *
+ * @return True if field types mismatch or if the process of reading an
+ * enum fails
+ */
 template <typename Enum>
 class ParquetFieldEnumListFunctor {
   int field_val;
@@ -506,13 +533,12 @@ class ParquetFieldEnumListFunctor {
 
  public:
   ParquetFieldEnumListFunctor(int f, std::vector<Enum> &v) : field_val(f), val(v) {}
-  inline bool operator()(CompactProtocolReader *cpr, int *c, int t)
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
   {
-    if (t != ST_FLD_LIST) return true;
-    int n;
-    (*c) = cpr->getb();
-    if (((*c) & 0xf) != ST_FLD_I32) return true;
-    n = (*c) >> 4;
+    if (field_type != ST_FLD_LIST) return true;
+    int current_byte = cpr->getb();
+    if ((current_byte & 0xf) != ST_FLD_I32) return true;
+    int n = current_byte >> 4;
     if (n == 0xf) n = cpr->get_u32();
     val.resize(n);
     for (int32_t i = 0; i < n; i++) { val[i] = static_cast<Enum>(cpr->get_i32()); }
@@ -528,19 +554,24 @@ ParquetFieldEnumListFunctor<T> ParquetFieldEnumList(int field, std::vector<T> &v
   return ParquetFieldEnumListFunctor<T>(field, v);
 }
 
+/**
+ * @brief Functor to read a vector of strings from CompactProtocolReader
+ *
+ * @return True if field types mismatch or if the process of reading a
+ * string fails
+ */
 class ParquetFieldStringList {
   int field_val;
   std::vector<std::string> &val;
 
  public:
   ParquetFieldStringList(int f, std::vector<std::string> &v) : field_val(f), val(v) {}
-  inline bool operator()(CompactProtocolReader *cpr, int *c, int t)
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
   {
-    if (t != ST_FLD_LIST) return true;
-    int n;
-    (*c) = cpr->getb();
-    if (((*c) & 0xf) != ST_FLD_BINARY) return true;
-    n = (*c) >> 4;
+    if (field_type != ST_FLD_LIST) return true;
+    int current_byte = cpr->getb();
+    if ((current_byte & 0xf) != ST_FLD_BINARY) return true;
+    int n = current_byte >> 4;
     if (n == 0xf) n = cpr->get_u32();
     val.resize(n);
     for (int32_t i = 0; i < n; i++) {
@@ -557,17 +588,22 @@ class ParquetFieldStringList {
   int &field(void) { return field_val; }
 };
 
+/**
+ * @brief Functor to read a struct from CompactProtocolReader
+ *
+ * @return True if field type mismatches
+ */
 class ParquetFieldStructBlob {
   int field_val;
   std::vector<uint8_t> &val;
 
  public:
   ParquetFieldStructBlob(int f, std::vector<uint8_t> &v) : field_val(f), val(v) {}
-  inline bool operator()(CompactProtocolReader *cpr, int *c, int t)
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
   {
-    if (t != ST_FLD_STRUCT) return true;
+    if (field_type != ST_FLD_STRUCT) return true;
     const uint8_t *start = cpr->m_cur;
-    cpr->skip_struct_field(t);
+    cpr->skip_struct_field(field_type);
     if (cpr->m_cur > start) { val.assign(start, cpr->m_cur - 1); }
     return false;
   }

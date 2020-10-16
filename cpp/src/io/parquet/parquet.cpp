@@ -85,13 +85,15 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
 template <int index>
 struct FunctionSwitchImpl {
   template <typename... Operator>
-  static inline bool run(
-    CompactProtocolReader *cpr, int *c, int t, const int &fld, std::tuple<Operator...> &ops)
+  static inline bool run(CompactProtocolReader *cpr,
+                         int field_type,
+                         const int &field,
+                         std::tuple<Operator...> &ops)
   {
-    if (fld == std::get<index>(ops).field()) {
-      return std::get<index>(ops)(cpr, c, t);
+    if (field == std::get<index>(ops).field()) {
+      return std::get<index>(ops)(cpr, field_type);
     } else {
-      return FunctionSwitchImpl<index - 1>::run(cpr, c, t, fld, ops);
+      return FunctionSwitchImpl<index - 1>::run(cpr, field_type, field, ops);
     }
   }
 };
@@ -99,31 +101,32 @@ struct FunctionSwitchImpl {
 template <>
 struct FunctionSwitchImpl<0> {
   template <typename... Operator>
-  static inline bool run(
-    CompactProtocolReader *cpr, int *c, int t, const int &fld, std::tuple<Operator...> &ops)
+  static inline bool run(CompactProtocolReader *cpr,
+                         int field_type,
+                         const int &field,
+                         std::tuple<Operator...> &ops)
   {
-    if (fld == std::get<0>(ops).field()) {
-      return std::get<0>(ops)(cpr, c, t);
+    if (field == std::get<0>(ops).field()) {
+      return std::get<0>(ops)(cpr, field_type);
     } else {
-      cpr->skip_struct_field(t);
+      cpr->skip_struct_field(field_type);
       return false;
     }
   }
 };
 
-template <typename T, typename... Operator>
-inline bool function_builder(CompactProtocolReader *cpr, T *s, std::tuple<Operator...> &op)
+template <typename... Operator>
+inline bool function_builder(CompactProtocolReader *cpr, std::tuple<Operator...> &op)
 {
   constexpr int index = std::tuple_size<std::tuple<Operator...>>::value - 1;
-  int fld             = 0;
-  for (;;) {
-    int c, t, f;
-    c = cpr->getb();
-    if (!c) break;
-    f                  = c >> 4;
-    t                  = c & 0xf;
-    fld                = f ? fld + f : cpr->get_i16();
-    bool exit_function = FunctionSwitchImpl<index>::run(cpr, &c, t, fld, op);
+  int field           = 0;
+  while (true) {
+    int const current_byte = cpr->getb();
+    if (!current_byte) break;
+    int const field_delta = current_byte >> 4;
+    int const field_type  = current_byte & 0xf;
+    field                 = field_delta ? field + field_delta : cpr->get_i16();
+    bool exit_function    = FunctionSwitchImpl<index>::run(cpr, field_type, field, op);
     if (exit_function) { return false; }
   }
   return true;
@@ -137,7 +140,7 @@ bool CompactProtocolReader::read(FileMetaData *f)
                             ParquetFieldStructList(4, f->row_groups),
                             ParquetFieldStructList(5, f->key_value_metadata),
                             ParquetFieldString(6, f->created_by));
-  return function_builder(this, f, op);
+  return function_builder(this, op);
 }
 
 bool CompactProtocolReader::read(SchemaElement *s)
@@ -150,7 +153,7 @@ bool CompactProtocolReader::read(SchemaElement *s)
                             ParquetFieldEnum<ConvertedType>(6, s->converted_type),
                             ParquetFieldInt32(7, s->decimal_scale),
                             ParquetFieldInt32(8, s->decimal_precision));
-  return function_builder(this, s, op);
+  return function_builder(this, op);
 }
 
 bool CompactProtocolReader::read(RowGroup *r)
@@ -158,7 +161,7 @@ bool CompactProtocolReader::read(RowGroup *r)
   auto op = std::make_tuple(ParquetFieldStructList(1, r->columns),
                             ParquetFieldInt64(2, r->total_byte_size),
                             ParquetFieldInt64(3, r->num_rows));
-  return function_builder(this, r, op);
+  return function_builder(this, op);
 }
 
 bool CompactProtocolReader::read(ColumnChunk *c)
@@ -170,7 +173,7 @@ bool CompactProtocolReader::read(ColumnChunk *c)
                             ParquetFieldInt32(5, c->offset_index_length),
                             ParquetFieldInt64(6, c->column_index_offset),
                             ParquetFieldInt32(7, c->column_index_length));
-  return function_builder(this, c, op);
+  return function_builder(this, op);
 }
 
 bool CompactProtocolReader::read(ColumnChunkMetaData *c)
@@ -186,7 +189,7 @@ bool CompactProtocolReader::read(ColumnChunkMetaData *c)
                             ParquetFieldInt64(10, c->index_page_offset),
                             ParquetFieldInt64(11, c->dictionary_page_offset),
                             ParquetFieldStructBlob(12, c->statistics_blob));
-  return function_builder(this, c, op);
+  return function_builder(this, op);
 }
 
 bool CompactProtocolReader::read(PageHeader *p)
@@ -196,7 +199,7 @@ bool CompactProtocolReader::read(PageHeader *p)
                             ParquetFieldInt32(3, p->compressed_page_size),
                             ParquetFieldStruct(5, p->data_page_header),
                             ParquetFieldStruct(7, p->dictionary_page_header));
-  return function_builder(this, p, op);
+  return function_builder(this, op);
 }
 
 bool CompactProtocolReader::read(DataPageHeader *d)
@@ -205,20 +208,20 @@ bool CompactProtocolReader::read(DataPageHeader *d)
                             ParquetFieldEnum<Encoding>(2, d->encoding),
                             ParquetFieldEnum<Encoding>(3, d->definition_level_encoding),
                             ParquetFieldEnum<Encoding>(4, d->repetition_level_encoding));
-  return function_builder(this, d, op);
+  return function_builder(this, op);
 }
 
 bool CompactProtocolReader::read(DictionaryPageHeader *d)
 {
   auto op = std::make_tuple(ParquetFieldInt32(1, d->num_values),
                             ParquetFieldEnum<Encoding>(2, d->encoding));
-  return function_builder(this, d, op);
+  return function_builder(this, op);
 }
 
 bool CompactProtocolReader::read(KeyValue *k)
 {
   auto op = std::make_tuple(ParquetFieldString(1, k->key), ParquetFieldString(2, k->value));
-  return function_builder(this, k, op);
+  return function_builder(this, op);
 }
 
 /**
