@@ -39,7 +39,7 @@ export CUSTREAMZ_FILE=`conda build conda/recipes/custreamz --python=$PYTHON --ou
 # UPLOAD - Conda packages
 ################################################################################
 
-gpuci_logger "Staring conda uploads"
+gpuci_logger "Starting conda uploads"
 if [ "$UPLOAD_LIBCUDF" == "1" ]; then
   test -e ${LIBCUDF_FILE}
   echo "Upload libcudf"
