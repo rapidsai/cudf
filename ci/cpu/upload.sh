@@ -4,8 +4,8 @@
 
 set -e
 
-# Setup 'gpuci_retry' for upload retries (results in 3 total attempts)
-export GPUCI_RETRY_MAX=2
+# Setup 'gpuci_retry' for upload retries (results in 4 total attempts)
+export GPUCI_RETRY_MAX=3
 export GPUCI_RETRY_SLEEP=30
 
 # Set default label options if they are not defined elsewhere
