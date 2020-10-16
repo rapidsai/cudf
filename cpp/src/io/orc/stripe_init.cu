@@ -16,6 +16,7 @@
 #include <io/utilities/block_utils.cuh>
 #include "orc_common.h"
 #include "orc_gpu.h"
+#include <trove/block.h>
 
 namespace cudf {
 namespace io {
@@ -32,14 +33,16 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
 {
   __shared__ compressed_stream_s strm_g[4];
 
-  volatile compressed_stream_s *const s = &strm_g[threadIdx.x >> 5];
+  compressed_stream_s *const s = &strm_g[threadIdx.x >> 5];
   int strm_id                           = blockIdx.x * 4 + (threadIdx.x >> 5);
   int t                                 = threadIdx.x & 0x1f;
 
-  if (strm_id < num_streams && t < sizeof(CompressedStreamInfo) / sizeof(uint32_t)) {
-    // NOTE: Assumes that sizeof(CompressedStreamInfo) <= 128
-    ((uint32_t *)&s->info)[t] = ((const uint32_t *)&strm_info[strm_id])[t];
+  if (t == 0) {
+      s->info = strm_info[strm_id];
+      // CompressedStreamInfo info = trove::load(&strm_info[strm_id]);
+      // trove::store(info, &(s->info));
   }
+  
   __syncthreads();
   if (strm_id < num_streams) {
     // Walk through the compressed blocks
@@ -99,10 +102,7 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
         s->ctl.dstSize   = uncompressed_size;
       }
       SYNCWARP();
-      if (init_ctl && t < sizeof(gpu_inflate_input_s) / sizeof(uint32_t)) {
-        reinterpret_cast<uint32_t *>(init_ctl)[t] =
-          reinterpret_cast<volatile uint32_t *>(&s->ctl)[t];
-      }
+      if (init_ctl && t == 0 ) *init_ctl = s->ctl;
       cur += block_len;
       max_uncompressed_size += uncompressed_size;
     }
@@ -115,10 +115,7 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
   }
 
   __syncthreads();
-  if (strm_id < num_streams && t < sizeof(CompressedStreamInfo) / sizeof(uint32_t)) {
-    // NOTE: Assumes that sizeof(CompressedStreamInfo) <= 128
-    ((uint32_t *)&strm_info[strm_id])[t] = ((uint32_t *)&s->info)[t];
-  }
+  if (strm_id < num_streams && t == 0) strm_info[strm_id] = s->info;
 }
 
 // blockDim {128,1,1}
@@ -127,14 +124,12 @@ extern "C" __global__ void __launch_bounds__(128, 8)
 {
   __shared__ compressed_stream_s strm_g[4];
 
-  volatile compressed_stream_s *const s = &strm_g[threadIdx.x >> 5];
+  compressed_stream_s *const s = &strm_g[threadIdx.x >> 5];
   int strm_id                           = blockIdx.x * 4 + (threadIdx.x >> 5);
   int t                                 = threadIdx.x & 0x1f;
 
-  if (strm_id < num_streams && t < sizeof(CompressedStreamInfo) / sizeof(uint32_t)) {
-    // NOTE: Assumes that sizeof(CompressedStreamInfo) <= 128
-    ((uint32_t *)&s->info)[t] = ((const uint32_t *)&strm_info[strm_id])[t];
-  }
+  if (strm_id < num_streams && t == 0) s->info = strm_info[strm_id];
+
   __syncthreads();
   if (strm_id < num_streams &&
       s->info.num_compressed_blocks + s->info.num_uncompressed_blocks > 0 &&
@@ -419,19 +414,12 @@ extern "C" __global__ void __launch_bounds__(128, 8)
   uint32_t chunk_id         = blockIdx.y * num_columns + blockIdx.x;
   int t                     = threadIdx.x;
 
-  if (t < sizeof(ColumnDesc) / sizeof(uint32_t)) {
-    // NOTE: Assumes that sizeof(ColumnDesc) <= 128x4
-    ((volatile uint32_t *)&s->chunk)[t] = ((const uint32_t *)&chunks[chunk_id])[t];
-  }
+  if (t == 0) s->chunk = chunks[chunk_id];
+
   __syncthreads();
-  if (strm_info) {
-    int strm_len = s->chunk.strm_len[t >> 6];
-    int strm_id  = s->chunk.strm_id[t >> 6];
-    int t6       = t & 0x3f;
-    if (strm_len > 0 && t6 < sizeof(CompressedStreamInfo) / sizeof(uint32_t)) {
-      ((volatile uint32_t *)&s->strm_info[t >> 6])[t6] =
-        ((const uint32_t *)&strm_info[strm_id])[t6];
-    }
+  if (strm_len > 0) {
+    if (t == 0) s->strm_info[0] = strm_info[s->chunk.strm_id[0]];
+    if (t == 64) s->strm_info[1] = strm_info[s->chunk.strm_id[1]];
   }
   if (t == 0) {
     uint32_t rowgroups_in_chunk =

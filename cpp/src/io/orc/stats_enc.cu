@@ -42,11 +42,11 @@ __global__ void __launch_bounds__(init_threads_per_block)
                              uint32_t num_rowgroups,
                              uint32_t row_index_stride)
 {
-  __shared__ __align__(4) volatile statistics_group group_g[init_groups_per_block];
+  __shared__ __align__(4) statistics_group group_g[init_groups_per_block];
   uint32_t col_id                  = blockIdx.y;
   uint32_t chunk_id                = (blockIdx.x * init_groups_per_block) + threadIdx.y;
   uint32_t t                       = threadIdx.x;
-  volatile statistics_group *group = &group_g[threadIdx.y];
+  statistics_group *group = &group_g[threadIdx.y];
   if (chunk_id < num_rowgroups) {
     if (t == 0) {
       uint32_t num_rows = cols[col_id].num_rows;
@@ -57,10 +57,7 @@ __global__ void __launch_bounds__(init_threads_per_block)
     }
   }
   __syncthreads();
-  if (chunk_id < num_rowgroups && t < sizeof(statistics_group) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&groups[col_id * num_rowgroups + chunk_id])[t] =
-      reinterpret_cast<volatile uint32_t *>(group)[t];
-  }
+  if (chunk_id < num_rowgroups && t == 0) groups[col_id * num_rowgroups + chunk_id] = *group;
 }
 
 /**
@@ -248,25 +245,15 @@ __global__ void __launch_bounds__(encode_threads_per_block)
   uint32_t t             = threadIdx.x;
   uint32_t idx           = blockIdx.x * encode_chunks_per_block + threadIdx.y;
   stats_state_s *const s = &state_g[threadIdx.y];
-  if (idx < statistics_count) {
-    if (t < sizeof(statistics_chunk) / sizeof(uint32_t)) {
-      reinterpret_cast<uint32_t *>(&s->chunk)[t] =
-        reinterpret_cast<const uint32_t *>(&chunks[idx])[t];
-    }
-    if (t < sizeof(statistics_merge_group) / sizeof(uint32_t)) {
-      reinterpret_cast<uint32_t *>(&s->group)[t] = reinterpret_cast<uint32_t *>(&groups[idx])[t];
-    }
+  if ((idx < statistics_count) and (t == 0)) {
+    s->chunk = chunks[idx];
+    s->group = groups[idx];
   }
   __syncthreads();
-  if (idx < statistics_count) {
-    if (t < sizeof(stats_column_desc) / sizeof(uint32_t)) {
-      reinterpret_cast<uint32_t *>(&s->col)[t] =
-        reinterpret_cast<const uint32_t *>(s->group.col)[t];
-    }
-    if (t == 0) {
+  if (idx < statistics_count and t == 0) {
+      s->col = *(s->group.col);
       s->base = blob_bfr + s->group.start_chunk;
       s->end  = blob_bfr + s->group.start_chunk + s->group.num_chunks;
-    }
   }
   __syncthreads();
   // Encode and update actual bfr size
