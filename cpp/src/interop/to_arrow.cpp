@@ -171,7 +171,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
 
   column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
   auto child_arrays      = fetch_child_array(input_view, {{}, {}}, ar_mr, stream);
-  if (child_arrays.size() == 0) {
+  if (child_arrays.empty()) {
     arrow::Result<std::unique_ptr<arrow::Buffer>> result;
 
     // Empty string will have only one value in offset of 4 bytes
@@ -246,10 +246,10 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::list_view>(
   }
 
   column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
-  auto children_meta     = metadata.children_meta.size() > 0 ? metadata.children_meta
-                                                         : std::vector<column_metadata>{{}, {}};
+  auto children_meta =
+    metadata.children_meta.empty() ? std::vector<column_metadata>{{}, {}} : metadata.children_meta;
   auto child_arrays = fetch_child_array(input_view, children_meta, ar_mr, stream);
-  if (child_arrays.size() == 0) {
+  if (child_arrays.empty()) {
     return std::make_shared<arrow::ListArray>(arrow::list(arrow::null()), 0, nullptr, nullptr);
   }
 
@@ -279,15 +279,15 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::dictionary32>(
          stream);
   auto indices = dispatch_to_arrow{}.operator()<int32_t>(
     dict_indices->view(), dict_indices->type().id(), {}, ar_mr, stream);
-  auto dict_keys  = cudf::dictionary_column_view(input).keys();
-  auto dictionary = type_dispatcher(
-    dict_keys.type(),
-    dispatch_to_arrow{},
-    dict_keys,
-    dict_keys.type().id(),
-    metadata.children_meta.size() > 0 ? metadata.children_meta[0] : column_metadata{},
-    ar_mr,
-    stream);
+  auto dict_keys = cudf::dictionary_column_view(input).keys();
+  auto dictionary =
+    type_dispatcher(dict_keys.type(),
+                    dispatch_to_arrow{},
+                    dict_keys,
+                    dict_keys.type().id(),
+                    metadata.children_meta.empty() ? column_metadata{} : metadata.children_meta[0],
+                    ar_mr,
+                    stream);
 
   return std::make_shared<arrow::DictionaryArray>(
     arrow::dictionary(indices->type(), dictionary->type()), indices, dictionary);

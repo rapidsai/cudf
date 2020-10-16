@@ -44,7 +44,7 @@ get_arrow_array(std::vector<T> const& data, std::vector<uint8_t> const& mask = {
   CUDF_EXPECTS(buff_builder.Finish(&data_buffer).ok(), "Failed to allocate buffer");
 
   std::shared_ptr<arrow::Buffer> mask_buffer =
-    mask.size() > 0 ? arrow::internal::BytesToBits(mask).ValueOrDie() : nullptr;
+    mask.empty() ? nullptr : arrow::internal::BytesToBits(mask).ValueOrDie();
 
   return cudf::detail::to_arrow_array(cudf::type_to_id<T>(), data.size(), data_buffer, mask_buffer);
 }
@@ -157,7 +157,7 @@ std::shared_ptr<arrow::Array> get_arrow_list_array(std::vector<T> data,
     offsets.size() - 1,
     offset_buffer,
     data_array,
-    list_validity.size() == 0 ? nullptr : arrow::internal::BytesToBits(list_validity).ValueOrDie());
+    list_validity.empty() ? nullptr : arrow::internal::BytesToBits(list_validity).ValueOrDie());
 }
 
 template <typename T>
