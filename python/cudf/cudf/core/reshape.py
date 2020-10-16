@@ -326,9 +326,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             return cudf.DataFrame()
         elif len(objs) == 1:
             if join == "inner":
-                result = cudf.DataFrame()
-                result.index = cudf.RangeIndex(len(objs[0]))
-                return result
+                return cudf.DataFrame(index=cudf.RangeIndex(len(objs[0])))
             elif ignore_index:
                 result = cudf.DataFrame(
                     data=objs[0]._data.copy(deep=True),
