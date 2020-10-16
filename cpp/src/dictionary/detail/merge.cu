@@ -26,9 +26,6 @@ namespace cudf {
 namespace dictionary {
 namespace detail {
 
-/**
- * @copydoc cudf::dictionary::detail::merge
- */
 std::unique_ptr<column> merge(dictionary_column_view const& lcol,
                               dictionary_column_view const& rcol,
                               cudf::detail::index_vector const& row_order,
@@ -39,8 +36,8 @@ std::unique_ptr<column> merge(dictionary_column_view const& lcol,
   auto const rcol_iter = cudf::detail::indexalator_factory::make_input_iterator(rcol.indices());
 
   // create output indices column
-  auto const merged_size = lcol.size() + rcol.size();
-  auto indices_type      = get_indices_type_for_size(merged_size);
+  auto const merged_size  = lcol.size() + rcol.size();
+  auto const indices_type = get_indices_type_for_size(merged_size);
   auto indices_column =
     make_fixed_width_column(indices_type, merged_size, cudf::mask_state::UNALLOCATED, stream, mr);
   auto output_iter =
