@@ -129,8 +129,9 @@
 - PR #6273 Update JNI to use ORC options builder
 - PR #6293 Replace shuffle warp reduce with cub calls
 - PR #6287 Make java aggregate API follow C++ API
+- PR #6303 Use cudf test dtypes so timedelta tests are deterministic
+- PR #6329 Update and clean-up gpuCI scripts
 - PR #6299 Add lead and lag to java
-- PR #6303 Use cudf test dtypes so timedelta tests are determinstic
 - PR #6327 Add dictionary specialization to `cudf::replace_nulls`
 - PR #6306 Remove cpw macros from page encode kernels
 - PR #6375 Parallelize Cython compilation in addition to Cythonization
@@ -197,7 +198,7 @@
 - PR #6294 Fix read parquet key error when reading empty pandas DataFrame with cudf
 - PR #6285 Removed unsafe `reinterpret_cast` and implicit pointer-to-bool casts
 - PR #6281 Fix unreachable code warning in datetime.cuh
-- PR #6286 Fix `read_csv` `int32` overflow 
+- PR #6286 Fix `read_csv` `int32` overflow
 - PR #6466 Fix ORC reader issue with decimal type
 - PR #6310 Replace a misspelled reference to `master` branch with `main` branch in a comment in changelog.sh
 - PR #6289 Revert #6206
