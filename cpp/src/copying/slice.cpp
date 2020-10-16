@@ -22,6 +22,8 @@
 #include <cudf/utilities/error.hpp>
 
 #include <algorithm>
+#include "cudf_test/column_wrapper.hpp"
+#include "thrust/iterator/transform_iterator.h"
 
 namespace cudf {
 namespace detail {
@@ -31,30 +33,29 @@ std::vector<column_view> slice(column_view const& input,
 {
   CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even");
 
-  if (indices.empty()) { return {}; }
+  if (indices.empty()) return {};
 
   auto null_counts = cudf::detail::segmented_count_unset_bits(input.null_mask(), indices, stream);
 
-  std::vector<column_view> children{};
-  for (size_type i = 0; i < input.num_children(); i++) { children.push_back(input.child(i)); }
+  auto f = cudf::test::make_counting_transform_iterator(0, [&](auto i) { return input.child(i); });
+  auto const children = std::vector<column_view>(f, f + input.num_children());
 
-  std::vector<column_view> result{};
-  for (size_t i = 0; i < indices.size() / 2; i++) {
+  auto op = [&](auto i) {
     auto begin = indices[2 * i];
     auto end   = indices[2 * i + 1];
     CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
     CUDF_EXPECTS(end >= begin, "End index cannot be smaller than the starting index.");
     CUDF_EXPECTS(end <= input.size(), "Slice range out of bounds.");
-    result.emplace_back(input.type(),
-                        end - begin,
-                        input.head(),
-                        input.null_mask(),
-                        null_counts[i],
-                        input.offset() + begin,
-                        children);
-  }
-
-  return result;
+    return column_view{input.type(),
+                       end - begin,
+                       input.head(),
+                       input.null_mask(),
+                       null_counts[i],
+                       input.offset() + begin,
+                       children};
+  };
+  auto begin = cudf::test::make_counting_transform_iterator(0, op);
+  return {begin, begin + indices.size() / 2};
 }
 
 }  // namespace detail
@@ -73,15 +74,12 @@ std::vector<cudf::table_view> slice(cudf::table_view const& input,
   CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even");
   if (indices.empty()) { return {}; }
 
-  // 2d arrangement of column_views that represent the outgoing table_views
-  // sliced_table[i][j]
+  // 2d arrangement of column_views that represent the outgoing table_views sliced_table[i][j]
   // where i is the i'th column of the j'th table_view
-  std::vector<std::vector<cudf::column_view>> sliced_table;
-  sliced_table.reserve(indices.size() + 1);
-  std::transform(input.begin(),
-                 input.end(),
-                 std::back_inserter(sliced_table),
-                 [&indices](cudf::column_view const& c) { return cudf::slice(c, indices); });
+  auto op = [&indices](auto const& c) { return cudf::slice(c, indices); };
+  auto f  = thrust::make_transform_iterator(input.begin(), op);
+
+  auto sliced_table = std::vector<std::vector<cudf::column_view>>(f, f + indices.size() + 1);
 
   std::vector<cudf::table_view> result{};
   // distribute columns into outgoing table_views

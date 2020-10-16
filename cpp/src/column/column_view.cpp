@@ -20,6 +20,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <cudf_test/column_wrapper.hpp>
+
 #include <exception>
 #include <vector>
 
@@ -124,11 +126,9 @@ mutable_column_view::operator column_view() const
 
 size_type count_descendants(column_view parent)
 {
-  size_type count{parent.num_children()};
-  for (size_type i = 0; i < parent.num_children(); ++i) {
-    count += count_descendants(parent.child(i));
-  }
-  return count;
+  auto op    = [&](auto i) { return count_descendants(parent.child(i)); };
+  auto begin = cudf::test::make_counting_transform_iterator(0, op);
+  return std::accumulate(begin, begin + parent.num_children(), size_type{parent.num_children()});
 }
 
 column_view logical_cast(column_view const& input, data_type type)

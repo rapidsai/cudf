@@ -25,6 +25,7 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <algorithm>
+#include "cudf_test/column_wrapper.hpp"
 
 namespace cudf {
 namespace detail {
@@ -56,11 +57,9 @@ std::unique_ptr<column> allocate_like(column_view const& input,
   CUDF_EXPECTS(is_fixed_width(input.type()), "Expects only fixed-width type column");
   mask_state allocate_mask = should_allocate_mask(mask_alloc, input.nullable());
 
-  std::vector<std::unique_ptr<column>> children{};
-  children.reserve(input.num_children());
-  for (size_type index = 0; index < input.num_children(); index++) {
-    children.emplace_back(allocate_like(input.child(index), size, mask_alloc, mr, stream));
-  }
+  auto op    = [&](auto i) { return allocate_like(input.child(i), size, mask_alloc, mr, stream); };
+  auto begin = cudf::test::make_counting_transform_iterator(0, op);
+  auto children = std::vector<std::unique_ptr<column>>(begin, begin + input.num_children());
 
   return std::make_unique<column>(input.type(),
                                   size,

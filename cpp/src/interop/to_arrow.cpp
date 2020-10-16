@@ -28,6 +28,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include "cudf_test/column_wrapper.hpp"
 
 namespace cudf {
 namespace detail {
@@ -97,18 +98,12 @@ struct dispatch_to_arrow {
                                                                arrow::MemoryPool* ar_mr,
                                                                cudaStream_t stream)
   {
-    std::vector<std::shared_ptr<arrow::Array>> child_arrays;
-    std::vector<size_type> child_indices(input_view.num_children());
-    std::iota(child_indices.begin(), child_indices.end(), 0);
-    std::transform(child_indices.begin(),
-                   child_indices.end(),
-                   std::back_inserter(child_arrays),
-                   [&input_view, &ar_mr, &stream](auto const& i) {
-                     auto c = input_view.child(i);
-                     return type_dispatcher(
-                       c.type(), dispatch_to_arrow{}, c, c.type().id(), ar_mr, stream);
-                   });
-    return child_arrays;
+    auto op = [&input_view, &ar_mr, &stream](auto i) -> std::shared_ptr<arrow::Array> {
+      auto c = input_view.child(i);
+      return type_dispatcher(c.type(), dispatch_to_arrow{}, c, c.type().id(), ar_mr, stream);
+    };
+    auto begin = cudf::test::make_counting_transform_iterator(0, op);
+    return {begin, begin + input_view.num_children()};
   }
 
   template <typename T>
