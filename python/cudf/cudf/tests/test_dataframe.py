@@ -7775,7 +7775,7 @@ def test_agg_for_dataframes(data):
     pdf = pd.DataFrame(data)
     gdf = gd.DataFrame(data)
 
-    expect = pdf.agg(min,['sum'])
-    got = gdf.agg(min,['sum'])
+    expect = pdf.agg('sum')
+    got = gdf.agg('sum')
 
     assert_eq(expect, got)

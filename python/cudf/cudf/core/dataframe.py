@@ -3722,21 +3722,39 @@ class DataFrame(Frame, Serializable):
             keep_index=not ignore_index,
         )
 
-
     def agg(self, aggs):
         if isinstance(aggs, list):
             result = cudf.DataFrame()
             for agg in aggs:
-                result[agg] = getattr(self,agg)()
+                result[agg] = getattr(self,agg)() 
+            dtypes = [self[col].dtype for col in self._column_names]
+            common_dtype = np.find_common_type(dtypes, [])
+            result = result.astype(common_dtype).T
+            for col in self._column_names:
+                dtype = self[col].dtype if not np.issubdtype(self[col].dtype, np.bool_) else np.int64   
+                result[col] = result[col].astype(dtype)
+
         elif isinstance(aggs, str):
             result = cudf.DataFrame()
-            result[aggs] = getattr(self, agg)()
+            result[aggs] = getattr(self, aggs)()
+            dtypes = [self[col].dtype for col in self._column_names]
+            common_dtype = np.find_common_type(dtypes, [])
+            result = result.astype(common_dtype).T
+
+        elif isinstance(aggs, dict):
+            result = cudf.DataFrame()
+            for key in aggs.keys():
+                for agg in aggs.get(key):
+                    result[agg] = getattr(self,agg)() 
+
+        elif isinstance(aggs, fn, collections.Callable):
+            result = cudf.DataFrame()
+            result[aggs] = getattr(self, aggs)()
+
         else:
             raise ValueError("argument must be a string or list")
-        
-        dtypes = [self[col].dtype for col in self._column_names]
-        common_dtype = np.find_common_type(dtypes)
-        return result.astype(common_dtype).T 
+
+        return result
 
 
     def nlargest(self, n, columns, keep="first"):
