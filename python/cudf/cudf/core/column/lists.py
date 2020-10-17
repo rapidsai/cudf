@@ -10,7 +10,6 @@ from cudf.utils.dtypes import is_list_dtype
 class ListColumn(ColumnBase):
     def __init__(
         self,
-        data,
         size,
         dtype,
         mask=None,
@@ -19,7 +18,7 @@ class ListColumn(ColumnBase):
         children=(),
     ):
         super().__init__(
-            data,
+            None,
             size,
             dtype,
             mask=mask,
@@ -69,8 +68,14 @@ class ListColumn(ColumnBase):
             pa_type, len(self), buffers, children=[elements]
         )
 
-    def __sizeof__(self):
-        return sum(child.__sizeof__() for child in self.base_children)
+    def set_base_data(self, value):
+        if value is not None:
+            raise RuntimeError(
+                "ListColumn's do not use data attribute of Column, use "
+                "`set_base_children` instead"
+            )
+        else:
+            super().set_base_data(value)
 
 
 class ListMethods(ColumnMethodsMixin):
