@@ -69,6 +69,9 @@ class ListColumn(ColumnBase):
             pa_type, len(self), buffers, children=[elements]
         )
 
+    def __sizeof__(self):
+        return sum(child.__sizeof__() for child in self.base_children)
+
 
 class ListMethods(ColumnMethodsMixin):
     """
