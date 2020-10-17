@@ -9,13 +9,7 @@ from cudf.utils.dtypes import is_list_dtype
 
 class ListColumn(ColumnBase):
     def __init__(
-        self,
-        size,
-        dtype,
-        mask=None,
-        offset=0,
-        null_count=None,
-        children=(),
+        self, size, dtype, mask=None, offset=0, null_count=None, children=(),
     ):
         super().__init__(
             None,
