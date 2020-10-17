@@ -379,7 +379,7 @@ class ParquetFieldInt32 {
     return (field_type != ST_FLD_I32);
   }
 
-  int &field(void) { return field_val; }
+  int field() { return field_val; }
 };
 
 /**
@@ -400,7 +400,7 @@ class ParquetFieldInt64 {
     return (field_type < ST_FLD_I16 || field_type > ST_FLD_I64);
   }
 
-  int &field(void) { return field_val; }
+  int field() { return field_val; }
 };
 
 /**
@@ -433,7 +433,7 @@ class ParquetFieldStructListFunctor {
     return false;
   }
 
-  int &field(void) { return field_val; }
+  int field() { return field_val; }
 };
 
 template <typename T>
@@ -468,7 +468,7 @@ class ParquetFieldString {
     }
   }
 
-  int &field(void) { return field_val; }
+  int field() { return field_val; }
 };
 
 /**
@@ -490,7 +490,7 @@ class ParquetFieldStructFunctor {
     return (field_type != ST_FLD_STRUCT || !(cpr->read(&val)));
   }
 
-  int &field(void) { return field_val; }
+  int field() { return field_val; }
 };
 
 template <typename T>
@@ -517,7 +517,7 @@ class ParquetFieldEnum {
     return (field_type != ST_FLD_I32);
   }
 
-  int &field(void) { return field_val; }
+  int field() { return field_val; }
 };
 
 /**
@@ -545,7 +545,7 @@ class ParquetFieldEnumListFunctor {
     return false;
   }
 
-  int &field(void) { return field_val; }
+  int field() { return field_val; }
 };
 
 template <typename T>
@@ -585,7 +585,7 @@ class ParquetFieldStringList {
     return false;
   }
 
-  int &field(void) { return field_val; }
+  int field() { return field_val; }
 };
 
 /**
@@ -608,7 +608,7 @@ class ParquetFieldStructBlob {
     return false;
   }
 
-  int &field(void) { return field_val; }
+  int field() { return field_val; }
 };
 
 }  // namespace parquet

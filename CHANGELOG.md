@@ -134,7 +134,6 @@
 - PR #6326 Simplify interal csv/json kernel parameters
 - PR #6308 Add dictionary support to cudf::scatter with scalar
 - PR #6367 Add JNI bindings for byte casting
-- PR #6346 Remove macros from CompactProtocolWriter
 - PR #6312 Conda recipe dependency cleanup
 - PR #6346 Remove macros from CompactProtocolWriter
 - PR #6347 Add dictionary support to cudf::copy_range
