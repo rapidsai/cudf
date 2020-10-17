@@ -2130,17 +2130,17 @@ class Frame(libcudf.table.Table):
         Identify missing values.
 
         Return a boolean same-sized object indicating if
-        the values are <NA>. <NA> values gets mapped to
+        the values are ``<NA>``. ``<NA>`` values gets mapped to
         ``True`` values. Everything else gets mapped to
-        ``False`` values. <NA> values include:
+        ``False`` values. ``<NA>`` values include:
 
         * Values where null mask is set.
-        * ``np.NAN`` in float dtype.
-        * ``NAT`` in datetime64 and timedelta64 types.
+        * ``NaN`` in float dtype.
+        * ``NaT`` in datetime64 and timedelta64 types.
 
         Characters such as empty strings ``''`` or
-        ``numpy.inf`` incase of float are not
-        considered NA values.
+        ``inf`` incase of float are not
+        considered ``<NA>`` values.
 
         Returns
         -------
@@ -2210,17 +2210,17 @@ class Frame(libcudf.table.Table):
         Identify non-missing values.
 
         Return a boolean same-sized object indicating if
-        the values are not <NA>. Non-missing values get
-        mapped to ``True``. <NA> values get mapped to
-        ``False`` values. <NA> values include:
+        the values are not ``<NA>``. Non-missing values get
+        mapped to ``True``. ``<NA>`` values get mapped to
+        ``False`` values. ``<NA>`` values include:
 
         * Values where null mask is set.
-        * ``np.NAN`` in float dtype.
-        * ``NAT`` in datetime64 and timedelta64 types.
+        * ``NaN`` in float dtype.
+        * ``NaT`` in datetime64 and timedelta64 types.
 
         Characters such as empty strings ``''`` or
-        ``numpy.inf`` incase of float are not
-        considered <NA> values.
+        ``inf`` incase of float are not
+        considered ``<NA>`` values.
 
         Returns
         -------
