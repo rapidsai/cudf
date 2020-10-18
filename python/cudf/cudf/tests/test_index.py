@@ -28,6 +28,7 @@ from cudf.tests.utils import (
     SIGNED_TYPES,
     UNSIGNED_TYPES,
     assert_eq,
+    assert_exceptions_equal,
 )
 
 
@@ -788,13 +789,12 @@ def test_index_difference_sort_error():
     pdi = pd.Index([1, 2, 3])
     gdi = cudf.Index([1, 2, 3])
 
-    try:
-        pdi.difference(pdi, sort=True)
-    except Exception as e:
-        with pytest.raises(type(e), match=e.__str__()):
-            gdi.difference(gdi, sort=True)
-    else:
-        raise AssertionError("Expected pdi.difference to fail when sort=True")
+    assert_exceptions_equal(
+        pdi.difference,
+        gdi.difference,
+        ([pdi], {"sort": True}),
+        ([gdi], {"sort": True}),
+    )
 
 
 @pytest.mark.parametrize(

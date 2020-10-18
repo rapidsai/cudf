@@ -7,7 +7,12 @@ import pytest
 
 import cudf
 from cudf.core import DataFrame, Series
-from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import (
+    INTEGER_TYPES,
+    NUMERIC_TYPES,
+    assert_eq,
+    assert_exceptions_equal,
+)
 
 
 def test_series_replace():
@@ -910,10 +915,9 @@ def test_series_fillna_error():
     psr = pd.Series([1, 2, None, 3, None])
     gsr = cudf.from_pandas(psr)
 
-    try:
-        psr.fillna(pd.DataFrame({"a": [1, 2, 3]}))
-    except Exception as e:
-        with pytest.raises(type(e), match=str(e)):
-            gsr.fillna(cudf.DataFrame({"a": [1, 2, 3]}))
-    else:
-        raise AssertionError("Expected psr.fillna to fail")
+    assert_exceptions_equal(
+        psr.fillna,
+        gsr.fillna,
+        ([pd.DataFrame({"a": [1, 2, 3]})],),
+        ([cudf.DataFrame({"a": [1, 2, 3]})],),
+    )

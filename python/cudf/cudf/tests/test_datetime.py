@@ -1,7 +1,6 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 import datetime
 import datetime as dt
-import re
 
 import cupy as cp
 import numpy as np
@@ -12,7 +11,12 @@ import pytest
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.core.index import DatetimeIndex
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import (
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    assert_eq,
+    assert_exceptions_equal,
+)
 
 
 def data1():
@@ -645,13 +649,9 @@ def test_to_datetime_errors(data):
     else:
         gd_data = pd_data
 
-    try:
-        pd.to_datetime(pd_data)
-    except Exception as e:
-        with pytest.raises(type(e), match=re.escape(str(e))):
-            cudf.to_datetime(gd_data)
-    else:
-        raise AssertionError("Was expecting `pd.to_datetime` to fail")
+    assert_exceptions_equal(
+        pd.to_datetime, cudf.to_datetime, ([pd_data],), ([gd_data],)
+    )
 
 
 def test_to_datetime_not_implemented():

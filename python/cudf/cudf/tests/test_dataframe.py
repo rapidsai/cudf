@@ -2940,15 +2940,12 @@ def test_select_dtype_datetime_with_frequency():
     gdf = gdf.reset_index()
     pdf = gdf.to_pandas()
 
-    try:
-        pdf.select_dtypes("datetime64[ms]")
-    except Exception as e:
-        with pytest.raises(type(e), match=re.escape(str(e))):
-            gdf.select_dtypes("datetime64[ms]")
-    else:
-        raise AssertionError(
-            "Expected pdf.select_dtypes('datetime64[ms]') to fail"
-        )
+    assert_exceptions_equal(
+        pdf.select_dtypes,
+        gdf.select_dtypes,
+        (["datetime64[ms]"],),
+        (["datetime64[ms]"],),
+    )
 
 
 def test_array_ufunc():
@@ -7452,16 +7449,13 @@ def test_dataframe_init_from_series_list_with_index(
 )
 def test_dataframe_init_from_series_list_with_index_error(data, index):
     gd_data = [gd.from_pandas(obj) for obj in data]
-    try:
-        pd.DataFrame(data, index=index)
-    except Exception as e:
-        with pytest.raises(type(e), match=re.escape(str(e))):
-            gd.DataFrame(gd_data, index=index)
-    else:
-        raise AssertionError(
-            "expected pd.DataFrame to because of index mismatch "
-            "with data dimensions"
-        )
+
+    assert_exceptions_equal(
+        pd.DataFrame,
+        gd.DataFrame,
+        ([data], {"index": index}),
+        ([gd_data], {"index": index}),
+    )
 
 
 @pytest.mark.parametrize(

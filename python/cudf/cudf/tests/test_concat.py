@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf as gd
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, assert_exceptions_equal
 from cudf.utils.dtypes import is_categorical_dtype
 
 
@@ -96,22 +96,17 @@ def test_concat_errors():
     df, df2, gdf, gdf2 = make_frames()
 
     # No objs
-    try:
-        pd.concat([])
-    except Exception as e:
-        with pytest.raises(type(e), match=e.__str__()):
-            gd.concat([])
-    else:
-        raise AssertionError("Expected pd.concat to fail for empty input")
+    assert_exceptions_equal(
+        pd.concat, gd.concat, ([], {"objs": []}), ([], {"objs": []})
+    )
 
     # All None
-    try:
-        pd.concat([None, None])
-    except Exception as e:
-        with pytest.raises(type(e), match=e.__str__()):
-            gd.concat([None, None])
-    else:
-        raise AssertionError("Expected pd.concat to fail for all None input")
+    assert_exceptions_equal(
+        pd.concat,
+        gd.concat,
+        ([], {"objs": [None, None]}),
+        ([], {"objs": [None, None]}),
+    )
 
     # Mismatched types
     with pytest.raises(
@@ -321,15 +316,12 @@ def test_pandas_concat_compatibility_axis1_eq_index():
     ps1 = s1.to_pandas()
     ps2 = s2.to_pandas()
 
-    try:
-        pd.concat([ps1, ps2], axis=1)
-    except Exception as e:
-        with pytest.raises(type(e), match=e.__str__()):
-            gd.concat([s1, s2], axis=1)
-    else:
-        raise AssertionError(
-            "Expected pd.concat to fail for different index when axis=1"
-        )
+    assert_exceptions_equal(
+        pd.concat,
+        gd.concat,
+        ([], {"objs": [ps1, ps2], "axis": 1}),
+        ([], {"objs": [s1, s2], "axis": 1}),
+    )
 
 
 def test_concat_duplicate_columns():

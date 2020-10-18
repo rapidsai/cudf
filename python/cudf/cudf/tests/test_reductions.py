@@ -186,11 +186,7 @@ def test_timedelta_unsupported_reductions(op):
     gsr = cudf.Series([1, 2, 3, None], dtype="timedelta64[ns]")
     psr = gsr.to_pandas()
 
-    try:
-        getattr(psr, op)()
-    except Exception as e:
-        with pytest.raises(type(e), match=re.escape(str(e))):
-            getattr(gsr, op)()
+    utils.assert_exceptions_equal(getattr(psr, op), getattr(gsr, op))
 
 
 @pytest.mark.parametrize("op", ["sum", "product", "std", "var"])

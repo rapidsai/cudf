@@ -8,8 +8,8 @@ import pandas as pd
 import pytest
 
 import cudf
-import cudf.tests.utils as utils
-from cudf.tests.utils import assert_eq
+from cudf.tests import utils as utils
+from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 _TIMEDELTA_DATA = [
     [1000000, 200000, 3000000],
@@ -1160,24 +1160,16 @@ def test_timedelta_datetime_cast_invalid():
     sr = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
     psr = sr.to_pandas()
 
-    try:
-        psr.astype("datetime64[ns]")
-    except TypeError as e:
-        with pytest.raises(type(e), match=re.escape(e.__str__())):
-            sr.astype("datetime64[ns]")
-    else:
-        raise AssertionError("Expected timedelta to datetime typecast to fail")
+    assert_exceptions_equal(
+        psr.astype, sr.astype, (["datetime64[ns]"],), (["datetime64[ns]"],)
+    )
 
     sr = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
     psr = sr.to_pandas()
 
-    try:
-        psr.astype("timedelta64[ns]")
-    except TypeError as e:
-        with pytest.raises(type(e), match=re.escape(e.__str__())):
-            sr.astype("timedelta64[ns]")
-    else:
-        raise AssertionError("Expected datetime to timedelta typecast to fail")
+    assert_exceptions_equal(
+        psr.astype, sr.astype, (["timedelta64[ns]"],), (["timedelta64[ns]"],)
+    )
 
 
 @pytest.mark.parametrize("data", [[], [1, 2, 3, 4, 5]])

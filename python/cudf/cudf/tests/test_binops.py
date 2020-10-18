@@ -502,13 +502,7 @@ def test_df_different_index_shape(df2, binop):
     pdf1 = df1.to_pandas()
     pdf2 = df2.to_pandas()
 
-    try:
-        binop(pdf1, pdf2)
-    except Exception as e:
-        with pytest.raises(type(e), match=e.__str__()):
-            binop(df1, df2)
-    else:
-        raise AssertionError(f"Expected {binop} to fail for {pdf1} and {pdf2}")
+    utils.assert_exceptions_equal(binop, binop, ([pdf1, pdf2],), ([df1, df2],))
 
 
 @pytest.mark.parametrize("op", [operator.eq, operator.ne])

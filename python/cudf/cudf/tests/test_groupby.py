@@ -9,7 +9,7 @@ from numpy.testing import assert_array_equal
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_110
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 _now = np.datetime64("now")
 _tomorrow = _now + np.timedelta64(1, "D")
@@ -1049,13 +1049,7 @@ def test_raise_data_error():
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
     gdf = cudf.from_pandas(pdf)
 
-    try:
-        pdf.groupby("a").mean()
-    except Exception as e:
-        with pytest.raises(type(e), match=e.__str__()):
-            gdf.groupby("a").mean()
-    else:
-        raise AssertionError("Expected pandas groupby to fail")
+    assert_exceptions_equal(pdf.groupby("a").mean, gdf.groupby("a").mean)
 
 
 def test_drop_unsupported_multi_agg():

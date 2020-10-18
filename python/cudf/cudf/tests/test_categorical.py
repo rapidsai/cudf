@@ -8,7 +8,7 @@ import cudf as gd
 from cudf.core import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_110
 from cudf.core.index import as_index
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 
 @pytest.fixture
@@ -685,16 +685,13 @@ def test_add_categories_error(data, add):
     pds = pd.Series(data, dtype="category")
     gds = gd.Series(data, dtype="category")
 
-    try:
-        pds.cat.add_categories(add)
-    except Exception as e:
-        with pytest.raises(type(e)):
-            gds.cat.add_categories(add)
-    else:
-        raise AssertionError(
-            f"Expected pandas .cat.add_categories to"
-            f" fail for {pds} and {add} inputs"
-        )
+    assert_exceptions_equal(
+        pds.cat.add_categories,
+        gds.cat.add_categories,
+        ([add],),
+        ([add],),
+        compare_error_message=False,
+    )
 
 
 def test_add_categories_mixed_error():
