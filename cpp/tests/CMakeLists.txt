@@ -350,6 +350,11 @@ set(INCLUSIVE_COPY_IF_TEST_SRC
 
 ConfigureTest(INCLUSIVE_COPY_IF_TEST "${INCLUSIVE_COPY_IF_TEST_SRC}")
 
+set(SCAN_SELECT_IF_TEST_SRC
+"${CMAKE_CURRENT_SOURCE_DIR}/io/algo/scan_select_if_test.cu")
+
+ConfigureTest(SCAN_SELECT_IF_TEST "${SCAN_SELECT_IF_TEST_SRC}")
+
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
 
