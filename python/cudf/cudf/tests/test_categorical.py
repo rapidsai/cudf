@@ -160,8 +160,9 @@ def test_categorical_unary_ceil():
     sr = Series(cat)
 
     assert_exceptions_equal(
-        lfunc=lambda: pdsr.ceil,
+        lfunc=getattr,
         rfunc=sr.ceil,
+        lfunc_args_and_kwargs=([pdsr, "ceil"],),
         expected_exception=TypeError,
         expected_error_message="Series of dtype `category` cannot "
         "perform the operation: ceil",
