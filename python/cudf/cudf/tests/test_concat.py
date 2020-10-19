@@ -97,15 +97,18 @@ def test_concat_errors():
 
     # No objs
     assert_exceptions_equal(
-        pd.concat, gd.concat, ([], {"objs": []}), ([], {"objs": []})
+        lfunc=pd.concat,
+        rfunc=gd.concat,
+        lfunc_args_and_kwargs=([], {"objs": []}),
+        rfunc_args_and_kwargs=([], {"objs": []}),
     )
 
     # All None
     assert_exceptions_equal(
-        pd.concat,
-        gd.concat,
-        ([], {"objs": [None, None]}),
-        ([], {"objs": [None, None]}),
+        lfunc=pd.concat,
+        rfunc=gd.concat,
+        lfunc_args_and_kwargs=([], {"objs": [None, None]}),
+        rfunc_args_and_kwargs=([], {"objs": [None, None]}),
     )
 
     # Mismatched types
@@ -328,10 +331,10 @@ def test_pandas_concat_compatibility_axis1_eq_index():
     ps2 = s2.to_pandas()
 
     assert_exceptions_equal(
-        pd.concat,
-        gd.concat,
-        ([], {"objs": [ps1, ps2], "axis": 1}),
-        ([], {"objs": [s1, s2], "axis": 1}),
+        lfunc=pd.concat,
+        rfunc=gd.concat,
+        lfunc_args_and_kwargs=([], {"objs": [ps1, ps2], "axis": 1}),
+        rfunc_args_and_kwargs=([], {"objs": [s1, s2], "axis": 1}),
     )
 
 

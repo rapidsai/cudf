@@ -327,8 +327,8 @@ def test_multiindex_loc_rows_0(pdf, gdf, pdfIndex):
     gdf.index = gdfIndex
 
     assert_exceptions_equal(
-        lfunc=pdf.loc.__setitem__,
-        rfunc=gdf.loc.__setitem__,
+        lfunc=pdf.loc.__getitem__,
+        rfunc=gdf.loc.__getitem__,
         lfunc_args_and_kwargs=([(("d",), slice(None, None, None))],),
         rfunc_args_and_kwargs=([(("d",), slice(None, None, None))],),
     )

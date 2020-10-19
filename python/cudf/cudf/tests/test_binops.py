@@ -502,7 +502,12 @@ def test_df_different_index_shape(df2, binop):
     pdf1 = df1.to_pandas()
     pdf2 = df2.to_pandas()
 
-    utils.assert_exceptions_equal(binop, binop, ([pdf1, pdf2],), ([df1, df2],))
+    utils.assert_exceptions_equal(
+        lfunc=binop,
+        rfunc=binop,
+        lfunc_args_and_kwargs=([pdf1, pdf2],),
+        rfunc_args_and_kwargs=([df1, df2],),
+    )
 
 
 @pytest.mark.parametrize("op", [operator.eq, operator.ne])
