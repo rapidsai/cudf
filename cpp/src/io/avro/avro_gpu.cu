@@ -261,11 +261,7 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
   } else {
     schema = schema_g;
   }
-  if (block_id < num_blocks and threadIdx.x == 0) {
-    *blk = blocks[block_id];
-    // RGSL
-    //__threadfence_block();
-  }
+  if (block_id < num_blocks and threadIdx.x == 0) { *blk = blocks[block_id]; }
   __syncthreads();
   if (block_id >= num_blocks) { return; }
   cur_row        = blk->first_row;
