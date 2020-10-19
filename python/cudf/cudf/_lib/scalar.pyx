@@ -102,7 +102,7 @@ cdef class Scalar:
     def _device_value_current(self):
         return self.uptr._device_uptr != NULL
 
-    def set_device_value(self, value, dtype):
+    def _set_device_value(self, value, dtype):
         valid = not is_null_host_scalar(value)
 
         if pd.api.types.is_string_dtype(dtype):
@@ -171,13 +171,13 @@ cdef class Scalar:
         if self._host_value_current() and self._device_value_current():
             return
         elif self._host_value_current() and not self._device_value_current():
-            self.set_device_value(self._host_value, self._host_dtype)
+            self._set_device_value(self._host_value, self._host_dtype)
         elif self._device_value_current() and not self._host_value_current():
             self._host_value = self.get_device_value()
 
     cdef _ScalarUptrWrapper get_uptr(self):
         if not self._device_value_current():
-            self.set_device_value(self._host_value, self._host_dtype)
+            self._set_device_value(self._host_value, self._host_dtype)
         return self.uptr
 
     cpdef bool is_valid(self):
