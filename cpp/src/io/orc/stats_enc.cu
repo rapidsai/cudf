@@ -43,9 +43,9 @@ __global__ void __launch_bounds__(init_threads_per_block)
                              uint32_t row_index_stride)
 {
   __shared__ __align__(4) statistics_group group_g[init_groups_per_block];
-  uint32_t col_id                  = blockIdx.y;
-  uint32_t chunk_id                = (blockIdx.x * init_groups_per_block) + threadIdx.y;
-  uint32_t t                       = threadIdx.x;
+  uint32_t col_id         = blockIdx.y;
+  uint32_t chunk_id       = (blockIdx.x * init_groups_per_block) + threadIdx.y;
+  uint32_t t              = threadIdx.x;
   statistics_group *group = &group_g[threadIdx.y];
   if (chunk_id < num_rowgroups) {
     if (t == 0) {
@@ -251,9 +251,9 @@ __global__ void __launch_bounds__(encode_threads_per_block)
   }
   __syncthreads();
   if (idx < statistics_count and t == 0) {
-      s->col = *(s->group.col);
-      s->base = blob_bfr + s->group.start_chunk;
-      s->end  = blob_bfr + s->group.start_chunk + s->group.num_chunks;
+    s->col  = *(s->group.col);
+    s->base = blob_bfr + s->group.start_chunk;
+    s->end  = blob_bfr + s->group.start_chunk + s->group.num_chunks;
   }
   __syncthreads();
   // Encode and update actual bfr size

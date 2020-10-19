@@ -202,13 +202,9 @@ extern "C" __global__ void __launch_bounds__(128)
   int chunk               = (blockIdx.x << 2) + (threadIdx.x >> 5);
   byte_stream_s *const bs = &bs_g[threadIdx.x >> 5];
 
-  if (chunk < num_chunks) {
-    // NOTE: Assumes that sizeof(ColumnChunkDesc) <= 128
-    if (t < sizeof(ColumnChunkDesc) / sizeof(uint32_t)) {
-      ((uint32_t *)&bs->ck)[t] = ((const uint32_t *)&chunks[chunk])[t];
-    }
-  }
+  if (chunk < num_chunks and t == 0) bs->ck = chunks[chunk];
   __syncthreads();
+
   if (chunk < num_chunks) {
     size_t num_values, values_found;
     uint32_t data_page_count       = 0;
@@ -270,12 +266,7 @@ extern "C" __global__ void __launch_bounds__(128)
         }
       }
       index_out = SHFL0(index_out);
-      if (index_out >= 0 && index_out < max_num_pages) {
-        // NOTE: Assumes that sizeof(PageInfo) <= 128
-        if (t < sizeof(PageInfo) / sizeof(uint32_t)) {
-          ((uint32_t *)(page_info + index_out))[t] = ((const uint32_t *)&bs->page)[t];
-        }
-      }
+      if (index_out >= 0 && index_out < max_num_pages && t == 0) page_info[index_out] = bs->page;
       num_values = SHFL0(num_values);
       SYNCWARP();
     }
@@ -306,13 +297,9 @@ extern "C" __global__ void __launch_bounds__(128)
   int t                     = threadIdx.x & 0x1f;
   int chunk                 = (blockIdx.x << 2) + (threadIdx.x >> 5);
   ColumnChunkDesc *const ck = &chunk_g[threadIdx.x >> 5];
-  if (chunk < num_chunks) {
-    // NOTE: Assumes that sizeof(ColumnChunkDesc) <= 128
-    if (t < sizeof(ColumnChunkDesc) / sizeof(uint32_t)) {
-      ((uint32_t *)ck)[t] = ((const uint32_t *)&chunks[chunk])[t];
-    }
-  }
+  if (chunk < num_chunks and t == 0) *ck = chunks[chunk];
   __syncthreads();
+
   if (chunk >= num_chunks) { return; }
   if (!t && ck->num_dict_pages > 0 && ck->str_dict_index) {
     // Data type to describe a string

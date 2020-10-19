@@ -381,8 +381,8 @@ __global__ void __launch_bounds__(block_size)
   __shared__ typename warp_reduce::TempStorage temp_storage[block_size / 32];
 
   build_state_s *const s = &state_g;
-  uint32_t col_id                 = blockIdx.x;
-  uint32_t stripe_id              = blockIdx.y;
+  uint32_t col_id        = blockIdx.x;
+  uint32_t stripe_id     = blockIdx.y;
   uint32_t num_strings;
   uint32_t *dict_data, *dict_index;
   uint32_t dict_char_count;

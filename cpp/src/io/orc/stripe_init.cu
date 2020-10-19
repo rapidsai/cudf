@@ -13,10 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <trove/block.h>
 #include <io/utilities/block_utils.cuh>
 #include "orc_common.h"
 #include "orc_gpu.h"
-#include <trove/block.h>
 
 namespace cudf {
 namespace io {
@@ -34,15 +34,15 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
   __shared__ compressed_stream_s strm_g[4];
 
   compressed_stream_s *const s = &strm_g[threadIdx.x >> 5];
-  int strm_id                           = blockIdx.x * 4 + (threadIdx.x >> 5);
-  int t                                 = threadIdx.x & 0x1f;
+  int strm_id                  = blockIdx.x * 4 + (threadIdx.x >> 5);
+  int t                        = threadIdx.x & 0x1f;
 
   if (t == 0) {
-      s->info = strm_info[strm_id];
-      // CompressedStreamInfo info = trove::load(&strm_info[strm_id]);
-      // trove::store(info, &(s->info));
+    s->info = strm_info[strm_id];
+    // CompressedStreamInfo info = trove::load(&strm_info[strm_id]);
+    // trove::store(info, &(s->info));
   }
-  
+
   __syncthreads();
   if (strm_id < num_streams) {
     // Walk through the compressed blocks
@@ -102,7 +102,7 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
         s->ctl.dstSize   = uncompressed_size;
       }
       SYNCWARP();
-      if (init_ctl && t == 0 ) *init_ctl = s->ctl;
+      if (init_ctl && t == 0) *init_ctl = s->ctl;
       cur += block_len;
       max_uncompressed_size += uncompressed_size;
     }
@@ -125,8 +125,8 @@ extern "C" __global__ void __launch_bounds__(128, 8)
   __shared__ compressed_stream_s strm_g[4];
 
   compressed_stream_s *const s = &strm_g[threadIdx.x >> 5];
-  int strm_id                           = blockIdx.x * 4 + (threadIdx.x >> 5);
-  int t                                 = threadIdx.x & 0x1f;
+  int strm_id                  = blockIdx.x * 4 + (threadIdx.x >> 5);
+  int t                        = threadIdx.x & 0x1f;
 
   if (strm_id < num_streams && t == 0) s->info = strm_info[strm_id];
 
@@ -417,7 +417,7 @@ extern "C" __global__ void __launch_bounds__(128, 8)
   if (t == 0) s->chunk = chunks[chunk_id];
 
   __syncthreads();
-  if (strm_len > 0) {
+  if (strm_info) {
     if (t == 0) s->strm_info[0] = strm_info[s->chunk.strm_id[0]];
     if (t == 64) s->strm_info[1] = strm_info[s->chunk.strm_id[1]];
   }

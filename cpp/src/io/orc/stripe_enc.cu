@@ -987,7 +987,7 @@ __global__ void __launch_bounds__(block_size)
   __syncthreads();
   chunk_id = s->u.dict_stripe.start_chunk * num_columns + s->u.dict_stripe.column_id;
   if (t == 0) {
-    s->chunk = chunks[chunk_id];
+    s->chunk         = chunks[chunk_id];
     s->strm_pos[cid] = 0;
     s->numlengths    = 0;
     s->nrows         = s->u.dict_stripe.num_strings;
@@ -1125,8 +1125,8 @@ __global__ void __launch_bounds__(256) gpuInitCompressionBlocks(StripeStream *st
   uint32_t num_blocks;
   uint8_t *src, *dst;
 
-  if (t == 0) { 
-    ss = strm_desc[strm_id];
+  if (t == 0) {
+    ss            = strm_desc[strm_id];
     uncomp_base_g = chunks[ss.first_chunk_id].streams[ss.stream_type];
   }
   __syncthreads();

@@ -21,6 +21,7 @@
 
 #include <thrust/gather.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <trove/block.h>
 
 namespace cudf {
 namespace io {
@@ -128,10 +129,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
   uint32_t t                 = threadIdx.x;
   uint32_t start_row, dtype_len, dtype_len_in, dtype;
 
-  if (t < sizeof(EncColumnDesc) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->col)[t] =
-      reinterpret_cast<const uint32_t *>(&col_desc[blockIdx.x])[t];
-  }
+  if (t == 0) s->col = col_desc[blockIdx.x];
   for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += block_size) {
     if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
   }
@@ -397,10 +395,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     }
   }
   __syncthreads();
-  if (t < sizeof(PageFragment) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&frag[blockIdx.x * num_fragments + blockIdx.y])[t] =
-      reinterpret_cast<uint32_t *>(&s->frag)[t];
-  }
+  if (t == 0) frag[blockIdx.x * num_fragments + blockIdx.y] = s->frag;
 }
 
 // blockDim {128,1,1}
@@ -423,10 +418,7 @@ __global__ void __launch_bounds__(128) gpuInitFragmentStats(statistics_group *gr
     g->num_rows  = fragments[column_id * num_fragments + frag_id].num_rows;
   }
   __syncthreads();
-  if (t < sizeof(statistics_group) / sizeof(uint32_t) && frag_id < num_fragments) {
-    reinterpret_cast<uint32_t *>(&groups[column_id * num_fragments + frag_id])[t] =
-      reinterpret_cast<uint32_t *>(g)[t];
-  }
+  if (frag_id < num_fragments and t == 0) groups[column_id * num_fragments + frag_id] = *g;
 }
 
 // blockDim {128,1,1}
@@ -446,13 +438,9 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
 
   uint32_t t = threadIdx.x;
 
-  if (t < sizeof(EncColumnDesc) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&col_g)[t] =
-      reinterpret_cast<const uint32_t *>(&col_desc[blockIdx.x])[t];
-  }
-  if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&ck_g)[t] =
-      reinterpret_cast<const uint32_t *>(&chunks[blockIdx.y * num_columns + blockIdx.x])[t];
+  if (t == 0) {
+    col_g = col_desc[blockIdx.x];
+    ck_g  = chunks[blockIdx.y * num_columns + blockIdx.x];
   }
   __syncthreads();
   if (t < 32) {
@@ -495,13 +483,9 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
         comp_page_offset += page_g.max_hdr_size + GetMaxCompressedBfrSize(page_g.max_data_size);
       }
       SYNCWARP();
-      if (pages && t < sizeof(EncPage) / sizeof(uint32_t)) {
-        reinterpret_cast<uint32_t *>(&pages[ck_g.first_page])[t] =
-          reinterpret_cast<uint32_t *>(&page_g)[t];
-      }
-      if (page_grstats && t < sizeof(statistics_merge_group) / sizeof(uint32_t)) {
-        reinterpret_cast<uint32_t *>(&page_grstats[ck_g.first_page])[t] =
-          reinterpret_cast<uint32_t *>(&pagestats_g)[t];
+      if (t == 0) {
+        if (pages) pages[ck_g.first_page] = page_g;
+        if (page_grstats) page_grstats[ck_g.first_page] = pagestats_g;
       }
       num_pages = 1;
     }
@@ -516,9 +500,10 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
       uint32_t fragment_data_size, max_page_size, minmax_len = 0;
       SYNCWARP();
       if (num_rows < ck_g.num_rows) {
-        if (t < sizeof(PageFragment) / sizeof(uint32_t)) {
-          reinterpret_cast<uint32_t *>(&frag_g)[t] =
-            reinterpret_cast<const uint32_t *>(&ck_g.fragments[fragments_in_chunk])[t];
+        if (t == 0) {
+          frag_g = ck_g.fragments[fragments_in_chunk];
+          // PageFragment frag = trove::load(&ck_g.fragments[fragments_in_chunk]);
+          // trove::store(frag, &(frag_g));
         }
         if (!t && ck_g.stats && col_g.stats_dtype == dtype_string) {
           minmax_len = max(ck_g.stats[fragments_in_chunk].min_value.str_val.length,
@@ -609,14 +594,20 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
           ck_max_stats_len = max(ck_max_stats_len, max_stats_len);
         }
         SYNCWARP();
-        if (pages && t < sizeof(EncPage) / sizeof(uint32_t)) {
-          reinterpret_cast<uint32_t *>(&pages[ck_g.first_page + num_pages])[t] =
-            reinterpret_cast<uint32_t *>(&page_g)[t];
+        if (t == 0) {
+          if (pages) {
+            pages[ck_g.first_page + num_pages] = page_g;
+            // EncPage page = trove::load(&page_g);
+            // trove::store(page, &pages[ck_g.first_page + num_pages]);
+          }
+
+          if (page_grstats) {
+            page_grstats[ck_g.first_page + num_pages] = pagestats_g;
+            // statistics_merge_group mg = trove::load(&pagestats_g);
+            // trove::store(mg, &page_grstats[ck_g.first_page + num_pages]);
+          }
         }
-        if (page_grstats && t < sizeof(statistics_merge_group) / sizeof(uint32_t)) {
-          reinterpret_cast<uint32_t *>(&page_grstats[ck_g.first_page + num_pages])[t] =
-            reinterpret_cast<uint32_t *>(&pagestats_g)[t];
-        }
+
         num_pages++;
         page_size           = 0;
         rows_in_page        = 0;
@@ -650,13 +641,9 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
     }
   }
   __syncthreads();
-  if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&chunks[blockIdx.y * num_columns + blockIdx.x])[t] =
-      reinterpret_cast<uint32_t *>(&ck_g)[t];
-  }
-  if (chunk_grstats && t < sizeof(statistics_merge_group) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&chunk_grstats[blockIdx.y * num_columns + blockIdx.x])[t] =
-      reinterpret_cast<uint32_t *>(&pagestats_g)[t];
+  if (t == 0) {
+    chunks[blockIdx.y * num_columns + blockIdx.x] = ck_g;
+    if (chunk_grstats) chunk_grstats[blockIdx.y * num_columns + blockIdx.x] = pagestats_g;
   }
 }
 
@@ -949,21 +936,15 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   uint32_t dtype, dtype_len_in, dtype_len_out;
   int32_t dict_bits;
 
-  if (t < sizeof(EncPage) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->page)[t] =
-      reinterpret_cast<uint32_t *>(&pages[start_page + blockIdx.x])[t];
-  }
+  if (t == 0) s->page = pages[start_page + blockIdx.x];
   __syncthreads();
-  if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->ck)[t] =
-      reinterpret_cast<const uint32_t *>(&chunks[s->page.chunk_id])[t];
-  }
+
+  if (t == 0) s->ck = chunks[s->page.chunk_id];
   __syncthreads();
-  if (t < sizeof(EncColumnDesc) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->col)[t] =
-      reinterpret_cast<const uint32_t *>(s->ck.col_desc)[t];
-  }
+
+  if (t == 0) s->col = *s->ck.col_desc;
   __syncthreads();
+
   if (!t) { s->cur = s->page.page_data + s->page.max_hdr_size; }
   __syncthreads();
   // Encode Repetition and Definition levels
@@ -1206,17 +1187,10 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
     s->comp_out.reserved         = 0;
   }
   __syncthreads();
-  if (t < sizeof(EncPage) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&pages[start_page + blockIdx.x])[t] =
-      reinterpret_cast<uint32_t *>(&s->page)[t];
-  }
-  if (comp_in && t < sizeof(gpu_inflate_input_s) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&comp_in[blockIdx.x])[t] =
-      reinterpret_cast<uint32_t *>(&s->comp_in)[t];
-  }
-  if (comp_out && t < sizeof(gpu_inflate_status_s) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&comp_out[blockIdx.x])[t] =
-      reinterpret_cast<uint32_t *>(&s->comp_out)[t];
+  if (t == 0) {
+    pages[start_page + blockIdx.x] = s->page;
+    if (comp_in) comp_in[blockIdx.x] = s->comp_in;
+    if (comp_out) comp_out[blockIdx.x] = s->comp_out;
   }
 }
 
@@ -1236,11 +1210,10 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(EncColumnChunk *chun
   uint32_t compressed_data_size   = 0;
   uint32_t first_page, num_pages;
 
-  if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&ck_g)[t] =
-      reinterpret_cast<const uint32_t *>(&chunks[blockIdx.x])[t];
+  if (t == 0) {
+    ck_g = chunks[blockIdx.x];
+    atomicAnd(&error_count, 0);
   }
-  if (t == 0) { atomicAnd(&error_count, 0); }
   __syncthreads();
   if (t < 32) {
     first_page = ck_g.first_page;
@@ -1446,20 +1419,15 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
 
   uint32_t t = threadIdx.x;
 
-  if (t < sizeof(EncPage) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&page_g)[t] =
-      reinterpret_cast<uint32_t *>(&pages[start_page + blockIdx.x])[t];
-  }
+  if (t == 0) page_g = pages[start_page + blockIdx.x];
   __syncthreads();
-  if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&ck_g)[t] =
-      reinterpret_cast<const uint32_t *>(&chunks[page_g.chunk_id])[t];
-  }
+
+  if (t == 0) ck_g = chunks[page_g.chunk_id];
   __syncthreads();
-  if (t < sizeof(EncColumnDesc) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&col_g)[t] = reinterpret_cast<const uint32_t *>(ck_g.col_desc)[t];
-  }
+
+  if (t == 0) col_g = *ck_g.col_desc;
   __syncthreads();
+
   if (!t) {
     uint8_t *hdr_start, *hdr_end;
     uint32_t compressed_page_size, uncompressed_page_size;
@@ -1524,10 +1492,7 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
     page_g.hdr_size = (uint32_t)(hdr_end - hdr_start);
   }
   __syncthreads();
-  if (t < sizeof(EncPage) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&pages[start_page + blockIdx.x])[t] =
-      reinterpret_cast<uint32_t *>(&page_g)[t];
-  }
+  if (t == 0) pages[start_page + blockIdx.x] = page_g;
 }
 
 // blockDim(1024, 1, 1)
@@ -1541,11 +1506,9 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
   const EncPage *first_page;
   uint32_t num_pages, uncompressed_size;
 
-  if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&ck_g)[t] =
-      reinterpret_cast<const uint32_t *>(&chunks[blockIdx.x])[t];
-  }
+  if (t == 0) ck_g = chunks[blockIdx.x];
   __syncthreads();
+
   first_page = &pages[ck_g.first_page];
   num_pages  = ck_g.num_pages;
   dst        = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;
@@ -1556,9 +1519,10 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
     const uint8_t *src;
     uint32_t hdr_len, data_len;
 
-    if (t < sizeof(EncPage) / sizeof(uint32_t)) {
-      reinterpret_cast<uint32_t *>(&page_g)[t] =
-        reinterpret_cast<const uint32_t *>(&first_page[page])[t];
+    if (t == 0) {
+      page_g = first_page[page];
+      // EncPage pg = trove::load(&first_page[page]);
+      // trove::store(pg, &page_g);
     }
     __syncthreads();
 

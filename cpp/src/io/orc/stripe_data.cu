@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
+#include <trove/block.h>
 #include <io/utilities/block_utils.cuh>
 #include "orc_common.h"
 #include "orc_gpu.h"
-#include <trove/block.h>
 
 #define LOG2_BYTESTREAM_BFRSZ 13  // Must be able to handle 512x 8-byte values
 
@@ -1497,7 +1497,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
     chunk_id = blockIdx.x;
   }
   if (t == 0) s->chunk = chunks[chunk_id];
-  
+
   __syncthreads();
   if (t == 0) {
     // If we have an index, seek to the initial run and update row positions

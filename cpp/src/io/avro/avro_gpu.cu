@@ -261,10 +261,10 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
   } else {
     schema = schema_g;
   }
-  if (block_id < num_blocks && threadIdx.x < sizeof(block_desc_s) / sizeof(uint32_t)) {
-    reinterpret_cast<volatile uint32_t *>(blk)[threadIdx.x] =
-      reinterpret_cast<const uint32_t *>(&blocks[block_id])[threadIdx.x];
-    __threadfence_block();
+  if (block_id < num_blocks and threadIdx.x == 0) {
+    *blk = blocks[block_id];
+    // RGSL
+    //__threadfence_block();
   }
   __syncthreads();
   if (block_id >= num_blocks) { return; }
