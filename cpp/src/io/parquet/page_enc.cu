@@ -21,7 +21,6 @@
 
 #include <thrust/gather.h>
 #include <thrust/iterator/discard_iterator.h>
-#include <trove/block.h>
 
 namespace cudf {
 namespace io {
@@ -500,8 +499,6 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
       if (num_rows < ck_g.num_rows) {
         if (t == 0) {
           frag_g = ck_g.fragments[fragments_in_chunk];
-          // PageFragment frag = trove::load(&ck_g.fragments[fragments_in_chunk]);
-          // trove::store(frag, &(frag_g));
         }
         if (!t && ck_g.stats && col_g.stats_dtype == dtype_string) {
           minmax_len = max(ck_g.stats[fragments_in_chunk].min_value.str_val.length,
@@ -595,14 +592,10 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
         if (t == 0) {
           if (pages) {
             pages[ck_g.first_page + num_pages] = page_g;
-            // EncPage page = trove::load(&page_g);
-            // trove::store(page, &pages[ck_g.first_page + num_pages]);
           }
 
           if (page_grstats) {
             page_grstats[ck_g.first_page + num_pages] = pagestats_g;
-            // statistics_merge_group mg = trove::load(&pagestats_g);
-            // trove::store(mg, &page_grstats[ck_g.first_page + num_pages]);
           }
         }
 
@@ -1519,8 +1512,6 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
 
     if (t == 0) {
       page_g = first_page[page];
-      // EncPage pg = trove::load(&first_page[page]);
-      // trove::store(pg, &page_g);
     }
     __syncthreads();
 

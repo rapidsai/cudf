@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <trove/block.h>
 #include <io/utilities/block_utils.cuh>
 #include "orc_common.h"
 #include "orc_gpu.h"

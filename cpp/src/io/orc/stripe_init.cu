@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <trove/block.h>
 #include <io/utilities/block_utils.cuh>
 #include "orc_common.h"
 #include "orc_gpu.h"
@@ -39,8 +38,6 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
 
   if (t == 0) {
     s->info = strm_info[strm_id];
-    // CompressedStreamInfo info = trove::load(&strm_info[strm_id]);
-    // trove::store(info, &(s->info));
   }
 
   __syncthreads();
