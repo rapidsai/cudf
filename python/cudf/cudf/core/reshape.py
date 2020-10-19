@@ -214,7 +214,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             raise ValueError(f"cannot concatenate object of type {type(o)}")
 
     allowed_typs = {cudf.Series, cudf.DataFrame}
-    typ = list(typs)[0]
 
     param_axis = _axis_map.get(axis, None)
     if param_axis is None:
