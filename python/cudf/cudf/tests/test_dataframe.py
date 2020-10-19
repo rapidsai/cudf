@@ -437,20 +437,47 @@ def test_dataframe_drop_labels_axis_1(pdf, labels, inplace):
 
 def test_dataframe_drop_error():
     df = gd.DataFrame({"a": [1], "b": [2], "c": [3]})
-    with pytest.raises(KeyError, match="column 'd' does not exist"):
-        df.drop(columns="d")
+    pdf = df.to_pandas()
 
-    with pytest.raises(KeyError, match="column 'd' does not exist"):
-        df.drop(columns=["a", "d", "b"])
+    assert_exceptions_equal(
+        lfunc=pdf.drop,
+        rfunc=df.drop,
+        lfunc_args_and_kwargs=([], {"columns": "d"}),
+        rfunc_args_and_kwargs=([], {"columns": "d"}),
+        expected_error_message="column 'd' does not exist",
+    )
 
-    with pytest.raises(ValueError, match="Cannot specify both"):
-        df.drop("a", axis=1, columns="a")
+    assert_exceptions_equal(
+        lfunc=pdf.drop,
+        rfunc=df.drop,
+        lfunc_args_and_kwargs=([], {"columns": ["a", "d", "b"]}),
+        rfunc_args_and_kwargs=([], {"columns": ["a", "d", "b"]}),
+        expected_error_message="column 'd' does not exist",
+    )
 
-    with pytest.raises(ValueError, match="Need to specify at least"):
-        df.drop(axis=1)
+    assert_exceptions_equal(
+        lfunc=pdf.drop,
+        rfunc=df.drop,
+        lfunc_args_and_kwargs=(["a"], {"columns": "a", "axis": 1}),
+        rfunc_args_and_kwargs=(["a"], {"columns": "a", "axis": 1}),
+        expected_error_message="Cannot specify both",
+    )
 
-    with pytest.raises(KeyError, match="One or more values not found in axis"):
-        df.drop([2, 0])
+    assert_exceptions_equal(
+        lfunc=pdf.drop,
+        rfunc=df.drop,
+        lfunc_args_and_kwargs=([], {"axis": 1}),
+        rfunc_args_and_kwargs=([], {"axis": 1}),
+        expected_error_message="Need to specify at least",
+    )
+
+    assert_exceptions_equal(
+        lfunc=pdf.drop,
+        rfunc=df.drop,
+        lfunc_args_and_kwargs=([[2, 0]],),
+        rfunc_args_and_kwargs=([[2, 0]],),
+        expected_error_message="One or more values not found in axis",
+    )
 
 
 def test_dataframe_drop_raises():
@@ -560,7 +587,7 @@ def test_dataframe_index_rename(axis):
     # `pandas` can support indexes with mixed values. We throw a
     # `NotImplementedError`.
     with pytest.raises(NotImplementedError):
-        got = gdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
+        gdf.rename(mapper={1: "x", 2: "y"}, axis=axis)
 
 
 def test_dataframe_MI_rename():
@@ -4257,11 +4284,14 @@ def test_isin_multiindex(data, values, level, err):
 
         assert_eq(got, expected)
     else:
-        with pytest.raises((ValueError, TypeError)):
-            pmdx.isin(values, level=level)
-
-        with pytest.raises(err):
-            gmdx.isin(values, level=level)
+        assert_exceptions_equal(
+            lfunc=pmdx.isin,
+            rfunc=gmdx.isin,
+            lfunc_args_and_kwargs=([values], {"level": level}),
+            rfunc_args_and_kwargs=([values], {"level": level}),
+            expected_exception=err,
+            compare_error_message=False,
+        )
 
 
 @pytest.mark.parametrize(
