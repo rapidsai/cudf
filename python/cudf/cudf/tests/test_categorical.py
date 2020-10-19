@@ -1,5 +1,7 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
+import operator
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -97,15 +99,12 @@ def test_categorical_compare_unordered():
     assert not sr.cat.ordered
 
     # test using ordered operators
-    with pytest.raises(TypeError) as raises:
-        pdsr < pdsr
-
-    raises.match("Unordered Categoricals can only compare equality or not")
-
-    with pytest.raises(TypeError) as raises:
-        sr < sr
-
-    raises.match("Unordered Categoricals can only compare equality or not")
+    assert_exceptions_equal(
+        lfunc=operator.lt,
+        rfunc=operator.lt,
+        lfunc_args_and_kwargs=([pdsr, pdsr],),
+        rfunc_args_and_kwargs=([sr, sr],),
+    )
 
 
 def test_categorical_compare_ordered():
@@ -145,14 +144,13 @@ def test_categorical_binary_add():
     pdsr = pd.Series(cat)
     sr = Series(cat)
 
-    with pytest.raises(TypeError) as raises:
-        pdsr + pdsr
-    raises.match("unsupported operand")
-
-    with pytest.raises(TypeError) as raises:
-        sr + sr
-    raises.match(
-        "Series of dtype `category` cannot perform the operation: add"
+    assert_exceptions_equal(
+        lfunc=operator.add,
+        rfunc=operator.add,
+        lfunc_args_and_kwargs=([pdsr, pdsr],),
+        rfunc_args_and_kwargs=([sr, sr],),
+        expected_error_message="Series of dtype `category` cannot perform "
+        "the operation: add",
     )
 
 
@@ -161,14 +159,12 @@ def test_categorical_unary_ceil():
     pdsr = pd.Series(cat)
     sr = Series(cat)
 
-    with pytest.raises(AttributeError) as raises:
-        pdsr.ceil()
-    raises.match(r"""no attribute ['"]ceil['"]""")
-
-    with pytest.raises(TypeError) as raises:
-        sr.ceil()
-    raises.match(
-        "Series of dtype `category` cannot perform the operation: ceil"
+    assert_exceptions_equal(
+        lfunc=lambda: pdsr.ceil,
+        rfunc=sr.ceil,
+        expected_exception=TypeError,
+        expected_error_message="Series of dtype `category` cannot "
+        "perform the operation: ceil",
     )
 
 
@@ -242,15 +238,24 @@ def test_cat_series_binop_error():
     dfb = df["b"]
 
     # lhs is a categorical
-    with pytest.raises(TypeError) as raises:
-        dfa + dfb
-    raises.match(
-        "Series of dtype `category` cannot perform the operation: add"
+    assert_exceptions_equal(
+        lfunc=operator.add,
+        rfunc=operator.add,
+        lfunc_args_and_kwargs=([dfa, dfb],),
+        rfunc_args_and_kwargs=([dfa, dfb],),
+        expected_exception=TypeError,
+        expected_error_message="Series of dtype `category` cannot "
+        "perform the operation: add",
     )
     # if lhs is a numerical
-    with pytest.raises(TypeError) as raises:
-        dfb + dfa
-    raises.match("'add' operator not supported")
+    assert_exceptions_equal(
+        lfunc=operator.add,
+        rfunc=operator.add,
+        lfunc_args_and_kwargs=([dfb, dfa],),
+        rfunc_args_and_kwargs=([dfb, dfa],),
+        expected_exception=TypeError,
+        expected_error_message="'add' operator not supported",
+    )
 
 
 @pytest.mark.parametrize("num_elements", [10, 100, 1000])
@@ -453,10 +458,13 @@ def test_categorical_remove_categories(pd_str_cat, inplace):
     assert_eq(pd_sr_1, cd_sr_1)
 
     # test using ordered operators
-    with pytest.raises(ValueError) as raises:
-        cd_sr_1 = cd_sr.cat.remove_categories(["a", "d"], inplace=inplace)
-
-    raises.match("removals must all be in old categories")
+    assert_exceptions_equal(
+        lfunc=cd_sr.to_pandas().cat.remove_categories,
+        rfunc=cd_sr.cat.remove_categories,
+        lfunc_args_and_kwargs=([["a", "d"]], {"inplace": inplace}),
+        rfunc_args_and_kwargs=([["a", "d"]], {"inplace": inplace}),
+        expected_error_message="removals must all be in old categories",
+    )
 
 
 def test_categorical_dataframe_slice_copy():

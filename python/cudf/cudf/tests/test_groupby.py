@@ -439,6 +439,7 @@ def test_advanced_groupby_levels():
     assert_eq(pdh, gdh)
     pdg = pdf.groupby(["x", "y", "z"]).sum()
     gdg = gdf.groupby(["x", "y", "z"]).sum()
+    assert_eq(pdg, gdg)
     pdg = pdf.groupby(["z"]).sum()
     gdg = gdf.groupby(["z"]).sum()
     assert_eq(pdg, gdg)
@@ -467,14 +468,14 @@ def test_advanced_groupby_levels():
     assert_eq(pdh, gdh)
     pdg = pdf.groupby(["x", "y"]).sum()
     gdg = gdf.groupby(["x", "y"]).sum()
-    with pytest.raises(IndexError) as raises:
-        pdh = pdg.groupby(level=2).sum()
-    raises.match("Too many levels")
-    with pytest.raises(IndexError) as raises:
-        gdh = gdg.groupby(level=2).sum()
-    # we use a different error message
-    raises.match("Invalid level number")
-    assert_eq(pdh, gdh)
+
+    assert_exceptions_equal(
+        lfunc=pdg.groupby,
+        rfunc=gdg.groupby,
+        lfunc_args_and_kwargs=([], {"level": 2}),
+        rfunc_args_and_kwargs=([], {"level": 2}),
+        expected_error_message="Invalid level number",
+    )
 
 
 @pytest.mark.parametrize(

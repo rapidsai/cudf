@@ -124,6 +124,8 @@ def assert_exceptions_equal(
     lfunc_args_and_kwargs=None,
     rfunc_args_and_kwargs=None,
     compare_error_message=True,
+    expected_exception=None,
+    expected_error_message=None,
 ):
     """Compares if two functions ``lfunc`` and ``rfunc`` raise
     same exception or not.
@@ -151,6 +153,10 @@ def assert_exceptions_equal(
         Whether to compare the error messages raised
         when calling both ``lfunc`` and
         ``rfunc`` or not.
+    expected_exception : Exception, default None
+        Expected exception type to be raised by calling ``rfunc``.
+    expected_error_message : str, default None
+        Expected error message to be raised by calling ``rfunc``.
 
     Returns
     -------
@@ -177,8 +183,12 @@ def assert_exceptions_equal(
         raise
     except Exception as e:
         with pytest.raises(
-            type(e),
-            match=re.escape(str(e)) if compare_error_message is True else None,
+            type(e) if expected_exception is None else expected_exception,
+            match=None
+            if not compare_error_message
+            else re.escape(str(e))
+            if expected_error_message is None
+            else expected_error_message,
         ):
             rfunc(*rfunc_args, **rfunc_kwargs)
     else:

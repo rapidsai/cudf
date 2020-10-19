@@ -744,11 +744,13 @@ def test_replace_inplace():
         pdf.replace([], []), gdf.replace([], []),
     )
 
-    with pytest.raises(TypeError):
-        pdf.replace(-1, [])
-
-    with pytest.raises(TypeError):
-        gdf.replace(-1, [])
+    assert_exceptions_equal(
+        lfunc=pdf.replace,
+        rfunc=gdf.replace,
+        lfunc_args_and_kwargs=([], {"to_replace": -1, "value": []}),
+        rfunc_args_and_kwargs=([], {"to_replace": -1, "value": []}),
+        compare_error_message=False,
+    )
 
 
 @pytest.mark.parametrize(

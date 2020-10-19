@@ -458,41 +458,39 @@ def test_dataframe_drop_raises():
         {"a": [1, 2, 3], "c": [10, 20, 30]}, index=["x", "y", "z"]
     )
     pdf = df.to_pandas()
-    try:
-        pdf.drop("p")
-    except Exception as e:
-        with pytest.raises(
-            type(e), match="One or more values not found in axis"
-        ):
-            df.drop("p")
-    else:
-        raise AssertionError("Expected pdf.drop to fail")
+    assert_exceptions_equal(
+        lfunc=pdf.drop,
+        rfunc=df.drop,
+        lfunc_args_and_kwargs=(["p"],),
+        rfunc_args_and_kwargs=(["p"],),
+        expected_error_message="One or more values not found in axis",
+    )
 
     expect = pdf.drop("p", errors="ignore")
     actual = df.drop("p", errors="ignore")
 
     assert_eq(actual, expect)
 
-    try:
-        pdf.drop(columns="p")
-    except Exception as e:
-        with pytest.raises(type(e), match="column 'p' does not exist"):
-            df.drop(columns="p")
-    else:
-        raise AssertionError("Expected pdf.drop to fail")
+    assert_exceptions_equal(
+        lfunc=pdf.drop,
+        rfunc=df.drop,
+        lfunc_args_and_kwargs=([], {"columns": "p"}),
+        rfunc_args_and_kwargs=([], {"columns": "p"}),
+        expected_error_message="column 'p' does not exist",
+    )
 
     expect = pdf.drop(columns="p", errors="ignore")
     actual = df.drop(columns="p", errors="ignore")
 
     assert_eq(actual, expect)
 
-    try:
-        pdf.drop(labels="p", axis=1)
-    except Exception as e:
-        with pytest.raises(type(e), match="column 'p' does not exist"):
-            df.drop(labels="p", axis=1)
-    else:
-        raise AssertionError("Expected pdf.drop to fail")
+    assert_exceptions_equal(
+        lfunc=pdf.drop,
+        rfunc=df.drop,
+        lfunc_args_and_kwargs=([], {"labels": "p", "axis": 1}),
+        rfunc_args_and_kwargs=([], {"labels": "p", "axis": 1}),
+        expected_error_message="column 'p' does not exist",
+    )
 
     expect = pdf.drop(labels="p", axis=1, errors="ignore")
     actual = df.drop(labels="p", axis=1, errors="ignore")
@@ -1151,7 +1149,7 @@ def test_dataframe_concat_different_numerical_columns(dtype1, dtype2):
     df1 = pd.DataFrame(dict(x=pd.Series(np.arange(5)).astype(dtype1)))
     df2 = pd.DataFrame(dict(x=pd.Series(np.arange(5)).astype(dtype2)))
     if dtype1 != dtype2 and "datetime" in dtype1 or "datetime" in dtype2:
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             gd.concat([df1, df2])
     else:
         pres = pd.concat([df1, df2])
@@ -2845,16 +2843,25 @@ def test_select_dtype():
         gdf.select_dtypes(exclude=np.number),
     )
 
-    with pytest.raises(TypeError):
-        assert_eq(
-            pdf.select_dtypes(include=["Foo"]),
-            gdf.select_dtypes(include=["Foo"]),
-        )
+    assert_exceptions_equal(
+        lfunc=pdf.select_dtypes,
+        rfunc=gdf.select_dtypes,
+        lfunc_args_and_kwargs=([], {"includes": ["Foo"]}),
+        rfunc_args_and_kwargs=([], {"includes": ["Foo"]}),
+    )
 
-    with pytest.raises(ValueError):
-        gdf.select_dtypes(exclude=np.number, include=np.number)
-    with pytest.raises(ValueError):
-        pdf.select_dtypes(exclude=np.number, include=np.number)
+    assert_exceptions_equal(
+        lfunc=pdf.select_dtypes,
+        rfunc=gdf.select_dtypes,
+        lfunc_args_and_kwargs=(
+            [],
+            {"exclude": np.number, "include": np.number},
+        ),
+        rfunc_args_and_kwargs=(
+            [],
+            {"exclude": np.number, "include": np.number},
+        ),
+    )
 
     gdf = gd.DataFrame({"A": [3, 4, 5], "C": [1, 2, 3], "D": ["a", "b", "c"]})
     pdf = gdf.to_pandas()
@@ -2896,10 +2903,10 @@ def test_select_dtype():
         pdf.select_dtypes(include=["int"], exclude=["object"]),
         gdf.select_dtypes(include=["int"], exclude=["object"]),
     )
-    with pytest.raises(ValueError):
-        pdf.select_dtypes()
-    with pytest.raises(ValueError):
-        gdf.select_dtypes()
+
+    assert_exceptions_equal(
+        lfunc=pdf.select_dtypes, rfunc=gdf.select_dtypes,
+    )
 
     gdf = gd.DataFrame(
         {"a": gd.Series([], dtype="int"), "b": gd.Series([], dtype="str")}
@@ -4251,10 +4258,10 @@ def test_isin_multiindex(data, values, level, err):
         assert_eq(got, expected)
     else:
         with pytest.raises((ValueError, TypeError)):
-            expected = pmdx.isin(values, level=level)
+            pmdx.isin(values, level=level)
 
         with pytest.raises(err):
-            got = gmdx.isin(values, level=level)
+            gmdx.isin(values, level=level)
 
 
 @pytest.mark.parametrize(
@@ -4319,10 +4326,12 @@ def test_isin_dataframe(data, values):
     gdf = gd.from_pandas(pdf)
 
     if is_scalar(values):
-        with pytest.raises(TypeError):
-            pdf.isin(values)
-        with pytest.raises(TypeError):
-            gdf.isin(values)
+        assert_exceptions_equal(
+            lfunc=pdf.isin,
+            rfunc=gdf.isin,
+            lfunc_args_and_kwargs=([values],),
+            rfunc_args_and_kwargs=([values],),
+        )
     else:
         try:
             expected = pdf.isin(values)
@@ -5568,15 +5577,35 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
                 expect_mask.fillna(-1), got_mask.fillna(-1), check_dtype=False
             )
     else:
-        with pytest.raises(error):
-            ps_where.where(ps_condition, other=ps_other, inplace=inplace)
-        with pytest.raises(error):
-            gs_where.where(gs_condition, other=gs_other, inplace=inplace)
+        assert_exceptions_equal(
+            lfunc=ps_where.where,
+            rfunc=gs_where.where,
+            lfunc_args_and_kwargs=(
+                [ps_condition],
+                {"other": ps_other, "inplace": inplace},
+            ),
+            rfunc_args_and_kwargs=(
+                [gs_condition],
+                {"other": gs_other, "inplace": inplace},
+            ),
+            compare_error_message=False
+            if error is NotImplementedError
+            else True,
+        )
 
-        with pytest.raises(error):
-            ps_mask.mask(ps_condition, other=ps_other, inplace=inplace)
-        with pytest.raises(error):
-            gs_mask.mask(gs_condition, other=gs_other, inplace=inplace)
+        assert_exceptions_equal(
+            lfunc=ps_mask.mask,
+            rfunc=gs_mask.mask,
+            lfunc_args_and_kwargs=(
+                [ps_condition],
+                {"other": ps_other, "inplace": inplace},
+            ),
+            rfunc_args_and_kwargs=(
+                [gs_condition],
+                {"other": gs_other, "inplace": inplace},
+            ),
+            compare_error_message=False,
+        )
 
 
 @pytest.mark.parametrize(
@@ -5784,16 +5813,16 @@ def test_from_pandas_unsupported_types(data, expected_upcast_type, error):
     pdf = pd.DataFrame({"one_col": data})
     if error == NotImplementedError:
         with pytest.raises(error):
-            df = gd.from_pandas(data)
+            gd.from_pandas(data)
 
         with pytest.raises(error):
-            df = gd.Series(data)
+            gd.Series(data)
 
         with pytest.raises(error):
-            df = gd.from_pandas(pdf)
+            gd.from_pandas(pdf)
 
         with pytest.raises(error):
-            df = gd.DataFrame(pdf)
+            gd.DataFrame(pdf)
     else:
         df = gd.from_pandas(data)
 
@@ -5912,11 +5941,12 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
     )
     assert_eq(gsr, psr)
 
-    with pytest.raises(KeyError):
-        gsr.astype(dtype={"a": "float"}, copy=copy)
-
-    with pytest.raises(KeyError):
-        psr.astype(dtype={"a": "float"}, copy=copy)
+    assert_exceptions_equal(
+        lfunc=psr.astype,
+        rfunc=gsr.astype,
+        lfunc_args_and_kwargs=([], {"dtype": {"a": "float"}, "copy": copy}),
+        rfunc_args_and_kwargs=([], {"dtype": {"a": "float"}, "copy": copy}),
+    )
 
     gsr = gd.Series([1, 2])
     psr = gsr.to_pandas()
@@ -7121,8 +7151,6 @@ def test_dataframe_sample_basic(n, frac, replace, axis):
     df = gd.DataFrame.from_pandas(pdf)
     random_state = 0
 
-    kind = None
-
     try:
         pout = pdf.sample(
             n=n,
@@ -7131,19 +7159,31 @@ def test_dataframe_sample_basic(n, frac, replace, axis):
             random_state=random_state,
             axis=axis,
         )
-    except BaseException as e:
-        kind = type(e)
-        msg = str(e)
-
-    if kind is not None:
-        with pytest.raises(kind, match=msg):
-            gout = df.sample(
-                n=n,
-                frac=frac,
-                replace=replace,
-                random_state=random_state,
-                axis=axis,
-            )
+    except BaseException:
+        assert_exceptions_equal(
+            lfunc=pdf.sample,
+            rfunc=df.sample,
+            lfunc_args_and_kwargs=(
+                [],
+                {
+                    "n": n,
+                    "frac": frac,
+                    "replace": replace,
+                    "random_state": random_state,
+                    "axis": axis,
+                },
+            ),
+            rfunc_args_and_kwargs=(
+                [],
+                {
+                    "n": n,
+                    "frac": frac,
+                    "replace": replace,
+                    "random_state": random_state,
+                    "axis": axis,
+                },
+            ),
+        )
     else:
         gout = df.sample(
             n=n,
@@ -7152,11 +7192,7 @@ def test_dataframe_sample_basic(n, frac, replace, axis):
             random_state=random_state,
             axis=axis,
         )
-
-    if kind is not None:
-        return
-
-    assert pout.shape == gout.shape
+        assert pout.shape == gout.shape
 
 
 @pytest.mark.parametrize("replace", [True, False])
@@ -7178,30 +7214,38 @@ def test_series_sample_basic(n, frac, replace):
     sr = gd.Series.from_pandas(psr)
     random_state = 0
 
-    kind = None
-
     try:
         pout = psr.sample(
             n=n, frac=frac, replace=replace, random_state=random_state
         )
-    except BaseException as e:
-        kind = type(e)
-        msg = str(e)
-
-    if kind is not None:
-        with pytest.raises(kind, match=msg):
-            gout = sr.sample(
-                n=n, frac=frac, replace=replace, random_state=random_state
-            )
+    except BaseException:
+        assert_exceptions_equal(
+            lfunc=psr.sample,
+            rfunc=sr.sample,
+            lfunc_args_and_kwargs=(
+                [],
+                {
+                    "n": n,
+                    "frac": frac,
+                    "replace": replace,
+                    "random_state": random_state,
+                },
+            ),
+            rfunc_args_and_kwargs=(
+                [],
+                {
+                    "n": n,
+                    "frac": frac,
+                    "replace": replace,
+                    "random_state": random_state,
+                },
+            ),
+        )
     else:
         gout = sr.sample(
             n=n, frac=frac, replace=replace, random_state=random_state
         )
-
-    if kind is not None:
-        return
-
-    assert pout.shape == gout.shape
+        assert pout.shape == gout.shape
 
 
 @pytest.mark.parametrize(
@@ -7476,15 +7520,14 @@ def test_dataframe_init_from_series_list_with_index_error(data, index):
 )
 def test_dataframe_init_from_series_list_duplicate_index_error(data):
     gd_data = [gd.from_pandas(obj) for obj in data]
-    try:
-        pd.DataFrame(data)
-    except Exception as e:
-        with pytest.raises(ValueError, match=re.escape(str(e))):
-            gd.DataFrame(gd_data)
-    else:
-        raise AssertionError(
-            "expected pd.DataFrame to because of duplicates in index"
-        )
+
+    assert_exceptions_equal(
+        lfunc=pd.DataFrame,
+        rfunc=gd.DataFrame,
+        lfunc_args_and_kwargs=([], {"data": data}),
+        rfunc_args_and_kwargs=([], {"data": gd_data}),
+        expected_exception=ValueError,
+    )
 
 
 def test_dataframe_iterrows_itertuples():

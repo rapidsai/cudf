@@ -109,21 +109,27 @@ def test_concat_errors():
     )
 
     # Mismatched types
-    with pytest.raises(
-        ValueError,
-        match=re.escape(
+    assert_exceptions_equal(
+        lfunc=pd.concat,
+        rfunc=gd.concat,
+        lfunc_args_and_kwargs=([], {"objs": [df, df.index, df.x]}),
+        rfunc_args_and_kwargs=([], {"objs": [gdf, gdf.index, gdf.x]}),
+        expected_error_message=re.escape(
             "`concat` cannot concatenate objects of "
             "types: ['DataFrame', 'RangeIndex', 'Series']."
         ),
-    ):
-        gd.concat([gdf, gdf.index, gdf.x])
+    )
 
     # Unknown type
-    with pytest.raises(
-        ValueError,
-        match=re.escape("cannot concatenate object of type <class 'str'>"),
-    ):
-        gd.concat(["bar", "foo"])
+    assert_exceptions_equal(
+        lfunc=pd.concat,
+        rfunc=gd.concat,
+        lfunc_args_and_kwargs=([], {"objs": ["bar", "foo"]}),
+        rfunc_args_and_kwargs=([], {"objs": ["bar", "foo"]}),
+        expected_error_message=re.escape(
+            "cannot concatenate object of type <class 'str'>"
+        ),
+    )
 
     # Mismatched index dtypes
     gdf3 = gdf2.copy()
@@ -134,13 +140,18 @@ def test_concat_errors():
         gd.concat([gdf3, gdf4])
 
     # Bad axis value
-    with pytest.raises(
-        ValueError,
-        match=re.escape(
+    assert_exceptions_equal(
+        lfunc=pd.concat,
+        rfunc=gd.concat,
+        lfunc_args_and_kwargs=(
+            [],
+            {"objs": [gdf.to_pandas(), gdf2.to_pandas()], "axis": "bad_value"},
+        ),
+        rfunc_args_and_kwargs=([], {"objs": [gdf, gdf2], "axis": "bad_value"}),
+        expected_error_message=re.escape(
             '`axis` must be 0 / "index"' ' or 1 / "columns", got: None'
         ),
-    ):
-        gd.concat([gdf, gdf2], axis="bad_value")
+    )
 
 
 def test_concat_misordered_columns():

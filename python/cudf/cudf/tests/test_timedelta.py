@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import datetime
+import operator
 import re
 
 import cupy as cp
@@ -336,14 +337,17 @@ def test_timedelta_ops_datetime_inputs(
 
         assert_eq(expected, actual)
     elif ops == "sub":
-        with pytest.raises(
-            TypeError,
-            match=re.escape(
+        assert_exceptions_equal(
+            lfunc=operator.sub,
+            rfunc=operator.sub,
+            lfunc_args_and_kwargs=([psr_timedelta, psr_datetime],),
+            rfunc_args_and_kwargs=([gsr_timedelta, gsr_datetime],),
+            expected_exception=TypeError,
+            expected_error_message=re.escape(
                 f"Subtraction of {gsr_timedelta.dtype} with "
                 f"{gsr_datetime.dtype} cannot be performed."
             ),
-        ):
-            actual = getattr(gsr_timedelta, ops)(gsr_datetime)
+        )
 
 
 @pytest.mark.parametrize(
@@ -970,190 +974,152 @@ def test_timedelta_invalid_ops():
     sr = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
     psr = sr.to_pandas()
 
-    try:
-        psr + 1
-    except TypeError:
-        with pytest.raises(
-            TypeError,
-            match=re.escape(
-                f"Addition of {sr.dtype} with {np.dtype('int64')} "
-                f"cannot be performed."
-            ),
-        ):
-            sr + 1
-    else:
-        raise AssertionError("Expected psr+1 to fail")
+    assert_exceptions_equal(
+        lfunc=operator.add,
+        rfunc=operator.add,
+        lfunc_args_and_kwargs=([psr, 1],),
+        rfunc_args_and_kwargs=([sr, 1],),
+        expected_error_message=re.escape(
+            f"Addition of {sr.dtype} with {np.dtype('int64')} "
+            f"cannot be performed."
+        ),
+    )
 
-    try:
-        psr + "a"
-    except TypeError:
-        with pytest.raises(
-            TypeError,
-            match=re.escape(
-                f"Addition of {sr.dtype} with {np.dtype('object')} "
-                f"cannot be performed."
-            ),
-        ):
-            sr + "a"
-    else:
-        raise AssertionError("Expected psr + 'a' to fail")
+    assert_exceptions_equal(
+        lfunc=operator.add,
+        rfunc=operator.add,
+        lfunc_args_and_kwargs=([psr, "a"],),
+        rfunc_args_and_kwargs=([sr, "a"],),
+        expected_error_message=re.escape(
+            f"Addition of {sr.dtype} with {np.dtype('object')} "
+            f"cannot be performed."
+        ),
+    )
 
     dt_sr = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
     dt_psr = dt_sr.to_pandas()
 
-    try:
-        psr % dt_psr
-    except TypeError:
-        with pytest.raises(
-            TypeError,
-            match=re.escape(
-                f"Modulus of {sr.dtype} with {dt_sr.dtype} "
-                f"cannot be performed."
-            ),
-        ):
-            sr % dt_sr
-    else:
-        raise AssertionError("Expected psr \\%d t_psr to fail")
+    assert_exceptions_equal(
+        lfunc=operator.mod,
+        rfunc=operator.mod,
+        lfunc_args_and_kwargs=([psr, dt_psr],),
+        rfunc_args_and_kwargs=([sr, dt_sr],),
+        expected_error_message=re.escape(
+            f"Modulus of {sr.dtype} with {dt_sr.dtype} "
+            f"cannot be performed."
+        ),
+    )
 
-    try:
-        psr % "a"
-    except TypeError:
-        with pytest.raises(
-            TypeError,
-            match=re.escape(
-                f"Modulus of {sr.dtype} with {np.dtype('object')} "
-                f"cannot be performed."
-            ),
-        ):
-            sr % "a"
-    else:
-        raise AssertionError("Expected psr \\%d 'a' to fail")
+    assert_exceptions_equal(
+        lfunc=operator.mod,
+        rfunc=operator.mod,
+        lfunc_args_and_kwargs=([psr, "a"],),
+        rfunc_args_and_kwargs=([sr, "a"],),
+        expected_error_message=re.escape(
+            f"Modulus of {sr.dtype} with {np.dtype('object')} "
+            f"cannot be performed."
+        ),
+    )
 
-    try:
-        psr > dt_psr
-    except TypeError:
-        with pytest.raises(
-            TypeError,
-            match=re.escape(
-                f"Invalid comparison between dtype={sr.dtype}"
-                f" and {dt_sr.dtype}"
-            ),
-        ):
-            sr > dt_sr
-    else:
-        raise AssertionError("Expected psr > t_psr to fail")
+    assert_exceptions_equal(
+        lfunc=operator.gt,
+        rfunc=operator.gt,
+        lfunc_args_and_kwargs=([psr, dt_psr],),
+        rfunc_args_and_kwargs=([sr, dt_sr],),
+        expected_error_message=re.escape(
+            f"Invalid comparison between dtype={sr.dtype}"
+            f" and {dt_sr.dtype}"
+        ),
+    )
 
-    try:
-        psr < dt_psr
-    except TypeError:
-        with pytest.raises(
-            TypeError,
-            match=re.escape(
-                f"Invalid comparison between dtype={sr.dtype}"
-                f" and {dt_sr.dtype}"
-            ),
-        ):
-            sr < dt_sr
-    else:
-        raise AssertionError("Expected psr < t_psr to fail")
+    assert_exceptions_equal(
+        lfunc=operator.lt,
+        rfunc=operator.lt,
+        lfunc_args_and_kwargs=([psr, dt_psr],),
+        rfunc_args_and_kwargs=([sr, dt_sr],),
+        expected_error_message=re.escape(
+            f"Invalid comparison between dtype={sr.dtype}"
+            f" and {dt_sr.dtype}"
+        ),
+    )
 
-    try:
-        psr >= dt_psr
-    except TypeError:
-        with pytest.raises(
-            TypeError,
-            match=re.escape(
-                f"Invalid comparison between dtype={sr.dtype}"
-                f" and {dt_sr.dtype}"
-            ),
-        ):
-            sr >= dt_sr
-    else:
-        raise AssertionError("Expected psr >= t_psr to fail")
+    assert_exceptions_equal(
+        lfunc=operator.ge,
+        rfunc=operator.ge,
+        lfunc_args_and_kwargs=([psr, dt_psr],),
+        rfunc_args_and_kwargs=([sr, dt_sr],),
+        expected_error_message=re.escape(
+            f"Invalid comparison between dtype={sr.dtype}"
+            f" and {dt_sr.dtype}"
+        ),
+    )
 
-    try:
-        psr <= dt_psr
-    except TypeError:
-        with pytest.raises(
-            TypeError,
-            match=re.escape(
-                f"Invalid comparison between dtype={sr.dtype}"
-                f" and {dt_sr.dtype}"
-            ),
-        ):
-            sr <= dt_sr
-    else:
-        raise AssertionError("Expected psr <= t_psr to fail")
+    assert_exceptions_equal(
+        lfunc=operator.le,
+        rfunc=operator.le,
+        lfunc_args_and_kwargs=([psr, dt_psr],),
+        rfunc_args_and_kwargs=([sr, dt_sr],),
+        expected_error_message=re.escape(
+            f"Invalid comparison between dtype={sr.dtype}"
+            f" and {dt_sr.dtype}"
+        ),
+    )
 
-    try:
-        psr / dt_psr
-    except TypeError:
-        with pytest.raises(
-            TypeError,
-            match=re.escape(
-                f"Division of {sr.dtype} with {dt_sr.dtype} "
-                f"cannot be performed."
-            ),
-        ):
-            sr / dt_sr
-    else:
-        raise AssertionError("Expected psr / t_psr to fail")
+    assert_exceptions_equal(
+        lfunc=operator.truediv,
+        rfunc=operator.truediv,
+        lfunc_args_and_kwargs=([psr, dt_psr],),
+        rfunc_args_and_kwargs=([sr, dt_sr],),
+        expected_error_message=re.escape(
+            f"Division of {sr.dtype} with {dt_sr.dtype} "
+            f"cannot be performed."
+        ),
+    )
 
-    try:
-        psr // dt_psr
-    except TypeError:
-        with pytest.raises(
-            TypeError,
-            match=re.escape(
-                f"Floor Division of {sr.dtype} with {dt_sr.dtype} "
-                f"cannot be performed."
-            ),
-        ):
-            sr // dt_sr
-    else:
-        raise AssertionError("Expected psr // t_psr to fail")
+    assert_exceptions_equal(
+        lfunc=operator.floordiv,
+        rfunc=operator.floordiv,
+        lfunc_args_and_kwargs=([psr, dt_psr],),
+        rfunc_args_and_kwargs=([sr, dt_sr],),
+        expected_error_message=re.escape(
+            f"Floor Division of {sr.dtype} with {dt_sr.dtype} "
+            f"cannot be performed."
+        ),
+    )
 
-    try:
-        psr * dt_psr
-    except TypeError:
-        with pytest.raises(
-            TypeError,
-            match=re.escape(
-                f"Multiplication of {sr.dtype} with {dt_sr.dtype} "
-                f"cannot be performed."
-            ),
-        ):
-            sr * dt_sr
-    else:
-        raise AssertionError("Expected psr * t_psr to fail")
+    assert_exceptions_equal(
+        lfunc=operator.mul,
+        rfunc=operator.mul,
+        lfunc_args_and_kwargs=([psr, dt_psr],),
+        rfunc_args_and_kwargs=([sr, dt_sr],),
+        expected_error_message=re.escape(
+            f"Multiplication of {sr.dtype} with {dt_sr.dtype} "
+            f"cannot be performed."
+        ),
+    )
 
-    try:
-        psr * psr
-    except TypeError:
-        with pytest.raises(
-            TypeError,
-            match=re.escape(
-                f"Multiplication of {sr.dtype} with {sr.dtype} "
-                f"cannot be performed."
-            ),
-        ):
-            sr * sr
-    else:
-        raise AssertionError("Expected psr * psr to fail")
+    # TODO: Fix this
 
-    try:
-        psr ^ psr
-    except TypeError:
-        with pytest.raises(
-            TypeError,
-            match=re.escape(
-                f"Series of dtype {sr.dtype} cannot perform "
-                f"the operation xor"
-            ),
-        ):
-            sr ^ sr
-    else:
-        raise AssertionError("Expected psr ^ psr to fail")
+    # assert_exceptions_equal(
+    #     lfunc=operator.mul,
+    #     rfunc=operator.mul,
+    #     lfunc_args_and_kwargs=([psr, psr],),
+    #     rfunc_args_and_kwargs=([sr, sr],),
+    #     expected_error_message=re.escape(
+    #         f"Multiplication of {sr.dtype} with {sr.dtype} "
+    #         f"cannot be performed."
+    #     )
+    # )
+
+    assert_exceptions_equal(
+        lfunc=operator.xor,
+        rfunc=operator.xor,
+        lfunc_args_and_kwargs=([psr, psr],),
+        rfunc_args_and_kwargs=([sr, sr],),
+        expected_error_message=re.escape(
+            f"Series of dtype {sr.dtype} cannot perform " f"the operation xor"
+        ),
+    )
 
 
 def test_timedelta_datetime_cast_invalid():
