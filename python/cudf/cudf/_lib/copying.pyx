@@ -202,6 +202,8 @@ def _scatter_scalar(scalars, Column scatter_map,
     source_scalars.reserve(len(scalars))
     cdef bool c_bounds_check = bounds_check
     cdef Scalar slr
+    # We have to pass the unique_ptrs themselves here
+    # https://github.com/rapidsai/cudf/issues/6554
     for val, col in zip(scalars, target_table._columns):
         slr = as_scalar(val, col.dtype)
         source_scalars.push_back(move(slr.get_uptr()._device_uptr))
