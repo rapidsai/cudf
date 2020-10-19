@@ -851,7 +851,7 @@ def test_concat_join_no_overlapcol_emptydf_ignoreindex_false_axis_1(
             join=join,
             ignore_index=ignore_index,
             axis=axis,
-        ).reset_index(drop=True),
+        ),
         gd.concat(
             [gdf4, gdf5, gdf6, gdf_empty],
             sort=sort,
