@@ -257,8 +257,7 @@ __global__ void copy_block_partitions(InputIter input_iter,
   auto block_output = reinterpret_cast<DataType*>(shared_memory);
   auto partition_offset_shared =
     reinterpret_cast<size_type*>(block_output + OPTIMIZED_BLOCK_SIZE * OPTIMIZED_ROWS_PER_THREAD);
-  auto partition_offset_global =
-    reinterpret_cast<size_type*>(partition_offset_shared + num_partitions + 1);
+  auto partition_offset_global = partition_offset_shared + num_partitions + 1;
 
   typedef cub::BlockScan<size_type, OPTIMIZED_BLOCK_SIZE> BlockScan;
   __shared__ typename BlockScan::TempStorage temp_storage;

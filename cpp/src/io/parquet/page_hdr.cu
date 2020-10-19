@@ -320,7 +320,7 @@ extern "C" __global__ void __launch_bounds__(128)
         }
       }
       // TODO: Could store 8 entries in shared mem, then do a single warp-wide store
-      dict_index[i].ptr   = (const char *)(dict + pos + 4);
+      dict_index[i].ptr   = reinterpret_cast<const char *>(dict + pos + 4);
       dict_index[i].count = len;
     }
   }

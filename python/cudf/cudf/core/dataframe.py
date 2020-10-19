@@ -38,8 +38,10 @@ from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
+    find_common_type,
     is_categorical_dtype,
     is_column_like,
+    is_datetime_dtype,
     is_list_dtype,
     is_list_like,
     is_scalar,
@@ -1308,7 +1310,7 @@ class DataFrame(Frame, Serializable):
             for k, col in enumerate(self._data):
                 result[col] = getattr(self[col], fn)(other[k])
         elif isinstance(other, DataFrame):
-            if fn in ("__eq__", "__ne__"):
+            if fn in cudf.utils.utils._EQUALITY_OPS:
                 if not self.index.equals(other.index):
                     raise ValueError(
                         "Can only compare identically-labeled "
@@ -3396,7 +3398,8 @@ class DataFrame(Frame, Serializable):
             for c in cols
         ):
             raise TypeError("non-numeric data not yet supported")
-        dtype = np.find_common_type(cols, [])
+
+        dtype = find_common_type([col.dtype for col in cols])
         for k, c in self._data.items():
             if c.has_nulls:
                 errmsg = (
@@ -5403,8 +5406,15 @@ class DataFrame(Frame, Serializable):
             )
             raise ValueError(msg)
 
-        filtered = self.select_dtypes(include=[np.number, np.bool])
-        common_dtype = np.find_common_type(filtered.dtypes, [])
+        is_pure_dt = all(is_datetime_dtype(dt) for dt in self.dtypes)
+
+        if not is_pure_dt:
+            filtered = self.select_dtypes(include=[np.number, np.bool])
+        else:
+            filtered = self.copy(deep=False)
+
+        common_dtype = find_common_type(filtered.dtypes)
+
         if filtered._num_columns < self._num_columns:
             msg = (
                 "Row-wise operations currently only support int, float "
@@ -5425,7 +5435,10 @@ class DataFrame(Frame, Serializable):
         else:
             mask = None
 
-        coerced = filtered.astype(common_dtype)
+        coerced = filtered.astype(common_dtype, copy=False)
+        if is_pure_dt:
+            # Further convert into cupy friendly types
+            coerced = coerced.astype("int64", copy=False)
         return coerced, mask, common_dtype
 
     def count(self, axis=0, level=None, numeric_only=False, **kwargs):
@@ -6378,6 +6391,8 @@ class DataFrame(Frame, Serializable):
                             cudf.utils.dtypes.get_min_float_dtype(
                                 prepared._data[col]
                             )
+                            if not is_datetime_dtype(common_dtype)
+                            else np.dtype("float64")
                         )
                         .fillna(np.nan)
                     )
@@ -6389,29 +6404,29 @@ class DataFrame(Frame, Serializable):
             result = getattr(cupy, method)(arr, axis=1, **kwargs)
 
             if result.ndim == 1:
-                result = column.as_column(result)
+                type_coerced_methods = {
+                    "count",
+                    "min",
+                    "max",
+                    "sum",
+                    "prod",
+                    "cummin",
+                    "cummax",
+                    "cumsum",
+                    "cumprod",
+                }
+                result_dtype = (
+                    common_dtype
+                    if method in type_coerced_methods
+                    or is_datetime_dtype(common_dtype)
+                    else None
+                )
+                result = column.as_column(result, dtype=result_dtype)
                 if mask is not None:
                     result = result.set_mask(
                         cudf._lib.transform.bools_to_mask(mask._column)
                     )
-                return Series(
-                    result,
-                    index=self.index,
-                    dtype=common_dtype
-                    if method
-                    in {
-                        "count",
-                        "min",
-                        "max",
-                        "sum",
-                        "prod",
-                        "cummin",
-                        "cummax",
-                        "cumsum",
-                        "cumprod",
-                    }
-                    else None,
-                )
+                return Series(result, index=self.index, dtype=result_dtype,)
             else:
                 result_df = DataFrame(result).set_index(self.index)
                 result_df.columns = prepared.columns

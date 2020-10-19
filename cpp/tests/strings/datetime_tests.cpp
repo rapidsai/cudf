@@ -182,7 +182,7 @@ TEST_F(StringsDatetimeTest, FromTimestampMillisecond)
                                                  "2020-02-29 00:01:01.007",
                                                  "2015-12-29 23:02:02.421",
                                                  "2011-10-11 03:03:03.999",
-                                                 "1776-07-04 12:00:00.953"};
+                                                 "1776-07-04 11:59:59.953"};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_ms);
 
   results = cudf::strings::from_timestamps(timestamps_ms, "%Y-%m-%d %H:%M:%S.%f");
@@ -190,7 +190,7 @@ TEST_F(StringsDatetimeTest, FromTimestampMillisecond)
                                                     "2020-02-29 00:01:01.007000",
                                                     "2015-12-29 23:02:02.421000",
                                                     "2011-10-11 03:03:03.999000",
-                                                    "1776-07-04 12:00:00.953000"};
+                                                    "1776-07-04 11:59:59.953000"};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_ms_6f);
 
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> timestamps_ns{
@@ -204,7 +204,7 @@ TEST_F(StringsDatetimeTest, FromTimestampMillisecond)
                                                  "2020-02-29 00:01:01.007008009",
                                                  "2015-12-29 23:02:02.421310209",
                                                  "2011-10-11 03:03:03.999777555",
-                                                 "1776-07-04 12:00:00.952952953"};
+                                                 "1776-07-04 11:59:59.952952953"};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_ns);
 
   results = cudf::strings::from_timestamps(timestamps_ns, "%Y-%m-%d %H:%M:%S.%f");
@@ -212,7 +212,7 @@ TEST_F(StringsDatetimeTest, FromTimestampMillisecond)
                                                     "2020-02-29 00:01:01.007008",
                                                     "2015-12-29 23:02:02.421310",
                                                     "2011-10-11 03:03:03.999777",
-                                                    "1776-07-04 12:00:00.952952"};
+                                                    "1776-07-04 11:59:59.952952"};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_ns_6f);
 }
 

@@ -388,7 +388,7 @@
                             def proc = 'ldd ${native.build.path}/libcudfjni.so'.execute()
                             proc.consumeProcessOutput(sout, serr)
                             proc.waitForOrKill(10000)
-                            def libcudf = ~/libcudf\\.so\\s+=>\\s+(.*)libcudf.*\\.so\\s+.*/
+                            def libcudf = ~/libcudf.*\\.so\\s+=>\\s+(.*)libcudf.*\\.so\\s+.*/
                             def cudfm = libcudf.matcher(sout)
                             if (cudfm.find()) {
                                 pom.properties['native.cudf.path'] = cudfm.group(1)
@@ -484,7 +484,18 @@
                                     <!--Set by groovy script-->
                                     <directory>${native.cudf.path}</directory>
                                     <includes>
-                                        <include>libcudf.so</include>
+                                        <include>libcudf_ast.so</include>
+                                        <include>libcudf_base.so</include>
+                                        <include>libcudf_comms.so</include>
+                                        <include>libcudf_hash.so</include>
+                                        <include>libcudf_interop.so</include>
+                                        <include>libcudf_io.so</include>
+                                        <include>libcudf_join.so</include>
+                                        <include>libcudf_merge.so</include>
+                                        <include>libcudf_partitioning.so</include>
+                                        <include>libcudf_reductions.so</include>
+                                        <include>libcudf_replace.so</include>
+                                        <include>libcudf_rolling.so</include>
                                     </includes>
                                 </resource>
                                 <resource>
