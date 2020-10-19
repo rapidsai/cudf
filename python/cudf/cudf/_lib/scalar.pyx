@@ -170,9 +170,15 @@ cdef class Scalar:
         """
         if self._is_host_value_current() and self._is_device_value_current():
             return
-        elif self._is_host_value_current() and not self._is_device_value_current():
+        elif (
+            self._is_host_value_current() and not
+            self._is_device_value_current()
+        ):
             self._set_device_value(self._host_value, self._host_dtype)
-        elif self._is_device_value_current() and not self._is_host_value_current():
+        elif (
+            self._is_device_value_current() and not
+            self._is_host_value_current()
+        ):
             self._host_value = self.get_device_value()
 
     cdef _ScalarUptrWrapper get_uptr(self):
