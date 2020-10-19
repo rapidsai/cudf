@@ -34,12 +34,12 @@ std::unique_ptr<aggregation> make_product_aggregation()
 /// Factory to create a MIN aggregation
 std::unique_ptr<aggregation> make_min_aggregation()
 {
-  return std::make_unique<aggregation>(aggregation::MIN);
+  return std::make_unique<detail::min_aggregation>(aggregation::MIN);
 }
 /// Factory to create a MAX aggregation
 std::unique_ptr<aggregation> make_max_aggregation()
 {
-  return std::make_unique<aggregation>(aggregation::MAX);
+  return std::make_unique<detail::max_aggregation>(aggregation::MAX);
 }
 /// Factory to create a COUNT aggregation
 std::unique_ptr<aggregation> make_count_aggregation(null_policy null_handling)

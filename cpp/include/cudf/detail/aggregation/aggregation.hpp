@@ -28,15 +28,60 @@
 namespace cudf {
 namespace detail {
 
+class aggregation_finalizer;
+
 class compound_aggregation {
-  // TODO (not really needed?) : virtual public aggregation {
  public:
-  // compound_aggregation(aggregation::Kind a) : aggregation{a} {}
-  virtual std::vector<aggregation> get_simple_aggregations() const
+  virtual std::vector<aggregation> get_simple_aggregations(data_type col_type) const { return {}; }
+  virtual void finalize(aggregation_finalizer& finalizer) = 0;
+};
+
+// Forward declare compound aggregations.
+class mean_aggregation;
+class std_var_aggregation;
+class min_aggregation;
+class max_aggregation;
+
+// Visitor pattern
+class aggregation_finalizer {  // Declares the interface for the finalizer
+ public:
+  // Declare overloads for each kind of a agg to dispatch
+  virtual void Dispatch(min_aggregation& agg)     = 0;
+  virtual void Dispatch(max_aggregation& agg)     = 0;
+  virtual void Dispatch(mean_aggregation& agg)    = 0;
+  virtual void Dispatch(std_var_aggregation& agg) = 0;
+};
+
+/**
+ * @brief Derived class for specifying a min aggregation
+ */
+struct min_aggregation final : compound_aggregation, aggregation {
+  min_aggregation(aggregation::Kind k) : compound_aggregation{}, aggregation{k} {}
+
+  std::vector<aggregation> get_simple_aggregations(data_type col_type) const override
   {
-    return {};
-    // return {*this};
+    if (col_type.id() == type_id::STRING)
+      return {aggregation{aggregation::ARGMIN}};
+    else
+      return {*this};
   }
+  void finalize(aggregation_finalizer& finalizer) override { finalizer.Dispatch(*this); }
+};
+
+/**
+ * @brief Derived class for specifying a max aggregation
+ */
+struct max_aggregation final : compound_aggregation, aggregation {
+  max_aggregation(aggregation::Kind k) : compound_aggregation{}, aggregation{k} {}
+
+  std::vector<aggregation> get_simple_aggregations(data_type col_type) const override
+  {
+    if (col_type.id() == type_id::STRING)
+      return {aggregation{aggregation::ARGMAX}};
+    else
+      return {*this};
+  }
+  void finalize(aggregation_finalizer& finalizer) override { finalizer.Dispatch(*this); }
 };
 
 /**
@@ -122,15 +167,17 @@ struct lead_lag_aggregation final : derived_aggregation<lead_lag_aggregation> {
 };
 
 /**
- * @brief Derived class for specifying a standard deviation/variance aggregation
+ * @brief Derived class for specifying a mean aggregation
  */
 struct mean_aggregation final : compound_aggregation, aggregation {
   mean_aggregation(aggregation::Kind k) : compound_aggregation{}, aggregation{k} {}
 
-  std::vector<aggregation> get_simple_aggregations() const override
+  std::vector<aggregation> get_simple_aggregations(data_type col_type) const override
   {
+    CUDF_EXPECTS(is_fixed_width(col_type), "MEAN aggregation expects fixed width type");
     return {aggregation{aggregation::SUM}, aggregation{aggregation::COUNT_VALID}};
   }
+  void finalize(aggregation_finalizer& finalizer) override { finalizer.Dispatch(*this); }
 };
 
 /**
@@ -143,10 +190,12 @@ struct std_var_aggregation final : derived_aggregation<std_var_aggregation>, com
   }
   size_type _ddof;  ///< Delta degrees of freedom
 
-  std::vector<aggregation> get_simple_aggregations() const override
+  std::vector<aggregation> get_simple_aggregations(data_type col_type) const override
   {
     return {aggregation{aggregation::SUM}, aggregation{aggregation::COUNT_VALID}};
   }
+
+  void finalize(aggregation_finalizer& finalizer) override { finalizer.Dispatch(*this); }
 
  protected:
   friend class derived_aggregation<std_var_aggregation>;
