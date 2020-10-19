@@ -16,19 +16,15 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
+
 #include <hash/concurrent_unordered_map.cuh>
-
 #include <join/join_common_utils.hpp>
-
-#include <cudf/detail/gather.cuh>
-#include <join/hash_join.cuh>
-#include "cudf/types.hpp"
 
 namespace cudf {
 namespace detail {

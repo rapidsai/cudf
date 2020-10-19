@@ -226,7 +226,9 @@ struct hash_join::hash_join_impl {
    * @param build The build table, from which the hash table is built.
    * @param build_on The column indices from `build` to join on.
    */
-  hash_join_impl(cudf::table_view const& build, std::vector<size_type> const& build_on);
+  hash_join_impl(cudf::table_view const& build,
+                 std::vector<size_type> const& build_on,
+                 cudaStream_t stream = 0);
 
   std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> inner_join(
     cudf::table_view const& probe,
@@ -234,21 +236,24 @@ struct hash_join::hash_join_impl {
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     common_columns_output_side common_columns_output_side,
     null_equality compare_nulls,
-    rmm::mr::device_memory_resource* mr) const;
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream = 0) const;
 
   std::unique_ptr<cudf::table> left_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     null_equality compare_nulls,
-    rmm::mr::device_memory_resource* mr) const;
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream = 0) const;
 
   std::unique_ptr<cudf::table> full_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     null_equality compare_nulls,
-    rmm::mr::device_memory_resource* mr) const;
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream = 0) const;
 
  private:
   /**
