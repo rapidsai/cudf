@@ -2130,28 +2130,164 @@ class Frame(libcudf.table.Table):
         return self.__class__._from_table(Frame(data, self._index))
 
     def isnull(self):
-        """Identify missing values.
+        """
+        Identify missing values.
+
+        Return a boolean same-sized object indicating if
+        the values are ``<NA>``. ``<NA>`` values gets mapped to
+        ``True`` values. Everything else gets mapped to
+        ``False`` values. ``<NA>`` values include:
+
+        * Values where null mask is set.
+        * ``NaN`` in float dtype.
+        * ``NaT`` in datetime64 and timedelta64 types.
+
+        Characters such as empty strings ``''`` or
+        ``inf`` incase of float are not
+        considered ``<NA>`` values.
+
+        Returns
+        -------
+        DataFrame/Series/Index
+            Mask of bool values for each element in
+            the object that indicates whether an element is an NA value.
+
+        Examples
+        --------
+
+        Show which entries in a DataFrame are NA.
+
+        >>> import cudf
+        >>> import numpy as np
+        >>> import pandas as pd
+        >>> df = cudf.DataFrame({'age': [5, 6, np.NaN],
+        ...                    'born': [pd.NaT, pd.Timestamp('1939-05-27'),
+        ...                             pd.Timestamp('1940-04-25')],
+        ...                    'name': ['Alfred', 'Batman', ''],
+        ...                    'toy': [None, 'Batmobile', 'Joker']})
+        >>> df
+            age                        born    name        toy
+        0     5                        <NA>  Alfred       <NA>
+        1     6  1939-05-27 00:00:00.000000  Batman  Batmobile
+        2  <NA>  1940-04-25 00:00:00.000000              Joker
+        >>> df.isnull()
+            age   born   name    toy
+        0  False   True  False   True
+        1  False  False  False  False
+        2   True  False  False  False
+
+        Show which entries in a Series are NA.
+
+        >>> ser = cudf.Series([5, 6, np.NaN, np.inf, -np.inf])
+        >>> ser
+        0     5.0
+        1     6.0
+        2    <NA>
+        3     Inf
+        4    -Inf
+        dtype: float64
+        >>> ser.isnull()
+        0    False
+        1    False
+        2     True
+        3    False
+        4    False
+        dtype: bool
+
+        Show which entries in an Index are NA.
+
+        >>> idx = cudf.Index([1, 2, None, np.NaN, 0.32, np.inf])
+        >>> idx
+        Float64Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
+        >>> idx.isnull()
+        GenericIndex([False, False, True, True, False, False], dtype='bool')
         """
         data_columns = (col.isnull() for col in self._columns)
         data = zip(self._column_names, data_columns)
         return self.__class__._from_table(Frame(data, self._index))
 
-    def isna(self):
-        """Identify missing values. Alias for `isnull`
-        """
-        return self.isnull()
+    # Alias for isnull
+    isna = isnull
 
     def notnull(self):
-        """Identify non-missing values.
+        """
+        Identify non-missing values.
+
+        Return a boolean same-sized object indicating if
+        the values are not ``<NA>``. Non-missing values get
+        mapped to ``True``. ``<NA>`` values get mapped to
+        ``False`` values. ``<NA>`` values include:
+
+        * Values where null mask is set.
+        * ``NaN`` in float dtype.
+        * ``NaT`` in datetime64 and timedelta64 types.
+
+        Characters such as empty strings ``''`` or
+        ``inf`` incase of float are not
+        considered ``<NA>`` values.
+
+        Returns
+        -------
+        DataFrame/Series/Index
+            Mask of bool values for each element in
+            the object that indicates whether an element is not an NA value.
+
+        Examples
+        --------
+
+        Show which entries in a DataFrame are NA.
+
+        >>> import cudf
+        >>> import numpy as np
+        >>> import pandas as pd
+        >>> df = cudf.DataFrame({'age': [5, 6, np.NaN],
+        ...                    'born': [pd.NaT, pd.Timestamp('1939-05-27'),
+        ...                             pd.Timestamp('1940-04-25')],
+        ...                    'name': ['Alfred', 'Batman', ''],
+        ...                    'toy': [None, 'Batmobile', 'Joker']})
+        >>> df
+            age                        born    name        toy
+        0     5                        <NA>  Alfred       <NA>
+        1     6  1939-05-27 00:00:00.000000  Batman  Batmobile
+        2  <NA>  1940-04-25 00:00:00.000000              Joker
+        >>> df.notnull()
+             age   born  name    toy
+        0   True  False  True  False
+        1   True   True  True   True
+        2  False   True  True   True
+
+        Show which entries in a Series are NA.
+
+        >>> ser = cudf.Series([5, 6, np.NaN, np.inf, -np.inf])
+        >>> ser
+        0     5.0
+        1     6.0
+        2    <NA>
+        3     Inf
+        4    -Inf
+        dtype: float64
+        >>> ser.notnull()
+        0     True
+        1     True
+        2    False
+        3     True
+        4     True
+        dtype: bool
+
+        Show which entries in an Index are NA.
+
+        >>> idx = cudf.Index([1, 2, None, np.NaN, 0.32, np.inf])
+        >>> idx
+        Float64Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
+        >>> idx.notnull()
+        GenericIndex([True, True, False, False, True, True], dtype='bool')
         """
         data_columns = (col.notnull() for col in self._columns)
         data = zip(self._column_names, data_columns)
         return self.__class__._from_table(Frame(data, self._index))
 
-    def notna(self):
-        """Identify non-missing values. Alias for `notnull`.
-        """
-        return self.notnull()
+    # Alias for notnull
+    notna = notnull
 
     def interleave_columns(self):
         """

@@ -18,26 +18,26 @@
  */
 
 #include <iostream>
-#include <libcudacxx/details/__config.jit>
-#include <libcudacxx/libcxx/include/__config.jit>
-#include <libcudacxx/libcxx/include/__undef_macros.jit>
-#include <libcudacxx/libcxx/include/cassert.jit>
-#include <libcudacxx/libcxx/include/cfloat.jit>
-#include <libcudacxx/libcxx/include/chrono.jit>
-#include <libcudacxx/libcxx/include/cmath.jit>
-#include <libcudacxx/libcxx/include/ctime.jit>
-#include <libcudacxx/libcxx/include/limits.jit>
-#include <libcudacxx/libcxx/include/ratio.jit>
-#include <libcudacxx/libcxx/include/type_traits.jit>
-#include <libcudacxx/simt/cassert.jit>
-#include <libcudacxx/simt/cfloat.jit>
-#include <libcudacxx/simt/chrono.jit>
-#include <libcudacxx/simt/cmath.jit>
-#include <libcudacxx/simt/ctime.jit>
-#include <libcudacxx/simt/limits.jit>
-#include <libcudacxx/simt/ratio.jit>
-#include <libcudacxx/simt/type_traits.jit>
-#include <libcudacxx/simt/version.jit>
+#include <jit/libcudacxx/details/__config.jit>
+#include <jit/libcudacxx/libcxx/include/__config.jit>
+#include <jit/libcudacxx/libcxx/include/__undef_macros.jit>
+#include <jit/libcudacxx/libcxx/include/cassert.jit>
+#include <jit/libcudacxx/libcxx/include/cfloat.jit>
+#include <jit/libcudacxx/libcxx/include/chrono.jit>
+#include <jit/libcudacxx/libcxx/include/cmath.jit>
+#include <jit/libcudacxx/libcxx/include/ctime.jit>
+#include <jit/libcudacxx/libcxx/include/limits.jit>
+#include <jit/libcudacxx/libcxx/include/ratio.jit>
+#include <jit/libcudacxx/libcxx/include/type_traits.jit>
+#include <jit/libcudacxx/simt/cassert.jit>
+#include <jit/libcudacxx/simt/cfloat.jit>
+#include <jit/libcudacxx/simt/chrono.jit>
+#include <jit/libcudacxx/simt/cmath.jit>
+#include <jit/libcudacxx/simt/ctime.jit>
+#include <jit/libcudacxx/simt/limits.jit>
+#include <jit/libcudacxx/simt/ratio.jit>
+#include <jit/libcudacxx/simt/type_traits.jit>
+#include <jit/libcudacxx/simt/version.jit>
 #include <string>
 
 namespace cudf {
