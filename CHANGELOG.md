@@ -20,6 +20,7 @@
 - PR #6509 Disable JITIFY log printing
 - PR #6517 Handle index equality in `Series` and `DataFrame` equality checks
 - PR #6519 Fix end-of-string marking boundary condition in subword-tokenizer
+- PR #6543 Handle `np.nan` values in `isna`/`isnull`/`notna`/`notnull`
 
 
 # cuDF 0.16.0 (Date TBD)
