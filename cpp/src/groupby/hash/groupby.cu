@@ -194,11 +194,14 @@ flatten_single_pass_aggs(std::vector<aggregation_request> const& requests)
 {
   std::vector<column_view> columns;
   std::vector<aggregation::Kind> agg_kinds;
+  std::unordered_set<aggregation::Kind> agg_kinds_set;
   std::vector<size_t> col_ids;
   auto insert_agg = [&](size_t i, column_view const& request_values, aggregation::Kind k) {
-    agg_kinds.push_back(k);
-    columns.push_back(request_values);
-    col_ids.push_back(i);
+    if (agg_kinds_set.insert(k).second) {
+      agg_kinds.push_back(k);
+      columns.push_back(request_values);
+      col_ids.push_back(i);
+    }
   };
 
   for (size_t i = 0; i < requests.size(); i++) {
