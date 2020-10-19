@@ -66,7 +66,7 @@ cdef class Scalar:
             A NumPy dtype.
         """
         value = cudf.utils.dtypes.to_cudf_compatible_scalar(value, dtype=dtype)
-        valid = not is_null_host_scalar(value)
+        valid = not _is_null_host_scalar(value)
 
         if dtype is None:
             if not valid:
@@ -88,7 +88,7 @@ cdef class Scalar:
         self._initialize_cache(value, dtype)
 
     def _initialize_cache(self, value, dtype):
-        if is_null_host_scalar(value):
+        if _is_null_host_scalar(value):
             self._host_value = cudf.NA
         else:
             self._host_value = value
@@ -103,7 +103,7 @@ cdef class Scalar:
         return self.uptr._device_uptr != NULL
 
     def _set_device_value(self, value, dtype):
-        valid = not is_null_host_scalar(value)
+        valid = not _is_null_host_scalar(value)
 
         if pd.api.types.is_string_dtype(dtype):
             _set_string_from_np_string(self.uptr._device_uptr, value, valid)
@@ -156,7 +156,7 @@ cdef class Scalar:
         """
         Returns a host copy of the underlying device scalar.
         """
-        if self._host_value_current():
+        if self._is_host_value_current():
             return self._host_value
         else:
             result = self.get_device_value()
@@ -168,15 +168,15 @@ cdef class Scalar:
         If the cache is not synched, copy either the device or host value
         to the host or device respectively. If cache is valid, do nothing
         """
-        if self._host_value_current() and self._device_value_current():
+        if self._is_host_value_current() and self._is_device_value_current():
             return
-        elif self._host_value_current() and not self._device_value_current():
+        elif self._is_host_value_current() and not self._is_device_value_current():
             self._set_device_value(self._host_value, self._host_dtype)
-        elif self._device_value_current() and not self._host_value_current():
+        elif self._is_device_value_current() and not self._is_host_value_current():
             self._host_value = self.get_device_value()
 
     cdef _ScalarUptrWrapper get_uptr(self):
-        if not self._device_value_current():
+        if not self._is_device_value_current():
             self._set_device_value(self._host_value, self._host_dtype)
         return self.uptr
 
@@ -423,7 +423,7 @@ def as_scalar(val, dtype=None):
         return Scalar(value=val, dtype=dtype)
 
 
-def is_null_host_scalar(slr):
+def _is_null_host_scalar(slr):
     if slr is None or slr is cudf.NA:
         return True
     else:
