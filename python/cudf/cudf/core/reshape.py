@@ -282,11 +282,9 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         for o in objs[1:]:
             result_columns = result_columns.append(o.columns)
         if ignore_index:
-            df.columns = pd.RangeIndex(len(result_columns.unique()))
-        else:
-            df.columns = result_columns.unique()
-        if ignore_index and not join == "inner":
-            df.index = cudf.RangeIndex(max(len(obj) for obj in objs))
+            df.reset_index(drop=True, inplace=True)
+            df.columns = pd.RangeIndex(len(df.columns))
+            return df
             return df
         elif not match_index:
             return df.sort_index()
