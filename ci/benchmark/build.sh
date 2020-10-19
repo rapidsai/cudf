@@ -58,7 +58,8 @@ logger "Check GPU usage..."
 nvidia-smi
 
 logger "Activate conda env..."
-source activate rapids
+. /opt/conda/etc/profile.d/conda.sh
+conda activate rapids
 
 # Enter dependencies to be shown in ASV tooltips.
 CUDF_DEPS=(librmm)
@@ -85,7 +86,9 @@ logger "Check versions..."
 python --version
 $CC --version
 $CXX --version
-conda list
+conda info
+conda config --show-sources
+conda list --show-channel-urls
 
 ################################################################################
 # BUILD - Build libcudf, cuDF and dask_cudf from source
@@ -164,7 +167,7 @@ set -e
 rm ${WORKSPACE}/tmp/benchmark/benchmarks.txt
 cd ${WORKSPACE}
 mv ${GBENCH_BENCHMARKS_DIR}/*.json ${WORKSPACE}/tmp/benchmark/
-python GBenchToASV.py -d  ${WORKSPACE}/tmp/benchmark/ -t ${S3_ASV_DIR} -n libcudf -b branch-${MINOR_VERSION} -r "${REQS}" 
+python GBenchToASV.py -d  ${WORKSPACE}/tmp/benchmark/ -t ${S3_ASV_DIR} -n libcudf -b branch-${MINOR_VERSION} -r "${REQS}"
 
 ###
 # Run Python Benchmarks

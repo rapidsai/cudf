@@ -22,6 +22,7 @@ from cudf.tests.utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_eq,
+    assert_exceptions_equal,
     does_not_raise,
     gen_rand,
 )
@@ -1380,36 +1381,38 @@ def test_from_records_index(columns, index):
     assert_eq(df, gdf)
 
 
-def test_from_gpu_matrix():
+def test_dataframe_construction_from_cupy_arrays():
     h_ary = np.array([[1, 2, 3], [4, 5, 6]], np.int32)
     d_ary = cupy.asarray(h_ary)
 
-    gdf = gd.DataFrame.from_gpu_matrix(d_ary, columns=["a", "b", "c"])
+    gdf = gd.DataFrame(d_ary, columns=["a", "b", "c"])
     df = pd.DataFrame(h_ary, columns=["a", "b", "c"])
     assert isinstance(gdf, gd.DataFrame)
 
     assert_eq(df, gdf)
 
-    gdf = gd.DataFrame.from_gpu_matrix(d_ary)
+    gdf = gd.DataFrame(d_ary)
     df = pd.DataFrame(h_ary)
     assert isinstance(gdf, gd.DataFrame)
 
     assert_eq(df, gdf)
 
-    gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=["a", "b"])
+    gdf = gd.DataFrame(d_ary, index=["a", "b"])
     df = pd.DataFrame(h_ary, index=["a", "b"])
     assert isinstance(gdf, gd.DataFrame)
 
     assert_eq(df, gdf)
 
-    gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=0)
+    gdf = gd.DataFrame(d_ary)
+    gdf = gdf.set_index(keys=0, drop=False)
     df = pd.DataFrame(h_ary)
     df = df.set_index(keys=0, drop=False)
     assert isinstance(gdf, gd.DataFrame)
 
     assert_eq(df, gdf)
 
-    gdf = gd.DataFrame.from_gpu_matrix(d_ary, index=1)
+    gdf = gd.DataFrame(d_ary)
+    gdf = gdf.set_index(keys=1, drop=False)
     df = pd.DataFrame(h_ary)
     df = df.set_index(keys=1, drop=False)
     assert isinstance(gdf, gd.DataFrame)
@@ -1417,24 +1420,30 @@ def test_from_gpu_matrix():
     assert_eq(df, gdf)
 
 
-def test_from_gpu_matrix_wrong_dimensions():
+def test_dataframe_cupy_wrong_dimensions():
     d_ary = cupy.empty((2, 3, 4), dtype=np.int32)
     with pytest.raises(
-        ValueError, match="matrix dimension expected 2 but found 3"
+        ValueError, match="records dimension expected 1 or 2 but found: 3"
     ):
-        gd.DataFrame.from_gpu_matrix(d_ary)
+        gd.DataFrame(d_ary)
 
 
-def test_from_gpu_matrix_wrong_index():
+def test_dataframe_cupy_array_wrong_index():
     d_ary = cupy.empty((2, 3), dtype=np.int32)
 
     with pytest.raises(
-        ValueError, match="index length expected 2 but found 1"
+        ValueError,
+        match="Length mismatch: Expected axis has 2 elements, "
+        "new values have 1 elements",
     ):
-        gd.DataFrame.from_gpu_matrix(d_ary, index=["a"])
+        gd.DataFrame(d_ary, index=["a"])
 
-    with pytest.raises(KeyError):
-        gd.DataFrame.from_gpu_matrix(d_ary, index="a")
+    with pytest.raises(
+        ValueError,
+        match="Length mismatch: Expected axis has 2 elements, "
+        "new values have 1 elements",
+    ):
+        gd.DataFrame(d_ary, index="a")
 
 
 @pytest.mark.xfail(reason="constructor does not coerce index inputs")
@@ -4784,6 +4793,169 @@ def test_rowwise_ops_nullable_int_dtypes(op, expected):
 @pytest.mark.parametrize(
     "data",
     [
+        {
+            "t1": gd.Series(
+                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ms]"
+            ),
+            "t2": gd.Series(
+                ["1940-08-31 06:00:00", "2020-08-02 10:00:00"], dtype="<M8[ms]"
+            ),
+        },
+        {
+            "t1": gd.Series(
+                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ms]"
+            ),
+            "t2": gd.Series(
+                ["1940-08-31 06:00:00", "2020-08-02 10:00:00"], dtype="<M8[ns]"
+            ),
+            "t3": gd.Series(
+                ["1960-08-31 06:00:00", "2030-08-02 10:00:00"], dtype="<M8[s]"
+            ),
+        },
+        {
+            "t1": gd.Series(
+                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ms]"
+            ),
+            "t2": gd.Series(
+                ["1940-08-31 06:00:00", "2020-08-02 10:00:00"], dtype="<M8[us]"
+            ),
+        },
+        {
+            "t1": gd.Series(
+                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ms]"
+            ),
+            "t2": gd.Series(
+                ["1940-08-31 06:00:00", "2020-08-02 10:00:00"], dtype="<M8[ms]"
+            ),
+            "i1": gd.Series([1001, 2002], dtype="int64"),
+        },
+        {
+            "t1": gd.Series(
+                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ms]"
+            ),
+            "t2": gd.Series(["1940-08-31 06:00:00", None], dtype="<M8[ms]"),
+            "i1": gd.Series([1001, 2002], dtype="int64"),
+        },
+        {
+            "t1": gd.Series(
+                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ms]"
+            ),
+            "i1": gd.Series([1001, 2002], dtype="int64"),
+            "f1": gd.Series([-100.001, 123.456], dtype="float64"),
+        },
+        {
+            "t1": gd.Series(
+                ["2020-08-01 09:00:00", "1920-05-01 10:30:00"], dtype="<M8[ms]"
+            ),
+            "i1": gd.Series([1001, 2002], dtype="int64"),
+            "f1": gd.Series([-100.001, 123.456], dtype="float64"),
+            "b1": gd.Series([True, False], dtype="bool"),
+        },
+    ],
+)
+@pytest.mark.parametrize("op", ["max", "min"])
+@pytest.mark.parametrize("skipna", [True, False])
+def test_rowwise_ops_datetime_dtypes(data, op, skipna):
+
+    gdf = gd.DataFrame(data)
+
+    pdf = gdf.to_pandas()
+
+    got = getattr(gdf, op)(axis=1, skipna=skipna)
+    expected = getattr(pdf, op)(axis=1, skipna=skipna)
+
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data,op,skipna",
+    [
+        (
+            {
+                "t1": gd.Series(
+                    ["2020-08-01 09:00:00", "1920-05-01 10:30:00"],
+                    dtype="<M8[ms]",
+                ),
+                "t2": gd.Series(
+                    ["1940-08-31 06:00:00", None], dtype="<M8[ms]"
+                ),
+            },
+            "max",
+            True,
+        ),
+        (
+            {
+                "t1": gd.Series(
+                    ["2020-08-01 09:00:00", "1920-05-01 10:30:00"],
+                    dtype="<M8[ms]",
+                ),
+                "t2": gd.Series(
+                    ["1940-08-31 06:00:00", None], dtype="<M8[ms]"
+                ),
+            },
+            "min",
+            False,
+        ),
+        (
+            {
+                "t1": gd.Series(
+                    ["2020-08-01 09:00:00", "1920-05-01 10:30:00"],
+                    dtype="<M8[ms]",
+                ),
+                "t2": gd.Series(
+                    ["1940-08-31 06:00:00", None], dtype="<M8[ms]"
+                ),
+            },
+            "min",
+            True,
+        ),
+    ],
+)
+def test_rowwise_ops_datetime_dtypes_2(data, op, skipna):
+
+    gdf = gd.DataFrame(data)
+
+    pdf = gdf.to_pandas()
+
+    got = getattr(gdf, op)(axis=1, skipna=skipna)
+    expected = getattr(pdf, op)(axis=1, skipna=skipna)
+
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        (
+            {
+                "t1": pd.Series(
+                    ["2020-08-01 09:00:00", "1920-05-01 10:30:00"],
+                    dtype="<M8[ns]",
+                ),
+                "t2": pd.Series(
+                    ["1940-08-31 06:00:00", pd.NaT], dtype="<M8[ns]"
+                ),
+            }
+        )
+    ],
+)
+def test_rowwise_ops_datetime_dtypes_pdbug(data):
+    """
+    Pandas bug: https://github.com/pandas-dev/pandas/issues/36907
+    """
+    pdf = pd.DataFrame(data)
+    gdf = gd.from_pandas(pdf)
+
+    expected = pdf.max(axis=1, skipna=False)
+    got = gdf.max(axis=1, skipna=False)
+
+    with pytest.raises(AssertionError, match="numpy array are different"):
+        assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
         [5.0, 6.0, 7.0],
         "single value",
         np.array(1, dtype="int64"),
@@ -7561,3 +7733,35 @@ def test_equals_dtypes():
     expect = lhs.to_pandas().equals(rhs.to_pandas())
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "df1",
+    [
+        pd.DataFrame({"a": [10, 11, 12]}, index=["a", "b", "z"]),
+        pd.DataFrame({"z": ["a"]}),
+    ],
+)
+@pytest.mark.parametrize(
+    "df2",
+    [
+        pd.DataFrame(),
+        pd.DataFrame({"a": ["a", "a", "c", "z", "A"], "z": [1, 2, 3, 4, 5]}),
+    ],
+)
+@pytest.mark.parametrize(
+    "op",
+    [
+        operator.eq,
+        operator.ne,
+        operator.lt,
+        operator.gt,
+        operator.le,
+        operator.ge,
+    ],
+)
+def test_dataframe_error_equality(df1, df2, op):
+    gdf1 = gd.from_pandas(df1)
+    gdf2 = gd.from_pandas(df2)
+
+    assert_exceptions_equal(op, op, ([df1, df2],), ([gdf1, gdf2],))

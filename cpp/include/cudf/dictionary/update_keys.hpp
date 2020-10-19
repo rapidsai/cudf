@@ -69,7 +69,7 @@ std::unique_ptr<column> add_keys(
  * @code{.pseudo}
  * d1 = {keys=["a", "c", "d"], indices=[2, 0, 1, 0, 2]}
  * d2 = remove_keys( d1, ["b", "c"] )
- * d2 is now {keys=["a", "d"], indices=[1, 0, x, 0, 1], nulls=[1, 1, 0, 1, 1]}
+ * d2 is now {keys=["a", "d"], indices=[1, 0, x, 0, 1], valids=[1, 1, 0, 1, 1]}
  * @endcode
  * Note that "a" has been removed so output row[2] becomes null.
  *
@@ -122,7 +122,7 @@ std::unique_ptr<column> remove_unused_keys(
  * @code{.pseudo}
  * d1 = {keys=["a", "b", "c"], indices=[2, 0, 1, 2, 1]}
  * d2 = set_keys(existing_dict, ["b","c","d"])
- * d2 is now {keys=["b", "c", "d"], indices=[1, x, 0, 1, 0], nulls=[1, 0, 1, 1, 1]}
+ * d2 is now {keys=["b", "c", "d"], indices=[1, x, 0, 1, 0], valids=[1, 0, 1, 1, 1]}
  * @endcode
  *
  * @throw cudf_logic_error if the keys type does not match the keys type in
