@@ -229,7 +229,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
 
-        assert typs.issubset(allowed_typs)
         if not typs.issubset(allowed_typs):
             raise TypeError(
                 "Can only concatenate Series and DataFrame objects when axis=1"
