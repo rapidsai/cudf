@@ -265,7 +265,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             objs, match_index = _align_objs(objs, how=join)
 
         for idx, o in enumerate(objs):
-            if not ignore_index and idx == 0:
+            if idx == 0 and not ignore_index:
                 df.index = o.index
             for col in o._data.names:
                 if col in df._data:
