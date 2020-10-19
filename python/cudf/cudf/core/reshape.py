@@ -214,7 +214,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             raise ValueError(f"cannot concatenate object of type {type(o)}")
 
     allowed_typs = {cudf.Series, cudf.DataFrame}
-    typ = list(typs)[0]
 
     param_axis = _axis_map.get(axis, None)
     if param_axis is None:
@@ -229,7 +228,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
 
-        assert typs.issubset(allowed_typs)
         if not typs.issubset(allowed_typs):
             raise TypeError(
                 "Can only concatenate Series and DataFrame objects when axis=1"
@@ -310,22 +308,30 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             )
 
     if typ is cudf.DataFrame:
+        new_objs = [obj for obj in objs if obj.shape != (0, 0)]
+        names = [name for obj in objs for name in obj._column_names]
+        names_no_overlap = OrderedDict.fromkeys(names).keys()
         objs = [obj for obj in objs if obj.shape != (0, 0)]
+
         if len(objs) == 0:
             # If objs is empty, that indicates all of
             # objs are empty dataframes.
             return cudf.DataFrame()
         elif len(objs) == 1:
-            if join == "inner":
-                return cudf.DataFrame(index=cudf.RangeIndex(len(objs[0])))
-            elif ignore_index:
-                result = cudf.DataFrame(
-                    data=objs[0]._data.copy(deep=True),
-                    index=cudf.RangeIndex(len(objs[0])),
-                )
-            else:
-                result = objs[0].copy()
-            return result
+            data = objs[0]._data.copy(deep=True)
+        # objs contains empty df and no overlapping column names
+        elif (
+            join == "inner"
+            and new_objs != objs
+            and names == list(names_no_overlap)
+            ):
+            data = None
+
+        result = cudf.DataFrame(
+            data=data,
+            index=cudf.RangeIndex(sum(len(obj) for obj in objs)) if ignore_index else objs[0].index.copy(deep=True),
+        )
+        return result 
         else:
             result = cudf.DataFrame._concat(
                 objs,
@@ -334,18 +340,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 ignore_index=ignore_index,
                 sort=sort,
             )
-            if ignore_index and join == "inner" and result.empty:
-                # this occurs with no overlapping column names
-                result.index = cudf.RangeIndex(sum(len(obj) for obj in objs))
-                return result
-            else:
-                return cudf.DataFrame._concat(
-                    objs,
-                    axis=axis,
-                    join=join,
-                    ignore_index=ignore_index,
-                    sort=sort,
-                )
+            # if ignore_index and join == "inner" and result.empty:
+            #     # this occurs with no overlapping column names
+            #     result.index = cudf.RangeIndex(sum(len(obj) for obj in objs))
+        return result
+            
+            
     elif typ is cudf.Series:
         objs = [obj for obj in objs if len(obj)]
         if len(objs) == 0:
