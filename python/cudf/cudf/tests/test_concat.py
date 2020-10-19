@@ -589,31 +589,59 @@ def test_concat_dataframe_with_multiIndex(df1, df2):
     assert_eq(expected, actual)
 
 
+
+@pytest.mark.parametrize(
+    "objs",
+    [
+        [
+            pd.DataFrame(
+                {
+                    "x": range(10),
+                    "y": list(map(float, range(10))),
+                    "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                }
+            ),
+            pd.DataFrame(
+                {"x": range(10, 20), "y": list(map(float, range(10, 20)))}
+            ),
+        ],
+        [
+            pd.DataFrame(
+                {
+                    "x": range(10),
+                    "y": list(map(float, range(10))),
+                    "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                },
+                index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
+            ),
+            pd.DataFrame(
+                {"x": range(10, 20), "y": list(map(float, range(10, 20)))},
+                index=["k", "l", "m", "n", "o", "p", "q", "r", "s", "t"],
+            ),
+            pd.DataFrame(
+                {
+                    "x": range(10),
+                    "y": list(map(float, range(10))),
+                    "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                },
+                index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
+            ),
+            pd.DataFrame(
+                {"x": range(10, 20), "y": list(map(float, range(10, 20)))},
+                index=["a", "b", "c", "d", "z", "f", "g", "h", "i", "w"],
+            ),
+        ],
+    ],
+)
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("sort", [True, False])
 @pytest.mark.parametrize("join", ["inner", "outer"])
-def test_concat_join(ignore_index, sort, join):
-    pdf1 = pd.DataFrame(
-        {
-            "x": range(10),
-            "y": list(map(float, range(10))),
-            "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-        }
-    )
-    pdf2 = pd.DataFrame(
-        {"x": range(10, 20), "y": list(map(float, range(10, 20)))}
-    )
-
-    gdf1 = gd.from_pandas(pdf1)
-    gdf2 = gd.from_pandas(pdf2)
+def test_concat_join(objs, ignore_index, sort, join):
+    gpu_objs = [gd.from_pandas(o) for o in objs]
 
     assert_eq(
-        pd.concat(
-            [pdf1, pdf2], sort=sort, join=join, ignore_index=ignore_index
-        ),
-        gd.concat(
-            [gdf1, gdf2], sort=sort, join=join, ignore_index=ignore_index
-        ),
+        pd.concat(objs, sort=sort, join=join, ignore_index=ignore_index),
+        gd.concat(gpu_objs, sort=sort, join=join, ignore_index=ignore_index),
     )
 
 
