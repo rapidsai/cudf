@@ -254,8 +254,8 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             typ = cudf.DataFrame
         else:
             raise TypeError(
-                "`concat` cannot concatenate objects of "
-                "types: %r." % sorted([t.__name__ for t in typs])
+                f"`concat` cannot concatenate objects of "
+                f"types: {sorted([t.__name__ for t in typs])}."
             )
 
     if typ is cudf.DataFrame:
