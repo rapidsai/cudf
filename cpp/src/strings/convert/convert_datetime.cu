@@ -28,9 +28,9 @@
 #include <cudf/wrappers/timestamps.hpp>
 #include <strings/utilities.cuh>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <thrust/logical.h>
 #include <map>
+#include <rmm/device_uvector.hpp>
 #include <vector>
 
 namespace cudf {
@@ -103,7 +103,7 @@ struct alignas(4) format_item {
 struct format_compiler {
   std::string format;
   std::string template_string;
-  rmm::device_vector<format_item> d_items;
+  rmm::device_uvector<format_item> d_items;
 
   std::map<char, int8_t> specifier_lengths = {{'Y', 4},
                                               {'y', 2},
@@ -119,7 +119,7 @@ struct format_compiler {
                                               {'p', 2},
                                               {'j', 3}};
 
-  format_compiler(const char* fmt) : format(fmt)
+  format_compiler(const char* fmt, cudaStream_t stream) : format(fmt), d_items(0, stream)
   {
     std::vector<format_item> items;
     const char* str = format.c_str();
@@ -156,12 +156,15 @@ struct format_compiler {
       template_string.append((size_t)spec_length, ch);
     }
     // create program in device memory
-    d_items.resize(items.size());
-    CUDA_TRY(cudaMemcpyAsync(
-      d_items.data().get(), items.data(), items.size() * sizeof(items[0]), cudaMemcpyHostToDevice));
+    d_items.resize(items.size(), stream);
+    CUDA_TRY(cudaMemcpyAsync(d_items.data(),
+                             items.data(),
+                             items.size() * sizeof(items[0]),
+                             cudaMemcpyHostToDevice,
+                             stream));
   }
 
-  format_item const* format_items() { return d_items.data().get(); }
+  format_item const* format_items() { return d_items.data(); }
   size_type template_bytes() const { return static_cast<size_type>(template_string.size()); }
   size_type items_count() const { return static_cast<size_type>(d_items.size()); }
   int8_t subsecond_precision() const { return specifier_lengths.at('f'); }
@@ -371,7 +374,7 @@ struct dispatch_to_timestamps_fn {
                   mutable_column_view& results_view,
                   cudaStream_t stream) const
   {
-    format_compiler compiler(format.c_str());
+    format_compiler compiler(format.c_str(), stream);
     auto d_items   = compiler.format_items();
     auto d_results = results_view.data<T>();
     parse_datetime<T> pfn{
@@ -569,7 +572,7 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& strings,
                                      mr);
   auto d_results = results->mutable_view().data<bool>();
 
-  format_compiler compiler(format.c_str());
+  format_compiler compiler(format.c_str(), stream);
   thrust::transform(
     rmm::exec_policy(stream)->on(stream),
     thrust::make_counting_iterator<size_type>(0),
@@ -876,7 +879,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
   timestamp_units units =
     cudf::type_dispatcher(timestamps.type(), dispatch_timestamp_to_units_fn());
 
-  format_compiler compiler(format.c_str());
+  format_compiler compiler(format.c_str(), stream);
   auto d_format_items = compiler.format_items();
 
   auto column   = column_device_view::create(timestamps, stream);
