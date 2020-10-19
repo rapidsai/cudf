@@ -96,10 +96,10 @@ cdef class Scalar:
         # the codepath for setting the device value later
         self._host_dtype = dtype
 
-    def _host_value_current(self):
+    def _is_host_value_current(self):
         return self._host_value is not None
 
-    def _device_value_current(self):
+    def _is_device_value_current(self):
         return self.uptr._device_uptr != NULL
 
     def _set_device_value(self, value, dtype):
