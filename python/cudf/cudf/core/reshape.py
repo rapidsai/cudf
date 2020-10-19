@@ -265,7 +265,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             objs, match_index = _align_objs(objs, how=join)
 
         for idx, o in enumerate(objs):
-            if not ignore_index and idx == 0:
+            if idx == 0 and not ignore_index:
                 df.index = o.index
             for col in o._data.names:
                 if col in df._data:
@@ -281,12 +281,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         result_columns = objs[0].columns
         for o in objs[1:]:
             result_columns = result_columns.append(o.columns)
+
+        df.columns = result_columns.unique()
         if ignore_index:
-            df.columns = pd.RangeIndex(len(result_columns.unique()))
-        else:
-            df.columns = result_columns.unique()
-        if ignore_index and not join == "inner":
-            df.index = cudf.RangeIndex(max(len(obj) for obj in objs))
+            df.reset_index(drop=True, inplace=True)
+            df.columns = pd.RangeIndex(len(df.columns))
+            return df
             return df
         elif not match_index:
             return df.sort_index()
