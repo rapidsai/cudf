@@ -22,8 +22,12 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <rmm/device_uvector.hpp>
+#include <thrust/iterator/discard_iterator.h>
 
 #include <numeric>
+
+#define __NEW_PATH
 
 namespace cudf {
 namespace detail {
@@ -139,7 +143,7 @@ __launch_bounds__(block_size) __global__
 
   size_type warp_cur = warp_begin + warp_id;
   size_type index    = tid;
-  while (warp_cur <= warp_end) {
+  while (warp_cur <= warp_end) { 
     if (index < chars_end) { chars_out[index] = chars_in[index]; }
 
     if (index < offsets_end) {
@@ -449,13 +453,514 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t,
 
 };  // anonymous namespace
 
+struct _size_of_helper {
+  template <typename T>
+  constexpr std::enable_if_t<not is_fixed_width<T>(), int> __device__ operator()() const
+  {
+    return 0;
+  }
+
+  template <typename T>
+  constexpr std::enable_if_t<is_fixed_width<T>(), int> __device__ operator()() const noexcept
+  {
+    return sizeof(T);
+  }
+};
+
+
+inline __device__ size_t _round_up_safe(size_t number_to_round, size_t modulus)
+{
+  auto remainder = number_to_round % modulus;
+  if (remainder == 0) { return number_to_round; }
+  auto rounded_up = number_to_round - remainder + modulus;
+  return rounded_up;
+}
+
+struct _src_column_info {
+  cudf::type_id     type;
+  const int         *offsets;
+  bool              is_offset_column;
+  bool              is_validity;
+};
+
+struct _column_info {
+  size_t    buf_size;       // total size of buffer, including padding
+  int       num_elements;   // # of elements to be copied
+  int       element_size;
+  int       src_row_index;
+  int       dst_offset;   
+  int       value_shift;
+  int       bit_shift;  
+};
+
+struct dst_offset_output_iterator {
+  _column_info *c;
+  using value_type        = int;
+  using difference_type   = int;
+  using pointer           = int *;
+  using reference         = int &;
+  using iterator_category = thrust::output_device_iterator_tag;
+
+  dst_offset_output_iterator operator+ __host__ __device__(int i)
+  {
+    return dst_offset_output_iterator{c + i};
+  }
+
+  void operator++ __host__ __device__() { c++; }
+
+  reference operator[] __device__(int i) { return dereference(c + i); }
+  reference operator*__device__() { return dereference(c); }
+
+ private:
+  reference __device__ dereference(_column_info *c)
+  {
+    return c->dst_offset;
+  }
+};
+
+__device__ void copy_buffer(uint8_t * __restrict__ dst, uint8_t *__restrict__ _src,
+                            int t, int num_elements, int element_size,
+                            int src_row_index, uint32_t stride, int value_shift, int bit_shift)
+{
+  uint8_t *src = _src + (src_row_index * element_size);
+
+  // handle misalignment. read 16 bytes in 4 byte reads. write in a single 16 byte store.
+  const size_t num_bytes = num_elements * element_size;
+  // how many bytes we're misaligned from 4-byte alignment
+  const uint32_t ofs = reinterpret_cast<uintptr_t>(src) % 4;
+  size_t pos = t*16;
+  stride *= 16;
+  while(pos+20 <= num_bytes){
+    // read from the nearest aligned address.
+    const uint32_t* in32 = reinterpret_cast<const uint32_t *>((src + pos) - ofs);
+    uint4 v = { in32[0], in32[1], in32[2], in32[3] };
+    if (ofs || bit_shift) {
+      v.x = __funnelshift_r(v.x, v.y, ofs*8 + bit_shift);
+      v.y = __funnelshift_r(v.y, v.z, ofs*8 + bit_shift);
+      v.z = __funnelshift_r(v.z, v.w, ofs*8 + bit_shift);
+      // don't read off the end
+      v.w = __funnelshift_r(v.w, /*pos+20 <= num_bytes ? in32[4] : 0*/in32[4], ofs*8 + bit_shift);
+    }           
+    v.x -= value_shift;
+    v.y -= value_shift;
+    v.z -= value_shift;
+    v.w -= value_shift;
+    reinterpret_cast<uint4*>(dst)[pos/16] = v;
+    pos += stride;
+  }  
+
+  // copy trailing bytes
+  if(t == 0){
+    size_t remainder = num_bytes < 16 ? num_bytes : 16 + (num_bytes % 16);
+
+    /*
+    if(blockIdx.x == 80){
+      printf("R : num_bytes(%lu), pos(%lu), remainder(%lu)\n", num_bytes, pos, remainder);
+    }
+    */
+
+    // if we're performing a value shift (offsets), or a bit shift (validity) the # of bytes and 
+    // alignment must be a multiple of 4 
+    if(value_shift || bit_shift){
+      int idx = num_bytes-4;
+      uint32_t carry = 0;
+      while(remainder){
+        uint32_t v = reinterpret_cast<uint32_t*>(src)[idx/4];        
+        //printf("VA : v(%x), (shift)%d, carry(%x), result(%x)\n", v, bit_shift, carry, ((v - value_shift) >> bit_shift) | carry);
+        reinterpret_cast<uint32_t*>(dst)[idx/4] = ((v - value_shift) >> bit_shift) | carry;        
+        carry = (v & ((1<<bit_shift)-1)) << (32 - bit_shift);
+        remainder -= 4;
+        idx-=4;
+      }
+    } else {
+      while(remainder){
+        int idx = num_bytes - remainder--;
+        reinterpret_cast<uint8_t*>(dst)[idx] = reinterpret_cast<uint8_t*>(src)[idx];
+      }
+    }
+  }
+}
+
+__global__ void copy_partitions(int num_columns, int num_partitions, int num_bufs,
+                                uint8_t **src_bufs,
+                                uint8_t **dst_bufs,
+                                _column_info *buf_info)
+{   
+  int partition_index = blockIdx.x / num_columns;
+  int column_index = blockIdx.x % num_columns;
+  int t = threadIdx.x; 
+  size_t buf_index = (partition_index * num_columns) + column_index; 
+  int num_elements = buf_info[buf_index].num_elements;    
+  int element_size = buf_info[buf_index].element_size;
+  int stride = blockDim.x;
+ 
+  int src_row_index = buf_info[buf_index].src_row_index;
+  uint8_t *src = src_bufs[column_index];
+  uint8_t *dst = dst_bufs[partition_index] + buf_info[buf_index].dst_offset;
+
+  // copy, shifting offsets and validity bits as needed
+  copy_buffer(dst, src, t, num_elements, element_size, src_row_index, stride, buf_info[buf_index].value_shift, buf_info[buf_index].bit_shift);
+}
+
+struct get_col_data {
+  template<typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+  void operator()(column_view const& col, size_type &col_index, uint8_t **out_buf)
+  {
+    out_buf[col_index++] = reinterpret_cast<uint8_t*>(const_cast<T*>(col.begin<T>()));
+    if(col.nullable()){      
+      out_buf[col_index++] = reinterpret_cast<uint8_t*>(const_cast<bitmask_type*>(col.null_mask()));
+    }
+  }
+
+  template<typename T, std::enable_if_t<!cudf::is_fixed_width<T>() && std::is_same<T, cudf::string_view>::value>* = nullptr>
+  void operator()(column_view const& col, size_type &col_index, uint8_t **out_buf)
+  {
+    strings_column_view scv(col);
+    out_buf[col_index++] = reinterpret_cast<uint8_t*>(const_cast<size_type*>(scv.offsets().begin<size_type>()));
+    out_buf[col_index++] = reinterpret_cast<uint8_t*>(const_cast<int8_t*>(scv.chars().begin<int8_t>()));
+    if(col.nullable()){      
+      out_buf[col_index++] = reinterpret_cast<uint8_t*>(const_cast<bitmask_type*>(col.null_mask()));
+    }
+  }
+
+  template<typename T, std::enable_if_t<!cudf::is_fixed_width<T>() && !std::is_same<T, cudf::string_view>::value>* = nullptr>
+  void operator()(column_view const& col, size_type &col_index, uint8_t **out_buf)
+  {
+    CUDF_FAIL("unsupported type");    
+  }
+};
+
+
+struct buf_size_functor {  
+  _column_info const* ci;
+  size_t operator() __device__ (int index)
+  {
+    //printf("Size : %d (%lu)\n", ci[index].buf_size, (uint64_t)(&ci[index]));
+    return static_cast<size_t>(ci[index].buf_size);
+  }
+};
+
+struct split_key_functor {
+  int num_columns;
+  int operator() __device__ (int t)
+  {
+    //printf("Key : %d (%d, %d)\n", t / num_columns, t , num_columns);
+    return t / num_columns;
+  }
+};
+
 std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& input,
                                                       std::vector<size_type> const& splits,
                                                       rmm::mr::device_memory_resource* mr,
                                                       cudaStream_t stream)
-{
-  auto subtables = cudf::split(input, splits);
+{ 
+#if defined(__NEW_PATH)     
+  if (input.num_columns() == 0) { return {}; }
+  if(splits.size() > 0){
+    CUDF_EXPECTS(splits.back() <= input.column(0).size(), "splits can't exceed size of input columns");
+  }
 
+  size_t num_root_columns = input.num_columns();
+
+  // compute real # of columns (treating every child column individually), # of partitions
+  // and total # of buffers
+  size_t num_columns = 0;
+  for(size_t idx=0; idx<num_root_columns; idx++){
+    if(input.column(idx).type().id() == type_id::STRING){      
+      num_columns+=2;
+    } else {
+      num_columns++;
+    }
+    if(input.column(idx).nullable()){
+      num_columns++;
+    }
+  }
+  size_t num_partitions = splits.size() + 1;
+  size_t num_bufs = num_columns * num_partitions;  
+
+  // compute total size of host-side temp data
+  size_t indices_size = cudf::util::round_up_safe((splits.size() + 1) * 2 * sizeof(size_type), split_align);
+  size_t src_column_info_size = cudf::util::round_up_safe(num_columns * sizeof(_src_column_info), split_align);  
+  size_t buf_sizes_size = cudf::util::round_up_safe(num_partitions * sizeof(size_t), split_align);
+  size_t column_infos_size = cudf::util::round_up_safe(num_bufs * sizeof(_column_info), split_align);
+  size_t src_bufs_size = cudf::util::round_up_safe(num_columns * sizeof(uint8_t*), split_align);
+  size_t dst_bufs_size = cudf::util::round_up_safe(num_partitions * sizeof(uint8_t*), split_align);
+  size_t total_temp_size = indices_size + src_column_info_size + buf_sizes_size + column_infos_size + src_bufs_size + dst_bufs_size;
+  
+  // allocate host
+  std::vector<uint8_t> host_buf(total_temp_size);
+  
+  // distribute
+  uint8_t *cur_h_buf = host_buf.data();
+  size_type     *h_indices = reinterpret_cast<size_type*>(cur_h_buf);           cur_h_buf += indices_size;
+  _src_column_info *h_column_src_info = reinterpret_cast<_src_column_info*>(cur_h_buf);  cur_h_buf += src_column_info_size;  
+  size_t        *h_buf_sizes = reinterpret_cast<size_t*>(cur_h_buf);            cur_h_buf += buf_sizes_size;
+  _column_info  *h_column_info = reinterpret_cast<_column_info*>(cur_h_buf);    cur_h_buf += column_infos_size;
+  uint8_t       **h_src_bufs = reinterpret_cast<uint8_t**>(cur_h_buf);          cur_h_buf += src_bufs_size;
+  uint8_t       **h_dst_bufs = reinterpret_cast<uint8_t**>(cur_h_buf);
+
+
+  // allocate device
+  rmm::device_buffer device_buf{total_temp_size, stream, mr};
+
+  // distribute
+  uint8_t *cur_d_buf = reinterpret_cast<uint8_t*>(device_buf.data());
+  size_type     *d_indices = reinterpret_cast<size_type*>(cur_d_buf);           cur_d_buf += indices_size;
+  _src_column_info *d_column_src_info = reinterpret_cast<_src_column_info*>(cur_d_buf);  cur_d_buf += src_column_info_size;  
+  size_t        *d_buf_sizes = reinterpret_cast<size_t*>(cur_d_buf);            cur_d_buf += buf_sizes_size;
+  _column_info  *d_column_info = reinterpret_cast<_column_info*>(cur_d_buf);    cur_d_buf += column_infos_size;
+  uint8_t       **d_src_bufs = reinterpret_cast<uint8_t**>(cur_d_buf);          cur_d_buf += src_bufs_size;
+  uint8_t       **d_dst_bufs = reinterpret_cast<uint8_t**>(cur_d_buf);
+
+  // compute splits -> indices
+  {
+    size_type *indices = h_indices;
+    *indices = 0;
+    indices++;
+    std::for_each(splits.begin(), splits.end(), [&indices](auto split) {
+      *indices = split;
+      indices++;
+      *indices = split;
+      indices++; 
+    });
+    *indices = input.column(0).size();
+  
+    for (size_t i = 0; i < splits.size(); i++) {
+      auto begin = h_indices[2 * i];
+      auto end   = h_indices[2 * i + 1];
+      CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
+      CUDF_EXPECTS(end >= begin, "End index cannot be smaller than the starting index.");
+      CUDF_EXPECTS(end <= input.column(0).size(), "Slice range out of bounds.");
+    }   
+  }
+  
+  // setup column types
+  {
+    int col_index = 0;
+    for(size_t idx=0; idx<num_root_columns; idx++){
+      if(input.column(idx).type().id() == type_id::STRING){
+        strings_column_view scv(input.column(idx));
+
+        h_column_src_info[col_index].type = type_id::INT32; 
+        h_column_src_info[col_index].offsets = scv.offsets().begin<int>();
+        h_column_src_info[col_index].is_offset_column = true;
+        h_column_src_info[col_index].is_validity = false;
+        col_index++;
+
+        h_column_src_info[col_index].type = type_id::INT8;  // chars
+        h_column_src_info[col_index].offsets = scv.offsets().begin<int>();
+        h_column_src_info[col_index].is_offset_column = false;
+        h_column_src_info[col_index].is_validity = false;        
+        col_index++;
+      } else {
+        h_column_src_info[col_index].type = input.column(idx).type().id();
+        h_column_src_info[col_index].offsets = nullptr;
+        h_column_src_info[col_index].is_offset_column = false;
+        h_column_src_info[col_index].is_validity = false; 
+        col_index++;
+      }
+
+      // if we have validity
+      if(input.column(idx).nullable()){
+        h_column_src_info[col_index].type = type_id::INT32; 
+        h_column_src_info[col_index].offsets = 0;
+        h_column_src_info[col_index].is_offset_column = false;
+        h_column_src_info[col_index].is_validity = true; 
+        col_index++;
+      }
+    }
+  }
+
+  // HtoD indices and types to device
+  cudaMemcpyAsync(d_indices, h_indices, indices_size + src_column_info_size, cudaMemcpyHostToDevice, stream);
+  cudaStreamSynchronize(stream);
+
+  // compute sizes of each column in each partition, including alignment.
+  thrust::transform(rmm::exec_policy(stream)->on(stream),
+    thrust::make_counting_iterator<size_t>(0),
+    thrust::make_counting_iterator<size_t>(num_bufs),
+    d_column_info,
+    [num_columns, d_indices, d_column_src_info] __device__ (size_t t){      
+      int split_index = t / num_columns;
+      int column_index = t % num_columns;
+      auto const& src_info = d_column_src_info[column_index];
+      
+      int row_index_start = d_indices[split_index * 2];
+      int row_index_end = d_indices[split_index *2 + 1];
+      int value_shift = 0;
+      int bit_shift = 0;
+
+      // if I am an offsets column, all my values need to be shifted
+      if(src_info.is_offset_column){
+        //printf("Value shift pre: %lu, %d\n", (uint64_t)src_info.offsets, row_index_start);
+        value_shift = src_info.offsets[row_index_start];
+        //printf("Value shift post: %d\n", value_shift);
+      }
+      // otherwise, if I have an associated offsets column adjust indices
+      else if(src_info.offsets != nullptr){      
+        row_index_start = src_info.offsets[row_index_start];
+        row_index_end = src_info.offsets[row_index_end];        
+      }      
+      int num_elements = row_index_end - row_index_start;
+      if(src_info.is_offset_column){
+        num_elements++;
+      }
+      if(src_info.is_validity){
+        bit_shift = row_index_start % 32;        
+        num_elements = (num_elements + 31) / 32;
+        row_index_start /= 32;
+        row_index_end /= 32;
+      }
+      int element_size = cudf::type_dispatcher(data_type{src_info.type}, _size_of_helper{});
+      size_t bytes = num_elements * element_size;
+      //printf("Col %d, split %d (%d, %d), (%d, %lu), (%d, %d)\n", column_index, split_index, row_index_start, row_index_end, num_elements, bytes, value_shift, bit_shift);
+      return _column_info{_round_up_safe(bytes, 64), num_elements, element_size, row_index_start, 0, value_shift, bit_shift};
+    });
+
+  // DtoH buf sizes and col info back to the host
+  cudaMemcpyAsync(h_buf_sizes, d_buf_sizes, buf_sizes_size + column_infos_size, cudaMemcpyDeviceToHost, stream);
+  cudaStreamSynchronize(stream);
+
+  // compute total size of each partition
+  {
+    // key is split index
+    auto keys = thrust::make_transform_iterator(thrust::make_counting_iterator(0), split_key_functor{static_cast<int>(num_columns)});
+    auto values = thrust::make_transform_iterator(thrust::make_counting_iterator(0), buf_size_functor{d_column_info});
+
+    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream), 
+      keys, keys + num_bufs, values, thrust::make_discard_iterator(), d_buf_sizes);
+  }
+  
+  /*
+  // DtoH buf sizes and col info back to the host
+  cudaMemcpyAsync(h_buf_sizes, d_buf_sizes, buf_sizes_size, cudaMemcpyDeviceToHost, stream);
+  cudaStreamSynchronize(stream);
+  for(size_t idx=0; idx<num_partitions; idx++){
+    printf("partition %lu : %lu\n", idx, h_buf_sizes[idx]);
+  } 
+  */ 
+
+  // compute start offset for each output buffer
+  {
+    auto keys = thrust::make_transform_iterator(thrust::make_counting_iterator(0), split_key_functor{static_cast<int>(num_columns)});
+    auto values = thrust::make_transform_iterator(thrust::make_counting_iterator(0), buf_size_functor{d_column_info});
+    thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream),
+      keys, keys + num_bufs, values, dst_offset_output_iterator{d_column_info}, 0);
+  }
+
+  // DtoH buf sizes and col info back to the host
+  cudaMemcpyAsync(h_buf_sizes, d_buf_sizes, buf_sizes_size + column_infos_size, cudaMemcpyDeviceToHost, stream);
+  cudaStreamSynchronize(stream);
+
+  /*
+  for(size_t idx=0; idx<h_buf_sizes.size(); idx++){
+    printf("partition %lu : %lu\n", idx, h_buf_sizes[idx]);
+  }
+  */    
+  // DtoH column info back to hose
+  /*
+  thrust::host_vector<_column_info> h_col_info(num_bufs);
+  cudaMemcpyAsync(h_col_info.data(), d_col_info.data(), sizeof(_column_info) * num_bufs, cudaMemcpyDeviceToHost);
+  */
+  /*
+  thrust::host_vector<size_t> h_dst_offsets(num_bufs);
+  cudaMemcpyAsync(h_dst_offsets.data(), d_dst_offsets.data(), sizeof(size_t) * num_bufs, cudaMemcpyDeviceToHost);  
+  */
+  /*
+  // debug  
+  for(size_t idx=0; idx<h_col_info.size(); idx++){
+    printf("size/offset : (%d, %d), %lu\n", h_col_info[idx].num_elements, h_col_info[idx].buf_size, h_dst_offsets[idx]);
+  } 
+  */   
+
+  // allocate output partition buffers
+  std::vector<rmm::device_buffer> out_buffers;
+  out_buffers.reserve(num_partitions);
+  std::transform(h_buf_sizes, h_buf_sizes + num_partitions, std::back_inserter(out_buffers), [stream, mr](size_t bytes){    
+    return rmm::device_buffer{bytes, stream, mr};
+  });
+
+  // setup src buffers
+  {
+    size_type out_index = 0;  
+    std::for_each(input.begin(), input.end(), [&out_index, &h_src_bufs](column_view const& col){
+      cudf::type_dispatcher(col.type(), get_col_data{}, col, out_index, h_src_bufs);
+    });  
+  }
+
+  // setup dst buffers
+  {
+    size_type out_index = 0;  
+    std::for_each(out_buffers.begin(), out_buffers.end(), [&out_index, &h_dst_bufs](rmm::device_buffer& buf){
+      h_dst_bufs[out_index++] = reinterpret_cast<uint8_t*>(buf.data());
+    });
+  }
+
+  // HtoD src and dest buffers
+  cudaMemcpyAsync(d_src_bufs, h_src_bufs, src_bufs_size + dst_bufs_size, cudaMemcpyHostToDevice, stream);
+  cudaStreamSynchronize(stream);  
+    
+  // copy.  1 block per buffer  
+  {
+    // scope_timer timer("kernel");
+    constexpr int block_size = 512;
+    copy_partitions<<<num_bufs, block_size, 0, stream>>>(num_columns, num_partitions, num_bufs,
+                                                                d_src_bufs,
+                                                                d_dst_bufs,
+                                                                d_column_info);
+
+    // TODO : put this after the column building step below to overlap work
+    CUDA_TRY(cudaStreamSynchronize(stream));
+  }
+
+  // build the output.
+  std::vector<contiguous_split_result> result;  
+  result.reserve(num_partitions);
+  size_t buf_index = 0;
+  for(size_t idx=0; idx<num_partitions; idx++){
+    std::vector<column_view> cols;
+    cols.reserve(input.num_columns());    
+    for(size_t s_idx=0; s_idx<num_root_columns; s_idx++){
+      cudf::type_id id = input.column(s_idx).type().id();
+      bool nullable = input.column(s_idx).nullable();
+      
+      if(id == type_id::STRING){
+        cols.push_back(cudf::column_view{data_type{type_id::STRING}, 
+                                          h_column_info[buf_index].num_elements-1, 
+                                          nullptr,
+                                          nullable ? reinterpret_cast<bitmask_type*>(h_dst_bufs[idx] + h_column_info[buf_index+2].dst_offset) : nullptr,
+                                          nullable ? UNKNOWN_NULL_COUNT : 0,
+                                          0,
+                                          {
+                                            cudf::column_view{data_type{type_id::INT32}, h_column_info[buf_index].num_elements, 
+                                            reinterpret_cast<void*>(h_dst_bufs[idx] + h_column_info[buf_index].dst_offset)},
+
+                                            cudf::column_view{data_type{type_id::INT8}, h_column_info[buf_index+1].num_elements, 
+                                            reinterpret_cast<void*>(h_dst_bufs[idx] + h_column_info[buf_index+1].dst_offset)}
+                                          }});
+
+        // cudf::test::print(cols.back());
+        buf_index+=2;
+      } else {
+        cols.push_back(cudf::column_view{data_type{id}, 
+                                         h_column_info[buf_index].num_elements, 
+                                         reinterpret_cast<void*>(h_dst_bufs[idx] + h_column_info[buf_index].dst_offset),
+                                         nullable ? reinterpret_cast<bitmask_type*>(h_dst_bufs[idx] + h_column_info[buf_index+1].dst_offset) : nullptr,
+                                         nullable ? UNKNOWN_NULL_COUNT : 0
+                                         });
+        buf_index++;
+      }      
+      if(nullable){
+        buf_index++;
+      }
+    }
+    result.push_back(contiguous_split_result{cudf::table_view{cols}, std::make_unique<rmm::device_buffer>(std::move(out_buffers[idx]))});
+  }    
+
+  return std::move(result);
+#else
+  auto subtables = cudf::split(input, splits);
+  
   // optimization : for large numbers of splits this allocation can dominate total time
   //                spent if done inside alloc_and_copy().  so we'll allocate it once
   //                and reuse it.
@@ -463,7 +968,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
   //                benchmark:        1 GB data, 10 columns, 256 splits.
   //                no optimization:  106 ms (8 GB/s)
   //                optimization:     20 ms (48 GB/s)
-  rmm::device_vector<column_split_info> device_split_info(input.num_columns());
+  rmm::device_vector<column_split_info> device_split_info(input.num_columns());  
 
   std::vector<contiguous_split_result> result;
   std::transform(subtables.begin(),
@@ -471,9 +976,10 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
                  std::back_inserter(result),
                  [mr, stream, &device_split_info](table_view const& t) {
                    return alloc_and_copy(t, device_split_info, mr, stream);
-                 });
+                 });                 
 
   return result;
+#endif  
 }
 
 };  // namespace detail
