@@ -8,24 +8,27 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/constant_iterator.h>
 
 class InclusiveCopyIfTest : public cudf::test::BaseFixture {
 };
 
 struct simple_op {
-  static inline constexpr uint32_t scan(uint32_t lhs, uint32_t rhs) { return rhs - lhs / 2; }
-  static inline constexpr bool predicate(uint32_t a) { return a % 3 == 0; }
+  inline __device__ uint32_t operator()(uint32_t lhs, uint32_t rhs) { return rhs + lhs; }
+  inline __device__ bool operator()(uint32_t value)
+  {
+    printf("pred_op(%i)\n", value);
+    return true;
+  }
 };
 
 TEST_F(InclusiveCopyIfTest, CanScanSelectIf)
 {
-  auto input = thrust::make_counting_iterator<uint32_t>(0);
+  auto input = thrust::make_constant_iterator<uint32_t>(1);
 
-  auto d_result = scan_select_if(input,  //
-                                 input + 10,
-                                 simple_op::scan,
-                                 simple_op::predicate);
+  auto op = simple_op{};
+
+  auto d_result = scan_select_if(input, input + 9, op, op);
 
   auto h_result = thrust::host_vector<uint32_t>(d_result.size());
 
