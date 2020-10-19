@@ -13,6 +13,7 @@
 - PR #6485 Add File IO to cuIO benchmarks
 - PR #6504 Update Java bindings version to 0.17-SNAPSHOT
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
+- PR #6557 Support nullable timestamp columns in time range window functions
 
 ## Bug Fixes
 
