@@ -106,7 +106,7 @@ TYPED_TEST(FixedPointTestBothReps, PaddedDecimalXXConstruction)
   EXPECT_EQ(1, static_cast<double>(c));  // intentional (inhereted problem from floating point)
   EXPECT_EQ(1.0001, static_cast<double>(d));
   EXPECT_EQ(1.00001, static_cast<double>(e));
-  EXPECT_EQ(1, static_cast<double>(f));  // intentional (inhereted problem from floating point)
+  EXPECT_EQ(1, static_cast<double>(f));  // intentional (inherited problem from floating point)
 
   EXPECT_TRUE(1.000123 - static_cast<double>(x) < std::numeric_limits<double>::epsilon());
   EXPECT_EQ(0.000123, static_cast<double>(y));
