@@ -75,6 +75,47 @@ std::unique_ptr<column> to_timestamps(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Verifies the given strings column can be parsed to timestamps using the provided format
+ * pattern.
+ *
+ * The format pattern can include the following specifiers: "%Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z"
+ *
+ * | Specifier | Description |
+ * | :-------: | ----------- |
+ * | \%d | Day of the month: 01-31 |
+ * | \%m | Month of the year: 01-12 |
+ * | \%y | Year without century: 00-99 |
+ * | \%Y | Year with century: 0001-9999 |
+ * | \%H | 24-hour of the day: 00-23 |
+ * | \%I | 12-hour of the day: 01-12 |
+ * | \%M | Minute of the hour: 00-59|
+ * | \%S | Second of the minute: 00-59 |
+ * | \%f | 6-digit microsecond: 000000-999999 |
+ * | \%z | UTC offset with format ±HHMM Example +0500 |
+ * | \%j | Day of the year: 001-366 |
+ * | \%p | Only 'AM', 'PM' or 'am', 'pm' are recognized |
+ *
+ * Other specifiers are not currently supported.
+ * The "%f" supports a precision value to read the numeric digits. Specify the
+ * precision with a single integer value (1-9) as follows:
+ * use "%3f" for milliseconds, "%6f" for microseconds and "%9f" for nanoseconds.
+ *
+ * Any null string entry will result in a corresponding null row in the output column.
+ *
+ * This will return a column of type BOOL8 where a `true` row indicates the corresponding
+ * input string can be parsed correctly with the given format.
+ *
+ * @param strings Strings instance for this operation.
+ * @param format String specifying the timestamp format in strings.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New BOOL8 column.
+ */
+std::unique_ptr<column> is_timestamp(
+  strings_column_view const& strings,
+  std::string const& format,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Returns a new strings column converting a timestamp column into
  * strings using the provided format pattern.
  *

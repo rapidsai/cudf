@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/table/table_view.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -25,11 +26,7 @@ namespace detail {
  * @copydoc cudf::dictionary::add_keys(dictionary_column_view const&,column_view
  * const&,mm::mr::device_memory_resource*)
  *
- * @param dictionary_column Existing dictionary column.
- * @param new_keys New keys to incorporate into the dictionary_column
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return New dictionary column.
  */
 std::unique_ptr<column> add_keys(
   dictionary_column_view const& dictionary_column,
@@ -41,11 +38,7 @@ std::unique_ptr<column> add_keys(
  * @copydoc cudf::dictionary::remove_keys(dictionary_column_view const&,column_view
  * const&,mm::mr::device_memory_resource*)
  *
- * @param dictionary_column Existing dictionary column.
- * @param keys_to_remove The keys to remove from the dictionary_column
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return New dictionary column.
  */
 std::unique_ptr<column> remove_keys(
   dictionary_column_view const& dictionary_column,
@@ -57,10 +50,7 @@ std::unique_ptr<column> remove_keys(
  * @copydoc cudf::dictionary::remove_unused_keys(dictionary_column_view
  * const&,mm::mr::device_memory_resource*)
  *
- * @param dictionary_column Existing dictionary column.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return New dictionary column.
  */
 std::unique_ptr<column> remove_unused_keys(
   dictionary_column_view const& dictionary_column,
@@ -68,14 +58,10 @@ std::unique_ptr<column> remove_unused_keys(
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::dictionary::remove_unused_keys(dictionary_column_view
+ * @copydoc cudf::dictionary::set_keys(dictionary_column_view
  * const&,mm::mr::device_memory_resource*)
  *
- * @param dictionary_column Existing dictionary column.
- * @param keys New keys to use for the output column. Must not contain nulls.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return New dictionary column.
  */
 std::unique_ptr<column> set_keys(
   dictionary_column_view const& dictionary_column,
@@ -96,6 +82,30 @@ std::unique_ptr<column> set_keys(
  */
 std::vector<std::unique_ptr<column>> match_dictionaries(
   std::vector<dictionary_column_view> input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
+
+/**
+ * @brief Create new dictionaries that have keys merged from dictionary columns
+ * found in the provided tables.
+ *
+ * The result includes a vector of new dictionary columns along with a
+ * vector of table_views with corresponding updated column_views.
+ * And any column_views in the input tables that are not dictionary type
+ * are simply copied.
+ *
+ * Merging the dictionary keys also adjusts the indices appropriately in the
+ * output dictionary columns.
+ *
+ * Any null rows are left unchanged.
+ *
+ * @param input Vector of cudf::table_views that include dictionary columns to be matched.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return New dictionary columns and updated cudf::table_views.
+ */
+std::pair<std::vector<std::unique_ptr<column>>, std::vector<table_view>> match_dictionaries(
+  std::vector<table_view> tables,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 

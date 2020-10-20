@@ -1045,8 +1045,8 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
         uint32_t pos = lastpos;
         pos += varint_length<uint4>(bs, pos);
         if (pos > maxpos) break;
-        *(volatile int32_t *)&vals[n] = lastpos;
-        lastpos                       = pos;
+        *reinterpret_cast<volatile int32_t *>(&vals[n]) = lastpos;
+        lastpos                                         = pos;
       }
       scratch->num_vals = n;
       bytestream_flush_bytes(bs, lastpos - bs->pos);
@@ -1054,7 +1054,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
     __syncthreads();
     uint32_t num_vals_to_read = scratch->num_vals;
     if (t >= num_vals_read and t < num_vals_to_read) {
-      int pos    = *(volatile int32_t *)&vals[t];
+      int pos    = *reinterpret_cast<volatile int32_t *>(&vals[t]);
       int128_s v = decode_varint128(bs, pos);
 
       if (col_scale & ORC_DECIMAL2FLOAT64_SCALE) {
@@ -1267,9 +1267,9 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
     if ((encoding_kind == DICTIONARY || encoding_kind == DICTIONARY_V2) &&
         (s->chunk.dict_len > 0)) {
       if (t == 0) {
-        s->top.dict.dict_len = s->chunk.dict_len;
-        s->top.dict.local_dict =
-          (uint2 *)(global_dictionary + s->chunk.dictionary_start);  // Local dictionary
+        s->top.dict.dict_len   = s->chunk.dict_len;
+        s->top.dict.local_dict = reinterpret_cast<uint2 *>(
+          global_dictionary + s->chunk.dictionary_start);  // Local dictionary
         s->top.dict.dict_pos = 0;
         // CI_DATA2 contains the LENGTH stream coding the length of individual dictionary entries
         bytestream_init(&s->bs, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
@@ -1749,39 +1749,35 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
           void *data_out = s->chunk.column_data_base;
           switch (s->chunk.type_kind) {
             case FLOAT:
-            case INT:
-              reinterpret_cast<uint32_t *>(data_out)[row] = s->vals.u32[t + vals_skipped];
-              break;
+            case INT: static_cast<uint32_t *>(data_out)[row] = s->vals.u32[t + vals_skipped]; break;
             case DOUBLE:
             case LONG:
             case DECIMAL:
-              reinterpret_cast<uint64_t *>(data_out)[row] = s->vals.u64[t + vals_skipped];
+              static_cast<uint64_t *>(data_out)[row] = s->vals.u64[t + vals_skipped];
               break;
             case SHORT:
-              reinterpret_cast<uint16_t *>(data_out)[row] =
+              static_cast<uint16_t *>(data_out)[row] =
                 static_cast<uint16_t>(s->vals.u32[t + vals_skipped]);
               break;
-            case BYTE:
-              reinterpret_cast<uint8_t *>(data_out)[row] = s->vals.u8[t + vals_skipped];
-              break;
+            case BYTE: static_cast<uint8_t *>(data_out)[row] = s->vals.u8[t + vals_skipped]; break;
             case BOOLEAN:
-              reinterpret_cast<uint8_t *>(data_out)[row] =
+              static_cast<uint8_t *>(data_out)[row] =
                 (s->vals.u8[(t + vals_skipped) >> 3] >> ((~t) & 7)) & 1;
               break;
             case DATE:
               if (s->chunk.dtype_len == 8) {
                 // Convert from days to milliseconds by multiplying by 24*3600*1000
-                reinterpret_cast<int64_t *>(data_out)[row] =
+                static_cast<int64_t *>(data_out)[row] =
                   86400000ll * (int64_t)s->vals.i32[t + vals_skipped];
               } else {
-                reinterpret_cast<uint32_t *>(data_out)[row] = s->vals.u32[t + vals_skipped];
+                static_cast<uint32_t *>(data_out)[row] = s->vals.u32[t + vals_skipped];
               }
               break;
             case STRING:
             case BINARY:
             case VARCHAR:
             case CHAR: {
-              nvstrdesc_s *strdesc = &reinterpret_cast<nvstrdesc_s *>(data_out)[row];
+              nvstrdesc_s *strdesc = &static_cast<nvstrdesc_s *>(data_out)[row];
               const uint8_t *ptr;
               uint32_t count;
               if (IS_DICTIONARY(s->chunk.encoding_kind)) {
@@ -1815,12 +1811,12 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
               if (tz_len > 0) { seconds = ConvertToUTC(&s->top.data, tz_table, seconds); }
               if (seconds < 0 && nanos != 0) { seconds -= 1; }
               if (s->chunk.ts_clock_rate)
-                reinterpret_cast<int64_t *>(data_out)[row] =
+                static_cast<int64_t *>(data_out)[row] =
                   seconds * s->chunk.ts_clock_rate +
                   (nanos + (499999999 / s->chunk.ts_clock_rate)) /
                     (1000000000 / s->chunk.ts_clock_rate);  // Output to desired clock rate
               else
-                reinterpret_cast<int64_t *>(data_out)[row] = seconds * 1000000000 + nanos;
+                static_cast<int64_t *>(data_out)[row] = seconds * 1000000000 + nanos;
               break;
             }
           }
