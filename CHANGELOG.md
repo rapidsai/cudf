@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #6460 Add is_timestamp format check API
+- PR #6568 Add function to create hashed vocabulary file from raw vocabulary
 
 ## Improvements
 
