@@ -237,6 +237,8 @@ class Frame(libcudf.table.Table):
                     empty_has_index = empty_has_index or len(obj) > 0
 
         if join == "inner":
+            if ignore_index and num_empty_input_frames > 0:
+                result_index_length = sum(len(obj) for obj in objs)
             names = [name for obj in objs for name in obj._column_names]
             names = OrderedDict.fromkeys(names).keys()
             names_not_in_all = [
