@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #6460 Add is_timestamp format check API
+- PR #6562 Add `cudf::round` for `HALF_UP` and `HALF_EVEN` rounding
 
 ## Improvements
 
