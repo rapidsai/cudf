@@ -543,7 +543,7 @@ class ColumnBase(Column, Serializable):
             )
             return build_column(view_buf, dtype=dtype)
 
-    def element_indexing(self, index: int):
+    def element_indexing(self, index: int) -> ScalarObj:
         """Default implementation for indexing to an element
 
         Raises
@@ -558,7 +558,7 @@ class ColumnBase(Column, Serializable):
 
         return libcudf.copying.get_element(self, index).value
 
-    def slice(self, start, stop, stride=None):
+    def slice(self, start: int, stop: int, stride: int = None) -> "ColumnBase":
         if start < 0:
             start = start + len(self)
         if stop < 0:
@@ -703,19 +703,19 @@ class ColumnBase(Column, Serializable):
 
         self._mimic_inplace(out, inplace=True)
 
-    def fillna(self, value):
+    def fillna(self, value: Union[ScalarObj, "ColumnBase"]) -> "ColumnBase":
         """Fill null values with ``value``.
 
         Returns a copy with null filled.
         """
         raise NotImplementedError
 
-    def isnull(self):
+    def isnull(self) -> "ColumnBase":
         """Identify missing values in a Column.
         """
         return libcudf.unary.is_null(self)
 
-    def isna(self):
+    def isna(self) -> "ColumnBase":
         """Identify missing values in a Column. Alias for isnull.
         """
         return self.isnull()
