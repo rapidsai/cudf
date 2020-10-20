@@ -14,14 +14,9 @@
  * limitations under the License.
  */
 
-// #include <cudf/column/column.hpp>
-// #include <cudf/column/column_view.hpp>
 #include <cudf/round.hpp>
-// #include <cudf/types.hpp>
 #include <cudf_test/base_fixture.hpp>
-// #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-// #include <cudf_test/type_lists.hpp>
 
 struct RoundTests : public cudf::test::BaseFixture {
 };
@@ -33,10 +28,11 @@ TEST_F(RoundTests, SimpleFixedPointTest)
 
   auto const input    = fp_wrapper{{1140, 1150, 1160}, scale_type{-3}};
   auto const expected = fp_wrapper{{11, 12, 12}, scale_type{-1}};
-  // auto const result   = cudf::round(col, 1, cudf::round_option::HALF_UP);
 
   EXPECT_THROW(cudf::round(input, 1, cudf::round_option::HALF_UP), cudf::logic_error);
 
+  // enable in follow up PR
+  // auto const result   = cudf::round(col, 1, cudf::round_option::HALF_UP);
   // CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 

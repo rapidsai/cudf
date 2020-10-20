@@ -18,8 +18,6 @@
 
 #include <cudf/column/column.hpp>
 
-#include <memory>
-
 namespace cudf {
 
 /**

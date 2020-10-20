@@ -20,10 +20,6 @@
 #include <cudf/detail/round.hpp>
 #include <cudf/round.hpp>
 #include <cudf/scalar/scalar.hpp>
-// #include <cudf/scalar/scalar_factories.hpp>
-// #include <cudf/utilities/error.hpp>
-// #include <cudf/utilities/traits.hpp>
-// #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -33,10 +29,9 @@ namespace detail {
 
 struct round_fn {
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_floating_point<T>(), std::unique_ptr<column>> operator()(
-    Args&&... args)
+  std::enable_if_t<not cudf::is_numeric<T>(), std::unique_ptr<column>> operator()(Args&&... args)
   {
-    CUDF_FAIL("fail for the moment");
+    CUDF_FAIL("Type not currenlty support for cudf::round");
   }
 
   template <typename T>
