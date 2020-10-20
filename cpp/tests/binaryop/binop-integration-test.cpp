@@ -2064,11 +2064,12 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpAdd)
 
   auto const sz = std::size_t{1000};
 
-  auto vec1       = std::vector<decimalXX>(sz);
+  auto begin      = make_counting_transform_iterator(1, [](auto i) {
+    return decimalXX{i, scale_type{0}};
+  });
+  auto const vec1 = std::vector<decimalXX>(begin, begin + sz);
   auto const vec2 = std::vector<decimalXX>(sz, decimalXX{2, scale_type{0}});
   auto expected   = std::vector<decimalXX>(sz);
-
-  std::iota(std::begin(vec1), std::end(vec1), decimalXX{1, scale_type{0}});
 
   std::transform(std::cbegin(vec1),
                  std::cend(vec1),
@@ -2092,11 +2093,12 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiply)
 
   auto const sz = std::size_t{1000};
 
-  auto vec1       = std::vector<decimalXX>(sz);
+  auto begin      = make_counting_transform_iterator(1, [](auto i) {
+    return decimalXX{i, scale_type{0}};
+  });
+  auto const vec1 = std::vector<decimalXX>(begin, begin + sz);
   auto const vec2 = std::vector<decimalXX>(sz, decimalXX{2, scale_type{0}});
   auto expected   = std::vector<decimalXX>(sz);
-
-  std::iota(std::begin(vec1), std::end(vec1), decimalXX{1, scale_type{0}});
 
   std::transform(std::cbegin(vec1),
                  std::cend(vec1),
