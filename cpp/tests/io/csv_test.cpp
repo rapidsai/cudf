@@ -69,7 +69,7 @@ struct CsvReaderNumericTypeTest : public CsvReaderTest {
 };
 
 // Declare typed test cases
-using SupportedNumericTypes = cudf::test::Types<int64_t, double>;
+using SupportedNumericTypes = cudf::test::Types<uint64_t, double>;
 TYPED_TEST_CASE(CsvReaderNumericTypeTest, SupportedNumericTypes);
 
 namespace {
@@ -893,7 +893,7 @@ TEST_F(CsvReaderTest, SkipRowsXorSkipFooter)
   EXPECT_NO_THROW(cudf_io::read_csv(skipfooter_options));
 }
 
-TEST_F(CsvReaderTest, nullHanlding)
+TEST_F(CsvReaderTest, nullHandling)
 {
   const auto filepath = temp_env->get_temp_dir() + "NullValues.csv";
   {
@@ -1420,6 +1420,27 @@ TEST_F(CsvReaderTest, DurationsWithWriter)
 
   const auto result_table = result.tbl->view();
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result_table);
+}
+
+TEST_F(CsvReaderTest, ReadMaxNumericValue)
+{
+  constexpr auto num_rows = 10;
+  auto sequence           = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return std::numeric_limits<uint64_t>::max() - i; });
+
+  auto filepath = temp_env->get_temp_filepath("ReadMaxNumericValue.csv");
+  {
+    std::ofstream out_file{filepath, std::ofstream::out};
+    std::ostream_iterator<uint64_t> output_iterator(out_file, "\n");
+    std::copy(sequence, sequence + num_rows, output_iterator);
+  }
+
+  cudf_io::csv_reader_options in_opts =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath}).header(-1);
+  auto result = cudf_io::read_csv(in_opts);
+
+  const auto view = result.tbl->view();
+  expect_column_data_equal(std::vector<uint64_t>(sequence, sequence + num_rows), view.column(0));
 }
 
 CUDF_TEST_PROGRAM_MAIN()
