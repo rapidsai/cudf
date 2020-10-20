@@ -144,7 +144,7 @@ PANDAS_TO_ORC_TYPES = {
     pd.Int8Dtype(): pyorc.TinyInt(),
     pd.Int16Dtype(): pyorc.SmallInt(),
     pd.Int32Dtype(): pyorc.Int(),
-    pd.Int64Dtype(): pyorc.Int(),
+    pd.Int64Dtype(): pyorc.BigInt(),
     pd.BooleanDtype(): pyorc.Boolean(),
     np.dtype("bool_"): pyorc.Boolean(),
     np.dtype("int16"): pyorc.SmallInt(),

@@ -49,7 +49,7 @@ class OrcReader(IOFuzz):
         else:
             dtypes_list = list(
                 cudf.utils.dtypes.ALL_TYPES
-                - {"category", "str"}
+                - {"category"}
                 - cudf.utils.dtypes.TIMEDELTA_TYPES
                 - cudf.utils.dtypes.UNSIGNED_TYPES
                 - cudf.utils.dtypes.DATETIME_TYPES
