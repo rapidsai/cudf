@@ -103,7 +103,7 @@ TYPED_TEST(FixedPointTestBothReps, PaddedDecimalXXConstruction)
 
   EXPECT_EQ(1.1, static_cast<double>(a));
   EXPECT_EQ(1.01, static_cast<double>(b));
-  EXPECT_EQ(1, static_cast<double>(c));  // intentional (inhereted problem from floating point)
+  EXPECT_EQ(1, static_cast<double>(c));  // intentional (inherited problem from floating point)
   EXPECT_EQ(1.0001, static_cast<double>(d));
   EXPECT_EQ(1.00001, static_cast<double>(e));
   EXPECT_EQ(1, static_cast<double>(f));  // intentional (inherited problem from floating point)
