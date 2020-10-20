@@ -2444,6 +2444,45 @@ def test_string_ishex():
     assert_eq(expected, got)
 
 
+def test_string_istimestamp():
+    gsr = Series(
+        [
+            "",
+            None,
+            "20201009 123456.987654AM+0100",
+            "1920111 012345.000001",
+            "18201235 012345.1",
+            "20201009 250001.2",
+            "20201009 129901.3",
+            "20201009 123499.4",
+            "20201009 000000.500000PM-0130",
+            "20201009:000000.600000",
+            "20201009 010203.700000PM-2500",
+            "20201009 010203.800000AM+0590",
+            "20201009 010203.900000AP-0000",
+        ]
+    )
+    got = gsr.str.istimestamp(r"%Y%m%d %H%M%S.%f%p%z")
+    expected = Series(
+        [
+            False,
+            None,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+        ]
+    )
+    assert_eq(expected, got)
+
+
 def test_string_ip4_to_int():
     gsr = Series(["", None, "hello", "41.168.0.1", "127.0.0.1", "41.197.0.1"])
     expected = Series([0, None, 0, 698875905, 2130706433, 700776449])
