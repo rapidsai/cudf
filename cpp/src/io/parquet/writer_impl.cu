@@ -104,7 +104,8 @@ class parquet_column_view {
   explicit parquet_column_view(size_t id,
                                column_view const &col,
                                const table_metadata *metadata,
-                               cudaStream_t stream)
+                               cudaStream_t stream,
+                               bool int96_timestamps)
     : _id(id),
       _string_type(col.type().id() == type_id::STRING),
       _type_width(_string_type ? 0 : cudf::size_of(col.type())),
@@ -201,26 +202,46 @@ class parquet_column_view {
         _stats_dtype    = statistics_dtype::dtype_int32;
         break;
       case cudf::type_id::TIMESTAMP_SECONDS:
-        _physical_type  = Type::INT64;
-        _converted_type = ConvertedType::TIMESTAMP_MILLIS;
-        _stats_dtype    = statistics_dtype::dtype_timestamp64;
-        _ts_scale       = 1000;
+        if (int96_timestamps) {
+          _physical_type  = Type::INT96;
+          _converted_type = ConvertedType::INTERVAL;
+        } else {
+          _physical_type  = Type::INT64;
+          _converted_type = ConvertedType::TIMESTAMP_MILLIS;
+        }
+        _stats_dtype = statistics_dtype::dtype_timestamp64;
+        _ts_scale    = 1000;
         break;
       case cudf::type_id::TIMESTAMP_MILLISECONDS:
-        _physical_type  = Type::INT64;
-        _converted_type = ConvertedType::TIMESTAMP_MILLIS;
-        _stats_dtype    = statistics_dtype::dtype_timestamp64;
+        if (int96_timestamps) {
+          _physical_type  = Type::INT96;
+          _converted_type = ConvertedType::INTERVAL;
+        } else {
+          _physical_type  = Type::INT64;
+          _converted_type = ConvertedType::TIMESTAMP_MILLIS;
+        }
+        _stats_dtype = statistics_dtype::dtype_timestamp64;
         break;
       case cudf::type_id::TIMESTAMP_MICROSECONDS:
-        _physical_type  = Type::INT64;
-        _converted_type = ConvertedType::TIMESTAMP_MICROS;
-        _stats_dtype    = statistics_dtype::dtype_timestamp64;
+        if (int96_timestamps) {
+          _physical_type  = Type::INT96;
+          _converted_type = ConvertedType::INTERVAL;
+        } else {
+          _physical_type  = Type::INT64;
+          _converted_type = ConvertedType::TIMESTAMP_MICROS;
+        }
+        _stats_dtype = statistics_dtype::dtype_timestamp64;
         break;
       case cudf::type_id::TIMESTAMP_NANOSECONDS:
-        _physical_type  = Type::INT64;
-        _converted_type = ConvertedType::TIMESTAMP_MICROS;
-        _stats_dtype    = statistics_dtype::dtype_timestamp64;
-        _ts_scale       = -1000;  // negative value indicates division by absolute value
+        if (int96_timestamps) {
+          _physical_type  = Type::INT96;
+          _converted_type = ConvertedType::INTERVAL;
+        } else {
+          _physical_type  = Type::INT64;
+          _converted_type = ConvertedType::TIMESTAMP_MICROS;
+        }
+        _stats_dtype = statistics_dtype::dtype_timestamp64;
+        _ts_scale    = -1000;  // negative value indicates division by absolute value
         break;
       case cudf::type_id::STRING:
         _physical_type  = Type::BYTE_ARRAY;
@@ -490,12 +511,13 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
   const table_metadata *metadata,
   bool return_filemetadata,
   const std::string &column_chunks_file_path,
+  bool int96_timestamps,
   cudaStream_t stream)
 {
-  pq_chunked_state state{metadata, SingleWriteMode::YES, stream};
+  pq_chunked_state state{metadata, SingleWriteMode::YES, stream, int96_timestamps};
 
   write_chunked_begin(state);
-  write_chunk(table, state);
+  write_chunk(table, state, int96_timestamps);
   return write_chunked_end(state, return_filemetadata, column_chunks_file_path);
 }
 
@@ -508,7 +530,9 @@ void writer::impl::write_chunked_begin(pq_chunked_state &state)
   state.current_chunk_offset = sizeof(file_header_s);
 }
 
-void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
+void writer::impl::write_chunk(table_view const &table,
+                               pq_chunked_state &state,
+                               bool int96_timestamps)
 {
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
@@ -524,7 +548,8 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
     const auto current_id = parquet_columns.size();
 
     num_rows = std::max<uint32_t>(num_rows, col.size());
-    parquet_columns.emplace_back(current_id, col, state.user_metadata, state.stream);
+    parquet_columns.emplace_back(
+      current_id, col, state.user_metadata, state.stream, int96_timestamps);
   }
 
   if (state.user_metadata_with_nullability.column_nullable.size() > 0) {
@@ -555,9 +580,14 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
     }
     for (auto i = 0; i < num_columns; i++) {
       auto &col = parquet_columns[i];
+      auto const physical_type = col.physical_type();
       // Column metadata
-      state.md.schema[1 + i].type           = col.physical_type();
+      state.md.schema[1 + i].type           = physical_type == INT96 ? FIXED_LEN_BYTE_ARRAY : physical_type;
       state.md.schema[1 + i].converted_type = col.converted_type();
+
+      if (physical_type == INT96) {
+        printf("writing out fixed len byte arrays\n");
+      }
       // because the repetition type is global (in the sense of, not per-rowgroup or per
       // write_chunk() call) we cannot know up front if the user is going to end up passing tables
       // with nulls/no nulls in the multiple write_chunk() case.  so we'll do some special
@@ -974,9 +1004,11 @@ std::unique_ptr<std::vector<uint8_t>> writer::write(table_view const &table,
                                                     const table_metadata *metadata,
                                                     bool return_filemetadata,
                                                     const std::string column_chunks_file_path,
+                                                    bool int96_timestamps,
                                                     cudaStream_t stream)
 {
-  return _impl->write(table, metadata, return_filemetadata, column_chunks_file_path, stream);
+  return _impl->write(
+    table, metadata, return_filemetadata, column_chunks_file_path, int96_timestamps, stream);
 }
 
 // Forward to implementation
@@ -986,9 +1018,9 @@ void writer::write_chunked_begin(pq_chunked_state &state)
 }
 
 // Forward to implementation
-void writer::write_chunk(table_view const &table, pq_chunked_state &state)
+void writer::write_chunk(table_view const &table, pq_chunked_state &state, bool int96_timestamps)
 {
-  _impl->write_chunk(table, state);
+  _impl->write_chunk(table, state, int96_timestamps);
 }
 
 // Forward to implementation

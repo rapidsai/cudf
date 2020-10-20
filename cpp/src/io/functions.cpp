@@ -278,7 +278,8 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
   return writer->write(options.get_table(),
                        options.get_metadata(),
                        options.is_enabled_return_filemetadata(),
-                       options.get_column_chunks_file_path());
+                       options.get_column_chunks_file_path(),
+                       options.is_enabled_int96_timestamps());
 }
 
 /**
@@ -322,10 +323,10 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
  * @copydoc cudf::io::write_parquet_chunked
  *
  **/
-void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_state> state)
+void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_state> state, bool int96_timestamps)
 {
   CUDF_FUNC_RANGE();
-  state->wp->write_chunk(table, *state);
+  state->wp->write_chunk(table, *state, int96_timestamps);
 }
 
 /**

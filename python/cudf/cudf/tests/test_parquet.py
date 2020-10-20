@@ -969,6 +969,32 @@ def test_parquet_writer_cpu_pyarrow(tmpdir, pdf, gdf):
     assert_eq(expect, got)
 
 
+@pytest.mark.filterwarnings("ignore:Using CPU")
+def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+
+    if len(pdf) == 0:
+        pdf = pdf.reset_index(drop=True)
+        gdf = gdf.reset_index(drop=True)
+
+    if "col_category" in pdf.columns:
+        pdf = pdf.drop(columns=["col_category"])
+    if "col_category" in gdf.columns:
+        gdf = gdf.drop(columns=["col_category"])
+
+    assert_eq(pdf, gdf)
+
+    # Write out the gdf using the GPU accelerated writer
+    gdf.to_parquet(gdf_fname.strpath, index=None, int96_timestamps=True)
+
+    assert os.path.exists(gdf_fname)
+
+    expect = pdf
+    got = pd.read_parquet(gdf_fname)
+
+    assert_eq(expect, got, check_categorical=False)
+
+
 def test_multifile_warning(datadir):
     fpath = datadir.__fspath__() + "/*.parquet"
     with pytest.warns(UserWarning):

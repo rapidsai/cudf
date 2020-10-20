@@ -86,6 +86,7 @@ class writer::impl {
                                               const table_metadata* metadata,
                                               bool return_filemetadata,
                                               const std::string& column_chunks_file_path,
+                                              bool int96_timestamps,
                                               cudaStream_t stream);
 
   /**
@@ -101,8 +102,12 @@ class writer::impl {
    * @param[in] table The table information to be written
    * @param[in] pq_chunked_state Internal state maintained between chunks.
    * boundaries.
+   * @param[in] int96_timestamps Set to true if timestamps should be written as
+   * int96 types instead of int64 types. Even though int96 is deprecated and is
+   * not an internal type for cudf, it needs to be written for backwards
+   * compatability reasons.
    */
-  void write_chunk(table_view const& table, pq_chunked_state& state);
+  void write_chunk(table_view const& table, pq_chunked_state& state, bool int96_timestamps);
 
   /**
    * @brief Finishes the chunked/streamed write process.

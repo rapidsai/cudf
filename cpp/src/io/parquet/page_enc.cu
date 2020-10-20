@@ -16,6 +16,7 @@
 #include <cub/cub.cuh>
 #include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
+#include "io/parquet/parquet_common.hpp"
 
 namespace cudf {
 namespace io {
@@ -137,9 +138,15 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     s->total_dupes             = 0;
   }
   dtype     = s->col.physical_type;
-  dtype_len = (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
+  dtype_len = (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
   if (dtype == INT32) {
     dtype_len_in = GetDtypeLogicalLen(s->col.converted_type);
+  } else if (dtype == INT96) {
+    // cudf doesn't support INT96 internally and uses INT64, so treat INT96 as an INT64 for computing dictionary
+    // hash values and reading the data, but we do treat it as 12 bytes for dtype_len, which determines
+    // how much memory we need to allocate for the fragment.
+    dtype_len_in = 8;
+    printf("processing column with INT96\n");
   } else {
     dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len;
   }
@@ -828,6 +835,19 @@ static __device__ void PlainBoolEncode(page_enc_state_s *s,
   }
 }
 
+static __device__ std::pair<int64_t, int32_t> convert_64bit_timestamp_to_int96(int64_t timestamp, uint8_t converted_type)
+{
+  constexpr int64_t JulianEpochOffsetDays = INT64_C(2440588);
+  constexpr int64_t MicroSecondsPerDay = INT64_C(86400000000);
+  constexpr int64_t MilliSecondsPerDay = INT64_C(86400000);
+
+  auto divisor = converted_type == TIMESTAMP_MILLIS ? MilliSecondsPerDay : MicroSecondsPerDay;
+  uint32_t julian_days = static_cast<uint32_t>((timestamp / divisor) + JulianEpochOffsetDays);
+  int64_t last_day_ticks = timestamp % divisor;
+  printf("converted timestamp\n");
+  return {last_day_ticks, julian_days};
+}
+
 // blockDim(128, 1, 1)
 __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
                                                          const EncColumnChunk *chunks,
@@ -899,9 +919,11 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   // Encode data values
   __syncthreads();
   dtype         = s->col.physical_type;
-  dtype_len_out = (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
+  dtype_len_out = (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
   if (dtype == INT32) {
     dtype_len_in = GetDtypeLogicalLen(s->col.converted_type);
+  } else if (dtype == INT96) {
+    dtype_len_in = 8;
   } else {
     dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len_out;
   }
@@ -1023,6 +1045,42 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
             dst[pos + 6] = v >> 48;
             dst[pos + 7] = v >> 56;
           } break;
+          case INT96: {
+            printf("writing int96 data\n");
+            int64_t v        = *reinterpret_cast<const int64_t *>(src8);
+            int32_t ts_scale = s->col.ts_scale;
+            if (ts_scale != 0) {
+              if (ts_scale < 0) {
+                v /= -ts_scale;
+              } else {
+                v *= ts_scale;
+              }
+            }
+            std::pair<int64_t, uint32_t> ret = convert_64bit_timestamp_to_int96(v, s->col.converted_type);
+            // int96 is written as a byte array, so first is the length of the array
+            uint32_t len = 12;
+            dst[pos + 0] = len;
+            dst[pos + 1] = len >> 8;
+            dst[pos + 2] = len >> 16;
+            dst[pos + 3] = len >> 24;
+
+            // and followed is the 12 bytes of data.
+            v = ret.first;
+            dst[pos + 4] = v;
+            dst[pos + 5] = v >> 8;
+            dst[pos + 6] = v >> 16;
+            dst[pos + 7] = v >> 24;
+            dst[pos + 8] = v >> 32;
+            dst[pos + 9] = v >> 40;
+            dst[pos + 10] = v >> 48;
+            dst[pos + 11] = v >> 56;
+            uint32_t w = ret.second;
+            dst[pos + 12] = w;
+            dst[pos + 13] = w >> 8;
+            dst[pos + 14] = w >> 16;
+            dst[pos + 15] = w >> 24;
+          } break;
+            
           case DOUBLE: memcpy(dst + pos, src8, 8); break;
           case BYTE_ARRAY: {
             const char *str_data = reinterpret_cast<const nvstrdesc_s *>(src8)->ptr;

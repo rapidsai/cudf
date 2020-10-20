@@ -111,6 +111,7 @@ class writer {
                                               const table_metadata* metadata            = nullptr,
                                               bool return_filemetadata                  = false,
                                               const std::string column_chunks_file_path = "",
+                                              bool int96_timestamps                     = false,
                                               cudaStream_t stream                       = 0);
 
   /**
@@ -126,7 +127,7 @@ class writer {
    * @param[in] table The table information to be written
    * @param[in] pq_chunked_state Internal state maintained between chunks.
    */
-  void write_chunk(table_view const& table, struct pq_chunked_state& state);
+  void write_chunk(table_view const& table, struct pq_chunked_state& state, bool int96_timestamps);
 
   /**
    * @brief Finishes the chunked/streamed write process.

@@ -269,6 +269,7 @@ def to_parquet(
     partition_file_name=None,
     statistics="ROWGROUP",
     metadata_file_path=None,
+    int96_timestamps=False,
     *args,
     **kwargs,
 ):
@@ -307,6 +308,7 @@ def to_parquet(
                     compression=compression,
                     statistics=statistics,
                     metadata_file_path=metadata_file_path,
+                    int96_timestamps=int96_timestamps,
                 )
         else:
             write_parquet_res = libparquet.write_parquet(
@@ -316,6 +318,7 @@ def to_parquet(
                 compression=compression,
                 statistics=statistics,
                 metadata_file_path=metadata_file_path,
+                int96_timestamps=int96_timestamps,
             )
 
         return write_parquet_res
