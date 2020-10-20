@@ -27,7 +27,7 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
-#define MAX_DICT_ENTRIES (5 * 1024)
+constexpr uint32_t max_dict_entries = default_row_index_stride;
 #define INIT_HASH_BITS 12
 
 struct dictinit_state_s {
@@ -35,7 +35,7 @@ struct dictinit_state_s {
   uint32_t total_dupes;
   DictionaryChunk chunk;
   volatile uint32_t scratch_red[32];
-  uint32_t dict[MAX_DICT_ENTRIES];
+  uint32_t dict[max_dict_entries];
   union {
     uint16_t u16[1 << (INIT_HASH_BITS)];
     uint32_t u32[1 << (INIT_HASH_BITS - 1)];
