@@ -19,6 +19,7 @@
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
 - PR #6544 Remove `fixed_point` precise round
 - PR #6555 Adapt JNI build to libcudf composition of multiple libraries
+- PR #6564 Load JNI library dependencies with a thread pool
 
 ## Bug Fixes
 
