@@ -56,7 +56,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
  * @brief Derived class for specifying a min aggregation
  */
 struct min_aggregation final : compound_aggregation, aggregation {
-  min_aggregation(aggregation::Kind k) : compound_aggregation{}, aggregation{k} {}
+  min_aggregation() : compound_aggregation{}, aggregation{MIN} {}
 
   std::vector<aggregation> get_simple_aggregations(data_type col_type) const override
   {
@@ -72,7 +72,7 @@ struct min_aggregation final : compound_aggregation, aggregation {
  * @brief Derived class for specifying a max aggregation
  */
 struct max_aggregation final : compound_aggregation, aggregation {
-  max_aggregation(aggregation::Kind k) : compound_aggregation{}, aggregation{k} {}
+  max_aggregation() : compound_aggregation{}, aggregation{MAX} {}
 
   std::vector<aggregation> get_simple_aggregations(data_type col_type) const override
   {
@@ -170,7 +170,7 @@ struct lead_lag_aggregation final : derived_aggregation<lead_lag_aggregation> {
  * @brief Derived class for specifying a mean aggregation
  */
 struct mean_aggregation final : compound_aggregation, aggregation {
-  mean_aggregation(aggregation::Kind k) : compound_aggregation{}, aggregation{k} {}
+  mean_aggregation() : compound_aggregation{}, aggregation{MEAN} {}
 
   std::vector<aggregation> get_simple_aggregations(data_type col_type) const override
   {
@@ -187,6 +187,8 @@ struct std_var_aggregation final : derived_aggregation<std_var_aggregation>, com
   std_var_aggregation(aggregation::Kind k, size_type ddof)
     : derived_aggregation{k}, compound_aggregation{}, _ddof{ddof}
   {
+    CUDF_EXPECTS(k == aggregation::STD or k == aggregation::VARIANCE,
+                 "std_var_aggregation can accept only STD, VARIANCE");
   }
   size_type _ddof;  ///< Delta degrees of freedom
 
@@ -209,8 +211,8 @@ struct std_var_aggregation final : derived_aggregation<std_var_aggregation>, com
  * @brief Derived class for specifying a nunique aggregation
  */
 struct nunique_aggregation final : derived_aggregation<nunique_aggregation> {
-  nunique_aggregation(aggregation::Kind k, null_policy null_handling)
-    : derived_aggregation{k}, _null_handling{null_handling}
+  nunique_aggregation(null_policy null_handling)
+    : derived_aggregation{NUNIQUE}, _null_handling{null_handling}
   {
   }
   null_policy _null_handling;  ///< include or exclude nulls
@@ -230,8 +232,8 @@ struct nunique_aggregation final : derived_aggregation<nunique_aggregation> {
  * @brief Derived class for specifying a nth element aggregation
  */
 struct nth_element_aggregation final : derived_aggregation<nth_element_aggregation> {
-  nth_element_aggregation(aggregation::Kind k, size_type n, null_policy null_handling)
-    : derived_aggregation{k}, _n{n}, _null_handling{null_handling}
+  nth_element_aggregation(size_type n, null_policy null_handling)
+    : derived_aggregation{NTH_ELEMENT}, _n{n}, _null_handling{null_handling}
   {
   }
   size_type _n;                ///< nth index to return
@@ -265,6 +267,8 @@ struct udf_aggregation final : derived_aggregation<udf_aggregation> {
       _function_name{"rolling_udf"},
       _output_type{output_type}
   {
+    CUDF_EXPECTS(type == aggregation::PTX or type == aggregation::CUDA,
+                 "udf_aggregation can accept only PTX, CUDA");
   }
   std::string const _source;
   std::string const _operator_name;
