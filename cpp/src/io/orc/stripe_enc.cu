@@ -709,11 +709,13 @@ __global__ void __launch_bounds__(block_size)
         uint32_t row  = s->chunk.start_row + present_rows + t * 8;
         uint8_t valid = 0;
         if (row < s->chunk.valid_rows) {
-          const uint8_t *valid_map_base =
-            reinterpret_cast<const uint8_t *>(s->chunk.valid_map_base);
-          valid = (valid_map_base) ? valid_map_base[row >> 3] : 0xff;
-          if (row + 7 > s->chunk.valid_rows) {
-            valid = valid & ((1 << (s->chunk.valid_rows & 7)) - 1);
+          if (s->chunk.valid_map_base) {
+            uint8_t valid_map[4];
+            auto const valid_map_byte_idx = row >> 3;
+            memcpy(valid_map, &s->chunk.valid_map_base[valid_map_byte_idx / 4], 4);
+            valid = valid_map[valid_map_byte_idx % 4];
+          } else {
+            valid = 0xff;
           }
         }
         s->valid_buf[(row >> 3) & 0x1ff] = valid;
