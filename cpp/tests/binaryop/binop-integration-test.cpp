@@ -2139,7 +2139,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpDiv)
 
   auto const lhs      = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{-1}};
   auto const rhs      = fp_wrapper<RepType>{{4, 4, 4, 4}, scale_type{0}};
-  auto const expected = fp_wrapper<RepType>{{3, 8, 13, 18}, scale_type{-1}};
+  auto const expected = fp_wrapper<RepType>{{2, 7, 12, 17}, scale_type{-1}};
 
   auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, {});
 
