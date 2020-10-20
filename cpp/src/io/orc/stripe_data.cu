@@ -131,12 +131,13 @@ struct orcdec_state_s {
     orc_byterle_state_s rle8;
     orc_rowdec_state_s rowdec;
   } u;
-  union {
+  union values {
     uint8_t u8[NTHREADS * 8];
     uint32_t u32[NTHREADS * 2];
     int32_t i32[NTHREADS * 2];
     uint64_t u64[NTHREADS];
     int64_t i64[NTHREADS];
+    double f64[NTHREADS];
   } vals;
 };
 
@@ -1029,7 +1030,7 @@ static const __device__ __constant__ int64_t kPow5i[28] = {1,
  **/
 static __device__ int Decode_Decimals(orc_bytestream_s *bs,
                                       volatile orc_byterle_state_s *scratch,
-                                      volatile int64_t *vals,
+                                      volatile orcdec_state_s::values &vals,
                                       int val_scale,
                                       int numvals,
                                       int col_scale,
@@ -1047,8 +1048,8 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
         uint32_t pos = lastpos;
         pos += varint_length<uint4>(bs, pos);
         if (pos > maxpos) break;
-        *reinterpret_cast<volatile int32_t *>(&vals[n]) = lastpos;
-        lastpos                                         = pos;
+        vals.i64[n] = lastpos;
+        lastpos     = pos;
       }
       scratch->num_vals = n;
       bytestream_flush_bytes(bs, lastpos - bs->pos);
@@ -1056,21 +1057,21 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
     __syncthreads();
     uint32_t num_vals_to_read = scratch->num_vals;
     if (t >= num_vals_read and t < num_vals_to_read) {
-      int pos    = *reinterpret_cast<volatile int32_t *>(&vals[t]);
-      int128_s v = decode_varint128(bs, pos);
+      auto const pos = static_cast<int>(vals.i64[t]);
+      int128_s v     = decode_varint128(bs, pos);
 
       if (col_scale & ORC_DECIMAL2FLOAT64_SCALE) {
         double f      = Int128ToDouble_rn(v.lo, v.hi);
         int32_t scale = (t < numvals) ? val_scale : 0;
         if (scale >= 0)
-          reinterpret_cast<volatile double *>(vals)[t] = f / kPow10[min(scale, 39)];
+          vals.f64[t] = f / kPow10[min(scale, 39)];
         else
-          reinterpret_cast<volatile double *>(vals)[t] = f * kPow10[min(-scale, 39)];
+          vals.f64[t] = f * kPow10[min(-scale, 39)];
       } else {
         int32_t scale = (t < numvals) ? (col_scale & ~ORC_DECIMAL2FLOAT64_SCALE) - val_scale : 0;
         if (scale >= 0) {
-          scale   = min(scale, 27);
-          vals[t] = ((int64_t)v.lo * kPow5i[scale]) << scale;
+          scale       = min(scale, 27);
+          vals.i64[t] = ((int64_t)v.lo * kPow5i[scale]) << scale;
         } else  // if (scale < 0)
         {
           bool is_negative = (v.hi < 0);
@@ -1089,7 +1090,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
           } else {
             lo /= kPow5i[scale];
           }
-          vals[t] = (is_negative) ? -(int64_t)lo : (int64_t)lo;
+          vals.i64[t] = (is_negative) ? -(int64_t)lo : (int64_t)lo;
         }
       }
     }
@@ -1689,7 +1690,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
           val_scale = (t < numvals) ? (int)s->vals.i64[skip + t] : 0;
           __syncthreads();
           numvals = Decode_Decimals(
-            &s->bs, &s->u.rle8, s->vals.i64, val_scale, numvals, s->chunk.decimal_scale, t);
+            &s->bs, &s->u.rle8, s->vals, val_scale, numvals, s->chunk.decimal_scale, t);
         }
         __syncthreads();
       } else if (s->chunk.type_kind == FLOAT) {

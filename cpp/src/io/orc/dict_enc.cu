@@ -216,7 +216,6 @@ __global__ void __launch_bounds__(block_size, 2)
     }
     // The isolation of the atomicAdd, along with pos_old/pos_new is to guarantee deterministic
     // behavior for the first row in the hash map that will be used for early duplicate detection
-    // The lack of 16-bit atomicMin makes this a bit messy...
     __syncthreads();
     if (i + t < nnz) {
       pos          = (atomicAdd(&s->map.u32[hash >> 1], 1 << sh) >> sh) & 0xffff;
@@ -231,6 +230,7 @@ __global__ void __launch_bounds__(block_size, 2)
     }
     __syncthreads();
     if (collision) { atomicMin(s->dict + pos_old, ck_row); }
+
     __syncthreads();
     // Resolve collision
     if (collision && ck_row == s->dict[pos_old]) { s->dict[pos] = colliding_row; }
