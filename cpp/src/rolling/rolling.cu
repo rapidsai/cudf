@@ -36,9 +36,9 @@
 #include <jit/type.h>
 #include <rolling/jit/code/code.h>
 
-#include <bit.hpp.jit>
-#include <rolling_jit_detail.hpp.jit>
-#include <types.hpp.jit>
+#include <jit/bit.hpp.jit>
+#include <jit/rolling_jit_detail.hpp.jit>
+#include <jit/types.hpp.jit>
 
 #include <thrust/binary_search.h>
 #include <rmm/device_scalar.hpp>

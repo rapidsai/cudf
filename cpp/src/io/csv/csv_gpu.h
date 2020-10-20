@@ -151,7 +151,7 @@ inline __host__ __device__ rowctx64_t select_row_context(rowctx64_t sel_ctx,
  *
  * @return Number of row contexts
  **/
-uint32_t gather_row_offsets(cudf::io::ParseOptions const &options,
+uint32_t gather_row_offsets(cudf::io::parse_options_view const &options,
                             uint64_t *row_ctx,
                             device_span<uint64_t> offsets_out,
                             device_span<char const> data,
@@ -173,7 +173,7 @@ uint32_t gather_row_offsets(cudf::io::ParseOptions const &options,
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  **/
-size_t count_blank_rows(cudf::io::ParseOptions const &options,
+size_t count_blank_rows(cudf::io::parse_options_view const &options,
                         device_span<char const> data,
                         device_span<uint64_t const> row_offsets,
                         cudaStream_t stream = 0);
@@ -187,7 +187,7 @@ size_t count_blank_rows(cudf::io::ParseOptions const &options,
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  **/
-void remove_blank_rows(const cudf::io::ParseOptions &options,
+void remove_blank_rows(const cudf::io::parse_options_view &options,
                        device_span<char const> data,
                        rmm::device_vector<uint64_t> &row_offsets,
                        cudaStream_t stream = 0);
@@ -204,7 +204,7 @@ void remove_blank_rows(const cudf::io::ParseOptions &options,
  * @return stats Histogram of each dtypes' occurrence for each column
  **/
 thrust::host_vector<column_parse::stats> detect_column_types(
-  cudf::io::ParseOptions const &options,
+  cudf::io::parse_options_view const &options,
   device_span<char const> data,
   device_span<column_parse::flags const> column_flags,
   device_span<uint64_t const> row_offsets,
@@ -223,7 +223,7 @@ thrust::host_vector<column_parse::stats> detect_column_types(
  * @param[out] valids Device memory output of column valids bitmap data
  * @param[in] stream CUDA stream to use, default 0
  **/
-void decode_row_column_data(cudf::io::ParseOptions const &options,
+void decode_row_column_data(cudf::io::parse_options_view const &options,
                             device_span<char const> data,
                             device_span<column_parse::flags const> column_flags,
                             device_span<uint64_t const> row_offsets,

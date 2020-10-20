@@ -39,13 +39,13 @@
 #include "cudf/fixed_point/fixed_point.hpp"
 #include "cudf/types.hpp"
 
-#include <bit.hpp.jit>
-#include <durations.hpp.jit>
-#include <fixed_point.hpp.jit>
+#include <jit/bit.hpp.jit>
 #include <jit/common_headers.hpp>
+#include <jit/durations.hpp.jit>
+#include <jit/fixed_point.hpp.jit>
+#include <jit/timestamps.hpp.jit>
+#include <jit/types.hpp.jit>
 #include <string>
-#include <timestamps.hpp.jit>
-#include <types.hpp.jit>
 
 namespace cudf {
 
