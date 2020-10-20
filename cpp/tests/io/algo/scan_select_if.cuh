@@ -131,24 +131,24 @@ struct agent {
 
     __syncthreads();
 
-    // // scan values
-    // if (tile_idx == 0) {
-    //   T block_aggregate;
-    //   BlockScanItem(temp_storage.item_scan).InclusiveScan(items, items, scan_op,
-    //   block_aggregate);
+    // scan values
+    if (tile_idx == 0) {
+      T block_aggregate;
+      BlockScanItem(temp_storage.item_scan).InclusiveScan(items, items, scan_op,
+      block_aggregate);
 
-    //   if (threadIdx.x == 0 and not is_last_tile) {
-    //     item_state.SetInclusive(tile_idx, block_aggregate);
-    //   }
-    // } else {
-    //   auto prefix_op = PrefixOpItem(item_state, temp_storage.item_prefix, scan_op, tile_idx);
-    //   // memory access exception
-    //   // BlockScanItem(temp_storage.item_scan).InclusiveScan(items, items, scan_op, prefix_op);
-    //   // no exception
-    //   BlockScanItem(temp_storage.item_scan).InclusiveScan(items, items, scan_op);
-    // }
+      if (threadIdx.x == 0 and not is_last_tile) {
+        item_state.SetInclusive(0, block_aggregate);
+      }
+    } else {
+      auto prefix_op = PrefixOpItem(item_state, temp_storage.item_prefix, scan_op, tile_idx);
+      // memory access exception
+      BlockScanItem(temp_storage.item_scan).InclusiveScan(items, items, scan_op, prefix_op);
+      // no exception
+      // BlockScanItem(temp_storage.item_scan).InclusiveScan(items, items, scan_op);
+    }
 
-    // __syncthreads();
+    __syncthreads();
 
     uint32_t selection_flags[ITEMS_PER_THREAD];
     uint32_t selection_indices[ITEMS_PER_THREAD];
@@ -168,7 +168,7 @@ struct agent {
     if (tile_idx == 0) {
       BlockScanCount(temp_storage.count_scan)
         .ExclusiveSum(selection_flags, selection_indices, num_tile_selections);
-      if (threadIdx.x == 0) { count_state.SetInclusive(tile_idx, num_tile_selections); }
+      if (threadIdx.x == 0) { count_state.SetInclusive(0, num_tile_selections); }
     } else {
       auto prefix_op = PrefixOpCount(count_state, temp_storage.count_prefix, cub::Sum(), tile_idx);
 
@@ -270,7 +270,7 @@ struct scan_select_if_dispatch {
   using T = typename std::iterator_traits<InputIterator>::value_type;
 
   enum {
-    THREADS_PER_BLOCK = 2,
+    THREADS_PER_BLOCK = 32,
     ITEMS_PER_THREAD  = 2,
     ITEMS_PER_TILE    = ITEMS_PER_THREAD * THREADS_PER_BLOCK,
   };
