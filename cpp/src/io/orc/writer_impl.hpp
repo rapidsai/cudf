@@ -55,7 +55,7 @@ class writer::impl {
   static constexpr uint32_t DEFAULT_STRIPE_SIZE = 64 * 1024 * 1024;
 
   // ORC rows are divided into groups and assigned indexes for faster seeking
-  static constexpr uint32_t DEFAULT_ROW_INDEX_STRIDE = 10000;
+  static constexpr uint32_t DEFAULT_ROW_INDEX_STRIDE = 5000;
 
   // ORC compresses streams into independent chunks
   static constexpr uint32_t DEFAULT_COMPRESSION_BLOCKSIZE = 256 * 1024;

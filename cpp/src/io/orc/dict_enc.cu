@@ -27,7 +27,7 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
-#define MAX_SHORT_DICT_ENTRIES (10 * 1024)
+#define MAX_DICT_ENTRIES (5 * 1024)
 #define INIT_HASH_BITS 12
 
 struct dictinit_state_s {
@@ -35,7 +35,7 @@ struct dictinit_state_s {
   uint32_t total_dupes;
   DictionaryChunk chunk;
   volatile uint32_t scratch_red[32];
-  uint16_t dict[MAX_SHORT_DICT_ENTRIES];
+  uint32_t dict[MAX_DICT_ENTRIES];
   union {
     uint16_t u16[1 << (INIT_HASH_BITS)];
     uint32_t u32[1 << (INIT_HASH_BITS - 1)];
@@ -230,17 +230,7 @@ __global__ void __launch_bounds__(block_size, 2)
       if (collision) { colliding_row = s->dict[pos_old]; }
     }
     __syncthreads();
-    // evens
-    if (collision && !(pos_old & 1)) {
-      uint32_t *dict32 = reinterpret_cast<uint32_t *>(&s->dict[pos_old]);
-      atomicMin(dict32, (dict32[0] & 0xffff0000) | ck_row);
-    }
-    __syncthreads();
-    // odds
-    if (collision && (pos_old & 1)) {
-      uint32_t *dict32 = reinterpret_cast<uint32_t *>(&s->dict[pos_old - 1]);
-      atomicMin(dict32, (dict32[0] & 0x0000ffff) | (ck_row << 16));
-    }
+    if (collision) { atomicMin(s->dict + pos_old, ck_row); }
     __syncthreads();
     // Resolve collision
     if (collision && ck_row == s->dict[pos_old]) { s->dict[pos] = colliding_row; }
