@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ struct dictinit_state_s {
 /**
  * @brief Return a 12-bit hash from a byte sequence
  */
-static inline __device__ uint32_t nvstr_init_hash(const uint8_t *ptr, uint32_t len)
+static inline __device__ uint32_t nvstr_init_hash(char const *ptr, uint32_t len)
 {
   if (len != 0) {
     return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << INIT_HASH_BITS) - 1);
@@ -148,13 +148,13 @@ __global__ void __launch_bounds__(block_size, 2)
   start_row = s->chunk.start_row;
   ck_data   = static_cast<const nvstrdesc_s *>(s->chunk.column_data_base) + start_row;
   for (uint32_t i = 0; i < nnz; i += block_size) {
-    uint32_t ck_row = 0, len = 0, hash;
-    const uint8_t *ptr = 0;
+    uint32_t ck_row = 0;
+    uint32_t hash   = 0;
+    uint32_t len    = 0;
     if (i + t < nnz) {
       ck_row = s->dict[i + t];
-      ptr    = reinterpret_cast<const uint8_t *>(ck_data[ck_row].ptr);
-      len    = ck_data[ck_row].count;
-      hash   = nvstr_init_hash(ptr, len);
+      len    = static_cast<uint32_t>(ck_data[ck_row].count);
+      hash   = nvstr_init_hash(ck_data[ck_row].ptr, len);
     }
     len = half_warp_reduce(temp_storage.half[t / 32]).Sum(len);
     if (!(t & 0xf)) { s->scratch_red[t >> 4] = len; }
@@ -209,12 +209,8 @@ __global__ void __launch_bounds__(block_size, 2)
     uint32_t ck_row = 0, pos = 0, hash = 0, pos_old, pos_new, sh, colliding_row;
     bool collision;
     if (i + t < nnz) {
-      const uint8_t *ptr;
-      uint32_t len;
       ck_row  = dict_data[i + t] - start_row;
-      ptr     = reinterpret_cast<const uint8_t *>(ck_data[ck_row].ptr);
-      len     = (uint32_t)ck_data[ck_row].count;
-      hash    = nvstr_init_hash(ptr, len);
+      hash    = nvstr_init_hash(ck_data[ck_row].ptr, static_cast<uint32_t>(ck_data[ck_row].count));
       sh      = (hash & 1) ? 16 : 0;
       pos_old = s->map.u16[hash];
     }
@@ -260,12 +256,12 @@ __global__ void __launch_bounds__(block_size, 2)
       uint32_t len1, len2, hash;
       ck_row     = s->dict[i + t];
       str1       = ck_data[ck_row].ptr;
-      len1       = (uint32_t)ck_data[ck_row].count;
-      hash       = nvstr_init_hash(reinterpret_cast<const uint8_t *>(str1), len1);
+      len1       = static_cast<uint32_t>(ck_data[ck_row].count);
+      hash       = nvstr_init_hash(str1, len1);
       ck_row_ref = s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0];
       if (ck_row_ref != ck_row) {
         str2    = ck_data[ck_row_ref].ptr;
-        len2    = (uint32_t)ck_data[ck_row_ref].count;
+        len2    = static_cast<uint32_t>(ck_data[ck_row_ref].count);
         is_dupe = nvstr_is_equal(str1, len1, str2, len2);
         dict_char_count += (is_dupe) ? 0 : len1;
       }
