@@ -47,16 +47,28 @@ struct round_fn {
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
   {
-    auto result       = cudf::make_fixed_width_column(input.type(), input.size());
-    auto out_view     = result->mutable_view();
-    auto const factor = static_cast<int32_t>(std::pow(10, scale));
+    auto result   = cudf::make_fixed_width_column(input.type(), input.size());
+    auto out_view = result->mutable_view();
+    auto const n  = static_cast<int32_t>(std::pow(10, std::abs(scale)));
 
-    thrust::transform(
-      rmm::exec_policy(stream)->on(stream),
-      input.begin<T>(),
-      input.end<T>(),
-      out_view.begin<T>(),
-      [factor] __device__(auto e) { return static_cast<T>(std::roundf(e * factor) / factor); });
+    if (scale == 0)
+      thrust::transform(rmm::exec_policy(stream)->on(stream),
+                        input.begin<T>(),
+                        input.end<T>(),
+                        out_view.begin<T>(),
+                        [] __device__(T e) -> T { return std::roundf(e); });
+    else if (scale > 0)
+      thrust::transform(rmm::exec_policy(stream)->on(stream),
+                        input.begin<T>(),
+                        input.end<T>(),
+                        out_view.begin<T>(),
+                        [n] __device__(T e) -> T { return std::roundf(e * n) / n; });
+    else  // scale < 0
+      thrust::transform(rmm::exec_policy(stream)->on(stream),
+                        input.begin<T>(),
+                        input.end<T>(),
+                        out_view.begin<T>(),
+                        [n] __device__(T e) -> T { return std::roundf(e / n) * n; });
 
     return result;
   }
@@ -70,7 +82,6 @@ std::unique_ptr<column> round(column_view const& input,
                               cudaStream_t stream)
 {
   CUDF_EXPECTS(round == round_option::HALF_UP, "HALF_EVEN currently not supported.");
-  CUDF_EXPECTS(scale >= 0, "Only positive scales currently supported.");
   CUDF_EXPECTS(cudf::is_floating_point(input.type()), "Only floating point currently supported.");
 
   // TODO when fixed_point supported, have to adjust type

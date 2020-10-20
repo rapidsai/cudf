@@ -64,4 +64,28 @@ TEST_F(RoundTests, SimpleFloatingPointTest1)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TEST_F(RoundTests, SimpleFloatingPointTestNeg1)
+{
+  using namespace numeric;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<float>;
+
+  auto const input    = fw_wrapper{12, 135, 1454, 1455, 1456};
+  auto const expected = fw_wrapper{10, 140, 1450, 1460, 1460};
+  auto const result   = cudf::round(input, -1, cudf::round_option::HALF_UP);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(RoundTests, SimpleFloatingPointTestNeg2)
+{
+  using namespace numeric;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<float>;
+
+  auto const input    = fw_wrapper{12, 135, 1454, 1455, 1500};
+  auto const expected = fw_wrapper{0, 100, 1500, 1500, 1500};
+  auto const result   = cudf::round(input, -2, cudf::round_option::HALF_UP);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 CUDF_TEST_PROGRAM_MAIN()
