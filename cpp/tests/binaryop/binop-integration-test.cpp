@@ -2171,7 +2171,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpDiv3)
   auto const rhs      = make_fixed_point_scalar<decimalXX>(12, scale_type{-1});
   auto const expected = fp_wrapper<RepType>{{0, 2, 4, 5}, scale_type{0}};
 
-  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, {});
+  auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::DIV, {});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
