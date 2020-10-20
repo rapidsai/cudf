@@ -28,8 +28,8 @@
 #include "jit/code/code.h"
 
 #include <jit/common_headers.hpp>
-#include <timestamps.hpp.jit>
-#include <types.hpp.jit>
+#include <jit/timestamps.hpp.jit>
+#include <jit/types.hpp.jit>
 
 namespace cudf {
 namespace transformation {

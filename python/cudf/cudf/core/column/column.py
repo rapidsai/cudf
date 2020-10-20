@@ -752,7 +752,14 @@ class ColumnBase(Column, Serializable):
     def isnull(self):
         """Identify missing values in a Column.
         """
-        return libcudf.unary.is_null(self)
+        result = libcudf.unary.is_null(self)
+
+        if self.dtype.kind == "f":
+            # Need to consider `np.nan` values incase
+            # of a float column
+            result = result.binary_operator("or", libcudf.unary.is_nan(self))
+
+        return result
 
     def isna(self):
         """Identify missing values in a Column. Alias for isnull.
@@ -762,7 +769,16 @@ class ColumnBase(Column, Serializable):
     def notnull(self):
         """Identify non-missing values in a Column.
         """
-        return libcudf.unary.is_valid(self)
+        result = libcudf.unary.is_valid(self)
+
+        if self.dtype.kind == "f":
+            # Need to consider `np.nan` values incase
+            # of a float column
+            result = result.binary_operator(
+                "and", libcudf.unary.is_non_nan(self)
+            )
+
+        return result
 
     def notna(self):
         """Identify non-missing values in a Column. Alias for notnull.
