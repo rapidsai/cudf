@@ -130,28 +130,6 @@ CUDA_HOST_DEVICE_CALLABLE constexpr T right_shift(T const& val, scale_type const
   return val / ipow<Rep, Rad>(scale._t);
 }
 
-/** @brief Function that performs a rounding `right shift` scale "times" on the `val`
- *
- * The scaled integer equivalent of 0.5 is added to the value before truncating such that
- * any remaining fractional part will be rounded away from zero.
- *
- * Note: perform this operation when constructing with positive scale
- *
- * @tparam Rep Representation type needed for integer exponentiation
- * @tparam Rad The radix which will act as the base in the exponentiation
- * @tparam T Type for value `val` being shifted and the return type
- * @param val The value being shifted
- * @param scale The amount to shift the value by
- * @return Shifted value of type T
- */
-template <typename Rep, Radix Rad, typename T>
-CUDA_HOST_DEVICE_CALLABLE constexpr T right_shift_rounded(T const& val, scale_type const& scale)
-{
-  Rep const factor = ipow<Rep, Rad>(scale._t);
-  Rep const half   = factor / 2;
-  return (val >= 0 ? val + half : val - half) / factor;
-}
-
 /** @brief Function that performs a `left shift` scale "times" on the `val`
  *
  * Note: perform this operation when constructing with negative scale
@@ -191,59 +169,6 @@ CUDA_HOST_DEVICE_CALLABLE constexpr T shift(T const& val, scale_type const& scal
     return right_shift<Rep, Rad>(val, scale);
   else
     return left_shift<Rep, Rad>(val, scale);
-}
-
-/** @brief Function that performs precise shift to avoid "lossiness"
- * inherent in floating point values
- *
- * Example: `auto n = fixed_point<int32_t, Radix::BASE_10>{1.001, scale_type{-3}}`
- * will construct n to have a value of 1 without the precise shift
- *
- * @tparam Rep Representation type needed for integer exponentiation
- * @tparam Rad The radix which will act as the base in the exponentiation
- * @tparam T Type for value `val` being shifted and the return type
- * @param value The value being shifted
- * @param scale The amount to shift the value by
- * @return Shifted value of type T
- */
-template <typename Rep,
-          Radix Rad,
-          typename T,
-          typename simt::std::enable_if_t<simt::std::is_integral<T>::value>* = nullptr>
-CUDA_HOST_DEVICE_CALLABLE auto shift_with_precise_round(T const& value, scale_type const& scale)
-  -> Rep
-{
-  if (scale == 0)
-    return value;
-  else if (scale > 0)
-    return right_shift_rounded<Rep, Rad>(value, scale);
-  else
-    return left_shift<Rep, Rad>(value, scale);
-}
-
-/** @brief Function that performs precise shift to avoid "lossiness"
- * inherent in floating point values
- *
- * Example: `auto n = fixed_point<int32_t, Radix::BASE_10>{1.001, scale_type{-3}}`
- * will construct n to have a value of 1 without the precise shift
- *
- * @tparam Rep Representation type needed for integer exponentiation
- * @tparam Rad The radix which will act as the base in the exponentiation
- * @tparam T Type for value `val` being shifted and the return type
- * @param value The value being shifted
- * @param scale The amount to shift the value by
- * @return Shifted value of type T
- */
-template <typename Rep,
-          Radix Rad,
-          typename T,
-          typename simt::std::enable_if_t<simt::std::is_floating_point<T>::value>* = nullptr>
-CUDA_HOST_DEVICE_CALLABLE auto shift_with_precise_round(T const& value, scale_type const& scale)
-  -> Rep
-{
-  if (scale == 0) return value;
-  T const factor = ipow<int64_t, Rad>(std::abs(scale));
-  return std::roundf(scale <= 0 ? value * factor : value / factor);
 }
 
 }  // namespace detail
@@ -302,7 +227,7 @@ class fixed_point {
             typename simt::std::enable_if_t<is_supported_construction_value_type<T>() &&
                                             is_supported_representation_type<Rep>()>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE explicit fixed_point(T const& value, scale_type const& scale)
-    : _value{detail::shift_with_precise_round<Rep, Rad>(value, scale)}, _scale{scale}
+    : _value{static_cast<Rep>(detail::shift<Rep, Rad>(value, scale))}, _scale{scale}
   {
   }
 
@@ -587,8 +512,7 @@ class fixed_point {
   CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep, Rad> rescaled(scale_type scale) const
   {
     if (scale == _scale) return *this;
-    Rep const value =
-      detail::shift_with_precise_round<Rep, Rad>(_value, scale_type{scale - _scale});
+    Rep const value = detail::shift<Rep, Rad>(_value, scale_type{scale - _scale});
     return fixed_point<Rep, Rad>{scaled_integer<Rep>{value, scale}};
   }
 };  // namespace numeric
@@ -738,8 +662,8 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Ra
 
 #endif
 
-  return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>(std::roundf(lhs._value * 1.0 / rhs._value),
-                                                      scale_type{lhs._scale - rhs._scale})};
+  return fixed_point<Rep1, Rad1>{
+    scaled_integer<Rep1>(lhs._value / rhs._value, scale_type{lhs._scale - rhs._scale})};
 }
 
 // EQUALITY COMPARISON Operation
