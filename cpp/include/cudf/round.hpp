@@ -36,7 +36,7 @@ enum class round_option : int32_t { HALF_UP, HALF_EVEN };
 
 // TODO DOCS
 std::unique_ptr<column> round(
-  column_view const& col,
+  column_view const& input,
   int32_t scale,
   round_option round,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

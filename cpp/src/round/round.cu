@@ -41,20 +41,20 @@ struct round_fn {
 
   template <typename T, typename... Args>
   std::enable_if_t<cudf::is_floating_point<T>(), std::unique_ptr<column>> operator()(
-    column_view const& col,
+    column_view const& input,
     int32_t scale,
     cudf::round_option round,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
   {
-    auto result       = cudf::make_fixed_width_column(col.type(), col.size());
+    auto result       = cudf::make_fixed_width_column(input.type(), input.size());
     auto out_view     = result->mutable_view();
     auto const factor = static_cast<int32_t>(std::pow(10, scale));
 
     thrust::transform(
       rmm::exec_policy(stream)->on(stream),
-      col.begin<T>(),
-      col.end<T>(),
+      input.begin<T>(),
+      input.end<T>(),
       out_view.begin<T>(),
       [factor] __device__(auto e) { return static_cast<T>(std::roundf(e * factor) / factor); });
 
@@ -63,7 +63,7 @@ struct round_fn {
 };
 
 // TODO docs
-std::unique_ptr<column> round(column_view const& col,
+std::unique_ptr<column> round(column_view const& input,
                               int32_t scale,
                               cudf::round_option round,
                               rmm::mr::device_memory_resource* mr,
@@ -71,23 +71,23 @@ std::unique_ptr<column> round(column_view const& col,
 {
   CUDF_EXPECTS(round == round_option::HALF_UP, "HALF_EVEN currently not supported.");
   CUDF_EXPECTS(scale >= 0, "Only positive scales currently supported.");
-  CUDF_EXPECTS(cudf::is_floating_point(col.type()), "Only floating point currently supported.");
+  CUDF_EXPECTS(cudf::is_floating_point(input.type()), "Only floating point currently supported.");
 
   // TODO when fixed_point supported, have to adjust type
-  if (col.size() == 0) return empty_like(col);
+  if (input.size() == 0) return empty_like(input);
 
-  return type_dispatcher(col.type(), round_fn{}, col, scale, round, mr, stream);
+  return type_dispatcher(input.type(), round_fn{}, input, scale, round, mr, stream);
 }
 
 }  // namespace detail
 
-std::unique_ptr<column> round(column_view const& col,
+std::unique_ptr<column> round(column_view const& input,
                               int32_t scale,
                               round_option round,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::round(col, scale, round, mr);
+  return cudf::detail::round(input, scale, round, mr);
 }
 
 }  // namespace cudf
