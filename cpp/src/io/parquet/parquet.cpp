@@ -82,202 +82,147 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
   return true;
 }
 
-#define PARQUET_BEGIN_STRUCT(st)          \
-  bool CompactProtocolReader::read(st *s) \
-  { /*printf(#st "\n");*/                 \
-    int fld = 0;                          \
-    for (;;) {                            \
-      int c, t, f;                        \
-      c = getb();                         \
-      if (!c) break;                      \
-      f   = c >> 4;                       \
-      t   = c & 0xf;                      \
-      fld = (f) ? fld + f : get_i16();    \
-      switch (fld) {
-#define PARQUET_FLD_INT16(id, m)       \
-  case id:                             \
-    s->m = get_i16();                  \
-    if (t != ST_FLD_I16) return false; \
-    break;
-
-#define PARQUET_FLD_INT32(id, m)       \
-  case id:                             \
-    s->m = get_i32();                  \
-    if (t != ST_FLD_I32) return false; \
-    break;
-
-#define PARQUET_FLD_ENUM(id, m, mt)    \
-  case id:                             \
-    s->m = (mt)get_i32();              \
-    if (t != ST_FLD_I32) return false; \
-    break;
-
-#define PARQUET_FLD_INT64(id, m)                        \
-  case id:                                              \
-    s->m = get_i64();                                   \
-    if (t < ST_FLD_I16 || t > ST_FLD_I64) return false; \
-    break;
-
-#define PARQUET_FLD_STRING(id, m)            \
-  case id:                                   \
-    if (t != ST_FLD_BINARY)                  \
-      return false;                          \
-    else {                                   \
-      uint32_t n = get_u32();                \
-      if (n < (size_t)(m_end - m_cur)) {     \
-        s->m.assign((const char *)m_cur, n); \
-        m_cur += n;                          \
-      } else                                 \
-        return false;                        \
-    }                                        \
-    break;
-
-#define PARQUET_FLD_STRUCT_LIST(id, m)              \
-  case id:                                          \
-    if (t != ST_FLD_LIST) return false;             \
-    {                                               \
-      int n;                                        \
-      c = getb();                                   \
-      if ((c & 0xf) != ST_FLD_STRUCT) return false; \
-      n = c >> 4;                                   \
-      if (n == 0xf) n = get_u32();                  \
-      s->m.resize(n);                               \
-      for (int32_t i = 0; i < n; i++)               \
-        if (!read(&s->m[i])) return false;          \
-      break;                                        \
+template <int index>
+struct FunctionSwitchImpl {
+  template <typename... Operator>
+  static inline bool run(CompactProtocolReader *cpr,
+                         int field_type,
+                         const int &field,
+                         std::tuple<Operator...> &ops)
+  {
+    if (field == std::get<index>(ops).field()) {
+      return std::get<index>(ops)(cpr, field_type);
+    } else {
+      return FunctionSwitchImpl<index - 1>::run(cpr, field_type, field, ops);
     }
+  }
+};
 
-#define PARQUET_FLD_ENUM_LIST(id, m, mt)                       \
-  case id:                                                     \
-    if (t != ST_FLD_LIST) return false;                        \
-    {                                                          \
-      int n;                                                   \
-      c = getb();                                              \
-      if ((c & 0xf) != ST_FLD_I32) return false;               \
-      n = c >> 4;                                              \
-      if (n == 0xf) n = get_u32();                             \
-      s->m.resize(n);                                          \
-      for (int32_t i = 0; i < n; i++) s->m[i] = (mt)get_i32(); \
-      break;                                                   \
+template <>
+struct FunctionSwitchImpl<0> {
+  template <typename... Operator>
+  static inline bool run(CompactProtocolReader *cpr,
+                         int field_type,
+                         const int &field,
+                         std::tuple<Operator...> &ops)
+  {
+    if (field == std::get<0>(ops).field()) {
+      return std::get<0>(ops)(cpr, field_type);
+    } else {
+      cpr->skip_struct_field(field_type);
+      return false;
     }
+  }
+};
 
-#define PARQUET_FLD_STRING_LIST(id, m)              \
-  case id:                                          \
-    if (t != ST_FLD_LIST) return false;             \
-    {                                               \
-      int n;                                        \
-      c = getb();                                   \
-      if ((c & 0xf) != ST_FLD_BINARY) return false; \
-      n = c >> 4;                                   \
-      if (n == 0xf) n = get_u32();                  \
-      s->m.resize(n);                               \
-      for (int32_t i = 0; i < n; i++) {             \
-        uint32_t l = get_u32();                     \
-        if (l < (size_t)(m_end - m_cur)) {          \
-          s->m[i].assign((const char *)m_cur, l);   \
-          m_cur += l;                               \
-        } else                                      \
-          return false;                             \
-      }                                             \
-      break;                                        \
-    }
+template <typename... Operator>
+inline bool function_builder(CompactProtocolReader *cpr, std::tuple<Operator...> &op)
+{
+  constexpr int index = std::tuple_size<std::tuple<Operator...>>::value - 1;
+  int field           = 0;
+  while (true) {
+    int const current_byte = cpr->getb();
+    if (!current_byte) break;
+    int const field_delta = current_byte >> 4;
+    int const field_type  = current_byte & 0xf;
+    field                 = field_delta ? field + field_delta : cpr->get_i16();
+    bool exit_function    = FunctionSwitchImpl<index>::run(cpr, field_type, field, op);
+    if (exit_function) { return false; }
+  }
+  return true;
+}
 
-#define PARQUET_FLD_STRUCT(id, m)                         \
-  case id:                                                \
-    if (t != ST_FLD_STRUCT || !read(&s->m)) return false; \
-    break;
+bool CompactProtocolReader::read(FileMetaData *f)
+{
+  auto op = std::make_tuple(ParquetFieldInt32(1, f->version),
+                            ParquetFieldStructList(2, f->schema),
+                            ParquetFieldInt64(3, f->num_rows),
+                            ParquetFieldStructList(4, f->row_groups),
+                            ParquetFieldStructList(5, f->key_value_metadata),
+                            ParquetFieldString(6, f->created_by));
+  return function_builder(this, op);
+}
 
-#define PARQUET_FLD_STRUCT_BLOB(id, m)                  \
-  case id:                                              \
-    if (t != ST_FLD_STRUCT) return false;               \
-    {                                                   \
-      const uint8_t *start = m_cur;                     \
-      skip_struct_field(t);                             \
-      if (m_cur > start) s->m.assign(start, m_cur - 1); \
-      break;                                            \
-    }
+bool CompactProtocolReader::read(SchemaElement *s)
+{
+  auto op = std::make_tuple(ParquetFieldEnum<Type>(1, s->type),
+                            ParquetFieldInt32(2, s->type_length),
+                            ParquetFieldEnum<FieldRepetitionType>(3, s->repetition_type),
+                            ParquetFieldString(4, s->name),
+                            ParquetFieldInt32(5, s->num_children),
+                            ParquetFieldEnum<ConvertedType>(6, s->converted_type),
+                            ParquetFieldInt32(7, s->decimal_scale),
+                            ParquetFieldInt32(8, s->decimal_precision));
+  return function_builder(this, op);
+}
 
-#define PARQUET_END_STRUCT()                                                        \
-  default: /*printf("unknown fld %d of type %d\n", fld, t);*/ skip_struct_field(t); \
-    }                                                                               \
-    }                                                                               \
-    return true;                                                                    \
-    }
+bool CompactProtocolReader::read(RowGroup *r)
+{
+  auto op = std::make_tuple(ParquetFieldStructList(1, r->columns),
+                            ParquetFieldInt64(2, r->total_byte_size),
+                            ParquetFieldInt64(3, r->num_rows));
+  return function_builder(this, op);
+}
 
-PARQUET_BEGIN_STRUCT(FileMetaData)
-PARQUET_FLD_INT32(1, version)
-PARQUET_FLD_STRUCT_LIST(2, schema)
-PARQUET_FLD_INT64(3, num_rows)
-PARQUET_FLD_STRUCT_LIST(4, row_groups)
-PARQUET_FLD_STRUCT_LIST(5, key_value_metadata)
-PARQUET_FLD_STRING(6, created_by)
-PARQUET_END_STRUCT()
+bool CompactProtocolReader::read(ColumnChunk *c)
+{
+  auto op = std::make_tuple(ParquetFieldString(1, c->file_path),
+                            ParquetFieldInt64(2, c->file_offset),
+                            ParquetFieldStruct(3, c->meta_data),
+                            ParquetFieldInt64(4, c->offset_index_offset),
+                            ParquetFieldInt32(5, c->offset_index_length),
+                            ParquetFieldInt64(6, c->column_index_offset),
+                            ParquetFieldInt32(7, c->column_index_length));
+  return function_builder(this, op);
+}
 
-PARQUET_BEGIN_STRUCT(SchemaElement)
-PARQUET_FLD_ENUM(1, type, Type)
-PARQUET_FLD_INT32(2, type_length)
-PARQUET_FLD_ENUM(3, repetition_type, FieldRepetitionType)
-PARQUET_FLD_STRING(4, name)
-PARQUET_FLD_INT32(5, num_children)
-PARQUET_FLD_ENUM(6, converted_type, ConvertedType)
-PARQUET_FLD_INT32(7, decimal_scale)
-PARQUET_FLD_INT32(8, decimal_precision)
-PARQUET_END_STRUCT()
+bool CompactProtocolReader::read(ColumnChunkMetaData *c)
+{
+  auto op = std::make_tuple(ParquetFieldEnum<Type>(1, c->type),
+                            ParquetFieldEnumList(2, c->encodings),
+                            ParquetFieldStringList(3, c->path_in_schema),
+                            ParquetFieldEnum<Compression>(4, c->codec),
+                            ParquetFieldInt64(5, c->num_values),
+                            ParquetFieldInt64(6, c->total_uncompressed_size),
+                            ParquetFieldInt64(7, c->total_compressed_size),
+                            ParquetFieldInt64(9, c->data_page_offset),
+                            ParquetFieldInt64(10, c->index_page_offset),
+                            ParquetFieldInt64(11, c->dictionary_page_offset),
+                            ParquetFieldStructBlob(12, c->statistics_blob));
+  return function_builder(this, op);
+}
 
-PARQUET_BEGIN_STRUCT(RowGroup)
-PARQUET_FLD_STRUCT_LIST(1, columns)
-PARQUET_FLD_INT64(2, total_byte_size)
-PARQUET_FLD_INT64(3, num_rows)
-PARQUET_END_STRUCT()
+bool CompactProtocolReader::read(PageHeader *p)
+{
+  auto op = std::make_tuple(ParquetFieldEnum<PageType>(1, p->type),
+                            ParquetFieldInt32(2, p->uncompressed_page_size),
+                            ParquetFieldInt32(3, p->compressed_page_size),
+                            ParquetFieldStruct(5, p->data_page_header),
+                            ParquetFieldStruct(7, p->dictionary_page_header));
+  return function_builder(this, op);
+}
 
-PARQUET_BEGIN_STRUCT(ColumnChunk)
-PARQUET_FLD_STRING(1, file_path)
-PARQUET_FLD_INT64(2, file_offset)
-PARQUET_FLD_STRUCT(3, meta_data)
-PARQUET_FLD_INT64(4, offset_index_offset)
-PARQUET_FLD_INT32(5, offset_index_length)
-PARQUET_FLD_INT64(6, column_index_offset)
-PARQUET_FLD_INT32(7, column_index_length)
-PARQUET_END_STRUCT()
+bool CompactProtocolReader::read(DataPageHeader *d)
+{
+  auto op = std::make_tuple(ParquetFieldInt32(1, d->num_values),
+                            ParquetFieldEnum<Encoding>(2, d->encoding),
+                            ParquetFieldEnum<Encoding>(3, d->definition_level_encoding),
+                            ParquetFieldEnum<Encoding>(4, d->repetition_level_encoding));
+  return function_builder(this, op);
+}
 
-PARQUET_BEGIN_STRUCT(ColumnChunkMetaData)
-PARQUET_FLD_ENUM(1, type, Type)
-PARQUET_FLD_ENUM_LIST(2, encodings, Encoding)
-PARQUET_FLD_STRING_LIST(3, path_in_schema)
-PARQUET_FLD_ENUM(4, codec, Compression)
-PARQUET_FLD_INT64(5, num_values)
-PARQUET_FLD_INT64(6, total_uncompressed_size)
-PARQUET_FLD_INT64(7, total_compressed_size)
-PARQUET_FLD_INT64(9, data_page_offset)
-PARQUET_FLD_INT64(10, index_page_offset)
-PARQUET_FLD_INT64(11, dictionary_page_offset)
-PARQUET_FLD_STRUCT_BLOB(12, statistics_blob)
-PARQUET_END_STRUCT()
+bool CompactProtocolReader::read(DictionaryPageHeader *d)
+{
+  auto op = std::make_tuple(ParquetFieldInt32(1, d->num_values),
+                            ParquetFieldEnum<Encoding>(2, d->encoding));
+  return function_builder(this, op);
+}
 
-PARQUET_BEGIN_STRUCT(PageHeader)
-PARQUET_FLD_ENUM(1, type, PageType)
-PARQUET_FLD_INT32(2, uncompressed_page_size)
-PARQUET_FLD_INT32(3, compressed_page_size)
-PARQUET_FLD_STRUCT(5, data_page_header)
-PARQUET_FLD_STRUCT(7, dictionary_page_header)
-PARQUET_END_STRUCT()
-
-PARQUET_BEGIN_STRUCT(DataPageHeader)
-PARQUET_FLD_INT32(1, num_values)
-PARQUET_FLD_ENUM(2, encoding, Encoding);
-PARQUET_FLD_ENUM(3, definition_level_encoding, Encoding);
-PARQUET_FLD_ENUM(4, repetition_level_encoding, Encoding);
-PARQUET_END_STRUCT()
-
-PARQUET_BEGIN_STRUCT(DictionaryPageHeader)
-PARQUET_FLD_INT32(1, num_values)
-PARQUET_FLD_ENUM(2, encoding, Encoding);
-PARQUET_END_STRUCT()
-
-PARQUET_BEGIN_STRUCT(KeyValue)
-PARQUET_FLD_STRING(1, key)
-PARQUET_FLD_STRING(2, value)
-PARQUET_END_STRUCT()
+bool CompactProtocolReader::read(KeyValue *k)
+{
+  auto op = std::make_tuple(ParquetFieldString(1, k->key), ParquetFieldString(2, k->value));
+  return function_builder(this, op);
+}
 
 /**
  * @brief Constructs the schema from the file-level metadata
