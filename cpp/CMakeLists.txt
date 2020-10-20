@@ -192,7 +192,7 @@ endif(CUDA_STATIC_RUNTIME)
 target_link_libraries(cudf INTERFACE ZLIB::ZLIB Boost::filesystem)
 target_link_libraries(cudf INTERFACE arrow arrow_cuda)
 target_link_libraries(cudf INTERFACE nvrtc cuda)
-target_link_libraries(cudf INTERFACE rmm)
+target_link_libraries(cudf INTERFACE rmm::rmm)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
