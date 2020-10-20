@@ -26,13 +26,39 @@
 struct RoundTests : public cudf::test::BaseFixture {
 };
 
-TEST_F(RoundTests, SimpleTest)
+TEST_F(RoundTests, SimpleFixedPointTest)
 {
   using namespace numeric;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<int32_t>;
 
   auto const col      = fp_wrapper{{1140, 1150, 1160}, scale_type{-3}};
   auto const expected = fp_wrapper{{11, 12, 12}, scale_type{-1}};
+  // auto const result   = cudf::round(col, 1, cudf::round_option::HALF_UP);
+
+  EXPECT_THROW(cudf::round(col, 1, cudf::round_option::HALF_UP), cudf::logic_error);
+
+  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(RoundTests, SimpleFloatingPointTest0)
+{
+  using namespace numeric;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<float>;
+
+  auto const col      = fw_wrapper{1.4, 1.5, 1.6};
+  auto const expected = fw_wrapper{1, 2, 2};
+  auto const result   = cudf::round(col, 0, cudf::round_option::HALF_UP);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(RoundTests, SimpleFloatingPointTest1)
+{
+  using namespace numeric;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<float>;
+
+  auto const col      = fw_wrapper{1.24, 1.25, 1.26};
+  auto const expected = fw_wrapper{1.2, 1.3, 1.3};
   auto const result   = cudf::round(col, 1, cudf::round_option::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
