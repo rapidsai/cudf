@@ -21,7 +21,7 @@ from cudf.tests.utils import assert_eq
 @pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
 @pytest.mark.parametrize("nulls", ["none", "one", "some", "all"])
 @pytest.mark.parametrize("center", [True, False])
-def test_rollling_series_basic(data, index, agg, nulls, center):
+def test_rolling_series_basic(data, index, agg, nulls, center):
     if PANDAS_GE_110:
         kwargs = {"check_freq": False}
     else:
@@ -47,15 +47,7 @@ def test_rollling_series_basic(data, index, agg, nulls, center):
             got = getattr(
                 gsr.rolling(window_size, min_periods, center), agg
             )().fillna(-1)
-            try:
-                assert_eq(expect, got, check_dtype=False, **kwargs)
-            except AssertionError as e:
-                if agg == "count" and data != []:
-                    pytest.xfail(
-                        reason="Differ from Pandas behavior for count"
-                    )
-                else:
-                    raise e
+            assert_eq(expect, got, check_dtype=False, **kwargs)
 
 
 @pytest.mark.parametrize(
@@ -97,17 +89,24 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
             got = getattr(
                 gdf.rolling(window_size, min_periods, center), agg
             )().fillna(-1)
-            try:
-                assert_eq(expect, got, check_dtype=False)
-            except AssertionError as e:
-                if agg == "count" and len(pdf) > 0:
-                    pytest.xfail(reason="Differ from pandas behavior here")
-                else:
-                    raise e
+            assert_eq(expect, got, check_dtype=False)
 
 
 @pytest.mark.parametrize(
-    "agg", ["sum", pytest.param("min"), pytest.param("max"), "mean", "count"]
+    "agg",
+    [
+        pytest.param("sum"),
+        pytest.param("min"),
+        pytest.param("max"),
+        pytest.param("mean"),
+        pytest.param(
+            "count",  # Does not follow similar conventions as
+            # with non-offset columns
+            marks=pytest.mark.xfail(
+                reason="Differs from pandas behaviour here"
+            ),
+        ),
+    ],
 )
 def test_rolling_with_offset(agg):
     psr = pd.Series(
@@ -125,6 +124,44 @@ def test_rolling_with_offset(agg):
     assert_eq(
         getattr(psr.rolling("2s"), agg)().fillna(-1),
         getattr(gsr.rolling("2s"), agg)().fillna(-1),
+        check_dtype=False,
+    )
+
+
+def test_rolling_count_with_offset():
+    """
+    This test covers the xfail case from test_rolling_with_offset["count"].
+    It is expected that count should return a non-Nan value, even if
+    the counted value is a Nan, unless the min-periods condition
+    is not met.
+    This behaviour is consistent with counts for rolling-windows,
+    in the non-offset window case.
+    """
+    psr = pd.Series(
+        [1, 2, 4, 4, np.nan, 9],
+        index=[
+            pd.Timestamp("20190101 09:00:00"),
+            pd.Timestamp("20190101 09:00:01"),
+            pd.Timestamp("20190101 09:00:02"),
+            pd.Timestamp("20190101 09:00:04"),
+            pd.Timestamp("20190101 09:00:07"),
+            pd.Timestamp("20190101 09:00:08"),
+        ],
+    )
+    gsr = cudf.from_pandas(psr)
+    assert_eq(
+        getattr(gsr.rolling("2s"), "count")().fillna(-1),
+        pd.Series(
+            [1, 2, 2, 1, 0, 1],
+            index=[
+                pd.Timestamp("20190101 09:00:00"),
+                pd.Timestamp("20190101 09:00:01"),
+                pd.Timestamp("20190101 09:00:02"),
+                pd.Timestamp("20190101 09:00:04"),
+                pd.Timestamp("20190101 09:00:07"),
+                pd.Timestamp("20190101 09:00:08"),
+            ],
+        ),
         check_dtype=False,
     )
 

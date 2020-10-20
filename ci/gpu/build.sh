@@ -1,16 +1,11 @@
 #!/bin/bash
-# Copyright (c) 2018, NVIDIA CORPORATION.
-#########################################
-# cuDF GPU build and test script for CI #
-#########################################
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+##############################################
+# cuDF GPU build and test script for CI      #
+##############################################
 set -e
 NUMARGS=$#
 ARGS=$*
-
-# Logger function for build status output
-function logger() {
-  echo -e "\n>>>> $@\n"
-}
 
 # Arg parsing function
 function hasArg {
@@ -18,81 +13,101 @@ function hasArg {
 }
 
 # Set path and build parallel level
-export PATH=/conda/bin:/usr/local/cuda/bin:$PATH
-export PARALLEL_LEVEL=4
-export CUDA_REL=${CUDA_VERSION%.*}
+export PATH=/opt/conda/bin:/usr/local/cuda/bin:$PATH
+export PARALLEL_LEVEL=${PARALLEL_LEVEL:-4}
 
 # Set home to the job's workspace
 export HOME=$WORKSPACE
 
-# Parse git describe
+# Switch to project root; also root of repo checkout
 cd $WORKSPACE
+
+# Determine CUDA release version
+export CUDA_REL=${CUDA_VERSION%.*}
+
+# Parse git describe
 export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
-# Set `LIBCUDF_KERNEL_CACHE_PATH` environment variable to $HOME/.jitify-cache because
-# it's local to the container's virtual file system, and not shared with other CI jobs
-# like `/tmp` is.
+
+################################################################################
+# TRAP - Setup trap for removing jitify cache
+################################################################################
+
+# Set `LIBCUDF_KERNEL_CACHE_PATH` environment variable to $HOME/.jitify-cache
+# because it's local to the container's virtual file system, and not shared with
+# other CI jobs like `/tmp` is
 export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
 
 function remove_libcudf_kernel_cache_dir {
     EXITCODE=$?
-    logger "removing kernel cache dir: $LIBCUDF_KERNEL_CACHE_PATH"
-    rm -rf "$LIBCUDF_KERNEL_CACHE_PATH" || logger "could not rm -rf $LIBCUDF_KERNEL_CACHE_PATH"
+    gpuci_logger "TRAP: Removing kernel cache dir: $LIBCUDF_KERNEL_CACHE_PATH"
+    rm -rf "$LIBCUDF_KERNEL_CACHE_PATH" \
+        || gpuci_logger "[ERROR] TRAP: Could not rm -rf $LIBCUDF_KERNEL_CACHE_PATH"
     exit $EXITCODE
 }
 
+# Set trap to run on exit
+gpuci_logger "TRAP: Set trap to remove jitify cache on exit"
 trap remove_libcudf_kernel_cache_dir EXIT
 
-mkdir -p "$LIBCUDF_KERNEL_CACHE_PATH" || logger "could not mkdir -p $LIBCUDF_KERNEL_CACHE_PATH"
+mkdir -p "$LIBCUDF_KERNEL_CACHE_PATH" \
+    || gpuci_logger "[ERROR] TRAP: Could not mkdir -p $LIBCUDF_KERNEL_CACHE_PATH"
 
 ################################################################################
 # SETUP - Check environment
 ################################################################################
 
-logger "Check environment..."
+gpuci_logger "Check environment variables"
 env
 
-logger "Check GPU usage..."
+gpuci_logger "Check GPU usage"
 nvidia-smi
 
-logger "Activate conda env..."
-source activate gdf
+gpuci_logger "Activate conda env"
+. /opt/conda/etc/profile.d/conda.sh
+conda activate rapids
 
-# Install contextvars on Python 3.6
-py_ver=$(python -c "import sys; print('.'.join(map(str, sys.version_info[:2])))")
-if [ "$py_ver" == "3.6" ];then
-    conda install contextvars
-fi
+gpuci_logger "Check conda environment"
+conda info
+conda config --show-sources
+conda list --show-channel-urls
 
-conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
-              "rapids-build-env=$MINOR_VERSION.*" \
-              "rapids-notebook-env=$MINOR_VERSION.*" \
-              "dask-cuda=${MINOR_VERSION}" \
-              "ucx-py=${MINOR_VERSION}" \
+gpuci_logger "Install dependencies"
+gpuci_conda_retry install -y \
+                  "cudatoolkit=$CUDA_REL" \
+                  "rapids-build-env=$MINOR_VERSION.*" \
+                  "rapids-notebook-env=$MINOR_VERSION.*" \
+                  "dask-cuda=${MINOR_VERSION}" \
+                  "rmm=$MINOR_VERSION.*" \
+                  "ucx-py=${MINOR_VERSION}"
 
 # https://docs.rapids.ai/maintainers/depmgmt/
-# conda remove -f rapids-build-env rapids-notebook-env
-# conda install "your-pkg=1.0.0"
+# gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
+# gpuci_conda_retry install -y "your-pkg=1.0.0"
 
 # Install the master version of dask, distributed, and streamz
-logger "pip install git+https://github.com/dask/distributed.git --upgrade --no-deps"
+gpuci_logger "Install the master version of dask, distributed, and streamz"
+set -x
 pip install "git+https://github.com/dask/distributed.git" --upgrade --no-deps
-logger "pip install git+https://github.com/dask/dask.git --upgrade --no-deps"
 pip install "git+https://github.com/dask/dask.git" --upgrade --no-deps
-logger "pip install git+https://github.com/python-streamz/streamz.git --upgrade --no-deps"
 pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
+set +x
 
-logger "Check versions..."
+gpuci_logger "Check compiler versions"
 python --version
 $CC --version
 $CXX --version
-conda list
+
+gpuci_logger "Check conda environment"
+conda info
+conda config --show-sources
+conda list --show-channel-urls
 
 ################################################################################
 # BUILD - Build libcudf, cuDF, libcudf_kafka, and dask_cudf from source
 ################################################################################
 
-logger "Build libcudf..."
+gpuci_logger "Build from source"
 if [[ ${BUILD_MODE} == "pull-request" ]]; then
     $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
 else
@@ -100,17 +115,22 @@ else
 fi
 
 ################################################################################
-# TEST - Run GoogleTest and py.tests for libcudf, and
-# cuDF
+# TEST - Run GoogleTest, py.tests, and notebooks
 ################################################################################
 
+set +e -Eo pipefail
+EXITCODE=0
+trap "EXITCODE=1" ERR
+
+
 if hasArg --skip-tests; then
-    logger "Skipping Tests..."
+    gpuci_logger "Skipping Tests"
 else
-    logger "Check GPU usage..."
+    gpuci_logger "Check GPU usage"
     nvidia-smi
 
-    logger "GoogleTests..."
+    gpuci_logger "GoogleTests"
+    set -x
     cd $WORKSPACE/cpp/build
 
     for gt in ${WORKSPACE}/cpp/build/gtests/* ; do
@@ -123,22 +143,24 @@ else
     # will be enabled for later versions by default
     np_ver=$(python -c "import numpy; print('.'.join(numpy.__version__.split('.')[:-1]))")
     if [ "$np_ver" == "1.16" ];then
-        logger "export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1"
         export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
     fi
 
     cd $WORKSPACE/python/cudf
-    logger "Python py.test for cuDF..."
+    gpuci_logger "Python py.test for cuDF"
     py.test --cache-clear --basetemp=${WORKSPACE}/cudf-cuda-tmp --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/python/cudf/cudf-coverage.xml --cov-report term
 
     cd $WORKSPACE/python/dask_cudf
-    logger "Python py.test for dask-cudf..."
+    gpuci_logger "Python py.test for dask-cudf"
     py.test --cache-clear --basetemp=${WORKSPACE}/dask-cudf-cuda-tmp --junitxml=${WORKSPACE}/junit-dask-cudf.xml -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:${WORKSPACE}/python/dask_cudf/dask-cudf-coverage.xml --cov-report term
 
     cd $WORKSPACE/python/custreamz
-    logger "Python py.test for cuStreamz..."
+    gpuci_logger "Python py.test for cuStreamz"
     py.test --cache-clear --basetemp=${WORKSPACE}/custreamz-cuda-tmp --junitxml=${WORKSPACE}/junit-custreamz.xml -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:${WORKSPACE}/python/custreamz/custreamz-coverage.xml --cov-report term
 
+    gpuci_logger "Test notebooks"
     ${WORKSPACE}/ci/gpu/test-notebooks.sh 2>&1 | tee nbtest.log
     python ${WORKSPACE}/ci/utils/nbtestlog2junitxml.py nbtest.log
 fi
+
+return ${EXITCODE}

@@ -33,7 +33,18 @@ public class NativeDepsLoader {
   private static final Logger log = LoggerFactory.getLogger(NativeDepsLoader.class);
   private static final String[] loadOrder = new String[] {
       "nvcomp",
-      "cudf",
+      "cudf_base",
+      "cudf_ast",
+      "cudf_comms",
+      "cudf_hash",
+      "cudf_interop",
+      "cudf_io",
+      "cudf_join",
+      "cudf_merge",
+      "cudf_partitioning",
+      "cudf_reductions",
+      "cudf_replace",
+      "cudf_rolling",
       "cudfjni"
   };
   private static ClassLoader loader = NativeDepsLoader.class.getClassLoader();

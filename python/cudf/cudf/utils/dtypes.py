@@ -191,6 +191,17 @@ def is_list_dtype(obj):
     )
 
 
+def is_struct_dtype(obj):
+    return (
+        type(obj) is cudf.core.dtypes.StructDtype
+        or obj is cudf.core.dtypes.StructDtype
+        # or type(obj) is cudf.core.column.StructColumn
+        # or obj is cudf.core.column.StructColumn
+        or (isinstance(obj, str) and obj == cudf.core.dtypes.StructDtype.name)
+        or (hasattr(obj, "dtype") and is_struct_dtype(obj.dtype))
+    )
+
+
 def cudf_dtype_from_pydata_dtype(dtype):
     """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
         Python dtype.
@@ -202,6 +213,29 @@ def cudf_dtype_from_pydata_dtype(dtype):
         return dtype.type
 
     return infer_dtype_from_object(dtype)
+
+
+def cudf_dtype_to_pa_type(dtype):
+    """ Given a cudf pandas dtype, converts it into the equivalent cuDF
+        Python dtype.
+    """
+    if is_categorical_dtype(dtype):
+        raise NotImplementedError()
+    elif is_list_dtype(dtype):
+        return dtype.to_arrow()
+    elif is_struct_dtype(dtype):
+        return dtype.to_arrow()
+    else:
+        return np_to_pa_dtype(np.dtype(dtype))
+
+
+def cudf_dtype_from_pa_type(typ):
+    if pa.types.is_list(typ):
+        return cudf.core.dtypes.ListDtype.from_arrow(typ)
+    elif pa.types.is_struct(typ):
+        return cudf.core.dtypes.StructDtype.from_arrow(typ)
+    else:
+        return pd.api.types.pandas_dtype(typ.to_pandas_dtype())
 
 
 def is_scalar(val):
@@ -465,3 +499,44 @@ def _get_nan_for_dtype(dtype):
         return dtype.type("nan")
     else:
         return np.float64("nan")
+
+
+def find_common_type(dtypes):
+    """
+    Wrapper over np.find_common_type to handle special cases
+
+    Corner cases:
+    1. "M8", "M8" -> "M8" | "m8", "m8" -> "m8"
+
+    Parameters
+    ----------
+    dtypes : iterable, sequence of dtypes to find common types
+
+    Returns
+    -------
+    dtype : np.dtype optional, the result from np.find_common_type,
+    None if input is empty
+
+    """
+
+    if len(dtypes) == 0:
+        return None
+
+    # Aggregate same types
+    dtypes = set(dtypes)
+
+    # Corner case 1:
+    # Resort to np.result_type to handle "M" and "m" types separately
+    dt_dtypes = set(filter(lambda t: is_datetime_dtype(t), dtypes))
+    if len(dt_dtypes) > 0:
+        dtypes = dtypes - dt_dtypes
+        dtypes.add(np.result_type(*dt_dtypes))
+
+    td_dtypes = set(
+        filter(lambda t: pd.api.types.is_timedelta64_dtype(t), dtypes)
+    )
+    if len(td_dtypes) > 0:
+        dtypes = dtypes - td_dtypes
+        dtypes.add(np.result_type(*td_dtypes))
+
+    return np.find_common_type(list(dtypes), [])

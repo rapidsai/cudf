@@ -65,36 +65,61 @@ class scalar_device_view_base {
 };
 
 /**
- * @brief A type of scalar_device_view where the value is a fixed width type
+ * @brief A type-erased scalar_device_view where the value is a fixed width type
  */
-template <typename T>
-class fixed_width_scalar_device_view : public detail::scalar_device_view_base {
+class fixed_width_scalar_device_view_base : public detail::scalar_device_view_base {
  public:
-  using value_type = T;
-
   /**
    * @brief Returns reference to stored value.
+   *
+   * @tparam T The desired type
    */
-  __device__ T& value() noexcept { return *data(); }
+  template <typename T>
+  __device__ T& value() noexcept
+  {
+    return *data<T>();
+  }
 
   /**
    * @brief Returns const reference to stored value.
+   *
+   * @tparam T The desired type
    */
-  __device__ T const& value() const noexcept { return *data(); }
+  template <typename T>
+  __device__ T const& value() const noexcept
+  {
+    return *data<T>();
+  }
 
-  __device__ void set_value(T value) { *_data = value; }
+  template <typename T>
+  __device__ void set_value(T value)
+  {
+    *static_cast<T*>(_data) = value;
+  }
 
   /**
    * @brief Returns a raw pointer to the value in device memory
+   *
+   * @tparam T The desired type
    */
-  __device__ T* data() noexcept { return static_cast<T*>(_data); }
+  template <typename T>
+  __device__ T* data() noexcept
+  {
+    return static_cast<T*>(_data);
+  }
   /**
    * @brief Returns a const raw pointer to the value in device memory
+   *
+   * @tparam T The desired type
    */
-  __device__ T const* data() const noexcept { return static_cast<T const*>(_data); }
+  template <typename T>
+  __device__ T const* data() const noexcept
+  {
+    return static_cast<T const*>(_data);
+  }
 
  protected:
-  T* _data{};  ///< Pointer to device memory containing the value
+  void* _data{};  ///< Pointer to device memory containing the value
 
   /**
    * @brief Construct a new fixed width scalar device view object
@@ -107,8 +132,61 @@ class fixed_width_scalar_device_view : public detail::scalar_device_view_base {
    * @param is_valid The pointer to the bool in device memory that indicates the
    * validity of the stored value
    */
-  fixed_width_scalar_device_view(data_type type, T* data, bool* is_valid)
+  fixed_width_scalar_device_view_base(data_type type, void* data, bool* is_valid)
     : detail::scalar_device_view_base(type, is_valid), _data(data)
+  {
+  }
+};
+
+/**
+ * @brief A type of scalar_device_view where the value is a fixed width type
+ */
+template <typename T>
+class fixed_width_scalar_device_view : public detail::fixed_width_scalar_device_view_base {
+ public:
+  using value_type = T;
+
+  /**
+   * @brief Returns reference to stored value.
+   */
+  __device__ T& value() noexcept { return fixed_width_scalar_device_view_base::value<T>(); }
+
+  /**
+   * @brief Returns const reference to stored value.
+   */
+  __device__ T const& value() const noexcept
+  {
+    return fixed_width_scalar_device_view_base::value<T>();
+  }
+
+  __device__ void set_value(T value) { fixed_width_scalar_device_view_base::set_value<T>(value); }
+
+  /**
+   * @brief Returns a raw pointer to the value in device memory
+   */
+  __device__ T* data() noexcept { return fixed_width_scalar_device_view_base::data<T>(); }
+  /**
+   * @brief Returns a const raw pointer to the value in device memory
+   */
+  __device__ T const* data() const noexcept
+  {
+    return fixed_width_scalar_device_view_base::data<T>();
+  }
+
+ protected:
+  /**
+   * @brief Construct a new fixed width scalar device view object
+   *
+   * This constructor should not be used directly. get_scalar_device_view
+   * should be used to get the view of an existing scalar
+   *
+   * @param type The data type of the value
+   * @param data The pointer to the data in device memory
+   * @param is_valid The pointer to the bool in device memory that indicates the
+   * validity of the stored value
+   */
+  fixed_width_scalar_device_view(data_type type, T* data, bool* is_valid)
+    : detail::fixed_width_scalar_device_view_base(type, data, is_valid)
   {
   }
 };
@@ -131,10 +209,12 @@ class numeric_scalar_device_view : public detail::fixed_width_scalar_device_view
  * @brief A type of scalar_device_view that stores a pointer to a fixed_point value
  */
 template <typename T>
-class fixed_point_scalar_device_view : public detail::fixed_width_scalar_device_view<T> {
+class fixed_point_scalar_device_view : public detail::scalar_device_view_base {
  public:
-  fixed_point_scalar_device_view(data_type type, T* data, bool* is_valid)
-    : detail::fixed_width_scalar_device_view<T>(type, data, is_valid)
+  using rep_type = typename T::rep;
+
+  fixed_point_scalar_device_view(data_type type, rep_type* data, bool* is_valid)
+    : detail::scalar_device_view_base(type, is_valid)
   {
   }
 };

@@ -24,8 +24,12 @@
 #define CUDA_DEVICE_CALLABLE inline
 #endif
 
+#include <thrust/optional.h>  // TODO no idea why this is needed ¯\_(ツ)_/¯
+
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 
 /**
  * @file
@@ -62,31 +66,21 @@ class list_view;
 class struct_view;
 
 class scalar;
-template <typename T>
-class numeric_scalar;
 
-template <typename T>
-class fixed_point_scalar;
-
+// clang-format off
+class list_scalar;
 class string_scalar;
-template <typename T>
-class timestamp_scalar;
-template <typename T>
-class duration_scalar;
-
-template <typename T>
-class numeric_scalar_device_view;
-
-template <typename T>
-class fixed_point_scalar_device_view;
+template <typename T> class numeric_scalar;
+template <typename T> class fixed_point_scalar;
+template <typename T> class timestamp_scalar;
+template <typename T> class duration_scalar;
 
 class string_scalar_device_view;
-template <typename T>
-class timestamp_scalar_device_view;
-template <typename T>
-class duration_scalar_device_view;
-
-class list_scalar;
+template <typename T> class numeric_scalar_device_view;
+template <typename T> class fixed_point_scalar_device_view;
+template <typename T> class timestamp_scalar_device_view;
+template <typename T> class duration_scalar_device_view;
+// clang-format on
 
 class struct_scalar;
 
@@ -103,6 +97,20 @@ class mutable_table_view;
 using size_type    = int32_t;
 using bitmask_type = uint32_t;
 using valid_type   = uint8_t;
+
+/**
+ * @brief Similar to `std::distance` but returns `cudf::size_type` and performs `static_cast`
+ *
+ * @tparam T Iterator type
+ * @param f "first" iterator
+ * @param l "last" iterator
+ * @return size_type The distance between first and last
+ */
+template <typename T>
+size_type distance(T f, T l)
+{
+  return static_cast<size_type>(std::distance(f, l));
+}
 
 /**
  * @brief Indicates an unknown null count.
@@ -247,14 +255,32 @@ class data_type {
   explicit constexpr data_type(type_id id) : _id{id} {}
 
   /**
+   * @brief Construct a new `data_type` object for `numeric::fixed_point`
+   *
+   * @param id The `fixed_point`'s identifier
+   * @param scale The `fixed_point`'s scale (see `fixed_point::_scale`)
+   **/
+  explicit data_type(type_id id, int32_t scale) : _id{id}, _fixed_point_scale{scale}
+  {
+    assert(id == type_id::DECIMAL32 || id == type_id::DECIMAL64);
+  }
+
+  /**
    * @brief Returns the type identifier
    **/
   CUDA_HOST_DEVICE_CALLABLE type_id id() const noexcept { return _id; }
 
+  /**
+   * @brief Returns the scale (for fixed_point types)
+   **/
+  CUDA_HOST_DEVICE_CALLABLE int32_t scale() const noexcept { return _fixed_point_scale; }
+
  private:
   type_id _id{type_id::EMPTY};
-  // Store additional type specific metadata, timezone, decimal precision and
-  // scale, etc.
+
+  // Below is additional type specific metadata. Currently, only _fixed_point_scale is stored.
+
+  int32_t _fixed_point_scale{};  // numeric::scale_type not available here, use int32_t
 };
 
 /**
@@ -270,6 +296,20 @@ class data_type {
  * @return false `lhs` is not equal to `rhs`
  */
 inline bool operator==(data_type const& lhs, data_type const& rhs) { return lhs.id() == rhs.id(); }
+
+/**
+ * @brief Compares two `data_type` objects for inequality.
+ *
+ * // TODO Define exactly what it means for two `data_type`s to be equal. e.g.,
+ * are two timestamps with different resolutions equal? How about decimals with
+ * different scale/precision?
+ *
+ * @param lhs The first `data_type` to compare
+ * @param rhs The second `data_type` to compare
+ * @return true `lhs` is not equal to `rhs`
+ * @return false `lhs` is equal to `rhs`
+ */
+inline bool operator!=(data_type const& lhs, data_type const& rhs) { return !(lhs == rhs); }
 
 /**
  * @brief Returns the size in bytes of elements of the specified `data_type`

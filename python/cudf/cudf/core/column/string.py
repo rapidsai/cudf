@@ -5,6 +5,7 @@ import warnings
 import cupy
 import numpy as np
 import pandas as pd
+from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
@@ -41,7 +42,6 @@ from cudf._lib.nvtext.tokenize import (
     detokenize as cpp_detokenize,
     tokenize as cpp_tokenize,
 )
-from cudf._lib.nvtx import annotate
 from cudf._lib.scalar import Scalar, as_scalar
 from cudf._lib.strings.attributes import (
     code_points as cpp_code_points,
@@ -927,6 +927,30 @@ class StringMethods(ColumnMethodsMixin):
         dtype: bool
         """
         return self._return_or_inplace(str_cast.is_hex(self._column), **kwargs)
+
+    def istimestamp(self, format, **kwargs):
+        """
+        Check whether all characters in each string can be converted to
+        a timestamp using the given format.
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the same
+            length as the original Series/Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["20201101", "192011", "18200111", "2120-11-01"])
+        >>> s.str.istimestamp("%Y%m%d")
+        0     True
+        1    False
+        2     True
+        3    False
+        dtype: bool
+        """
+        return self._return_or_inplace(
+            str_cast.istimestamp(self._column, format), **kwargs
+        )
 
     def isfloat(self, **kwargs):
         """

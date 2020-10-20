@@ -1,9 +1,14 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
+import re
+from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
 
 import cupy
 import numpy as np
 import pandas as pd
-from pandas.util import testing as tm
+import pytest
+from pandas import testing as tm
 
 import cudf
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
@@ -111,6 +116,106 @@ def assert_neq(left, right, **kwargs):
         pass
     else:
         raise AssertionError
+
+
+def assert_exceptions_equal(
+    lfunc,
+    rfunc,
+    lfunc_args_and_kwargs=None,
+    rfunc_args_and_kwargs=None,
+    compare_error_message=True,
+):
+    """Compares if two functions ``lfunc`` and ``rfunc`` raise
+    same exception or not.
+
+    Parameters
+    ----------
+    lfunc : callable
+        A callable function to obtain the Exception.
+    rfunc : callable
+        A callable function to compare the Exception
+        obtained by calling ``rfunc``.
+    lfunc_args_and_kwargs : tuple, default None
+        Tuple containing positional arguments at first position,
+        and key-word arguments at second position that need to be passed into
+        ``lfunc``. If the tuple is of length 1, it must either contain
+        positional arguments(as a Sequence) or key-word arguments(as a Mapping
+        dict).
+    rfunc_args_and_kwargs : tuple, default None
+        Tuple containing positional arguments at first position,
+        and key-word arguments at second position that need to be passed into
+        ``rfunc``. If the tuple is of length 1, it must either contain
+        positional arguments(as a Sequence) or key-word arguments(as a Mapping
+        dict).
+    compare_error_message : boolean, default True
+        Whether to compare the error messages raised
+        when calling both ``lfunc`` and
+        ``rfunc`` or not.
+
+    Returns
+    -------
+    None
+        If exceptions raised by ``lfunc`` and
+        ``rfunc`` match.
+
+    Raises
+    ------
+    AssertionError
+        If call to ``lfunc`` doesn't raise any Exception.
+    """
+
+    lfunc_args, lfunc_kwargs = _get_args_kwars_for_assert_exceptions(
+        lfunc_args_and_kwargs
+    )
+    rfunc_args, rfunc_kwargs = _get_args_kwars_for_assert_exceptions(
+        rfunc_args_and_kwargs
+    )
+
+    try:
+        lfunc(*lfunc_args, **lfunc_kwargs)
+    except KeyboardInterrupt:
+        raise
+    except Exception as e:
+        with pytest.raises(
+            type(e),
+            match=re.escape(str(e)) if compare_error_message is True else None,
+        ):
+            rfunc(*rfunc_args, **rfunc_kwargs)
+    else:
+        raise AssertionError("Expected to fail with an Exception.")
+
+
+def _get_args_kwars_for_assert_exceptions(func_args_and_kwargs):
+    if func_args_and_kwargs is None:
+        return [], {}
+    else:
+        if len(func_args_and_kwargs) == 1:
+            func_args, func_kwargs = [], {}
+            if isinstance(func_args_and_kwargs[0], Sequence):
+                func_args = func_args_and_kwargs[0]
+            elif isinstance(func_args_and_kwargs[0], Mapping):
+                func_kwargs = func_args_and_kwargs[0]
+            else:
+                raise ValueError(
+                    "length 1 func_args_and_kwargs must be "
+                    "either a Sequence or a Mapping"
+                )
+        elif len(func_args_and_kwargs) == 2:
+            if not isinstance(func_args_and_kwargs[0], Sequence):
+                raise ValueError(
+                    "Positional argument at 1st position of "
+                    "func_args_and_kwargs should be a sequence."
+                )
+            if not isinstance(func_args_and_kwargs[1], Mapping):
+                raise ValueError(
+                    "Key-word argument at 2nd position of "
+                    "func_args_and_kwargs should be a dictionary mapping."
+                )
+
+            func_args, func_kwargs = func_args_and_kwargs
+        else:
+            raise ValueError("func_args_and_kwargs must be of length 1 or 2")
+        return func_args, func_kwargs
 
 
 def gen_rand(dtype, size, **kwargs):
