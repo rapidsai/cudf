@@ -4,7 +4,7 @@ import pickle
 import warnings
 from collections.abc import MutableSequence
 from types import SimpleNamespace
-from typing import Tuple, Union
+from typing import Any, Tuple, Union
 
 import cupy
 import numpy as np
@@ -591,7 +591,7 @@ class ColumnBase(Column, Serializable):
                 return self.apply_boolean_mask(arg)
             raise NotImplementedError(type(arg))
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: Any, value: Any):
         """
         Set the value of self[key] to value.
 
@@ -632,10 +632,7 @@ class ColumnBase(Column, Serializable):
             nelem = len(key)
 
         if is_scalar(value):
-            if is_categorical_dtype(self.dtype):
-                value = self._encode(value)
-            else:
-                value = self.dtype.type(value) if value is not None else value
+            value = self.dtype.type(value) if value is not None else value
         else:
             if len(value) != nelem:
                 msg = (
@@ -645,9 +642,6 @@ class ColumnBase(Column, Serializable):
                 )
                 raise ValueError(msg)
             value = as_column(value).astype(self.dtype)
-            if is_categorical_dtype(value.dtype):
-                value = value.cat().set_categories(self.categories)
-                assert self.dtype == value.dtype
 
         if (
             isinstance(key, slice)
@@ -658,34 +652,11 @@ class ColumnBase(Column, Serializable):
             out = libcudf.copying.copy_range(
                 value, self, 0, nelem, key_start, key_stop, False
             )
-            if is_categorical_dtype(value.dtype):
-                out = build_categorical_column(
-                    categories=value.categories,
-                    codes=as_column(out.base_data, dtype=out.dtype),
-                    mask=out.base_mask,
-                    size=out.size,
-                    offset=out.offset,
-                    ordered=value.ordered,
-                )
         else:
             try:
                 if is_scalar(value):
                     input = self
-                    if is_categorical_dtype(self.dtype):
-                        input = self.codes
-
                     out = input.as_frame()._scatter(key, [value])._as_column()
-
-                    if is_categorical_dtype(self.dtype):
-                        out = build_categorical_column(
-                            categories=self.categories,
-                            codes=as_column(out.base_data, dtype=out.dtype),
-                            mask=out.base_mask,
-                            size=out.size,
-                            offset=out.offset,
-                            ordered=self.ordered,
-                        )
-
                 else:
                     if not isinstance(value, Column):
                         value = as_column(value)

@@ -1,5 +1,6 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 import pickle
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -879,6 +880,24 @@ class CategoricalColumn(column.ColumnBase):
 
     def __eq__(self, other):
         return self.binary_operator("eq", other).all()
+
+    def __setitem__(self, key: Any, value: Any):
+        if cudf.utils.dtypes.is_scalar(value):
+            value = self._encode(value) if value is not None else value
+        else:
+            value = cudf.core.column.as_column(value).astype(self.dtype)
+            value = value.codes
+        codes = self.codes
+        codes[key] = value
+        out = cudf.core.column.build_categorical_column(
+            categories=self.categories,
+            codes=codes,
+            mask=codes.base_mask,
+            size=codes.size,
+            offset=self.offset,
+            ordered=self.ordered,
+        )
+        self._mimic_inplace(out, inplace=True)
 
     def _fill(
         self,
