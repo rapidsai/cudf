@@ -3,9 +3,8 @@
 import pickle
 import warnings
 from collections.abc import MutableSequence
-from numbers import Number
 from types import SimpleNamespace
-from typing import Tuple
+from typing import Tuple, Union
 
 import cupy
 import numpy as np
@@ -152,11 +151,15 @@ class ColumnBase(Column, Serializable):
             n += self.mask.size
         return n
 
-    def cat(self, parent=None):
+    def cat(
+        self, parent=None
+    ) -> "cudf.core.column.categorical.CategoricalAccessor":
         raise NotImplementedError()
 
     @classmethod
-    def _concat(cls, objs: "MutableSequence[ColumnBase]", dtype=None):
+    def _concat(
+        cls, objs: "MutableSequence[ColumnBase]", dtype: Dtype = None
+    ) -> "ColumnBase":
         if len(objs) == 0:
             dtype = pd.api.types.pandas_dtype(dtype)
             if is_categorical_dtype(dtype):
@@ -253,11 +256,11 @@ class ColumnBase(Column, Serializable):
 
         return col
 
-    def dropna(self):
+    def dropna(self) -> "ColumnBase":
         dropped_col = self.as_frame().dropna()._as_column()
         return dropped_col
 
-    def to_arrow(self):
+    def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
 
         Examples
@@ -306,7 +309,7 @@ class ColumnBase(Column, Serializable):
         )["None"].chunk(0)
 
     @classmethod
-    def from_arrow(cls, array):
+    def from_arrow(cls, array: pa.Array) -> "ColumnBase":
         """
         Convert PyArrow Array/ChunkedArray to column
 
@@ -368,15 +371,18 @@ class ColumnBase(Column, Serializable):
             "None"
         ]
 
-    def _get_mask_as_column(self):
+    def _get_mask_as_column(self) -> "ColumnBase":
         return libcudf.transform.mask_to_bools(
             self.base_mask, self.offset, self.offset + len(self)
         )
 
-    def _memory_usage(self, **kwargs):
+    def _memory_usage(self, **kwargs) -> int:
         return self.__sizeof__()
 
-    def to_gpu_array(self, fillna=None):
+    def default_na_value(self):
+        raise NotImplementedError()
+
+    def to_gpu_array(self, fillna=None) -> "cuda.devicearray.DeviceNDArray":
         """Get a dense numba device array for the data.
 
         Parameters
@@ -395,7 +401,7 @@ class ColumnBase(Column, Serializable):
         else:
             return self.dropna().data_array_view
 
-    def to_array(self, fillna=None):
+    def to_array(self, fillna=None) -> "np.array":
         """Get a dense numpy array for the data.
 
         Parameters
@@ -413,12 +419,15 @@ class ColumnBase(Column, Serializable):
         """
         return self.to_gpu_array(fillna=fillna).copy_to_host()
 
-    def _fill(self, fill_value, begin=0, end=-1, inplace=False):
+    def _fill(
+        self,
+        fill_value: ScalarObj,
+        begin: int,
+        end: int,
+        inplace: bool = False,
+    ) -> "ColumnBase":
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
-
-        if is_categorical_dtype(self.dtype):
-            return self._fill_categorical(fill_value, begin, end, inplace)
 
         fill_scalar = as_scalar(fill_value, self.dtype)
 
@@ -439,7 +448,6 @@ class ColumnBase(Column, Serializable):
 
         return self
 
-    def _fill_categorical(self, fill_value, begin, end, inplace):
         fill_code = self._encode(fill_value)
         fill_scalar = as_scalar(fill_code, self.codes.dtype)
 
@@ -448,11 +456,11 @@ class ColumnBase(Column, Serializable):
         libcudf.filling.fill_in_place(result.codes, begin, end, fill_scalar)
         return result
 
-    def shift(self, offset, fill_value):
+    def shift(self, offset: int, fill_value: ScalarObj) -> "ColumnBase":
         return libcudf.copying.shift(self, offset, fill_value)
 
     @property
-    def valid_count(self):
+    def valid_count(self) -> int:
         """Number of non-null values"""
         return len(self) - self.null_count
 
@@ -465,7 +473,7 @@ class ColumnBase(Column, Serializable):
         else:
             raise ValueError("Column has no null mask")
 
-    def copy(self, deep=True):
+    def copy(self, deep: bool = True) -> "ColumnBase":
         """Columns are immutable, so a deep copy produces a copy of the
         underlying data and mask and a shallow copy creates a new column and
         copies the references of the data and mask.
@@ -482,7 +490,7 @@ class ColumnBase(Column, Serializable):
                 children=self.base_children,
             )
 
-    def view(self, dtype):
+    def view(self, dtype: Dtype) -> "ColumnBase":
         """
         View the data underlying a column as different dtype.
         The source column must divide evenly into the size of
@@ -535,7 +543,7 @@ class ColumnBase(Column, Serializable):
             )
             return build_column(view_buf, dtype=dtype)
 
-    def element_indexing(self, index):
+    def element_indexing(self, index: int):
         """Default implementation for indexing to an element
 
         Raises
@@ -550,46 +558,29 @@ class ColumnBase(Column, Serializable):
 
         return libcudf.copying.get_element(self, index).value
 
-    def __getitem__(self, arg):
+    def slice(self, start, stop, stride=None):
+        if start < 0:
+            start = start + len(self)
+        if stop < 0:
+            stop = stop + len(self)
+        if start >= stop:
+            return column_empty(0, self.dtype, masked=True)
+        # compute mask slice
+        if stride == 1 or stride is None:
+            return libcudf.copying.column_slice(self, [start, stop])[0]
+        else:
+            # Need to create a gather map for given slice with stride
+            gather_map = arange(
+                start=start, stop=stop, step=stride, dtype=np.dtype(np.int32),
+            )
+            return self.take(gather_map)
 
-        if isinstance(arg, Number):
-            arg = int(arg)
-            return self.element_indexing(arg)
+    def __getitem__(self, arg) -> Union[ScalarObj, "ColumnBase"]:
+        if is_scalar(arg):
+            return self.element_indexing(int(arg))
         elif isinstance(arg, slice):
-
-            if is_categorical_dtype(self):
-                codes = self.codes[arg]
-                return build_categorical_column(
-                    categories=self.categories,
-                    codes=as_column(codes.base_data, dtype=codes.dtype),
-                    mask=codes.base_mask,
-                    ordered=self.ordered,
-                    size=codes.size,
-                    offset=codes.offset,
-                )
-
             start, stop, stride = arg.indices(len(self))
-
-            if start < 0:
-                start = start + len(self)
-            if stop < 0:
-                stop = stop + len(self)
-
-            if start >= stop:
-                return column_empty(0, self.dtype, masked=True)
-            # compute mask slice
-            if stride == 1 or stride is None:
-
-                return libcudf.copying.column_slice(self, [start, stop])[0]
-            else:
-                # Need to create a gather map for given slice with stride
-                gather_map = arange(
-                    start=start,
-                    stop=stop,
-                    step=stride,
-                    dtype=np.dtype(np.int32),
-                )
-                return self.take(gather_map)
+            return self.slice(start, stop, stride)
         else:
             arg = as_column(arg)
             if len(arg) == 0:
@@ -1311,7 +1302,7 @@ def build_column(
     mask: Buffer = None,
     offset: int = 0,
     null_count: int = None,
-    children: Tuple[ColumnBase, ...] = (),
+    children: Tuple[Column, ...] = (),
 ):
     """
     Build a Column of the appropriate type from the given parameters

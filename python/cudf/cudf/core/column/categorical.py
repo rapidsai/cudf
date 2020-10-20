@@ -7,6 +7,7 @@ from numba import cuda
 
 import cudf
 from cudf import _lib as libcudf
+from cudf._lib.scalar import as_scalar
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import ScalarObj
 from cudf.core.buffer import Buffer
@@ -878,6 +879,39 @@ class CategoricalColumn(column.ColumnBase):
 
     def __eq__(self, other):
         return self.binary_operator("eq", other).all()
+
+    def _fill(
+        self,
+        fill_value: ScalarObj,
+        begin: int,
+        end: int,
+        inplace: bool = False,
+    ) -> "column.ColumnBase":
+        if end <= begin or begin >= self.size:
+            return self if inplace else self.copy()
+
+        fill_code = self._encode(fill_value)
+        fill_scalar = as_scalar(fill_code, self.codes.dtype)
+
+        result = self if inplace else self.copy()
+
+        libcudf.filling.fill_in_place(result.codes, begin, end, fill_scalar)
+        return result
+
+    def slice(
+        self, start: int, stop: int, stride: int = None
+    ) -> "column.ColumnBase":
+        codes = self.codes.slice(start, stop, stride)
+        return cudf.core.column.build_categorical_column(
+            categories=self.categories,
+            codes=cudf.core.column.as_column(
+                codes.base_data, dtype=codes.dtype
+            ),
+            mask=codes.base_mask,
+            ordered=self.ordered,
+            size=codes.size,
+            offset=codes.offset,
+        )
 
     def binary_operator(self, op, rhs, reflect=False):
 
