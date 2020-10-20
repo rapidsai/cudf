@@ -32,8 +32,8 @@ class aggregation_finalizer;
 
 class compound_aggregation {
  public:
-  virtual std::vector<aggregation> get_simple_aggregations(data_type col_type) const { return {}; }
-  virtual void finalize(aggregation_finalizer& finalizer) = 0;
+  virtual std::vector<aggregation> get_simple_aggregations(data_type col_type) const = 0;
+  virtual void finalize(aggregation_finalizer& finalizer)                            = 0;
 };
 
 // Forward declare compound aggregations.
@@ -46,10 +46,10 @@ class max_aggregation;
 class aggregation_finalizer {  // Declares the interface for the finalizer
  public:
   // Declare overloads for each kind of a agg to dispatch
-  virtual void Dispatch(min_aggregation& agg)     = 0;
-  virtual void Dispatch(max_aggregation& agg)     = 0;
-  virtual void Dispatch(mean_aggregation& agg)    = 0;
-  virtual void Dispatch(std_var_aggregation& agg) = 0;
+  virtual void visit(min_aggregation& agg)     = 0;
+  virtual void visit(max_aggregation& agg)     = 0;
+  virtual void visit(mean_aggregation& agg)    = 0;
+  virtual void visit(std_var_aggregation& agg) = 0;
 };
 
 /**
@@ -65,7 +65,7 @@ struct min_aggregation final : compound_aggregation, aggregation {
     else
       return {*this};
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.Dispatch(*this); }
+  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
 
 /**
@@ -81,7 +81,7 @@ struct max_aggregation final : compound_aggregation, aggregation {
     else
       return {*this};
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.Dispatch(*this); }
+  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
 
 /**
@@ -177,7 +177,7 @@ struct mean_aggregation final : compound_aggregation, aggregation {
     CUDF_EXPECTS(is_fixed_width(col_type), "MEAN aggregation expects fixed width type");
     return {aggregation{aggregation::SUM}, aggregation{aggregation::COUNT_VALID}};
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.Dispatch(*this); }
+  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
 
 /**
@@ -195,7 +195,7 @@ struct std_var_aggregation final : derived_aggregation<std_var_aggregation>, com
     return {aggregation{aggregation::SUM}, aggregation{aggregation::COUNT_VALID}};
   }
 
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.Dispatch(*this); }
+  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 
  protected:
   friend class derived_aggregation<std_var_aggregation>;

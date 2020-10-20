@@ -148,7 +148,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   };
 
   // Declare overloads for each kind of a agg to dispatch
-  void Dispatch(cudf::detail::min_aggregation& agg) override
+  void visit(cudf::detail::min_aggregation& agg) override
   {
     if (col.type().id() == type_id::STRING)
       dense_results->add_result(i, agg, transformed_result(aggregation::ARGMIN));
@@ -156,7 +156,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
       dense_results->add_result(i, agg, to_dense_agg_result(agg));
   }
 
-  void Dispatch(cudf::detail::max_aggregation& agg) override
+  void visit(cudf::detail::max_aggregation& agg) override
   {
     if (col.type().id() == type_id::STRING)
       dense_results->add_result(i, agg, transformed_result(aggregation::ARGMAX));
@@ -164,7 +164,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
       dense_results->add_result(i, agg, to_dense_agg_result(agg));
   }
 
-  void Dispatch(cudf::detail::mean_aggregation& agg) override
+  void visit(cudf::detail::mean_aggregation& agg) override
   {
     if (is_fixed_width(col.type()) and !sparse_results.has_result(i, agg)) {
       auto sum_agg      = std::make_unique<aggregation>(aggregation::SUM);
@@ -182,7 +182,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
       dense_results->add_result(i, agg, to_dense_agg_result(agg));
     }
   }
-  void Dispatch(cudf::detail::std_var_aggregation& agg) override
+  void visit(cudf::detail::std_var_aggregation& agg) override
   {
     // TODO
   }
