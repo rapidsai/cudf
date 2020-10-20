@@ -220,6 +220,8 @@ class Frame(libcudf.table.Table):
         # the number of empty input frames
         num_empty_input_frames = 0
 
+        overlap = True
+
         for i, obj in enumerate(objs):
             objs[i] = obj.copy(deep=False)
             if ignore_index:
@@ -237,23 +239,36 @@ class Frame(libcudf.table.Table):
                     empty_has_index = empty_has_index or len(obj) > 0
 
         if join == "inner":
-            if ignore_index and num_empty_input_frames > 0:
-                result_index_length = sum(len(obj) for obj in objs)
             names = [name for obj in objs for name in obj._column_names]
-            names = OrderedDict.fromkeys(names).keys()
+            og_names = names
+            new_names = OrderedDict.fromkeys(names).keys()
             names_not_in_all = [
                 name
-                for name in names
+                for name in new_names
                 for obj in objs
                 if name not in obj._column_names
             ]
+            if axis ==0:
+                if num_empty_input_frames > 0 or names==names_not_in_all:
+                    if ignore_index:
+                        empty_has_index = True
+                        num_empty_input_frames = len(objs)
+                        result_index_length = sum(len(obj) for obj in objs)
+            if axis ==1:
+                if names==names_not_in_all:
+                    if ignore_index:
+                        empty_has_index = True
+                        num_empty_input_frames = len(objs)
+                        result_index_length = 0
+                        overlap = False
             objs = [obj.copy(deep=False) for obj in objs]
             for obj in objs:
                 obj.drop(
                     columns=names_not_in_all, inplace=True, errors="ignore"
                 )
-            names = [x for x in names if x not in names_not_in_all]
-
+            names = [x for x in new_names if x not in names_not_in_all]
+            if not overlap:
+                names = pd.RangeIndex(len(og_names))
         elif join == "outer":
             # Get a list of the unique table column names
             names = [name for f in objs for name in f._column_names]
@@ -367,6 +382,9 @@ class Frame(libcudf.table.Table):
         # Reassign index and column names
         if isinstance(objs[0].columns, pd.MultiIndex):
             out.columns = objs[0].columns
+        # if join=='inner' and not overlap:
+        #     out.reset_index(drop=True, inplace=True)
+        #     out.columns = pd.RangeIndex(len(og_names))
         else:
             out.columns = names
         if not ignore_index:

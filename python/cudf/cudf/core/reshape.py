@@ -15,6 +15,8 @@ def _align_objs(objs, how="outer"):
     Parameters
     ----------
     objs : list of DataFrame, Series, or Index
+    how : How to handle indexes on other axis (or axes), 
+    similar to join in concat 
 
     Returns
     -------
@@ -235,33 +237,45 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         df = cudf.DataFrame()
         _normalize_series_and_dataframe(objs, axis=axis)
 
-        new_objs = [obj for obj in objs if obj.shape != (0, 0)]
-        names = [name for obj in objs for name in obj._column_names]
-        names_no_overlap = OrderedDict.fromkeys(names).keys()
-        # objs contains empty df and no overlapping column names
-        if (
-            join == "inner"
-            and len(new_objs) != len(objs)
-            and names == list(names_no_overlap)
-        ):
-            if ignore_index:
-                # column names change
-                result = cudf.DataFrame(columns=pd.RangeIndex(len(names)))
-            else:
-                # retains column names
-                new_columns = [
-                    col for obj in objs for col in obj._column_names
-                ]
-                result = cudf.DataFrame(columns=new_columns,)
-            # column dtypes are retained
-            result.index = cudf.RangeIndex(0)
-            cols = [col for col in result._column_names]
-            old_dtypes = [dt for obj in objs for dt in obj.dtypes]
-            new_dtypes = dict(zip(cols, old_dtypes))
-            result = result.astype(dtype=new_dtypes)
+        old_objs= objs
+        objs = [obj for obj in objs if obj.shape != (0, 0)]
+        if join=='inner' and old_objs != objs:
+            #don't filter out empty df's
+            result = cudf.DataFrame._concat(
+                objs,
+                axis=axis,
+                join=join,
+                ignore_index=ignore_index,
+                sort=sort,
+            )
             return result
+        
+        # objs = [obj for obj in objs if obj.shape != (0, 0)]
+        # names = [name for obj in objs for name in obj._column_names]
+        # names_no_overlap = OrderedDict.fromkeys(names).keys()
+        # # objs contains empty df and no overlapping column names
+        # if (
+        #     join == "inner"
+        #     and len(new_objs) != len(objs)
+        #     and names == list(names_no_overlap)
+        # ):
+        #     if ignore_index:
+        #         # column names change
+        #         result = cudf.DataFrame(columns=pd.RangeIndex(len(names)))
+        #     else:
+        #         # retains column names
+        #         new_columns = [
+        #             col for obj in objs for col in obj._column_names
+        #         ]
+        #         result = cudf.DataFrame(columns=new_columns,)
+        #     # column dtypes are retained
+        #     result.index = cudf.RangeIndex(0)
+        #     cols = [col for col in result._column_names]
+        #     old_dtypes = [dt for obj in objs for dt in obj.dtypes]
+        #     new_dtypes = dict(zip(cols, old_dtypes))
+        #     result = result.astype(dtype=new_dtypes)
+            
         else:
-            objs = new_objs
             objs, match_index = _align_objs(objs, how=join)
 
         for idx, o in enumerate(objs):
@@ -307,26 +321,26 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             )
 
     if typ is cudf.DataFrame:
-        new_objs = [obj for obj in objs if obj.shape != (0, 0)]
-        names = [name for obj in objs for name in obj._column_names]
-        names_no_overlap = OrderedDict.fromkeys(names).keys()
-        if len(new_objs) == 0:
+        old_objs = objs
+        objs = [obj for obj in objs if obj.shape != (0, 0)]
+        if len(objs) == 0:
             # If objs is empty, that indicates all of
             # objs are empty dataframes.
             return cudf.DataFrame()
-        elif len(new_objs) == 1:
+        elif len(objs) == 1:
             if join == 'inner':
                 data = None
             else:
-                data = new_objs[0]._data.copy(deep=True)
+                data = objs[0]._data.copy(deep=True)
             result = cudf.DataFrame(
             data=data,
-            index=cudf.RangeIndex(len(new_objs[0])) if ignore_index else new_objs[0].index.copy(deep=True),
+            index=cudf.RangeIndex(len(objs[0])) if ignore_index else objs[0].index.copy(deep=True),
             )
             return result
         else:
-            # if join=='inner' and (len(old_objs) != len(objs) or names == list(names_no_overlap)):
-            #     objs = [cudf.DataFrame(index=cudf.RangeIndex(len(obj)) if ignore_index else obj.index.copy(deep=True)) for obj in objs]
+            if join=='inner' and old_objs != objs:
+                #don't filter out empty df's
+                objs = old_objs
             result = cudf.DataFrame._concat(
                 objs,
                 axis=axis,
