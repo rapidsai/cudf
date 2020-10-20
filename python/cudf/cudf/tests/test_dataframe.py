@@ -5095,6 +5095,15 @@ def test_memory_usage_cat():
     assert gdf.set_index("B").index.memory_usage(deep=True) == expected
 
 
+def test_memory_usage_list():
+    df = gd.DataFrame({"A": [[0, 1, 2, 3], [4, 5, 6], [7, 8], [9]]})
+    expected = (
+        df.A._column.offsets._memory_usage()
+        + df.A._column.elements._memory_usage()
+    )
+    assert expected == df.A.memory_usage()
+
+
 @pytest.mark.xfail
 def test_memory_usage_multi():
     rows = int(100)
