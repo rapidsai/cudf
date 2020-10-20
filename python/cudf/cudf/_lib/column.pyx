@@ -567,7 +567,7 @@ cdef class Column:
 
 
 def make_column_from_scalar(Scalar val, size_type size):
-    cdef scalar* c_val = val.get_uptr()._device_uptr.get()
+    cdef const scalar* c_val = val.get_raw_ptr()
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(cpp_make_column_from_scalar(c_val[0], size))

@@ -30,10 +30,10 @@ def concatenate(Table source_strings,
     cdef unique_ptr[column] c_result
     cdef table_view source_view = source_strings.data_view()
 
-    cdef string_scalar* scalar_separator = \
-        <string_scalar*>(separator.get_uptr()._device_uptr.get())
-    cdef string_scalar* scalar_narep = <string_scalar*>(
-        narep.get_uptr()._device_uptr.get()
+    cdef const string_scalar* scalar_separator = \
+        <const string_scalar*>(separator.get_raw_ptr())
+    cdef const string_scalar* scalar_narep = <const string_scalar*>(
+        narep.get_raw_ptr()
     )
 
     with nogil:
@@ -57,10 +57,10 @@ def join(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_separator = \
-        <string_scalar*>(separator.get_uptr()._device_uptr.get())
-    cdef string_scalar* scalar_narep = <string_scalar*>(
-        narep.get_uptr()._device_uptr.get()
+    cdef const string_scalar* scalar_separator = \
+        <const string_scalar*>(separator.get_raw_ptr())
+    cdef const string_scalar* scalar_narep = <const string_scalar*>(
+        narep.get_raw_ptr()
     )
 
     with nogil:

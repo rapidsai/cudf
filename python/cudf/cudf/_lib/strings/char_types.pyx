@@ -25,8 +25,8 @@ def filter_alphanum(Column source_strings, Scalar repl, bool keep=True):
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
-    cdef string_scalar* scalar_repl = <string_scalar*>(
-        repl.get_uptr()._device_uptr.get()
+    cdef const string_scalar* scalar_repl = <const string_scalar*>(
+        repl.get_raw_ptr()
     )
 
     with nogil:

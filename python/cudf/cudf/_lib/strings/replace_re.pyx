@@ -33,8 +33,8 @@ def replace_re(Column source_strings,
     cdef column_view source_view = source_strings.view()
 
     cdef string pattern_string = <string>str(pattern).encode()
-    cdef string_scalar* scalar_repl = \
-        <string_scalar*>(repl.get_uptr()._device_uptr.get())
+    cdef const string_scalar* scalar_repl = \
+        <const string_scalar*>(repl.get_raw_ptr())
 
     with nogil:
         c_result = move(cpp_replace_re(

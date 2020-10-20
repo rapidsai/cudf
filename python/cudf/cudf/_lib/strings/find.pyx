@@ -26,8 +26,8 @@ def contains(Column source_strings, Scalar target):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(
-        target.get_uptr()._device_uptr.get()
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        target.get_raw_ptr()
     )
 
     with nogil:
@@ -47,8 +47,8 @@ def endswith(Column source_strings, Scalar target):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(
-        target.get_uptr()._device_uptr.get()
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        target.get_raw_ptr()
     )
 
     with nogil:
@@ -87,8 +87,8 @@ def startswith(Column source_strings, Scalar target):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(
-        target.get_uptr()._device_uptr.get()
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        target.get_raw_ptr()
     )
 
     with nogil:
@@ -132,8 +132,8 @@ def find(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(
-        target.get_uptr()._device_uptr.get()
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        target.get_raw_ptr()
     )
 
     with nogil:
@@ -160,8 +160,8 @@ def rfind(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(
-        target.get_uptr()._device_uptr.get()
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        target.get_raw_ptr()
     )
 
     with nogil:

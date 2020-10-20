@@ -448,8 +448,8 @@ def _to_booleans(Column input_col, object string_true="True"):
 
     cdef Scalar str_true = as_scalar(string_true)
     cdef column_view input_column_view = input_col.view()
-    cdef string_scalar* string_scalar_true = <string_scalar*>(
-        str_true.get_uptr()._device_uptr.get())
+    cdef const string_scalar* string_scalar_true = <const string_scalar*>(
+        str_true.get_raw_ptr())
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(
@@ -486,10 +486,10 @@ def _from_booleans(
     cdef Scalar str_true = as_scalar(string_true)
     cdef Scalar str_false = as_scalar(string_false)
     cdef column_view input_column_view = input_col.view()
-    cdef string_scalar* string_scalar_true = <string_scalar*>(
-        str_true.get_uptr()._device_uptr.get())
-    cdef string_scalar* string_scalar_false = <string_scalar*>(
-        str_false.get_uptr()._device_uptr.get())
+    cdef const string_scalar* string_scalar_true = <const string_scalar*>(
+        str_true.get_raw_ptr())
+    cdef const string_scalar* string_scalar_false = <const string_scalar*>(
+        str_false.get_raw_ptr())
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(

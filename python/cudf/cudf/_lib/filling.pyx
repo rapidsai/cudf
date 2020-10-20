@@ -27,7 +27,7 @@ def fill_in_place(Column destination, int begin, int end, Scalar value):
     cdef mutable_column_view c_destination = destination.mutable_view()
     cdef size_type c_begin = <size_type> begin
     cdef size_type c_end = <size_type> end
-    cdef scalar* c_value = value.get_uptr()._device_uptr.get()
+    cdef const scalar* c_value = value.get_raw_ptr()
 
     cpp_filling.fill_in_place(
         c_destination,
@@ -41,7 +41,7 @@ def fill(Column destination, int begin, int end, Scalar value):
     cdef column_view c_destination = destination.view()
     cdef size_type c_begin = <size_type> begin
     cdef size_type c_end = <size_type> end
-    cdef scalar* c_value = value.get_uptr()._device_uptr.get()
+    cdef const scalar* c_value = value.get_raw_ptr()
     cdef unique_ptr[column] c_result
 
     with nogil:
@@ -101,8 +101,8 @@ def _repeat_via_size_type(Table inp, size_type count):
 
 def sequence(int size, Scalar init, Scalar step):
     cdef size_type c_size = size
-    cdef scalar* c_init = init.get_uptr()._device_uptr.get()
-    cdef scalar* c_step = step.get_uptr()._device_uptr.get()
+    cdef const scalar* c_init = init.get_raw_ptr()
+    cdef const scalar* c_step = step.get_raw_ptr()
     cdef unique_ptr[column] c_result
 
     with nogil:

@@ -82,8 +82,8 @@ def replace_nulls_scalar(Column input_col, Scalar replacement_value):
     """
 
     cdef column_view input_col_view = input_col.view()
-    cdef scalar* replacement_value_scalar = replacement_value\
-        .get_uptr()._device_uptr.get()
+    cdef const scalar* replacement_value_scalar = replacement_value\
+        .get_raw_ptr()
 
     cdef unique_ptr[column] c_result
     with nogil:
@@ -124,10 +124,10 @@ def clamp(Column input_col, Scalar lo, Scalar lo_replace,
     """
 
     cdef column_view input_col_view = input_col.view()
-    cdef scalar* lo_value = lo.get_uptr()._device_uptr.get()
-    cdef scalar* lo_replace_value = lo_replace.get_uptr()._device_uptr.get()
-    cdef scalar* hi_value = hi.get_uptr()._device_uptr.get()
-    cdef scalar* hi_replace_value = hi_replace.get_uptr()._device_uptr.get()
+    cdef const scalar* lo_value = lo.get_raw_ptr()
+    cdef const scalar* lo_replace_value = lo_replace.get_raw_ptr()
+    cdef const scalar* hi_value = hi.get_raw_ptr()
+    cdef const scalar* hi_replace_value = hi_replace.get_raw_ptr()
 
     cdef unique_ptr[column] c_result
     with nogil:
@@ -151,8 +151,8 @@ def clamp(Column input_col, Scalar lo, Scalar hi):
     """
 
     cdef column_view input_col_view = input_col.view()
-    cdef scalar* lo_value = lo.get_uptr()._device_uptr.get()
-    cdef scalar* hi_value = hi.get_uptr()._device_uptr.get()
+    cdef const scalar* lo_value = lo.get_raw_ptr()
+    cdef const scalar* hi_value = hi.get_raw_ptr()
 
     cdef unique_ptr[column] c_result
     with nogil:
