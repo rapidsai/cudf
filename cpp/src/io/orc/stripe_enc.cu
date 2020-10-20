@@ -717,6 +717,9 @@ __global__ void __launch_bounds__(block_size)
           } else {
             valid = 0xff;
           }
+          if (row + 7 > s->chunk.valid_rows) {
+            valid = valid & ((1 << (s->chunk.valid_rows & 7)) - 1);
+          }
         }
         s->valid_buf[(row >> 3) & 0x1ff] = valid;
       }
