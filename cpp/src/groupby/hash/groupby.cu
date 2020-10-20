@@ -188,16 +188,24 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   }
 };
 
+struct pair_hash {
+  template <typename T1, typename T2>
+  auto operator()(std::pair<T1, T2> const& pair) const
+  {
+    return std::hash<T1>()(pair.first) ^ std::hash<T2>()(pair.second);
+  }
+};
+
 // flatten aggs to filter in single pass aggs
 std::tuple<table_view, std::vector<aggregation::Kind>, std::vector<size_t>>
 flatten_single_pass_aggs(std::vector<aggregation_request> const& requests)
 {
   std::vector<column_view> columns;
   std::vector<aggregation::Kind> agg_kinds;
-  std::unordered_set<aggregation::Kind> agg_kinds_set;
+  std::unordered_set<std::pair<int, aggregation::Kind>, pair_hash> agg_kinds_set;
   std::vector<size_t> col_ids;
   auto insert_agg = [&](size_t i, column_view const& request_values, aggregation::Kind k) {
-    if (agg_kinds_set.insert(k).second) {
+    if (agg_kinds_set.insert(std::pair<int, aggregation::Kind>{i, k}).second) {
       agg_kinds.push_back(k);
       columns.push_back(request_values);
       col_ids.push_back(i);
