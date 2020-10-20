@@ -54,12 +54,10 @@ def _longest_bin_length(bins):
 
 
 def _make_bins(data, num_bins, a, b):
-    h = lambda k: _hash_func(k, a, b, num_bins)
-
     bins = [[] for i in range(num_bins)]
 
     for item in data:
-        bins[h(item)].append(item)
+        bins[_hash_func(item, a, b, num_bins)].append(item)
     return bins
 
 
@@ -242,7 +240,11 @@ def _retrieve(
 
 
 def hash_vocab(
-    vocab_path, output_path, unk_tok="[UNK]", first_token="[CLS]", sep_token="[SEP]"
+    vocab_path,
+    output_path,
+    unk_tok="[UNK]",
+    first_token="[CLS]",
+    sep_token="[SEP]",
 ):
     """
       Write the vocab vocabulary hashtable to the output_path
@@ -253,10 +255,12 @@ def hash_vocab(
 
     hashed_vocab = {_sdbm_hash(key): value for key, value in vocab.items()}
 
+    error_message = '''Collision occurred and only sdbm token hash current supported :(
+      Can be extended to use random hashes if needed'''
+
     assert len(hashed_vocab) == len(
         vocab
-    ), "Collision occurred and only sdbm token hash current supported :(. \
-                                           Can be extended to use random hashes if needed"
+    ), error_message
 
     (
         outer_a,
