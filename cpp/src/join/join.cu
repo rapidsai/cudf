@@ -28,9 +28,8 @@ cudf::table_view update_table_from_matched(cudf::table_view const& input,
                                            cudf::table_view const& updated_table,
                                            std::vector<size_type> const& indices)
 {
-  std::vector<cudf::column_view> updated_columns;
-  std::copy(input.begin(), input.end(), std::back_inserter(updated_columns));
-  // scatter( updated.begin(), updated.end(), indices.begin(), updated_columns.begin());
+  std::vector<cudf::column_view> updated_columns(input.begin(), input.end());
+  // scatter(updated_table.begin(),updated_table.end(),indices.begin(),updated_columns.begin());
   for (size_type idx = 0; idx < updated_table.num_columns(); ++idx)
     updated_columns[indices[idx]] = updated_table.column(idx);
   return table_view{updated_columns};
