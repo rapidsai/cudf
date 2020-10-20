@@ -28,7 +28,7 @@ TEST_F(InclusiveCopyIfTest, CanScanSelectIf)
 
   auto op = simple_op{};
 
-  auto d_result = scan_select_if(input, input + 2560, op, op);
+  auto d_result = scan_select_if(input, input + 256, op, op);
 
   auto h_result = thrust::host_vector<uint32_t>(d_result.size());
 
