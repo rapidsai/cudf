@@ -28,7 +28,7 @@ namespace detail {
  */
 
 std::unique_ptr<column> round(
-  column_view const& col,
+  column_view const& input,
   int32_t scale,
   round_option round,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
