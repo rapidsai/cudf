@@ -37,3 +37,5 @@ TEST_F(RoundTests, SimpleTest)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
+
+CUDF_TEST_PROGRAM_MAIN()
