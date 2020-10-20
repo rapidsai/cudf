@@ -91,7 +91,7 @@ struct orc_rowdec_state_s {
 };
 
 struct orc_strdict_state_s {
-  uint2 *local_dict;
+  DictionaryEntry *local_dict;
   uint32_t dict_pos;
   uint32_t dict_len;
 };
@@ -142,14 +142,15 @@ struct orcdec_state_s {
 
 /**
  * @brief Initializes byte stream, modifying length and start position to keep the read pointer
- *8-byte aligned Assumes that the address range [start_address & ~7, (start_address + len - 1) | 7]
- *is valid
+ * 8-byte aligned.
  *
- * @param[in] bs Byte stream input
+ * Assumes that the address range [start_address & ~7, (start_address + len - 1) | 7]
+ * is valid.
+ *
+ * @param[in,out] bs Byte stream input
  * @param[in] base Pointer to raw byte stream data
  * @param[in] len Stream length in bytes
- *
- **/
+ */
 static __device__ void bytestream_init(volatile orc_bytestream_s *bs,
                                        const uint8_t *base,
                                        uint32_t len)
@@ -191,11 +192,12 @@ static __device__ void bytestream_flush_bytes(volatile orc_bytestream_s *bs,
  **/
 static __device__ void bytestream_fill(orc_bytestream_s *bs, int t)
 {
-  int count = bs->fill_count;
+  auto const count = bs->fill_count;
   if (t < count) {
-    int pos8 = (bs->fill_pos >> 3) + t;
-    bs->buf.u64[pos8 & ((BYTESTREAM_BFRSZ >> 3) - 1)] =
-      (reinterpret_cast<const uint2 *>(bs->base))[pos8];
+    auto const pos8 = (bs->fill_pos >> 3) + t;
+    memcpy(&bs->buf.u64[pos8 & ((BYTESTREAM_BFRSZ >> 3) - 1)],
+           &bs->base[pos8 * sizeof(uint2)],
+           sizeof(uint2));
   }
 }
 
@@ -1268,9 +1270,8 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
         (s->chunk.dict_len > 0)) {
       if (t == 0) {
         s->top.dict.dict_len   = s->chunk.dict_len;
-        s->top.dict.local_dict = reinterpret_cast<uint2 *>(
-          global_dictionary + s->chunk.dictionary_start);  // Local dictionary
-        s->top.dict.dict_pos = 0;
+        s->top.dict.local_dict = global_dictionary + s->chunk.dictionary_start;  // Local dictionary
+        s->top.dict.dict_pos   = 0;
         // CI_DATA2 contains the LENGTH stream coding the length of individual dictionary entries
         bytestream_init(&s->bs, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
       }
@@ -1296,10 +1297,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
           vals[t] = 0;
         }
         if (t < numvals) {
-          uint2 dict_entry;
-          dict_entry.x              = s->top.dict.dict_pos + vals[t] - len;
-          dict_entry.y              = len;
-          s->top.dict.local_dict[t] = dict_entry;
+          s->top.dict.local_dict[t] = {s->top.dict.dict_pos + vals[t] - len, len};
         }
         __syncthreads();
         if (t == 0) {
@@ -1778,30 +1776,23 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
             case VARCHAR:
             case CHAR: {
               nvstrdesc_s *strdesc = &static_cast<nvstrdesc_s *>(data_out)[row];
-              const uint8_t *ptr;
-              uint32_t count;
+              uint32_t count       = 0;
+              void const *ptr      = nullptr;
               if (IS_DICTIONARY(s->chunk.encoding_kind)) {
-                uint32_t dict_idx = s->vals.u32[t + vals_skipped];
-                ptr               = s->chunk.streams[CI_DICTIONARY];
+                auto const dict_idx = s->vals.u32[t + vals_skipped];
                 if (dict_idx < s->chunk.dict_len) {
-                  ptr += global_dictionary[s->chunk.dictionary_start + dict_idx].pos;
-                  count = global_dictionary[s->chunk.dictionary_start + dict_idx].len;
-                } else {
-                  count = 0;
-                  // ptr = (uint8_t *)0xdeadbeef;
+                  auto const &g_entry = global_dictionary[s->chunk.dictionary_start + dict_idx];
+                  count               = g_entry.len;
+                  ptr                 = s->chunk.streams[CI_DICTIONARY] + g_entry.pos;
                 }
               } else {
-                uint32_t dict_idx =
+                auto const dict_idx =
                   s->chunk.dictionary_start + s->vals.u32[t + vals_skipped] - secondary_val;
                 count = secondary_val;
                 ptr   = s->chunk.streams[CI_DATA] + dict_idx;
-                if (dict_idx + count > s->chunk.strm_len[CI_DATA]) {
-                  count = 0;
-                  // ptr = (uint8_t *)0xdeadbeef;
-                }
               }
-              strdesc->ptr   = reinterpret_cast<const char *>(ptr);
               strdesc->count = count;
+              strdesc->ptr   = static_cast<char const *>(ptr);
               break;
             }
             case TIMESTAMP: {
