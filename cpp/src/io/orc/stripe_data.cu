@@ -1777,23 +1777,27 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
             case VARCHAR:
             case CHAR: {
               nvstrdesc_s *strdesc = &static_cast<nvstrdesc_s *>(data_out)[row];
-              uint32_t count       = 0;
               void const *ptr      = nullptr;
+              uint32_t count       = 0;
               if (IS_DICTIONARY(s->chunk.encoding_kind)) {
                 auto const dict_idx = s->vals.u32[t + vals_skipped];
                 if (dict_idx < s->chunk.dict_len) {
                   auto const &g_entry = global_dictionary[s->chunk.dictionary_start + dict_idx];
-                  count               = g_entry.len;
-                  ptr                 = s->chunk.streams[CI_DICTIONARY] + g_entry.pos;
+
+                  ptr   = s->chunk.streams[CI_DICTIONARY] + g_entry.pos;
+                  count = g_entry.len;
                 }
               } else {
                 auto const dict_idx =
                   s->chunk.dictionary_start + s->vals.u32[t + vals_skipped] - secondary_val;
-                count = secondary_val;
-                ptr   = s->chunk.streams[CI_DATA] + dict_idx;
+
+                if (dict_idx + count <= s->chunk.strm_len[CI_DATA]) {
+                  ptr   = s->chunk.streams[CI_DATA] + dict_idx;
+                  count = secondary_val;
+                }
               }
-              strdesc->count = count;
               strdesc->ptr   = static_cast<char const *>(ptr);
+              strdesc->count = count;
               break;
             }
             case TIMESTAMP: {
