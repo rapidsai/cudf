@@ -342,7 +342,6 @@ def test_timedelta_ops_datetime_inputs(
             rfunc=operator.sub,
             lfunc_args_and_kwargs=([psr_timedelta, psr_datetime],),
             rfunc_args_and_kwargs=([gsr_timedelta, gsr_datetime],),
-            expected_exception=TypeError,
             expected_error_message=re.escape(
                 f"Subtraction of {gsr_timedelta.dtype} with "
                 f"{gsr_datetime.dtype} cannot be performed."

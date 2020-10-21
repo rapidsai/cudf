@@ -182,13 +182,14 @@ def assert_exceptions_equal(
     except KeyboardInterrupt:
         raise
     except Exception as e:
+        if not compare_error_message:
+            expected_error_message = None
+        elif expected_error_message is None:
+            expected_error_message = re.escape(str(e))
+
         with pytest.raises(
             type(e) if expected_exception is None else expected_exception,
-            match=None
-            if not compare_error_message
-            else re.escape(str(e))
-            if expected_error_message is None
-            else expected_error_message,
+            match=expected_error_message,
         ):
             rfunc(*rfunc_args, **rfunc_kwargs)
     else:
