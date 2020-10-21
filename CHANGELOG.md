@@ -21,6 +21,7 @@
 - PR #6544 Remove `fixed_point` precise round
 - PR #6555 Adapt JNI build to libcudf composition of multiple libraries
 - PR #6564 Load JNI library dependencies with a thread pool
+- PR #6578 Add in java to row conversion
 
 ## Bug Fixes
 
