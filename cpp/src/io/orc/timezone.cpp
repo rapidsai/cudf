@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,13 @@
 namespace cudf {
 namespace io {
 
-#define TZIF_MAGIC (('T' << 0) | ('Z' << 8) | ('i' << 16) | ('f' << 24))
+constexpr uint32_t tzif_magic           = ('T' << 0) | ('Z' << 8) | ('i' << 16) | ('f' << 24);
+std::string const tzif_system_directory = "/usr/share/zoneinfo/";
 
-#define ORC_UTC_OFFSET 1420070400  // Seconds from Jan 1st, 1970 to Jan 1st, 2015
+// Seconds from Jan 1st, 1970 to Jan 1st, 2015
+constexpr int64_t orc_utc_offset = 1420070400;
 
 #pragma pack(push, 1)
-
 struct localtime_type_record_s {
   int32_t utcoff;    // number of seconds to be added to UTC in order to determine local time
   uint8_t isdst;     // 0:standard time, 1:Daylight Savings Time (DST)
@@ -49,6 +50,15 @@ struct timezone_file_header {
                      ///< in the body
 };
 
+struct dst_transition_s {
+  char type;  // Transition type ('J','M' or day)
+  int month;  // Month of transition
+  int week;   // Week of transition
+  int day;    // Day of transition
+  int time;   // Time of day (seconds)
+};
+#pragma pack(pop)
+
 struct timezone_file {
   timezone_file_header header;
   bool is_header_from_64bit = false;
@@ -61,6 +71,25 @@ struct timezone_file {
   auto timecnt() const { return header.timecnt; }
   auto typecnt() const { return header.typecnt; }
 
+  // Based on https://tools.ietf.org/id/draft-murchison-tzdist-tzif-00.html
+  static constexpr auto leap_second_rec_size(bool is_64bit) noexcept
+  {
+    return (is_64bit ? sizeof(uint64_t) : sizeof(uint32_t)) + sizeof(uint32_t);
+  }
+  static constexpr auto file_content_size_32(timezone_file_header const &header) noexcept
+  {
+    return header.timecnt * sizeof(uint32_t) +                 // transition times
+           header.timecnt +                                    // transition time index
+           header.typecnt * sizeof(localtime_type_record_s) +  // local time type records
+           header.charcnt +                                    // time zone designations
+           header.leapcnt * leap_second_rec_size(false) +      // leap second records
+           header.isstdcnt +                                   // standard/wall indicators
+           header.isutccnt;                                    // UTC/local indicators
+  }
+
+  /**
+   * @brief Used because little-endian platform in assumed.
+   */
   void header_to_little_endian()
   {
     header.isutccnt = __builtin_bswap32(header.isutccnt);
@@ -74,19 +103,19 @@ struct timezone_file {
   void read_header(std::ifstream &input_file, size_t file_size)
   {
     input_file.read(reinterpret_cast<char *>(&header), sizeof(header));
-    CUDF_EXPECTS(!input_file.fail() && header.magic == TZIF_MAGIC,
+    CUDF_EXPECTS(!input_file.fail() && header.magic == tzif_magic,
                  "Error reading time zones file header.");
     header_to_little_endian();
 
     // Check for 64-bit header
     if (header.version != 0) {
-      size_t const ofs64 = header.timecnt * 5 + header.typecnt * 6 + header.charcnt +
-                           header.leapcnt * 8 + header.isstdcnt + header.isutccnt;
-      if (ofs64 + sizeof(header) < file_size) {
-        input_file.seekg(ofs64, std::ios_base::cur);
-        is_header_from_64bit = true;
+      if (file_content_size_32(header) + sizeof(header) < file_size) {
+        // skip the 32-bit content
+        input_file.seekg(file_content_size_32(header), std::ios_base::cur);
+        // read the 64-bit header
         input_file.read(reinterpret_cast<char *>(&header), sizeof(header));
         header_to_little_endian();
+        is_header_from_64bit = true;
       }
     }
     CUDF_EXPECTS(
@@ -101,7 +130,7 @@ struct timezone_file {
     using std::ios_base;
 
     // Open the input file
-    std::string const tz_filename = "/usr/share/zoneinfo/" + timezone_name;
+    std::string const tz_filename = tzif_system_directory + timezone_name;
     std::ifstream fin;
     fin.open(tz_filename, ios_base::in | ios_base::binary | ios_base::ate);
     CUDF_EXPECTS(fin, "Failed to open the timezone file.");
@@ -136,7 +165,7 @@ struct timezone_file {
     }
 
     // Read posix TZ string
-    fin.seekg(header.charcnt + header.leapcnt * ((is_header_from_64bit) ? 12 : 8) +
+    fin.seekg(header.charcnt + header.leapcnt * leap_second_rec_size(is_header_from_64bit) +
                 header.isstdcnt + header.isutccnt,
               ios_base::cur);
     auto const file_pos = fin.tellg();
@@ -146,15 +175,6 @@ struct timezone_file {
     }
   }
 };
-
-struct dst_transition_s {
-  char type;  // Transition type ('J','M' or day)
-  int month;  // Month of transition
-  int week;   // Week of transition
-  int day;    // Day of transition
-  int time;   // Time of day (seconds)
-};
-#pragma pack(pop)
 
 /**
  * @brief Posix TZ parser
@@ -421,7 +441,7 @@ timezone_table build_timezone_transition_table(std::string const &timezone_name)
     year_timestamp += (365 + is_leap_year(year)) * 24 * 60 * 60;
   }
 
-  return {get_gmt_offset(ttimes, offsets, ORC_UTC_OFFSET), ttimes, offsets};
+  return {get_gmt_offset(ttimes, offsets, orc_utc_offset), ttimes, offsets};
 }
 
 }  // namespace io

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -113,7 +113,7 @@ struct timezone_table {
 /**
  * @brief Creates a transition table to convert ORC timestamps to UTC.
  *
- * Assumes little-endian platform
+ * Uses system's TZif files. Assumes little-endian platform when parsing these files.
  *
  * @param timezone_name standard timezone name (for example, "US/Pacific")
  *
