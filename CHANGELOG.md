@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #6460 Add is_timestamp format check API
+- PR #6528 Enable `fixed_point` binary operations
 
 ## Improvements
 
@@ -63,7 +64,6 @@
 - PR #6301 Add JNI bindings to nvcomp
 - PR #6328 Java and JNI bindings for getMapValue/map_lookup
 - PR #6371 Use ColumnViewAccess on Host side
-- PR #6528 Enable `fixed_point` binary operations (will be moved to 0.17)
 
 ## Improvements
 
