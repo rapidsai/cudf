@@ -4,7 +4,17 @@ import pickle
 import warnings
 from collections.abc import MutableSequence
 from types import SimpleNamespace
-from typing import Any, Dict, List, Mapping, Sequence, Tuple, Union, cast
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Mapping,
+    Sequence,
+    Tuple,
+    Union,
+    cast,
+)
 
 import cupy
 import numpy as np
@@ -249,7 +259,7 @@ class ColumnBase(Column, Serializable):
 
         if is_categorical:
             col = build_categorical_column(
-                categories=cats,
+                categories=as_column(cats),
                 codes=as_column(col.base_data, dtype=col.dtype),
                 mask=col.base_mask,
                 size=col.size,
@@ -952,9 +962,7 @@ class ColumnBase(Column, Serializable):
         else:
             return self.as_numerical_column(dtype, **kwargs)
 
-    def as_categorical_column(
-        self, dtype, **kwargs
-    ) -> "cudf.core.column.CategoricalColumn":
+    def as_categorical_column(self, dtype, **kwargs) -> "ColumnBase":
         if "ordered" in kwargs:
             ordered = kwargs["ordered"]
         else:
@@ -997,24 +1005,16 @@ class ColumnBase(Column, Serializable):
             ordered=ordered,
         )
 
-    def as_numerical_column(
-        self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.NumericalColumn":
+    def as_numerical_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
         raise NotImplementedError
 
-    def as_datetime_column(
-        self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.DatetimeColumn":
+    def as_datetime_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
         raise NotImplementedError
 
-    def as_timedelta_column(
-        self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.TimeDeltaColumn":
+    def as_timedelta_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
         raise NotImplementedError
 
-    def as_string_column(
-        self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.StringColumn":
+    def as_string_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
         raise NotImplementedError
 
     def apply_boolean_mask(self, mask: "Buffer") -> "ColumnBase":
@@ -1276,7 +1276,9 @@ def column_empty_like(
     return column_empty(row_count, dtype, masked)
 
 
-def column_empty_like_same_mask(column, dtype):
+def column_empty_like_same_mask(
+    column: "ColumnBase", dtype: Dtype
+) -> "ColumnBase":
     """Create a new empty Column with the same length and the same mask.
 
     Parameters
@@ -1286,15 +1288,17 @@ def column_empty_like_same_mask(column, dtype):
     """
     result = column_empty_like(column, dtype)
     if column.nullable:
-        result = result.set_mask(column.mask)
+        result.set_mask(column.mask)
     return result
 
 
-def column_empty(row_count, dtype="object", masked=False):
+def column_empty(
+    row_count: int, dtype: Dtype = "object", masked: bool = False
+) -> "ColumnBase":
     """Allocate a new column like the given row_count and dtype.
     """
     dtype = pd.api.types.pandas_dtype(dtype)
-    children = ()
+    children = ()  # type: Tuple[ColumnBase, ...]
 
     if is_categorical_dtype(dtype):
         data = None
@@ -1335,7 +1339,7 @@ def build_column(
     offset: int = 0,
     null_count: int = None,
     children: Tuple[Column, ...] = (),
-):
+) -> "ColumnBase":
     """
     Build a Column of the appropriate type from the given parameters
 
@@ -1425,14 +1429,14 @@ def build_column(
 
 
 def build_categorical_column(
-    categories,
-    codes,
-    mask=None,
-    size=None,
-    offset=0,
-    null_count=None,
-    ordered=None,
-):
+    categories: "ColumnBase",
+    codes: "ColumnBase",
+    mask: "Buffer" = None,
+    size: int = None,
+    offset: int = 0,
+    null_count: int = None,
+    ordered: bool = None,
+) -> "ColumnBase":
     """
     Build a CategoricalColumn
 
@@ -1456,9 +1460,9 @@ def build_categorical_column(
     if codes.dtype != codes_dtype:
         codes = codes.astype(codes_dtype)
 
-    dtype = CategoricalDtype(categories=as_column(categories), ordered=ordered)
+    dtype = CategoricalDtype(categories=categories, ordered=ordered)
 
-    return build_column(
+    result = build_column(
         data=None,
         dtype=dtype,
         mask=mask,
@@ -1467,9 +1471,15 @@ def build_categorical_column(
         null_count=null_count,
         children=(codes,),
     )
+    return result
 
 
-def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
+def as_column(
+    arbitrary: Any,
+    nan_as_null: bool = None,
+    dtype: Dtype = None,
+    length: int = None,
+):
     """Create a Column from an arbitrary object
 
     Parameters
@@ -1534,7 +1544,9 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         if desc.get("mask", None) is not None:
             # Extract and remove the mask from arbitrary before
             # passing to cupy.asarray
-            mask = _mask_from_cuda_array_interface_desc(arbitrary)
+            mask = _mask_from_cuda_array_interface_desc(
+                arbitrary.__cuda_array_interface__
+            )
             arbitrary = SimpleNamespace(__cuda_array_interface__=desc.copy())
             arbitrary.__cuda_array_interface__["mask"] = None
             desc = arbitrary.__cuda_array_interface__
@@ -1553,7 +1565,9 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         ):
             arbitrary = cupy.ascontiguousarray(arbitrary)
 
-        data = _data_from_cuda_array_interface_desc(arbitrary)
+        data = _data_from_cuda_array_interface_desc(
+            arbitrary.__cuda_array_interface__
+        )
         col = build_column(data, dtype=current_dtype, mask=mask)
 
         if dtype is not None:
@@ -1564,7 +1578,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         elif np.issubdtype(col.dtype, np.floating):
             if nan_as_null or (mask is None and nan_as_null is None):
                 mask = libcudf.transform.nans_to_nulls(col.fillna(np.nan))
-                col = col.set_mask(mask)
+                col.set_mask(mask)
         elif np.issubdtype(col.dtype, np.datetime64):
             if nan_as_null or (mask is None and nan_as_null is None):
                 col = utils.time_col_replace_nulls(col)
@@ -1706,7 +1720,10 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 mask = data.mask
 
             data = cudf.core.column.timedelta.TimeDeltaColumn(
-                data=buffer, mask=mask, dtype=arbitrary.dtype
+                data=buffer,
+                size=len(arbitrary),
+                mask=mask,
+                dtype=arbitrary.dtype,
             )
         elif arb_dtype.kind in ("O", "U"):
             data = as_column(
@@ -1827,7 +1844,9 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
     return data
 
 
-def column_applymap(udf, column, out_dtype):
+def column_applymap(
+    udf: Callable, column: "ColumnBase", out_dtype: Dtype
+) -> "ColumnBase":
     """Apply an element-wise function to transform the values in the Column.
 
     Parameters
@@ -1875,7 +1894,7 @@ def column_applymap(udf, column, out_dtype):
     return as_column(results)
 
 
-def _data_from_cuda_array_interface_desc(obj):
+def _data_from_cuda_array_interface_desc(obj) -> "Buffer":
     desc = obj.__cuda_array_interface__
     ptr = desc["data"][0]
     nelem = desc["shape"][0] if len(desc["shape"]) > 0 else 1
@@ -1885,7 +1904,7 @@ def _data_from_cuda_array_interface_desc(obj):
     return data
 
 
-def _mask_from_cuda_array_interface_desc(obj):
+def _mask_from_cuda_array_interface_desc(obj) -> Union["Buffer", None]:
     desc = obj.__cuda_array_interface__
     mask = desc.get("mask", None)
 
@@ -1908,7 +1927,7 @@ def _mask_from_cuda_array_interface_desc(obj):
     return mask
 
 
-def serialize_columns(columns):
+def serialize_columns(columns) -> Tuple[List[dict], List]:
     """
     Return the headers and frames resulting
     from serializing a list of Column
@@ -1923,7 +1942,7 @@ def serialize_columns(columns):
     frames : list
         list of frames
     """
-    headers = []
+    headers = []  # type List[Dict[Any, Any], ...]
     frames = []
 
     if len(columns) > 0:
@@ -1935,7 +1954,9 @@ def serialize_columns(columns):
     return headers, frames
 
 
-def deserialize_columns(headers, frames):
+def deserialize_columns(
+    headers: List[dict], frames: List
+) -> List["ColumnBase"]:
     """
     Construct a list of Columns from a list of headers
     and frames.
@@ -1953,7 +1974,12 @@ def deserialize_columns(headers, frames):
     return columns
 
 
-def arange(start, stop=None, step=1, dtype=None):
+def arange(
+    start: Union[int, float],
+    stop: Union[int, float] = None,
+    step: Union[int, float] = 1,
+    dtype=None,
+) -> "ColumnBase":
     """
     Returns a column with evenly spaced values within a given interval.
 
@@ -2004,7 +2030,9 @@ def arange(start, stop=None, step=1, dtype=None):
     )
 
 
-def full(size, fill_value, dtype=None):
+def full(
+    size: int, fill_value: ScalarObj, dtype: Dtype = None
+) -> "ColumnBase":
     """
     Returns a column of given size and dtype, filled with a given value.
 
@@ -2036,6 +2064,4 @@ def full(size, fill_value, dtype=None):
     dtype: int8
     """
 
-    return libcudf.column.make_column_from_scalar(
-        as_scalar(fill_value, dtype), size
-    )
+    return ColumnBase.from_scalar(as_scalar(fill_value, dtype), size)

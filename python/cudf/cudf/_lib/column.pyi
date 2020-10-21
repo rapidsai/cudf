@@ -1,7 +1,8 @@
 from typing import Tuple, Union
 
-from cudf._typing import DtypeObj, Dtype
+from cudf._typing import DtypeObj, Dtype, ScalarObj
 from cudf.core.buffer import Buffer
+from cudf.core.column import ColumnBase
 
 
 class Column:
@@ -82,10 +83,10 @@ class Column:
     def mask_ptr(self) -> int:
         ...
 
-    def set_base_mask(self, value: Buffer) -> None:
+    def set_base_mask(self, value: Union[Buffer, None]) -> None:
         ...
 
-    def set_mask(self, value: Buffer) -> None:
+    def set_mask(self, value: Union[Buffer, None]) -> None:
         ...
 
     @property
@@ -108,4 +109,11 @@ class Column:
         ...
 
     def _mimic_inplace(self, other_col, inplace=False):
+        ...
+
+    @staticmethod
+    def from_scalar(
+        val: ScalarObj,
+        size: int
+    ) -> "ColumnBase":  # TODO: This should be Scalar, not ScalarObj
         ...

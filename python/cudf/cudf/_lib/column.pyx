@@ -565,12 +565,10 @@ cdef class Column:
 
         return result
 
-
-def make_column_from_scalar(Scalar val, size_type size):
-    cdef scalar* c_val = val.c_value.get()
-
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(cpp_make_column_from_scalar(c_val[0], size))
-
-    return Column.from_unique_ptr(move(c_result))
+    @staticmethod
+    cpdef Column from_scalar(Scalar val, size_type size):
+        cdef scalar* c_val = val.c_value.get()
+        cdef unique_ptr[column] c_result
+        with nogil:
+            c_result = move(cpp_make_column_from_scalar(c_val[0], size))
+        return Column.from_unique_ptr(move(c_result))

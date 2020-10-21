@@ -12,6 +12,8 @@ from cudf._lib.cpp.column.column_view cimport (
     column_view, mutable_column_view
 )
 
+from cudf._lib.scalar cimport Scalar
+
 
 cdef class Column:
     cdef public:
@@ -35,5 +37,8 @@ cdef class Column:
 
     @staticmethod
     cdef Column from_column_view(column_view, object)
+
+    @staticmethod
+    cpdef Column from_column_view(Scalar val, size_type size)
 
     cdef size_type compute_null_count(self) except? 0
