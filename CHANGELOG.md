@@ -20,6 +20,7 @@
 - PR #6489 Add `AVRO` fuzz tests with varying function parameters
 - PR #6544 Remove `fixed_point` precise round
 - PR #6555 Adapt JNI build to libcudf composition of multiple libraries
+- PR #6571 Add ORC fuzz tests with varying function parameters
 
 ## Bug Fixes
 
