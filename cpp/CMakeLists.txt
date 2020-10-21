@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.17...3.18 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.16.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.17.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -74,11 +74,11 @@ endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 ###################################################################################################
 # - copy libcu++ ------------------------------------------------------------------------------------
 
-file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcudacxx")
-file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/libcxx/include")
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include")
 
-file(INSTALL ${LIBCUDACXX_INCLUDE_DIR} DESTINATION ${CMAKE_BINARY_DIR}/include/libcudacxx/)
-file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION ${CMAKE_BINARY_DIR}/include/libcxx/include/)
+# `${LIBCUDACXX_INCLUDE_DIR}/` specifies that the contents of this directory will be installed (not the directory itself)
+#file(INSTALL "${LIBCUDACXX_INCLUDE_DIR}/" DESTINATION "${CMAKE_BINARY_DIR}/include/libcudacxx")  
+file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION "${CMAKE_BINARY_DIR}/include/libcxx")
 
 
 ###################################################################################################
@@ -97,12 +97,7 @@ endif(JITIFY_USE_CACHE)
 option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 if(PER_THREAD_DEFAULT_STREAM)
     message(STATUS "Using per-thread default stream")
-    add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
 endif(PER_THREAD_DEFAULT_STREAM)
-
-###################################################################################################
-# - third party dependencies-----------------------------------------------------------------------
-# add third party dependencies using CMake FetchContent
 
 # jitify and libcudacxx are not CPM compatible yet
 add_subdirectory(thirdparty)
@@ -119,7 +114,6 @@ if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
 endif(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
 
 include_directories("${CMAKE_BINARY_DIR}/include"
-                    "${CMAKE_BINARY_DIR}/include/jit"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${ARROW_INCLUDE_DIR}")
@@ -155,9 +149,6 @@ include(cmake/CUDF_Jitify.cmake)
 option(USE_NVTX "Build with NVTX support" ON)
 if(USE_NVTX)
     message(STATUS "Using Nvidia Tools Extension")
-else()
-    # Makes NVTX APIs no-ops
-    add_compile_definitions(NVTX_DISABLE)
 endif(USE_NVTX)
 
 option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
@@ -175,7 +166,104 @@ set_property(CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS
         "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF")
 message(STATUS "RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
 
-target_compile_definitions(cudf PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_LOGGING_LEVEL})
+###################################################################################################
+# - library targets -------------------------------------------------------------------------------
+
+set(CUDF_NAMESPACE "cudf")
+
+# define a function that populates the namespace with modules from the cudf source tree (cpp/src)
+function(add_library_module NAMESPACE MODULE MODULE_SOURCE_DIRS)
+    foreach(MODULE_SOURCE_DIR IN LISTS MODULE_SOURCE_DIRS)
+        file(GLOB_RECURSE MODULE_SOURCE "${MODULE_SOURCE_DIR}/*")
+        list(APPEND MODULE_SRC ${MODULE_SOURCE})
+    endforeach(MODULE_SOURCE_DIR IN LISTS MODULE_SOURCE_DIRS)
+    message(STATUS "Adding library module with name ${MODULE} under namespace ${NAMESPACE} ...")
+    message(STATUS "Using sources: ${MODULE_SRC}")
+    add_library("${NAMESPACE}_${MODULE}" "${MODULE_SRC}")
+    set_target_properties("${NAMESPACE}_${MODULE}" PROPERTIES BUILD_RPATH "\$ORIGIN")
+    # Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
+    target_compile_definitions("${NAMESPACE}_${MODULE}" PRIVATE "JITIFY_PRINT_LOG=0")
+    # per-thread default stream
+    if(PER_THREAD_DEFAULT_STREAM)
+        target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM)
+    endif(PER_THREAD_DEFAULT_STREAM)
+    # nvtx
+    if(NOT USE_NVTX)
+        target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC NVTX_DISABLE)
+    endif(NOT USE_NVTX)
+    # spdlog level
+    target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGING_LEVEL}")
+    add_dependencies("${NAMESPACE}_${MODULE}" stringify_run)
+    target_link_libraries("${NAMESPACE}_${MODULE}" arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+    add_library("${NAMESPACE}::${MODULE}" ALIAS "${NAMESPACE}_${MODULE}")
+endfunction()
+
+# define a list of modules for the base library
+set(
+    CUDF_BASE_MODULE_LIST
+        "${CMAKE_SOURCE_DIR}/src/aggregation"
+        "${CMAKE_SOURCE_DIR}/src/binaryop"
+        "${CMAKE_SOURCE_DIR}/src/bitmask"
+        "${CMAKE_SOURCE_DIR}/src/column"
+        "${CMAKE_SOURCE_DIR}/src/copying"
+        "${CMAKE_SOURCE_DIR}/src/datetime"
+        "${CMAKE_SOURCE_DIR}/src/dictionary"
+        "${CMAKE_SOURCE_DIR}/src/filling"
+        "${CMAKE_SOURCE_DIR}/src/groupby"
+        "${CMAKE_SOURCE_DIR}/src/jit"
+        "${CMAKE_SOURCE_DIR}/src/lists"
+        "${CMAKE_SOURCE_DIR}/src/quantiles"
+        "${CMAKE_SOURCE_DIR}/src/reshape"
+        "${CMAKE_SOURCE_DIR}/src/scalar"
+        "${CMAKE_SOURCE_DIR}/src/search"
+        "${CMAKE_SOURCE_DIR}/src/sort"
+        "${CMAKE_SOURCE_DIR}/src/stream_compaction"
+        "${CMAKE_SOURCE_DIR}/src/strings"
+        "${CMAKE_SOURCE_DIR}/src/structs"
+        "${CMAKE_SOURCE_DIR}/src/table"
+        "${CMAKE_SOURCE_DIR}/src/text"
+        "${CMAKE_SOURCE_DIR}/src/transform"
+        "${CMAKE_SOURCE_DIR}/src/unary"
+        "${CMAKE_SOURCE_DIR}/src/utilities"
+)
+
+set(CUDF_BASE_NAME "base")
+add_library_module("${CUDF_NAMESPACE}" "${CUDF_BASE_NAME}" "${CUDF_BASE_MODULE_LIST}")
+
+set(
+    CUDF_MODULE_LIST
+        "${CMAKE_SOURCE_DIR}/src/ast"
+        "${CMAKE_SOURCE_DIR}/src/comms"
+        "${CMAKE_SOURCE_DIR}/src/hash"
+        "${CMAKE_SOURCE_DIR}/src/interop"
+        "${CMAKE_SOURCE_DIR}/src/io"
+        "${CMAKE_SOURCE_DIR}/src/join"
+        "${CMAKE_SOURCE_DIR}/src/merge"
+        "${CMAKE_SOURCE_DIR}/src/partitioning"
+        "${CMAKE_SOURCE_DIR}/src/reductions"
+        "${CMAKE_SOURCE_DIR}/src/replace"
+        "${CMAKE_SOURCE_DIR}/src/reshape"
+        "${CMAKE_SOURCE_DIR}/src/rolling"
+        "${CMAKE_SOURCE_DIR}/src/transpose"
+)
+
+# generate names of cudf library modules based on source tree under cpp/src
+foreach(CUDF_MODULE_DIR IN LISTS CUDF_MODULE_LIST)
+    get_filename_component(CUDF_MODULE_NAME ${CUDF_MODULE_DIR} NAME)
+    add_library_module(${CUDF_NAMESPACE} ${CUDF_MODULE_NAME} ${CUDF_MODULE_DIR})
+    target_link_libraries("${CUDF_NAMESPACE}_${CUDF_MODULE_NAME}" "${CUDF_NAMESPACE}::${CUDF_BASE_NAME}")
+    list(APPEND CUDF_MODULES "${CUDF_NAMESPACE}_${CUDF_MODULE_NAME}")
+endforeach()
+
+set(CUDF_PROXY_NAME "${CUDF_NAMESPACE}")
+set(CUDF_PROXY_SRC "${CMAKE_BINARY_DIR}/cudf.cpp")  # this file will be generated
+message(STATUS "Generating proxy library: cudf")
+file(WRITE "${CUDF_PROXY_SRC}" "// This file is generated by ${CMAKE_CURRENT_LIST_FILE} \n")
+#add_library("${CUDF_PROXY_NAME}" "${CUDF_PROXY_SRC}")
+# `-Wl,--no-as-needed`: link libraries to cudf even if no symbols in that library are called
+target_link_options("${CUDF_PROXY_NAME}" PRIVATE "LINKER:--no-as-needed")
+set_target_properties("${CUDF_PROXY_NAME}" PROPERTIES BUILD_RPATH "\$ORIGIN")
+add_library("${CUDF_PROXY_NAME}::${CUDF_PROXY_NAME}" ALIAS "${CUDF_PROXY_NAME}")
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
@@ -198,12 +286,22 @@ target_link_libraries(cudf INTERFACE rmm::rmm)
 # - install targets -------------------------------------------------------------------------------
 
 # install targets for cuDF
+install(TARGETS cudf_base
+        DESTINATION lib
+        COMPONENT cudf)
+
+install(TARGETS ${CUDF_MODULES}
+        DESTINATION lib
+        COMPONENT cudf)
+
 install(TARGETS cudf
         DESTINATION lib
         COMPONENT cudf)
+
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
         DESTINATION include
         COMPONENT cudf)
+
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf_test
         DESTINATION include
         COMPONENT cudf)

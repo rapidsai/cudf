@@ -52,21 +52,21 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
   constexpr cudf::size_type num_values{10};
   constexpr cudf::size_type repeat_count{10};
 
-  cudf::test::fixed_width_column_wrapper<T, int32_t> input(
+  auto input = cudf::test::fixed_width_column_wrapper<T, int32_t>(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + num_values);
 
   static_assert(repeat_count > 0, "repeat_count should be larger than 0.");
   auto expected_elements = cudf::test::make_counting_transform_iterator(
     0, [repeat_count](auto i) { return i / repeat_count; });
-  cudf::test::fixed_width_column_wrapper<T, typename decltype(expected_elements)::value_type>
-    expected(expected_elements, expected_elements + num_values * repeat_count);
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<T, typename decltype(expected_elements)::value_type>(
+      expected_elements, expected_elements + num_values * repeat_count);
 
-  cudf::table_view input_table{{input}};
-
-  auto p_ret = cudf::repeat(input_table, repeat_count);
+  auto input_table = cudf::table_view{{input}};
+  auto const p_ret = cudf::repeat(input_table, repeat_count);
 
   EXPECT_EQ(p_ret->num_columns(), 1);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected, true);
 }
 
 TYPED_TEST(RepeatTypedTestFixture, RepeatColumnCount)
