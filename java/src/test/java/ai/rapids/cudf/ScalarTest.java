@@ -45,10 +45,11 @@ public class ScalarTest extends CudfTestBase {
 
   @Test
   public void testNull() {
-    for (DType type : DType.values()) {
-      if(type == DType.DECIMAL32 || type == DType.DECIMAL64) {
+    for (DType.DTypeEnum dataType : DType.DTypeEnum.values()) {
+      if (dataType == DType.DTypeEnum.DECIMAL32 || dataType == DType.DTypeEnum.DECIMAL64) {
         continue;
       }
+      DType type= DType.fromNative(dataType.nativeId);
       if (!type.isNestedType()) {
         try (Scalar s = Scalar.fromNull(type)) {
           assertEquals(type, s.getType());

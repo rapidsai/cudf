@@ -40,7 +40,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private final OffHeapState offHeap;
 
   public static Scalar fromNull(DType type) {
-    switch (type) {
+    switch (type.typeId) {
     case EMPTY:
     case BOOL8:
       return new Scalar(type, makeBool8Scalar(false, false));
@@ -70,7 +70,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case TIMESTAMP_MILLISECONDS:
     case TIMESTAMP_MICROSECONDS:
     case TIMESTAMP_NANOSECONDS:
-      return new Scalar(type, makeTimestampTimeScalar(type.nativeId, 0, false));
+      return new Scalar(type, makeTimestampTimeScalar(type.getNativeId(), 0, false));
     case STRING:
       return new Scalar(type, makeStringScalar(null, false));
     case DURATION_DAYS:
@@ -79,7 +79,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case DURATION_MILLISECONDS:
     case DURATION_NANOSECONDS:
     case DURATION_SECONDS:
-      return new Scalar(type, makeDurationTimeScalar(type.nativeId, 0, false));
+      return new Scalar(type, makeDurationTimeScalar(type.getNativeId(), 0, false));
     default:
       throw new IllegalArgumentException("Unexpected type: " + type);
     }
@@ -253,7 +253,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         }
         return durationDaysFromInt(intValue);
       } else {
-        return new Scalar(type, makeDurationTimeScalar(type.nativeId, value, true));
+        return new Scalar(type, makeDurationTimeScalar(type.getNativeId(), value, true));
       }
     } else {
       throw new IllegalArgumentException("type is not a timestamp: " + type);
@@ -282,7 +282,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         }
         return timestampDaysFromInt(intValue);
       } else {
-        return new Scalar(type, makeTimestampTimeScalar(type.nativeId, value, true));
+        return new Scalar(type, makeTimestampTimeScalar(type.getNativeId(), value, true));
       }
     } else {
       throw new IllegalArgumentException("type is not a timestamp: " + type);
@@ -453,10 +453,10 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
 
   static long binaryOp(Scalar lhs, ColumnVector rhs, BinaryOp op, DType outputType) {
     return binaryOpSV(lhs.getScalarHandle(), rhs.getNativeView(),
-        op.nativeId, outputType.nativeId);
+        op.nativeId, outputType.getNativeId(), outputType.getScale());
   }
 
-  private static native long binaryOpSV(long lhs, long rhs, int op, int dtype);
+  private static native long binaryOpSV(long lhs, long rhs, int op, int dtype, int scale);
 
   @Override
   public boolean equals(Object o) {
@@ -467,7 +467,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     boolean valid = isValid();
     if (valid != other.isValid()) return false;
     if (!valid) return true;
-    switch (type) {
+    switch (type.typeId) {
     case EMPTY:
       return true;
     case BOOL8:
@@ -504,7 +504,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   public int hashCode() {
     int valueHash = 0;
     if (isValid()) {
-      switch (type) {
+      switch (type.typeId) {
       case EMPTY:
         valueHash = 0;
         break;
@@ -554,7 +554,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     sb.append(type);
     if (getScalarHandle() != 0) {
       sb.append(" value=");
-      switch (type) {
+      switch (type.typeId) {
       case BOOL8:
         sb.append(getBoolean());
         break;

@@ -395,7 +395,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeTimestampTimeScalar(JNIEn
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_binaryOpSV(JNIEnv *env, jclass, jlong lhs_ptr,
                                                               jlong rhs_view, jint int_op,
-                                                              jint out_dtype) {
+                                                              jint out_dtype, jint scale) {
   JNI_NULL_CHECK(env, lhs_ptr, "lhs is null", 0);
   JNI_NULL_CHECK(env, rhs_view, "rhs is null", 0);
   try {

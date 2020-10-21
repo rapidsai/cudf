@@ -37,7 +37,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   private static final Logger log = LoggerFactory.getLogger(HostColumnVector.class);
 
   protected final OffHeapState offHeap;
-  protected final DataType type;
+  protected final DType type;
   protected long scale;
   protected long rows;
   protected Optional<Long> nullCount;
@@ -49,18 +49,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
                               HostMemoryBuffer offsets, List<HostColumnVectorCore> nestedChildren) {
     this.offHeap = new OffHeapState(data, validity,  offsets);
     MemoryCleaner.register(this, offHeap);
-    this.type = new DataType(type);
-    this.rows = rows;
-    this.nullCount = nullCount;
-    this.children = nestedChildren;
-  }
-
-  public HostColumnVectorCore(DataType type, long rows,
-                              Optional<Long> nullCount, HostMemoryBuffer data, HostMemoryBuffer validity,
-                              HostMemoryBuffer offsets, List<HostColumnVectorCore> nestedChildren) {
-    this.offHeap = new OffHeapState(data, validity,  offsets);
-    MemoryCleaner.register(this, offHeap);
-    this.type = new DataType(type.typeId, type.scale);
+    this.type = type;
     this.rows = rows;
     this.nullCount = nullCount;
     this.children = nestedChildren;
@@ -70,7 +59,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    * Returns the type of this vector.
    */
   public DType getType() {
-    return type.typeId;
+    return type;
   }
 
   /**
@@ -144,7 +133,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    */
   @Override
   public DType getDataType() {
-    return type.typeId;
+    return type;
   }
 
   /**
@@ -178,9 +167,9 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    * @return an object that would need to be casted to appropriate type based on this vector's data type
    */
   Object getElement(int rowIndex) {
-    if (type.typeId == DType.LIST) {
+    if (type == DType.LIST) {
       return getList(rowIndex);
-    } else if (type.typeId == DType.STRUCT) {
+    } else if (type == DType.STRUCT) {
       return getStruct(rowIndex);
     } else {
       if (isNull(rowIndex)) {
@@ -288,7 +277,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   public byte getByte(long index) {
     assert type.isBackedByByte() : type + " is not stored as a byte.";
     assertsForGet(index);
-    return offHeap.data.getByte(index * type.typeId.sizeInBytes);
+    return offHeap.data.getByte(index * type.getSizeInBytes());
   }
 
   /**
@@ -297,16 +286,16 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   public final short getShort(long index) {
     assert type.isBackedByShort() : type + " is not stored as a short.";
     assertsForGet(index);
-    return offHeap.data.getShort(index * type.typeId.sizeInBytes);
+    return offHeap.data.getShort(index * type.getSizeInBytes());
   }
 
   /**
    * Get the value at index.
    */
   public final int getInt(long index) {
-    assert type.typeId.isBackedByInt() : type + " is not stored as a int.";
+    assert type.isBackedByInt() : type + " is not stored as a int.";
     assertsForGet(index);
-    return offHeap.data.getInt(index * type.typeId.sizeInBytes);
+    return offHeap.data.getInt(index * type.getSizeInBytes());
   }
 
   /**
@@ -321,7 +310,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    * Get the starting element offset for the list or string at index
    */
   long getStartListOffset(long index) {
-    assert type.typeId == DType.STRING || type.typeId == DType.LIST: type +
+    assert type == DType.STRING || type == DType.LIST: type.typeId +
       " is not a supported string or list type.";
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
     return offHeap.offsets.getInt(index * 4);
@@ -339,7 +328,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    * Get the ending element offset for the list or string at index.
    */
   long getEndListOffset(long index) {
-    assert type.typeId == DType.STRING || type.typeId == DType.LIST: type.typeId +
+    assert type == DType.STRING || type == DType.LIST: type.typeId +
       " is not a supported string or list type.";
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
     // The offsets has one more entry than there are rows.
@@ -351,36 +340,36 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    */
   public final long getLong(long index) {
     // Timestamps with time values are stored as longs
-    assert type.typeId.isBackedByLong(): type.typeId + " is not stored as a long.";
+    assert type.isBackedByLong(): type.typeId + " is not stored as a long.";
     assertsForGet(index);
-    return offHeap.data.getLong(index * type.typeId.sizeInBytes);
+    return offHeap.data.getLong(index * type.getSizeInBytes());
   }
 
   /**
    * Get the value at index.
    */
   public final float getFloat(long index) {
-    assert type.typeId == DType.FLOAT32 : type.typeId + " is not a supported float type.";
+    assert type == DType.FLOAT32 : type.typeId + " is not a supported float type.";
     assertsForGet(index);
-    return offHeap.data.getFloat(index * type.typeId.sizeInBytes);
+    return offHeap.data.getFloat(index * type.getSizeInBytes());
   }
 
   /**
    * Get the value at index.
    */
   public final double getDouble(long index) {
-    assert type.typeId == DType.FLOAT64 : type.typeId + " is not a supported double type.";
+    assert type == DType.FLOAT64 : type.typeId + " is not a supported double type.";
     assertsForGet(index);
-    return offHeap.data.getDouble(index * type.typeId.sizeInBytes);
+    return offHeap.data.getDouble(index * type.getSizeInBytes());
   }
 
   /**
    * Get the boolean value at index
    */
   public final boolean getBoolean(long index) {
-    assert type.typeId == DType.BOOL8 : type.typeId + " is not a supported boolean type.";
+    assert type == DType.BOOL8 : type.typeId + " is not a supported boolean type.";
     assertsForGet(index);
-    return offHeap.data.getBoolean(index * type.typeId.sizeInBytes);
+    return offHeap.data.getBoolean(index * type.getSizeInBytes());
   }
 
   /**
@@ -388,7 +377,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    * ideal because it is copying the data onto the heap.
    */
   public byte[] getUTF8(long index) {
-    assert type.typeId == DType.STRING : type.typeId + " is not a supported string type.";
+    assert type == DType.STRING : type.typeId + " is not a supported string type.";
     assertsForGet(index);
     int start = (int)getStartListOffset(index);
     int size = (int)getEndListOffset(index) - start;
@@ -415,9 +404,9 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    * of lists and may not have nulls.
    */
   public byte[] getBytesFromList(long rowIndex) {
-    assert type.typeId == DType.LIST : type.typeId + " is not a supported list of bytes type.";
+    assert type == DType.LIST : type.typeId + " is not a supported list of bytes type.";
     HostColumnVectorCore listData = children.get(0);
-    assert listData.type.typeId == DType.INT8 || listData.type.typeId == DType.UINT8  : type.typeId +
+    assert listData.type == DType.INT8 || listData.type == DType.UINT8  : type.typeId +
       " is not a supported list of bytes type.";
     assert !listData.hasNulls() : "byte list column with nulls are not supported";
     assertsForGet(rowIndex);
@@ -436,7 +425,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    */
   public List getList(long rowIndex) {
     assert rowIndex < rows;
-    assert type.typeId == DType.LIST;
+    assert type == DType.LIST;
     List retList = new ArrayList();
     int start = (int)getStartListOffset(rowIndex);
     int end = (int)getEndListOffset(rowIndex);
@@ -458,7 +447,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    */
   public HostColumnVector.StructData getStruct(int rowIndex) {
     assert rowIndex < rows;
-    assert type.typeId == DType.STRUCT;
+    assert type == DType.STRUCT;
     List<Object> retList = new ArrayList<>();
     // check if null or empty
     if (isNull(rowIndex)) {
@@ -506,7 +495,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    */
   private Object readValue(int rowIndex) {
     assert rowIndex < rows;
-    int rowOffset = rowIndex * type.typeId.getSizeInBytes();
+    int rowOffset = rowIndex * type.getSizeInBytes();
     switch (type.typeId) {
       case INT32: // fall through
       case UINT32: // fall through
@@ -530,7 +519,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
       case INT16: return offHeap.data.getShort(rowOffset);
       case BOOL8: return offHeap.data.getBoolean(rowOffset);
       case STRING: return getString(rowIndex);
-      default: throw new UnsupportedOperationException("Do not support " + type);
+      default: throw new UnsupportedOperationException("Do not support " + type.typeId);
     }
   }
 

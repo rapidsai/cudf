@@ -286,7 +286,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_ifElseSS(JNIEnv *env, j
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_reduce(JNIEnv *env, jclass,
                                                                 jlong j_col_view,
                                                                 jlong j_agg,
-                                                                jint j_dtype) {
+                                                                jint j_dtype, jint scale) {
   JNI_NULL_CHECK(env, j_col_view, "column view is null", 0);
   JNI_NULL_CHECK(env, j_agg, "aggregation is null", 0);
   try {
@@ -694,7 +694,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_dayOfYear(JNIEnv *env, 
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castTo(JNIEnv *env, jobject j_object,
-                                                                jlong handle, jint type) {
+                                                                jlong handle, jint type,
+                                                                jint scale) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -996,7 +997,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenation(
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_binaryOpVV(JNIEnv *env, jclass,
                                                                     jlong lhs_view, jlong rhs_view,
-                                                                    jint int_op, jint out_dtype) {
+                                                                    jint int_op, jint out_dtype,
+                                                                    jint scale) {
   JNI_NULL_CHECK(env, lhs_view, "lhs is null", 0);
   JNI_NULL_CHECK(env, rhs_view, "rhs is null", 0);
   try {
@@ -1014,7 +1016,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_binaryOpVV(JNIEnv *env,
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_binaryOpVS(JNIEnv *env, jclass,
                                                                     jlong lhs_view, jlong rhs_ptr,
-                                                                    jint int_op, jint out_dtype) {
+                                                                    jint int_op, jint out_dtype,
+                                                                    jint scale) {
   JNI_NULL_CHECK(env, lhs_view, "lhs is null", 0);
   JNI_NULL_CHECK(env, rhs_ptr, "rhs is null", 0);
   try {
@@ -1382,7 +1385,7 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeTypeScale(JNIEn
 }
 
 JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeRowCount(JNIEnv *env,
-                                                                          jobject j_object,
+                                                                          jclass,
                                                                           jlong handle) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
@@ -1636,7 +1639,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeColumnView(JNI
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeEmptyCudfColumn(JNIEnv *env,
-                                                                             jobject j_object,
+                                                                             jclass,
                                                                              jint j_type,
                                                                              jint scale) {
 

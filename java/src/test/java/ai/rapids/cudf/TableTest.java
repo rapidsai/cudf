@@ -173,7 +173,7 @@ public class TableTest extends CudfTestBase {
       assertEquals(expected.isNull(expectedRow), cv.isNull(tableRow),
           "NULL for Column " + colName + " Row " + tableRow);
       if (!expected.isNull(expectedRow)) {
-        switch (type) {
+        switch (type.typeId) {
           case BOOL8: // fall through
           case INT8: // fall through
           case UINT8:
@@ -271,7 +271,7 @@ public class TableTest extends CudfTestBase {
     assertTrue(input.getData() == null);
     boolean hasNestedTypeChildren = false;
     for (HostColumnVectorCore expectedChild : expected.getNestedChildren()) {
-      if (expectedChild.type.typeId.isNestedType()) {
+      if (expectedChild.type.isNestedType()) {
         hasNestedTypeChildren = true;
       }
     }
