@@ -39,13 +39,13 @@
 #include "cudf/fixed_point/fixed_point.hpp"
 #include "cudf/types.hpp"
 
-#include <bit.hpp.jit>
-#include <durations.hpp.jit>
-#include <fixed_point.hpp.jit>
+#include <jit/bit.hpp.jit>
 #include <jit/common_headers.hpp>
+#include <jit/durations.hpp.jit>
+#include <jit/fixed_point.hpp.jit>
+#include <jit/timestamps.hpp.jit>
+#include <jit/types.hpp.jit>
 #include <string>
-#include <timestamps.hpp.jit>
-#include <types.hpp.jit>
 
 namespace cudf {
 
@@ -420,6 +420,7 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
 {
   using namespace numeric;
 
+  CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
   CUDF_EXPECTS(lhs.type().id() == rhs.type().id(),
                "Both columns must be of the same fixed_point type");
 
@@ -495,6 +496,7 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
 {
   using namespace numeric;
 
+  CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
   CUDF_EXPECTS(lhs.type().id() == rhs.type().id(),
                "Both columns must be of the same fixed_point type");
 

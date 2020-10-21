@@ -22,6 +22,7 @@ from cudf.tests.utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_eq,
+    assert_exceptions_equal,
     does_not_raise,
     gen_rand,
 )
@@ -38,6 +39,29 @@ def test_init_via_list_of_tuples():
     gdf = gd.DataFrame(data)
 
     assert_eq(pdf, gdf)
+
+
+def _dataframe_na_data():
+    return [
+        pd.DataFrame(
+            {
+                "a": [0, 1, 2, np.nan, 4, None, 6],
+                "b": [np.nan, None, "u", "h", "d", "a", "m"],
+            },
+            index=["q", "w", "e", "r", "t", "y", "u"],
+        ),
+        pd.DataFrame({"a": [0, 1, 2, 3, 4], "b": ["a", "b", "u", "h", "d"]}),
+        pd.DataFrame(
+            {
+                "a": [None, None, np.nan, None],
+                "b": [np.nan, None, np.nan, None],
+            }
+        ),
+        pd.DataFrame({"a": []}),
+        pd.DataFrame({"a": [np.nan], "b": [None]}),
+        pd.DataFrame({"a": ["a", "b", "c", None, "e"]}),
+        pd.DataFrame({"a": ["a", "b", "c", "d", "e"]}),
+    ]
 
 
 @pytest.mark.parametrize("rows", [0, 1, 2, 100])
@@ -3109,147 +3133,34 @@ def test_diff(dtype, period, data_empty):
         assert_eq(diffed_outcome, expected_outcome)
 
 
-def test_isnull_isna():
-    # float & strings some missing
-    ps = pd.DataFrame(
-        {
-            "a": [0, 1, 2, np.nan, 4, None, 6],
-            "b": [np.nan, None, "u", "h", "d", "a", "m"],
-        }
-    )
-    ps.index = ["q", "w", "e", "r", "t", "y", "u"]
-    gs = gd.DataFrame.from_pandas(ps)
-    assert_eq(ps.a.isnull(), gs.a.isnull())
-    assert_eq(ps.isnull(), gs.isnull())
-    assert_eq(ps.a.isna(), gs.a.isna())
-    assert_eq(ps.isna(), gs.isna())
+@pytest.mark.parametrize("df", _dataframe_na_data())
+@pytest.mark.parametrize("nan_as_null", [True, False, None])
+def test_dataframe_isnull_isna(df, nan_as_null):
 
-    # integer & string none missing
-    ps = pd.DataFrame({"a": [0, 1, 2, 3, 4], "b": ["a", "b", "u", "h", "d"]})
-    gs = gd.DataFrame.from_pandas(ps)
-    assert_eq(ps.a.isnull(), gs.a.isnull())
-    assert_eq(ps.isnull(), gs.isnull())
-    assert_eq(ps.a.isna(), gs.a.isna())
-    assert_eq(ps.isna(), gs.isna())
+    gdf = gd.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
 
-    # all missing
-    ps = pd.DataFrame(
-        {"a": [None, None, np.nan, None], "b": [np.nan, None, np.nan, None]}
-    )
-    gs = gd.DataFrame.from_pandas(ps)
-    assert_eq(ps.a.isnull(), gs.a.isnull())
-    assert_eq(ps.isnull(), gs.isnull())
-    assert_eq(ps.a.isna(), gs.a.isna())
-    assert_eq(ps.isna(), gs.isna())
+    assert_eq(df.isnull(), gdf.isnull())
+    assert_eq(df.isna(), gdf.isna())
 
-    # empty
-    ps = pd.DataFrame({"a": []})
-    gs = gd.DataFrame.from_pandas(ps)
-    assert_eq(ps.a.isnull(), gs.a.isnull())
-    assert_eq(ps.isnull(), gs.isnull())
-    assert_eq(ps.a.isna(), gs.a.isna())
-    assert_eq(ps.isna(), gs.isna())
-
-    # one missing
-    ps = pd.DataFrame({"a": [np.nan], "b": [None]})
-    gs = gd.DataFrame.from_pandas(ps)
-    assert_eq(ps.a.isnull(), gs.a.isnull())
-    assert_eq(ps.isnull(), gs.isnull())
-    assert_eq(ps.a.isna(), gs.a.isna())
-    assert_eq(ps.isna(), gs.isna())
-
-    # strings missing
-    ps = pd.DataFrame({"a": ["a", "b", "c", None, "e"]})
-    gs = gd.DataFrame.from_pandas(ps)
-    assert_eq(ps.a.isnull(), gs.a.isnull())
-    assert_eq(ps.isnull(), gs.isnull())
-    assert_eq(ps.a.isna(), gs.a.isna())
-    assert_eq(ps.isna(), gs.isna())
-
-    # strings none missing
-    ps = pd.DataFrame({"a": ["a", "b", "c", "d", "e"]})
-    gs = gd.DataFrame.from_pandas(ps)
-    assert_eq(ps.a.isnull(), gs.a.isnull())
-    assert_eq(ps.isnull(), gs.isnull())
-    assert_eq(ps.a.isna(), gs.a.isna())
-    assert_eq(ps.isna(), gs.isna())
-
-    # unnamed series
-    ps = pd.Series([0, 1, 2, np.nan, 4, None, 6])
-    gs = gd.Series.from_pandas(ps)
-    assert_eq(ps.isnull(), gs.isnull())
-    assert_eq(ps.isna(), gs.isna())
+    # Test individual columns
+    for col in df:
+        assert_eq(df[col].isnull(), gdf[col].isnull())
+        assert_eq(df[col].isna(), gdf[col].isna())
 
 
-def test_notna_notnull():
-    # float & strings some missing
-    ps = pd.DataFrame(
-        {
-            "a": [0, 1, 2, np.nan, 4, None, 6],
-            "b": [np.nan, None, "u", "h", "d", "a", "m"],
-        }
-    )
-    gs = gd.DataFrame.from_pandas(ps)
-    assert_eq(ps.notna(), gs.notna())
-    assert_eq(ps.a.notna(), gs.a.notna())
-    assert_eq(ps.notnull(), gs.notnull())
-    assert_eq(ps.a.notnull(), gs.a.notnull())
+@pytest.mark.parametrize("df", _dataframe_na_data())
+@pytest.mark.parametrize("nan_as_null", [True, False, None])
+def test_dataframe_notna_notnull(df, nan_as_null):
 
-    # integer & string none missing
-    ps = pd.DataFrame({"a": [0, 1, 2, 3, 4], "b": ["a", "b", "u", "h", "d"]})
-    gs = gd.DataFrame.from_pandas(ps)
-    assert_eq(ps.notna(), gs.notna())
-    assert_eq(ps.a.notna(), gs.a.notna())
-    assert_eq(ps.notnull(), gs.notnull())
-    assert_eq(ps.a.notnull(), gs.a.notnull())
+    gdf = gd.DataFrame.from_pandas(df, nan_as_null=nan_as_null)
 
-    # all missing
-    ps = pd.DataFrame(
-        {"a": [None, None, np.nan, None], "b": [np.nan, None, np.nan, None]}
-    )
-    gs = gd.DataFrame.from_pandas(ps)
-    assert_eq(ps.notna(), gs.notna())
-    assert_eq(ps.a.notna(), gs.a.notna())
-    assert_eq(ps.notnull(), gs.notnull())
-    assert_eq(ps.a.notnull(), gs.a.notnull())
+    assert_eq(df.notnull(), gdf.notnull())
+    assert_eq(df.notna(), gdf.notna())
 
-    # empty
-    ps = pd.DataFrame({"a": []})
-    gs = gd.DataFrame.from_pandas(ps)
-    assert_eq(ps.notna(), gs.notna())
-    assert_eq(ps.a.notna(), gs.a.notna())
-    assert_eq(ps.notnull(), gs.notnull())
-    assert_eq(ps.a.notnull(), gs.a.notnull())
-
-    # one missing
-    ps = pd.DataFrame({"a": [np.nan], "b": [None]})
-    gs = gd.DataFrame.from_pandas(ps)
-    assert_eq(ps.notna(), gs.notna())
-    assert_eq(ps.a.notna(), gs.a.notna())
-    assert_eq(ps.notnull(), gs.notnull())
-    assert_eq(ps.a.notnull(), gs.a.notnull())
-
-    # strings missing
-    ps = pd.DataFrame({"a": ["a", "b", "c", None, "e"]})
-    gs = gd.DataFrame.from_pandas(ps)
-    assert_eq(ps.notna(), gs.notna())
-    assert_eq(ps.a.notna(), gs.a.notna())
-    assert_eq(ps.notnull(), gs.notnull())
-    assert_eq(ps.a.notnull(), gs.a.notnull())
-
-    # strings none missing
-    ps = pd.DataFrame({"a": ["a", "b", "c", "d", "e"]})
-    gs = gd.DataFrame.from_pandas(ps)
-    assert_eq(ps.notna(), gs.notna())
-    assert_eq(ps.a.notna(), gs.a.notna())
-    assert_eq(ps.notnull(), gs.notnull())
-    assert_eq(ps.a.notnull(), gs.a.notnull())
-
-    # unnamed series
-    ps = pd.Series([0, 1, 2, np.nan, 4, None, 6])
-    gs = gd.Series.from_pandas(ps)
-    assert_eq(ps.notna(), gs.notna())
-    assert_eq(ps.notnull(), gs.notnull())
+    # Test individual columns
+    for col in df:
+        assert_eq(df[col].notnull(), gdf[col].notnull())
+        assert_eq(df[col].notna(), gdf[col].notna())
 
 
 def test_ndim():
@@ -5182,6 +5093,15 @@ def test_memory_usage_cat():
 
     # Check cat index
     assert gdf.set_index("B").index.memory_usage(deep=True) == expected
+
+
+def test_memory_usage_list():
+    df = gd.DataFrame({"A": [[0, 1, 2, 3], [4, 5, 6], [7, 8], [9]]})
+    expected = (
+        df.A._column.offsets._memory_usage()
+        + df.A._column.elements._memory_usage()
+    )
+    assert expected == df.A.memory_usage()
 
 
 @pytest.mark.xfail
@@ -7732,6 +7652,38 @@ def test_equals_dtypes():
     expect = lhs.to_pandas().equals(rhs.to_pandas())
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "df1",
+    [
+        pd.DataFrame({"a": [10, 11, 12]}, index=["a", "b", "z"]),
+        pd.DataFrame({"z": ["a"]}),
+    ],
+)
+@pytest.mark.parametrize(
+    "df2",
+    [
+        pd.DataFrame(),
+        pd.DataFrame({"a": ["a", "a", "c", "z", "A"], "z": [1, 2, 3, 4, 5]}),
+    ],
+)
+@pytest.mark.parametrize(
+    "op",
+    [
+        operator.eq,
+        operator.ne,
+        operator.lt,
+        operator.gt,
+        operator.le,
+        operator.ge,
+    ],
+)
+def test_dataframe_error_equality(df1, df2, op):
+    gdf1 = gd.from_pandas(df1)
+    gdf2 = gd.from_pandas(df2)
+
+    assert_exceptions_equal(op, op, ([df1, df2],), ([gdf1, gdf2],))
 
 
 @pytest.mark.parametrize(

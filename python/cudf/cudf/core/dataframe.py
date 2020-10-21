@@ -38,16 +38,16 @@ from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
+    find_common_type,
     is_categorical_dtype,
-    is_datetime_dtype,
     is_column_like,
+    is_datetime_dtype,
     is_list_dtype,
     is_list_like,
     is_scalar,
     is_string_dtype,
     is_struct_dtype,
     numeric_normalize_types,
-    find_common_type,
 )
 from cudf.utils.utils import OrderedColumnDict
 
@@ -1310,7 +1310,7 @@ class DataFrame(Frame, Serializable):
             for k, col in enumerate(self._data):
                 result[col] = getattr(self[col], fn)(other[k])
         elif isinstance(other, DataFrame):
-            if fn in ("__eq__", "__ne__"):
+            if fn in cudf.utils.utils._EQUALITY_OPS:
                 if not self.index.equals(other.index):
                     raise ValueError(
                         "Can only compare identically-labeled "
