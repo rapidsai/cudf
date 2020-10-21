@@ -470,6 +470,8 @@ public final class Table implements AutoCloseable {
 
   private static native long[] gather(long tableHandle, long gatherView, boolean checkBounds);
 
+  private static native long[] convertToRows(long nativeHandle);
+
   private static native long[] repeatStaticCount(long tableHandle, int count);
 
   private static native long[] repeatColumnCount(long tableHandle,
@@ -1617,6 +1619,67 @@ public final class Table implements AutoCloseable {
    */
   public Table gather(ColumnVector gatherMap, boolean checkBounds) {
     return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
+  }
+
+  /**
+   * Convert this table of columns into a row major format that is useful for interacting with other
+   * systems that do row major processing of the data. Currently only fixed-width column types are
+   * supported.
+   *
+   * The output is one or more ColumnVectors that are lists of bytes. A ColumnVector that is a
+   * list of bytes can have at most 2GB of data stored in it. Multiple lists are returned if not
+   * all of the data can fit in a single ColumnVector.
+   *
+   * Each row in the returned ColumnVector array corresponds to a row in the input table. The rows
+   * will be in the same order that they are, in the input Table. The first ColumnVector in the
+   * array will hold the first N rows followed by the second ColumnVector and so on.
+   *
+   * The format of each row is similar in layout to a C struct where each column will have padding
+   * in front of it to align it properly. Each row is aligned to a 64-bit boundary so the first
+   * column will always start at the beginning of the list of bytes.
+   *
+   * Validity bytes are added to the end of the row.  There will be one byte for each 8 columns in a
+   * row. Because the validity is byte aligned there is no padding between it and the last column
+   * in the row.
+   *
+   * For example a table consisting of the following column types
+   *   | BOOL8 (A) | INT16 (B) | DURATION_DAYS (C) |
+   *
+   *  Will have a layout that looks like
+   *  | A_0 | P | B_0 | B_1 | C_0 | C_1 | C_2 | C_3 | V0 | P | P | P | P | P | P | P |
+   *
+   * In this P corresponds to a byte of padding, [LETTER]_[NUMBER] represents the NUMBER
+   * byte of the corresponding LETTER column, and V[NUMBER] is a validity byte for the NUMBER * 8
+   * columns.
+   *
+   * The order of the columns will not be changed, but to reduce the total amount of padding it is
+   * recommended to order the columns in the following way.
+   *
+   * 64-bit columns, 32-bit columns, 16-bit columns, 8-bit columns.
+   *
+   * This way padding is only inserted at the end of a row to make the next column 64-bit aligned.
+   * So for the example above it the columns were ordered C, B, A instead the layout would be.
+   *
+   * | C_0 | C_1 | C_2 | C_3 | B_0 | B_1 | A_0 | V0 |
+   *
+   * This would have reduced the overall size of the data transferred by half.
+   *
+   * One of the main motivations for this is to avoid cache problems when walking through columnar
+   * data on the CPU in a row wise manner. If you are not transferring very many columns it is
+   * likely to be more efficient to just pull back the columns and walk through them. This is
+   * especially true of a single column of fixed width data. The extra padding will slow down the
+   * transfer and looking at only a handful of buffers is not likely to cause cache issues.
+   *
+   * There are some limits on the size of a single row.  If the row is larger than 1KB this will
+   * throw an exception.
+   */
+  public ColumnVector[] convertToRows() {
+    long[] ptrs = convertToRows(nativeHandle);
+    ColumnVector[] ret = new ColumnVector[ptrs.length];
+    for (int i = 0; i < ptrs.length; i++) {
+      ret[i] = new ColumnVector(ptrs[i]);
+    }
+    return ret;
   }
 
   /////////////////////////////////////////////////////////////////////////////

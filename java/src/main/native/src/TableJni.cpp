@@ -36,6 +36,7 @@
 #include <cudf/stream_compaction.hpp>
 
 #include "cudf_jni_apis.hpp"
+#include "row_conversion.hpp"
 
 namespace cudf {
 namespace jni {
@@ -1704,6 +1705,24 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gather(JNIEnv *env, jclas
     cudf::column_view *map = reinterpret_cast<cudf::column_view *>(j_map);
     std::unique_ptr<cudf::table> result = cudf::gather(*input, *map);
     return cudf::jni::convert_table_for_return(env, result);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertToRows(
+    JNIEnv *env, jclass clazz, jlong input_table) {
+  JNI_NULL_CHECK(env, input_table, "input table is null", 0);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
+    std::vector<std::unique_ptr<cudf::column>> cols = cudf::java::convert_to_rows(*n_input_table);
+    int num_columns = cols.size();
+    cudf::jni::native_jlongArray outcol_handles(env, num_columns);
+    for (int i = 0; i < num_columns; i++) {
+      outcol_handles[i] = reinterpret_cast<jlong>(cols[i].release());
+    }
+    return outcol_handles.get_jArray();
   }
   CATCH_STD(env, 0);
 }

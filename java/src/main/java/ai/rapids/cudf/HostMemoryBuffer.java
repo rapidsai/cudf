@@ -639,14 +639,27 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * WARNING: Debug only method to print a passed in buffer
    */
   public void printBuffer() {
+    printBuffer(5);
+  }
+
+  /**
+   * WARNING: Debug only method to print a passed in buffer
+   */
+  public void printBuffer(int wordsPerRow) {
+    int bytesPerWord = 4;
     byte[] offsetbytes = new byte[(int)length];
-    System.out.println("BUFFER length =" + offsetbytes.length);
+    System.out.println("BUFFER length = " + offsetbytes.length);
     getBytes(offsetbytes, 0, 0, length);
     for (int i = 0; i < offsetbytes.length; i++) {
-      System.out.print(offsetbytes[i]);
-      if (i%4 == 0) {
-        System.out.print(" ");
+      if (i%bytesPerWord == 0 && 1 != 0) {
+        if (i % (bytesPerWord*wordsPerRow) == 0) {
+          System.out.println();
+        } else {
+          System.out.print(" ");
+        }
       }
+      String toPrint = String.format("%02x",((long)offsetbytes[i]) & 0xFF);
+      System.out.print(toPrint);
     }
     System.out.println();
   }

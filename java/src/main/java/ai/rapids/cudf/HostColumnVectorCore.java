@@ -63,14 +63,14 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * Returns the data buffer for a given host side column vector
    */
-  HostMemoryBuffer getData() {
+  public HostMemoryBuffer getData() {
     return offHeap.data;
   }
 
   /**
    * Returns the validity buffer for a given host side column vector
    */
-  HostMemoryBuffer getValidity() {
+  public HostMemoryBuffer getValidity() {
     return offHeap.valid;
   }
 
@@ -121,7 +121,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * Returns the list of child host column vectors for a given host side column
    */
-  List<HostColumnVectorCore> getNestedChildren() {
+  public List<HostColumnVectorCore> getNestedChildren() {
     return children;
   }
 
@@ -308,7 +308,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * Get the starting element offset for the list or string at index
    */
-  long getStartListOffset(long index) {
+  public long getStartListOffset(long index) {
     assert type == DType.STRING || type == DType.LIST: type +
       " is not a supported string or list type.";
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
@@ -326,7 +326,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * Get the ending element offset for the list or string at index.
    */
-  long getEndListOffset(long index) {
+  public long getEndListOffset(long index) {
     assert type == DType.STRING || type == DType.LIST: type +
       " is not a supported string or list type.";
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
