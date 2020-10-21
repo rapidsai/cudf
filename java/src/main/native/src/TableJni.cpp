@@ -1727,6 +1727,26 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertToRows(
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertFromRows(
+    JNIEnv *env, jclass clazz, jlong input_column, jlongArray types) {
+  JNI_NULL_CHECK(env, input_column, "input column is null", 0);
+  JNI_NULL_CHECK(env, types, "types is null", 0);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_column);
+    cudf::lists_column_view list_input(*input);
+    cudf::jni::native_jlongArray n_types(env, types);
+    std::vector<cudf::data_type> types_vec;
+    for (int i = 0; i < n_types.size(); i++) {
+      types_vec.emplace_back(cudf::data_type(static_cast<cudf::type_id>(n_types[i])));
+    }
+    std::unique_ptr<cudf::table> result = cudf::java::convert_from_rows(list_input, types_vec);
+    return cudf::jni::convert_table_for_return(env, result);
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_repeatStaticCount(JNIEnv *env, jclass,
                                                                          jlong input_jtable,
                                                                          jint count) {

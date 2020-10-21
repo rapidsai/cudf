@@ -3691,7 +3691,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void convertToRows() {
+  void fixedWidthRowsRoundTrip() {
     try (Table t = new TestBuilder()
         .column(3l, 9l, 4l, 2l, 20l, null)
         .column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d, null)
@@ -3699,29 +3699,20 @@ public class TableTest extends CudfTestBase {
         .column(true, false, false, true, false, null)
         .column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f, null)
         .column(new Byte[]{2, 3, 4, 5, 9, null})
-//            .column("this", "is", "a", "test", "string" null)
         .build()) {
       ColumnVector[] rows = t.convertToRows();
       try {
         // We didn't overflow
         assert rows.length == 1;
         ColumnVector cv = rows[0];
-        assert cv.getType() == DType.LIST;
-        assert cv.getNumChildren() == 1;
-        // We don't have a proper generic value for getChildColumnViewAccess
-        try (ColumnViewAccess child = cv.getChildColumnViewAccess(0)) {
-          assert child.getDataType() == DType.INT8;
-          BaseDeviceMemoryBuffer buffer = (BaseDeviceMemoryBuffer) child.getDataBuffer();
-          try (HostMemoryBuffer host = HostMemoryBuffer.allocate(buffer.getLength())) {
-            host.copyFromDeviceBuffer(buffer);
-            host.printBuffer(8);
-          }
-        }
         assert cv.getRowCount() == t.getRowCount();
-        try (HostColumnVector hostCv = cv.copyToHost()) {
-          assertEquals(1, hostCv.getNestedChildren().size());
-          HostColumnVectorCore child = hostCv.getNestedChildren().get(0);
-          assertEquals(DType.INT8, child.type);
+
+        DType[] types = new DType[t.getNumberOfColumns()];
+        for (int i = 0; i < t.getNumberOfColumns(); i++) {
+          types[i] = t.getColumn(i).getType();
+        }
+        try (Table backAgain = Table.convertFromRows(cv, types)) {
+          assertTablesAreEqual(t, backAgain);
         }
       } finally {
         for (ColumnVector cv : rows) {
