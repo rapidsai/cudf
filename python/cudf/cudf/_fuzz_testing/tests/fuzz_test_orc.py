@@ -1,10 +1,11 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import io
 import sys
 
 import cudf
 from cudf._fuzz_testing.main import pythonfuzz
-from cudf._fuzz_testing.orc import OrcReader
+from cudf._fuzz_testing.orc import OrcReader, OrcWriter
 from cudf._fuzz_testing.utils import compare_dataframe, run_test
 
 
@@ -28,6 +29,29 @@ def orc_reader_test(input_tuple, columns, num_rows):
     )
 
     compare_dataframe(expected_pdf, gdf)
+
+
+@pythonfuzz(
+    data_handle=OrcWriter,
+    params={
+        "compression": [None, "snappy"],
+        "enable_statistics": [True, False],
+    },
+)
+def orc_writer_test(pdf, compression, enable_statistics):
+    file_to_strore = io.BytesIO()
+
+    gdf = cudf.from_pandas(pdf)
+
+    gdf.to_orc(
+        file_to_strore,
+        compression=compression,
+        enable_statistics=enable_statistics,
+    )
+    file_to_strore.seek(0)
+
+    actual_df = cudf.read_orc(file_to_strore)
+    compare_dataframe(pdf, actual_df)
 
 
 if __name__ == "__main__":

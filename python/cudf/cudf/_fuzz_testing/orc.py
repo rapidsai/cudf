@@ -100,3 +100,61 @@ class OrcReader(IOFuzz):
                 params_dict[param] = np.random.choice(values)
         self._current_params["test_kwargs"] = params_dict
         return params_dict
+
+
+class OrcWriter(IOFuzz):
+    def __init__(
+        self,
+        dirs=None,
+        max_rows=100_000,
+        max_columns=1000,
+        max_string_length=None,
+    ):
+        super().__init__(
+            dirs=dirs,
+            max_rows=max_rows,
+            max_columns=max_columns,
+            max_string_length=max_string_length,
+        )
+        self._df = None
+
+    def generate_input(self):
+        if self._regression:
+            (
+                dtypes_meta,
+                num_rows,
+                num_cols,
+                seed,
+            ) = self.get_next_regression_params()
+        else:
+            dtypes_list = list(
+                cudf.utils.dtypes.ALL_TYPES
+                - {"category", "str", "bool"}
+                - cudf.utils.dtypes.TIMEDELTA_TYPES
+                - cudf.utils.dtypes.UNSIGNED_TYPES
+                - cudf.utils.dtypes.DATETIME_TYPES
+            )
+
+            dtypes_meta, num_rows, num_cols = _generate_rand_meta(
+                self, dtypes_list
+            )
+            self._current_params["dtypes_meta"] = dtypes_meta
+            seed = random.randint(0, 2 ** 32 - 1)
+            self._current_params["seed"] = seed
+            self._current_params["num_rows"] = num_rows
+            self._current_params["num_cols"] = num_cols
+        logging.info(
+            f"Generating DataFrame with rows: {num_rows} "
+            f"and columns: {num_cols}"
+        )
+        table = dg.rand_dataframe(dtypes_meta, num_rows, seed)
+        df = pyarrow_to_pandas(table)
+        logging.info(f"Shape of DataFrame generated: {table.shape}")
+        self._df = df
+        return df
+
+    def write_data(self, file_name):
+        # Due to the lack of really fast reference writer we are dumping
+        # the dataframe to a parquet file
+        if self._df is not None:
+            self._df.to_parquet(file_name + "_crash.parquet")
