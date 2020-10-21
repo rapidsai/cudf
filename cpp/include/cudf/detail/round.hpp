@@ -29,7 +29,7 @@ namespace detail {
 
 std::unique_ptr<column> round(
   column_view const& input,
-  int32_t scale,
+  int32_t decimal_places,
   round_option round,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
