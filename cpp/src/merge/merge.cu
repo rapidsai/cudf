@@ -13,15 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <rmm/thrust_rmm_allocator.h>
 #include <cudf/copying.hpp>
 #include <cudf/detail/merge.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/dictionary/detail/merge.hpp>
+#include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/strings/detail/merge.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 
+#include <rmm/thrust_rmm_allocator.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/merge.h>
@@ -30,9 +32,9 @@
 #include <queue>
 #include <vector>
 
-namespace {  // anonym.
-
-using namespace cudf;
+namespace cudf {
+namespace detail {
+namespace {
 
 using detail::side;
 using index_type = detail::index_type;
@@ -223,15 +225,11 @@ rmm::device_vector<index_type> generate_merged_indices(
 
 }  // namespace
 
-namespace cudf {
-namespace detail {
-// generate merged column
-// given row order of merged tables
-//(ordered according to indices of key_cols)
-// and the 2 columns to merge
-//
+/**
+ * @brief Generate merged column given row-order of merged tables
+ *  (ordered according to indices of key_cols) and the 2 columns to merge.
+ */
 struct column_merger {
-  using index_vector = rmm::device_vector<index_type>;
   explicit column_merger(
     index_vector const& row_order,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
@@ -335,7 +333,17 @@ template <>
 std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(column_view const& lcol,
                                                                       column_view const& rcol) const
 {
-  CUDF_FAIL("dictionary not supported yet");
+  auto result = cudf::dictionary::detail::merge(cudf::dictionary_column_view(lcol),
+                                                cudf::dictionary_column_view(rcol),
+                                                row_order_,
+                                                mr_,
+                                                stream_);
+  // set the validity mask
+  if (lcol.has_nulls() || rcol.has_nulls()) {
+    auto merged_view = result->mutable_view();
+    materialize_bitmask(lcol, rcol, merged_view, row_order_.data().get(), stream_);
+  }
+  return result;
 }
 
 using table_ptr_type = std::unique_ptr<cudf::table>;
@@ -432,10 +440,16 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
   CUDF_EXPECTS(key_cols.size() == column_order.size(),
                "Mismatched size between key_cols and column_order");
 
+  // This utility will ensure all corresponding dictionary columns have matching keys.
+  // It will return any new dictionary columns created as well as updated table_views.
+  auto matched = cudf::dictionary::detail::match_dictionaries(
+    tables_to_merge, rmm::mr::get_current_device_resource(), stream);
+  auto merge_tables = matched.second;
+
   // A queue of (table view, table) pairs
   std::priority_queue<merge_queue_item> merge_queue;
   // The table pointer is null if we do not own the table (input tables)
-  std::for_each(tables_to_merge.begin(), tables_to_merge.end(), [&](auto const& table) {
+  std::for_each(merge_tables.begin(), merge_tables.end(), [&](auto const& table) {
     if (table.num_rows() > 0) merge_queue.emplace(table, table_ptr_type());
   });
 
