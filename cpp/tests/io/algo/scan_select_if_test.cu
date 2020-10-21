@@ -24,20 +24,20 @@ TEST_F(InclusiveCopyIfTest, CanScanSelectIf)
 
   auto op = simple_op{};
 
-  const uint32_t size = 4096;
+  const uint32_t size = 128;
 
   thrust::host_vector<uint32_t> h_result = scan_select_if(input, input + size, op, op);
 
   // cudaMemcpy(h_result.data(), d_result.data(), d_result.size(), cudaMemcpyDeviceToHost);
 
   // 4096 / 3 = 1365.333...
-  ASSERT_EQ(static_cast<uint32_t>(1365), h_result.size());
+  // ASSERT_EQ(static_cast<uint32_t>(1365), h_result.size());
 
-  for (uint32_t i = 0; i < 1365; i++) {  //
-    EXPECT_EQ(static_cast<uint32_t>(i * 3 + 3), h_result[i]);
-  }
+  // for (uint32_t i = 0; i < 1365; i++) {  //
+  //   EXPECT_EQ(static_cast<uint32_t>(i * 3 + 3), h_result[i]);
+  // }
 
-  // FAIL();
+  FAIL();
 }
 
 // struct csv_row_start_op {
