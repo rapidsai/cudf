@@ -123,8 +123,8 @@ def assert_exceptions_equal(
     rfunc,
     lfunc_args_and_kwargs=None,
     rfunc_args_and_kwargs=None,
+    check_exception_type=True,
     compare_error_message=True,
-    expected_exception=None,
     expected_error_message=None,
 ):
     """Compares if two functions ``lfunc`` and ``rfunc`` raise
@@ -149,14 +149,18 @@ def assert_exceptions_equal(
         ``rfunc``. If the tuple is of length 1, it must either contain
         positional arguments(as a Sequence) or key-word arguments(as a Mapping
         dict).
+    check_exception_type : boolean, default True
+        Whether to compare the exception types raised by ``lfunc``
+        with ``rfunc`` exception type or not. If False, ``rfunc``
+        is simply evaluated against `Exception` type.
     compare_error_message : boolean, default True
         Whether to compare the error messages raised
         when calling both ``lfunc`` and
         ``rfunc`` or not.
-    expected_exception : Exception, default None
-        Expected exception type to be raised by calling ``rfunc``.
     expected_error_message : str, default None
         Expected error message to be raised by calling ``rfunc``.
+        Note that ``lfunc`` error message will not be compared to
+        this value.
 
     Returns
     -------
@@ -188,7 +192,7 @@ def assert_exceptions_equal(
             expected_error_message = re.escape(str(e))
 
         with pytest.raises(
-            type(e) if expected_exception is None else expected_exception,
+            type(e) if check_exception_type else Exception,
             match=expected_error_message,
         ):
             rfunc(*rfunc_args, **rfunc_kwargs)

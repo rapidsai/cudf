@@ -459,23 +459,25 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
     gdf_left = DataFrame.from_pandas(pdf_left)
     gdf_right = DataFrame.from_pandas(pdf_right)
     if not set(pdf_left.columns).intersection(pdf_right.columns):
-        assert_exceptions_equal(
-            lfunc=pdf_left.merge,
-            rfunc=gdf_left.merge,
-            lfunc_args_and_kwargs=([pdf_right],),
-            rfunc_args_and_kwargs=([gdf_right],),
-            expected_exception=ValueError,
-            expected_error_message="No common columns to perform merge on",
-        )
+        with pytest.raises(
+            pd.core.reshape.merge.MergeError,
+            match="No common columns to perform merge on",
+        ):
+            pdf_left.merge(pdf_right)
+        with pytest.raises(
+            ValueError, match="No common columns to perform merge on"
+        ):
+            gdf_left.merge(gdf_right)
     elif not [value for value in pdf_left if value in pdf_right]:
-        assert_exceptions_equal(
-            lfunc=pdf_left.merge,
-            rfunc=gdf_left.merge,
-            lfunc_args_and_kwargs=([pdf_right],),
-            rfunc_args_and_kwargs=([gdf_right],),
-            expected_exception=ValueError,
-            expected_error_message="No common columns to perform merge on",
-        )
+        with pytest.raises(
+            pd.core.reshape.merge.MergeError,
+            match="No common columns to perform merge on",
+        ):
+            pdf_left.merge(pdf_right)
+        with pytest.raises(
+            ValueError, match="No common columns to perform merge on"
+        ):
+            gdf_left.merge(gdf_right)
     else:
         pdf_result = pdf_left.merge(pdf_right, how=how)
         gdf_result = gdf_left.merge(gdf_right, how=how)

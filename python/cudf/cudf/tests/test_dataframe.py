@@ -4199,8 +4199,11 @@ def test_isin_multiindex(data, values, level, err):
             rfunc=gmdx.isin,
             lfunc_args_and_kwargs=([values], {"level": level}),
             rfunc_args_and_kwargs=([values], {"level": level}),
-            expected_exception=err,
-            compare_error_message=False,
+            check_exception_type=False,
+            expected_error_message=re.escape(
+                "values need to be a Multi-Index or set/list-like tuple "
+                "squences  when `level=None`."
+            ),
         )
 
 
@@ -7475,7 +7478,7 @@ def test_dataframe_init_from_series_list_duplicate_index_error(data):
         rfunc=gd.DataFrame,
         lfunc_args_and_kwargs=([], {"data": data}),
         rfunc_args_and_kwargs=([], {"data": gd_data}),
-        expected_exception=ValueError,
+        check_exception_type=False,
     )
 
 

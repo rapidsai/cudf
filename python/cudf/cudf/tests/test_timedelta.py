@@ -1102,7 +1102,7 @@ def test_timedelta_invalid_ops():
         rfunc=operator.mul,
         lfunc_args_and_kwargs=([psr, psr],),
         rfunc_args_and_kwargs=([sr, sr],),
-        expected_exception=TypeError,
+        check_exception_type=False,
         expected_error_message=re.escape(
             f"Multiplication of {sr.dtype} with {sr.dtype} "
             f"cannot be performed."

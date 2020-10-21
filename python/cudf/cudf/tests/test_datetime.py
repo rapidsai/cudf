@@ -2,6 +2,7 @@
 import datetime
 import datetime as dt
 import operator
+import re
 
 import cupy as cp
 import numpy as np
@@ -843,8 +844,10 @@ def test_str_to_datetime_error():
         rfunc=gsr.astype,
         lfunc_args_and_kwargs=(["datetime64[s]"],),
         rfunc_args_and_kwargs=(["datetime64[s]"],),
-        expected_exception=ValueError,
-        compare_error_message=False,
+        check_exception_type=False,
+        expected_error_message=re.escape(
+            "Could not convert `None` value to datetime"
+        ),
     )
 
 

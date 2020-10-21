@@ -163,7 +163,7 @@ def test_categorical_unary_ceil():
         lfunc=getattr,
         rfunc=sr.ceil,
         lfunc_args_and_kwargs=([pdsr, "ceil"],),
-        expected_exception=TypeError,
+        check_exception_type=False,
         expected_error_message="Series of dtype `category` cannot "
         "perform the operation: ceil",
     )
@@ -244,7 +244,7 @@ def test_cat_series_binop_error():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([dfa, dfb],),
         rfunc_args_and_kwargs=([dfa, dfb],),
-        expected_exception=TypeError,
+        check_exception_type=False,
         expected_error_message="Series of dtype `category` cannot "
         "perform the operation: add",
     )
@@ -254,7 +254,7 @@ def test_cat_series_binop_error():
         rfunc=operator.add,
         lfunc_args_and_kwargs=([dfb, dfa],),
         rfunc_args_and_kwargs=([dfb, dfa],),
-        expected_exception=TypeError,
+        check_exception_type=False,
         expected_error_message="'add' operator not supported",
     )
 

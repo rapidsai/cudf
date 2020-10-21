@@ -126,8 +126,6 @@ class TestRank:
                     "pct": True,
                 },
             ),
-            expected_exception=KeyError,
-            compare_error_message=False,
         )
 
     sort_group_args = [
