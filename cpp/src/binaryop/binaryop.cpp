@@ -419,6 +419,7 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
 {
   using namespace numeric;
 
+  CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
   CUDF_EXPECTS(lhs.type().id() == rhs.type().id(),
                "Both columns must be of the same fixed_point type");
 
@@ -494,6 +495,7 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
 {
   using namespace numeric;
 
+  CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
   CUDF_EXPECTS(lhs.type().id() == rhs.type().id(),
                "Both columns must be of the same fixed_point type");
 
