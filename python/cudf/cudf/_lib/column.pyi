@@ -5,7 +5,7 @@ from cudf.core.buffer import Buffer
 
 
 class Column:
-    _data: Buffer
+    _data: Union[Buffer, None]
     _mask: Buffer
     _base_data: Buffer
     _base_mask: Buffer
@@ -17,7 +17,7 @@ class Column:
 
     def __init__(
         self,
-        data: Buffer,
+        data: Union[Buffer, None],
         dtype: Dtype,
         size: int = None,
         mask: Buffer = None,

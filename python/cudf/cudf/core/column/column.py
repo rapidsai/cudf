@@ -4,7 +4,7 @@ import pickle
 import warnings
 from collections.abc import MutableSequence
 from types import SimpleNamespace
-from typing import Any, Tuple, Union
+from typing import Any, Dict, List, Mapping, Sequence, Tuple, Union, cast
 
 import cupy
 import numpy as np
@@ -145,7 +145,7 @@ class ColumnBase(Column, Serializable):
     def any(self) -> bool:
         return bool(libcudf.reduce.reduce("any", self, dtype=np.bool_))
 
-    def __sizeof__(self):
+    def __sizeof__(self) -> int:
         n = self.base_data.size if self.base_data is not None else 0
         if self.nullable:
             n += self.base_mask.size
@@ -381,7 +381,7 @@ class ColumnBase(Column, Serializable):
     def _memory_usage(self, **kwargs) -> int:
         return self.__sizeof__()
 
-    def default_na_value(self):
+    def default_na_value(self) -> Any:
         raise NotImplementedError()
 
     def to_gpu_array(self, fillna=None) -> "cuda.devicearray.DeviceNDArray":
@@ -700,7 +700,7 @@ class ColumnBase(Column, Serializable):
         """
         return self.isnull()
 
-    def notnull(self):
+    def notnull(self) -> "ColumnBase":
         """Identify non-missing values in a Column.
         """
         result = libcudf.unary.is_valid(self)
@@ -714,12 +714,12 @@ class ColumnBase(Column, Serializable):
 
         return result
 
-    def notna(self):
+    def notna(self) -> "ColumnBase":
         """Identify non-missing values in a Column. Alias for notnull.
         """
         return self.notnull()
 
-    def find_first_value(self, value):
+    def find_first_value(self, value: ScalarObj, closest: bool = False) -> int:
         """
         Returns offset of first value that matches
         """
@@ -730,7 +730,7 @@ class ColumnBase(Column, Serializable):
             raise ValueError("value not found")
         return indices[0]
 
-    def find_last_value(self, value):
+    def find_last_value(self, value: ScalarObj, closest: bool = False) -> int:
         """
         Returns offset of last value that matches
         """
@@ -741,16 +741,23 @@ class ColumnBase(Column, Serializable):
             raise ValueError("value not found")
         return indices[-1]
 
-    def append(self, other):
+    def append(self, other: "ColumnBase") -> "ColumnBase":
         return ColumnBase._concat([self, as_column(other)])
 
-    def quantile(self, q, interpolation, exact):
+    def quantile(
+        self,
+        q: Union[ScalarObj, List[ScalarObj]],
+        interpolation: str,
+        exact: bool,
+    ) -> Union["ColumnBase", List["ColumnBase"]]:
         raise TypeError(f"cannot perform quantile with type {self.dtype}")
 
-    def median(self, skipna=None):
+    def median(self, skipna: bool = None) -> ScalarObj:
         raise TypeError(f"cannot perform median with type {self.dtype}")
 
-    def take(self, indices, keep_index=True):
+    def take(
+        self, indices: "ColumnBase", keep_index: bool = True
+    ) -> "ColumnBase":
         """Return Column by taking values from the corresponding *indices*.
         """
         # Handle zero size
@@ -769,7 +776,7 @@ class ColumnBase(Column, Serializable):
                 ) from e
             raise
 
-    def isin(self, values):
+    def isin(self, values: Sequence) -> "ColumnBase":
         """Check whether values are contained in the Column.
 
         Parameters
@@ -824,17 +831,17 @@ class ColumnBase(Column, Serializable):
                 rhs = as_column(pd.Categorical.from_codes([-1], categories=[]))
                 rhs = rhs.cat().set_categories(lhs_cats).astype(self.dtype)
 
-        lhs = cudf.DataFrame({"x": lhs, "orig_order": arange(len(lhs))})
-        rhs = cudf.DataFrame(
+        ldf = cudf.DataFrame({"x": lhs, "orig_order": arange(len(lhs))})
+        rdf = cudf.DataFrame(
             {"x": rhs, "bool": full(len(rhs), True, dtype="bool")}
         )
-        res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
+        res = ldf.merge(rdf, on="x", how="left").sort_values(by="orig_order")
         res = res.drop_duplicates(subset="orig_order", ignore_index=True)
         res = res._data["bool"].fillna(False)
 
         return res
 
-    def as_mask(self):
+    def as_mask(self) -> "Buffer":
         """Convert booleans to bitmask
 
         Returns
@@ -854,15 +861,15 @@ class ColumnBase(Column, Serializable):
         return cudf.io.dlpack.to_dlpack(self)
 
     @property
-    def is_unique(self):
+    def is_unique(self) -> bool:
         return self.distinct_count() == len(self)
 
     @property
-    def is_monotonic(self):
+    def is_monotonic(self) -> bool:
         return self.is_monotonic_increasing
 
     @property
-    def is_monotonic_increasing(self):
+    def is_monotonic_increasing(self) -> bool:
         if not hasattr(self, "_is_monotonic_increasing"):
             if self.has_nulls:
                 self._is_monotonic_increasing = False
@@ -873,7 +880,7 @@ class ColumnBase(Column, Serializable):
         return self._is_monotonic_increasing
 
     @property
-    def is_monotonic_decreasing(self):
+    def is_monotonic_decreasing(self) -> bool:
         if not hasattr(self, "_is_monotonic_decreasing"):
             if self.has_nulls:
                 self._is_monotonic_decreasing = False
@@ -883,14 +890,14 @@ class ColumnBase(Column, Serializable):
                 )
         return self._is_monotonic_decreasing
 
-    def get_slice_bound(self, label, side, kind):
+    def get_slice_bound(self, label: ScalarObj, side: str, kind: str) -> int:
         """
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
         of given label.
         Parameters
         ----------
-        label : object
+        label : Scalar
         side : {'left', 'right'}
         kind : {'ix', 'loc', 'getitem'}
         """
@@ -905,21 +912,25 @@ class ColumnBase(Column, Serializable):
         #       Not currently using `kind` argument.
         if side == "left":
             return self.find_first_value(label, closest=True)
-        if side == "right":
+        elif side == "right":
             return self.find_last_value(label, closest=True) + 1
+        else:
+            raise ValueError(f"Invalid value for side: {side}")
 
-    def sort_by_values(self, ascending=True, na_position="last"):
+    def sort_by_values(
+        self, ascending: bool = True, na_position: str = "last"
+    ) -> Tuple["ColumnBase", "ColumnBase"]:
         col_inds = self.as_frame()._get_sorted_inds(ascending, na_position)
-        col_keys = self[col_inds]
+        col_keys = self.take(col_inds)
         return col_keys, col_inds
 
-    def distinct_count(self, method="sort", dropna=True):
+    def distinct_count(self, method: str = "sort", dropna: bool = True) -> int:
         if method != "sort":
             msg = "non sort based distinct_count() not implemented yet"
             raise NotImplementedError(msg)
         return cpp_distinct_count(self, ignore_nulls=dropna)
 
-    def astype(self, dtype, **kwargs) -> "ColumnBase":
+    def astype(self, dtype: Dtype, **kwargs) -> "ColumnBase":
         if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
         elif pd.api.types.pandas_dtype(dtype).type in {
@@ -941,7 +952,9 @@ class ColumnBase(Column, Serializable):
         else:
             return self.as_numerical_column(dtype, **kwargs)
 
-    def as_categorical_column(self, dtype, **kwargs):
+    def as_categorical_column(
+        self, dtype, **kwargs
+    ) -> "cudf.core.column.CategoricalColumn":
         if "ordered" in kwargs:
             ordered = kwargs["ordered"]
         else:
@@ -984,26 +997,36 @@ class ColumnBase(Column, Serializable):
             ordered=ordered,
         )
 
-    def as_numerical_column(self, dtype, **kwargs):
+    def as_numerical_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.NumericalColumn":
         raise NotImplementedError
 
-    def as_datetime_column(self, dtype, **kwargs):
+    def as_datetime_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.DatetimeColumn":
         raise NotImplementedError
 
-    def as_timedelta_column(self, dtype, **kwargs):
+    def as_timedelta_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.TimeDeltaColumn":
         raise NotImplementedError
 
-    def as_string_column(self, dtype, **kwargs):
+    def as_string_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.StringColumn":
         raise NotImplementedError
 
-    def apply_boolean_mask(self, mask):
+    def apply_boolean_mask(self, mask: "Buffer") -> "ColumnBase":
         mask = as_column(mask, dtype="bool")
         result = (
             self.as_frame()._apply_boolean_mask(boolean_mask=mask)._as_column()
         )
         return result
 
-    def argsort(self, ascending=True, na_position="last"):
+    def argsort(
+        self, ascending: bool = True, na_position: str = "last"
+    ) -> "ColumnBase":
 
         sorted_indices = self.as_frame()._get_sorted_inds(
             ascending=ascending, na_position=na_position
@@ -1011,7 +1034,7 @@ class ColumnBase(Column, Serializable):
         return sorted_indices
 
     @property
-    def __cuda_array_interface__(self):
+    def __cuda_array_interface__(self) -> Mapping[str, Any]:
         output = {
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),
@@ -1038,14 +1061,18 @@ class ColumnBase(Column, Serializable):
         return output
 
     def searchsorted(
-        self, value, side="left", ascending=True, na_position="last"
+        self,
+        value,
+        side: str = "left",
+        ascending: bool = True,
+        na_position: str = "last",
     ):
         values = as_column(value).as_frame()
         return self.as_frame().searchsorted(
             values, side, ascending=ascending, na_position=na_position
         )
 
-    def unique(self):
+    def unique(self) -> "ColumnBase":
         """
         Get unique values in the data
         """
@@ -1055,8 +1082,8 @@ class ColumnBase(Column, Serializable):
             ._as_column()
         )
 
-    def serialize(self):
-        header = {}
+    def serialize(self) -> Tuple[dict, list]:
+        header = {}  # type: Dict[Any, Any]
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
         header["dtype"] = self.dtype.str
@@ -1074,7 +1101,7 @@ class ColumnBase(Column, Serializable):
         return header, frames
 
     @classmethod
-    def deserialize(cls, header, frames):
+    def deserialize(cls, header: dict, frames: list) -> "ColumnBase":
         dtype = header["dtype"]
         data = Buffer.deserialize(header["data"], [frames[0]])
         mask = None
@@ -1082,61 +1109,66 @@ class ColumnBase(Column, Serializable):
             mask = Buffer.deserialize(header["mask"], [frames[1]])
         return build_column(data=data, dtype=dtype, mask=mask)
 
-    def min(self, skipna=None, dtype=None):
+    def min(self, skipna: bool = None, dtype: Dtype = None):
         result_col = self._process_for_reduction(skipna=skipna)
         if isinstance(result_col, ColumnBase):
             return libcudf.reduce.reduce("min", result_col, dtype=dtype)
         else:
             return result_col
 
-    def max(self, skipna=None, dtype=None):
+    def max(self, skipna: bool = None, dtype: Dtype = None):
         result_col = self._process_for_reduction(skipna=skipna)
         if isinstance(result_col, ColumnBase):
             return libcudf.reduce.reduce("max", result_col, dtype=dtype)
         else:
             return result_col
 
-    def sum(self, skipna=None, dtype=None, min_count=0):
+    def sum(
+        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
+    ):
         raise TypeError(f"cannot perform sum with type {self.dtype}")
 
-    def product(self, skipna=None, dtype=None, min_count=0):
+    def product(
+        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
+    ):
         raise TypeError(f"cannot perform prod with type {self.dtype}")
 
-    def mean(self, skipna=None, dtype=None):
+    def mean(self, skipna: bool = None, dtype: Dtype = None):
         raise TypeError(f"cannot perform mean with type {self.dtype}")
 
-    def std(self, skipna=None, ddof=1, dtype=np.float64):
+    def std(self, skipna: bool = None, ddof=1, dtype: Dtype = np.float64):
         raise TypeError(f"cannot perform std with type {self.dtype}")
 
-    def var(self, skipna=None, ddof=1, dtype=np.float64):
+    def var(self, skipna: bool = None, ddof=1, dtype: Dtype = np.float64):
         raise TypeError(f"cannot perform var with type {self.dtype}")
 
-    def kurtosis(self, skipna=None):
+    def kurtosis(self, skipna: bool = None):
         raise TypeError(f"cannot perform kurt with type {self.dtype}")
 
-    def skew(self, skipna=None):
+    def skew(self, skipna: bool = None):
         raise TypeError(f"cannot perform skew with type {self.dtype}")
 
-    def cov(self, other):
+    def cov(self, other: "ColumnBase"):
         raise TypeError(
             f"cannot perform covarience with types {self.dtype}, "
             f"{other.dtype}"
         )
 
-    def corr(self, other):
+    def corr(self, other: "ColumnBase"):
         raise TypeError(
             f"cannot perform corr with types {self.dtype}, {other.dtype}"
         )
 
-    def nans_to_nulls(self):
+    def nans_to_nulls(self) -> "ColumnBase":
         if self.dtype.kind == "f":
             col = self.fillna(np.nan)
             newmask = libcudf.transform.nans_to_nulls(col)
-            return self.set_mask(newmask)
-        else:
-            return self
+            self.set_mask(newmask)
+        return self
 
-    def _process_for_reduction(self, skipna=None, min_count=0):
+    def _process_for_reduction(
+        self, skipna: bool = None, min_count: int = 0
+    ) -> "ColumnBase":
         skipna = True if skipna is None else skipna
 
         if skipna:
@@ -1161,8 +1193,13 @@ class ColumnBase(Column, Serializable):
         return result_col
 
     def scatter_to_table(
-        self, row_indices, column_indices, names, nrows=None, ncols=None
-    ):
+        self,
+        row_indices: "ColumnBase",
+        column_indices: "ColumnBase",
+        names: List[Any],
+        nrows: int = None,
+        ncols: int = None,
+    ) -> "cudf.core.frame.Frame":
         """
         Scatters values from the column into a table.
 
@@ -1209,7 +1246,12 @@ class ColumnBase(Column, Serializable):
         )
 
 
-def column_empty_like(column, dtype=None, masked=False, newsize=None):
+def column_empty_like(
+    column: "ColumnBase",
+    dtype: Dtype = None,
+    masked: bool = False,
+    newsize: int = None,
+) -> "ColumnBase":
     """Allocate a new column like the given *column*
     """
     if dtype is None:
@@ -1221,6 +1263,7 @@ def column_empty_like(column, dtype=None, masked=False, newsize=None):
         and is_categorical_dtype(column.dtype)
         and dtype == column.dtype
     ):
+        column = cast("cudf.core.column.CategoricalColumn", column)
         codes = column_empty_like(column.codes, masked=masked, newsize=newsize)
         return build_column(
             data=None,
@@ -1284,7 +1327,7 @@ def column_empty(row_count, dtype="object", masked=False):
 
 
 def build_column(
-    data: Buffer,
+    data: Union[Buffer, None],
     dtype: Dtype,
     *,
     size: int = None,

@@ -118,7 +118,7 @@ class Buffer(Serializable):
         return header, frames
 
     @classmethod
-    def deserialize(cls, header, frames) -> "Buffer":
+    def deserialize(cls, header: dict, frames: list) -> "Buffer":
         buf = cls(frames[0], **header["constructor-kwargs"])
 
         if header["desc"]["shape"] != buf.__cuda_array_interface__["shape"]:
