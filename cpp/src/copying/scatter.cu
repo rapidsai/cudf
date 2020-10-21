@@ -60,7 +60,7 @@ __global__ void marking_bitmask_kernel(mutable_column_device_view destination,
 }
 
 template <typename MapIterator>
-void scatter_scalar_bitmask(std::vector<std::reference_wrapper<scalar>> const& source,
+void scatter_scalar_bitmask(std::vector<std::reference_wrapper<const scalar>> const& source,
                             MapIterator scatter_map,
                             size_type num_scatter_rows,
                             std::vector<std::unique_ptr<column>>& target,
@@ -91,7 +91,7 @@ void scatter_scalar_bitmask(std::vector<std::reference_wrapper<scalar>> const& s
 
 template <typename Element, typename MapIterator>
 struct column_scalar_scatterer_impl {
-  std::unique_ptr<column> operator()(std::reference_wrapper<scalar> const& source,
+  std::unique_ptr<column> operator()(std::reference_wrapper<const scalar> const& source,
                                      MapIterator scatter_iter,
                                      size_type scatter_rows,
                                      column_view const& target,
@@ -106,7 +106,7 @@ struct column_scalar_scatterer_impl {
     using Type = device_storage_type_t<Element>;
 
     // Use permutation iterator with constant index to dereference scalar data
-    auto scalar_impl = static_cast<scalar_type_t<Type>*>(&source.get());
+    auto scalar_impl = static_cast<const scalar_type_t<Type>*>(&source.get());
     auto scalar_iter =
       thrust::make_permutation_iterator(scalar_impl->data(), thrust::make_constant_iterator(0));
 
@@ -122,7 +122,7 @@ struct column_scalar_scatterer_impl {
 
 template <typename MapIterator>
 struct column_scalar_scatterer_impl<string_view, MapIterator> {
-  std::unique_ptr<column> operator()(std::reference_wrapper<scalar> const& source,
+  std::unique_ptr<column> operator()(std::reference_wrapper<const scalar> const& source,
                                      MapIterator scatter_iter,
                                      size_type scatter_rows,
                                      column_view const& target,
@@ -131,7 +131,7 @@ struct column_scalar_scatterer_impl<string_view, MapIterator> {
   {
     CUDF_EXPECTS(source.get().type() == target.type(), "scalar and column types must match");
 
-    auto const scalar_impl = static_cast<string_scalar*>(&source.get());
+    auto const scalar_impl = static_cast<const string_scalar*>(&source.get());
     auto const source_view = string_view(scalar_impl->data(), scalar_impl->size());
     auto const begin       = thrust::make_constant_iterator(source_view);
     auto const end         = begin + scatter_rows;
@@ -141,7 +141,7 @@ struct column_scalar_scatterer_impl<string_view, MapIterator> {
 
 template <typename MapIterator>
 struct column_scalar_scatterer_impl<list_view, MapIterator> {
-  std::unique_ptr<column> operator()(std::reference_wrapper<scalar> const& source,
+  std::unique_ptr<column> operator()(std::reference_wrapper<const scalar> const& source,
                                      MapIterator scatter_iter,
                                      size_type scatter_rows,
                                      column_view const& target,
@@ -154,7 +154,7 @@ struct column_scalar_scatterer_impl<list_view, MapIterator> {
 
 template <typename MapIterator>
 struct column_scalar_scatterer_impl<struct_view, MapIterator> {
-  std::unique_ptr<column> operator()(std::reference_wrapper<scalar> const& source,
+  std::unique_ptr<column> operator()(std::reference_wrapper<const scalar> const& source,
                                      MapIterator scatter_iter,
                                      size_type scatter_rows,
                                      column_view const& target,
@@ -167,7 +167,7 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
 
 template <typename MapIterator>
 struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
-  std::unique_ptr<column> operator()(std::reference_wrapper<scalar> const& source,
+  std::unique_ptr<column> operator()(std::reference_wrapper<const scalar> const& source,
                                      MapIterator scatter_iter,
                                      size_type scatter_rows,
                                      column_view const& target,
@@ -214,7 +214,7 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
 template <typename MapIterator>
 struct column_scalar_scatterer {
   template <typename Element>
-  std::unique_ptr<column> operator()(std::reference_wrapper<scalar> const& source,
+  std::unique_ptr<column> operator()(std::reference_wrapper<const scalar> const& source,
                                      MapIterator scatter_iter,
                                      size_type scatter_rows,
                                      column_view const& target,
@@ -256,7 +256,7 @@ std::unique_ptr<table> scatter(table_view const& source,
   return detail::scatter(source, map_begin, map_end, target, check_bounds, mr, stream);
 }
 
-std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<scalar>> const& source,
+std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>> const& source,
                                column_view const& indices,
                                table_view const& target,
                                bool check_bounds,
@@ -390,7 +390,7 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
 }
 
 std::unique_ptr<table> boolean_mask_scatter(
-  std::vector<std::reference_wrapper<scalar>> const& input,
+  std::vector<std::reference_wrapper<const scalar>> const& input,
   table_view const& target,
   column_view const& boolean_mask,
   rmm::mr::device_memory_resource* mr,
@@ -440,7 +440,7 @@ std::unique_ptr<table> scatter(table_view const& source,
   return detail::scatter(source, scatter_map, target, check_bounds, mr);
 }
 
-std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<scalar>> const& source,
+std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>> const& source,
                                column_view const& indices,
                                table_view const& target,
                                bool check_bounds,
@@ -460,7 +460,7 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
 }
 
 std::unique_ptr<table> boolean_mask_scatter(
-  std::vector<std::reference_wrapper<scalar>> const& input,
+  std::vector<std::reference_wrapper<const scalar>> const& input,
   table_view const& target,
   column_view const& boolean_mask,
   rmm::mr::device_memory_resource* mr)
