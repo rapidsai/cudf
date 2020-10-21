@@ -9,11 +9,7 @@ CPMFindPackage(
   GIT_TAG 1.10.0
   VERSION 1.10.0
   GIT_SHALLOW TRUE
-  OPTIONS
-    # If there is no pre-installed thrust we can use, we'll install our fetched copy
-    # together with CUDF
-    "THRUST_INSTALL TRUE"
-  )
+)
 
 thrust_create_target(cudf::Thrust FROM_OPTIONS)
 
@@ -29,7 +25,6 @@ CPMFindPackage(
 )
 
 set(JITIFY_INCLUDE_DIR "${jitify_SOURCE_DIR}" PARENT_SCOPE)
-set(jitify_DIR "${jitify_SOURCE_DIR}" PARENT_SCOPE)
 
 ###################################################################################################
 # - libcudacxx ------------------------------------------------------------------------------------
@@ -42,7 +37,6 @@ CPMFindPackage(
 )
 
 set(LIBCUDACXX_DIR "${libcudacxx_SOURCE_DIR}" PARENT_SCOPE)
-set(libcudacxx_DIR "${libcudacxx_SOURCE_DIR}" PARENT_SCOPE)
 set(LIBCUDACXX_INCLUDE_DIR "${libcudacxx_SOURCE_DIR}/include" PARENT_SCOPE)
 set(LIBCXX_DIR "${libcudacxx_SOURCE_DIR}/libcxx" PARENT_SCOPE)
 set(LIBCXX_INCLUDE_DIR "${libcudacxx_SOURCE_DIR}/libcxx/include" PARENT_SCOPE)

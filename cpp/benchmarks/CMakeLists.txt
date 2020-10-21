@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.17...3.18 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
 project(CUDF_BENCHS LANGUAGES C CXX CUDA)
 
