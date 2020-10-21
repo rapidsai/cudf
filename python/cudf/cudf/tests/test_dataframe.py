@@ -7737,27 +7737,23 @@ def test_equals_dtypes():
 @pytest.mark.parametrize(
     "data",
     [
-        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False],},
-        {
-            "a": [1.0, 2.0, 3.0],
-            "b": [3.0, 4.0, 5.0],
-            "c": [True, True, False],
-        },
-        {"a": [1, 2, 3], "b": [3, 4, 5], "c": [True, True, False],},
-        {"a": [1, 2, 3], "b": [True, True, False], "c": [False, True, False],},
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]},
+        {"a": [1.0, 2.0, 3.0], "b": [3.0, 4.0, 5.0], "c": [True, True, False]},
+        {"a": [1, 2, 3], "b": [3, 4, 5], "c": [True, True, False]},
+        {"a": [1, 2, 3], "b": [True, True, False], "c": [False, True, False]},
         {
             "a": [1.0, 2.0, 3.0],
             "b": [True, True, False],
             "c": [False, True, False],
         },
-        {"a": [1, 2, 3], "b": [3, 4, 5], "c": [2.0, 3.0, 4.0],},
-        {"a": [1, 2, 3], "b": [2.0, 3.0, 4.0], "c": [5.0, 6.0, 4.0],},
+        {"a": [1, 2, 3], "b": [3, 4, 5], "c": [2.0, 3.0, 4.0]},
+        {"a": [1, 2, 3], "b": [2.0, 3.0, 4.0], "c": [5.0, 6.0, 4.0]},
     ],
 )
 @pytest.mark.parametrize(
     "aggs",
     [
-        ["min", "sum", "mean"],
+        ["min", "sum", "max"],
         "sum",
         "min",
         {"a": ["sum", "min"], "b": ["min"], "c": ["max"]},

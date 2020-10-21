@@ -3725,36 +3725,45 @@ class DataFrame(Frame, Serializable):
     def agg(self, aggs):
         dtypes = [self[col].dtype for col in self._column_names]
         common_dtype = np.find_common_type(dtypes, [])
-        self = self.astype(common_dtype)
+        df_normalized = self.astype(common_dtype)
 
         if isinstance(aggs, list):
             result = cudf.DataFrame()
             for agg in aggs:
-                result[agg] = getattr(self, agg)()
+                result[agg] = getattr(df_normalized, agg)()
 
         elif isinstance(aggs, str):
             result = cudf.DataFrame()
-            result[aggs] = getattr(self, aggs)()
+            result[aggs] = getattr(df_normalized, aggs)()
             result = result.T.loc[aggs]
             result.name = None
             return result
 
         elif isinstance(aggs, dict):
-            result = cudf.DataFrame()
+            cols = aggs.keys()
+            idxs = set()
+            for agg_l in aggs.values():
+                for agg in agg_l:
+                    idxs.add(agg)
+            idxs = sorted(list(idxs))
+            result = cudf.DataFrame(index=idxs, columns=cols)
             for key in aggs.keys():
+                col = df_normalized[key]
+                ans = cudf.Series(
+                    [None] * len(idxs), index=idxs, dtype=col.dtype
+                )
                 for agg in aggs.get(key):
-                    result[agg] = getattr(self, agg)()
-
+                    ans[agg] = getattr(col, agg)()
+                result[key] = ans
+            return result
         elif callable(aggs):
-            raise NotImplementedError("callable parameter is not implemented yet")
-           
+            raise NotImplementedError(
+                "callable parameter is not implemented yet"
+            )
+
         else:
             raise ValueError("argument must be a string or list")
-
-        dtypes = [result[col].dtype for col in result._column_names]
-        common_dtype = np.find_common_type(dtypes, [])
-        result = result.astype(common_dtype)
-        return result.T.sort_index(axis=0, ascending=True)
+        return result.T.sort_index(axis=1, ascending=True)
 
     def nlargest(self, n, columns, keep="first"):
         """Get the rows of the DataFrame sorted by the n largest value of *columns*
