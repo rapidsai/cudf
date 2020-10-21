@@ -22,6 +22,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf {
+namespace detail {
 namespace {
 struct byte_list_conversion {
   /**
@@ -107,9 +108,23 @@ std::unique_ptr<column> byte_cast(column_view const& input_column,
                                   rmm::mr::device_memory_resource* mr,
                                   cudaStream_t stream)
 {
-  CUDF_FUNC_RANGE();
   return type_dispatcher(
     input_column.type(), byte_list_conversion{}, input_column, configuration, mr, stream);
+}
+
+}  // namespace detail
+
+/**
+ * @copydoc cudf::byte_cast(input_column,flip_endianess,rmm::mr::device_memory_resource)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> byte_cast(column_view const& input_column,
+                                  flip_endianness configuration,
+                                  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::byte_cast(input_column, configuration, mr, 0);
 }
 
 }  // namespace cudf
