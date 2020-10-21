@@ -1705,26 +1705,29 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
             case VARCHAR:
             case CHAR: {
               nvstrdesc_s *strdesc = &static_cast<nvstrdesc_s *>(data_out)[row];
-              void const *ptr      = nullptr;
+              const uint8_t *ptr;
               uint32_t count;
               if (IS_DICTIONARY(s->chunk.encoding_kind)) {
                 uint32_t dict_idx = s->vals.u32[t + vals_skipped];
+                ptr               = s->chunk.streams[CI_DICTIONARY];
                 if (dict_idx < s->chunk.dict_len) {
-                  ptr = s->chunk.streams[CI_DICTIONARY] +
-                        global_dictionary[s->chunk.dictionary_start + dict_idx].pos;
+                  ptr += global_dictionary[s->chunk.dictionary_start + dict_idx].pos;
                   count = global_dictionary[s->chunk.dictionary_start + dict_idx].len;
                 } else {
-                  ptr   = s->chunk.streams[CI_DICTIONARY];
                   count = 0;
+                  // ptr = (uint8_t *)0xdeadbeef;
                 }
               } else {
                 uint32_t dict_idx =
                   s->chunk.dictionary_start + s->vals.u32[t + vals_skipped] - secondary_val;
                 count = secondary_val;
                 ptr   = s->chunk.streams[CI_DATA] + dict_idx;
-                if (dict_idx + count > s->chunk.strm_len[CI_DATA]) { count = 0; }
+                if (dict_idx + count > s->chunk.strm_len[CI_DATA]) {
+                  count = 0;
+                  // ptr = (uint8_t *)0xdeadbeef;
+                }
               }
-              strdesc->ptr   = static_cast<char const *>(ptr);
+              strdesc->ptr   = reinterpret_cast<const char *>(ptr);
               strdesc->count = count;
               break;
             }
