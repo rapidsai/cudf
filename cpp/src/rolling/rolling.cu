@@ -14,6 +14,13 @@
  * limitations under the License.
  */
 
+#include "jit/launcher.h"
+#include "jit/parser.h"
+#include "jit/type.h"
+#include "rolling/jit/code/code.h"
+#include "rolling/rolling_detail.hpp"
+#include "rolling/rolling_jit_detail.hpp"
+
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -42,14 +49,8 @@
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <memory>
 
-#include "jit/launcher.h"
-#include "jit/parser.h"
-#include "jit/type.h"
-#include "rolling/jit/code/code.h"
-#include "rolling/rolling_detail.hpp"
-#include "rolling/rolling_jit_detail.hpp"
+#include <memory>
 
 namespace cudf {
 namespace detail {
