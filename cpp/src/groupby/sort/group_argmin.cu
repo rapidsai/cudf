@@ -54,7 +54,7 @@ std::unique_ptr<column> group_argmin(column_view const& values,
   auto result_table =
     cudf::detail::gather(table_view({key_sort_order}),
                          null_removed_indices,
-                         indices->nullable() ? cudf::out_of_bounds_policy::IGNORE
+                         indices->nullable() ? cudf::out_of_bounds_policy::DONT_CHECK
                                              : cudf::out_of_bounds_policy::NULLIFY,
                          cudf::detail::negative_index_policy::NOT_ALLOWED,
                          stream,

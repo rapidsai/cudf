@@ -90,7 +90,7 @@ std::unique_ptr<column> add_keys(
   // and the corresponding index is therefore invalid/undefined
   auto table_indices = cudf::detail::gather(table_view{{map_indices->view()}},
                                             indices_view,
-                                            cudf::out_of_bounds_policy::IGNORE,
+                                            cudf::out_of_bounds_policy::DONT_CHECK,
                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
                                             stream,
                                             mr)

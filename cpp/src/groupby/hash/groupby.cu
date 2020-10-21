@@ -172,7 +172,7 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
       auto transformed_result =
         cudf::detail::gather(table_view({col}),
                              null_removed_map,
-                             arg_result->nullable() ? cudf::out_of_bounds_policy::IGNORE
+                             arg_result->nullable() ? cudf::out_of_bounds_policy::DONT_CHECK
                                                     : cudf::out_of_bounds_policy::NULLIFY,
                              cudf::detail::negative_index_policy::NOT_ALLOWED,
                              stream,

@@ -58,7 +58,7 @@ TEST_F(GatherTestStr, Gather)
   cudf::test::fixed_width_column_wrapper<int32_t> gather_map(h_map.begin(), h_map.end());
   auto results = cudf::detail::gather(source_table,
                                       gather_map,
-                                      cudf::out_of_bounds_policy::IGNORE,
+                                      cudf::out_of_bounds_policy::DONT_CHECK,
                                       cudf::detail::negative_index_policy::NOT_ALLOWED);
 
   std::vector<const char*> h_expected;
@@ -88,7 +88,7 @@ TEST_F(GatherTestStr, GatherIgnoreOutOfBounds)
   cudf::test::fixed_width_column_wrapper<int32_t> gather_map(h_map.begin(), h_map.end());
   auto results = cudf::detail::gather(source_table,
                                       gather_map,
-                                      cudf::out_of_bounds_policy::IGNORE,
+                                      cudf::out_of_bounds_policy::DONT_CHECK,
                                       cudf::detail::negative_index_policy::NOT_ALLOWED);
 
   std::vector<const char*> h_expected;
