@@ -13,12 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 
-#include "hash_join.cuh"
+#include <join/hash_join.cuh>
+
+#include <numeric>
 
 namespace cudf {
 namespace detail {

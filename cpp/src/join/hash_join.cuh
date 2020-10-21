@@ -17,16 +17,14 @@
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/join.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
-#include "cudf/types.hpp"
-#include "join_common_utils.hpp"
-#include "join_kernels.cuh"
+#include <join/join_common_utils.hpp>
+#include <join/join_kernels.cuh>
 
+#include <thrust/sequence.h>
 #include <limits>
 
 namespace cudf {

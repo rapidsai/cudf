@@ -19,10 +19,10 @@
 #include <cudf/table/table.hpp>
 
 #include <join/hash_join.cuh>
+#include <join/join_common_utils.hpp>
 
 namespace cudf {
 namespace detail {
-namespace {
 
 cudf::table_view update_table_from_matched(cudf::table_view const& input,
                                            cudf::table_view const& updated_table,
@@ -34,8 +34,6 @@ cudf::table_view update_table_from_matched(cudf::table_view const& input,
     updated_columns[indices[idx]] = updated_table.column(idx);
   return table_view{updated_columns};
 }
-
-}  // namespace
 
 std::unique_ptr<table> inner_join(
   table_view const& left_input,
@@ -50,12 +48,12 @@ std::unique_ptr<table> inner_join(
   // Make sure any dictionary columns have matched key sets.
   // This will return any new dictionary columns created as well as updated table_views.
   auto matched = cudf::dictionary::detail::match_dictionaries(
-    {left_input.select(left_on), right_input.select(right_on)},  // these should match
-    rmm::mr::get_current_device_resource(),                      // temporary objects returned
+    {left_input.select(left_on), right_input.select(right_on)},
+    rmm::mr::get_current_device_resource(),  // temporary objects returned
     stream);
   // now rebuild the table views with the updated ones
-  table_view const left  = update_table_from_matched(left_input, matched.second.front(), left_on);
-  table_view const right = update_table_from_matched(right_input, matched.second.back(), right_on);
+  auto const left  = update_table_from_matched(left_input, matched.second.front(), left_on);
+  auto const right = update_table_from_matched(right_input, matched.second.back(), right_on);
 
   // For `inner_join`, we can freely choose either the `left` or `right` table to use for
   // building/probing the hash map. Because building is typically more expensive than probing, we

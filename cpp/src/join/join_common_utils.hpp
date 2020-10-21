@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,14 +17,11 @@
 
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/table/row_operators.cuh>
-#include <cudf/table/table.hpp>
-#include <cudf/types.hpp>
+#include <cudf/table/table_view.hpp>
+
 #include <hash/concurrent_unordered_multimap.cuh>
 
-#include <algorithm>
 #include <limits>
-#include <memory>
-#include <numeric>
 
 namespace cudf {
 namespace detail {
@@ -75,6 +72,10 @@ inline bool is_trivial_join(table_view const& left,
 
   return false;
 }
+
+cudf::table_view update_table_from_matched(cudf::table_view const& input,
+                                           cudf::table_view const& updated_table,
+                                           std::vector<size_type> const& indices);
 
 }  // namespace detail
 
