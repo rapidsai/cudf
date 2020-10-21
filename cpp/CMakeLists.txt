@@ -666,9 +666,8 @@ add_library("${CUDF_PROXY_NAME}::${CUDF_PROXY_NAME}" ALIAS "${CUDF_PROXY_NAME}")
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries("${CUDF_PROXY_NAME}" "${CUDF_NAMESPACE}::${CUDF_BASE_NAME}" "${CUDF_MODULES}" ZLIB::ZLIB Boost::filesystem)
-
-
+target_link_libraries("${CUDF_PROXY_NAME}" "${CUDF_NAMESPACE}::${CUDF_BASE_NAME}" "${CUDF_MODULES}" 
+                        ZLIB::ZLIB Boost::filesystem)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
