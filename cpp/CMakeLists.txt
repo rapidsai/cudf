@@ -201,12 +201,40 @@ endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
 
-option(ARROW_STATIC_LIB "Build and statically link with Arrow libraries" OFF)
-
 if(ARROW_STATIC_LIB)
   message(STATUS "BUILDING ARROW")
-  include(ConfigureArrow)
-
+  CPMFindPackage(
+    NAME Arrow
+    GITHUB_REPOSITORY google/googletest
+    GIT_TAG apache-arrow-1.0.1
+    VERSION 1.0.1
+    GIT_SHALLOW TRUE
+    OPTIONS
+      "ARROW_WITH_LZ4 OFF"
+      "ARROW_WITH_ZSTD OFF"
+      "ARROW_WITH_BROTLI OFF"
+      "ARROW_WITH_SNAPPY OFF"
+      "ARROW_WITH_ZLIB OFF"
+      "ARROW_BUILD_STATIC ON"
+      "ARROW_BUILD_SHARED OFF"
+      "ARROW_BOOST_USE_SHARED OFF"
+      "ARROW_BUILD_TESTS OFF"
+      "ARROW_TEST_MEMCHECK OFF"
+      "ARROW_BUILD_BENCHMARKS OFF"
+      "ARROW_IPC ON"
+      "ARROW_FLIGHT OFF"
+      "ARROW_COMPUTE OFF"
+      "ARROW_CUDA ON"
+      "ARROW_JEMALLOC OFF"
+      "ARROW_BOOST_VENDORED OFF"
+      "ARROW_PYTHON OFF"
+      "ARROW_USE_GLOG OFF"
+      "ARROW_DATASET ON"
+      "ARROW_BUILD_UTILITIES OFF"
+      "ARROW_HDFS OFF"
+      "CMAKE_VERBOSE_MAKEFILE ON"
+  )
+  
   if(ARROW_FOUND)
     message(STATUS "Apache Arrow found in ${ARROW_INCLUDE_DIR}")
   else()
@@ -258,15 +286,6 @@ CPMFindPackage(
   VERSION 1.2.11
 )
 
-message(STATUS "ZLIB: ZLIB_LIBRARY set to ${ZLIB_LIBRARY}")
-message(STATUS "ZLIB: ZLIB_INCLUDE_DIR set to ${ZLIB_INCLUDE_DIR}")
-
-if(ZLIB_INCLUDE_DIR)
-    message(STATUS "ZLib found in ${ZLIB_INCLUDE_DIR}")
-else()
-    message(FATAL_ERROR "ZLib not found, please check your settings.")
-endif(ZLIB_INCLUDE_DIR)
-
 ###################################################################################################
 # - find boost ------------------------------------------------------------------------------------
 
@@ -289,10 +308,14 @@ endif(Boost_INCLUDE_DIR)
 ###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
 
-find_path(RMM_INCLUDE "rmm"
-          HINTS "$ENV{RMM_ROOT}/include")
-
-message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
+CPMFindPackage(
+  NAME RMM
+  GITHUB_REPOSITORY rapidsai/rmm
+  VERSION ${CMAKE_PROJECT_VERSION}
+  GIT_TAG "branch-${CMAKE_PROJECT_VERSION_MAJOR}.${CMAKE_PROJECT_VERSION_MINOR}"
+  OPTIONS
+    "CUDAToolkit_INCLUDE_DIR ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
+)
 
 ###################################################################################################
 # - DLPACK -------------------------------------------------------------------------------------------
@@ -643,7 +666,9 @@ add_library("${CUDF_PROXY_NAME}::${CUDF_PROXY_NAME}" ALIAS "${CUDF_PROXY_NAME}")
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries("${CUDF_PROXY_NAME}" "${CUDF_NAMESPACE}::${CUDF_BASE_NAME}" "${CUDF_MODULES}")
+target_link_libraries("${CUDF_PROXY_NAME}" "${CUDF_NAMESPACE}::${CUDF_BASE_NAME}" "${CUDF_MODULES}" ZLIB::ZLIB Boost::filesystem)
+
+
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
