@@ -147,7 +147,7 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
     ) except +
 
     cdef unique_ptr[table] boolean_mask_scatter (
-        vector[reference_wrapper[scalar]] input,
+        vector[reference_wrapper[constscalar]] input,
         table_view target,
         column_view boolean_mask
     ) except +
