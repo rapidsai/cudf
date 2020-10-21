@@ -103,3 +103,28 @@ def test_can_cast_safely_has_nulls():
 
     data = Series([1, 2, 3.1, None], dtype="float32")._column
     assert not data.can_cast_safely(to_dtype)
+
+@pytest.mark.skip
+@pytest.mark.parametrize(
+    "data_1d", [
+        [1, 2, 3, 4],
+        ['1.0', '2', -3],
+    ]
+)
+@pytest.mark.parametrize(
+    "obj", [
+        
+    ]
+)
+@pytest.mark.parametrize(
+    "downcast", [
+        'integer', 'signed', 'unsigned', 'float'
+    ]
+)
+@pytest.mark.parametrize(
+    "errors", [
+        'ignore', 'raise', 'coerce'
+    ]
+)
+def test_to_numeric_basic(data_1d, downcast, errors):
+    pdf = 
