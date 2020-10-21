@@ -86,6 +86,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/utilities/int_fastdiv.h
     - test -f $PREFIX/include/cudf/dictionary/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/encode.hpp
+    - test -f $PREFIX/include/cudf/dictionary/detail/merge.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/replace.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/search.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/update_keys.hpp
@@ -190,6 +191,7 @@ test:
     - test -f $PREFIX/include/cudf_test/column_wrapper.hpp
     - test -f $PREFIX/include/cudf_test/cudf_gtest.hpp
     - test -f $PREFIX/include/cudf_test/cxxopts.hpp
+    - test -f $PREFIX/include/cudf_test/file_utilities.hpp
     - test -f $PREFIX/include/cudf_test/scalar_utilities.hpp
     - test -f $PREFIX/include/cudf_test/table_utilities.hpp
     - test -f $PREFIX/include/cudf_test/timestamp_utilities.cuh
