@@ -36,8 +36,9 @@ struct timezone_table_view {
   cudf::detail::device_span<int32_t const> offsets;
 };
 
+static constexpr int64_t day_seconds = 24 * 60 * 60;
 // Number of seconds in 400 years
-static constexpr int64_t cycle_seconds = (365 * 400 + (100 - 3)) * 24 * 60 * 60ll;
+static constexpr int64_t cycle_seconds = (365 * 400 + (100 - 3)) * day_seconds;
 // Two entries per year, over the length of the cycle
 static constexpr uint32_t cycle_entry_cnt = 2 * 400;
 

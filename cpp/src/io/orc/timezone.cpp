@@ -28,12 +28,6 @@ std::string const tzif_system_directory = "/usr/share/zoneinfo/";
 constexpr int64_t orc_utc_offset = 1420070400;
 
 #pragma pack(push, 1)
-struct localtime_type_record_s {
-  int32_t utcoff;    // number of seconds to be added to UTC in order to determine local time
-  uint8_t isdst;     // 0:standard time, 1:Daylight Savings Time (DST)
-  uint8_t desigidx;  // index into the series of time zone designation characters
-};
-
 /**
  * @brief 32-bit TZif header
  */
@@ -48,6 +42,12 @@ struct timezone_file_header {
   uint32_t typecnt;  ///< number of local time type Records contained in the body - MUST NOT be zero
   uint32_t charcnt;  ///< total number of octets used by the set of time zone designations contained
                      ///< in the body
+};
+
+struct localtime_type_record_s {
+  int32_t utcoff;    // number of seconds to be added to UTC in order to determine local time
+  uint8_t isdst;     // 0:standard time, 1:Daylight Savings Time (DST)
+  uint8_t desigidx;  // index into the series of time zone designation characters
 };
 
 struct dst_transition_s {
@@ -79,12 +79,12 @@ struct timezone_file {
   static constexpr auto file_content_size_32(timezone_file_header const &header) noexcept
   {
     return header.timecnt * sizeof(uint32_t) +                 // transition times
-           header.timecnt +                                    // transition time index
+           header.timecnt * sizeof(uint8_t) +                  // transition time index
            header.typecnt * sizeof(localtime_type_record_s) +  // local time type records
-           header.charcnt +                                    // time zone designations
+           header.charcnt * sizeof(uint8_t) +                  // time zone designations
            header.leapcnt * leap_second_rec_size(false) +      // leap second records
-           header.isstdcnt +                                   // standard/wall indicators
-           header.isutccnt;                                    // UTC/local indicators
+           header.isstdcnt * sizeof(uint8_t) +                 // standard/wall indicators
+           header.isutccnt * sizeof(uint8_t);                  // UTC/local indicators
   }
 
   /**
@@ -228,18 +228,18 @@ class posix_parser {
 template <class Container>
 void posix_parser<Container>::skip_name()
 {
-  if (cur < end) {
-    auto c = *cur;
-    if (c == '<') {
-      ++cur;
-      while (cur < end) {
-        if (*cur++ == '>') { break; }
-      }
-    } else {
-      while ((c < '0' || c > '9') && (c != '-') && (c != '+') && (c != ',')) {
-        if (++cur >= end) { break; }
-        c = *cur;
-      }
+  CUDF_EXPECTS(cur < end, "Unexpected end of input stream");
+
+  auto c = *cur;
+  if (c == '<') {
+    ++cur;
+    while (cur < end) {
+      if (*cur++ == '>') { break; }
+    }
+  } else {
+    while ((c < '0' || c > '9') && (c != '-') && (c != '+') && (c != ',')) {
+      if (++cur >= end) { break; }
+      c = *cur;
     }
   }
 }
@@ -250,7 +250,7 @@ int64_t posix_parser<Container>::parse_number()
   int64_t v = 0;
   while (cur < end) {
     auto const c = *cur - '0';
-    if (c > 9u) { break; }
+    if (c > 9 || c < 0) { break; }
     v = v * 10 + c;
     ++cur;
   }
@@ -260,27 +260,32 @@ int64_t posix_parser<Container>::parse_number()
 template <class Container>
 int32_t posix_parser<Container>::parse_offset()
 {
-  if (cur < end) {
-    auto scale      = 60 * 60;
-    auto const sign = *cur;
-    cur += (sign == '-' || sign == '+');
-    auto v = parse_number();
-    v *= scale;
-    while (cur < end && scale > 1 && *cur == ':') {
-      ++cur;
-      auto const v2 = parse_number();
-      scale /= 60;
-      v += v2 * scale;
-    }
-    if (sign == '-') { v = -v; }
-    return v;
+  CUDF_EXPECTS(cur < end, "Unexpected end of input stream");
+
+  auto const sign = *cur;
+  cur += (sign == '-' || sign == '+');
+
+  auto const hours   = parse_number();
+  auto scale         = 60 * 60;
+  auto total_seconds = hours * scale;
+
+  // Parse minutes and seconds, if present
+  while (cur < end && scale > 1 && *cur == ':') {
+    // Skip the ':' character
+    ++cur;
+    // Scale becomes 60, for minutes, and then 1, for seconds
+    scale /= 60;
+    total_seconds += parse_number() * scale;
   }
-  return 0;
+
+  return (sign == '-') ? -total_seconds : total_seconds;
 }
 
 template <class Container>
 dst_transition_s posix_parser<Container>::parse_transition()
 {
+  CUDF_EXPECTS(cur < end, "Unexpected end of input stream");
+
   if (cur + 2 <= end && *cur == ',') {
     char const type = cur[1];
     int month       = 0;
@@ -300,6 +305,7 @@ dst_transition_s posix_parser<Container>::parse_transition()
     } else {
       day = parse_number();
     }
+    // Transition at 2AM by default
     int32_t time = 2 * 60 * 60;
     if (cur < end && *cur == '/') {
       ++cur;
@@ -346,7 +352,7 @@ static int64_t get_transition_time(dst_transition_s const &trans, int year)
     auto const month   = std::min(std::max(trans.month, 1), 12);
     auto week          = std::min(std::max(trans.week, 1), 52);
 
-    // Compute day of week
+    // Year-to-year day adjustment
     auto const adjusted_month = (month + 9) % 12 + 1;
     auto const adjusted_year  = year - (month <= 2);
     auto day_of_week =
@@ -354,18 +360,21 @@ static int64_t get_transition_time(dst_transition_s const &trans, int year)
        (adjusted_year / 400) - 2 * (adjusted_year / 100)) %
       7;
     if (day_of_week < 0) { day_of_week += 7; }
-    day -= day_of_week;
-    if (day < 0) { day += 7; }
+    day = (day - day_of_week + 7) % 7;
+
+    // Add weeks
     while (week > 1 && day + 7 < days_in_month(month, is_leap)) {
       week--;
       day += 7;
     }
+    // Add months
     for (int m = 1; m < month; m++) { day += days_in_month(m, is_leap); }
   } else if (trans.type == 'J') {
-    day += (day > 60 && is_leap_year(year));
+    // Account for 29th of February on leap years
+    day += (day > 31 + 29 && is_leap_year(year));
   }
 
-  return trans.time + day * 24 * 60 * 60;
+  return trans.time + day * day_seconds;
 }
 
 timezone_table build_timezone_transition_table(std::string const &timezone_name)
@@ -423,8 +432,8 @@ timezone_table build_timezone_transition_table(std::string const &timezone_name)
   // Add entries to fill the transition cycle
   int64_t year_timestamp = 0;
   for (uint32_t year = 1970; year < 1970 + cycle_entry_cnt; ++year) {
-    int64_t const dst_start_time = get_transition_time(dst_start, year);
-    int64_t const dst_end_time   = get_transition_time(dst_end, year);
+    auto const dst_start_time = get_transition_time(dst_start, year);
+    auto const dst_end_time   = get_transition_time(dst_end, year);
 
     // Two entries per year, since there are two transitions
     ttimes.push_back(year_timestamp + dst_end_time - future_dst_offset);
@@ -438,7 +447,7 @@ timezone_table build_timezone_transition_table(std::string const &timezone_name)
       std::swap(offsets.rbegin()[0], offsets.rbegin()[1]);
     }
 
-    year_timestamp += (365 + is_leap_year(year)) * 24 * 60 * 60;
+    year_timestamp += (365 + is_leap_year(year)) * day_seconds;
   }
 
   return {get_gmt_offset(ttimes, offsets, orc_utc_offset), ttimes, offsets};
