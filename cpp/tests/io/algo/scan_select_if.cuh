@@ -10,6 +10,7 @@
 #include <iterator>
 #include "cudf/types.hpp"
 #include "rmm/device_buffer.hpp"
+#include "rmm/device_scalar.hpp"
 #include "rmm/device_uvector.hpp"
 #include "rmm/thrust_rmm_allocator.h"
 
@@ -21,7 +22,23 @@ inline constexpr auto ceil_div(Dividend dividend, Divisor divisor)
   return dividend / divisor + (dividend % divisor != 0);
 }
 
+template <typename T, int N>
+inline __device__ void print_array_2(char const* message,
+                                     uint32_t num_items_remaining,
+                                     T (&items)[N])
+{
+  printf("b(%i) t(%i) remaining(%i) %s: %i %i\n",
+         blockIdx.x,
+         threadIdx.x,
+         num_items_remaining,
+         message,
+         items[0],
+         items[1]);
+}
+
 template <typename InputIterator,
+          typename OutputIterator,
+          typename OutputNumSelectedIterator,
           typename ScanOperator,
           typename SelectOperator,
           int THREADS_PER_BLOCK,
@@ -35,20 +52,21 @@ struct agent {
     T,
     THREADS_PER_BLOCK,
     ITEMS_PER_THREAD,
-    cub::BlockLoadAlgorithm::BLOCK_LOAD_TRANSPOSE>;
+    cub::BlockLoadAlgorithm::BLOCK_LOAD_DIRECT>;
 
   using BlockScanItem = cub::BlockScan<  //
     T,
     THREADS_PER_BLOCK,
-    cub::BlockScanAlgorithm::BLOCK_SCAN_WARP_SCANS>;
+    cub::BlockScanAlgorithm::BLOCK_SCAN_RAKING>;
 
   using BlockScanCount = cub::BlockScan<  //
     uint32_t,
     THREADS_PER_BLOCK,
-    cub::BlockScanAlgorithm::BLOCK_SCAN_WARP_SCANS>;
+    cub::BlockScanAlgorithm::BLOCK_SCAN_RAKING>;
 
-  using PrefixOpItem  = cub::TilePrefixCallbackOp<T, ScanOperator, cub::ScanTileState<T>>;
-  using PrefixOpCount = cub::TilePrefixCallbackOp<uint32_t, cub::Sum, cub::ScanTileState<uint32_t>>;
+  using PrefixOpItem = cub::TilePrefixCallbackOp<T, ScanOperator, cub::ScanTileState<T>>;
+  using PrefixOpCount =
+    cub::TilePrefixCallbackOp<uint32_t, ScanOperator, cub::ScanTileState<uint32_t>>;
 
   union _TempStorage {
     typename BlockLoadItem::TempStorage item_load;
@@ -69,6 +87,8 @@ struct agent {
 
   _TempStorage& temp_storage;
   InputIterator d_input;
+  OutputIterator d_output;
+  OutputNumSelectedIterator d_num_selected_output;
   uint32_t num_items;
   ScanOperator scan_op;
   SelectOperator select_op;
@@ -77,6 +97,8 @@ struct agent {
 
   __device__ agent(TempStorage temp_storage,
                    InputIterator d_input,
+                   OutputIterator d_output,
+                   OutputNumSelectedIterator d_num_selected_output,
                    uint32_t num_items,
                    ScanOperator scan_op,
                    SelectOperator select_op,
@@ -84,6 +106,8 @@ struct agent {
                    cub::ScanTileState<uint32_t>& count_state)
     : temp_storage(temp_storage.Alias()),
       d_input(d_input),
+      d_output(d_output),
+      d_num_selected_output(d_num_selected_output),
       num_items(num_items),
       scan_op(scan_op),
       select_op(select_op),
@@ -92,7 +116,7 @@ struct agent {
   {
   }
 
-  inline __device__ void consume_range(int num_items, int start_tile)
+  inline __device__ void consume_range(int num_tiles, int start_tile)
   {
     int tile_idx            = start_tile + blockIdx.x;
     int tile_offset         = ITEMS_PER_TILE * tile_idx;
@@ -100,10 +124,16 @@ struct agent {
 
     if (num_items_remaining <= 0) { return; }
 
-    if (num_items_remaining > ITEMS_PER_TILE) {
-      consume_tile<false>(tile_idx, tile_offset, num_items_remaining);
+    typename std::iterator_traits<OutputNumSelectedIterator>::value_type num_selected;
+
+    if (tile_idx < num_tiles - 1) {
+      num_selected = consume_tile<false>(tile_idx, tile_offset, ITEMS_PER_TILE);
     } else {
-      consume_tile<true>(tile_idx, tile_offset, num_items_remaining);
+      num_selected = consume_tile<true>(tile_idx, tile_offset, num_items_remaining);
+    }
+
+    if (threadIdx.x == 0) {  //
+      *d_num_selected_output = num_selected;
     }
   }
 
@@ -112,15 +142,6 @@ struct agent {
                                           uint32_t tile_offset,
                                           uint32_t num_items_remaining)
   {
-    if (threadIdx.x == 0) {
-      printf("bid(%i) tid(%i): consuming tile (%i, %i, %u)\n",
-             blockIdx.x,
-             threadIdx.x,
-             tile_idx,
-             tile_offset,
-             num_items_remaining);
-    }
-
     T items[ITEMS_PER_THREAD];
 
     if (is_last_tile) {
@@ -134,62 +155,111 @@ struct agent {
     // scan values
     if (tile_idx == 0) {
       T block_aggregate;
-      BlockScanItem(temp_storage.item_scan).InclusiveScan(items, items, scan_op,
-      block_aggregate);
+      BlockScanItem(temp_storage.item_scan)  //
+        .InclusiveScan(                      //
+          items,
+          items,
+          scan_op,
+          block_aggregate);
 
-      if (threadIdx.x == 0 and not is_last_tile) {
+      if (threadIdx.x == 0 and not is_last_tile) {  //
         item_state.SetInclusive(0, block_aggregate);
       }
     } else {
+      // printf("instantiating item prefix op for tile %i.\n", tile_idx);
       auto prefix_op = PrefixOpItem(item_state, temp_storage.item_prefix, scan_op, tile_idx);
-      // memory access exception
-      BlockScanItem(temp_storage.item_scan).InclusiveScan(items, items, scan_op, prefix_op);
-      // no exception
-      // BlockScanItem(temp_storage.item_scan).InclusiveScan(items, items, scan_op);
+      BlockScanItem(temp_storage.item_scan)  //
+        .InclusiveScan(                      //
+          items,
+          items,
+          scan_op,
+          prefix_op);
     }
 
     __syncthreads();
 
     uint32_t selection_flags[ITEMS_PER_THREAD];
-    uint32_t selection_indices[ITEMS_PER_THREAD];
 
     // initialize the selection flags.
     for (uint64_t i = 0; i < ITEMS_PER_THREAD; i++) {
       selection_flags[i] = 0;
-      if (not is_last_tile || threadIdx.x * ITEMS_PER_THREAD + i < num_items_remaining) {
+      if (threadIdx.x * ITEMS_PER_THREAD + i < num_items_remaining) {
         selection_flags[i] = select_op(items[i]);
       }
     }
 
+    // count the number of selections
+    uint32_t block_aggregate;
+    uint32_t num_selections;
+    uint32_t selection_indices[ITEMS_PER_THREAD];
+
     __syncthreads();
 
-    // count the number of selections
-    uint32_t num_tile_selections;
     if (tile_idx == 0) {
-      BlockScanCount(temp_storage.count_scan)
-        .ExclusiveSum(selection_flags, selection_indices, num_tile_selections);
-      if (threadIdx.x == 0) { count_state.SetInclusive(0, num_tile_selections); }
+      BlockScanItem(temp_storage.item_scan)
+        .InclusiveScan(  //
+          selection_flags,
+          selection_indices,
+          scan_op,
+          num_selections);
+
+      block_aggregate = num_selections;
+
+      if (threadIdx.x == 0 and not is_last_tile) {  //
+        count_state.SetInclusive(0, num_selections);
+      }
     } else {
-      auto prefix_op = PrefixOpCount(count_state, temp_storage.count_prefix, cub::Sum(), tile_idx);
+      auto prefix_op = PrefixOpItem(count_state, temp_storage.count_prefix, scan_op, tile_idx);
 
-      BlockScanCount(temp_storage.count_scan)
-        .ExclusiveSum(selection_flags, selection_indices, prefix_op);
+      BlockScanItem(temp_storage.item_scan)
+        .InclusiveScan(  //
+          selection_flags,
+          selection_indices,
+          scan_op,
+          prefix_op);
 
-      num_tile_selections = prefix_op.GetInclusivePrefix();
+      num_selections  = prefix_op.GetInclusivePrefix();
+      block_aggregate = prefix_op.GetBlockAggregate();
     }
 
-    printf("bid(%i) tid(%i) num tile selections %i\n",  //
+    print_array_2("sf", num_items_remaining, selection_flags);
+    print_array_2("si", num_items_remaining, selection_indices);
+
+    printf("b(%i) t(%i) ns(%i), ba(%i)\n",  //
            blockIdx.x,
            threadIdx.x,
-           num_tile_selections);
+           num_selections,
+           block_aggregate);
 
     __syncthreads();
 
-    // scatter the selections
+    // printf("b(%i) t(%i) ns(%i) ba(%i)\n", blockIdx.x, threadIdx.x, num_selections,
+    // block_aggregate);
 
-    return num_tile_selections;
+    if (d_output == nullptr) {  //
+      return num_selections;
+    }
 
-    return 0;
+    for (int i = 0; i < ITEMS_PER_THREAD; ++i) {
+      if (selection_flags[i]) {
+        if (selection_indices[i] < num_selections) {
+          // printf("b(%i) t(%i) d_output[%i] = %i\n",
+          //        blockIdx.x,
+          //        threadIdx.x,
+          //        selection_indices[i],
+          //        items[i]);
+          d_output[selection_indices[i]] = items[i];
+        } else {
+          // printf("b(%i) t(%i) d_output[%i] = x\n",
+          //        blockIdx.x,
+          //        threadIdx.x,
+          //        selection_indices[i],
+          //        items[i]);
+        }
+      }
+    }
+
+    return num_selections;
   }
 };
 
@@ -228,33 +298,43 @@ __global__ void initialization_pass_kernel(  //
 template <typename T,
           typename InputIterator,
           typename OutputIterator,
+          typename OutputNumSelectedIterator,
           typename ScanOperator,
           typename SelectOperator,
           int THREADS_PER_BLOCK,
           int ITEMS_PER_THREAD>
-__global__ void execution_pass_kernel(  //
+__launch_bounds__(int(THREADS_PER_BLOCK)) __global__ void execution_pass_kernel(  //
   InputIterator d_input,
   OutputIterator d_output,
+  OutputNumSelectedIterator d_num_selected_output,
   ScanOperator scan_op,
   SelectOperator select_op,
   uint32_t num_items,
+  uint32_t num_tiles,
   uint32_t start_tile,
   cub::ScanTileState<uint32_t> count_state,
   cub::ScanTileState<T> item_state)
 {
-  using Agent =
-    agent<InputIterator, ScanOperator, SelectOperator, THREADS_PER_BLOCK, ITEMS_PER_THREAD>;
+  using Agent = agent<InputIterator,
+                      OutputIterator,
+                      OutputNumSelectedIterator,
+                      ScanOperator,
+                      SelectOperator,
+                      THREADS_PER_BLOCK,
+                      ITEMS_PER_THREAD>;
   __shared__ typename Agent::TempStorage temp_storage;
 
   Agent(  //
     temp_storage,
     d_input,
+    d_output,
+    d_num_selected_output,
     num_items,
     scan_op,
     select_op,
     count_state,
     item_state)
-    .consume_range(num_items, start_tile);
+    .consume_range(num_tiles, start_tile);
 }
 
 /**
@@ -264,6 +344,7 @@ __global__ void execution_pass_kernel(  //
  */
 template <typename InputIterator,  //
           typename OutputIterator,
+          typename OutputNumResultsIterator,
           typename ScanOperator,
           typename SelectOperator>
 struct scan_select_if_dispatch {
@@ -315,7 +396,9 @@ struct scan_select_if_dispatch {
     CHECK_CUDA(stream);
   }
 
-  void execute(OutputIterator d_output, uint32_t& num_results, cudaStream_t stream)
+  void execute(OutputIterator d_output,
+               OutputNumResultsIterator d_num_selected,
+               cudaStream_t stream)
   {
     printf("dispatcher: begin executing\n");
     uint32_t max_blocks     = 1 << 15;
@@ -324,6 +407,7 @@ struct scan_select_if_dispatch {
       T,
       InputIterator,
       OutputIterator,
+      decltype(d_num_selected),
       ScanOperator,
       SelectOperator,
       THREADS_PER_BLOCK,
@@ -337,9 +421,11 @@ struct scan_select_if_dispatch {
       execution_kernel<<<num_tiles_per_pass, THREADS_PER_BLOCK, 0, stream>>>(  //
         d_input_begin,
         d_output,
+        d_num_selected,
         scan_op,
         select_op,
         num_items,
+        num_tiles,
         tile,
         item_state.state,
         count_state.state);
@@ -374,26 +460,30 @@ auto scan_select_if(  //
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
+  auto num_selected   = rmm::device_scalar<uint32_t>(stream);
+  auto d_num_selected = num_selected.data();
+
   using Input          = typename std::iterator_traits<InputIterator>::value_type;
   using Output         = uint32_t;
   using OutputIterator = Output*;
-  using Dispatch =
-    scan_select_if_dispatch<InputIterator, OutputIterator, ScanOperator, SelectOperator>;
+  using Dispatch       = scan_select_if_dispatch<InputIterator,
+                                           decltype(d_num_selected),
+                                           OutputIterator,
+                                           ScanOperator,
+                                           SelectOperator>;
 
   auto dispatcher = Dispatch(d_input_begin, d_input_end, scan_op, select_op, stream);
 
   // initialize tile state and perform upsweep
-  uint32_t num_results = 0;
   dispatcher.initialize(stream);
-  dispatcher.execute(nullptr, num_results, stream);
-
+  dispatcher.execute(nullptr, d_num_selected, stream);
   cudaStreamSynchronize(stream);
 
   // // allocate result and perform downsweep
-  auto d_output = rmm::device_uvector<Output>(num_results, stream, mr);
-  // dispatcher.execute(d_output.data(), num_results, stream);
-
-  // cudaStreamSynchronize(stream);
+  auto d_output = rmm::device_uvector<Output>(num_selected.value(stream), stream, mr);
+  dispatcher.initialize(stream);
+  dispatcher.execute(d_output.data(), d_num_selected, stream);
+  cudaStreamSynchronize(stream);
 
   CHECK_CUDA(stream);
 
