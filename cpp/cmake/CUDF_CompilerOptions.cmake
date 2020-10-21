@@ -1,6 +1,7 @@
 ###################################################################################################
 # - compiler options ------------------------------------------------------------------------------
 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_C_COMPILER $ENV{CC})
 set(CMAKE_CXX_COMPILER $ENV{CXX})
@@ -11,7 +12,6 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-error=deprecated-declarations")
-
     # Suppress parentheses warning which causes gmock to fail
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-parentheses")
 endif(CMAKE_COMPILER_IS_GNUCXX)
@@ -110,5 +110,16 @@ set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
+
+###################################################################################################
+# - cudart options --------------------------------------------------------------------------------
+# cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
+
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
-option(ARROW_STATIC_LIB "Build and statically link with Arrow libraries" OFF)
+
+if(CUDA_STATIC_RUNTIME)
+    message(STATUS "Enabling static linking of cudart")
+    set(CUDART_LIBRARY "cudart_static")
+else()
+    set(CUDART_LIBRARY "cudart")
+endif(CUDA_STATIC_RUNTIME)

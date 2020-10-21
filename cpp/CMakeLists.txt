@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
+
 cmake_minimum_required(VERSION 3.17...3.18 FATAL_ERROR)
 
 project(CUDA_DATAFRAME VERSION 0.17.0 LANGUAGES C CXX CUDA)
@@ -44,8 +45,128 @@ endif(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 ###################################################################################################
 # - compiler options ------------------------------------------------------------------------------
 
-include(cmake/CUDF_CompilerOptions.cmake)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_C_COMPILER $ENV{CC})
+set(CMAKE_CXX_COMPILER $ENV{CXX})
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_CUDA_STANDARD 14)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+
+if(CMAKE_COMPILER_IS_GNUCXX)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-error=deprecated-declarations")
+    # Suppress parentheses warning which causes gmock to fail
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-parentheses")
+endif(CMAKE_COMPILER_IS_GNUCXX)
+
+if(CMAKE_CUDA_COMPILER_VERSION)
+  # Compute the version. from  CMAKE_CUDA_COMPILER_VERSION
+  string(REGEX REPLACE "([0-9]+)\\.([0-9]+).*" "\\1" CUDA_VERSION_MAJOR ${CMAKE_CUDA_COMPILER_VERSION})
+  string(REGEX REPLACE "([0-9]+)\\.([0-9]+).*" "\\2" CUDA_VERSION_MINOR ${CMAKE_CUDA_COMPILER_VERSION})
+  set(CUDA_VERSION "${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR}" CACHE STRING "Version of CUDA as computed from nvcc.")
+  mark_as_advanced(CUDA_VERSION)
+endif()
+
+message(STATUS "CUDA_VERSION_MAJOR: ${CUDA_VERSION_MAJOR}")
+message(STATUS "CUDA_VERSION_MINOR: ${CUDA_VERSION_MINOR}")
+message(STATUS "CUDA_VERSION: ${CUDA_VERSION}")
+
+# Always set this convenience variable
+set(CUDA_VERSION_STRING "${CUDA_VERSION}")
+
+# Auto-detect available GPU compute architectures
+set(GPU_ARCHS "ALL" CACHE STRING
+  "List of GPU architectures (semicolon-separated) to be compiled for. Pass 'ALL' if you want to compile for all supported GPU architectures. Empty string means to auto-detect the GPUs on the current system")
+
+if("${GPU_ARCHS}" STREQUAL "")
+  include(cmake/EvalGpuArchs.cmake)
+  evaluate_gpu_archs(GPU_ARCHS)
+endif()
+
+if("${GPU_ARCHS}" STREQUAL "ALL")
+  
+  # Check for embedded vs workstation architectures
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+    # This is being built for Linux4Tegra or SBSA ARM64
+    set(GPU_ARCHS "62")
+    if((CUDA_VERSION_MAJOR EQUAL 9) OR (CUDA_VERSION_MAJOR GREATER 9))
+      set(GPU_ARCHS "${GPU_ARCHS};72")
+    endif()
+    if((CUDA_VERSION_MAJOR EQUAL 11) OR (CUDA_VERSION_MAJOR GREATER 11))
+      set(GPU_ARCHS "${GPU_ARCHS};75;80")
+    endif()
+
+  else()
+    # This is being built for an x86 or x86_64 architecture
+    set(GPU_ARCHS "60")
+    if((CUDA_VERSION_MAJOR EQUAL 9) OR (CUDA_VERSION_MAJOR GREATER 9))
+      set(GPU_ARCHS "${GPU_ARCHS};70")
+    endif()
+    if((CUDA_VERSION_MAJOR EQUAL 10) OR (CUDA_VERSION_MAJOR GREATER 10))
+      set(GPU_ARCHS "${GPU_ARCHS};75")
+    endif()
+    if((CUDA_VERSION_MAJOR EQUAL 11) OR (CUDA_VERSION_MAJOR GREATER 11))
+      set(GPU_ARCHS "${GPU_ARCHS};80")
+    endif()
+
+  endif()
+  
+endif()
+message("GPU_ARCHS = ${GPU_ARCHS}")
+
+foreach(arch ${GPU_ARCHS})
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_${arch},code=sm_${arch}")
+endforeach()
+
+list(GET GPU_ARCHS -1 ptx)
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_${ptx},code=compute_${ptx}")
+
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
+
+# set warnings as errors
+# TODO: remove `no-maybe-unitialized` used to suppress warnings in rmm::exec_policy
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror=cross-execution-space-call -Xcompiler -Wall,-Werror,-Wno-error=deprecated-declarations")
+
+option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
+if(DISABLE_DEPRECATION_WARNING)
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-deprecated-declarations")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
+endif(DISABLE_DEPRECATION_WARNING)
+
+# Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
+option(CMAKE_CUDA_LINEINFO "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF)
+if(CMAKE_CUDA_LINEINFO)
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -lineinfo")
+endif(CMAKE_CUDA_LINEINFO)
+
+# Debug options
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+    message(STATUS "Building with debugging flags")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G -Xcompiler -rdynamic")
+endif(CMAKE_BUILD_TYPE MATCHES Debug)
+
+# To apply RUNPATH to transitive dependencies (this is a temporary solution)
+set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--disable-new-dtags")
+set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
+
+# Build options
+option(BUILD_SHARED_LIBS "Build shared libraries" ON)
+option(BUILD_TESTS "Configure CMake to build tests" ON)
+option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
+
+###################################################################################################
+# - cudart options --------------------------------------------------------------------------------
+# cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
+
+option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
+
+if(CUDA_STATIC_RUNTIME)
+    message(STATUS "Enabling static linking of cudart")
+    set(CUDART_LIBRARY "cudart_static")
+else()
+    set(CUDART_LIBRARY "cudart")
+endif(CUDA_STATIC_RUNTIME)
 
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
@@ -55,6 +176,12 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODUL
 include(FeatureSummary)
 include(CheckIncludeFiles)
 include(CheckLibraryExists)
+
+###################################################################################################
+# - third party dependencies-----------------------------------------------------------------------
+# add third party dependencies using CMake FetchContent
+
+add_subdirectory(thirdparty)
 
 ###################################################################################################
 # - conda environment -----------------------------------------------------------------------------
@@ -72,14 +199,109 @@ elseif(DEFINED ENV{CONDA_PREFIX})
 endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 
 ###################################################################################################
-# - copy libcu++ ------------------------------------------------------------------------------------
+# - find arrow ------------------------------------------------------------------------------------
+
+option(ARROW_STATIC_LIB "Build and statically link with Arrow libraries" OFF)
+
+if(ARROW_STATIC_LIB)
+  message(STATUS "BUILDING ARROW")
+  include(ConfigureArrow)
+
+  if(ARROW_FOUND)
+    message(STATUS "Apache Arrow found in ${ARROW_INCLUDE_DIR}")
+  else()
+    message(FATAL_ERROR "Apache Arrow not found, please check your settings.")
+  endif(ARROW_FOUND)
+
+  add_library(arrow STATIC IMPORTED ${ARROW_LIB})
+  add_library(arrow_cuda STATIC IMPORTED ${ARROW_CUDA_LIB})
+else()
+  find_path(ARROW_INCLUDE_DIR "arrow"
+      HINTS "$ENV{ARROW_ROOT}/include")
+
+  find_library(ARROW_LIB "arrow"
+      NAMES libarrow
+      HINTS "$ENV{ARROW_ROOT}/lib" "$ENV{ARROW_ROOT}/build")
+
+  find_library(ARROW_CUDA_LIB "arrow_cuda"
+      NAMES libarrow_cuda
+      HINTS "$ENV{ARROW_ROOT}/lib" "$ENV{ARROW_ROOT}/build")
+
+  message(STATUS "ARROW: ARROW_INCLUDE_DIR set to ${ARROW_INCLUDE_DIR}")
+  message(STATUS "ARROW: ARROW_LIB set to ${ARROW_LIB}")
+  message(STATUS "ARROW: ARROW_CUDA_LIB set to ${ARROW_CUDA_LIB}")
+
+  add_library(arrow SHARED IMPORTED ${ARROW_LIB})
+  add_library(arrow_cuda SHARED IMPORTED ${ARROW_CUDA_LIB})
+endif(ARROW_STATIC_LIB)
+
+if(ARROW_INCLUDE_DIR AND ARROW_LIB AND ARROW_CUDA_LIB)
+  set_target_properties(arrow PROPERTIES IMPORTED_LOCATION ${ARROW_LIB})
+  set_target_properties(arrow_cuda PROPERTIES IMPORTED_LOCATION ${ARROW_CUDA_LIB})
+endif(ARROW_INCLUDE_DIR AND ARROW_LIB AND ARROW_CUDA_LIB)
+
+###################################################################################################
+# - copy libcu++ ----------------------------------------------------------------------------------
 
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include")
 
 # `${LIBCUDACXX_INCLUDE_DIR}/` specifies that the contents of this directory will be installed (not the directory itself)
-#file(INSTALL "${LIBCUDACXX_INCLUDE_DIR}/" DESTINATION "${CMAKE_BINARY_DIR}/include/libcudacxx")  
+file(INSTALL "${LIBCUDACXX_INCLUDE_DIR}/" DESTINATION "${CMAKE_BINARY_DIR}/include/libcudacxx")  
 file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION "${CMAKE_BINARY_DIR}/include/libcxx")
 
+###################################################################################################
+# - find zlib -------------------------------------------------------------------------------------
+
+CPMFindPackage(
+  NAME ZLIB
+  GITHUB_REPOSITORY madler/zlib
+  VERSION 1.2.11
+)
+
+message(STATUS "ZLIB: ZLIB_LIBRARY set to ${ZLIB_LIBRARY}")
+message(STATUS "ZLIB: ZLIB_INCLUDE_DIR set to ${ZLIB_INCLUDE_DIR}")
+
+if(ZLIB_INCLUDE_DIR)
+    message(STATUS "ZLib found in ${ZLIB_INCLUDE_DIR}")
+else()
+    message(FATAL_ERROR "ZLib not found, please check your settings.")
+endif(ZLIB_INCLUDE_DIR)
+
+###################################################################################################
+# - find boost ------------------------------------------------------------------------------------
+
+CPMFindPackage(
+  NAME Boost
+  GITHUB_REPOSITORY Orphis/boost-cmake
+  GIT_TAG 60fb5fa
+  VERSION 1.70.0
+  FIND_PACKAGE_ARGUMENTS "COMPONENTS filesystem"
+)
+if(Boost_INCLUDE_DIR)
+    message(STATUS "Boost found in ${Boost_INCLUDE_DIR}")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
+else()
+    message(FATAL_ERROR "Boost not found, please check your settings.")
+endif(Boost_INCLUDE_DIR)
+
+###################################################################################################
+# - RMM -------------------------------------------------------------------------------------------
+
+find_path(RMM_INCLUDE "rmm"
+          HINTS "$ENV{RMM_ROOT}/include")
+
+message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
+
+###################################################################################################
+# - DLPACK -------------------------------------------------------------------------------------------
+
+CPMFindPackage(
+  NAME DLPACK
+  GITHUB_REPOSITORY dmlc/dlpack
+  VERSION 0.3
+)
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
@@ -99,9 +321,45 @@ if(PER_THREAD_DEFAULT_STREAM)
     message(STATUS "Using per-thread default stream")
 endif(PER_THREAD_DEFAULT_STREAM)
 
-# jitify and libcudacxx are not CPM compatible yet
-add_subdirectory(thirdparty)
-include(cmake/CUDF_Thirdparty.cmake)
+###################################################################################################
+# - add gtest -------------------------------------------------------------------------------------
+
+if(BUILD_TESTS)
+  CPMFindPackage(
+    NAME GTest
+    GITHUB_REPOSITORY google/googletest
+    GIT_TAG release-1.10.0
+    VERSION 1.10.0
+    GIT_SHALLOW TRUE
+    OPTIONS
+      "INSTALL_GTEST OFF"
+    # googletest >= 1.10.0 provides a cmake config file -- use it if it exists
+    FIND_PACKAGE_ARGUMENTS "CONFIG"
+    )
+  include_directories("${gtest_SOURCE_DIR}/include"
+                      "${gmock_SOURCE_DIR}/include")
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
+endif(BUILD_TESTS)
+
+###################################################################################################
+# - add google benchmark --------------------------------------------------------------------------
+
+if(BUILD_BENCHMARKS)
+  CPMFindPackage(
+    NAME benchmark
+    GITHUB_REPOSITORY google/benchmark
+    VERSION 1.5.1
+    OPTIONS
+    "BENCHMARK_ENABLE_TESTING OFF"
+    # The REGEX feature test fails when gbench's cmake is run under CPM because it doesn't assume C++11
+    # Additionally, attempting to set the CMAKE_CXX_VERSION here doesn't propogate to the feature test build
+    # Therefore, we just disable the feature test and assume platforms we care about have a regex impl available
+    "RUN_HAVE_GNU_POSIX_REGEX 0" #
+  )
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/benchmarks)
+  message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
+endif(BUILD_BENCHMARKS)
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
@@ -134,14 +392,131 @@ if(CONDA_LINK_DIRS)
 endif(CONDA_LINK_DIRS)
 
 ###################################################################################################
-# - library targets -------------------------------------------------------------------------------
-
-include(cmake/CUDF_LibraryTargets.cmake)
-
-###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
 
-include(cmake/CUDF_Jitify.cmake)
+# Creates executable stringify and uses it to convert types.h to c-str for use in JIT code
+add_executable(stringify "${JITIFY_INCLUDE_DIR}/stringify.cpp")
+execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        ${CMAKE_BINARY_DIR}/include/jit
+        ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details
+        ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt
+        ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include)
+
+add_custom_command(WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
+                   COMMENT "Stringify headers for use in JIT compiled code"
+                   DEPENDS stringify
+                   OUTPUT ${CMAKE_BINARY_DIR}/include/jit/types.h.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/types.hpp.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/bit.hpp.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/fixed_point.hpp.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/durations.hpp.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details/__config.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/limits.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cfloat.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/chrono.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ctime.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ratio.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/type_traits.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/version.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cmath.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cassert.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__config.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__undef_macros.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cfloat.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/chrono.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ctime.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/limits.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ratio.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/type_traits.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cmath.jit
+                          ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cassert.jit
+                   MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.hpp
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/utilities/bit.hpp
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/wrappers/timestamps.hpp
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/fixed_point/fixed_point.hpp
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/wrappers/durations.hpp
+                                   ${LIBCUDACXX_INCLUDE_DIR}/details/__config
+                                   ${LIBCUDACXX_INCLUDE_DIR}/simt/limits
+                                   ${LIBCUDACXX_INCLUDE_DIR}/simt/cfloat
+                                   ${LIBCUDACXX_INCLUDE_DIR}/simt/chrono
+                                   ${LIBCUDACXX_INCLUDE_DIR}/simt/ctime
+                                   ${LIBCUDACXX_INCLUDE_DIR}/simt/ratio
+                                   ${LIBCUDACXX_INCLUDE_DIR}/simt/type_traits
+                                   ${LIBCUDACXX_INCLUDE_DIR}/simt/version
+                                   ${LIBCUDACXX_INCLUDE_DIR}/simt/cmath
+                                   ${LIBCUDACXX_INCLUDE_DIR}/simt/cassert
+                                   ${LIBCXX_INCLUDE_DIR}/__config
+                                   ${LIBCXX_INCLUDE_DIR}/__undef_macros
+                                   ${LIBCXX_INCLUDE_DIR}/cfloat
+                                   ${LIBCXX_INCLUDE_DIR}/chrono
+                                   ${LIBCXX_INCLUDE_DIR}/ctime
+                                   ${LIBCXX_INCLUDE_DIR}/limits
+                                   ${LIBCXX_INCLUDE_DIR}/ratio
+                                   ${LIBCXX_INCLUDE_DIR}/type_traits
+                                   ${LIBCXX_INCLUDE_DIR}/cmath
+                                   ${LIBCXX_INCLUDE_DIR}/cassert
+
+                   # stringified headers are placed underneath the bin include jit directory and end in ".jit"
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/jit/types.h.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.hpp > ${CMAKE_BINARY_DIR}/include/jit/types.hpp.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/utilities/bit.hpp > ${CMAKE_BINARY_DIR}/include/jit/bit.hpp.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ../src/rolling/rolling_jit_detail.hpp > ${CMAKE_BINARY_DIR}/include/jit/rolling_jit_detail.hpp.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/wrappers/timestamps.hpp > ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/fixed_point/fixed_point.hpp > ${CMAKE_BINARY_DIR}/include/jit/fixed_point.hpp.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/wrappers/durations.hpp > ${CMAKE_BINARY_DIR}/include/jit/durations.hpp.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/details/__config libcudacxx_details_config > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details/__config.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/limits libcudacxx_simt_limits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/limits.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/cfloat libcudacxx_simt_cfloat > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cfloat.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/chrono libcudacxx_simt_chrono > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/chrono.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/ctime libcudacxx_simt_ctime > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ctime.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/ratio libcudacxx_simt_ratio > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ratio.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/type_traits libcudacxx_simt_type_traits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/type_traits.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/cmath libcudacxx_simt_cmath > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cmath.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/simt/cassert libcudacxx_simt_cassert > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cassert.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCUDACXX_INCLUDE_DIR}/version libcudacxx_simt_version > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/version.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/__config libcxx_config > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__config.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/__undef_macros libcxx_undef_macros > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__undef_macros.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/cfloat libcxx_cfloat > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cfloat.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/chrono libcxx_chrono > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/chrono.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/ctime libcxx_ctime > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ctime.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/limits libcxx_limits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/limits.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/ratio libcxx_ratio > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ratio.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/type_traits libcxx_type_traits > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/type_traits.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/cmath libcxx_cmath > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cmath.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify ${LIBCXX_INCLUDE_DIR}/cassert libcxx_cassert > ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cassert.jit
+                   )
+
+add_custom_target(stringify_run DEPENDS
+                  ${CMAKE_BINARY_DIR}/include/jit/types.h.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/types.hpp.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/bit.hpp.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/timestamps.hpp.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/fixed_point.hpp.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/durations.hpp.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/details/__config.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/limits.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cfloat.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/chrono.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ctime.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/ratio.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/type_traits.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cmath.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/cassert.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/simt/version.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__config.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/__undef_macros.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cfloat.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/chrono.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ctime.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/limits.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/ratio.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/type_traits.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cmath.jit
+                  ${CMAKE_BINARY_DIR}/include/jit/libcudacxx/libcxx/include/cassert.jit
+                  )
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
@@ -259,28 +634,16 @@ set(CUDF_PROXY_NAME "${CUDF_NAMESPACE}")
 set(CUDF_PROXY_SRC "${CMAKE_BINARY_DIR}/cudf.cpp")  # this file will be generated
 message(STATUS "Generating proxy library: cudf")
 file(WRITE "${CUDF_PROXY_SRC}" "// This file is generated by ${CMAKE_CURRENT_LIST_FILE} \n")
-#add_library("${CUDF_PROXY_NAME}" "${CUDF_PROXY_SRC}")
+add_library("${CUDF_PROXY_NAME}" "${CUDF_PROXY_SRC}")
 # `-Wl,--no-as-needed`: link libraries to cudf even if no symbols in that library are called
 target_link_options("${CUDF_PROXY_NAME}" PRIVATE "LINKER:--no-as-needed")
 set_target_properties("${CUDF_PROXY_NAME}" PROPERTIES BUILD_RPATH "\$ORIGIN")
 add_library("${CUDF_PROXY_NAME}::${CUDF_PROXY_NAME}" ALIAS "${CUDF_PROXY_NAME}")
 
 ###################################################################################################
-# - library targets -------------------------------------------------------------------------------
+# - link libraries --------------------------------------------------------------------------------
 
-if(CUDA_STATIC_RUNTIME)
-    message(STATUS "Enabling static linking of cudart")
-    set(CUDART_LIBRARY "cudart_static")
-    target_link_libraries(cudf INTERFACE cudart_static)
-else()
-    set(CUDART_LIBRARY "cudart")
-    target_link_libraries(cudf INTERFACE cudart)
-endif(CUDA_STATIC_RUNTIME)
-
-target_link_libraries(cudf INTERFACE ZLIB::ZLIB Boost::filesystem)
-target_link_libraries(cudf INTERFACE arrow arrow_cuda)
-target_link_libraries(cudf INTERFACE nvrtc cuda)
-target_link_libraries(cudf INTERFACE rmm::rmm)
+target_link_libraries("${CUDF_PROXY_NAME}" "${CUDF_NAMESPACE}::${CUDF_BASE_NAME}" "${CUDF_MODULES}")
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
