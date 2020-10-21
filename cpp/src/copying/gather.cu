@@ -63,7 +63,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
 
 std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
-                              out_of_bounds_policy bounds,
+                              out_of_bounds_policy policy,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -74,7 +74,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
   return detail::gather(
     source_table,
     gather_map,
-    bounds,
+    policy,
     index_policy,
     rmm::cuda_stream_default,
     mr);
