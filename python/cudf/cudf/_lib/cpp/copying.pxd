@@ -39,7 +39,7 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
     ) except +
 
     cdef unique_ptr[table] scatter (
-        vector[unique_ptr[scalar]] source_scalars,
+        vector[reference_wrapper[scalar]] source_scalars,
         column_view indices,
         table_view target,
         bool bounds_check

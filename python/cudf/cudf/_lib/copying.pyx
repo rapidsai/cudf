@@ -198,13 +198,16 @@ def _scatter_table(Table source_table, Column scatter_map,
 def _scatter_scalar(scalars, Column scatter_map,
                     Table target_table, bool bounds_check=True):
 
-    cdef vector[unique_ptr[scalar]] source_scalars
+    cdef vector[reference_wrapper[scalar]] source_scalars
     source_scalars.reserve(len(scalars))
     cdef bool c_bounds_check = bounds_check
     cdef Scalar slr
     for val, col in zip(scalars, target_table._columns):
         slr = as_scalar(val, col.dtype)
-        source_scalars.push_back(move(slr.c_value))
+        source_scalars.push_back(reference_wrapper[scalar](
+            slr.c_value.get()[0]))
+
+
     cdef column_view scatter_map_view = scatter_map.view()
     cdef table_view target_table_view = target_table.data_view()
 

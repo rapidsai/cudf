@@ -145,7 +145,7 @@ std::unique_ptr<table> scatter(
  * @return Result of scattering values from source to target
  */
 std::unique_ptr<table> scatter(
-  std::vector<std::unique_ptr<scalar>> const& source,
+  std::vector<std::reference_wrapper<scalar>> const& source,
   column_view const& indices,
   table_view const& target,
   bool check_bounds                   = false,
