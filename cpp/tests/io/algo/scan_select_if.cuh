@@ -196,7 +196,7 @@ struct agent {
     __syncthreads();
 
     if (tile_idx == 0) {
-      BlockScanItem(temp_storage.item_scan)
+      BlockScanCount(temp_storage.count_scan)
         .InclusiveScan(  //
           selection_flags,
           selection_indices,
@@ -209,9 +209,9 @@ struct agent {
         count_state.SetInclusive(0, num_selections);
       }
     } else {
-      auto prefix_op = PrefixOpItem(count_state, temp_storage.count_prefix, scan_op, tile_idx);
+      auto prefix_op = PrefixOpCount(count_state, temp_storage.count_prefix, scan_op, tile_idx);
 
-      BlockScanItem(temp_storage.item_scan)
+      BlockScanCount(temp_storage.count_scan)
         .InclusiveScan(  //
           selection_flags,
           selection_indices,
