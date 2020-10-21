@@ -7734,48 +7734,40 @@ def test_equals_dtypes():
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("data",[
-                                {"a":[1,2,3], 
-                                 "b":[3.0, 4.0, 5.0], 
-                                 "c":[True, True, False],
-                                },
-
-                                {"a":[1.0,2.0,3.0],
-                                 "b":[3.0, 4.0, 5.0],
-                                 "c":[True, True, False],
-                                },
-
-                                {"a":[1,2,3],
-                                 "b":[3,4,5],
-                                 "c":[True, True, False],
-                                },
-
-                                {"a":[1,2,3],
-                                 "b":[True, True, False],
-                                 "c":[False, True, False],
-                                },
-
-                                {"a":[1.0,2.0,3.0],
-                                 "b":[True, True, False],
-                                 "c":[False, True, False],
-                                },
-
-                                {"a":[1,2,3],
-                                 "b":[3,4,5],
-                                 "c":[2.0, 3.0, 4.0],
-                                },
-
-                                {"a":[1,2,3],
-                                 "b":[2.0, 3.0, 4.0],
-                                 "c":[5.0, 6.0, 4.0],
-                                },
-                                ],
-                        )                  
-def test_agg_for_dataframes(data):
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False],},
+        {
+            "a": [1.0, 2.0, 3.0],
+            "b": [3.0, 4.0, 5.0],
+            "c": [True, True, False],
+        },
+        {"a": [1, 2, 3], "b": [3, 4, 5], "c": [True, True, False],},
+        {"a": [1, 2, 3], "b": [True, True, False], "c": [False, True, False],},
+        {
+            "a": [1.0, 2.0, 3.0],
+            "b": [True, True, False],
+            "c": [False, True, False],
+        },
+        {"a": [1, 2, 3], "b": [3, 4, 5], "c": [2.0, 3.0, 4.0],},
+        {"a": [1, 2, 3], "b": [2.0, 3.0, 4.0], "c": [5.0, 6.0, 4.0],},
+    ],
+)
+@pytest.mark.parametrize(
+    "aggs",
+    [
+        ["min", "sum", "mean"],
+        "sum",
+        "min",
+        {"a": ["sum", "min"], "b": ["min"], "c": ["max"]},
+    ],
+)
+def test_agg_for_dataframes(data, aggs):
     pdf = pd.DataFrame(data)
     gdf = gd.DataFrame(data)
 
-    expect = pdf.agg('sum')
-    got = gdf.agg('sum')
+    expect = pdf.agg(aggs)
+    got = gdf.agg(aggs)
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_dtype=False)
