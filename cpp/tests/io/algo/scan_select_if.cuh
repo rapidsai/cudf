@@ -368,8 +368,8 @@ struct scan_select_if_dispatch {
   using T = typename std::iterator_traits<InputIterator>::value_type;
 
   enum {
-    THREADS_PER_BLOCK = 32,
-    ITEMS_PER_THREAD  = 2,
+    THREADS_PER_BLOCK = 128,
+    ITEMS_PER_THREAD  = 16,
     ITEMS_PER_TILE    = ITEMS_PER_THREAD * THREADS_PER_BLOCK,
   };
 

@@ -14,16 +14,8 @@ class InclusiveCopyIfTest : public cudf::test::BaseFixture {
 };
 
 struct simple_op {
-  inline __device__ uint32_t operator()(uint32_t lhs, uint32_t rhs)
-  {
-    // printf("b(%i) t(%i) %i + %i\n", blockIdx.x, threadIdx.x, lhs, rhs);
-    return lhs + rhs;
-  }
-  inline __device__ bool operator()(uint32_t value)
-  {
-    // printf("b(%i) t(%i) pred(%i)\n", blockIdx.x, threadIdx.x, value);
-    return true;
-  }
+  inline __device__ uint32_t operator()(uint32_t lhs, uint32_t rhs) { return lhs + rhs; }
+  inline __device__ bool operator()(uint32_t value) { return value % 3 == 0; }
 };
 
 TEST_F(InclusiveCopyIfTest, CanScanSelectIf)
@@ -38,13 +30,21 @@ TEST_F(InclusiveCopyIfTest, CanScanSelectIf)
 
   // cudaMemcpy(h_result.data(), d_result.data(), d_result.size(), cudaMemcpyDeviceToHost);
 
-  ASSERT_EQ(static_cast<uint32_t>(size), h_result.size());
+  // 4096 / 3 = 1365.333...
+  ASSERT_EQ(static_cast<uint32_t>(1365), h_result.size());
 
-  for (uint32_t i = 0; i < h_result.size(); i++) {
-    ASSERT_EQ(static_cast<uint32_t>(i + 1), h_result[i]);
+  for (uint32_t i = 0; i < 1365; i++) {  //
+    EXPECT_EQ(static_cast<uint32_t>(i * 3 + 3), h_result[i]);
   }
 
   // FAIL();
 }
+
+// struct csv_row_start_op {
+//   inline __device__ uint32_t operator()(uint32_t lhs, uint32_t rhs) { return lhs + rhs; }
+//   inline __device__ bool operator()(uint32_t value) { return true; }
+// };
+
+// TEST_F(InclusiveCopyIfTest, CanDetectCsvRowStart) {}
 
 CUDF_TEST_PROGRAM_MAIN()
