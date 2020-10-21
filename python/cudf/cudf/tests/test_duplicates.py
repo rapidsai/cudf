@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import numpy as np
 import pytest
 from pandas import DataFrame, MultiIndex, Series, date_range
