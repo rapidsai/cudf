@@ -54,7 +54,7 @@ std::unique_ptr<cudf::column> copy_if_else(
   StringPairIterLeft lhs_end,
   StringPairIterRight rhs_begin,
   Filter filter_fn,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0)
 {
   auto strings_count = std::distance(lhs_begin, lhs_end);

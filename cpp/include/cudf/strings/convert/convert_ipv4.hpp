@@ -23,6 +23,7 @@ namespace strings {
 /**
  * @addtogroup strings_convert
  * @{
+ * @file
  */
 
 /**
@@ -51,7 +52,7 @@ namespace strings {
  */
 std::unique_ptr<column> ipv4_to_integers(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Converts integers into IPv4 addresses as strings.
@@ -74,7 +75,7 @@ std::unique_ptr<column> ipv4_to_integers(
  */
 std::unique_ptr<column> integers_to_ipv4(
   column_view const& integers,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a boolean column identifying strings in which all
@@ -99,7 +100,7 @@ std::unique_ptr<column> integers_to_ipv4(
  */
 std::unique_ptr<column> is_ipv4(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

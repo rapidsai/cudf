@@ -7,12 +7,13 @@ from collections import OrderedDict, abc as abc
 import cupy
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from pandas.api.types import is_dict_like, is_dtype_equal
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.nvtx import annotate
-from cudf.core.column import as_column, build_categorical_column
+from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils import utils
 from cudf.utils.dtypes import (
     is_categorical_dtype,
@@ -197,6 +198,12 @@ class Frame(libcudf.table.Table):
         """
         return self.size == 0
 
+    def __len__(self):
+        return self._num_rows
+
+    def copy(self, deep=True):
+        return Frame(self._data.copy(deep=deep))
+
     @classmethod
     @annotate("CONCAT", color="orange", domain="cudf_python")
     def _concat(cls, objs, axis=0, ignore_index=False, sort=False):
@@ -227,117 +234,6 @@ class Frame(libcudf.table.Table):
                     num_empty_input_frames += 1
                     result_index_length += len(obj)
                     empty_has_index = empty_has_index or len(obj) > 0
-
-        from cudf.core.column.column import (
-            build_categorical_column,
-            column_empty,
-        )
-        from cudf.core.index import as_index
-
-        # Create a dictionary of the common, non-null columns
-        def get_non_null_cols_and_dtypes(col_idxs, list_of_columns):
-            # A mapping of {idx: np.dtype}
-            dtypes = dict()
-            # A mapping of {idx: [...columns]}, where `[...columns]`
-            # is a list of columns with at least one valid value for each
-            # column name across all input frames
-            non_null_columns = dict()
-            for idx in col_idxs:
-                for cols in list_of_columns:
-                    # Skip columns not in this frame
-                    if idx >= len(cols) or cols[idx] is None:
-                        continue
-                    # Store the first dtype we find for a column, even if it's
-                    # all-null. This ensures we always have at least one dtype
-                    # for each name. This dtype will be overwritten later if a
-                    # non-null Column with the same name is found.
-                    if idx not in dtypes:
-                        dtypes[idx] = cols[idx].dtype
-                    if cols[idx].valid_count > 0:
-                        if idx not in non_null_columns:
-                            non_null_columns[idx] = [cols[idx]]
-                        else:
-                            non_null_columns[idx].append(cols[idx])
-            return non_null_columns, dtypes
-
-        def find_common_dtypes_and_categories(non_null_columns, dtypes):
-            # A mapping of {idx: categories}, where `categories` is a
-            # column of all the unique categorical values from each
-            # categorical column across all input frames
-            categories = dict()
-            for idx, cols in non_null_columns.items():
-                # default to the first non-null dtype
-                dtypes[idx] = cols[0].dtype
-                # If all the non-null dtypes are int/float, find a common dtype
-                if all(is_numerical_dtype(col.dtype) for col in cols):
-                    dtypes[idx] = np.find_common_type(
-                        [col.dtype for col in cols], []
-                    )
-                # If all categorical dtypes, combine the categories
-                elif all(
-                    isinstance(col, cudf.core.column.CategoricalColumn)
-                    for col in cols
-                ):
-                    # Combine and de-dupe the categories
-                    categories[idx] = (
-                        cudf.concat([col.cat().categories for col in cols])
-                        .to_series()
-                        .drop_duplicates(ignore_index=True)
-                        ._column
-                    )
-                    # Set the column dtype to the codes' dtype. The categories
-                    # will be re-assigned at the end
-                    dtypes[idx] = min_scalar_type(len(categories[idx]))
-                # Otherwise raise an error if columns have different dtypes
-                elif not all(
-                    is_dtype_equal(c.dtype, dtypes[idx]) for c in cols
-                ):
-                    raise ValueError("All columns must be the same type")
-            return categories
-
-        def cast_cols_to_common_dtypes(
-            col_idxs, list_of_columns, dtypes, categories
-        ):
-            # Cast all columns to a common dtype, assign combined categories,
-            # and back-fill missing columns with all-null columns
-            for idx in col_idxs:
-                dtype = dtypes[idx]
-                for cols in list_of_columns:
-                    # If column not in this df, fill with an all-null column
-                    if idx >= len(cols) or cols[idx] is None:
-                        n = len(next(x for x in cols if x is not None))
-                        cols[idx] = column_empty(
-                            row_count=n, dtype=dtype, masked=True
-                        )
-                    else:
-                        # If column is categorical, rebase the codes with the
-                        # combined categories, and cast the new codes to the
-                        # min-scalar-sized dtype
-                        if idx in categories:
-                            cols[idx] = (
-                                cols[idx]
-                                .cat()
-                                ._set_categories(
-                                    cols[idx].cat().categories,
-                                    categories[idx],
-                                    is_unique=True,
-                                )
-                                .codes
-                            )
-                        cols[idx] = cols[idx].astype(dtype)
-
-        def reassign_categories(categories, cols, col_idxs):
-            for name, idx in zip(cols, col_idxs):
-                if idx in categories:
-                    cols[name] = build_categorical_column(
-                        categories=categories[idx],
-                        codes=as_column(
-                            cols[name].base_data, dtype=cols[name].dtype
-                        ),
-                        mask=cols[name].base_mask,
-                        offset=cols[name].offset,
-                        size=cols[name].size,
-                    )
 
         # Get a list of the unique table column names
         names = [name for f in objs for name in f._column_names]
@@ -375,15 +271,15 @@ class Frame(libcudf.table.Table):
         first_data_column_position = len(indices) - len(names)
 
         # Get the non-null columns and their dtypes
-        non_null_cols, dtypes = get_non_null_cols_and_dtypes(indices, columns)
+        non_null_cols, dtypes = _get_non_null_cols_and_dtypes(indices, columns)
 
         # Infer common dtypes between numeric columns
         # and combine CategoricalColumn categories
-        categories = find_common_dtypes_and_categories(non_null_cols, dtypes)
+        categories = _find_common_dtypes_and_categories(non_null_cols, dtypes)
 
         # Cast all columns to a common dtype, assign combined categories,
         # and back-fill missing columns with all-null columns
-        cast_cols_to_common_dtypes(indices, columns, dtypes, categories)
+        _cast_cols_to_common_dtypes(indices, columns, dtypes, categories)
 
         # Construct input tables with the index and data columns in the same
         # order. This strips the given index/column names and replaces the
@@ -392,7 +288,7 @@ class Frame(libcudf.table.Table):
         for cols in columns:
             table_index = None
             if 1 == first_data_column_position:
-                table_index = as_index(cols[0])
+                table_index = cudf.core.index.as_index(cols[0])
             elif first_data_column_position > 1:
                 table_index = libcudf.table.Table(
                     data=dict(
@@ -426,18 +322,23 @@ class Frame(libcudf.table.Table):
             out._index = cudf.RangeIndex(result_index_length)
 
         # Reassign the categories for any categorical table cols
-        reassign_categories(
+        _reassign_categories(
             categories, out._data, indices[first_data_column_position:]
         )
 
         # Reassign the categories for any categorical index cols
-        reassign_categories(
-            categories, out._index._data, indices[:first_data_column_position]
-        )
-        if not isinstance(
-            out._index, cudf.MultiIndex
-        ) and is_categorical_dtype(out._index._values.dtype):
-            out = out.set_index(as_index(out.index._values))
+        if not isinstance(out._index, cudf.RangeIndex):
+            _reassign_categories(
+                categories,
+                out._index._data,
+                indices[:first_data_column_position],
+            )
+            if not isinstance(
+                out._index, cudf.MultiIndex
+            ) and is_categorical_dtype(out._index._values.dtype):
+                out = out.set_index(
+                    cudf.core.index.as_index(out.index._values)
+                )
 
         # Reassign index and column names
         if isinstance(objs[0].columns, pd.MultiIndex):
@@ -445,10 +346,93 @@ class Frame(libcudf.table.Table):
         else:
             out.columns = names
 
-        out._index.name = objs[0]._index.name
-        out._index.names = objs[0]._index.names
+        if not ignore_index:
+            out._index.name = objs[0]._index.name
+            out._index.names = objs[0]._index.names
 
         return out
+
+    def equals(self, other, **kwargs):
+        """
+        Test whether two objects contain the same elements.
+        This function allows two Series or DataFrames to be compared against
+        each other to see if they have the same shape and elements. NaNs in
+        the same location are considered equal. The column headers do not
+        need to have the same type.
+
+        Parameters
+        ----------
+        other : Series or DataFrame
+            The other Series or DataFrame to be compared with the first.
+
+        Returns
+        -------
+        bool
+            True if all elements are the same in both objects, False
+            otherwise.
+
+        Examples
+        --------
+        >>> import cudf
+
+        Comparing Series with `equals`:
+
+        >>> s = cudf.Series([1, 2, 3])
+        >>> other = cudf.Series([1, 2, 3])
+        >>> s.equals(other)
+        True
+        >>> different = cudf.Series([1.5, 2, 3])
+        >>> s.equals(different)
+        False
+
+        Comparing DataFrames with `equals`:
+
+        >>> df = cudf.DataFrame({1: [10], 2: [20]})
+        >>> df
+            1   2
+        0  10  20
+        >>> exactly_equal = cudf.DataFrame({1: [10], 2: [20]})
+        >>> exactly_equal
+            1   2
+        0  10  20
+        >>> df.equals(exactly_equal)
+        True
+
+        For two DataFrames to compare equal, the types of column
+        values must be equal, but the types of column labels
+        need not:
+
+        >>> different_column_type = cudf.DataFrame({1.0: [10], 2.0: [20]})
+        >>> different_column_type
+           1.0  2.0
+        0   10   20
+        >>> df.equals(different_column_type)
+        True
+        """
+        if self is other:
+            return True
+
+        check_types = kwargs.get("check_types", True)
+
+        if check_types:
+            if type(self) is not type(other):
+                return False
+
+        if other is None or len(self) != len(other):
+            return False
+
+        # check data:
+        for self_col, other_col in zip(
+            self._data.values(), other._data.values()
+        ):
+            if not self_col.equals(other_col, check_dtypes=check_types):
+                return False
+
+        # check index:
+        if self._index is None:
+            return other._index is None
+        else:
+            return self._index.equals(other._index)
 
     def _get_columns_by_label(self, labels, downcast=False):
         """
@@ -488,7 +472,9 @@ class Frame(libcudf.table.Table):
                 self, as_column(gather_map), keep_index=keep_index
             )
         )
-        result._copy_categories(self)
+        result._postprocess_columns(self)
+        if keep_index and self._index is not None:
+            result._index.names = self._index.names
         return result
 
     def _hash(self, initial_hash_values=None):
@@ -501,7 +487,7 @@ class Frame(libcudf.table.Table):
             self, columns_to_hash, num_partitions, keep_index
         )
         output = self.__class__._from_table(output)
-        output._copy_categories(self, include_index=keep_index)
+        output._postprocess_columns(self, include_index=keep_index)
         return output, offsets
 
     def _as_column(self):
@@ -520,7 +506,7 @@ class Frame(libcudf.table.Table):
     def _scatter(self, key, value):
         result = self._from_table(libcudf.copying.scatter(value, key, self))
 
-        result._copy_categories(self)
+        result._postprocess_columns(self)
         return result
 
     def _empty_like(self, keep_index=True):
@@ -528,7 +514,7 @@ class Frame(libcudf.table.Table):
             libcudf.copying.table_empty_like(self, keep_index)
         )
 
-        result._copy_categories(self, include_index=keep_index)
+        result._postprocess_columns(self, include_index=keep_index)
         return result
 
     def _slice(self, arg):
@@ -570,7 +556,9 @@ class Frame(libcudf.table.Table):
 
             if stride is not None and stride != 1:
                 return self._gather(
-                    cupy.arange(start, stop=stop, step=stride, dtype=np.int32)
+                    cudf.core.column.arange(
+                        start, stop=stop, step=stride, dtype=np.int32
+                    )
                 )
             else:
                 result = self._from_table(
@@ -579,7 +567,7 @@ class Frame(libcudf.table.Table):
                     )[0]
                 )
 
-                result._copy_categories(self, include_index=keep_index)
+                result._postprocess_columns(self, include_index=keep_index)
                 # Adding index of type RangeIndex back to
                 # result
                 if keep_index is False and self.index is not None:
@@ -710,7 +698,7 @@ class Frame(libcudf.table.Table):
         for i, name in enumerate(self._data):
             output._data[name] = self._data[name].clip(lower[i], upper[i])
 
-        output._copy_categories(self, include_index=False)
+        output._postprocess_columns(self, include_index=False)
 
         return self._mimic_inplace(output, inplace=inplace)
 
@@ -1039,14 +1027,6 @@ class Frame(libcudf.table.Table):
 
         return self.where(cond=~cond, other=other, inplace=inplace)
 
-    def _split(self, splits, keep_index=True):
-        result = libcudf.copying.table_split(
-            self, splits, keep_index=keep_index
-        )
-
-        result = [self.__class__._from_table(tbl) for tbl in result]
-        return result
-
     def _partition(self, scatter_map, npartitions, keep_index=True):
 
         output_table, output_offsets = libcudf.partitioning.partition(
@@ -1063,10 +1043,10 @@ class Frame(libcudf.table.Table):
         result = partitioned._split(output_offsets, keep_index=keep_index)
 
         for frame in result:
-            frame._copy_categories(self, include_index=keep_index)
+            frame._postprocess_columns(self, include_index=keep_index)
 
         if npartitions:
-            for i in range(npartitions - len(result)):
+            for _ in range(npartitions - len(result)):
                 result.append(self._empty_like(keep_index))
 
         return result
@@ -1330,10 +1310,17 @@ class Frame(libcudf.table.Table):
                 value = value
         elif not isinstance(value, abc.Mapping):
             value = {name: copy.deepcopy(value) for name in self._data.names}
+        elif isinstance(value, abc.Mapping):
+            value = {
+                key: value.reindex(self.index)
+                if isinstance(value, cudf.Series)
+                else value
+                for key, value in value.items()
+            }
 
         copy_data = self._data.copy(deep=True)
 
-        for name, col in copy_data.items():
+        for name in copy_data.keys():
             if name in value and value[name] is not None:
                 copy_data[name] = copy_data[name].fillna(value[name],)
 
@@ -1378,7 +1365,7 @@ class Frame(libcudf.table.Table):
                 self, how=how, keys=subset, thresh=thresh
             )
         )
-        result._copy_categories(self)
+        result._postprocess_columns(self)
         return result
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
@@ -1420,7 +1407,7 @@ class Frame(libcudf.table.Table):
                 self, as_column(boolean_mask)
             )
         )
-        result._copy_categories(self)
+        result._postprocess_columns(self)
         return result
 
     def _quantiles(
@@ -1452,7 +1439,7 @@ class Frame(libcudf.table.Table):
             )
         )
 
-        result._copy_categories(self)
+        result._postprocess_columns(self)
         return result
 
     def rank(
@@ -1605,7 +1592,7 @@ class Frame(libcudf.table.Table):
             libcudf.filling.repeat(self, count)
         )
 
-        result._copy_categories(self)
+        result._postprocess_columns(self)
         return result
 
     def _fill(self, fill_values, begin, end, inplace):
@@ -1674,9 +1661,10 @@ class Frame(libcudf.table.Table):
             replace == True is not yet supported for axis = 1/"columns"
         weights : str or ndarray-like, optional
             Only supported for axis=1/"columns"
-        random_state : int or None, default None
+        random_state : int, numpy RandomState or None, default None
             Seed for the random number generator (if int), or None.
             If None, a random seed will be chosen.
+            if RandomState, seed will be extracted from current state.
         axis : {0 or ‘index’, 1 or ‘columns’, None}, default None
             Axis to sample. Accepts axis number or name.
             Default is stat axis for given data type
@@ -1751,11 +1739,15 @@ class Frame(libcudf.table.Table):
                     "weights is not yet supported for axis=0/index"
                 )
 
-            seed = (
-                np.random.randint(np.iinfo(np.int64).max, dtype=np.int64)
-                if random_state is None
-                else np.int64(random_state)
-            )
+            if random_state is None:
+                seed = np.random.randint(
+                    np.iinfo(np.int64).max, dtype=np.int64
+                )
+            elif isinstance(random_state, np.random.mtrand.RandomState):
+                _, keys, pos, _, _ = random_state.get_state()
+                seed = 0 if pos >= len(keys) else pos
+            else:
+                seed = np.int64(random_state)
 
             result = self._from_table(
                 libcudf.copying.sample(
@@ -1766,7 +1758,7 @@ class Frame(libcudf.table.Table):
                     keep_index=keep_index,
                 )
             )
-            result._copy_categories(self)
+            result._postprocess_columns(self)
 
             return result
         else:
@@ -1819,6 +1811,160 @@ class Frame(libcudf.table.Table):
 
             return result
 
+    @classmethod
+    @annotate("FROM_ARROW", color="orange", domain="cudf_python")
+    def from_arrow(cls, data):
+        """Convert from PyArrow Table to Frame
+
+        Parameters
+        ----------
+        data : PyArrow Table
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> data = pa.table({"a":[1, 2, 3], "b":[4, 5, 6]})
+        >>> cudf.core.frame.Frame.from_arrow(data)
+           a  b
+        0  1  4
+        1  2  5
+        2  3  6
+        """
+
+        if not isinstance(data, (pa.Table)):
+            raise TypeError(
+                "To create a multicolumn cudf data, "
+                "the data should be an arrow Table"
+            )
+
+        column_names = data.column_names
+        pandas_dtypes = None
+        np_dtypes = None
+        if isinstance(data.schema.pandas_metadata, dict):
+            metadata = data.schema.pandas_metadata
+            pandas_dtypes = {
+                col["field_name"]: col["pandas_type"]
+                for col in metadata["columns"]
+                if "field_name" in col
+            }
+            np_dtypes = {
+                col["field_name"]: col["numpy_type"]
+                for col in metadata["columns"]
+                if "field_name" in col
+            }
+
+        # Currently we don't have support for
+        # pyarrow.DictionaryArray -> cudf Categorical column,
+        # so handling indices and dictionary as two different columns.
+        # This needs be removed once we have hooked libcudf dictionary32
+        # with categorical.
+        dict_indices = {}
+        dict_dictionaries = {}
+        dict_ordered = {}
+        for field in data.schema:
+            if isinstance(field.type, pa.DictionaryType):
+                dict_ordered[field.name] = field.type.ordered
+                dict_indices[field.name] = pa.chunked_array(
+                    [chunk.indices for chunk in data[field.name].chunks],
+                    type=field.type.index_type,
+                )
+                dict_dictionaries[field.name] = pa.chunked_array(
+                    [chunk.dictionary for chunk in data[field.name].chunks],
+                    type=field.type.value_type,
+                )
+
+        # Handle dict arrays
+        cudf_category_frame = libcudf.table.Table()
+        if len(dict_indices):
+
+            dict_indices_table = pa.table(dict_indices)
+            data = data.drop(dict_indices_table.column_names)
+            cudf_indices_frame = libcudf.interop.from_arrow(
+                dict_indices_table, dict_indices_table.column_names
+            )
+            # as dictionary size can vary, it can't be a single table
+            cudf_dictionaries_columns = {
+                name: cudf.core.column.ColumnBase.from_arrow(
+                    dict_dictionaries[name]
+                )
+                for name in dict_dictionaries.keys()
+            }
+
+            for name in cudf_indices_frame._data.names:
+                codes = cudf_indices_frame._data[name]
+                cudf_category_frame._data[name] = build_categorical_column(
+                    cudf_dictionaries_columns[name],
+                    codes,
+                    mask=codes.base_mask,
+                    size=codes.size,
+                    ordered=dict_ordered[name],
+                )
+
+        # Handle non-dict arrays
+        cudf_non_category_frame = (
+            libcudf.table.Table()
+            if data.num_columns == 0
+            else libcudf.interop.from_arrow(data, data.column_names)
+        )
+
+        if (
+            cudf_non_category_frame._num_columns > 0
+            and cudf_category_frame._num_columns > 0
+        ):
+            result = cudf_non_category_frame
+            for name in cudf_category_frame._data.names:
+                result._data[name] = cudf_category_frame._data[name]
+        elif cudf_non_category_frame._num_columns > 0:
+            result = cudf_non_category_frame
+        else:
+            result = cudf_category_frame
+
+        # In a scenario where column is of type list/other non
+        # pandas types, there will be no pandas metadata associated with
+        # given arrow table as those types can only originate from
+        # arrow.
+        if pandas_dtypes:
+            for name in result._data.names:
+                if pandas_dtypes[name] == "categorical":
+                    dtype = "category"
+                elif pandas_dtypes[name] == "bool":
+                    dtype = pandas_dtypes[name]
+                else:
+                    dtype = np_dtypes[name]
+
+                result._data[name] = result._data[name].astype(dtype)
+
+        result = libcudf.table.Table(
+            result._data.select_by_label(column_names)
+        )
+
+        return cls._from_table(result)
+
+    @annotate("TO_ARROW", color="orange", domain="cudf_python")
+    def to_arrow(self):
+        """
+        Convert to arrow Table
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame(
+        ...     {"a":[1, 2, 3], "b":[4, 5, 6]}, index=[1, 2, 3])
+        >>> df.to_arrow()
+        pyarrow.Table
+        a: int64
+        b: int64
+        index: int64
+        """
+        return pa.Table.from_pydict(
+            {name: col.to_arrow() for name, col in self._data.items()}
+        )
+
     def drop_duplicates(
         self,
         subset=None,
@@ -1866,7 +2012,7 @@ class Frame(libcudf.table.Table):
             )
         )
 
-        result._copy_categories(self)
+        result._postprocess_columns(self)
         return result
 
     def replace(self, to_replace, replacement):
@@ -1915,6 +2061,7 @@ class Frame(libcudf.table.Table):
                     ordered=other_col.ordered,
                     size=col.size,
                     offset=col.offset,
+                    null_count=col.null_count,
                 )
         if include_index:
             # include_index will still behave as False
@@ -1927,18 +2074,51 @@ class Frame(libcudf.table.Table):
                     (cudf.core.index.CategoricalIndex, cudf.MultiIndex),
                 )
             ):
-                self._index._copy_categories(other._index, include_index=False)
+                self._index._postprocess_columns(
+                    other._index, include_index=False
+                )
                 # When other._index is a CategoricalIndex, there is
                 # possibility that corresposing self._index be GenericIndex
                 # with codes. So to update even the class signature, we
-                # have to call as_index.
+                # have to reconstruct self._index:
                 if isinstance(
                     other._index, cudf.core.index.CategoricalIndex
                 ) and not isinstance(
                     self._index, cudf.core.index.CategoricalIndex
                 ):
-                    self._index = cudf.core.index.as_index(self._index)
+                    self._index = cudf.core.index.Index._from_table(
+                        self._index
+                    )
         return self
+
+    def _copy_struct_names(self, other, include_index=True):
+        """
+        Utility that copies struct field names.
+        """
+        for name, col, other_col in zip(
+            self._data.keys(), self._data.values(), other._data.values()
+        ):
+            if isinstance(other_col, cudf.core.column.StructColumn):
+                self._data[name] = col._rename_fields(
+                    other_col.dtype.fields.keys()
+                )
+
+        if include_index and self._index is not None:
+            for name, col, other_col in zip(
+                self._index._data.keys(),
+                self._index._data.values(),
+                other._index._data.values(),
+            ):
+                if isinstance(other_col, cudf.core.column.StructColumn):
+                    self._index._data[name] = col._rename_fields(
+                        other_col.dtype.fields.keys()
+                    )
+
+        return self
+
+    def _postprocess_columns(self, other, include_index=True):
+        self._copy_categories(other, include_index=include_index)
+        self._copy_struct_names(other, include_index=include_index)
 
     def _unaryop(self, op):
         data_columns = (col.unary_operator(op) for col in self._columns)
@@ -2034,7 +2214,7 @@ class Frame(libcudf.table.Table):
         The table containing the tiled "rows".
         """
         result = self.__class__._from_table(libcudf.reshape.tile(self, count))
-        result._copy_categories(self)
+        result._postprocess_columns(self)
         return result
 
     def searchsorted(
@@ -2446,7 +2626,15 @@ class Frame(libcudf.table.Table):
                     1.5707963267948966,  1.266103672779499],
                     dtype='float64')
         """
-        return self._unaryop("acos")
+        result = self.copy(deep=False)
+        for col in result._data:
+            min_float_dtype = cudf.utils.dtypes.get_min_float_dtype(
+                result._data[col]
+            )
+            result._data[col] = result._data[col].astype(min_float_dtype)
+        result = result._unaryop("acos")
+        result = result.mask((result < 0) | (result > np.pi + 1))
+        return result
 
     def atan(self):
         """
@@ -2878,6 +3066,18 @@ class Frame(libcudf.table.Table):
             self, ascending=ascending, null_position=null_position
         )
 
+    def _split(self, splits, keep_index=True):
+        result = libcudf.copying.table_split(
+            self, splits, keep_index=keep_index
+        )
+        result = [self.__class__._from_table(tbl) for tbl in result]
+        return result
+
+    def _encode(self):
+        keys, indices = libcudf.transform.table_encode(self)
+        keys = self.__class__._from_table(keys)
+        return keys, indices
+
 
 def _get_replacement_values(to_replace, replacement, col_name, column):
 
@@ -2940,3 +3140,110 @@ def _get_replacement_values(to_replace, replacement, col_name, column):
     if isinstance(replacement, list):
         all_nan = replacement.count(None) == len(replacement)
     return all_nan, replacement, to_replace
+
+
+# If the dictionary array is a string array and of length `0`
+# it should be a null array
+def _get_dictionary_array(array):
+    if isinstance(array, pa.StringArray) and len(array) == 0:
+        return pa.array([], type=pa.null())
+    else:
+        return array
+
+
+# Create a dictionary of the common, non-null columns
+def _get_non_null_cols_and_dtypes(col_idxs, list_of_columns):
+    # A mapping of {idx: np.dtype}
+    dtypes = dict()
+    # A mapping of {idx: [...columns]}, where `[...columns]`
+    # is a list of columns with at least one valid value for each
+    # column name across all input frames
+    non_null_columns = dict()
+    for idx in col_idxs:
+        for cols in list_of_columns:
+            # Skip columns not in this frame
+            if idx >= len(cols) or cols[idx] is None:
+                continue
+            # Store the first dtype we find for a column, even if it's
+            # all-null. This ensures we always have at least one dtype
+            # for each name. This dtype will be overwritten later if a
+            # non-null Column with the same name is found.
+            if idx not in dtypes:
+                dtypes[idx] = cols[idx].dtype
+            if cols[idx].valid_count > 0:
+                if idx not in non_null_columns:
+                    non_null_columns[idx] = [cols[idx]]
+                else:
+                    non_null_columns[idx].append(cols[idx])
+    return non_null_columns, dtypes
+
+
+def _find_common_dtypes_and_categories(non_null_columns, dtypes):
+    # A mapping of {idx: categories}, where `categories` is a
+    # column of all the unique categorical values from each
+    # categorical column across all input frames
+    categories = dict()
+    for idx, cols in non_null_columns.items():
+        # default to the first non-null dtype
+        dtypes[idx] = cols[0].dtype
+        # If all the non-null dtypes are int/float, find a common dtype
+        if all(is_numerical_dtype(col.dtype) for col in cols):
+            dtypes[idx] = np.find_common_type([col.dtype for col in cols], [])
+        # If all categorical dtypes, combine the categories
+        elif all(
+            isinstance(col, cudf.core.column.CategoricalColumn) for col in cols
+        ):
+            # Combine and de-dupe the categories
+            categories[idx] = (
+                cudf.concat([col.cat().categories for col in cols])
+                .to_series()
+                .drop_duplicates(ignore_index=True)
+                ._column
+            )
+            # Set the column dtype to the codes' dtype. The categories
+            # will be re-assigned at the end
+            dtypes[idx] = min_scalar_type(len(categories[idx]))
+        # Otherwise raise an error if columns have different dtypes
+        elif not all(is_dtype_equal(c.dtype, dtypes[idx]) for c in cols):
+            raise ValueError("All columns must be the same type")
+    return categories
+
+
+def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
+    # Cast all columns to a common dtype, assign combined categories,
+    # and back-fill missing columns with all-null columns
+    for idx in col_idxs:
+        dtype = dtypes[idx]
+        for cols in list_of_columns:
+            # If column not in this df, fill with an all-null column
+            if idx >= len(cols) or cols[idx] is None:
+                n = len(next(x for x in cols if x is not None))
+                cols[idx] = column_empty(row_count=n, dtype=dtype, masked=True)
+            else:
+                # If column is categorical, rebase the codes with the
+                # combined categories, and cast the new codes to the
+                # min-scalar-sized dtype
+                if idx in categories:
+                    cols[idx] = (
+                        cols[idx]
+                        .cat()
+                        ._set_categories(
+                            cols[idx].cat().categories,
+                            categories[idx],
+                            is_unique=True,
+                        )
+                        .codes
+                    )
+                cols[idx] = cols[idx].astype(dtype)
+
+
+def _reassign_categories(categories, cols, col_idxs):
+    for name, idx in zip(cols, col_idxs):
+        if idx in categories:
+            cols[name] = build_categorical_column(
+                categories=categories[idx],
+                codes=as_column(cols[name].base_data, dtype=cols[name].dtype),
+                mask=cols[name].base_mask,
+                offset=cols[name].offset,
+                size=cols[name].size,
+            )

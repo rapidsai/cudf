@@ -3,11 +3,11 @@
 from enum import Enum
 
 from libcpp.memory cimport unique_ptr, make_unique
+from libcpp.utility cimport move
 
 from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer
 
 from cudf._lib.column cimport Column
-from cudf._lib.move cimport move
 import cudf._lib as libcudfxx
 
 from cudf._lib.cpp.types cimport mask_state, size_type

@@ -18,29 +18,28 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table.hpp>
 
+#include <thrust/host_vector.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
+#include <thrust/sequence.h>
 #include <algorithm>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/null_mask.hpp>
+#include <cudf/structs/structs_column_view.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/type_lists.hpp>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_lists.hpp>
-#include "cudf/column/column_factories.hpp"
-#include "cudf/detail/utilities/device_operators.cuh"
-#include "cudf/null_mask.hpp"
-#include "cudf/structs/structs_column_view.hpp"
-#include "cudf/table/table_view.hpp"
-#include "cudf/types.hpp"
-#include "cudf/utilities/error.hpp"
-#include "gtest/gtest.h"
-#include "rmm/device_buffer.hpp"
-#include "thrust/host_vector.h"
-#include "thrust/iterator/counting_iterator.h"
-#include "thrust/scan.h"
-#include "thrust/sequence.h"
+#include <rmm/device_buffer.hpp>
 
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 using cudf::size_type;
@@ -583,15 +582,38 @@ TYPED_TEST(TypedStructColumnWrapperTest, EmptyColumnsOfStructs)
   // }
 }
 
-TEST_F(StructColumnWrapperTest, SimpleTestExpectStructColumnsEqual)
+TYPED_TEST(TypedStructColumnWrapperTest, CopyColumnFromView)
 {
-  auto ints_col = cudf::test::fixed_width_column_wrapper<int32_t>{{0, 1}, {0, 0}}.release();
+  // Testing deep-copying structs from column-views.
 
-  vector_of_columns cols;
-  cols.emplace_back(std::move(ints_col));
-  auto structs_col = cudf::test::structs_column_wrapper{std::move(cols)};
+  using namespace cudf::test;
+  using T = TypeParam;
 
-  cudf::test::expect_columns_equivalent(structs_col, structs_col);
+  auto numeric_column =
+    fixed_width_column_wrapper<T, int32_t>{{0, 1, 2, 3, 4, 5}, {1, 1, 1, 1, 1, 0}};
+
+  auto lists_column = lists_column_wrapper<T, int32_t>{
+    {{0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}},
+    make_counting_transform_iterator(0, [](auto i) { return i != 4; })};
+
+  auto structs_column =
+    structs_column_wrapper{{numeric_column, lists_column},
+                           make_counting_transform_iterator(0, [](auto i) { return i != 3; })};
+
+  auto clone_structs_column = cudf::column(structs_column);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(clone_structs_column, structs_column);
+
+  auto list_of_structs_column =
+    cudf::make_lists_column(3,
+                            fixed_width_column_wrapper<int32_t>{0, 2, 4, 6}.release(),
+                            structs_column.release(),
+                            cudf::UNKNOWN_NULL_COUNT,
+                            {})
+      .release();
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(list_of_structs_column->view(),
+                                      cudf::column(list_of_structs_column->view()));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

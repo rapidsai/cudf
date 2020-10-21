@@ -82,6 +82,7 @@ For more information on these sources, see the manual.
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <vector>
 #include "io_uncomp.h"
 #include "unbz2.h"
 
@@ -145,7 +146,7 @@ typedef struct {
   int32_t save_nblock;
 
   // for undoing the Burrows-Wheeler transform
-  uint32_t *tt;
+  std::vector<uint32_t> tt;
   uint32_t origPtr;
   int32_t nblock_used;
   int32_t unzftab[256];
@@ -180,9 +181,10 @@ static void skipbits(unbz_state_s *s, uint32_t n)
   uint32_t bitpos = s->bitpos + n;
   if (bitpos >= 32) {
     const uint8_t *cur = s->cur + 4;
-    uint32_t next32    = (cur + 4 < s->end) ? bswap_32(*(const uint32_t *)(cur + 4)) : 0;
-    s->cur             = cur;
-    s->bitbuf          = (s->bitbuf << 32) | next32;
+    uint32_t next32 =
+      (cur + 4 < s->end) ? bswap_32(*reinterpret_cast<const uint32_t *>(cur + 4)) : 0;
+    s->cur    = cur;
+    s->bitbuf = (s->bitbuf << 32) | next32;
     bitpos &= 0x1f;
   }
   s->bitpos = bitpos;
@@ -487,11 +489,11 @@ static void bzUnRLE(unbz_state_s *s)
   uint8_t *out    = s->out;
   uint8_t *outend = s->outend;
 
-  int32_t rle_cnt = s->save_nblock;
-  int cprev       = -1;
-  uint32_t *tt    = s->tt;
-  uint32_t pos    = tt[s->origPtr] >> 8;
-  int mask        = ~0;
+  int32_t rle_cnt           = s->save_nblock;
+  int cprev                 = -1;
+  std::vector<uint32_t> &tt = s->tt;
+  uint32_t pos              = tt[s->origPtr] >> 8;
+  int mask                  = ~0;
 
   s->nblock_used = rle_cnt + 1;
 
@@ -509,7 +511,7 @@ static void bzUnRLE(unbz_state_s *s)
     if (!mask) {
       int run;
       if (--rle_cnt < 0) {
-        printf("run split accross blocks! (unsupported)\n");
+        printf("run split across blocks! (unsupported)\n");
         break;
       }
       pos = tt[pos];
@@ -528,21 +530,19 @@ static void bzUnRLE(unbz_state_s *s)
 int32_t cpu_bz2_uncompress(
   const uint8_t *source, size_t sourceLen, uint8_t *dest, size_t *destLen, uint64_t *block_start)
 {
-  unbz_state_s s;
+  unbz_state_s s{};
   uint32_t v;
   int ret;
   size_t last_valid_block_in, last_valid_block_out;
 
   if (dest == NULL || destLen == NULL || source == NULL || sourceLen < 12) return BZ_PARAM_ERROR;
-
-  s.tt          = NULL;
   s.currBlockNo = 0;
 
   s.cur  = source;
   s.base = source;
   s.end =
     source + sourceLen - 4;  // We will not read the final combined CRC (last 4 bytes of the file)
-  s.bitbuf = bswap_64(*(const uint64_t *)source);
+  s.bitbuf = bswap_64(*reinterpret_cast<const uint64_t *>(source));
   s.bitpos = 0;
 
   s.out     = dest;
@@ -568,12 +568,11 @@ int32_t cpu_bz2_uncompress(
       s.cur    = source + (size_t)(bit_offs >> 3);
       s.bitpos = (uint32_t)(bit_offs & 7);
       if (s.cur + 8 > s.end) return BZ_PARAM_ERROR;
-      s.bitbuf = bswap_64(*(const uint64_t *)s.cur);
+      s.bitbuf = bswap_64(*reinterpret_cast<const uint64_t *>(s.cur));
     }
   }
 
-  s.tt = (uint32_t *)malloc(s.blockSize100k * 100000 * sizeof(int32_t));
-  if (s.tt == NULL) return BZ_MEM_ERROR;
+  s.tt.resize(s.blockSize100k * 100000);
 
   do {
     last_valid_block_in  = ((s.cur - s.base) << 3) + (s.bitpos);
@@ -597,8 +596,6 @@ int32_t cpu_bz2_uncompress(
 
   *destLen = last_valid_block_out;
   if (block_start) { *block_start = last_valid_block_in; }
-
-  if (s.tt != NULL) free(s.tt);
 
   return ret;
 }

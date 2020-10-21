@@ -21,14 +21,14 @@
 #include <rmm/thrust_rmm_allocator.h>
 
 /**
- * @file strings_column_view.hpp
+ * @file
  * @brief Class definition for cudf::strings_column_view
  */
 
 namespace cudf {
 
 /**
- * @ingroup strings_classes
+ * @addtogroup strings_classes
  * @{
  */
 
@@ -114,7 +114,7 @@ void print(strings_column_view const& strings,
 std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>> create_offsets(
   strings_column_view const& strings,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace strings
 /** @} */  // end of group

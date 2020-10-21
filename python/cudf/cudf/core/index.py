@@ -178,6 +178,36 @@ class Index(Frame, Serializable):
     def __contains__(self, item):
         return item in self._values
 
+    @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
+    def equals(self, other, **kwargs):
+        """
+        Determine if two Index objects contain the same elements.
+
+        Returns
+        -------
+        out: bool
+            True if “other” is an Index and it has the same elements
+            as calling index; False otherwise.
+        """
+        if not isinstance(other, Index):
+            return False
+
+        check_types = False
+
+        self_is_categorical = isinstance(self, CategoricalIndex)
+        other_is_categorical = isinstance(other, CategoricalIndex)
+        if self_is_categorical and not other_is_categorical:
+            other = other.astype(self.dtype)
+            check_types = True
+        elif other_is_categorical and not self_is_categorical:
+            self = self.astype(other.dtype)
+            check_types = True
+
+        try:
+            return super(Index, self).equals(other, check_types=check_types)
+        except TypeError:
+            return False
+
     def get_level_values(self, level):
         """
         Return an Index of values for requested level.
@@ -225,6 +255,55 @@ class Index(Frame, Serializable):
 
     def __iter__(self):
         cudf.utils.utils.raise_iteration_error(obj=self)
+
+    @classmethod
+    def from_arrow(cls, array):
+        """Convert PyArrow Array/ChunkedArray to Index
+
+        Parameters
+        ----------
+        array : PyArrow Array/ChunkedArray
+            PyArrow Object which has to be converted to Index
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Returns
+        -------
+        cudf Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
+        StringIndex(['a' 'b' None], dtype='object')
+        """
+
+        return cls(cudf.core.column.column.ColumnBase.from_arrow(array))
+
+    def to_arrow(self):
+        """Convert Index to PyArrow Array
+
+        Returns
+        -------
+        PyArrow Array
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ind = cudf.Index(["a", "b", None])
+        >>> ind.to_arrow()
+        <pyarrow.lib.StringArray object at 0x7f796b0e7750>
+        [
+          "a",
+          "b",
+          null
+        ]
+        """
+
+        return self._data.columns[0].to_arrow()
 
     @property
     def values_host(self):
@@ -518,25 +597,6 @@ class Index(Frame, Serializable):
         <class 'cudf.core.index.GenericIndex'>
         """
         return pd.Index(self._values.to_pandas(), name=self.name)
-
-    def to_arrow(self):
-        """
-        Convert Index to a PyArrow Array.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index([-3, 10, 15, 20])
-        >>> idx.to_arrow()
-        <pyarrow.lib.Int64Array object at 0x7fcaa6f53440>
-        [
-        -3,
-        10,
-        15,
-        20
-        ]
-        """
-        return self._values.to_arrow()
 
     def tolist(self):
 
@@ -963,36 +1023,6 @@ class Index(Frame, Serializable):
     def __ge__(self, other):
         return self._apply_op("__ge__", other)
 
-    @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
-    def equals(self, other):
-        """
-        Determine if two Index objects contain the same elements.
-
-        Returns
-        -------
-        out: bool
-            True if “other” is an Index and it has the same elements
-            as calling index; False otherwise.
-        """
-        basic_equality = _check_basic_index_equality(self, other)
-
-        if basic_equality is not None:
-            return basic_equality
-        elif len(self) == 1:
-            val = self[0] == other[0]
-            # when self is multiindex we need to checkall
-            if isinstance(val, np.ndarray):
-                return val.all()
-            return bool(val)
-        elif isinstance(other, CategoricalIndex):
-            return other.equals(self)
-        else:
-            if is_mixed_with_object_dtype(self, other):
-                return False
-
-            result = self == other
-            return result._values.all()
-
     def join(
         self, other, how="left", level=None, return_indexers=False, sort=False
     ):
@@ -1418,6 +1448,8 @@ class Index(Frame, Serializable):
         else:
             return as_index(table)
 
+    _accessors = set()
+
 
 class RangeIndex(Index):
     """
@@ -1511,8 +1543,7 @@ class RangeIndex(Index):
     @cached_property
     def _values(self):
         if len(self) > 0:
-            vals = cupy.arange(self._start, self._stop, dtype=self.dtype)
-            return column.as_column(vals)
+            return column.arange(self._start, self._stop, dtype=self.dtype)
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
 
@@ -1534,11 +1565,35 @@ class RangeIndex(Index):
         else:
             return False
 
-    def copy(self, deep=True):
+    def copy(self, name=None, deep=False, dtype=None, names=None):
         """
         Make a copy of this object.
+
+        Parameters
+        ----------
+        name : object optional (default: None), name of index
+        deep : Bool (default: False)
+            Ignored for RangeIndex
+        dtype : numpy dtype optional (default: None)
+            Target dtype for underlying range data
+        names : list-like optional (default: False)
+            Kept compatibility with MultiIndex. Should not be used.
+
+        Returns
+        -------
+        New RangeIndex instance with same range, casted to new dtype
         """
-        return RangeIndex(start=self._start, stop=self._stop, name=self.name)
+
+        dtype = self.dtype if dtype is None else dtype
+
+        if not np.issubdtype(dtype, np.signedinteger):
+            raise ValueError(f"Expected Signed Integer Type, Got {dtype}")
+
+        name = self.name if name is None else name
+
+        _idx_new = RangeIndex(start=self._start, stop=self._stop, name=name)
+
+        return _idx_new
 
     def __repr__(self):
         return (
@@ -1582,16 +1637,11 @@ class RangeIndex(Index):
     def __eq__(self, other):
         return super(type(self), self).__eq__(other)
 
-    @annotate("RANGE_INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other):
-        basic_equality = _check_basic_index_equality(self, other)
-
-        if basic_equality is not None:
-            return basic_equality
-        elif isinstance(other, cudf.core.index.RangeIndex):
-            return self._start == other._start and self._stop == other._stop
-        else:
-            return super().equals(other)
+        if isinstance(other, RangeIndex):
+            if (self._start, self._stop) == (other._start, other._stop):
+                return True
+        return super().equals(other)
 
     def serialize(self):
         header = {}
@@ -1740,7 +1790,7 @@ class RangeIndex(Index):
 
 
 def index_from_range(start, stop=None, step=None):
-    vals = cupy.arange(start, stop, step, dtype=np.int64)
+    vals = column.arange(start, stop, step, dtype=np.int64)
     return as_index(vals)
 
 
@@ -1794,22 +1844,36 @@ class GenericIndex(Index):
     def _values(self):
         return next(iter(self._data.columns))
 
-    def copy(self, deep=True):
+    def copy(self, name=None, deep=False, dtype=None, names=None):
         """
         Make a copy of this object.
 
         Parameters
         ----------
+        name : object, default None
+            Name of index, use original name when None
         deep : bool, default True
             Make a deep copy of the data.
-            With ``deep=False`` the is not copied.
+            With ``deep=False`` the original data is used
+        dtype : numpy dtype, default None
+            Target datatype to cast into, use original dtype when None
+        names : list-like, default False
+            Kept compatibility with MultiIndex. Should not be used.
 
         Returns
         -------
-        copy : Index
+        New index instance, casted to new dtype
         """
-        result = as_index(self._values.copy(deep=deep))
-        result.name = self.name
+
+        dtype = self.dtype if dtype is None else dtype
+        name = self.name if name is None else name
+
+        if isinstance(self, (StringIndex, CategoricalIndex)):
+            result = as_index(self._values.astype(dtype), name=name, copy=deep)
+        else:
+            result = as_index(
+                self._values.copy(deep=deep).astype(dtype), name=name
+            )
         return result
 
     def __sizeof__(self):
@@ -2102,37 +2166,165 @@ class DatetimeIndex(GenericIndex):
 
     @property
     def year(self):
-        return self.get_dt_field("year")
+        """
+        The year of the datetime.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="Y"))
+        >>> datetime_index
+        DatetimeIndex(['2000-12-31', '2001-12-31', '2002-12-31'], dtype='datetime64[ns]')
+        >>> datetime_index.year
+        Int16Index([2000, 2001, 2002], dtype='int16')
+        """  # noqa: E501
+        return self._get_dt_field("year")
 
     @property
     def month(self):
-        return self.get_dt_field("month")
+        """
+        The month as January=1, December=12.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="M"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-31', '2000-02-29', '2000-03-31'], dtype='datetime64[ns]')
+        >>> datetime_index.month
+        Int16Index([1, 2, 3], dtype='int16')
+        """  # noqa: E501
+        return self._get_dt_field("month")
 
     @property
     def day(self):
-        return self.get_dt_field("day")
+        """
+        The day of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="D"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-01', '2000-01-02', '2000-01-03'], dtype='datetime64[ns]')
+        >>> datetime_index.day
+        Int16Index([1, 2, 3], dtype='int16')
+        """  # noqa: E501
+        return self._get_dt_field("day")
 
     @property
     def hour(self):
-        return self.get_dt_field("hour")
+        """
+        The hours of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="h"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-01 00:00:00', '2000-01-01 01:00:00',
+                    '2000-01-01 02:00:00'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.hour
+        Int16Index([0, 1, 2], dtype='int16')
+        """
+        return self._get_dt_field("hour")
 
     @property
     def minute(self):
-        return self.get_dt_field("minute")
+        """
+        The minutes of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="T"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-01 00:00:00', '2000-01-01 00:01:00',
+                    '2000-01-01 00:02:00'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.minute
+        Int16Index([0, 1, 2], dtype='int16')
+        """
+        return self._get_dt_field("minute")
 
     @property
     def second(self):
-        return self.get_dt_field("second")
+        """
+        The seconds of the datetime.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="s"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-01 00:00:00', '2000-01-01 00:00:01',
+                    '2000-01-01 00:00:02'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.second
+        Int16Index([0, 1, 2], dtype='int16')
+        """
+        return self._get_dt_field("second")
 
     @property
     def weekday(self):
-        return self.get_dt_field("weekday")
+        """
+        The day of the week with Monday=0, Sunday=6.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2016-12-31",
+        ...     "2017-01-08", freq="D"))
+        >>> datetime_index
+        DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
+                    '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
+                    '2017-01-08'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.weekday
+        Int16Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
+        """
+        return self._get_dt_field("weekday")
+
+    @property
+    def dayofweek(self):
+        """
+        The day of the week with Monday=0, Sunday=6.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2016-12-31",
+        ...     "2017-01-08", freq="D"))
+        >>> datetime_index
+        DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
+                    '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
+                    '2017-01-08'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.dayofweek
+        Int16Index([5, 6, 0, 1, 2, 3, 4, 5, 6], dtype='int16')
+        """
+        return self._get_dt_field("weekday")
 
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
 
-    def get_dt_field(self, field):
+    def _get_dt_field(self, field):
         out_column = self._values.get_dt_field(field)
         # column.column_empty_like always returns a Column object
         # but we need a NumericalColumn for GenericIndex..
@@ -2333,9 +2525,8 @@ class CategoricalIndex(GenericIndex):
                     "Cannot specify `categories` or "
                     "`ordered` together with `dtype`."
                 )
-
         if copy:
-            data = column.as_column(data, dtype=dtype).copy()
+            data = column.as_column(data, dtype=dtype).copy(deep=True)
         out = Frame.__new__(cls)
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, CategoricalColumn):
@@ -2394,32 +2585,6 @@ class CategoricalIndex(GenericIndex):
         """
         return self._values.cat().categories
 
-    @annotate("CATEGORICAL_INDEX_EQUALS", color="green", domain="cudf_python")
-    def equals(self, other):
-        """
-        Determine if two Index objects contain the same elements.
-
-        Returns
-        -------
-        out: bool
-            True if “other” is an Index and it has the same elements
-            as calling index; False otherwise.
-        """
-        basic_equality = _check_basic_index_equality(self, other)
-
-        if basic_equality is not None:
-            return basic_equality
-        else:
-            casted_other = other
-            if not isinstance(other, CategoricalIndex):
-                casted_other = other.astype(self.dtype)
-
-            if self.dtype != casted_other.dtype:
-                return False
-
-            result = self._values == casted_other._values
-            return result
-
 
 class StringIndex(GenericIndex):
     """String defined indices into another Column
@@ -2430,13 +2595,13 @@ class StringIndex(GenericIndex):
     name: A string
     """
 
-    def __new__(cls, values, **kwargs):
+    def __new__(cls, values, copy=False, **kwargs):
         out = Frame.__new__(cls)
         kwargs = _setdefault_name(values, **kwargs)
         if isinstance(values, StringColumn):
-            values = values.copy()
+            values = values.copy(deep=copy)
         elif isinstance(values, StringIndex):
-            values = values._values.copy()
+            values = values._values.copy(deep=copy)
         else:
             values = column.as_column(values, dtype="str")
             if not pd.api.types.is_string_dtype(values.dtype):
@@ -2506,13 +2671,14 @@ def as_index(arbitrary, **kwargs):
         - DatetimeIndex for Datetime input.
         - GenericIndex for all other inputs.
     """
-
     kwargs = _setdefault_name(arbitrary, **kwargs)
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary
     elif isinstance(arbitrary, Index):
+        if arbitrary.name == kwargs["name"]:
+            return arbitrary
         idx = arbitrary.copy(deep=False)
-        idx.rename(**kwargs, inplace=True)
+        idx.rename(kwargs["name"], inplace=True)
         return idx
     elif isinstance(arbitrary, NumericalColumn):
         try:
@@ -2577,13 +2743,3 @@ def _setdefault_name(values, **kwargs):
         else:
             kwargs.update({"name": values.name})
     return kwargs
-
-
-def _check_basic_index_equality(left, right):
-    if left is right:
-        return True
-    elif not isinstance(right, Index):
-        return False
-    elif len(left) != len(right):
-        return False
-    return None

@@ -8,14 +8,13 @@ from libc.stdint cimport uintptr_t
 
 from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 from libcpp.pair cimport pair
 
 from cudf._lib.column cimport Column
+from cudf._lib.table cimport Table
 from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer
 from cudf.core.buffer import Buffer
-
-from cudf._lib.column cimport Column, column
-from cudf._lib.move cimport move
 
 from cudf._lib.cpp.types cimport (
     bitmask_type,
@@ -25,7 +24,10 @@ from cudf._lib.cpp.types cimport (
 )
 from cudf._lib.types import np_to_cudf_types
 from cudf._lib.types cimport underlying_type_t_type_id
+from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport table_view
 
 try:
     # Numba >= 0.49
@@ -124,3 +126,19 @@ def transform(Column input, op):
         ))
 
     return Column.from_unique_ptr(move(c_output))
+
+
+def table_encode(Table input):
+    cdef table_view c_input = input.data_view()
+    cdef pair[unique_ptr[table], unique_ptr[column]] c_result
+
+    with nogil:
+        c_result = move(libcudf_transform.encode(c_input))
+
+    return (
+        Table.from_unique_ptr(
+            move(c_result.first),
+            column_names=input._column_names,
+        ),
+        Column.from_unique_ptr(move(c_result.second))
+    )

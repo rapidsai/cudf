@@ -68,7 +68,7 @@ class Buffer(Serializable):
         intf = {
             "data": (self.ptr, False),
             "shape": (self.size,),
-            "strides": (1,),
+            "strides": None,
             "typestr": "|u1",
             "version": 0,
         }
@@ -106,6 +106,7 @@ class Buffer(Serializable):
         header["type-serialized"] = pickle.dumps(type(self))
         header["constructor-kwargs"] = {}
         header["desc"] = self.__cuda_array_interface__.copy()
+        header["desc"]["strides"] = (1,)
         frames = [self]
         return header, frames
 

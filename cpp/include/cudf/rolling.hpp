@@ -24,6 +24,7 @@ namespace cudf {
 /**
  * @addtogroup aggregation_rolling
  * @{
+ * @file
  */
 
 /**
@@ -58,7 +59,29 @@ std::unique_ptr<column> rolling_window(
   size_type following_window,
   size_type min_periods,
   std::unique_ptr<aggregation> const& agg,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc std::unique_ptr<column> rolling_window(
+ *            column_view const& input,
+ *            size_type preceding_window,
+ *            size_type following_window,
+ *            size_type min_periods,
+ *            std::unique_ptr<aggregation> const& agg,
+ *            rmm::mr::device_memory_resource* mr)
+ *
+ * @param default_outputs A column of per-row default values to be returned instead
+ *                        of nulls. Used for LEAD()/LAG(), if the row offset crosses
+ *                        the boundaries of the column.
+ */
+std::unique_ptr<column> rolling_window(
+  column_view const& input,
+  column_view const& default_outputs,
+  size_type preceding_window,
+  size_type following_window,
+  size_type min_periods,
+  std::unique_ptr<aggregation> const& agg,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Applies a grouping-aware, fixed-size rolling window function to the values in a column.
@@ -137,7 +160,31 @@ std::unique_ptr<column> grouped_rolling_window(
   size_type following_window,
   size_type min_periods,
   std::unique_ptr<aggregation> const& aggr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc std::unique_ptr<column> grouped_rolling_window(
+ *            table_view const& group_keys,
+ *            column_view const& input,
+ *            size_type preceding_window,
+ *            size_type following_window,
+ *            size_type min_periods,
+ *            std::unique_ptr<aggregation> const& aggr,
+ *            rmm::mr::device_memory_resource* mr)
+ *
+ * @param default_outputs A column of per-row default values to be returned instead
+ *                        of nulls. Used for LEAD()/LAG(), if the row offset crosses
+ *                        the boundaries of the column or group.
+ */
+std::unique_ptr<column> grouped_rolling_window(
+  table_view const& group_keys,
+  column_view const& input,
+  column_view const& default_outputs,
+  size_type preceding_window,
+  size_type following_window,
+  size_type min_periods,
+  std::unique_ptr<aggregation> const& aggr,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a
@@ -231,7 +278,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
   size_type following_window_in_days,
   size_type min_periods,
   std::unique_ptr<aggregation> const& aggr,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Applies a variable-size rolling window function to the values in a column.
@@ -273,7 +320,7 @@ std::unique_ptr<column> rolling_window(
   column_view const& following_window,
   size_type min_periods,
   std::unique_ptr<aggregation> const& agg,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

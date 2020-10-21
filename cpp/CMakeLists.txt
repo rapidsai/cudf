@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.15.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.16.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -52,16 +52,6 @@ if(CMAKE_COMPILER_IS_GNUCXX)
 
     # Suppress parentheses warning which causes gmock to fail
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-parentheses")
-
-    option(CMAKE_CXX11_ABI "Enable the GLIBCXX11 ABI" ON)
-    if(CMAKE_CXX11_ABI)
-        message(STATUS "CUDF: Enabling the GLIBCXX11 ABI")
-    else()
-        message(STATUS "CUDF: Disabling the GLIBCXX11 ABI")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
-        set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -D_GLIBCXX_USE_CXX11_ABI=0")
-    endif(CMAKE_CXX11_ABI)
 endif(CMAKE_COMPILER_IS_GNUCXX)
 
 if(CMAKE_CUDA_COMPILER_VERSION)
@@ -89,16 +79,33 @@ if("${GPU_ARCHS}" STREQUAL "")
 endif()
 
 if("${GPU_ARCHS}" STREQUAL "ALL")
-  set(GPU_ARCHS "60")
-  if((CUDA_VERSION_MAJOR EQUAL 9) OR (CUDA_VERSION_MAJOR GREATER 9))
-    set(GPU_ARCHS "${GPU_ARCHS};70")
+  
+  # Check for embedded vs workstation architectures
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+    # This is being built for Linux4Tegra or SBSA ARM64
+    set(GPU_ARCHS "62")
+    if((CUDA_VERSION_MAJOR EQUAL 9) OR (CUDA_VERSION_MAJOR GREATER 9))
+      set(GPU_ARCHS "${GPU_ARCHS};72")
+    endif()
+    if((CUDA_VERSION_MAJOR EQUAL 11) OR (CUDA_VERSION_MAJOR GREATER 11))
+      set(GPU_ARCHS "${GPU_ARCHS};75;80")
+    endif()
+
+  else()
+    # This is being built for an x86 or x86_64 architecture
+    set(GPU_ARCHS "60")
+    if((CUDA_VERSION_MAJOR EQUAL 9) OR (CUDA_VERSION_MAJOR GREATER 9))
+      set(GPU_ARCHS "${GPU_ARCHS};70")
+    endif()
+    if((CUDA_VERSION_MAJOR EQUAL 10) OR (CUDA_VERSION_MAJOR GREATER 10))
+      set(GPU_ARCHS "${GPU_ARCHS};75")
+    endif()
+    if((CUDA_VERSION_MAJOR EQUAL 11) OR (CUDA_VERSION_MAJOR GREATER 11))
+      set(GPU_ARCHS "${GPU_ARCHS};80")
+    endif()
+
   endif()
-  if((CUDA_VERSION_MAJOR EQUAL 10) OR (CUDA_VERSION_MAJOR GREATER 10))
-    set(GPU_ARCHS "${GPU_ARCHS};75")
-  endif()
-  if((CUDA_VERSION_MAJOR EQUAL 11) OR (CUDA_VERSION_MAJOR GREATER 11))
-    set(GPU_ARCHS "${GPU_ARCHS};80")
-  endif()
+  
 endif()
 message("GPU_ARCHS = ${GPU_ARCHS}")
 
@@ -279,16 +286,7 @@ endif(Boost_FOUND)
 find_path(RMM_INCLUDE "rmm"
           HINTS "$ENV{RMM_ROOT}/include")
 
-find_library(RMM_LIBRARY "rmm"
-             HINTS "$ENV{RMM_ROOT}/lib" "$ENV{RMM_ROOT}/build")
-
-message(STATUS "RMM: RMM_LIBRARY set to ${RMM_LIBRARY}")
 message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
-
-add_library(rmm SHARED IMPORTED ${RMM_LIBRARY})
-if(RMM_INCLUDE AND RMM_LIBRARY)
-    set_target_properties(rmm PROPERTIES IMPORTED_LOCATION ${RMM_LIBRARY})
-endif(RMM_INCLUDE AND RMM_LIBRARY)
 
 ###################################################################################################
 # - DLPACK -------------------------------------------------------------------------------------------
@@ -359,8 +357,7 @@ message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-include_directories("${CUB_INCLUDE_DIR}"
-                    "${THRUST_INCLUDE_DIR}"
+include_directories("${THRUST_INCLUDE_DIR}"
                     "${JITIFY_INCLUDE_DIR}"
                     "${LIBCUDACXX_INCLUDE_DIR}")
 
@@ -388,8 +385,7 @@ endif(CONDA_INCLUDE_DIRS)
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
                  "${CMAKE_BINARY_DIR}"
-                 "${GTEST_LIBRARY_DIR}"
-                 "${RMM_LIBRARY}")
+                 "${GTEST_LIBRARY_DIR}")
 
 if(CONDA_LINK_DIRS)
     link_directories("${CONDA_LINK_DIRS}")
@@ -412,7 +408,7 @@ add_library(cudf
             src/binaryop/jit/code/kernel.cpp
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp
-            src/interop/from_arrow.cu
+            src/interop/from_arrow.cpp
             src/interop/to_arrow.cpp
             src/interop/dlpack.cpp
             src/jit/type.cpp
@@ -424,7 +420,7 @@ add_library(cudf
             src/transform/nans_to_nulls.cu
             src/transform/bools_to_mask.cu
             src/transform/mask_to_bools.cu
-            src/transform/encode.cpp
+            src/transform/encode.cu
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
             src/stream_compaction/drop_nans.cu
@@ -435,8 +431,10 @@ add_library(cudf
             src/quantiles/quantile.cu
             src/quantiles/quantiles.cu
             src/reductions/reductions.cpp
+            src/reductions/nth_element.cu
             src/reductions/min.cu
             src/reductions/max.cu
+            src/reductions/minmax.cu
             src/reductions/any.cu
             src/reductions/all.cu
             src/reductions/sum.cu
@@ -448,6 +446,8 @@ add_library(cudf
             src/reductions/scan.cu
             src/replace/replace.cu
             src/replace/clamp.cu
+            src/replace/nans.cu
+            src/replace/nulls.cu
             src/reshape/interleave_columns.cu
             src/transpose/transpose.cu
             src/unary/cast_ops.cu
@@ -461,6 +461,7 @@ add_library(cudf
             src/io/csv/csv_gpu.cu
             src/io/csv/reader_impl.cu
             src/io/csv/writer_impl.cu
+            src/io/csv/durations.cu
             src/io/json/reader_impl.cu
             src/io/json/json_gpu.cu
             src/io/orc/orc.cpp
@@ -473,6 +474,7 @@ add_library(cudf
             src/io/orc/reader_impl.cu
             src/io/orc/writer_impl.cu
             src/io/parquet/page_data.cu
+            src/io/parquet/compact_protocol_writer.cpp
             src/io/parquet/page_hdr.cu
             src/io/parquet/page_enc.cu
             src/io/parquet/page_dict.cu
@@ -507,6 +509,7 @@ add_library(cudf
             src/filling/fill.cu
             src/filling/repeat.cu
             src/filling/sequence.cu
+            src/reshape/byte_cast.cu
             src/reshape/tile.cu
             src/search/search.cu
             src/column/column.cu
@@ -542,6 +545,7 @@ add_library(cudf
             src/strings/copying/concatenate.cu
             src/strings/copying/copying.cu
             src/strings/extract.cu
+            src/strings/filter_chars.cu
             src/strings/find.cu
             src/strings/findall.cu
             src/strings/find_multiple.cu
@@ -595,6 +599,7 @@ add_library(cudf
             src/dictionary/decode.cu
             src/dictionary/encode.cu
             src/dictionary/remove_keys.cu
+            src/dictionary/replace.cu
             src/dictionary/search.cu
             src/dictionary/set_keys.cu
             src/groupby/groupby.cu
@@ -611,9 +616,13 @@ add_library(cudf
             src/groupby/sort/group_nth_element.cu
             src/groupby/sort/group_std.cu
             src/groupby/sort/group_quantiles.cu
+            src/groupby/sort/group_collect.cu
             src/aggregation/aggregation.cpp
             src/aggregation/aggregation.cu
             src/aggregation/result_cache.cpp
+            src/ast/transform.cu
+            src/ast/linearizer.cpp
+            src/utilities/default_stream.cpp
 )
 
 # Override RPATH for cudf
@@ -766,10 +775,21 @@ if(HT_DEFAULT_ALLOCATOR)
 endif(HT_DEFAULT_ALLOCATOR)
 
 ###################################################################################################
+# - rmm logging level -----------------------------------------------------------------------------
+
+set(RMM_LOGGING_LEVEL "INFO" CACHE STRING "Choose the logging level.")
+# Set the possible values of build type for cmake-gui
+set_property(CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS
+        "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF")
+message(STATUS "RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
+
+target_compile_definitions(cudf PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_LOGGING_LEVEL})
+
+###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
 # link targets for cuDF
-target_link_libraries(cudf rmm arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(cudf arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
@@ -779,6 +799,9 @@ install(TARGETS cudf
         DESTINATION lib
         COMPONENT cudf)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
+        DESTINATION include
+        COMPONENT cudf)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf_test
         DESTINATION include
         COMPONENT cudf)
 

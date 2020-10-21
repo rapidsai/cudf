@@ -24,6 +24,7 @@ namespace strings {
 /**
  * @addtogroup strings_find
  * @{
+ * @file
  */
 
 /**
@@ -48,11 +49,12 @@ namespace strings {
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New integer column with character position values.
  */
-std::unique_ptr<column> find(strings_column_view const& strings,
-                             string_scalar const& target,
-                             size_type start                     = 0,
-                             size_type stop                      = -1,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> find(
+  strings_column_view const& strings,
+  string_scalar const& target,
+  size_type start                     = 0,
+  size_type stop                      = -1,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a column of character position values where the target
@@ -81,7 +83,7 @@ std::unique_ptr<column> rfind(
   string_scalar const& target,
   size_type start                     = 0,
   size_type stop                      = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 /**
  * @brief Returns a column of boolean values for each string where true indicates
  * the target string was found within that string in the provided column.
@@ -99,7 +101,7 @@ std::unique_ptr<column> rfind(
 std::unique_ptr<column> contains(
   strings_column_view const& strings,
   string_scalar const& target,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -119,7 +121,7 @@ std::unique_ptr<column> contains(
 std::unique_ptr<column> starts_with(
   strings_column_view const& strings,
   string_scalar const& target,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -141,7 +143,7 @@ std::unique_ptr<column> starts_with(
 std::unique_ptr<column> starts_with(
   strings_column_view const& strings,
   strings_column_view const& targets,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -161,7 +163,7 @@ std::unique_ptr<column> starts_with(
 std::unique_ptr<column> ends_with(
   strings_column_view const& strings,
   string_scalar const& target,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a column of boolean values for each string where true indicates
@@ -183,7 +185,7 @@ std::unique_ptr<column> ends_with(
 std::unique_ptr<column> ends_with(
   strings_column_view const& strings,
   strings_column_view const& targets,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 /** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

@@ -22,6 +22,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -353,11 +354,26 @@ public final class Table implements AutoCloseable {
                                                       HostBufferConsumer consumer);
 
   /**
+   * Convert a cudf table to an arrow table handle.
+   * @param handle the handle to the writer.
+   * @param tableHandle the table to convert
+   */
+  private static native long convertCudfToArrowTable(long handle,
+                                                     long tableHandle);
+
+  /**
    * Write out a table to an open handle.
    * @param handle the handle to the writer.
-   * @param table the table to write out.
+   * @param arrowHandle the arrow table to write out.
+   * @param maxChunkSize the maximum number of rows that could
+   *                     be written out in a single chunk.  Generally this setting will be
+   *                     followed unless for some reason the arrow table is not a single group.
+   *                     This can happen when reading arrow data, but not when converting from
+   *                     cudf.
    */
-  private static native void writeArrowIPCChunk(long handle, long table);
+  private static native void writeArrowIPCArrowChunk(long handle,
+                                                     long arrowHandle,
+                                                     long maxChunkSize);
 
   /**
    * Finish writing out Arrow IPC.
@@ -382,9 +398,22 @@ public final class Table implements AutoCloseable {
   /**
    * Read the next chunk/table of data.
    * @param handle the handle that is holding the data.
-   * @return the pointers to the columns for the table, or null if the data is done being read.
+   * @param rowTarget the number of rows to read.
+   * @return a pointer to an arrow table handle.
    */
-  private static native long[] readArrowIPCChunk(long handle);
+  private static native long readArrowIPCChunkToArrowTable(long handle, int rowTarget);
+
+  /**
+   * Close the arrow table handle returned by readArrowIPCChunkToArrowTable or
+   * convertCudfToArrowTable
+   */
+  private static native void closeArrowTable(long arrowHandle);
+
+  /**
+   * Convert an arrow table handle as returned by readArrowIPCChunkToArrowTable to
+   * cudf table handles.
+   */
+  private static native long[] convertArrowTableToCudf(long arrowHandle);
 
   /**
    * Finish reading the data.  We are done.
@@ -393,14 +422,21 @@ public final class Table implements AutoCloseable {
   private static native void readArrowIPCEnd(long handle);
 
   private static native long[] groupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
-                                                int[] aggTypes, boolean ignoreNullKeys) throws CudfException;
+                                                long[] aggInstances, boolean ignoreNullKeys) throws CudfException;
 
-  private static native long[] rollingWindowAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
-                                                      int[] aggTypes, int[] minPeriods, int[] preceding, int[] following,
-                                                      boolean ignoreNullKeys) throws CudfException;
+  private static native long[] rollingWindowAggregate(
+      long inputTable,
+      int[] keyIndices,
+      long[] defaultOutputs,
+      int[] aggColumnsIndices,
+      long[] aggInstances,
+      int[] minPeriods,
+      int[] preceding,
+      int[] following,
+      boolean ignoreNullKeys) throws CudfException;
 
   private static native long[] timeRangeRollingWindowAggregate(long inputTable, int[] keyIndices, int[] timestampIndices, boolean[] isTimesampAscending,
-                                                               int[] aggColumnsIndices, int[] aggTypes, int[] minPeriods,
+                                                               int[] aggColumnsIndices, long[] aggInstances, int[] minPeriods,
                                                                int[] preceding, int[] following, boolean ignoreNullKeys) throws CudfException;
 
   private static native long[] orderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
@@ -894,21 +930,29 @@ public final class Table implements AutoCloseable {
   }
 
   private static class ArrowIPCTableWriter implements TableWriter {
+    private final ArrowIPCWriterOptions.DoneOnGpu callback;
     private long handle;
-    HostBufferConsumer consumer;
+    private HostBufferConsumer consumer;
+    private long maxChunkSize;
 
-    private ArrowIPCTableWriter(ArrowIPCWriterOptions options, File outputFile) {
+    private ArrowIPCTableWriter(ArrowIPCWriterOptions options,
+                                File outputFile) {
+      this.callback = options.getCallback();
       this.consumer = null;
+      this.maxChunkSize = options.getMaxChunkSize();
       this.handle = writeArrowIPCFileBegin(
               options.getColumnNames(),
               outputFile.getAbsolutePath());
     }
 
-    private ArrowIPCTableWriter(ArrowIPCWriterOptions options, HostBufferConsumer consumer) {
+    private ArrowIPCTableWriter(ArrowIPCWriterOptions options,
+                                HostBufferConsumer consumer) {
+      this.callback = options.getCallback();
+      this.consumer = consumer;
+      this.maxChunkSize = options.getMaxChunkSize();
       this.handle = writeArrowIPCBufferBegin(
               options.getColumnNames(),
               consumer);
-      this.consumer = consumer;
     }
 
     @Override
@@ -916,7 +960,13 @@ public final class Table implements AutoCloseable {
       if (handle == 0) {
         throw new IllegalStateException("Writer was already closed");
       }
-      writeArrowIPCChunk(handle, table.nativeHandle);
+      long arrowHandle = convertCudfToArrowTable(handle, table.nativeHandle);
+      try {
+        callback.doneWithTheGpu(table);
+        writeArrowIPCArrowChunk(handle, arrowHandle, maxChunkSize);
+      } finally {
+        closeArrowTable(arrowHandle);
+      }
     }
 
     @Override
@@ -964,11 +1014,21 @@ public final class Table implements AutoCloseable {
     }
 
     // Called From JNI
-    public long readInto(long dstAddress, long maxAmount) {
-      long realMaxAmount = Math.min(maxAmount, buffer.length);
-      long amountRead = provider.readInto(buffer, realMaxAmount);
-      buffer.copyToMemory(dstAddress, amountRead);
-      return amountRead;
+    public long readInto(long dstAddress, long amount) {
+      long totalRead = 0;
+      long amountLeft = amount;
+      while (amountLeft > 0) {
+        long amountToCopy = Math.min(amountLeft, buffer.length);
+        long amountRead = provider.readInto(buffer, amountToCopy);
+        buffer.copyToMemory(totalRead + dstAddress, amountRead);
+        amountLeft -= amountRead;
+        totalRead += amountRead;
+        if (amountRead < amountToCopy) {
+          // EOF
+          amountLeft = 0;
+        }
+      }
+      return totalRead;
     }
 
     @Override
@@ -986,27 +1046,41 @@ public final class Table implements AutoCloseable {
   }
 
   private static class ArrowIPCStreamedTableReader implements StreamedTableReader {
+    private final ArrowIPCOptions.NeedGpu callback;
     private long handle;
     private ArrowReaderWrapper provider;
 
-    private ArrowIPCStreamedTableReader(File inputFile) {
+    private ArrowIPCStreamedTableReader(ArrowIPCOptions options, File inputFile) {
       this.provider = null;
       this.handle = readArrowIPCFileBegin(
               inputFile.getAbsolutePath());
+      this.callback = options.getCallback();
     }
 
-    private ArrowIPCStreamedTableReader(HostBufferProvider provider) {
+    private ArrowIPCStreamedTableReader(ArrowIPCOptions options, HostBufferProvider provider) {
       this.provider = new ArrowReaderWrapper(provider);
       this.handle = readArrowIPCBufferBegin(this.provider);
+      this.callback = options.getCallback();
     }
 
     @Override
     public Table getNextIfAvailable() throws CudfException {
-      long[] columns = readArrowIPCChunk(handle);
-      if (columns == null) {
-        return null;
+      // In this case rowTarget is the minimum number of rows to read.
+      return getNextIfAvailable(1);
+    }
+
+    @Override
+    public Table getNextIfAvailable(int rowTarget) throws CudfException {
+      long arrowTableHandle = readArrowIPCChunkToArrowTable(handle, rowTarget);
+      try {
+        if (arrowTableHandle == 0) {
+          return null;
+        }
+        callback.needTheGpu();
+        return new Table(convertArrowTableToCudf(arrowTableHandle));
+      } finally {
+        closeArrowTable(arrowTableHandle);
       }
-      return new Table(columns);
     }
 
     @Override
@@ -1024,11 +1098,32 @@ public final class Table implements AutoCloseable {
 
   /**
    * Get a reader that will return tables.
+   * @param options options for reading.
+   * @param inputFile the file to read the Arrow IPC formatted data from
+   * @return a reader.
+   */
+  public static StreamedTableReader readArrowIPCChunked(ArrowIPCOptions options, File inputFile) {
+    return new ArrowIPCStreamedTableReader(options, inputFile);
+  }
+
+  /**
+   * Get a reader that will return tables.
    * @param inputFile the file to read the Arrow IPC formatted data from
    * @return a reader.
    */
   public static StreamedTableReader readArrowIPCChunked(File inputFile) {
-    return new ArrowIPCStreamedTableReader(inputFile);
+    return readArrowIPCChunked(ArrowIPCOptions.DEFAULT, inputFile);
+  }
+
+  /**
+   * Get a reader that will return tables.
+   * @param options options for reading.
+   * @param provider what will provide the data being read.
+   * @return a reader.
+   */
+  public static StreamedTableReader readArrowIPCChunked(ArrowIPCOptions options,
+                                                        HostBufferProvider provider) {
+    return new ArrowIPCStreamedTableReader(options, provider);
   }
 
   /**
@@ -1037,7 +1132,7 @@ public final class Table implements AutoCloseable {
    * @return a reader.
    */
   public static StreamedTableReader readArrowIPCChunked(HostBufferProvider provider) {
-    return new ArrowIPCStreamedTableReader(provider);
+    return readArrowIPCChunked(ArrowIPCOptions.DEFAULT, provider);
   }
 
   /**
@@ -1288,7 +1383,9 @@ public final class Table implements AutoCloseable {
    * Null values are skipped.
    * @param index Column on which aggregation is to be performed
    * @return count aggregation of column `index` with null values skipped.
+   * @deprecated please use Aggregation.count.onColumn
    */
+  @Deprecated
   public static Aggregate count(int index) {
     return Aggregate.count(index, false);
   }
@@ -1298,7 +1395,9 @@ public final class Table implements AutoCloseable {
    * @param index Column on which aggregation is to be performed.
    * @param include_nulls Include nulls if set to true
    * @return count aggregation of column `index`
+   * @deprecated please use Aggregation.count.onColumn
    */
+  @Deprecated
   public static Aggregate count(int index, boolean include_nulls) {
     return Aggregate.count(index, include_nulls);
   }
@@ -1307,7 +1406,9 @@ public final class Table implements AutoCloseable {
    * Returns max aggregation. Null values are skipped.
    * @param index Column on which max aggregation is to be performed.
    * @return max aggregation of column `index`
+   * @deprecated please use Aggregation.max.onColumn
    */
+  @Deprecated
   public static Aggregate max(int index) {
     return Aggregate.max(index);
   }
@@ -1316,7 +1417,9 @@ public final class Table implements AutoCloseable {
    * Returns min aggregation. Null values are skipped.
    * @param index Column on which min aggregation is to be performed.
    * @return min aggregation of column `index`
+   * @deprecated please use Aggregation.min.onColumn
    */
+  @Deprecated
   public static Aggregate min(int index) {
     return Aggregate.min(index);
   }
@@ -1325,7 +1428,9 @@ public final class Table implements AutoCloseable {
    * Returns sum aggregation. Null values are skipped.
    * @param index Column on which sum aggregation is to be performed.
    * @return sum aggregation of column `index`
+   * @deprecated please use Aggregation.sum.onColumn
    */
+  @Deprecated
   public static Aggregate sum(int index) {
     return Aggregate.sum(index);
   }
@@ -1334,7 +1439,9 @@ public final class Table implements AutoCloseable {
    * Returns mean aggregation. Null values are skipped.
    * @param index Column on which mean aggregation is to be performed.
    * @return mean aggregation of column `index`
+   * @deprecated please use Aggregation.mean.onColumn
    */
+  @Deprecated
   public static Aggregate mean(int index) {
     return Aggregate.mean(index);
   }
@@ -1343,7 +1450,9 @@ public final class Table implements AutoCloseable {
    * Returns median aggregation. Null values are skipped.
    * @param index Column on which median aggregation is to be performed.
    * @return median aggregation of column `index`
+   * @deprecated please use Aggregation.median.onColumn
    */
+  @Deprecated
   public static Aggregate median(int index) {
     return Aggregate.median(index);
   }
@@ -1353,7 +1462,9 @@ public final class Table implements AutoCloseable {
    * @param index Column on which first aggregation is to be performed.
    * @param includeNulls Specifies whether null values are included in the aggregate operation.
    * @return first aggregation of column `index`
+   * @deprecated please use Aggregation.nth.onColumn
    */
+  @Deprecated
   public static Aggregate first(int index, boolean includeNulls) {
     return Aggregate.first(index, includeNulls);
   }
@@ -1363,7 +1474,9 @@ public final class Table implements AutoCloseable {
    * @param index Column on which last aggregation is to be performed.
    * @param includeNulls Specifies whether null values are included in the aggregate operation.
    * @return last aggregation of column `index`
+   * @deprecated please use Aggregation.nth.onColumn
    */
+  @Deprecated
   public static Aggregate last(int index, boolean includeNulls) {
     return Aggregate.last(index, includeNulls);
   }
@@ -1371,7 +1484,7 @@ public final class Table implements AutoCloseable {
   /**
    * Returns aggregate operations grouped by columns provided in indices
    * @param groupByOptions Options provided in the builder
-   * @param indices columnns to be considered for groupBy
+   * @param indices columns to be considered for groupBy
    */
   public AggregateOperation groupBy(GroupByOptions groupByOptions, int... indices) {
     return groupByInternal(groupByOptions, indices);
@@ -1539,8 +1652,7 @@ public final class Table implements AutoCloseable {
    * Internal class used to keep track of operations on a given column.
    */
   private static final class ColumnOps {
-    // Use a tree map to make debugging simpler (operations are all in the same order)
-    private final TreeMap<AggregateOp, List<Integer>> ops = new TreeMap<>();
+    private final HashMap<Aggregation, List<Integer>> ops = new HashMap<>();
 
     /**
      * Add an operation on a given column
@@ -1549,7 +1661,7 @@ public final class Table implements AutoCloseable {
      * @return 1 if it was not a duplicate or 0 if it was a duplicate.  This is mostly for
      * bookkeeping so we can easily allocate the correct data size later on.
      */
-    public int add(AggregateOp op, int index) {
+    public int add(Aggregation op, int index) {
       int ret = 0;
       List<Integer> indexes = ops.get(op);
       if (indexes == null) {
@@ -1561,7 +1673,7 @@ public final class Table implements AutoCloseable {
       return ret;
     }
 
-    public Set<AggregateOp> operations() {
+    public Set<Aggregation> operations() {
       return ops.keySet();
     }
 
@@ -1574,10 +1686,10 @@ public final class Table implements AutoCloseable {
    * Internal class used to keep track of operations on a given column.
    */
   private static final class ColumnWindowOps {
-    // Use a tree map to make debugging simpler (operations are all in the same order)
-    private final TreeMap<WindowAggregateOp, List<Integer>> ops = new TreeMap<>(); // Map AggOp -> Output column index.
+    // Map AggOp -> Output column index.
+    private final HashMap<AggregationOverWindow, List<Integer>> ops = new HashMap<>();
 
-    public int add(WindowAggregateOp op, int index) {
+    public int add(AggregationOverWindow op, int index) {
       int ret = 0;
       List<Integer> indexes = ops.get(op);
       if (indexes == null) {
@@ -1589,7 +1701,7 @@ public final class Table implements AutoCloseable {
       return ret;
     }
 
-    public Set<WindowAggregateOp> operations() {
+    public Set<AggregationOverWindow> operations() {
       return ops.keySet();
     }
 
@@ -1627,7 +1739,7 @@ public final class Table implements AutoCloseable {
      *                  1,   2
      *                  2,   1 ==> aggregated count
      */
-    public Table aggregate(Aggregate... aggregates) {
+    public Table aggregate(AggregationOnColumn... aggregates) {
       assert aggregates != null;
 
       // To improve performance and memory we want to remove duplicate operations
@@ -1640,52 +1752,52 @@ public final class Table implements AutoCloseable {
       int keysLength = operation.indices.length;
       int totalOps = 0;
       for (int outputIndex = 0; outputIndex < aggregates.length; outputIndex++) {
-        Aggregate agg = aggregates[outputIndex];
-        ColumnOps ops = groupedOps.computeIfAbsent(agg.getIndex(), (idx) -> new ColumnOps());
-        totalOps += ops.add(agg.getOp(), outputIndex + keysLength);
+        AggregationOnColumn agg = aggregates[outputIndex];
+        ColumnOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnOps());
+        totalOps += ops.add(agg, outputIndex + keysLength);
       }
       int[] aggColumnIndexes = new int[totalOps];
-      int[] aggOperationIds = new int[totalOps];
-      int opIndex = 0;
-      for (Map.Entry<Integer, ColumnOps> entry: groupedOps.entrySet()) {
-        int columnIndex = entry.getKey();
-        for (AggregateOp operation: entry.getValue().operations()) {
-          aggColumnIndexes[opIndex] = columnIndex;
-          aggOperationIds[opIndex] = operation.nativeId;
-          opIndex++;
-        }
-      }
-      assert opIndex == totalOps: opIndex + " == " + totalOps;
-
-      Table aggregate;
-      aggregate = new Table(groupByAggregate(
-          operation.table.nativeHandle,
-          operation.indices,
-          aggColumnIndexes,
-          aggOperationIds,
-          groupByOptions.getIgnoreNullKeys()));
+      long[] aggOperationInstances = new long[totalOps];
       try {
-        // prepare the final table
-        ColumnVector[] finalCols = new ColumnVector[keysLength + aggregates.length];
-
-        // get the key columns
-        for (int aggIndex = 0; aggIndex < keysLength; aggIndex++) {
-          finalCols[aggIndex] = aggregate.getColumn(aggIndex);
-        }
-
-        int inputColumn = keysLength;
-        // Now get the aggregation columns
-        for (ColumnOps ops: groupedOps.values()) {
-          for (List<Integer> indices: ops.outputIndices()) {
-            for (int outIndex: indices) {
-              finalCols[outIndex] = aggregate.getColumn(inputColumn);
-            }
-            inputColumn++;
+        int opIndex = 0;
+        for (Map.Entry<Integer, ColumnOps> entry: groupedOps.entrySet()) {
+          int columnIndex = entry.getKey();
+          for (Aggregation operation: entry.getValue().operations()) {
+            aggColumnIndexes[opIndex] = columnIndex;
+            aggOperationInstances[opIndex] = operation.createNativeInstance();
+            opIndex++;
           }
         }
-        return new Table(finalCols);
+        assert opIndex == totalOps : opIndex + " == " + totalOps;
+
+        try (Table aggregate = new Table(groupByAggregate(
+            operation.table.nativeHandle,
+            operation.indices,
+            aggColumnIndexes,
+            aggOperationInstances,
+            groupByOptions.getIgnoreNullKeys()))) {
+          // prepare the final table
+          ColumnVector[] finalCols = new ColumnVector[keysLength + aggregates.length];
+
+          // get the key columns
+          for (int aggIndex = 0; aggIndex < keysLength; aggIndex++) {
+            finalCols[aggIndex] = aggregate.getColumn(aggIndex);
+          }
+
+          int inputColumn = keysLength;
+          // Now get the aggregation columns
+          for (ColumnOps ops: groupedOps.values()) {
+            for (List<Integer> indices: ops.outputIndices()) {
+              for (int outIndex: indices) {
+                finalCols[outIndex] = aggregate.getColumn(inputColumn);
+              }
+              inputColumn++;
+            }
+          }
+          return new Table(finalCols);
+        }
       } finally {
-        aggregate.close();
+        Aggregation.close(aggOperationInstances);
       }
     }
 
@@ -1702,7 +1814,7 @@ public final class Table implements AutoCloseable {
      * 
      * Each window-aggregation is represented by a different {@link WindowAggregate} argument,
      * indicating:
-     *  1. the {@link AggregateOp}, 
+     *  1. the {@link Aggregation.Kind},
      *  2. the number of rows preceding and following the current row, within a window,
      *  3. the minimum number of observations within the defined window
      * 
@@ -1741,7 +1853,7 @@ public final class Table implements AutoCloseable {
      * {@link WindowOptions.FrameType#ROWS},
      * i.e. a timestamp column is specified for a window-aggregation.
      */
-    public Table aggregateWindows(WindowAggregate... windowAggregates) {
+    public Table aggregateWindows(AggregationOverWindow... windowAggregates) {
       // To improve performance and memory we want to remove duplicate operations
       // and also group the operations by column so hopefully cudf can do multiple aggregations
       // in a single pass.
@@ -1751,58 +1863,61 @@ public final class Table implements AutoCloseable {
       // Total number of operations that will need to be done.
       int totalOps = 0;
       for (int outputIndex = 0; outputIndex < windowAggregates.length; outputIndex++) {
-        WindowAggregate agg = windowAggregates[outputIndex];
-        if (agg.getOp().getWindowOptions().getFrameType() != WindowOptions.FrameType.ROWS) {
+        AggregationOverWindow agg = windowAggregates[outputIndex];
+        if (agg.getWindowOptions().getFrameType() != WindowOptions.FrameType.ROWS) {
           throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: " 
-                  + agg.getOp().getWindowOptions().getFrameType());
+                  + agg.getWindowOptions().getFrameType());
         }
         ColumnWindowOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnWindowOps());
-        totalOps += ops.add(agg.getOp(), outputIndex);
+        totalOps += ops.add(agg, outputIndex);
       }
 
       int[] aggColumnIndexes = new int[totalOps];
-      int[] aggOperationIds = new int[totalOps];
-      int[] aggPrecedingWindows = new int[totalOps];
-      int[] aggFollowingWindows = new int[totalOps];
-      int[] aggMinPeriods = new int[totalOps];
-      int opIndex = 0;
-      for (Map.Entry<Integer, ColumnWindowOps> entry : groupedOps.entrySet()) {
-        int columnIndex = entry.getKey();
-        for (WindowAggregateOp operation : entry.getValue().operations()) {
-          aggColumnIndexes[opIndex] = columnIndex;
-          aggOperationIds[opIndex] = operation.getAggregateOp().nativeId;
-          aggPrecedingWindows[opIndex] = operation.getWindowOptions().getPreceding();
-          aggFollowingWindows[opIndex] = operation.getWindowOptions().getFollowing();
-          aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
-          opIndex++;
-        }
-      }
-      assert opIndex == totalOps : opIndex + " == " + totalOps;
-
-      Table aggregate;
-      aggregate = new Table(rollingWindowAggregate(
-          operation.table.nativeHandle,
-          operation.indices,
-          aggColumnIndexes,
-          aggOperationIds, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
-          groupByOptions.getIgnoreNullKeys()));
+      long[] aggInstances = new long[totalOps];
       try {
-        // prepare the final table
-        ColumnVector[] finalCols = new ColumnVector[windowAggregates.length];
-
-        int inputColumn = 0;
-        // Now get the aggregation columns
-        for (ColumnWindowOps ops : groupedOps.values()) {
-          for (List<Integer> indices : ops.outputIndices()) {
-            for (int outIndex : indices) {
-              finalCols[outIndex] = aggregate.getColumn(inputColumn);
-            }
-            inputColumn++;
+        int[] aggPrecedingWindows = new int[totalOps];
+        int[] aggFollowingWindows = new int[totalOps];
+        int[] aggMinPeriods = new int[totalOps];
+        long[] defaultOutputs = new long[totalOps];
+        int opIndex = 0;
+        for (Map.Entry<Integer, ColumnWindowOps> entry: groupedOps.entrySet()) {
+          int columnIndex = entry.getKey();
+          for (AggregationOverWindow operation: entry.getValue().operations()) {
+            aggColumnIndexes[opIndex] = columnIndex;
+            aggInstances[opIndex] = operation.createNativeInstance();
+            aggPrecedingWindows[opIndex] = operation.getWindowOptions().getPreceding();
+            aggFollowingWindows[opIndex] = operation.getWindowOptions().getFollowing();
+            aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
+            defaultOutputs[opIndex] = operation.getDefaultOutput();
+            opIndex++;
           }
         }
-        return new Table(finalCols);
+        assert opIndex == totalOps : opIndex + " == " + totalOps;
+
+        try (Table aggregate = new Table(rollingWindowAggregate(
+            operation.table.nativeHandle,
+            operation.indices,
+            defaultOutputs,
+            aggColumnIndexes,
+            aggInstances, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
+            groupByOptions.getIgnoreNullKeys()))) {
+          // prepare the final table
+          ColumnVector[] finalCols = new ColumnVector[windowAggregates.length];
+
+          int inputColumn = 0;
+          // Now get the aggregation columns
+          for (ColumnWindowOps ops: groupedOps.values()) {
+            for (List<Integer> indices: ops.outputIndices()) {
+              for (int outIndex: indices) {
+                finalCols[outIndex] = aggregate.getColumn(inputColumn);
+              }
+              inputColumn++;
+            }
+          }
+          return new Table(finalCols);
+        }
       } finally {
-        aggregate.close();
+        Aggregation.close(aggInstances);
       }
     }
 
@@ -1819,7 +1934,7 @@ public final class Table implements AutoCloseable {
      * 
      * Each window-aggregation is represented by a different {@link WindowAggregate} argument,
      * indicating:
-     *  1. the {@link AggregateOp}, 
+     *  1. the {@link Aggregation.Kind},
      *  2. the index for the timestamp column to base the window definitions on
      *  2. the number of DAYS preceding and following the current row's date, to consider in the window
      *  3. the minimum number of observations within the defined window
@@ -1859,7 +1974,7 @@ public final class Table implements AutoCloseable {
      * {@link WindowOptions.FrameType#RANGE},
      * i.e. the timestamp-column was not specified for the aggregation.
      */
-    public Table aggregateWindowsOverTimeRanges(WindowAggregate... windowAggregates) {
+    public Table aggregateWindowsOverTimeRanges(AggregationOverWindow... windowAggregates) {
       // To improve performance and memory we want to remove duplicate operations
       // and also group the operations by column so hopefully cudf can do multiple aggregations
       // in a single pass.
@@ -1869,65 +1984,69 @@ public final class Table implements AutoCloseable {
       // Total number of operations that will need to be done.
       int totalOps = 0;
       for (int outputIndex = 0; outputIndex < windowAggregates.length; outputIndex++) {
-        WindowAggregate agg = windowAggregates[outputIndex];
-        if (agg.getOp().getWindowOptions().getFrameType() != WindowOptions.FrameType.RANGE) {
+        AggregationOverWindow agg = windowAggregates[outputIndex];
+        if (agg.getWindowOptions().getFrameType() != WindowOptions.FrameType.RANGE) {
           throw new IllegalArgumentException("Expected time-range-based window specification. Unexpected window type: " 
-                  + agg.getOp().getWindowOptions().getFrameType());
+                  + agg.getWindowOptions().getFrameType());
         }
         ColumnWindowOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnWindowOps());
-        totalOps += ops.add(agg.getOp(), outputIndex);
+        totalOps += ops.add(agg, outputIndex);
       }
 
       int[] aggColumnIndexes = new int[totalOps];
       int[] timestampColumnIndexes = new int[totalOps];
       boolean[] isTimestampOrderAscending = new boolean[totalOps];
-      int[] aggOperationIds = new int[totalOps];
-      int[] aggPrecedingWindows = new int[totalOps];
-      int[] aggFollowingWindows = new int[totalOps];
-      int[] aggMinPeriods = new int[totalOps];
-      int opIndex = 0;
-      for (Map.Entry<Integer, ColumnWindowOps> entry : groupedOps.entrySet()) {
-        int columnIndex = entry.getKey();
-        for (WindowAggregateOp operation : entry.getValue().operations()) {
-          aggColumnIndexes[opIndex] = columnIndex;
-          aggOperationIds[opIndex] = operation.getAggregateOp().nativeId;
-          aggPrecedingWindows[opIndex] = operation.getWindowOptions().getPreceding();
-          aggFollowingWindows[opIndex] = operation.getWindowOptions().getFollowing();
-          aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
-          assert(operation.getWindowOptions().getFrameType() == WindowOptions.FrameType.RANGE);
-          timestampColumnIndexes[opIndex] = operation.getWindowOptions().getTimestampColumnIndex();
-          isTimestampOrderAscending[opIndex] = operation.getWindowOptions().isTimestampOrderAscending();
-          opIndex++;
-        }
-      }
-      assert opIndex == totalOps : opIndex + " == " + totalOps;
-
-      Table aggregate;
-      aggregate = new Table(timeRangeRollingWindowAggregate(
-          operation.table.nativeHandle,
-          operation.indices,
-          timestampColumnIndexes,
-          isTimestampOrderAscending,
-          aggColumnIndexes,
-          aggOperationIds, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
-          groupByOptions.getIgnoreNullKeys()));
+      long[] aggInstances = new long[totalOps];
       try {
-        // prepare the final table
-        ColumnVector[] finalCols = new ColumnVector[windowAggregates.length];
-
-        int inputColumn = 0;
-        // Now get the aggregation columns
-        for (ColumnWindowOps ops : groupedOps.values()) {
-          for (List<Integer> indices : ops.outputIndices()) {
-            for (int outIndex : indices) {
-              finalCols[outIndex] = aggregate.getColumn(inputColumn);
+        int[] aggPrecedingWindows = new int[totalOps];
+        int[] aggFollowingWindows = new int[totalOps];
+        int[] aggMinPeriods = new int[totalOps];
+        int opIndex = 0;
+        for (Map.Entry<Integer, ColumnWindowOps> entry: groupedOps.entrySet()) {
+          int columnIndex = entry.getKey();
+          for (AggregationOverWindow operation: entry.getValue().operations()) {
+            aggColumnIndexes[opIndex] = columnIndex;
+            aggInstances[opIndex] = operation.createNativeInstance();
+            aggPrecedingWindows[opIndex] = operation.getWindowOptions().getPreceding();
+            aggFollowingWindows[opIndex] = operation.getWindowOptions().getFollowing();
+            aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
+            assert (operation.getWindowOptions().getFrameType() == WindowOptions.FrameType.RANGE);
+            timestampColumnIndexes[opIndex] = operation.getWindowOptions().getTimestampColumnIndex();
+            isTimestampOrderAscending[opIndex] = operation.getWindowOptions().isTimestampOrderAscending();
+            if (operation.getDefaultOutput() != 0) {
+              throw new IllegalArgumentException("Operations with a default output are not " +
+                  "supported on time based rolling windows");
             }
-            inputColumn++;
+            opIndex++;
           }
         }
-        return new Table(finalCols);
+        assert opIndex == totalOps : opIndex + " == " + totalOps;
+
+        try (Table aggregate = new Table(timeRangeRollingWindowAggregate(
+            operation.table.nativeHandle,
+            operation.indices,
+            timestampColumnIndexes,
+            isTimestampOrderAscending,
+            aggColumnIndexes,
+            aggInstances, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
+            groupByOptions.getIgnoreNullKeys()))) {
+          // prepare the final table
+          ColumnVector[] finalCols = new ColumnVector[windowAggregates.length];
+
+          int inputColumn = 0;
+          // Now get the aggregation columns
+          for (ColumnWindowOps ops: groupedOps.values()) {
+            for (List<Integer> indices: ops.outputIndices()) {
+              for (int outIndex: indices) {
+                finalCols[outIndex] = aggregate.getColumn(inputColumn);
+              }
+              inputColumn++;
+            }
+          }
+          return new Table(finalCols);
+        }
       } finally {
-        aggregate.close();
+        Aggregation.close(aggInstances);
       }
     }
   }

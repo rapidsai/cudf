@@ -866,9 +866,9 @@ void writer::impl::write_index_stream(int32_t stripe_id,
     if (record[0] >= 0) {
       record[0] += chunk.strm_len[type];
       while ((record[1] >= 0) && (static_cast<size_t>(record[0]) >= compression_blocksize_) &&
-             (record[3] + 3 + comp_out[record[1]].bytes_written < static_cast<size_t>(record[4]))) {
+             (record[2] + 3 + comp_out[record[1]].bytes_written < static_cast<size_t>(record[3]))) {
         record[0] -= compression_blocksize_;
-        record[3] += 3 + comp_out[record[1]].bytes_written;
+        record[2] += 3 + comp_out[record[1]].bytes_written;
         record[1] += 1;
       }
     }
@@ -955,10 +955,10 @@ void writer::impl::add_uncompressed_block_headers(std::vector<uint8_t> &v)
 }
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
-                   writer_options const &options,
+                   orc_writer_options const &options,
                    rmm::mr::device_memory_resource *mr)
-  : compression_kind_(to_orc_compression(options.compression)),
-    enable_statistics_(options.enable_statistics),
+  : compression_kind_(to_orc_compression(options.get_compression())),
+    enable_statistics_(options.enable_statistics()),
     out_sink_(std::move(sink)),
     _mr(mr)
 {
@@ -974,7 +974,7 @@ void writer::impl::write(table_view const &table,
   state.single_write_mode = true;
 
   write_chunked_begin(state);
-  write_chunked(table, state);
+  write_chunk(table, state);
   write_chunked_end(state);
 }
 
@@ -984,7 +984,7 @@ void writer::impl::write_chunked_begin(orc_chunked_state &state)
   out_sink_->host_write(MAGIC, std::strlen(MAGIC));
 }
 
-void writer::impl::write_chunked(table_view const &table, orc_chunked_state &state)
+void writer::impl::write_chunk(table_view const &table, orc_chunked_state &state)
 {
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
@@ -1088,7 +1088,7 @@ void writer::impl::write_chunked(table_view const &table, orc_chunked_state &sta
                                chunks,
                                state.stream);
 
-  // Assemble individual desparate column chunks into contiguous data streams
+  // Assemble individual disparate column chunks into contiguous data streams
   const auto num_index_streams  = (num_columns + 1);
   const auto num_data_streams   = streams.size() - num_index_streams;
   const auto num_stripe_streams = stripe_list.size() * num_data_streams;
@@ -1250,7 +1250,7 @@ void writer::impl::write_chunked(table_view const &table, orc_chunked_state &sta
 
   if (column_stats.size() != 0) {
     // File-level statistics
-    // NOTE: Excluded from chunked write mode to avoid the need for merging stats accross calls
+    // NOTE: Excluded from chunked write mode to avoid the need for merging stats across calls
     if (state.single_write_mode) {
       state.ff.statistics.resize(1 + num_columns);
       // First entry contains total number of rows
@@ -1299,10 +1299,10 @@ void writer::impl::write_chunked(table_view const &table, orc_chunked_state &sta
   } else {
     // verify the user isn't passing mismatched tables
     CUDF_EXPECTS(state.ff.types.size() == 1 + orc_columns.size(),
-                 "Mismatch in table structure between multiple calls to write_chunked");
+                 "Mismatch in table structure between multiple calls to write_chunk");
     for (auto i = 0; i < num_columns; i++) {
       CUDF_EXPECTS(state.ff.types[1 + i].kind == orc_columns[i].orc_kind(),
-                   "Mismatch in column types between multiple calls to write_chunked");
+                   "Mismatch in column types between multiple calls to write_chunk");
     }
   }
   state.ff.stripes.insert(state.ff.stripes.end(),
@@ -1352,7 +1352,7 @@ void writer::impl::write_chunked_end(orc_chunked_state &state)
 
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
-               writer_options const &options,
+               orc_writer_options const &options,
                rmm::mr::device_memory_resource *mr)
   : _impl(std::make_unique<impl>(std::move(sink), options, mr))
 {
@@ -1362,7 +1362,7 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::~writer() = default;
 
 // Forward to implementation
-void writer::write_all(table_view const &table, const table_metadata *metadata, cudaStream_t stream)
+void writer::write(table_view const &table, const table_metadata *metadata, cudaStream_t stream)
 {
   _impl->write(table, metadata, stream);
 }
@@ -1371,9 +1371,9 @@ void writer::write_all(table_view const &table, const table_metadata *metadata, 
 void writer::write_chunked_begin(orc_chunked_state &state) { _impl->write_chunked_begin(state); }
 
 // Forward to implementation
-void writer::write_chunked(table_view const &table, orc_chunked_state &state)
+void writer::write_chunk(table_view const &table, orc_chunked_state &state)
 {
-  _impl->write_chunked(table, state);
+  _impl->write_chunk(table, state);
 }
 
 // Forward to implementation

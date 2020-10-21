@@ -3,12 +3,9 @@ import functools
 from collections import OrderedDict
 from math import floor, isinf, isnan
 
-import cupy
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 from numba import njit
-from pyarrow.cuda import CudaBuffer as arrowCudaBuffer
 
 import rmm
 
@@ -81,7 +78,7 @@ def scalar_broadcast_to(scalar, size, dtype=None):
     dtype = scalar.dtype
 
     if np.dtype(dtype).kind in ("O", "U"):
-        gather_map = cupy.zeros(size, dtype="int32")
+        gather_map = column.full(size, 0, dtype="int32")
         scalar_str_col = column.as_column([scalar], dtype="str")
         return scalar_str_col[gather_map]
     else:
@@ -102,76 +99,6 @@ def normalize_index(index, size, doraise=True):
 
 
 list_types_tuple = (list, np.array)
-
-
-def buffers_from_pyarrow(pa_arr):
-    """
-    Given a pyarrow array returns a 5 length tuple of:
-        - size
-        - offset
-        - cudf.Buffer --> mask
-        - cudf.Buffer --> data
-        - cudf.Buffer --> string characters
-    """
-
-    buffers = pa_arr.buffers()
-
-    if pa_arr.null_count:
-        mask_size = cudf._lib.null_mask.bitmask_allocation_size_bytes(
-            len(pa_arr)
-        )
-        pamask = pyarrow_buffer_to_cudf_buffer(buffers[0], mask_size=mask_size)
-    else:
-        pamask = None
-
-    offset = pa_arr.offset
-    size = len(pa_arr)
-
-    if buffers[1]:
-        padata = pyarrow_buffer_to_cudf_buffer(buffers[1])
-    else:
-        padata = Buffer.empty(0)
-
-    pastrs = None
-    if isinstance(pa_arr, pa.StringArray):
-        pastrs = pyarrow_buffer_to_cudf_buffer(buffers[2])
-    return (size, offset, pamask, padata, pastrs)
-
-
-def pyarrow_buffer_to_cudf_buffer(arrow_buf, mask_size=0):
-    """
-    Given a PyArrow Buffer backed by either host or device memory, convert it
-    to a cuDF Buffer
-    """
-
-    # Try creating a PyArrow CudaBuffer from the PyArrow Buffer object, it
-    # fails with an ArrowTypeError if it's a host based Buffer so we catch and
-    # process as expected
-    if not isinstance(arrow_buf, pa.Buffer):
-        raise TypeError(
-            "Expected type: {}, got type: {}".format(
-                pa.Buffer.__name__, type(arrow_buf).__name__
-            )
-        )
-
-    try:
-        arrow_cuda_buf = arrowCudaBuffer.from_buffer(arrow_buf)
-        buf = Buffer(
-            data=arrow_cuda_buf.address,
-            size=arrow_cuda_buf.size,
-            owner=arrow_cuda_buf,
-        )
-        if buf.size < mask_size:
-            dbuf = rmm.DeviceBuffer(size=mask_size)
-            dbuf.copy_from_device(buf)
-            return Buffer(dbuf)
-        return buf
-    except pa.ArrowTypeError:
-        if arrow_buf.size < mask_size:
-            dbuf = rmm.DeviceBuffer(size=mask_size)
-            dbuf.copy_from_host(np.asarray(arrow_buf).view("u1"))
-            return Buffer(dbuf)
-        return Buffer(arrow_buf)
 
 
 def get_result_name(left, right):
@@ -395,7 +322,9 @@ def to_flat_dict(d):
     with tuple keys.
     """
 
-    def _inner(d, parents=[]):
+    def _inner(d, parents=None):
+        if parents is None:
+            parents = []
         for k, v in d.items():
             if not isinstance(v, d.__class__):
                 if parents:
@@ -438,3 +367,15 @@ def raise_iteration_error(obj):
         f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
         f"if you wish to iterate over the values."
     )
+
+
+def pa_mask_buffer_to_mask(mask_buf, size):
+    """
+    Convert PyArrow mask buffer to cuDF mask buffer
+    """
+    mask_size = cudf._lib.null_mask.bitmask_allocation_size_bytes(size)
+    if mask_buf.size < mask_size:
+        dbuf = rmm.DeviceBuffer(size=mask_size)
+        dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
+        return Buffer(dbuf)
+    return Buffer(mask_buf)

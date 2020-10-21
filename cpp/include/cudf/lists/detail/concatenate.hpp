@@ -42,7 +42,7 @@ namespace detail {
 std::unique_ptr<column> concatenate(
   std::vector<column_view> const& columns,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace lists

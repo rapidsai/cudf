@@ -34,6 +34,8 @@ cdef extern from "kafka_consumer.hpp" \
         int64_t get_committed_offset(string topic,
                                      int32_t partition) except +
 
+        map[string, vector[int32_t]] list_topics(string topic) except +
+
         map[string, int64_t] get_watermark_offset(string topic,
                                                   int32_t partition,
                                                   int32_t timeout,
@@ -62,6 +64,8 @@ cdef class KafkaDatasource(Datasource):
                              int64_t offset)
 
     cpdef int64_t get_committed_offset(self, string topic, int32_t partition)
+
+    cpdef map[string, vector[int32_t]] list_topics(self, string tp) except *
 
     cpdef map[string, int64_t] get_watermark_offset(self, string topic,
                                                     int32_t partition,

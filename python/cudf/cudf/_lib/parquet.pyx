@@ -6,39 +6,51 @@ import cudf
 import errno
 import os
 import pyarrow as pa
-import json
+
+try:
+    import ujson as json
+except ImportError:
+    import json
 
 from cython.operator import dereference
 import numpy as np
 
-from cudf.utils.dtypes import np_to_pa_dtype, is_categorical_dtype
+from cudf.utils.dtypes import (
+    np_to_pa_dtype,
+    is_categorical_dtype,
+    is_list_dtype,
+    is_struct_dtype
+)
 from libc.stdlib cimport free
 from libc.stdint cimport uint8_t
 from libcpp.memory cimport shared_ptr, unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.map cimport map
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 from libcpp cimport bool
 
-from cudf._lib.cpp.types cimport size_type
+
+from cudf._lib.cpp.types cimport data_type, size_type
 from cudf._lib.table cimport Table
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport (
     table_view
 )
-from cudf._lib.move cimport move
-from cudf._lib.cpp.io.functions cimport (
-    write_parquet_args,
-    write_parquet as parquet_writer,
-    merge_rowgroup_metadata as parquet_merge_metadata,
-    read_parquet_args,
+from cudf._lib.cpp.io.parquet cimport (
     read_parquet as parquet_reader,
-    write_parquet_chunked_args,
+    parquet_reader_options,
+    parquet_writer_options,
+    write_parquet as parquet_writer,
+    chunked_parquet_writer_options,
+    chunked_parquet_writer_options_builder,
     write_parquet_chunked_begin,
     write_parquet_chunked,
     write_parquet_chunked_end,
+    merge_rowgroup_metadata as parquet_merge_metadata,
     pq_chunked_state
 )
+from cudf._lib.column cimport Column
 from cudf._lib.io.utils cimport (
     make_source_info,
     make_sink_info
@@ -100,6 +112,8 @@ cpdef generate_pandas_metadata(Table table, index):
                 "'category' column dtypes are currently not "
                 + "supported by the gpu accelerated parquet writer"
             )
+        elif is_list_dtype(col):
+            types.append(col.dtype.to_arrow())
         else:
             types.append(np_to_pa_dtype(col.dtype))
 
@@ -128,6 +142,8 @@ cpdef generate_pandas_metadata(Table table, index):
                             "'category' column dtypes are currently not "
                             + "supported by the gpu accelerated parquet writer"
                         )
+                    elif is_list_dtype(col):
+                        types.append(col.dtype.to_arrow())
                     else:
                         types.append(np_to_pa_dtype(idx.dtype))
                     index_levels.append(idx)
@@ -144,12 +160,18 @@ cpdef generate_pandas_metadata(Table table, index):
         types,
     )
 
-    md = metadata[b'pandas']
-    json_str = md.decode("utf-8")
-    return json_str
+    md_dict = json.loads(metadata[b"pandas"])
+
+    # correct metadata for list and struct types
+    for col_meta in md_dict["columns"]:
+        if col_meta["numpy_type"] in ("list", "struct"):
+            col_meta["numpy_type"] = "object"
+
+    return json.dumps(md_dict)
+
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
-                   skip_rows=None, num_rows=None, strings_to_categorical=False,
+                   skiprows=None, num_rows=None, strings_to_categorical=False,
                    use_pandas_metadata=True):
     """
     Cython function to call into libcudf API, see `read_parquet`.
@@ -163,21 +185,36 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cdef cudf_io_types.source_info source = make_source_info(
         filepaths_or_buffers)
 
-    # Setup parquet reader arguments
-    cdef read_parquet_args args = read_parquet_args(source)
+    cdef vector[string] cpp_columns
+    cdef bool cpp_strings_to_categorical = strings_to_categorical
+    cdef bool cpp_use_pandas_metadata = use_pandas_metadata
+    cdef size_type cpp_skiprows = skiprows if skiprows is not None else 0
+    cdef size_type cpp_num_rows = num_rows if num_rows is not None else -1
+    cdef vector[vector[size_type]] cpp_row_groups
+    cdef data_type cpp_timestamp_type = cudf_types.data_type(
+        cudf_types.type_id.EMPTY
+    )
 
     if columns is not None:
-        args.columns.reserve(len(columns))
+        cpp_columns.reserve(len(columns))
         for col in columns or []:
-            args.columns.push_back(str(col).encode())
-    args.strings_to_categorical = strings_to_categorical
-    args.use_pandas_metadata = use_pandas_metadata
-
-    args.skip_rows = skip_rows if skip_rows is not None else 0
-    args.num_rows = num_rows if num_rows is not None else -1
+            cpp_columns.push_back(str(col).encode())
     if row_groups is not None:
-        args.row_groups = row_groups
-    args.timestamp_type = cudf_types.data_type(cudf_types.type_id.EMPTY)
+        cpp_row_groups = row_groups
+
+    cdef parquet_reader_options args
+    # Setup parquet reader arguments
+    args = move(
+        parquet_reader_options.builder(source)
+        .columns(cpp_columns)
+        .row_groups(cpp_row_groups)
+        .convert_strings_to_categories(cpp_strings_to_categorical)
+        .use_pandas_metadata(cpp_use_pandas_metadata)
+        .skip_rows(cpp_skiprows)
+        .num_rows(cpp_num_rows)
+        .timestamp_type(cpp_timestamp_type)
+        .build()
+    )
 
     # Read Parquet
     cdef cudf_io_types.table_with_metadata c_out_table
@@ -198,9 +235,13 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
             index_col = meta['index_columns'][0]
 
     df = cudf.DataFrame._from_table(
-        Table.from_unique_ptr(move(c_out_table.tbl),
-                              column_names=column_names)
+        Table.from_unique_ptr(
+            move(c_out_table.tbl),
+            column_names=column_names
+        )
     )
+
+    _update_struct_field_names(df, c_out_table.metadata.schema_info)
 
     if df.empty and meta is not None:
         cols_dtype_map = {}
@@ -213,9 +254,10 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                 column_names.remove(index_col)
 
         for col in column_names:
+            meta_dtype = cols_dtype_map.get(col, None)
             df._data[col] = cudf.core.column.column_empty(
                 row_count=0,
-                dtype=np.dtype(cols_dtype_map[col])
+                dtype=np.dtype(meta_dtype)
             )
 
     # Set the index column
@@ -234,11 +276,11 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
 cpdef write_parquet(
         Table table,
-        path,
-        index=None,
-        compression=None,
-        statistics="ROWGROUP",
-        metadata_file_path=None):
+        object path,
+        object index=None,
+        object compression=None,
+        str statistics="ROWGROUP",
+        object metadata_file_path=None):
     """
     Cython function to call into libcudf API, see `write_parquet`.
 
@@ -255,7 +297,7 @@ cpdef write_parquet(
     cdef map[string, string] user_data
     cdef table_view tv = table.data_view()
     cdef unique_ptr[cudf_io_types.data_sink] _data_sink
-    cdef cudf_io_types.sink_info sink = make_sink_info(path, &_data_sink)
+    cdef cudf_io_types.sink_info sink = make_sink_info(path, _data_sink)
 
     if index is not False:
         tv = table.view()
@@ -282,22 +324,25 @@ cpdef write_parquet(
     cdef cudf_io_types.compression_type comp_type = _get_comp_type(compression)
     cdef cudf_io_types.statistics_freq stat_freq = _get_stat_freq(statistics)
 
-    cdef write_parquet_args args
+    cdef parquet_writer_options args
     cdef unique_ptr[vector[uint8_t]] out_metadata_c
+    cdef string c_column_chunks_file_path
+    cdef bool return_filemetadata = False
+    if metadata_file_path is not None:
+        c_column_chunks_file_path = str.encode(metadata_file_path)
+        return_filemetadata = True
 
     # Perform write
     with nogil:
-        args = write_parquet_args(sink,
-                                  tv,
-                                  tbl_meta.get(),
-                                  comp_type,
-                                  stat_freq)
-
-    if metadata_file_path is not None:
-        args.metadata_out_file_path = str.encode(metadata_file_path)
-        args.return_filemetadata = True
-
-    with nogil:
+        args = move(
+            parquet_writer_options.builder(sink, tv)
+            .metadata(tbl_meta.get())
+            .compression(comp_type)
+            .stats_level(stat_freq)
+            .column_chunks_file_path(c_column_chunks_file_path)
+            .return_filemetadata(return_filemetadata)
+            .build()
+        )
         out_metadata_c = move(parquet_writer(args))
 
     if metadata_file_path is not None:
@@ -327,7 +372,7 @@ cdef class ParquetWriter:
 
     def __cinit__(self, object path, object index=None,
                   object compression=None, str statistics="ROWGROUP"):
-        self.sink = make_sink_info(path, &self._data_sink)
+        self.sink = make_sink_info(path, self._data_sink)
         self.stat_freq = _get_stat_freq(statistics)
         self.comp_type = _get_comp_type(compression)
         self.index = index
@@ -349,14 +394,14 @@ cdef class ParquetWriter:
     def close(self, object metadata_file_path=None):
         cdef unique_ptr[vector[uint8_t]] out_metadata_c
         cdef bool return_meta
-        cdef string metadata_out_file_path
+        cdef string column_chunks_file_path
 
         if not self.state:
             return None
 
         # Update metadata-collection options
         if metadata_file_path is not None:
-            metadata_out_file_path = str.encode(metadata_file_path)
+            column_chunks_file_path = str.encode(metadata_file_path)
             return_meta = True
         else:
             return_meta = False
@@ -364,7 +409,7 @@ cdef class ParquetWriter:
         with nogil:
             out_metadata_c = move(
                 write_parquet_chunked_end(
-                    self.state, return_meta, metadata_out_file_path
+                    self.state, return_meta, column_chunks_file_path
                 )
             )
             self.state.reset()
@@ -392,15 +437,19 @@ cdef class ParquetWriter:
             str.encode(pandas_metadata)
 
         # call write_parquet_chunked_begin
-        cdef write_parquet_chunked_args args
+        cdef chunked_parquet_writer_options args
         with nogil:
-            args = write_parquet_chunked_args(self.sink,
-                                              tbl_meta.get(),
-                                              self.comp_type, self.stat_freq)
+            args = move(
+                chunked_parquet_writer_options.builder(self.sink)
+                .nullable_metadata(tbl_meta.get())
+                .compression(self.comp_type)
+                .stats_level(self.stat_freq)
+                .build()
+            )
             self.state = write_parquet_chunked_begin(args)
 
 
-cpdef merge_filemetadata(filemetadata_list):
+cpdef merge_filemetadata(object filemetadata_list):
     """
     Cython function to call into libcudf API, see `merge_rowgroup_metadata`.
 
@@ -458,3 +507,37 @@ cdef vector[string] _get_column_names(Table table, object index):
         column_names.push_back(str.encode(col_name))
 
     return column_names
+
+
+cdef _update_struct_field_names(
+    Table table,
+    vector[cudf_io_types.column_name_info]& schema_info
+):
+    for i, (name, col) in enumerate(table._data.items()):
+        table._data[name] = _update_column_struct_field_names(
+            col, schema_info[i]
+        )
+
+cdef Column _update_column_struct_field_names(
+    Column col,
+    cudf_io_types.column_name_info& info
+):
+    cdef vector[string] field_names
+
+    if is_struct_dtype(col):
+        field_names.reserve(len(col.base_children))
+        for i in range(info.children.size()):
+            field_names.push_back(info.children[i].name)
+        col = col._rename_fields(
+            field_names
+        )
+
+    if col.children:
+        children = list(col.children)
+        for i, child in enumerate(children):
+            children[i] = _update_column_struct_field_names(
+                child,
+                info.children[i]
+            )
+        col.set_base_children(tuple(children))
+    return col

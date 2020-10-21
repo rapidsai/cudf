@@ -23,6 +23,8 @@ namespace cudf {
 /**
  * @addtogroup transformation_unaryops
  * @{
+ * @file
+ * @brief Column APIs for unary ops
  */
 
 enum class unary_op : int32_t {
@@ -62,7 +64,7 @@ enum class unary_op : int32_t {
 std::unique_ptr<cudf::column> unary_operation(
   cudf::column_view const& input,
   cudf::unary_op op,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a column of `type_id::BOOL8` elements where for every element in `input` `true`
@@ -76,7 +78,7 @@ std::unique_ptr<cudf::column> unary_operation(
  */
 std::unique_ptr<cudf::column> is_null(
   cudf::column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a column of `type_id::BOOL8` elements where for every element in `input` `true`
@@ -90,7 +92,7 @@ std::unique_ptr<cudf::column> is_null(
  */
 std::unique_ptr<cudf::column> is_valid(
   cudf::column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Casts data from dtype specified in input to dtype specified in output.
@@ -103,9 +105,10 @@ std::unique_ptr<cudf::column> is_valid(
  * @returns Column of same size as `input` containing result of the cast operation
  * @throw cudf::logic_error if `out_type` is not a fixed-width type
  */
-std::unique_ptr<column> cast(column_view const& input,
-                             data_type out_type,
-                             rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<column> cast(
+  column_view const& input,
+  data_type out_type,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a column of `type_id::BOOL8` elements indicating the presence of `NaN` values
@@ -121,7 +124,7 @@ std::unique_ptr<column> cast(column_view const& input,
  */
 std::unique_ptr<column> is_nan(
   cudf::column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a column of `type_id::BOOL8` elements indicating the absence of `NaN` values
@@ -138,7 +141,7 @@ std::unique_ptr<column> is_nan(
  */
 std::unique_ptr<column> is_not_nan(
   cudf::column_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

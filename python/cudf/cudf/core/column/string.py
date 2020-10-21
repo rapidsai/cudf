@@ -5,7 +5,6 @@ import warnings
 import cupy
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 import cudf
 from cudf import _lib as libcudf
@@ -132,7 +131,10 @@ from cudf._lib.strings.substring import (
     slice_from as cpp_slice_from,
     slice_strings as cpp_slice_strings,
 )
-from cudf._lib.strings.translate import translate as cpp_translate
+from cudf._lib.strings.translate import (
+    filter_characters as cpp_filter_characters,
+    translate as cpp_translate,
+)
 from cudf._lib.strings.wrap import wrap as cpp_wrap
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
@@ -145,7 +147,6 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
 )
-from cudf.utils.utils import buffers_from_pyarrow
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
@@ -3614,6 +3615,56 @@ class StringMethods(ColumnMethodsMixin):
             cpp_translate(self._column, table), **kwargs
         )
 
+    def filter_characters(self, table, keep=True, repl=None, **kwargs):
+        """
+        Remove characters from each string using the character ranges
+        in the given mapping table.
+
+        Parameters
+        ----------
+        table : dict
+            This table is a range of Unicode ordinals to filter.
+            The minimum value is the key and the maximum value is the value.
+            You can use `str.maketrans()
+            <https://docs.python.org/3/library/stdtypes.html#str.maketrans>`_
+            as a helper function for making the filter table.
+            Overlapping ranges will cause undefined results.
+            Range values are inclusive.
+        keep : boolean
+            If False, the character ranges in the ``table`` are removed.
+            If True, the character ranges not in the ``table`` are removed.
+            Default is True.
+        repl : str
+            Optional replacement string to use in place of removed characters.
+
+        Returns
+        -------
+        Series or Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> data = ['aeiou', 'AEIOU', '0123456789']
+        >>> s = cudf.Series(data)
+        >>> s.str.filter_characters({'a':'l', 'M':'Z', '4':'6'})
+        0    aei
+        1     OU
+        2    456
+        dtype: object
+        >>> s.str.filter_characters({'a':'l', 'M':'Z', '4':'6'}, False, "_")
+        0         ___ou
+        1         AEI__
+        2    0123___789
+        dtype: object
+        """
+        if repl is None:
+            repl = ""
+        table = str.maketrans(table)
+        return self._return_or_inplace(
+            cpp_filter_characters(self._column, table, keep, as_scalar(repl)),
+            **kwargs,
+        )
+
     def normalize_spaces(self, **kwargs):
         """
         Remove extra whitespace between tokens and trim whitespace
@@ -4111,8 +4162,6 @@ class StringMethods(ColumnMethodsMixin):
         stride=48,
         do_lower=True,
         do_truncate=False,
-        max_num_strings=100,
-        max_num_chars=100000,
         max_rows_tensor=500,
         **kwargs,
     ):
@@ -4120,6 +4169,9 @@ class StringMethods(ColumnMethodsMixin):
         Run CUDA BERT subword tokenizer on cuDF strings column.
         Encodes words to token ids using vocabulary from a pretrained
         tokenizer.
+
+        This function requires about 21x the number of character bytes
+        in the input strings column as working memory.
 
         Parameters
         ----------
@@ -4147,10 +4199,6 @@ class StringMethods(ColumnMethodsMixin):
             max_length. Each input string will result in exactly one output
             sequence. If set to false, there may be multiple output
             sequences when the max_length is smaller than generated tokens.
-        max_num_strings : int, Default is 100
-            The maximum number of strings to be encoded.
-        max_num_chars : int, Default is 100000
-            The maximum number of characters in the input strings column.
         max_rows_tensor : int, Default is 500
             The maximum number of rows in the output
 
@@ -4180,8 +4228,6 @@ class StringMethods(ColumnMethodsMixin):
             stride,
             do_lower,
             do_truncate,
-            max_num_strings,
-            max_num_chars,
             max_rows_tensor,
         )
         return (
@@ -4421,9 +4467,8 @@ class StringColumn(column.ColumnBase):
 
         if len(children) == 0 and size != 0:
             # all nulls-column:
-            offsets = cudf.core.column.as_column(
-                cupy.zeros(size + 1, dtype="int32")
-            )
+            offsets = column.full(size + 1, 0, dtype="int32")
+
             chars = cudf.core.column.as_column([], dtype="int8")
             children = (offsets, chars)
 
@@ -4447,22 +4492,14 @@ class StringColumn(column.ColumnBase):
                 / self.base_children[0].dtype.itemsize
             )
 
-    def sum(self, dtype=None):
-        return self.str().cat()
-
-    def product(self, dtype=None):
-        raise TypeError("can't multiply sequence by non-int of type 'object'")
-
-    def mean(self, dtype=np.float64):
-        raise NotImplementedError(
-            "mean for Series of type 'object' is not yet implemented."
+    def sum(self, skipna=None, dtype=None, min_count=0):
+        result_col = self._process_for_reduction(
+            skipna=skipna, min_count=min_count
         )
-
-    def var(self, ddof=1, dtype=np.float64):
-        raise TypeError("unsupported operation for object of type 'object'")
-
-    def std(self, ddof=1, dtype=np.float64):
-        raise TypeError("unsupported operation for object of type 'object'")
+        if isinstance(result_col, cudf.core.column.ColumnBase):
+            return result_col.str().cat()
+        else:
+            return result_col
 
     def set_base_data(self, value):
         if value is not None:
@@ -4511,18 +4548,6 @@ class StringColumn(column.ColumnBase):
 
     def _set_mask(self, value):
         super()._set_mask(value)
-
-    @classmethod
-    def from_arrow(cls, array):
-        pa_size, pa_offset, nbuf, obuf, sbuf = buffers_from_pyarrow(array)
-        children = (
-            column.build_column(data=obuf, dtype="int32"),
-            column.build_column(data=sbuf, dtype="int8"),
-        )
-
-        return StringColumn(
-            mask=nbuf, children=children, size=pa_size, offset=pa_offset
-        )
 
     @property
     def _nbytes(self):
@@ -4591,31 +4616,6 @@ class StringColumn(column.ColumnBase):
 
     def as_string_column(self, dtype, **kwargs):
         return self
-
-    def to_arrow(self):
-        if len(self) == 0:
-            sbuf = np.empty(0, dtype="int8")
-            obuf = np.empty(0, dtype="int32")
-            nbuf = None
-        else:
-            sbuf = self.children[1].data.to_host_array().view("int8")
-            obuf = self.children[0].data.to_host_array().view("int32")
-            nbuf = None
-            if self.null_count > 0:
-                nbuf = self.mask.to_host_array().view("int8")
-                nbuf = pa.py_buffer(nbuf)
-
-        sbuf = pa.py_buffer(sbuf)
-        obuf = pa.py_buffer(obuf)
-
-        if self.null_count == len(self):
-            return pa.NullArray.from_buffers(
-                pa.null(), len(self), [pa.py_buffer((b""))], self.null_count
-            )
-        else:
-            return pa.StringArray.from_buffers(
-                len(self), obuf, sbuf, nbuf, self.null_count
-            )
 
     @property
     def values_host(self):
@@ -4767,13 +4767,13 @@ class StringColumn(column.ColumnBase):
         lhs = self
         if reflect:
             lhs, rhs = rhs, lhs
-        if isinstance(rhs, StringColumn) and op == "add":
-            return lhs.str().cat(others=rhs)
-        elif op in ("eq", "ne", "gt", "lt", "ge", "le"):
-            return _string_column_binop(self, rhs, op=op, out_dtype="bool")
-        else:
-            msg = "{!r} operator not supported between {} and {}"
-            raise TypeError(msg.format(op, type(self), type(rhs)))
+        if isinstance(rhs, (StringColumn, str)):
+            if op == "add":
+                return lhs.str().cat(others=rhs)
+            elif op in ("eq", "ne", "gt", "lt", "ge", "le"):
+                return _string_column_binop(self, rhs, op=op, out_dtype="bool")
+        msg = "{!r} operator not supported between {} and {}"
+        raise TypeError(msg.format(op, type(self), type(rhs)))
 
     @property
     def is_unique(self):

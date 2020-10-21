@@ -14,20 +14,14 @@
  * limitations under the License.
  */
 
-#include <text/subword/detail/cp_data.h>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/error.hpp>
-#include <text/subword/detail/codepoint_metadata.ah>
 #include <text/subword/detail/data_normalizer.hpp>
 #include <text/subword/detail/tokenizer_utils.cuh>
 
-#include <thrust/fill.h>
 #include <thrust/for_each.h>
-#include <cub/device/device_scan.cuh>
-#include <cub/device/device_select.cuh>
-#include <string>
-#include <vector>
+#include <thrust/remove.h>
 
 namespace nvtext {
 namespace detail {
@@ -129,7 +123,6 @@ __device__ uint32_t extract_code_points_from_utf8(unsigned char const* strings,
   constexpr uint8_t max_utf8_blocks_for_char    = 4;
   uint8_t utf8_blocks[max_utf8_blocks_for_char] = {0};
 
-#pragma unroll
   for (int i = 0; i < std::min(static_cast<size_t>(max_utf8_blocks_for_char),
                                total_bytes - start_byte_for_thread);
        ++i) {
@@ -172,10 +165,9 @@ __device__ uint32_t extract_code_points_from_utf8(unsigned char const* strings,
   uint32_t code_point = (utf8_blocks[0] & char_encoding_length.second) << 18;
   // Move the remaining values which are 6 bits (mask b10xxxxxx = x3F)
   // from the remaining bytes into successive positions in the 32-bit result.
-#pragma unroll
-  for (int i = 1; i < max_utf8_blocks_for_char; ++i) {
-    code_point |= ((utf8_blocks[i] & 0x3F) << (18 - 6 * i));
-  }
+  code_point |= ((utf8_blocks[1] & 0x3F) << 12);
+  code_point |= ((utf8_blocks[2] & 0x3F) << 6);
+  code_point |= utf8_blocks[3] & 0x3F;
 
   // Adjust the final result by shifting by the character length.
   uint8_t const shift_amt = 24 - 6 * char_encoding_length.first;
@@ -196,22 +188,18 @@ __device__ uint32_t extract_code_points_from_utf8(unsigned char const* strings,
  * tokens and match up token ids.
  *
  * @param[in] strings The input strings with characters to normalize to code point values.
- * @param[in] device_strings_offsets Offsets to individual strings in the input vector.
  * @param[in] total_bytes Total number of bytes in the input `strings` vector.
  * @param[in] cp_metadata The metadata lookup table for every unicode code point value.
  * @param[in] aux_table Aux table for mapping some multi-byte code point values.
  * @param[in] do_lower_case True if normalization should include lower-casing.
- * @param[in] num_strings Total number of strings in the input `strings` vector.
  * @param[out] code_points The resulting code point values from normalization.
  * @param[out] chars_per_thread Output number of code point values per string.
  */
 __global__ void kernel_data_normalizer(unsigned char const* strings,
-                                       uint32_t const* device_strings_offsets,
                                        size_t const total_bytes,
                                        uint32_t const* cp_metadata,
                                        uint64_t const* aux_table,
                                        bool const do_lower_case,
-                                       uint32_t const num_strings,
                                        uint32_t* code_points,
                                        uint32_t* chars_per_thread)
 {
@@ -268,207 +256,80 @@ __global__ void kernel_data_normalizer(unsigned char const* strings,
   BlockStore(temp_storage).Store(block_base, replacement_code_points);
 }
 
-/**
- * @brief Retrieve the code point metadata table.
- *
- * Build the code point metadata table in device memory
- * using the vector pieces from codepoint_metadata.ah
- */
-const codepoint_metadata_type* get_codepoint_metadata(cudaStream_t stream)
-{
-  static cudf::strings::detail::thread_safe_per_context_cache<codepoint_metadata_type>
-    g_codepoint_metadata;
-  return g_codepoint_metadata.find_or_initialize([stream](void) {
-    codepoint_metadata_type* table =
-      static_cast<codepoint_metadata_type*>(rmm::mr::get_default_resource()->allocate(
-        codepoint_metadata_size * sizeof(codepoint_metadata_type), stream));
-    thrust::fill(rmm::exec_policy(stream)->on(stream),
-                 table + cp_section1_end,
-                 table + codepoint_metadata_size,
-                 codepoint_metadata_default_value);
-    CUDA_TRY(cudaMemcpyAsync(table,
-                             codepoint_metadata,
-                             cp_section1_end * sizeof(codepoint_metadata[0]),  // 1st section
-                             cudaMemcpyHostToDevice,
-                             stream));
-    CUDA_TRY(cudaMemcpyAsync(
-      table + cp_section2_begin,
-      cp_metadata_917505_917999,
-      (cp_section2_end - cp_section2_begin + 1) * sizeof(codepoint_metadata[0]),  // 2nd section
-      cudaMemcpyHostToDevice,
-      stream));
-    return table;
-  });
-}
-
-/**
- * @brief Retrieve the aux code point data table.
- *
- * Build the aux code point data table in device memory
- * using the vector pieces from codepoint_metadata.ah
- */
-const aux_codepoint_data_type* get_aux_codepoint_data(cudaStream_t stream)
-{
-  static cudf::strings::detail::thread_safe_per_context_cache<aux_codepoint_data_type>
-    g_aux_codepoint_data;
-  return g_aux_codepoint_data.find_or_initialize([stream](void) {
-    aux_codepoint_data_type* table =
-      static_cast<aux_codepoint_data_type*>(rmm::mr::get_default_resource()->allocate(
-        aux_codepoint_data_size * sizeof(aux_codepoint_data_type), stream));
-    thrust::fill(rmm::exec_policy(stream)->on(stream),
-                 table + aux_section1_end,
-                 table + aux_codepoint_data_size,
-                 aux_codepoint_default_value);
-    CUDA_TRY(cudaMemcpyAsync(table,
-                             aux_codepoint_data,
-                             aux_section1_end * sizeof(aux_codepoint_data[0]),  // 1st section
-                             cudaMemcpyHostToDevice,
-                             stream));
-    CUDA_TRY(cudaMemcpyAsync(
-      table + aux_section2_begin,
-      aux_cp_data_44032_55203,
-      (aux_section2_end - aux_section2_begin + 1) * sizeof(aux_codepoint_data[0]),  // 2nd section
-      cudaMemcpyHostToDevice,
-      stream));
-    CUDA_TRY(cudaMemcpyAsync(
-      table + aux_section3_begin,
-      aux_cp_data_70475_71099,
-      (aux_section3_end - aux_section3_begin + 1) * sizeof(aux_codepoint_data[0]),  // 3rd section
-      cudaMemcpyHostToDevice,
-      stream));
-    CUDA_TRY(cudaMemcpyAsync(
-      table + aux_section4_begin,
-      aux_cp_data_119134_119232,
-      (aux_section4_end - aux_section4_begin + 1) * sizeof(aux_codepoint_data[0]),  // 4th section
-      cudaMemcpyHostToDevice,
-      stream));
-    return table;
-  });
-}
-
 }  // namespace
 
-data_normalizer::data_normalizer(uint32_t max_num_strings,
-                                 uint32_t max_num_chars,
-                                 cudaStream_t stream,
-                                 bool do_lower_case)
-  : do_lower_case(do_lower_case),
-    device_strings(static_cast<size_t>(max_num_chars), stream),
-    device_strings_offsets(static_cast<size_t>(max_num_strings + 1), stream),
-    device_code_points(0, stream),
-    device_chars_per_thread(0, stream),
-    cub_temp_storage(0, stream),
-    device_num_selected(1, stream)
+data_normalizer::data_normalizer(cudaStream_t stream, bool do_lower_case)
+  : do_lower_case(do_lower_case)
 {
   d_cp_metadata = detail::get_codepoint_metadata(stream);
   d_aux_table   = detail::get_aux_codepoint_data(stream);
-
-  cudf::detail::grid_1d const grid{static_cast<cudf::size_type>(max_num_chars), THREADS_PER_BLOCK};
-  size_t const max_threads_on_device = grid.num_threads_per_block * grid.num_blocks;
-  size_t const max_new_char_total    = MAX_NEW_CHARS * max_threads_on_device;
-  device_code_points.resize(max_new_char_total, stream);
-  device_chars_per_thread.resize(max_threads_on_device, stream);
-
-  // Determine temporary device storage requirements for cub
-  size_t temp_storage_scan_bytes    = 0;
-  uint32_t* device_chars_per_thread = nullptr;
-  cub::DeviceScan::InclusiveSum(nullptr,
-                                temp_storage_scan_bytes,
-                                device_chars_per_thread,
-                                device_chars_per_thread,
-                                max_threads_on_device,
-                                stream);
-  size_t temp_storage_select_bytes = 0;
-  NotEqual const select_op((1 << FILTER_BIT));
-  cub::DeviceSelect::If(nullptr,
-                        temp_storage_select_bytes,
-                        device_code_points.data(),
-                        device_code_points.data(),
-                        device_num_selected.data(),
-                        max_new_char_total,
-                        select_op,
-                        stream);
-  max_cub_storage_bytes = std::max(temp_storage_scan_bytes, temp_storage_select_bytes);
-  cub_temp_storage.resize(max_cub_storage_bytes, stream);
 }
 
-std::pair<ptr_length_pair, ptr_length_pair> data_normalizer::normalize(char const* d_strings,
-                                                                       uint32_t const* d_offsets,
-                                                                       uint32_t num_strings,
-                                                                       cudaStream_t stream)
+uvector_pair data_normalizer::normalize(char const* d_strings,
+                                        uint32_t const* d_offsets,
+                                        uint32_t num_strings,
+                                        cudaStream_t stream)
 {
-  ptr_length_pair cp_and_length;
-  ptr_length_pair offset_and_length;
+  if (num_strings == 0)
+    return std::make_pair(std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
+                          std::make_unique<rmm::device_uvector<uint32_t>>(0, stream));
 
+  auto const execpol = rmm::exec_policy(stream);
   // copy offsets to working memory
-  size_t const num_offsets = std::min(size_t{num_strings + 1}, device_strings_offsets.size());
-  CUDA_TRY(cudaMemcpyAsync(device_strings_offsets.data(),
-                           d_offsets,
-                           sizeof(uint32_t) * num_offsets,
-                           cudaMemcpyDeviceToDevice,
-                           stream));
-  uint32_t const bytes_count = device_strings_offsets.element(num_offsets - 1, stream);
+  size_t const num_offsets = num_strings + 1;
+  auto d_strings_offsets   = std::make_unique<rmm::device_uvector<uint32_t>>(num_offsets, stream);
+  thrust::transform(execpol->on(stream),
+                    thrust::make_counting_iterator<uint32_t>(0),
+                    thrust::make_counting_iterator<uint32_t>(num_offsets),
+                    d_strings_offsets->begin(),
+                    [d_offsets] __device__(auto idx) {
+                      auto const offset = d_offsets[0];  // adjust for any offset to the offsets
+                      return d_offsets[idx] - offset;
+                    });
+  uint32_t const bytes_count = d_strings_offsets->element(num_strings, stream);
   if (bytes_count == 0)  // if no bytes, nothing to do
-    return std::make_pair(cp_and_length, offset_and_length);
+    return std::make_pair(std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
+                          std::make_unique<rmm::device_uvector<uint32_t>>(0, stream));
 
   cudf::detail::grid_1d const grid{static_cast<cudf::size_type>(bytes_count), THREADS_PER_BLOCK, 1};
   size_t const threads_on_device  = grid.num_threads_per_block * grid.num_blocks;
   size_t const max_new_char_total = MAX_NEW_CHARS * threads_on_device;
 
+  auto d_code_points = std::make_unique<rmm::device_uvector<uint32_t>>(max_new_char_total, stream);
+  rmm::device_uvector<uint32_t> d_chars_per_thread(threads_on_device, stream);
+
   kernel_data_normalizer<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
     reinterpret_cast<const unsigned char*>(d_strings),
-    device_strings_offsets.data(),
     bytes_count,
     d_cp_metadata,
     d_aux_table,
     do_lower_case,
-    num_strings,
-    device_code_points.data(),
-    device_chars_per_thread.data());
-  CHECK_CUDA(stream);
+    d_code_points->data(),
+    d_chars_per_thread.data());
 
-  NotEqual const select_op((1 << FILTER_BIT));
-  cub::DeviceSelect::If(cub_temp_storage.data(),
-                        max_cub_storage_bytes,
-                        device_code_points.data(),
-                        device_code_points.data(),
-                        device_num_selected.data(),
-                        max_new_char_total,
-                        select_op,
-                        stream);
-  CHECK_CUDA(stream);
+  // Remove the 'empty' code points from the vector
+  thrust::remove(
+    execpol->on(stream), d_code_points->begin(), d_code_points->end(), uint32_t{1 << FILTER_BIT});
 
-  // We also need to prefix sum the number of characters up to an including the current character in
-  // order to get the new strings lengths.
-  cub::DeviceScan::InclusiveSum(cub_temp_storage.data(),
-                                max_cub_storage_bytes,
-                                device_chars_per_thread.data(),
-                                device_chars_per_thread.data(),
-                                threads_on_device,
-                                stream);
-  CHECK_CUDA(stream);
+  // We also need to prefix sum the number of characters up to an including
+  // the current character in order to get the new strings lengths.
+  thrust::inclusive_scan(execpol->on(stream),
+                         d_chars_per_thread.begin(),
+                         d_chars_per_thread.end(),
+                         d_chars_per_thread.begin());
 
-  // this is like an in-place gather
-  auto const execpol = rmm::exec_policy(stream);
+  // This will reset the offsets to the new generated code point values
   thrust::for_each_n(
     execpol->on(stream),
     thrust::make_counting_iterator<uint32_t>(1),
     num_strings,
-    update_strings_lengths_fn{device_chars_per_thread.data(), device_strings_offsets.data()});
+    update_strings_lengths_fn{d_chars_per_thread.data(), d_strings_offsets->data()});
 
-  offset_and_length.gpu_ptr = device_strings_offsets.data();
-  offset_and_length.length  = num_strings + 1;
+  uint32_t const num_chars = d_strings_offsets->element(num_strings, stream);
+  d_code_points->resize(num_chars, stream);  // should be smaller than original allocated size
 
-  uint32_t num_chars = 0;
-  CUDA_TRY(cudaMemcpyAsync(&num_chars,
-                           offset_and_length.gpu_ptr + num_strings,
-                           sizeof(num_chars),
-                           cudaMemcpyDeviceToHost,
-                           stream));
-  cp_and_length.gpu_ptr = device_code_points.data();
-  cp_and_length.length  = num_chars;
-
-  return std::make_pair(cp_and_length, offset_and_length);
+  // return the normalized code points and the new offsets
+  return uvector_pair(std::move(d_code_points), std::move(d_strings_offsets));
 }
 
 }  // namespace detail

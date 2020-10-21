@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import cudf
 from cudf._lib.cpp.reduce cimport cpp_reduce, cpp_scan, scan_type
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport data_type, type_id
@@ -9,9 +10,9 @@ from cudf._lib.scalar cimport Scalar
 from cudf._lib.column cimport Column
 from cudf._lib.types import np_to_cudf_types
 from cudf._lib.types cimport underlying_type_t_type_id
-from cudf._lib.move cimport move
 from cudf._lib.aggregation cimport make_aggregation, aggregation
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 import numpy as np
 
 
@@ -56,7 +57,8 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
             return incol.dtype.type(0)
         if reduction_op == 'product':
             return incol.dtype.type(1)
-        return np.nan
+
+        return cudf.utils.dtypes._get_nan_for_dtype(col_dtype)
 
     with nogil:
         c_result = move(cpp_reduce(

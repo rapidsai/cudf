@@ -13,9 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cub/cub.cuh>
 #include <cudf/utilities/error.hpp>
+#include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
-#include "parquet_gpu.h"
 
 namespace cudf {
 namespace io {
@@ -144,10 +145,13 @@ __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
 }
 
 // blockDim(1024, 1, 1)
-__global__ void __launch_bounds__(1024, 1)
+template <int block_size>
+__global__ void __launch_bounds__(block_size, 1)
   gpuBuildChunkDictionaries(EncColumnChunk *chunks, uint32_t *dev_scratch)
 {
   __shared__ __align__(8) dict_state_s state_g;
+  using warp_reduce = cub::WarpReduce<uint32_t>;
+  __shared__ typename warp_reduce::TempStorage temp_storage[block_size / 32];
 
   dict_state_s *const s = &state_g;
   uint32_t t            = threadIdx.x;
@@ -200,18 +204,18 @@ __global__ void __launch_bounds__(1024, 1)
         row = frag_start_row + s->frag_dict[i + t];
         len = dtype_len;
         if (dtype == BYTE_ARRAY) {
-          const char *ptr = reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].ptr;
-          uint32_t count =
-            (uint32_t) reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].count;
+          const char *ptr = static_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].ptr;
+          uint32_t count  = static_cast<uint32_t>(
+            static_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].count);
           len += count;
           hash = nvstr_hash16(reinterpret_cast<const uint8_t *>(ptr), count);
           // Walk the list of rows with the same hash
           next_addr = &s->hashmap[hash];
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
             const char *ptr2 =
-              reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].ptr;
+              static_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].ptr;
             uint32_t count2 =
-              reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].count;
+              static_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].count;
             if (count2 == count && nvstr_is_equal(ptr, count, ptr2, count2)) {
               is_dupe = 1;
               break;
@@ -222,14 +226,14 @@ __global__ void __launch_bounds__(1024, 1)
           uint64_t val;
 
           if (dtype_len_in == 8) {
-            val  = reinterpret_cast<const uint64_t *>(s->col.column_data_base)[row];
+            val  = static_cast<const uint64_t *>(s->col.column_data_base)[row];
             hash = uint64_hash16(val);
           } else {
             val = (dtype_len_in == 4)
-                    ? reinterpret_cast<const uint32_t *>(s->col.column_data_base)[row]
+                    ? static_cast<const uint32_t *>(s->col.column_data_base)[row]
                     : (dtype_len_in == 2)
-                        ? reinterpret_cast<const uint16_t *>(s->col.column_data_base)[row]
-                        : reinterpret_cast<const uint8_t *>(s->col.column_data_base)[row];
+                        ? static_cast<const uint16_t *>(s->col.column_data_base)[row]
+                        : static_cast<const uint8_t *>(s->col.column_data_base)[row];
             hash = uint32_hash16(val);
           }
           // Walk the list of rows with the same hash
@@ -237,12 +241,12 @@ __global__ void __launch_bounds__(1024, 1)
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
             uint64_t val2 =
               (dtype_len_in == 8)
-                ? reinterpret_cast<const uint64_t *>(s->col.column_data_base)[next - 1]
+                ? static_cast<const uint64_t *>(s->col.column_data_base)[next - 1]
                 : (dtype_len_in == 4)
-                    ? reinterpret_cast<const uint32_t *>(s->col.column_data_base)[next - 1]
+                    ? static_cast<const uint32_t *>(s->col.column_data_base)[next - 1]
                     : (dtype_len_in == 2)
-                        ? reinterpret_cast<const uint16_t *>(s->col.column_data_base)[next - 1]
-                        : reinterpret_cast<const uint8_t *>(s->col.column_data_base)[next - 1];
+                        ? static_cast<const uint16_t *>(s->col.column_data_base)[next - 1]
+                        : static_cast<const uint8_t *>(s->col.column_data_base)[next - 1];
             if (val2 == val) {
               is_dupe = 1;
               break;
@@ -252,11 +256,11 @@ __global__ void __launch_bounds__(1024, 1)
         }
       }
       // Count the non-duplicate entries
-      frag_dict_size = WarpReduceSum32((is_valid && !is_dupe) ? len : 0);
+      frag_dict_size = warp_reduce(temp_storage[t / 32]).Sum((is_valid && !is_dupe) ? len : 0);
       if (!(t & 0x1f)) { s->scratch_red[t >> 5] = frag_dict_size; }
       new_dict_entries = __syncthreads_count(is_valid && !is_dupe);
       if (t < 32) {
-        frag_dict_size = WarpReduceSum32(s->scratch_red[t]);
+        frag_dict_size = warp_reduce(temp_storage[t / 32]).Sum(s->scratch_red[t]);
         if (t == 0) {
           s->frag_dict_size += frag_dict_size;
           s->num_dict_entries += new_dict_entries;
@@ -322,7 +326,7 @@ __global__ void __launch_bounds__(1024, 1)
 /**
  * @brief Launches kernel for building chunk dictionaries
  *
- * @param[in] chunks Column chunks
+ * @param[in,out] chunks Column chunks
  * @param[in] dev_scratch Device scratch data (kDictScratchSize per dictionary)
  * @param[in] num_chunks Number of column chunks
  * @param[in] stream CUDA stream to use, default 0
@@ -337,7 +341,7 @@ cudaError_t BuildChunkDictionaries(EncColumnChunk *chunks,
 {
   if (num_chunks > 0 && scratch_size > 0) {  // zero scratch size implies no dictionaries
     CUDA_TRY(cudaMemsetAsync(dev_scratch, 0, scratch_size, stream));
-    gpuBuildChunkDictionaries<<<num_chunks, 1024, 0, stream>>>(chunks, dev_scratch);
+    gpuBuildChunkDictionaries<1024><<<num_chunks, 1024, 0, stream>>>(chunks, dev_scratch);
   }
   return cudaSuccess;
 }

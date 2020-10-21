@@ -1,12 +1,10 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
+
 import pyarrow as pa
 
-import cudf
 from cudf.core.column import ColumnBase
 from cudf.core.column.methods import ColumnMethodsMixin
-from cudf.core.dtypes import ListDtype
 from cudf.utils.dtypes import is_list_dtype
-from cudf.utils.utils import buffers_from_pyarrow
 
 
 class ListColumn(ColumnBase):
@@ -49,31 +47,18 @@ class ListColumn(ColumnBase):
         """
         return self.children[0]
 
-    @classmethod
-    def from_arrow(cls, array):
-        if array.type.num_children == 0:
-            return cudf.core.column.as_column(array)
-        else:
-            _, _, mask, _, _ = buffers_from_pyarrow(array)
-            offsets = cudf.core.column.as_column(array.offsets)
-            return ListColumn(
-                data=None,
-                size=len(array),
-                dtype=ListDtype.from_arrow(array.type),
-                offset=array.offset,
-                mask=mask,
-                null_count=array.null_count,
-                children=(offsets, ListColumn.from_arrow(array.values)),
-            )
+    def list(self, parent=None):
+        return ListMethods(self, parent=parent)
 
     def to_arrow(self):
         offsets = self.offsets.to_arrow()
-        elements = self.elements.to_arrow()
-        pa_type = self.dtype.to_arrow()
+        elements = (
+            pa.nulls(len(self.elements))
+            if len(self.elements) == self.elements.null_count
+            else self.elements.to_arrow()
+        )
+        pa_type = pa.list_(elements.type)
 
-        if len(elements) == elements.null_count:
-            elements = pa.NullArray.from_pandas([None] * len(elements))
-            pa_type = pa.list_(elements.type)
         if self.nullable:
             nbuf = self.mask.to_host_array().view("int8")
             nbuf = pa.py_buffer(nbuf)
@@ -83,9 +68,6 @@ class ListColumn(ColumnBase):
         return pa.ListArray.from_buffers(
             pa_type, len(self), buffers, children=[elements]
         )
-
-    def list(self, parent=None):
-        return ListMethods(self, parent=parent)
 
 
 class ListMethods(ColumnMethodsMixin):

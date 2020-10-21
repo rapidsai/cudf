@@ -30,6 +30,7 @@ namespace datetime {
 /**
  * @addtogroup datetime_extract
  * @{
+ * @file
  */
 
 /**
@@ -43,7 +44,7 @@ namespace datetime {
  */
 std::unique_ptr<cudf::column> extract_year(
   cudf::column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Extracts month from any date time type and returns an int16_t
@@ -56,7 +57,7 @@ std::unique_ptr<cudf::column> extract_year(
  */
 std::unique_ptr<cudf::column> extract_month(
   cudf::column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Extracts day from any date time type and returns an int16_t
@@ -69,7 +70,7 @@ std::unique_ptr<cudf::column> extract_month(
  */
 std::unique_ptr<cudf::column> extract_day(
   cudf::column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Extracts day from any date time type and returns an int16_t
@@ -82,7 +83,7 @@ std::unique_ptr<cudf::column> extract_day(
  */
 std::unique_ptr<cudf::column> extract_weekday(
   cudf::column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Extracts hour from any date time type and returns an int16_t
@@ -95,7 +96,7 @@ std::unique_ptr<cudf::column> extract_weekday(
  */
 std::unique_ptr<cudf::column> extract_hour(
   cudf::column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Extracts minute from any date time type and returns an int16_t
@@ -108,7 +109,7 @@ std::unique_ptr<cudf::column> extract_hour(
  */
 std::unique_ptr<cudf::column> extract_minute(
   cudf::column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Extracts second from any date time type and returns an int16_t
@@ -121,12 +122,13 @@ std::unique_ptr<cudf::column> extract_minute(
  */
 std::unique_ptr<cudf::column> extract_second(
   cudf::column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 /**
  * @addtogroup datetime_compute
  * @{
+ * @file
  */
 
 /**
@@ -140,7 +142,7 @@ std::unique_ptr<cudf::column> extract_second(
  */
 std::unique_ptr<cudf::column> last_day_of_month(
   cudf::column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Computes the day number since the start of the year from the datetime and
@@ -153,7 +155,7 @@ std::unique_ptr<cudf::column> last_day_of_month(
  */
 std::unique_ptr<cudf::column> day_of_year(
   cudf::column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief  Adds or subtracts a number of months from the date time type and returns a
@@ -186,7 +188,7 @@ std::unique_ptr<cudf::column> day_of_year(
 std::unique_ptr<cudf::column> add_calendrical_months(
   cudf::column_view const& timestamps,
   cudf::column_view const& months,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 /** @} */  // end of group
 }  // namespace datetime
 }  // namespace cudf

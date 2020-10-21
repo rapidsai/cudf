@@ -16,17 +16,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/type_lists.hpp>
 
+#include <cudf/dictionary/encode.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/replace.hpp>
 #include "cudf/fixed_point/fixed_point.hpp"
 
 #include <thrust/device_vector.h>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <gtest/gtest.h>
 #include <cstdlib>
@@ -547,10 +549,10 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReplace)
   auto const TWO = decimalXX{2, scale_type{0}};
   auto const sz  = std::size_t{1000};
 
-  auto vec1       = std::vector<decimalXX>(sz);
-  auto const vec2 = std::vector<decimalXX>(sz, TWO);
-
-  std::generate(vec1.begin(), vec1.end(), [&, i = 0]() mutable { return ++i % 2 ? ONE : TWO; });
+  auto mod2            = [&](auto e) { return e % 2 ? ONE : TWO; };
+  auto transform_begin = cudf::test::make_counting_transform_iterator(0, mod2);
+  auto const vec1      = std::vector<decimalXX>(transform_begin, transform_begin + sz);
+  auto const vec2      = std::vector<decimalXX>(sz, TWO);
 
   auto const to_replace  = std::vector<decimalXX>{ONE};
   auto const replacement = std::vector<decimalXX>{TWO};
@@ -563,6 +565,57 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReplace)
   auto const result = cudf::find_and_replace_all(input_w, to_replace_w, replacement_w);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
+}
+
+struct ReplaceDictionaryTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(ReplaceDictionaryTest, StringsKeys)
+{
+  cudf::test::strings_column_wrapper input_w({"a", "b", "a", "c", "b", "a", "c", "b"});
+  auto input = cudf::dictionary::encode(input_w);
+  cudf::test::strings_column_wrapper values_to_replace_w({"a"});
+  auto values_to_replace = cudf::dictionary::encode(values_to_replace_w);
+  cudf::test::strings_column_wrapper replacements_w({"z"});
+  auto replacements = cudf::dictionary::encode(replacements_w);
+
+  auto result =
+    cudf::find_and_replace_all(input->view(), values_to_replace->view(), replacements->view());
+  auto decoded = cudf::dictionary::decode(result->view());
+  cudf::test::strings_column_wrapper expected({"z", "b", "z", "c", "b", "z", "c", "b"});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, expected);
+}
+
+TEST_F(ReplaceDictionaryTest, InputAndReplacementNulls)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> input_w({1, 2, 1, 2, 0, 3, 4, 4, 3},
+                                                          {1, 1, 1, 1, 0, 1, 1, 1, 1});
+  auto input = cudf::dictionary::encode(input_w);
+  cudf::test::fixed_width_column_wrapper<int32_t> values_to_replace_w({2, 3});
+  auto values_to_replace = cudf::dictionary::encode(values_to_replace_w);
+  cudf::test::fixed_width_column_wrapper<int32_t> replacements_w({5, 0}, {1, 0});
+  auto replacements = cudf::dictionary::encode(replacements_w);
+
+  auto result =
+    cudf::find_and_replace_all(input->view(), values_to_replace->view(), replacements->view());
+  auto decoded = cudf::dictionary::decode(result->view());
+  cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 5, 1, 5, 0, 0, 4, 4, 0},
+                                                           {1, 1, 1, 1, 0, 0, 1, 1, 0});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*decoded, expected);
+}
+
+TEST_F(ReplaceDictionaryTest, EmptyReplacement)
+{
+  cudf::test::fixed_width_column_wrapper<double> input_w(
+    {1.0, 2.0, 1.0, 2.0, 0.0, 3.0, 4.0, 4.0, 3.0}, {1, 1, 1, 1, 0, 1, 1, 1, 1});
+  auto input = cudf::dictionary::encode(input_w);
+  cudf::test::fixed_width_column_wrapper<double> empty_w({});
+  auto empty  = cudf::dictionary::encode(empty_w);
+  auto result = cudf::find_and_replace_all(input->view(), empty->view(), empty->view());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *input);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

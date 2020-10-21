@@ -1,7 +1,10 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import numpy as np
+
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
 from cudf._lib.column cimport Column
@@ -14,7 +17,6 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.move cimport move
 from cudf._lib.scalar cimport Scalar
 from cudf._lib.table cimport Table
 
@@ -95,3 +97,19 @@ def _repeat_via_size_type(Table inp, size_type count):
         column_names=inp._column_names,
         index_names=inp._index_names
     )
+
+
+def sequence(int size, Scalar init, Scalar step):
+    cdef size_type c_size = size
+    cdef scalar* c_init = init.c_value.get()
+    cdef scalar* c_step = step.c_value.get()
+    cdef unique_ptr[column] c_result
+
+    with nogil:
+        c_result = move(cpp_filling.sequence(
+            c_size,
+            c_init[0],
+            c_step[0]
+        ))
+
+    return Column.from_unique_ptr(move(c_result))

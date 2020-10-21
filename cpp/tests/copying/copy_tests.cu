@@ -17,12 +17,12 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy_if_else.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/type_lists.hpp>
 
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -115,7 +115,7 @@ std::unique_ptr<cudf::column> tiny_grid_launch(cudf::column_view const& lhs,
                                lhs,
                                rhs,
                                filter,
-                               rmm::mr::get_default_resource(),
+                               rmm::mr::get_current_device_resource(),
                                (cudaStream_t)0);
 }
 
@@ -299,12 +299,12 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarColumn)
 
   cudf::numeric_scalar<T> lhs_w(5);
 
-  T rhs[]      = {6, 6, 6, 6};
-  bool rhs_v[] = {1, 0, 1, 1};
-  wrapper<T> rhs_w(rhs, rhs + num_els, rhs_v);
+  const auto rhs = cudf::test::make_type_param_vector<T>({6, 6, 6, 6});
+  bool rhs_v[]   = {1, 0, 1, 1};
+  wrapper<T> rhs_w(rhs.begin(), rhs.end(), rhs_v);
 
-  T expected[] = {5, 6, 6, 5};
-  wrapper<T> expected_w(expected, expected + num_els, rhs_v);
+  const auto expected = cudf::test::make_type_param_vector<T>({5, 6, 6, 5});
+  wrapper<T> expected_w(expected.begin(), expected.end(), rhs_v);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
@@ -320,14 +320,14 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestColumnScalar)
   bool mask_v[] = {1, 1, 1, 0};
   cudf::test::fixed_width_column_wrapper<bool> mask_w(mask, mask + num_els, mask_v);
 
-  T lhs[]      = {5, 5, 5, 5};
-  bool lhs_v[] = {0, 1, 1, 1};
-  wrapper<T> lhs_w(lhs, lhs + num_els, lhs_v);
+  const auto lhs = cudf::test::make_type_param_vector<T>({5, 5, 5, 5});
+  bool lhs_v[]   = {0, 1, 1, 1};
+  wrapper<T> lhs_w(lhs.begin(), lhs.end(), lhs_v);
 
   cudf::numeric_scalar<T> rhs_w(6);
 
-  T expected[] = {5, 6, 6, 6};
-  wrapper<T> expected_w(expected, expected + num_els, lhs_v);
+  const auto expected = cudf::test::make_type_param_vector<T>({5, 6, 6, 6});
+  wrapper<T> expected_w(expected.begin(), expected.end(), lhs_v);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
@@ -345,8 +345,8 @@ TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarScalar)
   cudf::numeric_scalar<T> lhs_w(5);
   cudf::numeric_scalar<T> rhs_w(6, false);
 
-  T expected[] = {5, 6, 6, 5};
-  wrapper<T> expected_w(expected, expected + num_els, mask);
+  const auto expected = cudf::test::make_type_param_vector<T>({5, 6, 6, 5});
+  wrapper<T> expected_w(expected.begin(), expected.end(), mask);
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);

@@ -18,13 +18,15 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 #include <memory>
-#include "cudf/types.hpp"
 
 namespace cudf {
 /**
  * @addtogroup column_reshape
  * @{
+ * @file
+ * @brief Column APIs for interleave and tile
  */
 
 /**
@@ -45,7 +47,8 @@ namespace cudf {
  * @return The interleaved columns as a single column
  */
 std::unique_ptr<column> interleave_columns(
-  table_view const& input, rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  table_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Repeats the rows from `input` table `count` times to form a new table.
@@ -64,9 +67,38 @@ std::unique_ptr<column> interleave_columns(
  *
  * @return The table containing the tiled "rows".
  */
-std::unique_ptr<table> tile(table_view const& input,
-                            size_type count,
-                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+std::unique_ptr<table> tile(
+  table_view const& input,
+  size_type count,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
+
+/*
+ * Configures if byte casting flips endianness
+ */
+enum class flip_endianness : bool { NO, YES };
+
+/**
+ * @brief Converts a column's elements to lists of bytes
+ *
+ * ```
+ * input<int32>  = [8675, 309]
+ * configuration = flip_endianness::YES
+ * return        = [[0x00, 0x00, 0x21, 0xe3], [0x00, 0x00, 0x01, 0x35]]
+ * ```
+ *
+ * @param input_column column to be converted to lists of bytes.
+ * @param configuration configuration retain or flip the endianness of a row.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ *
+ * @return The column containing the lists of bytes.
+ */
+std::unique_ptr<column> byte_cast(
+  column_view const& input_column,
+  flip_endianness configuration,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
+
 }  // namespace cudf

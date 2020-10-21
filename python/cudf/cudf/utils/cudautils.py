@@ -6,11 +6,7 @@ import numpy as np
 from numba import cuda
 
 import cudf
-from cudf.utils.utils import (
-    check_equals_float,
-    check_equals_int,
-    rint,
-)
+from cudf.utils.utils import check_equals_float, check_equals_int, rint
 
 try:
     # Numba >= 0.49
@@ -109,7 +105,12 @@ def gpu_mark_found_int(arr, val, out, not_found):
 def gpu_mark_found_float(arr, val, out, not_found):
     i = cuda.grid(1)
     if i < arr.size:
-        if check_equals_float(arr[i], val):
+        # TODO: Remove val typecast to float(val)
+        # once numba minimum version is pinned
+        # at 0.51.1, this will have a very slight
+        # performance improvement. Related
+        # discussion in : https://github.com/rapidsai/cudf/pull/6073
+        if check_equals_float(arr[i], float(val)):
             out[i] = i
         else:
             out[i] = not_found
@@ -148,7 +149,7 @@ def find_index_of_val(arr, val, mask=None, compare="eq"):
     mask : mask of the array
     compare: str ('gt', 'lt', or 'eq' (default))
     """
-    found = cuda.device_array_like(arr)
+    found = cuda.device_array(shape=(arr.shape), dtype="int32")
     if found.size > 0:
         if compare == "gt":
             gpu_mark_gt.forall(found.size)(arr, val, found, arr.size)
@@ -255,11 +256,11 @@ def grouped_window_sizes_from_offset(arr, group_starts, offset):
 
 @lru_cache(maxsize=32)
 def compile_udf(udf, type_signature):
-    """Copmile ``udf`` with `numba`
+    """Compile ``udf`` with `numba`
 
     Compile a python callable function ``udf`` with
-    `numba.cuda.jit(device=True)` using ``type_signature`` into CUDA PTX
-    together with the generated output type.
+    `numba.cuda.compile_ptx_for_current_device(device=True)` using
+    ``type_signature`` into CUDA PTX together with the generated output type.
 
     The output is expected to be passed to the PTX parser in `libcudf`
     to generate a CUDA device function to be inlined into CUDA kernels,
@@ -284,8 +285,8 @@ def compile_udf(udf, type_signature):
       An numpy type
 
     """
-    decorated_udf = cuda.jit(udf, device=True)
-    compiled = decorated_udf.compile(type_signature)
-    ptx_code = decorated_udf.inspect_ptx(type_signature).decode("utf-8")
-    output_type = numpy_support.as_dtype(compiled.signature.return_type)
+    ptx_code, return_type = cuda.compile_ptx_for_current_device(
+        udf, type_signature, device=True
+    )
+    output_type = numpy_support.as_dtype(return_type)
     return (ptx_code, output_type.type)

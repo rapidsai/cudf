@@ -2,11 +2,11 @@
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
 from libcpp.string cimport string
 from libc.stdint cimport uint32_t
 from libc.stdint cimport uintptr_t
 
-from cudf._lib.move cimport move
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.nvtext.subword_tokenize cimport (
@@ -24,8 +24,6 @@ def subword_tokenize(
     uint32_t stride=48,
     bool do_lower=True,
     bool do_truncate=False,
-    uint32_t max_num_strings=100,
-    uint32_t max_num_chars=100000,
     uint32_t max_rows_tensor=500
 ):
     cdef column_view c_strings = strings.view()
@@ -41,8 +39,6 @@ def subword_tokenize(
                 stride,
                 do_lower,
                 do_truncate,
-                max_num_strings,
-                max_num_chars,
                 max_rows_tensor
             )
         )

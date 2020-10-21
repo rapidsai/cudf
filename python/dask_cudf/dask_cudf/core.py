@@ -125,8 +125,11 @@ class DataFrame(_Frame, dd.core.DataFrame):
         meta = assigner(self._meta, k, dd.core.make_meta(v))
         return self.map_partitions(assigner, k, v, meta=meta)
 
-    def apply_rows(self, func, incols, outcols, kwargs={}, cache_key=None):
+    def apply_rows(self, func, incols, outcols, kwargs=None, cache_key=None):
         import uuid
+
+        if kwargs is None:
+            kwargs = {}
 
         if cache_key is None:
             cache_key = uuid.uuid4()
@@ -342,6 +345,11 @@ class DataFrame(_Frame, dd.core.DataFrame):
         if shuffle_arg and shuffle_arg != "tasks":
             raise ValueError("dask_cudf does not support disk-based shuffle.")
         return super().shuffle(*args, shuffle="tasks", **kwargs)
+
+    def groupby(self, by=None, **kwargs):
+        from .groupby import CudfDataFrameGroupBy
+
+        return CudfDataFrameGroupBy(self, by=by, **kwargs)
 
 
 def sum_of_squares(x):

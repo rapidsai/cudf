@@ -13,7 +13,6 @@ from cudf._lib.scalar import Scalar, as_scalar
 from cudf.core.column import column, string
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
-from cudf.utils.utils import buffers_from_pyarrow
 
 _dtype_to_format_conversion = {
     "timedelta64[ns]": "%D days %H:%M:%S",
@@ -248,21 +247,6 @@ class TimeDeltaColumn(column.ColumnBase):
             size=self.size,
         )
 
-    @classmethod
-    def from_arrow(cls, array, dtype=None):
-        if dtype is None:
-            dtype = np.dtype("m8[{}]".format(array.type.unit))
-
-        pa_size, pa_offset, pamask, padata, _ = buffers_from_pyarrow(array)
-
-        return TimeDeltaColumn(
-            data=padata,
-            mask=pamask,
-            dtype=dtype,
-            size=pa_size,
-            offset=pa_offset,
-        )
-
     def default_na_value(self):
         """Returns the default NA value for this column
         """
@@ -330,14 +314,15 @@ class TimeDeltaColumn(column.ColumnBase):
             return self
         return libcudf.unary.cast(self, dtype=dtype)
 
-    def mean(self, dtype=np.float64):
+    def mean(self, skipna=None, dtype=np.float64):
         return pd.Timedelta(
-            self.as_numerical.mean(dtype=dtype), unit=self.time_unit
+            self.as_numerical.mean(skipna=skipna, dtype=dtype),
+            unit=self.time_unit,
         )
 
-    def median(self, dtype=np.float64):
+    def median(self, skipna=None):
         return pd.Timedelta(
-            self.as_numerical.median(dtype=dtype), unit=self.time_unit
+            self.as_numerical.median(skipna=skipna), unit=self.time_unit
         )
 
     def quantile(self, q, interpolation, exact):
@@ -345,16 +330,25 @@ class TimeDeltaColumn(column.ColumnBase):
             q=q, interpolation=interpolation, exact=exact
         )
         if isinstance(q, Number):
-            return [pd.Timedelta(result[0], unit=self.time_unit)]
+            return pd.Timedelta(result, unit=self.time_unit)
         return result.astype(self.dtype)
 
-    def sum(self, dtype=None):
+    def sum(self, skipna=None, dtype=None, min_count=0):
         if len(self) == 0:
             return pd.Timedelta(None, unit=self.time_unit)
         else:
             return pd.Timedelta(
-                self.as_numerical.sum(dtype=dtype), unit=self.time_unit
+                self.as_numerical.sum(
+                    skipna=skipna, dtype=dtype, min_count=min_count
+                ),
+                unit=self.time_unit,
             )
+
+    def std(self, skipna=None, ddof=1, dtype=np.float64):
+        return pd.Timedelta(
+            self.as_numerical.std(skipna=skipna, ddof=ddof, dtype=dtype),
+            unit=self.time_unit,
+        )
 
     def components(self, index=None):
         """

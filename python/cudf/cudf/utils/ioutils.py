@@ -30,7 +30,7 @@ engine : {{ 'cudf', 'fastavro' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read.
-skip_rows : int, default None
+skiprows : int, default None
     If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
@@ -112,11 +112,25 @@ engine : {{ 'cudf', 'pyarrow' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read.
+filters : list of tuple, list of lists of tuples default None
+    If not None, specifies a filter predicate used to filter out row groups
+    using statistics stored for each row group as Parquet metadata. Row groups
+    that do not match the given filter predicate are not read. The
+    predicate is expressed in disjunctive normal form (DNF) like
+    `[[('x', '=', 0), ...], ...]`. DNF allows arbitrary boolean logical
+    combinations of single column predicates. The innermost tuples each
+    describe a single column predicate. The list of inner predicates is
+    interpreted as a conjunction (AND), forming a more selective and
+    multiple column predicate. Finally, the most outer list combines
+    these filters as a disjunction (OR). Predicates may also be passed
+    as a list of tuples. This form is interpreted as a single conjunction.
+    To express OR in predicates, one must use the (preferred) notation of
+    list of lists of tuples.
 row_groups : int, or list, or a list of lists default None
     If not None, specifies, for each input file, which row groups to read.
     If reading multiple inputs, a list of lists should be passed, one list
     for each input.
-skip_rows : int, default None
+skiprows : int, default None
     If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
@@ -172,6 +186,11 @@ index : bool, default None
 partition_cols : list, optional, default None
     Column names by which to partition the dataset
     Columns are partitioned in the order they are given
+partition_file_name : str, optional, default None
+    File name to use for partitioned datasets. Different partitions
+    will be written to different directories, but all files will
+    have this name.  If nothing is specified, a random uuid4 hex string
+    will be used for each file.
 
 See Also
 --------
@@ -247,9 +266,10 @@ engine : {{ 'cudf', 'pyarrow' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read from the file.
-stripe: int, default None
-    If not None, only the stripe with the specified index will be read.
-skip_rows : int, default None
+stripes: list, default None
+    If not None, only these stripe will be read from the file. Stripes are
+    concatenated with index ignored.
+skiprows : int, default None
     If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
@@ -808,16 +828,29 @@ cudf.io.csv.to_csv
 )
 doc_read_csv = docfmt_partial(docstring=_docstring_read_csv)
 
+_to_csv_example = """
+
+Write a dataframe to csv.
+
+>>> import cudf
+>>> filename = 'foo.csv'
+>>> df = cudf.DataFrame({'x': [0, 1, 2, 3],
+                         'y': [1.0, 3.3, 2.2, 4.4],
+                         'z': ['a', 'b', 'c', 'd']})
+>>> df = df.set_index([3, 2, 1, 0])
+>>> df.to_csv(filename)
+
+"""
 _docstring_to_csv = """
 
 Write a dataframe to csv file format.
 
 Parameters
 ----------
-df : DataFrame
-    DataFrame object to be written to csv
-path : str, default None
-    Path of file where DataFrame will be written
+{df_param}
+path_or_buf : str or file handle, default None
+    File path or object, if None is provided
+    the result is returned as a string.
 sep : char, default ','
     Delimiter to be used.
 na_rep : str, default ''
@@ -832,6 +865,12 @@ line_terminator : char, default '\\n'
 chunksize : int or None, default None
     Rows to write at a time
 
+Returns
+-------
+None or str
+    If `path_or_buf` is None, returns the resulting csv format as a string.
+    Otherwise returns None.
+
 Notes
 -----
 - Follows the standard of Pandas csv.QUOTE_NONNUMERIC for all output.
@@ -839,23 +878,25 @@ Notes
 
 Examples
 --------
-
-Write a dataframe to csv.
-
->>> import cudf
->>> filename = 'foo.csv'
->>> df = cudf.DataFrame({'x': [0, 1, 2, 3],
-                         'y': [1.0, 3.3, 2.2, 4.4],
-                         'z': ['a', 'b', 'c', 'd']})
->>> df = df.set_index([3, 2, 1, 0])
->>> df.to_csv(filename)
+{example}
 
 See Also
 --------
 cudf.io.csv.read_csv
 """
-doc_to_csv = docfmt_partial(docstring=_docstring_to_csv)
+doc_to_csv = docfmt_partial(
+    docstring=_docstring_to_csv.format(
+        df_param="""
+df : DataFrame
+    DataFrame object to be written to csv
+""",
+        example=_to_csv_example,
+    )
+)
 
+doc_dataframe_to_csv = docfmt_partial(
+    docstring=_docstring_to_csv.format(df_param="", example=_to_csv_example)
+)
 
 _docstring_kafka_datasource = """
 Configuration object for a Kafka Datasource
@@ -962,9 +1003,16 @@ def get_filepath_or_buffer(
         # fsspec does not expanduser so handle here
         path_or_data = os.path.expanduser(path_or_data)
 
-        fs, _, paths = fsspec.get_fs_token_paths(
-            path_or_data, mode=mode, storage_options=storage_options
-        )
+        try:
+            fs, _, paths = fsspec.get_fs_token_paths(
+                path_or_data, mode=mode, storage_options=storage_options
+            )
+        except ValueError as e:
+            if str(e).startswith("Protocol not known"):
+                return path_or_data, compression
+            else:
+                raise e
+
         if len(paths) == 0:
             raise IOError(f"{path_or_data} could not be resolved to any files")
         elif len(paths) > 1:

@@ -267,7 +267,7 @@ __device__ inline int string_view::compare(const char* data, size_type bytes) co
   const unsigned char* ptr2 = reinterpret_cast<const unsigned char*>(data);
   size_type idx             = 0;
   for (; (idx < len1) && (idx < bytes); ++idx) {
-    if (*ptr1 != *ptr2) return (int)*ptr1 - (int)*ptr2;
+    if (*ptr1 != *ptr2) return static_cast<int32_t>(*ptr1) - static_cast<int32_t>(*ptr2);
     ++ptr1;
     ++ptr2;
   }

@@ -18,15 +18,13 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <nvtext/subword_tokenize.hpp>
 
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <fstream>
 #include <iostream>
 #include <vector>
 
-#define MAX_NUM_SENTENCES 101
-#define MAX_NUM_CHARS 150000
 #define MAX_ROWS_TENSOR 300
 
 static std::string create_hash_vocab_file()
@@ -54,25 +52,24 @@ static std::string create_hash_vocab_file()
 
 static void BM_cuda_tokenizer_cudf(benchmark::State& state)
 {
-  uint32_t nrows = MAX_NUM_SENTENCES - 1;
+  uint32_t nrows = 1000;
   std::vector<const char*> h_strings(nrows, "This is a test ");
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
-  // cudf::test::strings_column_wrapper strings{"This is a test."};
   std::string hash_file = create_hash_vocab_file();
   std::vector<uint32_t> offsets{14};
   uint32_t max_sequence_length = 64;
   uint32_t stride              = 48;
   uint32_t do_truncate         = 0;
   uint32_t do_lower            = 1;
+  //
+  auto vocab = nvtext::load_vocabulary_file(hash_file);
   for (auto _ : state) {
     auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
-                                           hash_file,
+                                           vocab,
                                            max_sequence_length,
                                            stride,
                                            do_lower,
                                            do_truncate,
-                                           MAX_NUM_SENTENCES,
-                                           MAX_NUM_CHARS,
                                            MAX_ROWS_TENSOR);
   }
 }

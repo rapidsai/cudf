@@ -381,7 +381,7 @@ CUDF_FAIL("This code path should not be reached.");
 
 ### CUDA Error Checking
 
-Checking for the succesful completion of CUDA runtime API functions should be done via the  `CUDA_TRY`  macro. This macro throws a `cudf::cuda_error` exception if the return value of the CUDA API does not return  `cudaSuccess`. The thrown exception will include a description of the CUDA error code that occurred in it's  `what()`  message.
+Checking for the successful completion of CUDA runtime API functions should be done via the  `CUDA_TRY`  macro. This macro throws a `cudf::cuda_error` exception if the return value of the CUDA API does not return  `cudaSuccess`. The thrown exception will include a description of the CUDA error code that occurred in it's  `what()`  message.
 
 Example:
 
@@ -506,7 +506,7 @@ For example `is_numeric<T>()` can be used to specialize for any numeric type.
 
 Unit tests in libcudf are written using [Google Test](https://github.com/google/googletest/blob/master/googletest/docs/primer.md).
 
-**Important:** Instead of including `gtest/gtest.h` directly, use the custom header in `cpp/tests/utilities/cudf_gtest.hpp`.
+**Important:** Instead of including `gtest/gtest.h` directly, use `#include <cudf_test/cudf_gtest.hpp>`.
 
 ## Directory and File Naming
 
@@ -522,7 +522,7 @@ This is because `nvcc` is generally slower than `gcc` in compiling host code.
 ## Base Fixture
 
 All libcudf unit tests should make use of a GTest ["Test Fixture"](https://github.com/google/googletest/blob/master/googletest/docs/primer.md#test-fixtures-using-the-same-data-configuration-for-multiple-tests-same-data-multiple-tests).
-Even if the fixture is empty, it should inherit from the base fixture `cudf::test::BaseFixture` found in `cudf/cpp/tests/utilities/base_fixture.hpp`.
+Even if the fixture is empty, it should inherit from the base fixture `cudf::test::BaseFixture` found in `include/utilities/test/base_fixture.hpp`.
 This is to ensure that RMM is properly initialized/finalized. 
 `cudf::test::BaseFixture` already inherits from `::testing::Test` and therefore it is not necessary for your test fixtures to inherit from it.
 
@@ -555,21 +555,21 @@ In this example, all tests using the `TypedTestFixture` fixture will run once fo
 ### Type Lists
 
 The list of types that are used in tests should be consistent across all tests.
-To ensure consistency, several sets of common type lists are provided in `cudf/cpp/tests/utilities/type_lists.hpp`.
+To ensure consistency, several sets of common type lists are provided in `include/utilities/test/type_lists.hpp`.
 For example, `NumericTypes` gives a type list of all numeric types, or `FixedWidthTypes` gives a list of all fixed-width element types, and `AllTypes` provides a list of every element type libcudf supports.
 Example:
 ```c++
-#include <tests/utilities/type_lists.hpp>
+#include <cudf_test/type_lists.hpp>
 
 // All tests using TypeTestFixture will be invoked once for each numeric type
 TYPED_TEST_CASE(TypedTestFixture, cudf::test::NumericTypes);
 ```
-Therefore, whenever possible, avoid creating a custom type list and instead use one of the ones provided in `cudf/cpp/tests/utilities/type_lists.hpp`.
+Therefore, whenever possible, avoid creating a custom type list and instead use one of the ones provided in `include/utilities/test/type_lists.hpp`.
 
 #### Advanced Type Lists
 
 Sometimes it is necessary to generate more advanced type lists than the simple list of single types in the `TypeList` example above. 
-libcudf provides a set of meta-programming utilities in `cudf/cpp/tests/utilities/type_list_utilities.hpp` for generating and composing more advanced type lists;
+libcudf provides a set of meta-programming utilities in `include/utilities/test/type_list_utilities.hpp` for generating and composing more advanced type lists;
 
 For example, it may be useful to generate a type list where each element in the list is *two* types, i.e., a *nested type list*.
 In a nested type list, each element in the list is itself another list. 
@@ -609,19 +609,19 @@ This means `n*m` templates will be instantiated.
 `n` and `m` do not need to be large before compile time becomes unreasonable.
 
 There are a number of other utilities in `type_list_utilities.hpp`. 
-For more details, see the documentation in that file and they're associated tests in `cudf/cpp/tests/utilities_tests/type_list_tests.cpp`.
+For more details, see the documentation in that file and their associated tests in `cudf/cpp/tests/utilities_tests/type_list_tests.cpp`.
 
 ## Utilities
 
 libcudf provides a number of utilities that make common operations needed in testing more convenient. 
-These can be found in `cudf/cpp/tests/utilities`. 
+These can be found in `include/utilities/test/`. 
 Before creating your own test utilities, look to see if one already exists that does what you need.
 If not, consider adding a new utility to do what you need.
 However, make sure that the utility is generic enough to be useful for other tests and is not overly tailored to your specific testing need.
 
 ### Column Wrappers
 
-In order to make generating input columns easier, libcudf provides the `*_column_wrapper` classes in `cudf/cpp/tests/utilities/column_wrapper.hpp`.
+In order to make generating input columns easier, libcudf provides the `*_column_wrapper` classes in `include/utilities/test/column_wrapper.hpp`.
 These classes wrap a `cudf::column` and provide constructors for initializing a `cudf::column` object usable with libcudf APIs.
 Any `*_column_wrapper` class is implicitly convertible to a `column_view` or `mutable_column_view` and therefore may be transparently passed into any API expecting a `column_view` or `mutable_column_view` argument.
 
@@ -687,7 +687,7 @@ strings_column_wrapper s({"", "this", "is", "a", "column", "of", "strings"}, val
 ### `expect_columns_equal`
 
 A common operation in testing is verifying that two columns are equal to another and another.
-The utility function `expect_columns_equal` in `cudf/cpp/tests/utilities/column_utilities.cuh` should be used for this purpose.
+The utility function `expect_columns_equal` in `include/utilities/test/column_utilities.cuh` should be used for this purpose.
 It uses GTest macros to verify the equality of two columns metadata and the contents of each column.
 
 

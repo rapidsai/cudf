@@ -36,7 +36,7 @@ namespace detail {
  *
  * @tparam block_size The number of threads in the block
  * @param[out] output The output bitmask
- * @param[in] begin The begining of the sequence of elements
+ * @param[in] begin The beginning of the sequence of elements
  * @param[in] size The number of elements
  * @param[in] p The predicate to apply to each element
  * @param[out] valid_count The count of set bits in the output bitmask
@@ -88,7 +88,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
   InputIterator end,
   Predicate p,
   cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(begin <= end, "Invalid range.");
 

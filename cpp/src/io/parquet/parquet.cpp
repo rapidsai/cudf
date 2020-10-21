@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-#include "parquet.h"
-
 #include <algorithm>
+#include <io/parquet/parquet.hpp>
 
 namespace cudf {
 namespace io {
@@ -289,7 +288,7 @@ PARQUET_END_STRUCT()
  */
 bool CompactProtocolReader::InitSchema(FileMetaData *md)
 {
-  if (WalkSchema(md->schema) != md->schema.size()) return false;
+  if (WalkSchema(md) != md->schema.size()) return false;
 
   /* Inside FileMetaData, there is a std::vector of RowGroups and each RowGroup contains a
    * a std::vector of ColumnChunks. Each ColumnChunk has a member ColumnMetaData, which contains
@@ -312,24 +311,19 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md)
         }();
         if (it == md->schema.cend()) return false;
         current_schema_index = std::distance(md->schema.cbegin(), it);
-
-        // if the schema index is already pointing at a nested type, we'll leave it alone.
-        if (column.schema_idx < 0 ||
-            md->schema[column.schema_idx].converted_type != parquet::LIST) {
-          column.schema_idx = current_schema_index;
-        }
-        column.leaf_schema_idx = current_schema_index;
-        parent                 = current_schema_index;
+        column.schema_idx    = current_schema_index;
+        parent               = current_schema_index;
       }
     }
   }
+
   return true;
 }
 
 /**
  * @brief Populates each node in the schema tree
  *
- * @param[out] schema Current node
+ * @param[out] md File metadata
  * @param[in] idx Current node index
  * @param[in] parent_idx Parent node index
  * @param[in] max_def_level Max definition level
@@ -338,10 +332,10 @@ bool CompactProtocolReader::InitSchema(FileMetaData *md)
  * @return The node index that was populated
  */
 int CompactProtocolReader::WalkSchema(
-  std::vector<SchemaElement> &schema, int idx, int parent_idx, int max_def_level, int max_rep_level)
+  FileMetaData *md, int idx, int parent_idx, int max_def_level, int max_rep_level)
 {
-  if (idx >= 0 && (size_t)idx < schema.size()) {
-    SchemaElement *e = &schema[idx];
+  if (idx >= 0 && (size_t)idx < md->schema.size()) {
+    SchemaElement *e = &md->schema[idx];
     if (e->repetition_type == OPTIONAL) {
       ++max_def_level;
     } else if (e->repetition_type == REPEATED) {
@@ -351,12 +345,13 @@ int CompactProtocolReader::WalkSchema(
     e->max_definition_level = max_def_level;
     e->max_repetition_level = max_rep_level;
     e->parent_idx           = parent_idx;
-    parent_idx              = idx;
+
+    parent_idx = idx;
     ++idx;
     if (e->num_children > 0) {
       for (int i = 0; i < e->num_children; i++) {
         int idx_old = idx;
-        idx         = WalkSchema(schema, idx, parent_idx, max_def_level, max_rep_level);
+        idx         = WalkSchema(md, idx, parent_idx, max_def_level, max_rep_level);
         if (idx <= idx_old) break;  // Error
       }
     }
@@ -366,147 +361,6 @@ int CompactProtocolReader::WalkSchema(
     return -1;
   }
 }
-
-/**
- * @Brief Parquet CompactProtocolWriter class
- */
-
-#define CPW_BEGIN_STRUCT(st)                       \
-  size_t CompactProtocolWriter::write(const st *s) \
-  {                                                \
-    size_t struct_start_pos = m_buf->size();       \
-    int cur_fld             = 0;
-
-#define CPW_FLD_INT(f, m, t) \
-  put_fldh(f, cur_fld, t);   \
-  put_int(s->m);             \
-  cur_fld = f;
-
-#define CPW_FLD_INT32(id, m) CPW_FLD_INT(id, m, ST_FLD_I32)
-#define CPW_FLD_INT64(id, m) CPW_FLD_INT(id, m, ST_FLD_I64)
-
-#define CPW_FLD_STRUCT(id, m)           \
-  put_fldh(id, cur_fld, ST_FLD_STRUCT); \
-  write(&s->m);                         \
-  cur_fld = id;
-
-#define CPW_FLD_INT32_LIST(id, m)                                           \
-  put_fldh(id, cur_fld, ST_FLD_LIST);                                       \
-  putb((uint8_t)((std::min(s->m.size(), (size_t)0xfu) << 4) | ST_FLD_I32)); \
-  if (s->m.size() >= 0xf) put_uint(s->m.size());                            \
-  for (auto i = 0; i < s->m.size(); i++) { put_int(s->m[i]); }              \
-  cur_fld = id;
-
-#define CPW_FLD_STRING_LIST(id, m)                                                     \
-  put_fldh(id, cur_fld, ST_FLD_LIST);                                                  \
-  putb((uint8_t)((std::min(s->m.size(), (size_t)0xfu) << 4) | ST_FLD_BINARY));         \
-  if (s->m.size() >= 0xf) put_uint(s->m.size());                                       \
-  for (auto i = 0; i < s->m.size(); i++) {                                             \
-    put_uint(s->m[i].size());                                                          \
-    putb(reinterpret_cast<const uint8_t *>(s->m[i].data()), (uint32_t)s->m[i].size()); \
-  }                                                                                    \
-  cur_fld = id;
-
-#define CPW_FLD_STRUCT_LIST(id, m)                                             \
-  put_fldh(id, cur_fld, ST_FLD_LIST);                                          \
-  putb((uint8_t)((std::min(s->m.size(), (size_t)0xfu) << 4) | ST_FLD_STRUCT)); \
-  if (s->m.size() >= 0xf) put_uint(s->m.size());                               \
-  for (auto i = 0; i < s->m.size(); i++) { write(&s->m[i]); }                  \
-  cur_fld = id;
-
-#define CPW_FLD_STRUCT_BLOB(id, m)          \
-  put_fldh(id, cur_fld, ST_FLD_STRUCT);     \
-  putb(s->m.data(), (uint32_t)s->m.size()); \
-  putb(0);                                  \
-  cur_fld = id;
-
-#define CPW_FLD_STRING(id, m)                                                  \
-  put_fldh(id, cur_fld, ST_FLD_BINARY);                                        \
-  put_uint(s->m.size());                                                       \
-  putb(reinterpret_cast<const uint8_t *>(s->m.data()), (uint32_t)s->m.size()); \
-  cur_fld = id;
-
-#define CPW_END_STRUCT()                   \
-  putb(0);                                 \
-  return m_buf->size() - struct_start_pos; \
-  }
-
-CPW_BEGIN_STRUCT(FileMetaData)
-CPW_FLD_INT32(1, version)
-CPW_FLD_STRUCT_LIST(2, schema)
-CPW_FLD_INT64(3, num_rows)
-CPW_FLD_STRUCT_LIST(4, row_groups)
-if (s->key_value_metadata.size() != 0) { CPW_FLD_STRUCT_LIST(5, key_value_metadata) }
-if (s->created_by.size() != 0) { CPW_FLD_STRING(6, created_by) }
-if (s->column_order_listsize != 0) {
-  // Dummy list of struct containing an empty field1 struct
-  put_fldh(7, cur_fld, ST_FLD_LIST);
-  putb((uint8_t)((std::min(s->column_order_listsize, 0xfu) << 4) | ST_FLD_STRUCT));
-  if (s->column_order_listsize >= 0xf) put_uint(s->column_order_listsize);
-  for (uint32_t i = 0; i < s->column_order_listsize; i++) {
-    put_fldh(1, 0, ST_FLD_STRUCT);
-    putb(0);  // ColumnOrder.field1 struct end
-    putb(0);  // ColumnOrder struct end
-  }
-  cur_fld = 7;
-}
-CPW_END_STRUCT()
-
-CPW_BEGIN_STRUCT(SchemaElement)
-if (s->type != UNDEFINED_TYPE) {
-  CPW_FLD_INT32(1, type)
-  if (s->type_length != 0) { CPW_FLD_INT32(2, type_length) }
-}
-if (s->repetition_type != NO_REPETITION_TYPE) { CPW_FLD_INT32(3, repetition_type) }
-CPW_FLD_STRING(4, name)
-if (s->type == UNDEFINED_TYPE) { CPW_FLD_INT32(5, num_children) }
-if (s->converted_type != UNKNOWN) {
-  CPW_FLD_INT32(6, converted_type)
-  if (s->converted_type == DECIMAL) {
-    CPW_FLD_INT32(7, decimal_scale)
-    CPW_FLD_INT32(8, decimal_precision)
-  }
-}
-CPW_END_STRUCT()
-
-CPW_BEGIN_STRUCT(RowGroup)
-CPW_FLD_STRUCT_LIST(1, columns)
-CPW_FLD_INT64(2, total_byte_size)
-CPW_FLD_INT64(3, num_rows)
-CPW_END_STRUCT()
-
-CPW_BEGIN_STRUCT(KeyValue)
-CPW_FLD_STRING(1, key)
-if (s->value.size() != 0) { CPW_FLD_STRING(2, value) }
-CPW_END_STRUCT()
-
-CPW_BEGIN_STRUCT(ColumnChunk)
-if (s->file_path.size() != 0) { CPW_FLD_STRING(1, file_path) }
-CPW_FLD_INT64(2, file_offset)
-CPW_FLD_STRUCT(3, meta_data)
-if (s->offset_index_length != 0) {
-  CPW_FLD_INT64(4, offset_index_offset)
-  CPW_FLD_INT32(5, offset_index_length)
-}
-if (s->column_index_length != 0) {
-  CPW_FLD_INT64(6, column_index_offset)
-  CPW_FLD_INT32(7, column_index_length)
-}
-CPW_END_STRUCT()
-
-CPW_BEGIN_STRUCT(ColumnChunkMetaData)
-CPW_FLD_INT32(1, type)
-CPW_FLD_INT32_LIST(2, encodings)
-CPW_FLD_STRING_LIST(3, path_in_schema)
-CPW_FLD_INT32(4, codec)
-CPW_FLD_INT64(5, num_values)
-CPW_FLD_INT64(6, total_uncompressed_size)
-CPW_FLD_INT64(7, total_compressed_size)
-CPW_FLD_INT64(9, data_page_offset)
-if (s->index_page_offset != 0) { CPW_FLD_INT64(10, index_page_offset) }
-if (s->dictionary_page_offset != 0) { CPW_FLD_INT64(11, dictionary_page_offset) }
-if (s->statistics_blob.size() != 0) { CPW_FLD_STRUCT_BLOB(12, statistics_blob); }
-CPW_END_STRUCT()
 
 }  // namespace parquet
 }  // namespace io

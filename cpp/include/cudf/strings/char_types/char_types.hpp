@@ -24,6 +24,7 @@ namespace strings {
 /**
  * @addtogroup strings_types
  * @{
+ * @file
  */
 
 /**
@@ -99,7 +100,7 @@ std::unique_ptr<column> all_characters_of_type(
   strings_column_view const& strings,
   string_character_types types,
   string_character_types verify_types = string_character_types::ALL_TYPES,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Filter specific character types from a column of strings.
@@ -143,7 +144,7 @@ std::unique_ptr<column> filter_characters_of_type(
   string_character_types types_to_remove,
   string_scalar const& replacement     = string_scalar(""),
   string_character_types types_to_keep = string_character_types::ALL_TYPES,
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a boolean column identifying strings in which all
@@ -167,7 +168,7 @@ std::unique_ptr<column> filter_characters_of_type(
  */
 std::unique_ptr<column> is_integer(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns `true` if all strings contain
@@ -205,7 +206,7 @@ bool all_integer(strings_column_view const& strings);
  */
 std::unique_ptr<column> is_float(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns `true` if all strings contain

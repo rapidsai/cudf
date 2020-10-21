@@ -21,14 +21,15 @@
 
 #pragma once
 
-#include "parquet.h"
-#include "parquet_gpu.h"
+#include <io/parquet/parquet.hpp>
+#include <io/parquet/parquet_gpu.hpp>
 
 #include <cudf/io/data_sink.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/io/writers.hpp>
+#include <cudf/io/detail/parquet.hpp>
+#include <cudf/io/parquet.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -68,7 +69,7 @@ class writer::impl {
    * @param mr Device memory resource to use for device memory allocation
    **/
   explicit impl(std::unique_ptr<data_sink> sink,
-                writer_options const& options,
+                parquet_writer_options const& options,
                 rmm::mr::device_memory_resource* mr);
 
   /**
@@ -77,21 +78,20 @@ class writer::impl {
    * @param table The set of columns
    * @param metadata The metadata associated with the table
    * @param return_filemetadata If true, return the raw parquet file metadata
-   * @param metadata_out_file_path Column chunks file path to be set in the raw output metadata
+   * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @return unique_ptr to FileMetadata thrift message if requested
    **/
   std::unique_ptr<std::vector<uint8_t>> write(table_view const& table,
                                               const table_metadata* metadata,
                                               bool return_filemetadata,
-                                              const std::string& metadata_out_file_path,
+                                              const std::string& column_chunks_file_path,
                                               cudaStream_t stream);
 
   /**
    * @brief Begins the chunked/streamed write process.
    *
-   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end()
-   * boundaries.
+   * @param[in] pq_chunked_state Internal state maintained between chunks.
    */
   void write_chunked_begin(pq_chunked_state& state);
 
@@ -99,24 +99,23 @@ class writer::impl {
    * @brief Writes a single subtable as part of a larger parquet file/table write.
    *
    * @param[in] table The table information to be written
-   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end()
+   * @param[in] pq_chunked_state Internal state maintained between chunks.
    * boundaries.
    */
-  void write_chunked(table_view const& table, pq_chunked_state& state);
+  void write_chunk(table_view const& table, pq_chunked_state& state);
 
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] pq_chunked_state State information that crosses _begin() / write_chunked() / _end()
-   * boundaries.
+   * @param[in] pq_chunked_state Internal state maintained between chunks.
    * @param return_filemetadata If true, return the raw parquet file metadata
-   * @param metadata_out_file_path Column chunks file path to be set in the raw output metadata
+   * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
    * @return unique_ptr to FileMetadata thrift message if requested
    */
   std::unique_ptr<std::vector<uint8_t>> write_chunked_end(
     pq_chunked_state& state,
-    bool return_filemetadata                  = false,
-    const std::string& metadata_out_file_path = "");
+    bool return_filemetadata                   = false,
+    const std::string& column_chunks_file_path = "");
 
  private:
   /**

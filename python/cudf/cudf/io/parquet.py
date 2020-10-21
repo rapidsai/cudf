@@ -1,10 +1,12 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import warnings
+from collections import defaultdict
+from uuid import uuid4
 
 from fsspec.core import get_fs_token_paths
 from pyarrow import parquet as pq
-from pyarrow.compat import guid
+from pyarrow import dataset as ds
 
 import cudf
 from cudf._lib import parquet as libparquet
@@ -42,6 +44,7 @@ def _ensure_filesystem(passed_filesystem, path):
 def write_to_dataset(
     df,
     root_path,
+    filename=None,
     partition_cols=None,
     fs=None,
     preserve_index=False,
@@ -56,16 +59,19 @@ def write_to_dataset(
 
         root_dir/
             group=value1
-                <uuid>.parquet
+                <filename>.parquet
             ...
             group=valueN
-                <uuid>.parquet
+                <filename>.parquet
 
     Parameters
     ----------
     df : cudf.DataFrame
     root_path : string,
         The root directory of the dataset
+    filename : string, default None
+        The file name to use (within each partition directory). If None,
+        a random uuid4 hex string will be used for each file name.
     fs : FileSystem, default None
         If nothing passed, paths assumed to be found in the local on-disk
         filesystem
@@ -92,7 +98,7 @@ def write_to_dataset(
             raise ValueError("No data left to save outside partition columns")
 
         #  Loop through the partition groups
-        for i, sub_df in enumerate(
+        for _, sub_df in enumerate(
             _get_partition_groups(
                 df, partition_cols, preserve_index=preserve_index
             )
@@ -110,8 +116,8 @@ def write_to_dataset(
             )
             prefix = fs.sep.join([root_path, subdir])
             fs.mkdirs(prefix, exist_ok=True)
-            outfile = guid() + ".parquet"
-            full_path = fs.sep.join([prefix, outfile])
+            filename = filename or uuid4().hex + ".parquet"
+            full_path = fs.sep.join([prefix, filename])
             write_df = sub_df.copy(deep=False)
             write_df.drop(columns=partition_cols, inplace=True)
             with fs.open(full_path, mode="wb") as fil:
@@ -121,7 +127,7 @@ def write_to_dataset(
                         write_df.to_parquet(
                             fil,
                             index=preserve_index,
-                            metadata_file_path=fs.sep.join([subdir, outfile]),
+                            metadata_file_path=fs.sep.join([subdir, filename]),
                             **kwargs,
                         )
                     )
@@ -129,14 +135,14 @@ def write_to_dataset(
                     write_df.to_parquet(fil, index=preserve_index, **kwargs)
 
     else:
-        outfile = guid() + ".parquet"
-        full_path = fs.sep.join([root_path, outfile])
+        filename = filename or uuid4().hex + ".parquet"
+        full_path = fs.sep.join([root_path, filename])
         if return_metadata:
             metadata.append(
                 df.to_parquet(
                     full_path,
                     index=preserve_index,
-                    metadata_file_path=outfile,
+                    metadata_file_path=filename,
                     **kwargs,
                 )
             )
@@ -169,8 +175,9 @@ def read_parquet(
     filepath_or_buffer,
     engine="cudf",
     columns=None,
+    filters=None,
     row_groups=None,
-    skip_rows=None,
+    skiprows=None,
     num_rows=None,
     strings_to_categorical=False,
     use_pandas_metadata=True,
@@ -203,12 +210,41 @@ def read_parquet(
             )
         filepaths_or_buffers.append(tmp_source)
 
+    if filters is not None:
+        # Convert filters to ds.Expression
+        filters = pq._filters_to_expression(filters)
+
+        # Initialize ds.FilesystemDataset
+        dataset = ds.dataset(
+            filepaths_or_buffers, format="parquet", partitioning="hive"
+        )
+
+        # Load IDs of filtered row groups for each file in dataset
+        filtered_rg_ids = defaultdict(list)
+        for fragment in dataset.get_fragments(filter=filters):
+            for rg_fragment in fragment.split_by_row_group(filters):
+                for rg_info in rg_fragment.row_groups:
+                    filtered_rg_ids[rg_fragment.path].append(rg_info.id)
+
+        # Initialize row_groups to be selected
+        if row_groups is None:
+            row_groups = [None for _ in dataset.files]
+
+        # Store IDs of selected row groups for each file
+        for i, file in enumerate(dataset.files):
+            if row_groups[i] is None:
+                row_groups[i] = filtered_rg_ids[file]
+            else:
+                row_groups[i] = filter(
+                    lambda id: id in row_groups[i], filtered_rg_ids[file]
+                )
+
     if engine == "cudf":
         return libparquet.read_parquet(
             filepaths_or_buffers,
             columns=columns,
             row_groups=row_groups,
-            skip_rows=skip_rows,
+            skiprows=skiprows,
             num_rows=num_rows,
             strings_to_categorical=strings_to_categorical,
             use_pandas_metadata=use_pandas_metadata,
@@ -230,6 +266,7 @@ def to_parquet(
     compression="snappy",
     index=None,
     partition_cols=None,
+    partition_file_name=None,
     statistics="ROWGROUP",
     metadata_file_path=None,
     *args,
@@ -241,8 +278,9 @@ def to_parquet(
         if partition_cols:
             write_to_dataset(
                 df,
-                root_path=path,
+                filename=partition_file_name,
                 partition_cols=partition_cols,
+                root_path=path,
                 preserve_index=index,
                 **kwargs,
             )
@@ -288,10 +326,15 @@ def to_parquet(
         if index is None:
             index = True
 
+        # Convert partition_file_name to a call back
+        if partition_file_name:
+            partition_file_name = lambda x: partition_file_name  # noqa: E731
+
         pa_table = df.to_arrow(preserve_index=index)
         return pq.write_to_dataset(
             pa_table,
             root_path=path,
+            partition_filename_cb=partition_file_name,
             partition_cols=partition_cols,
             *args,
             **kwargs,

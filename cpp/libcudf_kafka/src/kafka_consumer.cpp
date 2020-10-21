@@ -150,7 +150,35 @@ int64_t kafka_consumer::get_committed_offset(std::string const &topic, int parti
                "Failed retrieve Kafka committed offsets");
 
   int64_t offset = toppar_list[0]->offset();
-  return offset > 0 ? offset : 0;
+  return offset > 0 ? offset : -1001;
+}
+
+std::map<std::string, std::vector<int32_t>> kafka_consumer::list_topics(std::string specific_topic)
+{
+  auto const metadata = [&]() {
+    std::string errstr;
+    auto spec_topic = std::unique_ptr<RdKafka::Topic>(
+      RdKafka::Topic::create(consumer.get(), specific_topic, nullptr, errstr));
+
+    RdKafka::Metadata *md;
+    CUDF_EXPECTS(
+      RdKafka::ERR_NO_ERROR ==
+        consumer->metadata(spec_topic == nullptr, spec_topic.get(), &md, default_timeout),
+      "Failed to list_topics in Kafka broker");
+    return std::unique_ptr<RdKafka::Metadata>{md};
+  }();
+  std::map<std::string, std::vector<int32_t>> topic_parts;
+
+  for (auto const &topic : *(metadata->topics())) {
+    auto &part_ids    = topic_parts[topic->topic()];
+    auto const &parts = *(topic->partitions());
+    std::transform(
+      parts.cbegin(), parts.cend(), std::back_inserter(part_ids), [](auto const &part) {
+        return part->id();
+      });
+  }
+
+  return topic_parts;
 }
 
 std::map<std::string, int64_t> kafka_consumer::get_watermark_offset(std::string const &topic,

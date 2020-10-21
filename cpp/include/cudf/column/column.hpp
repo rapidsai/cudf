@@ -26,9 +26,16 @@
 #include <utility>
 #include <vector>
 
+/**
+ * @file
+ * @brief Class definition for cudf::column
+ */
+
 namespace cudf {
 
 /**
+ * @brief A container of nullable device data as a column of elements.
+ *
  * @ingroup column_classes Column
  * @{
  */
@@ -63,7 +70,7 @@ class column {
    */
   column(column const& other,
          cudaStream_t stream,
-         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+         rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Move the contents from `other` to create a new column.
@@ -118,7 +125,7 @@ class column {
    */
   explicit column(column_view view,
                   cudaStream_t stream                 = 0,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Returns the column's logical element type
@@ -305,15 +312,15 @@ class column {
   operator mutable_column_view() { return this->mutable_view(); };
 
  private:
-  data_type _type{type_id::EMPTY};  ///< Logical type of elements in the column
-  cudf::size_type _size{};          ///< The number of elements in the column
-  rmm::device_buffer _data{};       ///< Dense, contiguous, type erased device memory
-                                    ///< buffer containing the column elements
-  rmm::device_buffer _null_mask{};  ///< Bitmask used to represent null values.
-                                    ///< May be empty if `null_count() == 0`
-  mutable size_type _null_count{UNKNOWN_NULL_COUNT};  ///< The number of null elements
-  std::vector<std::unique_ptr<column>> _children{};   ///< Depending on element type, child
-                                                      ///< columns may contain additional data
+  cudf::data_type _type{type_id::EMPTY};  ///< Logical type of elements in the column
+  cudf::size_type _size{};                ///< The number of elements in the column
+  rmm::device_buffer _data{};             ///< Dense, contiguous, type erased device memory
+                                          ///< buffer containing the column elements
+  rmm::device_buffer _null_mask{};        ///< Bitmask used to represent null values.
+                                          ///< May be empty if `null_count() == 0`
+  mutable cudf::size_type _null_count{UNKNOWN_NULL_COUNT};  ///< The number of null elements
+  std::vector<std::unique_ptr<column>> _children{};         ///< Depending on element type, child
+                                                            ///< columns may contain additional data
 };
 
 /** @} */  // end of group

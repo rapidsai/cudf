@@ -24,8 +24,6 @@ cdef extern from "nvtext/subword_tokenize.hpp" namespace "nvtext" nogil:
         uint32_t stride,
         bool do_lower,
         bool do_truncate,
-        uint32_t max_num_stings,
-        uint32_t max_num_chars,
         uint32_t max_rows_tensor
     ) except +
 

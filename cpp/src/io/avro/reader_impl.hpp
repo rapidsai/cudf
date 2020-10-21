@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/readers.hpp>
+#include <cudf/io/detail/avro.hpp>
 
 #include <memory>
 #include <string>
@@ -58,19 +58,18 @@ class reader::impl {
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<datasource> source,
-                reader_options const &options,
+                avro_reader_options const &options,
                 rmm::mr::device_memory_resource *mr);
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns
    *
-   * @param skip_rows Number of rows to skip from the start
-   * @param num_rows Number of rows to read
+   * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(int skip_rows, int num_rows, cudaStream_t stream);
+  table_with_metadata read(avro_reader_options const &options, cudaStream_t stream);
 
  private:
   /**

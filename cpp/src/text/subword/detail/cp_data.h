@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
 constexpr uint32_t NEW_CP_MASK = 0x1fffff;
 
@@ -29,3 +30,6 @@ constexpr uint32_t TOKEN_CAT_ALWAYS_REPLACE       = 4;
 
 constexpr uint32_t SPACE_CODE_POINT = 32;
 constexpr uint32_t MAX_NEW_CHARS    = 3;
+
+using codepoint_metadata_type = uint32_t;
+using aux_codepoint_data_type = uint64_t;

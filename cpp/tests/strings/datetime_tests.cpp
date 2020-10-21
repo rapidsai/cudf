@@ -17,13 +17,14 @@
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_durations.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/unary.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <tests/strings/utilities.h>
-#include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/column_utilities.hpp>
-#include <tests/utilities/column_wrapper.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <vector>
 
@@ -302,4 +303,45 @@ TEST_F(StringsDatetimeTest, Errors)
   cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep> timestamps{
     1530705600};
   EXPECT_THROW(cudf::strings::from_timestamps(timestamps, ""), cudf::logic_error);
+}
+
+TEST_F(StringsDatetimeTest, ToTimestampSingleSpecifier)
+{
+  cudf::test::strings_column_wrapper strings{"12", "10", "09", "05"};
+  auto strings_view = cudf::strings_column_view(strings);
+  auto results      = cudf::strings::to_timestamps(
+    strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_DAYS}, "%d");
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> expected_days{
+    11, 9, 8, 4};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_days);
+
+  results = cudf::strings::to_timestamps(
+    strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_DAYS}, "%m");
+  cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep> expected_months{
+    334, 273, 243, 120};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected_months);
+}
+
+TEST_F(StringsDatetimeTest, ToTimestampVariableFractions)
+{
+  cudf::test::strings_column_wrapper strings{"01:02:03.000001000",
+                                             "01:02:03.000001",
+                                             "01:02:03.1",
+                                             "01:02:03.01",
+                                             "01:02:03.0098700",
+                                             "01:02:03.0023456"};
+  auto strings_view = cudf::strings_column_view(strings);
+  auto results      = cudf::strings::to_timestamps(
+    strings_view, cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS}, "%H:%M:%S.%9f");
+  auto durations =
+    cudf::cast(results->view(), cudf::data_type{cudf::type_id::DURATION_NANOSECONDS});
+
+  cudf::test::fixed_width_column_wrapper<cudf::duration_ns> expected{
+    cudf::duration_ns{3723000001000},
+    cudf::duration_ns{3723000001000},
+    cudf::duration_ns{3723100000000},
+    cudf::duration_ns{3723010000000},
+    cudf::duration_ns{3723009870000},
+    cudf::duration_ns{3723002345600}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*durations, expected);
 }

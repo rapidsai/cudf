@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * @file reader_impl.hpp
- * @brief cuDF-IO CSV reader class implementation header
- */
-
 #pragma once
 
 #include "csv.h"
@@ -28,13 +23,17 @@
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
+#include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
-#include <cudf/io/readers.hpp>
+#include <cudf/io/detail/csv.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
+
+using cudf::detail::host_span;
 
 namespace cudf {
 namespace io {
@@ -77,28 +76,17 @@ class reader::impl {
    */
   explicit impl(std::unique_ptr<datasource> source,
                 std::string filepath,
-                reader_options const &options,
+                csv_reader_options const &options,
                 rmm::mr::device_memory_resource *mr);
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns.
    *
-   * @param range_offset Number of bytes offset from the start
-   * @param range_size Bytes to read; use `0` for all remaining data
-   * @param skip_rows Number of rows to skip from the start
-   * @param skip_rows_end Number of rows to skip from the end
-   * @param num_rows Number of rows to read
-   * @param metadata Optional location to return table metadata
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(size_t range_offset,
-                           size_t range_size,
-                           int skip_rows,
-                           int skip_end_rows,
-                           int num_rows,
-                           cudaStream_t stream);
+  table_with_metadata read(cudaStream_t stream);
 
  private:
   /**
@@ -108,8 +96,7 @@ class reader::impl {
    * the start of the input data).
    * A row is actually the data/offset between two termination symbols.
    *
-   * @param h_data Uncompressed input data in host memory
-   * @param h_size Number of bytes of uncompressed input data
+   * @param data Uncompressed input data in host memory
    * @param range_begin Only include rows starting after this position
    * @param range_end Only include rows starting before this position
    * @param skip_rows Number of rows to skip from the start
@@ -117,8 +104,7 @@ class reader::impl {
    * @param load_whole_file Hint that the entire data will be needed on gpu
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void gather_row_offsets(const char *h_data,
-                          size_t h_size,
+  void gather_row_offsets(host_span<char const> data,
                           size_t range_begin,
                           size_t range_end,
                           size_t skip_rows,
@@ -130,11 +116,10 @@ class reader::impl {
    * @brief Find the start position of the first data row
    *
    * @param h_data Uncompressed input data in host memory
-   * @param h_size Number of bytes of uncompressed input data
    *
    * @return Byte position of the first row
    */
-  size_t find_first_row_start(const char *h_data, size_t h_size);
+  size_t find_first_row_start(host_span<char const> data);
 
   /**
    * @brief Returns a detected or parsed list of column dtypes.
@@ -146,40 +131,40 @@ class reader::impl {
   std::vector<data_type> gather_column_types(cudaStream_t stream);
 
   /**
-   * @brief Converts the row-column data and outputs to columns.
+   * @brief Converts the row-column data and outputs to column bufferrs.
    *
    * @param column_types Column types
-   * @param out_buffers Output columns' device buffers
    * @param stream CUDA stream used for device memory operations and kernel launches.
+   *
+   * @return list of column buffers of decoded data, or ptr/size in the case of strings.
    */
-  void decode_data(std::vector<data_type> const &column_types,
-                   std::vector<column_buffer> &out_buffers,
-                   cudaStream_t stream);
+  std::vector<column_buffer> decode_data(std::vector<data_type> const &column_types,
+                                         cudaStream_t stream);
 
  private:
   rmm::mr::device_memory_resource *mr_ = nullptr;
   std::unique_ptr<datasource> source_;
   std::string filepath_;
   std::string compression_type_;
-  const reader_options args_;
+  const csv_reader_options opts_;
 
   rmm::device_vector<char> data_;
-  rmm::device_vector<uint64_t> row_offsets;
-  size_t num_records  = 0;  // Number of rows with actual data
-  int num_active_cols = 0;  // Number of columns to read
-  int num_actual_cols = 0;  // Number of columns in the dataset
+  rmm::device_vector<uint64_t> row_offsets_;
+  size_t num_records_  = 0;  // Number of rows with actual data
+  int num_active_cols_ = 0;  // Number of columns to read
+  int num_actual_cols_ = 0;  // Number of columns in the dataset
 
   // Parsing options
   ParseOptions opts{};
-  thrust::host_vector<column_parse::flags> h_column_flags;
-  rmm::device_vector<column_parse::flags> d_column_flags;
-  rmm::device_vector<SerialTrieNode> d_trueTrie;
-  rmm::device_vector<SerialTrieNode> d_falseTrie;
-  rmm::device_vector<SerialTrieNode> d_naTrie;
+  thrust::host_vector<column_parse::flags> h_column_flags_;
+  rmm::device_vector<column_parse::flags> d_column_flags_;
+  rmm::device_vector<SerialTrieNode> d_trie_true_;
+  rmm::device_vector<SerialTrieNode> d_trie_false_;
+  rmm::device_vector<SerialTrieNode> d_trie_na_;
 
   // Intermediate data
-  std::vector<std::string> col_names;
-  std::vector<char> header;
+  std::vector<std::string> col_names_;
+  std::vector<char> header_;
 };
 
 }  // namespace csv

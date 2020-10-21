@@ -191,6 +191,17 @@ def is_list_dtype(obj):
     )
 
 
+def is_struct_dtype(obj):
+    return (
+        type(obj) is cudf.core.dtypes.StructDtype
+        or obj is cudf.core.dtypes.StructDtype
+        # or type(obj) is cudf.core.column.StructColumn
+        # or obj is cudf.core.column.StructColumn
+        or (isinstance(obj, str) and obj == cudf.core.dtypes.StructDtype.name)
+        or (hasattr(obj, "dtype") and is_struct_dtype(obj.dtype))
+    )
+
+
 def cudf_dtype_from_pydata_dtype(dtype):
     """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
         Python dtype.
@@ -198,10 +209,33 @@ def cudf_dtype_from_pydata_dtype(dtype):
 
     if is_categorical_dtype(dtype):
         return cudf.core.dtypes.CategoricalDtype
-    elif np.issubdtype(dtype, np.datetime64):
-        dtype = np.datetime64
+    elif dtype in cudf._lib.types.np_to_cudf_types:
+        return dtype.type
 
     return infer_dtype_from_object(dtype)
+
+
+def cudf_dtype_to_pa_type(dtype):
+    """ Given a cudf pandas dtype, converts it into the equivalent cuDF
+        Python dtype.
+    """
+    if is_categorical_dtype(dtype):
+        raise NotImplementedError()
+    elif is_list_dtype(dtype):
+        return dtype.to_arrow()
+    elif is_struct_dtype(dtype):
+        return dtype.to_arrow()
+    else:
+        return np_to_pa_dtype(np.dtype(dtype))
+
+
+def cudf_dtype_from_pa_type(typ):
+    if pa.types.is_list(typ):
+        return cudf.core.dtypes.ListDtype.from_arrow(typ)
+    elif pa.types.is_struct(typ):
+        return cudf.core.dtypes.StructDtype.from_arrow(typ)
+    else:
+        return pd.api.types.pandas_dtype(typ.to_pandas_dtype())
 
 
 def is_scalar(val):
@@ -404,6 +438,16 @@ def min_column_type(x, expected_type):
     return x.dtype
 
 
+def get_min_float_dtype(col):
+    max_bound_dtype = np.min_scalar_type(float(col.max()))
+    min_bound_dtype = np.min_scalar_type(float(col.min()))
+    result_type = np.promote_types(max_bound_dtype, min_bound_dtype)
+    if result_type == np.dtype("float16"):
+        # cuDF does not support float16 dtype
+        result_type = np.dtype("float32")
+    return result_type
+
+
 def check_cast_unsupported_dtype(dtype):
     if is_categorical_dtype(dtype):
         return dtype
@@ -442,3 +486,16 @@ def get_time_unit(obj):
 
     time_unit, _ = np.datetime_data(obj.dtype)
     return time_unit
+
+
+def _get_nan_for_dtype(dtype):
+    dtype = np.dtype(dtype)
+    if pd.api.types.is_datetime64_dtype(
+        dtype
+    ) or pd.api.types.is_timedelta64_dtype(dtype):
+        time_unit, _ = np.datetime_data(dtype)
+        return dtype.type("nat", time_unit)
+    elif dtype.kind == "f":
+        return dtype.type("nan")
+    else:
+        return np.float64("nan")

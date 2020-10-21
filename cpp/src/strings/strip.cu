@@ -99,11 +99,12 @@ struct strip_fn {
 
 }  // namespace
 
-std::unique_ptr<column> strip(strings_column_view const& strings,
-                              strip_type stype                    = strip_type::BOTH,
-                              string_scalar const& to_strip       = string_scalar(""),
-                              rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
-                              cudaStream_t stream                 = 0)
+std::unique_ptr<column> strip(
+  strings_column_view const& strings,
+  strip_type stype                    = strip_type::BOTH,
+  string_scalar const& to_strip       = string_scalar(""),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0)
 {
   auto strings_count = strings.size();
   if (strings_count == 0) return detail::make_empty_strings_column(mr, stream);
