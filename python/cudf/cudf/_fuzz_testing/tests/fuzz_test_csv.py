@@ -36,7 +36,7 @@ def csv_writer_test(pdf):
 @pythonfuzz(
     data_handle=CSVWriter,
     params={
-        "sep": list([","]),
+        "sep": list([",", "|", "\t", "\t\t", "~"]),
         "header": [True, False],
         "na_rep": [
             "",
@@ -50,7 +50,7 @@ def csv_writer_test(pdf):
         ],
         "columns": None,
         "index": [True, False],
-        "line_terminator": ["\n", "\r"],
+        "line_terminator": ["\n", "\r", "\r\n"],
         "chunksize": None,
     },
 )

@@ -133,10 +133,9 @@ def compare_dataframe(left, right, nullable=True):
     if nullable and isinstance(right, cudf.DataFrame):
         right = cudf_to_pandas(right)
 
-    return assert_eq(
-        left,
-        right,
-        check_index_type=False
-        if (len(left.index) == 0 and len(right.index) == 0)
-        else True,
-    )
+    if len(left.index) == 0 and len(right.index) == 0:
+        check_index_type = False
+    else:
+        check_index_type = True
+
+    return assert_eq(left, right, check_index_type=check_index_type)
