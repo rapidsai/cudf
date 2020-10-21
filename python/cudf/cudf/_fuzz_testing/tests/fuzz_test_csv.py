@@ -78,6 +78,8 @@ def csv_writer_test_params(
         chunksize=chunksize,
     )
 
+    # TODO: Uncomment once this issue is fixed
+    # https://github.com/rapidsai/cudf/issues/6418
     # compare_content(pd_buffer, gd_buffer)
 
     actual = cudf.read_csv(
