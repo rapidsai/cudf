@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.17...3.18 FATAL_ERROR)
+﻿cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
 project(CUDF_TESTS LANGUAGES C CXX CUDA)
 
@@ -48,8 +48,7 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_executable(${CMAKE_TEST_NAME}
                     ${CMAKE_TEST_SRC})
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_link_libraries(${CMAKE_TEST_NAME} GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main
-                                                pthread cudf cudftestutil)
+    target_link_libraries(${CMAKE_TEST_NAME} gmock gtest pthread cudf cudftestutil)
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
