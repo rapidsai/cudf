@@ -114,7 +114,7 @@ def cudf_to_pandas(df):
                 cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes[df[col].dtype]
             )
         elif cudf.utils.dtypes.is_categorical_dtype(df[col].dtype):
-            pdf[col] = pdf[col].astyep(pd.CategoricalDtype())
+            pdf[col] = pdf[col].astype("category")
     return pdf
 
 
