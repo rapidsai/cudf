@@ -17,6 +17,21 @@ from cudf.utils.dtypes import to_cudf_compatible_scalar
 mask_dtype = np.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
 
+_EQUALITY_OPS = {
+    "eq",
+    "ne",
+    "lt",
+    "gt",
+    "le",
+    "ge",
+    "__eq__",
+    "__ne__",
+    "__lt__",
+    "__gt__",
+    "__le__",
+    "__ge__",
+}
+
 
 @njit
 def mask_get(mask, pos):

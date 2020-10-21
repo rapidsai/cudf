@@ -1311,7 +1311,7 @@ class DataFrame(Frame, Serializable):
             for k, col in enumerate(self._data):
                 result[col] = getattr(self[col], fn)(other[k])
         elif isinstance(other, DataFrame):
-            if fn in ("__eq__", "__ne__"):
+            if fn in cudf.utils.utils._EQUALITY_OPS:
                 if not self.index.equals(other.index):
                     raise ValueError(
                         "Can only compare identically-labeled "
