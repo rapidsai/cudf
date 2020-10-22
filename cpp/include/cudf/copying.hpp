@@ -68,14 +68,14 @@ enum class out_of_bounds_policy : int8_t { NULLIFY, DONT_CHECK };
  * corresponds to out-of-bound indices in the gather map to be null elements. Callers should
  * use `DONT_CHECK` when they are certain that the gather_map contains only valid indices for
  * better performance. In case there are out-of-bound indices in the gather map, the behavior
- * is undefined. Defaults to `DONT_CHECK`.
+ * is undefined. Defaults to `NULLIFY`.
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return std::unique_ptr<table> Result of the gather
  */
 std::unique_ptr<table> gather(
   table_view const& source_table,
   column_view const& gather_map,
-  out_of_bounds_policy policy         = out_of_bounds_policy::DONT_CHECK,
+  out_of_bounds_policy policy         = out_of_bounds_policy::NULLIFY,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
