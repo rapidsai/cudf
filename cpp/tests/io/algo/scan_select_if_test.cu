@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
@@ -14,8 +15,8 @@ class InclusiveCopyIfTest : public cudf::test::BaseFixture {
 };
 
 struct simple_op {
-  inline __device__ uint32_t operator()(uint32_t lhs, uint32_t rhs) { return lhs + rhs; }
-  inline __device__ bool operator()(uint32_t value) { return value % 3 == 0; }
+  inline constexpr uint32_t operator()(uint32_t lhs, uint32_t rhs) { return lhs + rhs; }
+  inline constexpr bool operator()(uint32_t value) { return value % 3 == 0; }
 };
 
 TEST_F(InclusiveCopyIfTest, CanScanSelectIf)
@@ -34,6 +35,58 @@ TEST_F(InclusiveCopyIfTest, CanScanSelectIf)
   for (uint32_t i = 0; i < h_result.size(); i++) {  //
     EXPECT_EQ(static_cast<uint32_t>(i * 3 + 3), h_result[i]);
   }
+}
+
+struct successive_capitalization_state {
+  char curr;
+  char prev;
+};
+
+struct successive_capitalization_op {
+  inline constexpr successive_capitalization_state operator()(  //
+    successive_capitalization_state lhs,
+    successive_capitalization_state rhs)
+  {
+    return {rhs.curr, lhs.curr};
+  }
+
+  inline constexpr bool is_capital(char value)
+  {                          //
+    return value >= 'A' and  //
+           value <= 'Z';
+  }
+
+  inline __device__ bool operator()(successive_capitalization_state value)
+  {
+    printf("p(%c) c(%c)\n", value.prev, value.curr);
+    return is_capital(value.prev) and  //
+           is_capital(value.curr);
+  }
+};
+
+TEST_F(InclusiveCopyIfTest, CanScanSelectIfFloat)
+{
+  auto input_str = std::string("AbcDeFGhiJKlMnoP");
+
+  auto input = rmm::device_vector<successive_capitalization_state>(input_str.size());
+
+  std::transform(input_str.begin(),  //
+                 input_str.end(),
+                 input.begin(),
+                 [](char value) { return successive_capitalization_state{value}; });
+
+  auto op = successive_capitalization_op{};
+
+  thrust::host_vector<uint32_t> h_result = scan_select_if(  //
+    input.begin(),
+    input.end(),
+    op,
+    op);
+
+  ASSERT_EQ(static_cast<uint32_t>(2), h_result.size());
+
+  ASSERT_EQ(static_cast<uint32_t>(6), h_result[0]);
+  ASSERT_EQ(static_cast<uint32_t>(10), h_result[1]);
 }
 
 // struct csv_row_start_op {

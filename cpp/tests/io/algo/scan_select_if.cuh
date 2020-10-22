@@ -75,8 +75,8 @@ struct agent {
   uint32_t num_items;
   ScanOperator scan_op;
   SelectOperator select_op;
-  cub::ScanTileState<T>& item_state;
   cub::ScanTileState<uint32_t>& count_state;
+  cub::ScanTileState<T>& item_state;
   select_scan_if_mode count_num_selected_only;
 
   __device__ agent(InputIterator d_input,
@@ -85,8 +85,8 @@ struct agent {
                    uint32_t num_items,
                    ScanOperator scan_op,
                    SelectOperator select_op,
-                   cub::ScanTileState<T>& item_state,
                    cub::ScanTileState<uint32_t>& count_state,
+                   cub::ScanTileState<T>& item_state,
                    select_scan_if_mode count_num_selected_only)
     : d_input(d_input),
       d_output(d_output),
@@ -94,8 +94,8 @@ struct agent {
       num_items(num_items),
       scan_op(scan_op),
       select_op(select_op),
-      item_state(item_state),
       count_state(count_state),
+      item_state(item_state),
       count_num_selected_only(count_num_selected_only)
   {
   }
@@ -201,7 +201,7 @@ struct agent {
     for (int i = 0; i < ITEMS_PER_THREAD; ++i) {
       if (selection_flags[i]) {
         if (selection_indices[i] < num_selections) {  //
-          d_output[selection_indices[i]] = items[i];
+          d_output[selection_indices[i]] = i;
         }
       }
     }
@@ -236,12 +236,12 @@ struct scan_tile_state {
  */
 template <typename T>
 __global__ void initialization_pass_kernel(  //
-  cub::ScanTileState<T> item_state,
   cub::ScanTileState<uint32_t> count_state,
+  cub::ScanTileState<T> item_state,
   uint32_t num_tiles)
 {
-  item_state.InitializeStatus(num_tiles);
   count_state.InitializeStatus(num_tiles);
+  item_state.InitializeStatus(num_tiles);
 }
 
 template <typename T,
@@ -310,8 +310,8 @@ struct scan_select_if_dispatch {
   uint32_t num_tiles;
   ScanOperator scan_op;
   SelectOperator select_op;
-  scan_tile_state<T> item_state;
   scan_tile_state<uint32_t> count_state;
+  scan_tile_state<T> item_state;
 
   scan_select_if_dispatch(InputIterator d_input_begin,  //
                           InputIterator d_input_end,
@@ -324,8 +324,8 @@ struct scan_select_if_dispatch {
   {
     num_items   = d_input_end - d_input_begin;
     num_tiles   = ceil_div(num_items, ITEMS_PER_TILE);
-    item_state  = scan_tile_state<T>(num_tiles);
     count_state = scan_tile_state<uint32_t>(num_tiles);
+    item_state  = scan_tile_state<T>(num_tiles);
   }
 
   void initialize(cudaStream_t stream)
@@ -334,8 +334,8 @@ struct scan_select_if_dispatch {
     auto initialization_kernel = initialization_pass_kernel<T>;
 
     initialization_kernel<<<num_init_blocks, THREADS_PER_BLOCK, 0, stream>>>(  //
-      item_state.state,
       count_state.state,
+      item_state.state,
       num_tiles);
 
     CHECK_CUDA(stream);
@@ -371,8 +371,8 @@ struct scan_select_if_dispatch {
         num_items,
         num_tiles,
         tile,
-        item_state.state,
         count_state.state,
+        item_state.state,
         count_num_selected_only);
 
       CHECK_CUDA(stream);
@@ -410,8 +410,8 @@ auto scan_select_if(  //
   using Output         = uint32_t;
   using OutputIterator = Output*;
   using Dispatch       = scan_select_if_dispatch<InputIterator,
-                                           decltype(d_num_selected),
                                            OutputIterator,
+                                           decltype(d_num_selected),
                                            ScanOperator,
                                            SelectOperator>;
 
