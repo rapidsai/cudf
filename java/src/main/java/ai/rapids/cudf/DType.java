@@ -182,7 +182,19 @@ public final class DType {
    */
   public int getScale() { return scale; }
 
+  /**
+   * Returns string name mapped to type.
+   * @return name corresponding to type
+   */
   public String getSimpleName() { return typeId.simpleName; }
+
+  /**
+   * Return enum for this DType
+   * @return DTypeEnum
+   */
+  public DTypeEnum getTypeId() {
+    return typeId;
+  }
 
   @Override
   public boolean equals(Object o) {
@@ -200,7 +212,7 @@ public final class DType {
   @Override
   public String toString() {
     if (isDecimalType()) {
-      return "" + typeId + ", scale: " + scale;
+      return "" + typeId + " scale:" + scale;
     } else {
       return "" + typeId;
     }
@@ -230,6 +242,12 @@ public final class DType {
     return DType.fromNative(dt.nativeId, scale);
   }
 
+  /**
+   * Factory method for DType instances
+   * @param nativeId nativeId of DataTypeEnun
+   * @param scale  scale should be provided for decimal type
+   * @return DType
+   */
   public static DType fromNative(int nativeId, int scale) {
     if (nativeId >=0 && nativeId < SINGLETON_DTYPE_LOOKUP.length) {
       DType ret = SINGLETON_DTYPE_LOOKUP[nativeId];
@@ -303,7 +321,7 @@ public final class DType {
   public boolean isBackedByByte() { return BYTES.contains(this.typeId); }
 
   /**
-   * Returns true if this type is backed by decimal type
+   * Returns true if this type is of decimal type
    * Namely this method will return true for the following types
    *       DType.DECIMAL32,
    *       DType.DECIMAL64
