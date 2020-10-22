@@ -918,7 +918,6 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
   if (s->page.flags & PAGEINFO_FLAGS_DICTIONARY) { return false; }
   // Fetch column chunk info
   chunk_idx = s->page.chunk_idx;
-  // TO DO, need to replace, currently has some race condition
   if (t == 0) { s->col = chunks[chunk_idx]; }
 
   // zero nested value and valid counts

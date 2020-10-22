@@ -128,7 +128,6 @@ __global__ void __launch_bounds__(block_size, 2)
   int t = threadIdx.x;
 
   if (t == 0) s->chunk = chunks[group_id * num_columns + col_id];
-  // TO-DO, if possible have to simplify
   for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += block_size) {
     if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
   }
