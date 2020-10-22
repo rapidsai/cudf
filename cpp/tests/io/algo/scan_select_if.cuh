@@ -16,6 +16,8 @@
 
 #include <type_traits>
 
+enum class select_scan_if_mode { count_only, count_and_gather };
+
 template <typename Dividend, typename Divisor>
 inline constexpr auto ceil_div(Dividend dividend, Divisor divisor)
 {
@@ -67,16 +69,6 @@ struct agent {
   using PrefixOpItem  = cub::TilePrefixCallbackOp<T, ScanOperator, cub::ScanTileState<T>>;
   using PrefixOpCount = cub::TilePrefixCallbackOp<uint32_t, cub::Sum, cub::ScanTileState<uint32_t>>;
 
-  union _TempStorage {
-    typename BlockLoadItem::TempStorage item_load;
-    typename PrefixOpItem::TempStorage item_prefix;
-    typename PrefixOpCount::TempStorage count_prefix;
-  };
-
-  struct TempStorage : cub::Uninitialized<_TempStorage> {
-  };
-
-  _TempStorage& temp_storage;
   InputIterator d_input;
   OutputIterator d_output;
   OutputNumSelectedIterator d_num_selected_output;
@@ -85,25 +77,26 @@ struct agent {
   SelectOperator select_op;
   cub::ScanTileState<T>& item_state;
   cub::ScanTileState<uint32_t>& count_state;
+  select_scan_if_mode count_num_selected_only;
 
-  __device__ agent(TempStorage temp_storage,
-                   InputIterator d_input,
+  __device__ agent(InputIterator d_input,
                    OutputIterator d_output,
                    OutputNumSelectedIterator d_num_selected_output,
                    uint32_t num_items,
                    ScanOperator scan_op,
                    SelectOperator select_op,
                    cub::ScanTileState<T>& item_state,
-                   cub::ScanTileState<uint32_t>& count_state)
-    : temp_storage(temp_storage.Alias()),
-      d_input(d_input),
+                   cub::ScanTileState<uint32_t>& count_state,
+                   select_scan_if_mode count_num_selected_only)
+    : d_input(d_input),
       d_output(d_output),
       d_num_selected_output(d_num_selected_output),
       num_items(num_items),
       scan_op(scan_op),
       select_op(select_op),
       item_state(item_state),
-      count_state(count_state)
+      count_state(count_state),
+      count_num_selected_only(count_num_selected_only)
   {
   }
 
@@ -118,7 +111,7 @@ struct agent {
     typename std::iterator_traits<OutputNumSelectedIterator>::value_type num_selected;
 
     if (tile_idx < num_tiles - 1) {
-      num_selected = consume_tile<false>(tile_idx, tile_offset, ITEMS_PER_TILE);
+      num_selected = consume_tile<false>(tile_idx, tile_offset, num_items_remaining);
     } else {
       num_selected = consume_tile<true>(tile_idx, tile_offset, num_items_remaining);
 
@@ -135,30 +128,33 @@ struct agent {
                                           uint32_t tile_offset,
                                           uint32_t num_items_remaining)
   {
-    // when either/both of these are declared as part of TempStorage, algorithm becomes unstable...
-    // this applies even if TempStorage is declared as a struct, or declared locally such as these.
-    // ... but why?
-    __shared__ typename BlockScanItem::TempStorage item_scan;
-    __shared__ typename BlockScanCount::TempStorage count_scan;
-
     T items[ITEMS_PER_THREAD];
 
-    if (is_last_tile) {
-      BlockLoadItem(temp_storage.item_load).Load(d_input + tile_offset, items, num_items_remaining);
-    } else {
-      BlockLoadItem(temp_storage.item_load).Load(d_input + tile_offset, items);
+    {
+      __shared__ typename BlockLoadItem::TempStorage item_load;
+
+      if (is_last_tile) {
+        BlockLoadItem(item_load).Load(d_input + tile_offset, items, num_items_remaining);
+      } else {
+        BlockLoadItem(item_load).Load(d_input + tile_offset, items);
+      }
     }
 
     __syncthreads();
 
-    // Scan Inputs
-    if (tile_idx == 0) {
-      T block_aggregate;
-      BlockScanItem(item_scan).InclusiveScan(items, items, scan_op, block_aggregate);
-      if (threadIdx.x == 0 and not is_last_tile) { item_state.SetInclusive(0, block_aggregate); }
-    } else {
-      auto prefix_op = PrefixOpItem(item_state, temp_storage.item_prefix, scan_op, tile_idx);
-      BlockScanItem(item_scan).InclusiveScan(items, items, scan_op, prefix_op);
+    {
+      __shared__ typename BlockScanItem::TempStorage item_scan;
+      __shared__ typename PrefixOpItem::TempStorage item_prefix;
+
+      // Scan Inputs
+      if (tile_idx == 0) {
+        T block_aggregate;
+        BlockScanItem(item_scan).InclusiveScan(items, items, scan_op, block_aggregate);
+        if (threadIdx.x == 0 and not is_last_tile) { item_state.SetInclusive(0, block_aggregate); }
+      } else {
+        auto prefix_op = PrefixOpItem(item_state, item_prefix, scan_op, tile_idx);
+        BlockScanItem(item_scan).InclusiveScan(items, items, scan_op, prefix_op);
+      }
     }
 
     __syncthreads();
@@ -178,21 +174,25 @@ struct agent {
     uint32_t num_selections;
 
     __syncthreads();
+    {
+      __shared__ typename BlockScanCount::TempStorage count_scan;
+      __shared__ typename PrefixOpCount::TempStorage count_prefix;
 
-    if (tile_idx == 0) {
-      BlockScanCount(count_scan).ExclusiveSum(selection_flags, selection_indices, num_selections);
-      if (threadIdx.x == 0 and not is_last_tile) { count_state.SetInclusive(0, num_selections); }
-    } else {
-      auto prefix_op = PrefixOpCount(count_state, temp_storage.count_prefix, cub::Sum(), tile_idx);
-      BlockScanCount(count_scan).ExclusiveSum(selection_flags, selection_indices, prefix_op);
-      num_selections = prefix_op.GetInclusivePrefix();
+      if (tile_idx == 0) {
+        BlockScanCount(count_scan).ExclusiveSum(selection_flags, selection_indices, num_selections);
+        if (threadIdx.x == 0 and not is_last_tile) { count_state.SetInclusive(0, num_selections); }
+      } else {
+        auto prefix_op = PrefixOpCount(count_state, count_prefix, cub::Sum(), tile_idx);
+        BlockScanCount(count_scan).ExclusiveSum(selection_flags, selection_indices, prefix_op);
+        num_selections = prefix_op.GetInclusivePrefix();
+      }
     }
 
     printf("b(%i) t(%i) num selections: %i\n", blockIdx.x, threadIdx.x, num_selections);
 
     __syncthreads();
 
-    if (d_output == nullptr) {  //
+    if (count_num_selected_only == select_scan_if_mode::count_only) {  //
       return num_selections;
     }
 
@@ -262,7 +262,8 @@ __global__ void execution_pass_kernel(  //
   uint32_t num_tiles,
   uint32_t start_tile,
   cub::ScanTileState<uint32_t> count_state,
-  cub::ScanTileState<T> item_state)
+  cub::ScanTileState<T> item_state,
+  select_scan_if_mode count_num_selected_only)
 {
   using Agent = agent<InputIterator,
                       OutputIterator,
@@ -271,10 +272,8 @@ __global__ void execution_pass_kernel(  //
                       SelectOperator,
                       THREADS_PER_BLOCK,
                       ITEMS_PER_THREAD>;
-  __shared__ typename Agent::TempStorage temp_storage;
 
   Agent(  //
-    temp_storage,
     d_input,
     d_output,
     d_num_selected_output,
@@ -282,7 +281,8 @@ __global__ void execution_pass_kernel(  //
     scan_op,
     select_op,
     count_state,
-    item_state)
+    item_state,
+    count_num_selected_only)
     .consume_range(num_tiles, start_tile);
 }
 
@@ -322,18 +322,14 @@ struct scan_select_if_dispatch {
       scan_op(scan_op),
       select_op(select_op)
   {
-    num_items = d_input_end - d_input_begin;
-    num_tiles = ceil_div(num_items, ITEMS_PER_TILE);
-    printf("creating states for %i items/%i tiles\n", num_items, num_tiles);
+    num_items   = d_input_end - d_input_begin;
+    num_tiles   = ceil_div(num_items, ITEMS_PER_TILE);
     item_state  = scan_tile_state<T>(num_tiles);
     count_state = scan_tile_state<uint32_t>(num_tiles);
-
-    printf("dispatcher created with %i items and %i tiles\n", num_items, num_tiles);
   }
 
   void initialize(cudaStream_t stream)
   {
-    printf("dispatcher: begin initializing\n");
     auto num_init_blocks       = ceil_div(num_tiles, THREADS_PER_BLOCK);
     auto initialization_kernel = initialization_pass_kernel<T>;
 
@@ -347,9 +343,9 @@ struct scan_select_if_dispatch {
 
   void execute(OutputIterator d_output,
                OutputNumResultsIterator d_num_selected,
+               select_scan_if_mode count_num_selected_only,
                cudaStream_t stream)
   {
-    printf("dispatcher: begin executing\n");
     uint32_t max_blocks     = 1 << 15;
     auto num_tiles_per_pass = num_tiles < max_blocks ? num_tiles : max_blocks;
     auto execution_kernel   = execution_pass_kernel<  //
@@ -362,11 +358,10 @@ struct scan_select_if_dispatch {
       THREADS_PER_BLOCK,
       ITEMS_PER_THREAD>;
 
-    printf("dispatcher: will execute %i tiles per pass, starting now.\n", num_tiles_per_pass);
+    CHECK_CUDA(stream);
 
     for (uint32_t tile = 0; tile < num_tiles; tile += num_tiles_per_pass) {
       num_tiles_per_pass = std::min(num_tiles_per_pass, num_tiles - tile);
-      printf("dispatcher: executing %i-tile pass starting at tile %i\n", num_tiles_per_pass, tile);
       execution_kernel<<<num_tiles_per_pass, THREADS_PER_BLOCK, 0, stream>>>(  //
         d_input_begin,
         d_output,
@@ -377,9 +372,8 @@ struct scan_select_if_dispatch {
         num_tiles,
         tile,
         item_state.state,
-        count_state.state);
-
-      cudaStreamSynchronize(stream);
+        count_state.state,
+        count_num_selected_only);
 
       CHECK_CUDA(stream);
     }
@@ -423,17 +417,25 @@ auto scan_select_if(  //
 
   auto dispatcher = Dispatch(d_input_begin, d_input_end, scan_op, select_op, stream);
 
-  // initialize tile state and perform upsweep
+  // initialize tile state and perform upsweep phase
   dispatcher.initialize(stream);
-  dispatcher.execute(nullptr, d_num_selected, stream);
-  cudaStreamSynchronize(stream);
+  dispatcher.execute(  //
+    nullptr,
+    d_num_selected,
+    select_scan_if_mode::count_only,
+    stream);
 
   CHECK_CUDA(stream);
 
   // // allocate result and perform downsweep
   auto d_output = rmm::device_vector<Output>(num_selected.value(stream));
-  dispatcher.execute(d_output.data().get(), d_num_selected, stream);
-  cudaStreamSynchronize(stream);
+
+  // perform downsweep phase
+  dispatcher.execute(  //
+    d_output.data().get(),
+    d_num_selected,
+    select_scan_if_mode::count_and_gather,
+    stream);
 
   CHECK_CUDA(stream);
 
