@@ -70,22 +70,16 @@ struct agent {
   union _TempStorage {
     typename BlockLoadItem::TempStorage item_load;
 
-    struct {
-      typename BlockScanItem::TempStorage item_scan;
-      typename PrefixOpItem::TempStorage item_prefix;
-    };
+    // struct {
+    //   typename BlockScanItem::TempStorage item_scan;
+    //   typename PrefixOpItem::TempStorage item_prefix;
+    // };
 
-    struct {
-      typename BlockScanCount::TempStorage count_scan;
-      typename PrefixOpCount::TempStorage count_prefix;
-    };
+    // struct {
+    //   typename BlockScanCount::TempStorage count_scan;
+    //   typename PrefixOpCount::TempStorage count_prefix;
+    // };
   };
-
-  // item_load
-
-  // item_scan + item_prefix
-
-  // count_scan + count_prefix
 
   struct TempStorage : cub::Uninitialized<_TempStorage> {
   };
@@ -151,6 +145,8 @@ struct agent {
   {
     __shared__ typename BlockScanItem::TempStorage item_scan;
     __shared__ typename PrefixOpItem::TempStorage item_prefix;
+    __shared__ typename BlockScanCount::TempStorage count_scan;
+    __shared__ typename PrefixOpCount::TempStorage count_prefix;
 
     T items[ITEMS_PER_THREAD];
 
@@ -165,52 +161,18 @@ struct agent {
     // scan values
     if (tile_idx == 0) {
       T block_aggregate;
-      BlockScanItem(item_scan)  //
-        .InclusiveScan(         //
-          items,
-          items,
-          scan_op,
-          block_aggregate);
-
-      __syncthreads();
-
+      BlockScanItem(item_scan).InclusiveScan(items, items, scan_op, block_aggregate);
       if (threadIdx.x == 0 and not is_last_tile) {  //
         item_state.SetInclusive(0, block_aggregate);
       }
 
       printf("b(%i) t(%i) agg(%i)\n", blockIdx.x, threadIdx.x, block_aggregate);
     } else {
-      // printf("instantiating item prefix op for tile %i.\n", tile_idx);
       auto prefix_op = PrefixOpItem(item_state, item_prefix, scan_op, tile_idx);
-      BlockScanItem(item_scan)  //
-        .InclusiveScan(         //
-          items,
-          items,
-          scan_op,
-          prefix_op);
-
-      __syncwarp(0xffffffff);
-      __syncthreads();
-
-      auto block_aggregate  = prefix_op.GetBlockAggregate();
-      auto inclusive_prefix = prefix_op.GetInclusivePrefix();
-
-      printf("b(%i) t(%i) agg(%i) inc(%i)\n",
-             blockIdx.x,
-             threadIdx.x,
-             block_aggregate,
-             inclusive_prefix);
-
-      // printf("b(%i) t(%i) item: ns(%i) ba(%i)\n",  //
-      //        blockIdx.x,
-      //        threadIdx.x,
-      //        block_aggregate,
-      //        num_selections);
+      BlockScanItem(item_scan).InclusiveScan(items, items, scan_op, prefix_op);
     }
 
     print_array_2("items", num_items_remaining, items);
-
-    return 0;
 
     __syncthreads();
 
@@ -226,56 +188,25 @@ struct agent {
 
     // count the number of selections
     uint32_t selection_indices[ITEMS_PER_THREAD];
-    __shared__ uint32_t block_aggregate;
-    __shared__ uint32_t num_selections;
+    uint32_t num_selections;
 
-    // __syncthreads();
+    __syncthreads();
 
     if (tile_idx == 0) {
-      BlockScanCount(temp_storage.count_scan)
-        .ExclusiveSum(  //
-          selection_flags,
-          selection_indices,
-          num_selections);
-
-      block_aggregate = num_selections;
+      BlockScanCount(count_scan).ExclusiveSum(selection_flags, selection_indices, num_selections);
 
       if (threadIdx.x == 0 and not is_last_tile) {  //
         count_state.SetInclusive(0, num_selections);
       }
     } else {
-      auto prefix_op = PrefixOpCount(count_state, temp_storage.count_prefix, cub::Sum(), tile_idx);
+      auto prefix_op = PrefixOpCount(count_state, count_prefix, cub::Sum(), tile_idx);
 
-      BlockScanCount(temp_storage.count_scan)
-        .ExclusiveSum(  //
-          selection_flags,
-          selection_indices,
-          prefix_op);
+      BlockScanCount(count_scan).ExclusiveSum(selection_flags, selection_indices, prefix_op);
 
-      if (threadIdx.x == 0) {
-        num_selections  = prefix_op.GetInclusivePrefix();
-        block_aggregate = prefix_op.GetBlockAggregate();
-      }
+      if (threadIdx.x == 0) { num_selections = prefix_op.GetInclusivePrefix(); }
     }
 
     __syncthreads();
-
-    // printf("b(%i) t(%i) flag: ns(%i) ba(%i)\n",  //
-    //        blockIdx.x,
-    //        threadIdx.x,
-    //        num_selections,
-    //        block_aggregate);
-
-    // __syncthreads();
-
-    print_array_2("selection flg", num_items_remaining, selection_flags);
-    print_array_2("selection idx", num_items_remaining, selection_indices);
-
-    // printf("b(%i) t(%i) ns(%i), ba(%i)\n",  //
-    //        blockIdx.x,
-    //        threadIdx.x,
-    //        num_selections,
-    //        block_aggregate);
 
     if (d_output == nullptr) {  //
       return num_selections;
@@ -394,7 +325,7 @@ struct scan_select_if_dispatch {
   using T = typename std::iterator_traits<InputIterator>::value_type;
 
   enum {
-    THREADS_PER_BLOCK = 32,
+    THREADS_PER_BLOCK = 64,
     ITEMS_PER_THREAD  = 2,
     ITEMS_PER_TILE    = ITEMS_PER_THREAD * THREADS_PER_BLOCK,
   };
@@ -515,20 +446,17 @@ auto scan_select_if(  //
                                            ScanOperator,
                                            SelectOperator>;
 
-  auto dispatcher_0 = Dispatch(d_input_begin, d_input_end, scan_op, select_op, stream);
+  auto dispatcher = Dispatch(d_input_begin, d_input_end, scan_op, select_op, stream);
 
   // initialize tile state and perform upsweep
-  dispatcher_0.initialize(stream);
-  dispatcher_0.execute(nullptr, d_num_selected, stream);
+  dispatcher.initialize(stream);
+  dispatcher.execute(nullptr, d_num_selected, stream);
   cudaStreamSynchronize(stream);
-
-  auto dispatcher_1 = Dispatch(d_input_begin, d_input_end, scan_op, select_op, stream);
 
   // // allocate result and perform downsweep
   auto d_output = rmm::device_vector<Output>(num_selected.value(stream));
-  // dispatcher_1.initialize(stream);
-  // dispatcher_1.execute(d_output.data().get(), d_num_selected, stream);
-  // cudaStreamSynchronize(stream);
+  dispatcher.execute(d_output.data().get(), d_num_selected, stream);
+  cudaStreamSynchronize(stream);
 
   CHECK_CUDA(stream);
 
