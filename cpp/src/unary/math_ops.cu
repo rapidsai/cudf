@@ -234,7 +234,7 @@ std::unique_ptr<cudf::column> transform_fn(InputIterator begin,
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream)
 {
-  auto size = cudf::distance(begin, end);
+  auto const size = cudf::distance(begin, end);
 
   std::unique_ptr<cudf::column> output = make_fixed_width_column(
     data_type{type_to_id<OutputType>()}, size, null_mask, null_count, stream, mr);
@@ -318,7 +318,7 @@ struct MathOpDispatcher {
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream)
   {
-    if (input.size() == 0) return empty_like(input);
+    if (input.is_empty()) return empty_like(input);
     auto dictionary_col = dictionary_column_view(input);
     return type_dispatcher(
       dictionary_col.keys().type(), dictionary_dispatch{}, dictionary_col, mr, stream);
@@ -375,7 +375,7 @@ struct BitwiseOpDispatcher {
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream)
   {
-    if (input.size() == 0) return empty_like(input);
+    if (input.is_empty()) return empty_like(input);
     auto dictionary_col = dictionary_column_view(input);
     return type_dispatcher(
       dictionary_col.keys().type(), dictionary_dispatch{}, dictionary_col, mr, stream);
@@ -452,7 +452,7 @@ struct LogicalOpDispatcher {
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream)
   {
-    if (input.size() == 0) return make_empty_column(cudf::data_type{cudf::type_id::BOOL8});
+    if (input.is_empty()) return make_empty_column(cudf::data_type{cudf::type_id::BOOL8});
     auto dictionary_col = dictionary_column_view(input);
     return type_dispatcher(
       dictionary_col.keys().type(), dictionary_dispatch{}, dictionary_col, mr, stream);
