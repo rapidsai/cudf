@@ -107,6 +107,7 @@ flatten_single_pass_aggs(std::vector<aggregation_request> const& requests)
 
     for (auto&& agg : agg_v) {
       if (is_hash_aggregation(agg->kind)) {
+        printf("flatten_single_pass_agg=%d\n", (int)agg->kind);
         if (is_fixed_width(request.values.type()) or agg->kind == aggregation::COUNT_VALID or
             agg->kind == aggregation::COUNT_ALL) {
           insert_agg(agg->kind);
@@ -123,6 +124,10 @@ flatten_single_pass_aggs(std::vector<aggregation_request> const& requests)
       }
     }
   }
+  printf("flatten_single_pass_aggs columns=%d, kinds=%d, col_ids=%d\n",
+         (int)columns.size(),
+         (int)agg_kinds.size(),
+         (int)col_ids.size());
   return std::make_tuple(table_view(columns), std::move(agg_kinds), std::move(col_ids));
 }
 
@@ -220,6 +225,8 @@ auto create_hash_map(table_device_view const& d_keys,
   row_hasher<default_hash, keys_have_nulls> hasher{d_keys};
   row_equality_comparator<keys_have_nulls> rows_equal{d_keys, d_keys, null_keys_are_equal};
 
+  printf("create_hash_map\n");
+
   return map_type::create(compute_hash_table_size(d_keys.num_rows()),
                           unused_key,
                           unused_value,
@@ -248,6 +255,8 @@ void compute_single_pass_aggs(table_view const& keys,
   std::vector<aggregation::Kind> aggs;
   std::vector<size_t> col_ids;
   std::tie(flattened_values, aggs, col_ids) = flatten_single_pass_aggs(requests);
+
+  printf("compute_single_pass_aggs\n");
 
   // make table that will hold sparse results
   std::vector<std::unique_ptr<column>> sparse_columns;
@@ -378,6 +387,8 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
   // column is indexed by the hash map
   cudf::detail::result_cache sparse_results(requests.size());
 
+  printf("groupby_null_templated\n");
+
   // Compute all single pass aggs first
   compute_single_pass_aggs<keys_have_nulls>(
     keys, requests, &sparse_results, *map, include_null_keys, stream);
@@ -391,8 +402,12 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
   size_type map_size;
   std::tie(gather_map, map_size) = extract_populated_keys(*map, keys.num_rows(), stream);
 
+  printf("extracted populated keys\n");
+
   // Compact all results from sparse_results and insert into cache
   sparse_to_dense_results(requests, sparse_results, cache, gather_map, map_size, stream, mr);
+
+  printf("calling gather\n");
 
   return cudf::detail::gather(
     keys, gather_map.begin(), gather_map.begin() + map_size, false, mr, stream);
@@ -429,6 +444,8 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
 {
   cudf::detail::result_cache cache(requests.size());
 
+  printf("detail::hash::groupby has_nulls=%d\n", (int)has_nulls(keys));
+
   std::unique_ptr<table> unique_keys;
   if (has_nulls(keys)) {
     unique_keys =
@@ -438,7 +455,11 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
       groupby_null_templated<false>(keys, requests, &cache, include_null_keys, stream, mr);
   }
 
-  return std::make_pair(std::move(unique_keys), extract_results(requests, cache));
+  auto result = extract_results(requests, cache);
+  printf("extract result = %d\n", (int)result.size());
+
+  // return std::make_pair(std::move(unique_keys), extract_results(requests, cache));
+  return std::make_pair(std::move(unique_keys), std::move(result));
 }
 }  // namespace hash
 }  // namespace detail

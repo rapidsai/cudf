@@ -26,6 +26,8 @@ namespace detail {
 inline std::vector<aggregation_result> extract_results(
   std::vector<aggregation_request> const& requests, cudf::detail::result_cache& cache)
 {
+  printf("extract_results size=%d\n", (int)requests.size());
+
   std::vector<aggregation_result> results(requests.size());
 
   for (size_t i = 0; i < requests.size(); i++) {
