@@ -77,7 +77,7 @@ enum ConvertedType {
 /**
  * @brief Encoding types for the actual data stream
  **/
-enum Encoding {
+enum class Encoding : uint8_t {
   PLAIN                   = 0,
   GROUP_VAR_INT           = 1,  // Deprecated, never used
   PLAIN_DICTIONARY        = 2,
