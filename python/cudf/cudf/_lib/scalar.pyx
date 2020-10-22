@@ -120,7 +120,7 @@ cdef class Scalar:
                 f"{type(value).__name__} to cudf scalar"
             )
 
-    def get_device_value(self):
+    def _get_device_value(self):
         if pd.api.types.is_string_dtype(self.dtype):
             result = _get_py_string_from_string(self.c_value)
         elif pd.api.types.is_numeric_dtype(self.dtype):
@@ -152,7 +152,7 @@ cdef class Scalar:
         if self._is_host_value_current():
             return self._host_value
         else:
-            result = self.get_device_value()
+            result = self._get_device_value()
             self._host_value = result
             return result
 
@@ -172,7 +172,7 @@ cdef class Scalar:
             self._is_device_value_current() and not
             self._is_host_value_current()
         ):
-            self._host_value = self.get_device_value()
+            self._host_value = self._get_device_value()
 
     cdef const scalar* get_raw_ptr(self):
         if not self._is_device_value_current():
