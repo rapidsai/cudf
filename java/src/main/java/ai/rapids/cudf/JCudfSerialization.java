@@ -183,7 +183,7 @@ public class JCudfSerialization {
       types = new DType[numColumns];
       nullCounts = new long[numColumns];
       for (int i = 0; i < numColumns; i++) {
-        types[i] = DType.fromNative(din.readInt());
+        types[i] = DType.fromNative(din.readInt(), din.readInt());
         nullCounts[i] = din.readInt();
       }
 
@@ -201,6 +201,7 @@ public class JCudfSerialization {
       // Header for each column...
       for (int i = 0; i < numColumns; i++) {
         dout.writeInt(types[i].getNativeId());
+        dout.writeInt(types[i].getScale());
         dout.writeInt((int) nullCounts[i]);
       }
       dout.writeLong(dataLen);

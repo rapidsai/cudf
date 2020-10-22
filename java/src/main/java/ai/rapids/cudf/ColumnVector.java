@@ -3273,11 +3273,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     }
 
     public DType getNativeType() {
-      DType dType = DType.fromNative(getNativeTypeId(getViewHandle()));
-      if (dType.isBackedByDecimal()) {
-        return DType.fromNative(dType.getNativeId(), getNativeTypeScale(getViewHandle()));
-      }
-      return dType;
+      return DType.fromNative(getNativeTypeId(getViewHandle()), getNativeTypeScale(getViewHandle()));
     }
 
     public int getNativeScale() {
@@ -3510,8 +3506,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       long offsetAddr = offsets == null ? 0 : offsets.address;
       long validAddr = valid == null ? 0 : valid.address;
       int nc = nullCount.orElse(OffHeapState.UNKNOWN_NULL_COUNT).intValue();
-      return makeCudfColumnView(dataType.typeId.nativeId, 0 , dataAddr, dataLen, offsetAddr, validAddr, nc,
-          (int)rows, childrenColViews);
+      return makeCudfColumnView(dataType.getNativeId(), dataType.getScale() , dataAddr, dataLen,
+          offsetAddr, validAddr, nc, (int)rows, childrenColViews);
     }
 
     private List<DeviceMemoryBuffer> getBuffersToClose() {

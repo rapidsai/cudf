@@ -16,6 +16,7 @@
 package ai.rapids.cudf;
 
 import java.util.EnumSet;
+import java.util.Objects;
 
 public final class DType {
 
@@ -97,7 +98,7 @@ public final class DType {
    * @param id Enum representing data type.
    * @param decimalScale scale - number of digits to the right of the decimal point in a number
    */
-  public DType(DTypeEnum id, int decimalScale) {
+  private DType(DTypeEnum id, int decimalScale) {
     typeId = id;
     scale = decimalScale;
   }
@@ -181,11 +182,22 @@ public final class DType {
 
   public String getSimpleName() { return typeId.simpleName; }
 
-  // TODO: override hashCode
   @Override
   public boolean equals(Object o) {
-    DType other = (DType) o;
-    return this.typeId == other.typeId && this.scale == other.scale;
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    DType type = (DType) o;
+    return scale == type.scale && typeId == type.typeId;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(typeId, scale);
+  }
+
+  @Override
+  public String toString() {
+    return "" + typeId;
   }
 
   public static DType fromNative(int nativeId, int scale) {
@@ -202,11 +214,6 @@ public final class DType {
     }
     throw new IllegalArgumentException("Could not translate " + nativeId + " into a DType");
   }
-
-  public static DType fromNative(int nativeId) {
-    return fromNative(nativeId, Integer.MIN_VALUE);
-  }
-
 
   /**
    * Returns true for timestamps with time level resolution, as opposed to day level resolution
