@@ -31,6 +31,7 @@
 - PR #6519 Fix end-of-string marking boundary condition in subword-tokenizer
 - PR #6543 Handle `np.nan` values in `isna`/`isnull`/`notna`/`notnull`
 - PR #6549 Fix memory_usage calls for list columns
+- PR #6575 Fix JNI RMM initialize with no pool allocator limit
 
 
 # cuDF 0.16.0 (Date TBD)
