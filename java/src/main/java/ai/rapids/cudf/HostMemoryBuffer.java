@@ -636,30 +636,32 @@ public class HostMemoryBuffer extends MemoryBuffer {
   }
 
   /**
-   * WARNING: Debug only method to print a passed in buffer
+   * WARNING: Debug only method to print buffer. Does not work for buffers over 2GB.
    */
   public void printBuffer() {
     printBuffer(5);
   }
 
   /**
-   * WARNING: Debug only method to print a passed in buffer
+   * WARNING: Debug only method to print buffer.  Does not work for buffers over 2GB.
+   * @param wordsPerRow the number of 32 bit works to print per row.
    */
   public void printBuffer(int wordsPerRow) {
-    int bytesPerWord = 4;
-    byte[] offsetbytes = new byte[(int)length];
-    System.out.println("BUFFER length = " + offsetbytes.length);
-    getBytes(offsetbytes, 0, 0, length);
-    for (int i = 0; i < offsetbytes.length; i++) {
-      if (i%bytesPerWord == 0 && 1 != 0) {
-        if (i % (bytesPerWord*wordsPerRow) == 0) {
+    final int bytesPerWord = 4;
+    final int bytesPerRow = bytesPerWord * wordsPerRow;
+    assert (length == (int)length) : "The buffer is too large to be printed";
+    byte[] data = new byte[(int)length];
+    System.out.println("BUFFER length = " + data.length);
+    getBytes(data, 0, 0, length);
+    for (int i = 0; i < data.length; i++) {
+      if (i % bytesPerWord == 0) {
+        if (i % bytesPerRow == 0) {
           System.out.println();
         } else {
           System.out.print(" ");
         }
       }
-      String toPrint = String.format("%02x",((long)offsetbytes[i]) & 0xFF);
-      System.out.print(toPrint);
+      System.out.print(String.format("%02x",((long)data[i]) & 0xFF));
     }
     System.out.println();
   }

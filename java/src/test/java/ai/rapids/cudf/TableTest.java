@@ -3706,6 +3706,9 @@ public class TableTest extends CudfTestBase {
         assert rows.length == 1;
         ColumnVector cv = rows[0];
         assert cv.getRowCount() == t.getRowCount();
+//        try (HostColumnVector hcv = cv.copyToHost()) {
+//          hcv.getChildColumnViewAccess(0).getDataBuffer().printBuffer(8);
+//        }
 
         DType[] types = new DType[t.getNumberOfColumns()];
         for (int i = 0; i < t.getNumberOfColumns(); i++) {
