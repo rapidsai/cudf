@@ -304,7 +304,7 @@ void copy_from_fixed_width_columns(
         __syncthreads();
 
         // Step 2: Copy the data back out
-        // We know row_size is always aligned with and a multipel of int64_t;
+        // We know row_size is always aligned with and a multiple of int64_t;
         int64_t * long_shared = reinterpret_cast<int64_t *>(shared_data);
         int64_t * long_output = reinterpret_cast<int64_t *>(output_data);
 
@@ -348,10 +348,14 @@ static int calc_fixed_width_kernel_dims(
     dim3 & threads) {
 
     // We have found speed degrades when a thread handles more than 4 columns.
-    // Each block is 2 dimensional and the y dimension indicates the number of
-    // columns. We limit this to 32 threads in the y dimension so we can still
-    // have 32 threads in the x dimension (1 warp) which should result in better
-    // coalesceing of memory operations
+    // Each block is 2 dimensional. The y dimension indicates the columns.
+    // We limit this to 32 threads in the y dimension so we can still
+    // have at least 32 threads in the x dimension (1 warp) which should
+    // result in better coalescing of memory operations. We also
+    // want to guarantee that we are processing a multiple of 32 threads
+    // in the x dimension because we use atomic operations at the block
+    // level when writing validity data out to main memory, and that would
+    // need to change if we split a word of validity data between blocks.
     int y_block_size = (num_columns + 3) / 4;
     if (y_block_size > 32) {
       y_block_size = 32;
@@ -361,9 +365,11 @@ static int calc_fixed_width_kernel_dims(
     // If someone configures the GPU to only have 16 KB this might not work.
     int max_shared_size = 48 * 1024;
     int max_block_size = max_shared_size/size_per_row;
-    // If we don't have enough shared memory there is no point in haveing more threads
+    // If we don't have enough shared memory there is no point in having more threads
     // per block that will just sit idle
     max_block_size = max_block_size > x_possible_block_size ? x_possible_block_size : max_block_size;
+    // Make sure that the x dimension is a multiple of 32 to help with memory access
+    // and also to let the atomic write operations happen at the block level.
     int block_size = (max_block_size / 32) * 32;
     CUDF_EXPECTS(block_size != 0, "Row size is too large to fit in shared memory");
 
@@ -454,8 +460,8 @@ static inline bool are_all_fixed_width(std::vector<cudf::data_type> const & sche
 }
 
 /**
- * Given a set of fixed width columns, calculate how the data will be laied out in memory.
- * @param [in] schema the types of columns that need to be laied out.
+ * Given a set of fixed width columns, calculate how the data will be laid out in memory.
+ * @param [in] schema the types of columns that need to be laid out.
  * @param [out] column_start the byte offset where each column starts in the row.
  * @param [out] column_size the size in bytes of the data for each columns in the row.
  * @return the size in bytes each row needs.
@@ -507,7 +513,7 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(
 
         int32_t max_rows_per_batch = std::numeric_limits<int>::max() / size_per_row;
         // Make the number of rows per batch a multiple of 32 so we don't have to worry about
-        // splittig validity at a specific row offset.  This might change in the future.
+        // splitting validity at a specific row offset.  This might change in the future.
         max_rows_per_batch = (max_rows_per_batch/32) * 32;
 
         cudf::size_type num_rows = tbl.num_rows();

@@ -63,14 +63,14 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * Returns the data buffer for a given host side column vector
    */
-  public HostMemoryBuffer getData() {
+  HostMemoryBuffer getData() {
     return offHeap.data;
   }
 
   /**
    * Returns the validity buffer for a given host side column vector
    */
-  public HostMemoryBuffer getValidity() {
+  HostMemoryBuffer getValidity() {
     return offHeap.valid;
   }
 
@@ -121,7 +121,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * Returns the list of child host column vectors for a given host side column
    */
-  public List<HostColumnVectorCore> getNestedChildren() {
+  List<HostColumnVectorCore> getNestedChildren() {
     return children;
   }
 
