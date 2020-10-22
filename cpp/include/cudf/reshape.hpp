@@ -73,7 +73,7 @@ std::unique_ptr<table> tile(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Configures if byte casting flips endianness
+ * @brief Configures whether byte casting flips endianness
  */
 enum class flip_endianness : bool { NO, YES };
 
@@ -86,15 +86,15 @@ enum class flip_endianness : bool { NO, YES };
  * return        = [[0x00, 0x00, 0x21, 0xe3], [0x00, 0x00, 0x01, 0x35]]
  * ```
  *
- * @param input_column column to be converted to lists of bytes.
- * @param configuration configuration retain or flip the endianness of a row.
+ * @param input_column Column to be converted to lists of bytes.
+ * @param endian_configuration Whether to retain or flip the endianness of the elements.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
  * @return The column containing the lists of bytes.
  */
 std::unique_ptr<column> byte_cast(
   column_view const& input_column,
-  flip_endianness configuration,
+  flip_endianness endian_configuration,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

@@ -103,6 +103,11 @@ std::unique_ptr<cudf::column> byte_list_conversion::operator()<string_view>(
 }
 }  // namespace
 
+/**
+ * @copydoc cudf::byte_cast(input_column,flip_endianess,rmm::mr::device_memory_resource)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
 std::unique_ptr<column> byte_cast(column_view const& input_column,
                                   flip_endianness configuration,
                                   rmm::mr::device_memory_resource* mr,
@@ -116,15 +121,13 @@ std::unique_ptr<column> byte_cast(column_view const& input_column,
 
 /**
  * @copydoc cudf::byte_cast(input_column,flip_endianess,rmm::mr::device_memory_resource)
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> byte_cast(column_view const& input_column,
                                   flip_endianness configuration,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::byte_cast(input_column, configuration, mr, 0);
+  return detail::byte_cast(input_column, configuration, mr, cudaStreamDefault);
 }
 
 }  // namespace cudf
