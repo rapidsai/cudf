@@ -1619,6 +1619,68 @@ TEST_F(SearchTest, contains_nullable_column_false_string)
   ASSERT_EQ(result, expect);
 }
 
+TEST_F(SearchTest, search_dictionary)
+{
+  cudf::test::strings_column_wrapper input_w({"", "", "10", "10", "20", "20", "30", "40"},
+                                             {0, 0, 1, 1, 1, 1, 1, 1});
+  auto input = cudf::dictionary::encode(input_w);
+  cudf::test::strings_column_wrapper values_w({"", "08", "10", "11", "30", "32", "90"},
+                                              {0, 1, 1, 1, 1, 1, 1});
+  auto values = cudf::dictionary::encode(values_w);
+  {
+    auto result = cudf::upper_bound({cudf::table_view{{input->view()}}},
+                                    {cudf::table_view{{values->view()}}},
+                                    {cudf::order::ASCENDING},
+                                    {cudf::null_order::BEFORE});
+    fixed_width_column_wrapper<size_type> expect{2, 2, 4, 4, 7, 7, 8};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
+  }
+  {
+    auto result = cudf::lower_bound({cudf::table_view{{input->view()}}},
+                                    {cudf::table_view{{values->view()}}},
+                                    {cudf::order::ASCENDING},
+                                    {cudf::null_order::BEFORE});
+    fixed_width_column_wrapper<size_type> expect{0, 2, 2, 4, 6, 7, 8};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
+  }
+}
+
+TEST_F(SearchTest, search_table_dictionary)
+{
+  fixed_width_column_wrapper<int32_t> column_0{{10, 10, 20, 20, 20, 20, 20, 20, 20, 50, 30},
+                                               {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
+  fixed_width_column_wrapper<float> column_1{{5.0, 6.0, .5, .5, .5, .5, .7, .7, .7, .7, .5},
+                                             {1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
+  fixed_width_column_wrapper<int16_t> column_w2{{90, 95, 77, 78, 79, 76, 61, 62, 63, 41, 50},
+                                                {1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1}};
+  auto dict_column_2 = cudf::dictionary::encode(column_w2);
+  auto column_2      = dict_column_2->view();
+  cudf::table_view input({column_0, column_1, column_2});
+
+  fixed_width_column_wrapper<int32_t> values_0{{10, 40, 20}, {1, 0, 1}};
+  fixed_width_column_wrapper<float> values_1{{6., .5, .5}, {0, 1, 1}};
+  fixed_width_column_wrapper<int16_t> values_w2{{95, 50, 77}, {1, 1, 0}};
+  auto dict_values_2 = cudf::dictionary::encode(values_w2);
+  auto values_2      = dict_values_2->view();
+  cudf::table_view values({values_0, values_1, values_2});
+
+  std::vector<cudf::order> order_flags{
+    {cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING}};
+  std::vector<cudf::null_order> null_order_flags{
+    {cudf::null_order::AFTER, cudf::null_order::AFTER, cudf::null_order::AFTER}};
+
+  {
+    auto result = cudf::lower_bound(input, values, order_flags, null_order_flags);
+    fixed_width_column_wrapper<size_type> expect{1, 10, 2};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
+  }
+  {
+    auto result = cudf::upper_bound(input, values, order_flags, null_order_flags);
+    fixed_width_column_wrapper<size_type> expect{2, 11, 6};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
+  }
+}
+
 TEST_F(SearchTest, contains_dictionary)
 {
   cudf::test::strings_column_wrapper column({"00", "00", "17", "17", "23", "23", "29"});
