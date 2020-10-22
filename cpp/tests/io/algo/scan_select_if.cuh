@@ -69,16 +69,8 @@ struct agent {
 
   union _TempStorage {
     typename BlockLoadItem::TempStorage item_load;
-
-    // struct {
-    //   typename BlockScanItem::TempStorage item_scan;
-    //   typename PrefixOpItem::TempStorage item_prefix;
-    // };
-
-    // struct {
-    //   typename BlockScanCount::TempStorage count_scan;
-    //   typename PrefixOpCount::TempStorage count_prefix;
-    // };
+    typename PrefixOpItem::TempStorage item_prefix;
+    typename PrefixOpCount::TempStorage count_prefix;
   };
 
   struct TempStorage : cub::Uninitialized<_TempStorage> {
@@ -143,10 +135,11 @@ struct agent {
                                           uint32_t tile_offset,
                                           uint32_t num_items_remaining)
   {
+    // when either/both of these are declared as part of TempStorage, algorithm becomes unstable...
+    // this applies even if TempStorage is declared as a struct, or declared locally such as these.
+    // ... but why?
     __shared__ typename BlockScanItem::TempStorage item_scan;
-    __shared__ typename PrefixOpItem::TempStorage item_prefix;
     __shared__ typename BlockScanCount::TempStorage count_scan;
-    __shared__ typename PrefixOpCount::TempStorage count_prefix;
 
     T items[ITEMS_PER_THREAD];
 
@@ -158,27 +151,21 @@ struct agent {
 
     __syncthreads();
 
-    // scan values
+    // Scan Inputs
     if (tile_idx == 0) {
       T block_aggregate;
       BlockScanItem(item_scan).InclusiveScan(items, items, scan_op, block_aggregate);
-      if (threadIdx.x == 0 and not is_last_tile) {  //
-        item_state.SetInclusive(0, block_aggregate);
-      }
-
-      printf("b(%i) t(%i) agg(%i)\n", blockIdx.x, threadIdx.x, block_aggregate);
+      if (threadIdx.x == 0 and not is_last_tile) { item_state.SetInclusive(0, block_aggregate); }
     } else {
-      auto prefix_op = PrefixOpItem(item_state, item_prefix, scan_op, tile_idx);
+      auto prefix_op = PrefixOpItem(item_state, temp_storage.item_prefix, scan_op, tile_idx);
       BlockScanItem(item_scan).InclusiveScan(items, items, scan_op, prefix_op);
     }
-
-    print_array_2("items", num_items_remaining, items);
 
     __syncthreads();
 
     uint32_t selection_flags[ITEMS_PER_THREAD];
 
-    // initialize the selection flags.
+    // Initialize Selection Flags
     for (uint64_t i = 0; i < ITEMS_PER_THREAD; i++) {
       selection_flags[i] = 0;
       if (threadIdx.x * ITEMS_PER_THREAD + i < num_items_remaining) {
@@ -186,7 +173,7 @@ struct agent {
       }
     }
 
-    // count the number of selections
+    // Scan Selection
     uint32_t selection_indices[ITEMS_PER_THREAD];
     uint32_t num_selections;
 
@@ -194,17 +181,14 @@ struct agent {
 
     if (tile_idx == 0) {
       BlockScanCount(count_scan).ExclusiveSum(selection_flags, selection_indices, num_selections);
-
-      if (threadIdx.x == 0 and not is_last_tile) {  //
-        count_state.SetInclusive(0, num_selections);
-      }
+      if (threadIdx.x == 0 and not is_last_tile) { count_state.SetInclusive(0, num_selections); }
     } else {
-      auto prefix_op = PrefixOpCount(count_state, count_prefix, cub::Sum(), tile_idx);
-
+      auto prefix_op = PrefixOpCount(count_state, temp_storage.count_prefix, cub::Sum(), tile_idx);
       BlockScanCount(count_scan).ExclusiveSum(selection_flags, selection_indices, prefix_op);
-
-      if (threadIdx.x == 0) { num_selections = prefix_op.GetInclusivePrefix(); }
+      num_selections = prefix_op.GetInclusivePrefix();
     }
+
+    printf("b(%i) t(%i) num selections: %i\n", blockIdx.x, threadIdx.x, num_selections);
 
     __syncthreads();
 
@@ -212,21 +196,12 @@ struct agent {
       return num_selections;
     }
 
+    // Scatter
+
     for (int i = 0; i < ITEMS_PER_THREAD; ++i) {
       if (selection_flags[i]) {
-        if (selection_indices[i] < num_selections) {
-          printf("b(%i) t(%i) d_output[%i] = %i\n",
-                 blockIdx.x,
-                 threadIdx.x,
-                 selection_indices[i],
-                 items[i]);
+        if (selection_indices[i] < num_selections) {  //
           d_output[selection_indices[i]] = items[i];
-        } else {
-          printf("b(%i) t(%i) d_output[%i] = x\n",
-                 blockIdx.x,
-                 threadIdx.x,
-                 selection_indices[i],
-                 items[i]);
         }
       }
     }
@@ -325,8 +300,8 @@ struct scan_select_if_dispatch {
   using T = typename std::iterator_traits<InputIterator>::value_type;
 
   enum {
-    THREADS_PER_BLOCK = 64,
-    ITEMS_PER_THREAD  = 2,
+    THREADS_PER_BLOCK = 128,
+    ITEMS_PER_THREAD  = 16,
     ITEMS_PER_TILE    = ITEMS_PER_THREAD * THREADS_PER_BLOCK,
   };
 
@@ -452,6 +427,8 @@ auto scan_select_if(  //
   dispatcher.initialize(stream);
   dispatcher.execute(nullptr, d_num_selected, stream);
   cudaStreamSynchronize(stream);
+
+  CHECK_CUDA(stream);
 
   // // allocate result and perform downsweep
   auto d_output = rmm::device_vector<Output>(num_selected.value(stream));

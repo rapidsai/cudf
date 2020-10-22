@@ -24,18 +24,16 @@ TEST_F(InclusiveCopyIfTest, CanScanSelectIf)
 
   auto op = simple_op{};
 
-  const uint32_t size = 192;
+  const uint32_t size = 4096;
 
   thrust::host_vector<uint32_t> h_result = scan_select_if(input, input + size, op, op);
 
   // 4096 / 3 = 1365.333...
-  ASSERT_EQ(static_cast<uint32_t>(64), h_result.size());
+  ASSERT_EQ(static_cast<uint32_t>(1365), h_result.size());
 
   for (uint32_t i = 0; i < h_result.size(); i++) {  //
     EXPECT_EQ(static_cast<uint32_t>(i * 3 + 3), h_result[i]);
   }
-
-  FAIL();
 }
 
 // struct csv_row_start_op {
