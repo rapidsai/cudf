@@ -497,9 +497,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
       uint32_t fragment_data_size, max_page_size, minmax_len = 0;
       SYNCWARP();
       if (num_rows < ck_g.num_rows) {
-        if (t == 0) {
-          frag_g = ck_g.fragments[fragments_in_chunk];
-        }
+        if (t == 0) { frag_g = ck_g.fragments[fragments_in_chunk]; }
         if (!t && ck_g.stats && col_g.stats_dtype == dtype_string) {
           minmax_len = max(ck_g.stats[fragments_in_chunk].min_value.str_val.length,
                            ck_g.stats[fragments_in_chunk].max_value.str_val.length);
@@ -590,13 +588,9 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
         }
         SYNCWARP();
         if (t == 0) {
-          if (pages) {
-            pages[ck_g.first_page + num_pages] = page_g;
-          }
+          if (pages) { pages[ck_g.first_page + num_pages] = page_g; }
 
-          if (page_grstats) {
-            page_grstats[ck_g.first_page + num_pages] = pagestats_g;
-          }
+          if (page_grstats) { page_grstats[ck_g.first_page + num_pages] = pagestats_g; }
         }
 
         num_pages++;
@@ -1510,9 +1504,7 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
     const uint8_t *src;
     uint32_t hdr_len, data_len;
 
-    if (t == 0) {
-      page_g = first_page[page];
-    }
+    if (t == 0) { page_g = first_page[page]; }
     __syncthreads();
 
     src = (ck_g.is_compressed) ? page_g.compressed_data : page_g.page_data;
