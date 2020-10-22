@@ -20,6 +20,11 @@ import java.util.Objects;
 
 public final class DType {
 
+  /* enum representing various types. Whenever a new non-decimal type is added please make sure
+  below sections are updated as well:
+  1. Create a singleton object of the new type.
+  2. Update SINGLETON_DTYPE_LOOKUP to reflect new type. The order should be maintained between
+  DTypeEnum and SINGLETON_DTYPE_LOOKUP */
   public enum DTypeEnum {
     EMPTY(0, 0, "NOT SUPPORTED"),
     INT8(1, 1, "byte"),
@@ -72,7 +77,6 @@ public final class DType {
     DECIMAL64(8, 26, "decimal64"),
     STRUCT(0, 27, "struct");
 
-    private static final DTypeEnum[] D_TYPES = DTypeEnum.values();
     final int sizeInBytes;
     final int nativeId;
     final String simpleName;
@@ -87,7 +91,7 @@ public final class DType {
   }
 
   final DTypeEnum typeId;
-  final int scale;
+  private final int scale;
 
   private DType(DTypeEnum id) {
     typeId = id;
@@ -131,7 +135,10 @@ public final class DType {
   public static final DType LIST = new DType(DTypeEnum.LIST);
   public static final DType STRUCT = new DType(DTypeEnum.STRUCT);
 
-  private static final DType[] staticDTypes = new DType[]{
+  /* This is used in fromNative method to return singleton object for non-decimal types.
+  Please make sure the order here is same as that of DTypeEnum. Whenever a new non-decimal
+  type is added in DTypeEnum, this array needs to be updated as well.*/
+  private static final DType[] SINGLETON_DTYPE_LOOKUP = new DType[]{
       EMPTY,
       INT8,
       INT16,
@@ -193,13 +200,20 @@ public final class DType {
 
   @Override
   public String toString() {
-    return "" + typeId;
+    if (isDecimalType()) {
+      return "" + typeId + ", scale: " + scale;
+    } else {
+      return "" + typeId;
+    }
   }
 
   public static DType fromNative(int nativeId, int scale) {
-    if (nativeId >=0 && nativeId < staticDTypes.length) {
-      if (staticDTypes[nativeId] != null) {
-        return staticDTypes[nativeId];
+    if (nativeId >=0 && nativeId < SINGLETON_DTYPE_LOOKUP.length) {
+      DType ret = SINGLETON_DTYPE_LOOKUP[nativeId];
+      if (ret != null) {
+        assert ret.typeId.nativeId == nativeId : "Something went wrong and it looks like " +
+          "SINGLETON_DTYPE_LOOKUP is out of sync";
+        return ret;
       }
       if (nativeId == DTypeEnum.DECIMAL32.nativeId) {
         return new DType(DTypeEnum.DECIMAL32, scale);
@@ -271,7 +285,7 @@ public final class DType {
    *       DType.DECIMAL32,
    *       DType.DECIMAL64
    */
-  public boolean isBackedByDecimal() { return DECIMALS.contains(this.typeId); }
+  public boolean isDecimalType() { return DECIMALS.contains(this.typeId); }
 
   /**
    * Returns true for duration types
@@ -287,7 +301,12 @@ public final class DType {
     return NESTED_TYPE.contains(this.typeId);
   }
 
+  @Deprecated
   public boolean isTimestamp() {
+    return TIMESTAMPS.contains(this.typeId);
+  }
+
+  public boolean isTimestampType() {
     return TIMESTAMPS.contains(this.typeId);
   }
 

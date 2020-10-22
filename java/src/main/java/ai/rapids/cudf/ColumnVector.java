@@ -1981,6 +1981,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
                                   "is required for .to_timestamp() operation";
     assert format != null : "Format string may not be NULL";
     assert timestampType.isTimestamp() : "unsupported conversion to non-timestamp DType";
+      // Only nativeID is passed in the below function as timestamp type does not have `scale`
     return new ColumnVector(stringTimestampToTimestamp(getNativeView(),
         timestampType.typeId.getNativeId(), format));
   }
