@@ -84,7 +84,7 @@ class ParquetReader(IOFuzz):
             with open(file_name + "_crash.parquet", "wb") as crash_dataset:
                 crash_dataset.write(self._current_buffer)
 
-    def get_rand_params(self, params):
+    def set_rand_params(self, params):
         params_dict = {}
         for param, values in params.items():
             if param == "columns" and values is None:
@@ -94,8 +94,7 @@ class ParquetReader(IOFuzz):
                 )
             else:
                 params_dict[param] = np.random.choice(values)
-        self._current_params["test_kwargs"] = params_dict
-        return params_dict
+        self._current_params["test_kwargs"] = self.process_kwargs(params_dict)
 
 
 class ParquetWriter(IOFuzz):

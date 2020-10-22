@@ -70,7 +70,7 @@ class CSVReader(IOFuzz):
         if self._current_buffer is not None:
             self._current_buffer.to_csv(file_name + "_crash.csv")
 
-    def get_rand_params(self, params):
+    def set_rand_params(self, params):
         params_dict = {}
         for param, values in params.items():
             if param == "usecols" and values is None:
@@ -117,7 +117,6 @@ class CSVReader(IOFuzz):
             else:
                 params_dict[param] = np.random.choice(values)
         self._current_params["test_kwargs"] = self.process_kwargs(params_dict)
-        return params_dict
 
 
 class CSVWriter(IOFuzz):
@@ -169,7 +168,7 @@ class CSVWriter(IOFuzz):
         if self._current_buffer is not None:
             self._current_buffer.to_csv(file_name + "_crash.csv")
 
-    def get_rand_params(self, params):
+    def set_rand_params(self, params):
         params_dict = {}
         for param, values in params.items():
             if param == "columns" and values is None:
@@ -193,4 +192,3 @@ class CSVWriter(IOFuzz):
             else:
                 params_dict[param] = np.random.choice(values)
         self._current_params["test_kwargs"] = self.process_kwargs(params_dict)
-        return params_dict
