@@ -58,20 +58,17 @@ enum class out_of_bounds_policy : int8_t { NULLIFY, DONT_CHECK };
  * For dictionary columns, the keys column component is copied and not trimmed
  * if the gather results in abandoned key elements.
  *
- * @throws CUDA RuntimeError "illegal memory access" may be thrown when out-of-bound
- * indices exist in the gather map and out-of-bound policy is set to `DONT_CHECK`
+ * @throws cudf::logic_error if gather_map contains null values. 
  *
  * @param[in] source_table The input columns whose rows will be gathered
  * @param[in] gather_map View into a non-nullable column of integral indices that maps the
  * rows in the source columns to rows in the destination columns.
-
  * @param[in] policy Policy to apply to account for possible out-of-bound indices
- * `DONT_CHECK` skips all bound checking for gather map indices. `NULLIFY` coerces rows that
+ * `DONT_CHECK` skips all bound checking for gather map values. `NULLIFY` coerces rows that
  * corresponds to out-of-bound indices in the gather map to be null elements. Callers should
  * use `DONT_CHECK` when they are certain that the gather_map contains only valid indices for
  * better performance. In case there are out-of-bound indices in the gather map, the behavior
- * is undefined.
-
+ * is undefined. Defaults to `DONT_CHECK`.
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return std::unique_ptr<table> Result of the gather
  */
