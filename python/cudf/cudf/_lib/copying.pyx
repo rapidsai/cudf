@@ -27,6 +27,7 @@ from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 cimport cudf._lib.cpp.copying as cpp_copying
 
+# workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
 
 def copy_column(Column input_column):
@@ -207,8 +208,6 @@ def _scatter_scalar(scalars, Column scatter_map,
         slr = as_scalar(val, col.dtype)
         source_scalars.push_back(reference_wrapper[constscalar](
             slr.c_value.get()[0]))
-
-
     cdef column_view scatter_map_view = scatter_map.view()
     cdef table_view target_table_view = target_table.data_view()
 
