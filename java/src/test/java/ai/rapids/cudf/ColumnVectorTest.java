@@ -751,7 +751,7 @@ public class ColumnVectorTest extends CudfTestBase {
         case TIMESTAMP_MILLISECONDS:
         case TIMESTAMP_MICROSECONDS:
         case TIMESTAMP_NANOSECONDS:
-          s = Scalar.timestampFromLong(new DType(type, 0), 1234567890123456789L);
+          s = Scalar.timestampFromLong(DType.create(type), 1234567890123456789L);
           break;
         case STRING:
           s = Scalar.fromString("hello, world!");
@@ -763,7 +763,7 @@ public class ColumnVectorTest extends CudfTestBase {
         case DURATION_MILLISECONDS:
         case DURATION_MICROSECONDS:
         case DURATION_NANOSECONDS:
-          s = Scalar.durationFromLong(new DType(type, 0), 21313);
+          s = Scalar.durationFromLong(DType.create(type), 21313);
           break;
           case EMPTY:
           case LIST:
@@ -774,7 +774,7 @@ public class ColumnVectorTest extends CudfTestBase {
         }
 
         try (ColumnVector c = ColumnVector.fromScalar(s, 0)) {
-          assertEquals(type, c.getType().typeId);
+          assertEquals(DType.create(type), c.getType());
           assertEquals(0, c.getRowCount());
           assertEquals(0, c.getNullCount());
         }
@@ -968,7 +968,7 @@ public class ColumnVectorTest extends CudfTestBase {
           || type == DType.DTypeEnum.DECIMAL32 || type == DType.DTypeEnum.DECIMAL64) {
         continue;
       }
-      try (Scalar s = Scalar.fromNull(DType.fromNative(type.nativeId));
+      try (Scalar s = Scalar.fromNull(DType.create(type));
            ColumnVector c = ColumnVector.fromScalar(s, rowCount);
            HostColumnVector hc = c.copyToHost()) {
         assertEquals(type, c.getType().typeId);
