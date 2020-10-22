@@ -568,6 +568,8 @@ def test_drop(gdf, gddf):
 @pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize("index", [True, False])
 def test_memory_usage(gdf, gddf, index, deep):
+    gddf = gddf.map_partitions(lambda x: x.copy(deep=True))
+
     dd.assert_eq(
         gdf.memory_usage(deep=deep, index=index),
         gddf.memory_usage(deep=deep, index=index),
