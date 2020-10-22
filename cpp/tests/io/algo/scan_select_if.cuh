@@ -16,7 +16,7 @@
 
 #include <type_traits>
 
-enum class select_scan_if_mode { count_only, count_and_gather };
+enum class select_scan_if_mode { count_only, count_and_gather, gather_only };
 
 template <typename Dividend, typename Divisor>
 inline constexpr auto ceil_div(Dividend dividend, Divisor divisor)
@@ -41,8 +41,8 @@ inline __device__ void print_array_2(char const* message,
 template <typename InputIterator,
           typename OutputIterator,
           typename OutputNumSelectedIterator,
-          typename ScanOperator,
-          typename SelectOperator,
+          typename ScanOp,
+          typename SelectOp,
           int THREADS_PER_BLOCK,
           int ITEMS_PER_THREAD>
 struct agent {
@@ -66,15 +66,15 @@ struct agent {
     THREADS_PER_BLOCK,
     cub::BlockScanAlgorithm::BLOCK_SCAN_RAKING>;
 
-  using PrefixOpItem  = cub::TilePrefixCallbackOp<T, ScanOperator, cub::ScanTileState<T>>;
+  using PrefixOpItem  = cub::TilePrefixCallbackOp<T, ScanOp, cub::ScanTileState<T>>;
   using PrefixOpCount = cub::TilePrefixCallbackOp<uint32_t, cub::Sum, cub::ScanTileState<uint32_t>>;
 
   InputIterator d_input;
   OutputIterator d_output;
   OutputNumSelectedIterator d_num_selected_output;
   uint32_t num_items;
-  ScanOperator scan_op;
-  SelectOperator select_op;
+  ScanOp scan_op;
+  SelectOp select_op;
   cub::ScanTileState<uint32_t>& count_state;
   cub::ScanTileState<T>& item_state;
   select_scan_if_mode count_num_selected_only;
@@ -83,8 +83,8 @@ struct agent {
                    OutputIterator d_output,
                    OutputNumSelectedIterator d_num_selected_output,
                    uint32_t num_items,
-                   ScanOperator scan_op,
-                   SelectOperator select_op,
+                   ScanOp scan_op,
+                   SelectOp select_op,
                    cub::ScanTileState<uint32_t>& count_state,
                    cub::ScanTileState<T>& item_state,
                    select_scan_if_mode count_num_selected_only)
@@ -202,6 +202,8 @@ struct agent {
       if (selection_flags[i]) {
         if (selection_indices[i] < num_selections) {  //
           d_output[selection_indices[i]] = i;
+          // d_idx_output[selection_indices[i]] = i;
+          // d_val_output[selection_indices[i]] = item[i];
         }
       }
     }
@@ -248,16 +250,16 @@ template <typename T,
           typename InputIterator,
           typename OutputIterator,
           typename OutputNumSelectedIterator,
-          typename ScanOperator,
-          typename SelectOperator,
+          typename ScanOp,
+          typename SelectOp,
           int THREADS_PER_BLOCK,
           int ITEMS_PER_THREAD>
 __global__ void execution_pass_kernel(  //
   InputIterator d_input,
   OutputIterator d_output,
   OutputNumSelectedIterator d_num_selected_output,
-  ScanOperator scan_op,
-  SelectOperator select_op,
+  ScanOp scan_op,
+  SelectOp select_op,
   uint32_t num_items,
   uint32_t num_tiles,
   uint32_t start_tile,
@@ -268,8 +270,8 @@ __global__ void execution_pass_kernel(  //
   using Agent = agent<InputIterator,
                       OutputIterator,
                       OutputNumSelectedIterator,
-                      ScanOperator,
-                      SelectOperator,
+                      ScanOp,
+                      SelectOp,
                       THREADS_PER_BLOCK,
                       ITEMS_PER_THREAD>;
 
@@ -294,35 +296,41 @@ __global__ void execution_pass_kernel(  //
 template <typename InputIterator,  //
           typename OutputIterator,
           typename OutputNumResultsIterator,
-          typename ScanOperator,
-          typename SelectOperator>
+          typename ScanOp,
+          typename SelectOp>
 struct scan_select_if_dispatch {
-  using T = typename std::iterator_traits<InputIterator>::value_type;
+  using T      = typename std::iterator_traits<InputIterator>::value_type;
+  using TInput = T;
 
-  enum {
-    THREADS_PER_BLOCK = 128,
-    ITEMS_PER_THREAD  = 16,
-    ITEMS_PER_TILE    = ITEMS_PER_THREAD * THREADS_PER_BLOCK,
-  };
+  static void allocation_size(uint32_t num_tiles, uint32_t& temp_storage_bytes)
+  {
+    uint64_t idx_state_bytes;
+    cub::ScanTileState<uint32_t>::AllocationSize(num_tiles, idx_state_bytes);
 
-  InputIterator d_input_begin;
+    uint64_t val_state_bytes;
+    cub::ScanTileState<TInput>::AllocationSize(num_tiles, val_state_bytes);
+
+    temp_storage_bytes = idx_state_bytes + val_state_bytes;
+  }
+
+  InputIterator d_in;
   uint32_t num_items;
   uint32_t num_tiles;
-  ScanOperator scan_op;
-  SelectOperator select_op;
+  ScanOp scan_op;
+  SelectOp select_op;
   scan_tile_state<uint32_t> count_state;
   scan_tile_state<T> item_state;
 
-  scan_select_if_dispatch(InputIterator d_input_begin,  //
+  scan_select_if_dispatch(InputIterator d_in,  //
                           InputIterator d_input_end,
-                          ScanOperator scan_op,
-                          SelectOperator select_op,
+                          ScanOp scan_op,
+                          SelectOp select_op,
                           cudaStream_t stream)
-    : d_input_begin(d_input_begin),  //
+    : d_in(d_in),  //
       scan_op(scan_op),
       select_op(select_op)
   {
-    num_items   = d_input_end - d_input_begin;
+    num_items   = d_input_end - d_in;
     num_tiles   = ceil_div(num_items, ITEMS_PER_TILE);
     count_state = scan_tile_state<uint32_t>(num_tiles);
     item_state  = scan_tile_state<T>(num_tiles);
@@ -353,8 +361,8 @@ struct scan_select_if_dispatch {
       InputIterator,
       OutputIterator,
       decltype(d_num_selected),
-      ScanOperator,
-      SelectOperator,
+      ScanOp,
+      SelectOp,
       THREADS_PER_BLOCK,
       ITEMS_PER_THREAD>;
 
@@ -363,7 +371,7 @@ struct scan_select_if_dispatch {
     for (uint32_t tile = 0; tile < num_tiles; tile += num_tiles_per_pass) {
       num_tiles_per_pass = std::min(num_tiles_per_pass, num_tiles - tile);
       execution_kernel<<<num_tiles_per_pass, THREADS_PER_BLOCK, 0, stream>>>(  //
-        d_input_begin,
+        d_in,
         d_output,
         d_num_selected,
         scan_op,
@@ -384,9 +392,9 @@ struct scan_select_if_dispatch {
  * @brief
  *
  * @tparam InputIterator
- * @tparam ScanOperator
- * @tparam SelectOperator
- * @param d_input_begin
+ * @tparam ScanOp
+ * @tparam SelectOp
+ * @param d_in
  * @param d_input_end
  * @param scan_op
  * @param select_op
@@ -394,50 +402,55 @@ struct scan_select_if_dispatch {
  * @param mr
  * @return rmm::device_vector<uint32_t>
  */
-template <typename InputIterator, typename ScanOperator, typename SelectOperator>
-auto scan_select_if(  //
-  InputIterator d_input_begin,
-  InputIterator d_input_end,
-  ScanOperator scan_op,
-  SelectOperator select_op,
-  cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+template <typename InputIterator,
+          typename OutputValueIterator,
+          typename OutputIndexIterator,
+          typename NumSelectedIterator,
+          typename ScanOp,
+          typename SelectOp>
+void scan_select_if(  //
+  void* d_temp_storage,
+  size_t& temp_storage_bytes,
+  select_scan_if_mode mode,
+  InputIterator d_in,
+  OutputValueIterator d_value_out,
+  OutputIndexIterator d_index_out,
+  NumSelectedIterator d_count_out,
+  uint32_t num_items,
+  ScanOp scan_op,
+  SelectOp select_op,
+  cudaStream_t stream = 0)
 {
-  auto num_selected   = rmm::device_scalar<uint32_t>(stream);
-  auto d_num_selected = num_selected.data();
+  enum {
+    THREADS_PER_BLOCK = 128,
+    ITEMS_PER_THREAD  = 16,
+    ITEMS_PER_TILE    = ITEMS_PER_THREAD * THREADS_PER_BLOCK,
+  };
 
-  using Input          = typename std::iterator_traits<InputIterator>::value_type;
-  using Output         = uint32_t;
-  using OutputIterator = Output*;
-  using Dispatch       = scan_select_if_dispatch<InputIterator,
-                                           OutputIterator,
-                                           decltype(d_num_selected),
-                                           ScanOperator,
-                                           SelectOperator>;
+  auto num_tiles = ceil_div(num_items, ITEMS_PER_TILE);
 
-  auto dispatcher = Dispatch(d_input_begin, d_input_end, scan_op, select_op, stream);
+  using Dispatch = scan_select_if_dispatch<InputIterator,
+                                           OutputValueIterator,
+                                           OutputIndexIterator,
+                                           NumSelectedIterator,
+                                           ScanOp,
+                                           SelectOp>;
+
+  Dispatch::allocation_size(num_tiles, temp_storage_bytes);
+
+  if (d_temp_storage == nullptr) { return; }
+
+  auto dispatcher = Dispatch(d_in,  //
+                             d_value_out,
+                             d_index_out,
+                             d_count_out,
+                             scan_op,
+                             select_op,
+                             stream);
 
   // initialize tile state and perform upsweep phase
   dispatcher.initialize(stream);
-  dispatcher.execute(  //
-    nullptr,
-    d_num_selected,
-    select_scan_if_mode::count_only,
-    stream);
+  dispatcher.execute(mode, stream);
 
   CHECK_CUDA(stream);
-
-  // // allocate result and perform downsweep
-  auto d_output = rmm::device_vector<Output>(num_selected.value(stream));
-
-  // perform downsweep phase
-  dispatcher.execute(  //
-    d_output.data().get(),
-    d_num_selected,
-    select_scan_if_mode::count_and_gather,
-    stream);
-
-  CHECK_CUDA(stream);
-
-  return d_output;
 }
