@@ -84,5 +84,13 @@ class IOFuzz(object):
         params_dict = {
             param: np.random.choice(values) for param, values in params.items()
         }
-        self._current_params["test_kwargs"] = params_dict
+        self._current_params["test_kwargs"] = self.process_kwargs(
+            params_dict=params_dict
+        )
         return params_dict
+
+    def process_kwargs(self, params_dict):
+        return {
+            key: bool(value) if isinstance(value, np.bool_) else value
+            for key, value in params_dict.items()
+        }

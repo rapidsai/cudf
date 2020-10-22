@@ -7,6 +7,7 @@
 
 ## Improvements
 
+- PR #6384 Add CSV fuzz tests with varying function parameters
 - PR #6398 Remove function constructor macros in parquet reader
 - PR #6432 Add dictionary support to `cudf::upper_bound` and `cudf::lower_bound`
 - PR #6461 Replace index type-dispatch call with indexalator in cudf::scatter
