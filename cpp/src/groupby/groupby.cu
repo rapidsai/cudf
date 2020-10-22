@@ -56,7 +56,6 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
   cudaStream_t stream,
   rmm::mr::device_memory_resource* mr)
 {
-  printf("groupby::dispatch_aggregation\n");
   // If sort groupby has been called once on this groupby object, then
   // always use sort groupby from now on. Because once keys are sorted,
   // all the aggs that can be done by hash groupby are efficiently done by
@@ -128,9 +127,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
                 [this](auto const& request) { return request.values.size() == _keys.num_rows(); }),
     "Size mismatch between request values and groupby keys.");
 
-  printf("groupby::aggregate\n");
   verify_valid_requests(requests);
-  printf("verified valid requests\n");
 
   if (_keys.num_rows() == 0) { return std::make_pair(empty_like(_keys), empty_results(requests)); }
 

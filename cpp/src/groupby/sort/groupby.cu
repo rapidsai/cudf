@@ -149,8 +149,6 @@ void store_result_functor::operator()<aggregation::SUM>(aggregation const& agg)
 template <>
 void store_result_functor::operator()<aggregation::ARGMAX>(aggregation const& agg)
 {
-  printf("store_result_function ARGMAX\n");
-
   if (cache.has_result(col_idx, agg)) return;
 
   cache.add_result(col_idx,

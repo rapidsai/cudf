@@ -73,8 +73,6 @@ struct reduce_functor {
     auto resultview = mutable_column_device_view::create(result->mutable_view());
     auto valuesview = column_device_view::create(values);
 
-    printf("groups = %d, values = %d\n", num_groups, values.size());
-
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
                        thrust::make_counting_iterator(0),
                        values.size(),

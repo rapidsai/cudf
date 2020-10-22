@@ -21,6 +21,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/dictionary/encode.hpp>
 
 namespace cudf {
 namespace test {
@@ -198,6 +199,54 @@ TYPED_TEST(groupby_nunique_test, include_nulls)
         test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 // clang-format on
+
+struct groupby_dictionary_nunique_test : public cudf::test::BaseFixture {
+};
+
+TEST_F(groupby_dictionary_nunique_test, include_nulls)
+{
+  using K = int32_t;
+  using V = int64_t;
+  using R = cudf::detail::target_type_t<V, aggregation::NUNIQUE>;
+
+  // clang-format off
+  fixed_width_column_wrapper<K> keys_w(         {1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
+                                                {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1});
+  fixed_width_column_wrapper<V, int32_t> vals_w({0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
+                                                {0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
+
+                                          // { 1, 1,   2, 2, 2,   3, 3,   4}
+  fixed_width_column_wrapper<K> expect_keys_w({1,      2,         3,      4}, all_valid());
+                                          // { 3, 6,-  1, 4, 9,-  2*, 8,  -*}
+                                          //  unique,  with null, dup,    dup null
+  fixed_width_column_wrapper<R> expect_vals(  {3, 4, 2, 1});
+  // clang-format on
+
+  auto keys        = cudf::dictionary::encode(keys_w);
+  auto vals        = cudf::dictionary::encode(vals_w);
+  auto expect_keys = cudf::dictionary::encode(expect_keys_w);
+
+  test_single_agg(keys_w,
+                  vals_w,
+                  expect_keys_w,
+                  expect_vals,
+                  cudf::make_nunique_aggregation(null_policy::INCLUDE));
+  test_single_agg(keys_w,
+                  vals->view(),
+                  expect_keys_w,
+                  expect_vals,
+                  cudf::make_nunique_aggregation(null_policy::INCLUDE));
+  test_single_agg(keys->view(),
+                  vals_w,
+                  expect_keys->view(),
+                  expect_vals,
+                  cudf::make_nunique_aggregation(null_policy::INCLUDE));
+  test_single_agg(keys->view(),
+                  vals->view(),
+                  expect_keys->view(),
+                  expect_vals,
+                  cudf::make_nunique_aggregation(null_policy::INCLUDE));
+}
 
 }  // namespace test
 }  // namespace cudf
