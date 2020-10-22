@@ -49,7 +49,7 @@ public class ScalarTest extends CudfTestBase {
       if (dataType == DType.DTypeEnum.DECIMAL32 || dataType == DType.DTypeEnum.DECIMAL64) {
         continue;
       }
-      DType type= DType.fromNative(dataType.nativeId);
+      DType type = DType.create(dataType);
       if (!type.isNestedType()) {
         try (Scalar s = Scalar.fromNull(type)) {
           assertEquals(type, s.getType());

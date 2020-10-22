@@ -94,7 +94,6 @@ public final class DType {
     scale = 0;
   }
 
-  // TODO : Java docs for constructor and public methods
   /**
    * Constructor for Decimal Type
    * @param id Enum representing data type.
@@ -194,6 +193,30 @@ public final class DType {
   @Override
   public String toString() {
     return "" + typeId;
+  }
+
+  /**
+   * Factory method for non-decimal DType instances.
+   *
+   * @return DType
+   */
+  public static DType create(DTypeEnum dt) {
+    if (dt == DTypeEnum.DECIMAL32 || dt == DTypeEnum.DECIMAL64) {
+      throw new IllegalArgumentException("Could not create a Decimal DType without scale");
+    }
+    return DType.fromNative(dt.nativeId, 0);
+  }
+
+  /**
+   * Factory method specialized for decimal DType instances.
+   *
+   * @return DType
+   */
+  public static DType create(DTypeEnum dt, int scale) {
+    if (dt != DTypeEnum.DECIMAL32 && dt != DTypeEnum.DECIMAL64) {
+      throw new IllegalArgumentException("Could not create a non-Decimal DType with scale");
+    }
+    return DType.fromNative(dt.nativeId, scale);
   }
 
   public static DType fromNative(int nativeId, int scale) {
