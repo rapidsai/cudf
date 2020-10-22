@@ -14,6 +14,7 @@
 - PR #6504 Update Java bindings version to 0.17-SNAPSHOT
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
 - PR #6555 Adapt JNI build to libcudf composition of multiple libraries
+- PR #6559 Refactoring cooperative loading with single thread loading.
 
 ## Bug Fixes
 
