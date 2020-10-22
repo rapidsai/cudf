@@ -28,8 +28,9 @@
 #include <cudf/wrappers/timestamps.hpp>
 #include <strings/utilities.cuh>
 
-#include <rmm/thrust_rmm_allocator.h>
+#include <thrust/logical.h>
 #include <map>
+#include <rmm/device_uvector.hpp>
 #include <vector>
 
 namespace cudf {
@@ -102,8 +103,7 @@ struct alignas(4) format_item {
 struct format_compiler {
   std::string format;
   std::string template_string;
-  timestamp_units units;
-  rmm::device_vector<format_item> d_items;
+  rmm::device_uvector<format_item> d_items;
 
   std::map<char, int8_t> specifier_lengths = {{'Y', 4},
                                               {'y', 2},
@@ -119,9 +119,7 @@ struct format_compiler {
                                               {'p', 2},
                                               {'j', 3}};
 
-  format_compiler(const char* format, timestamp_units units) : format(format), units(units) {}
-
-  format_item const* compile_to_device()
+  format_compiler(const char* fmt, cudaStream_t stream) : format(fmt), d_items(0, stream)
   {
     std::vector<format_item> items;
     const char* str = format.c_str();
@@ -158,13 +156,15 @@ struct format_compiler {
       template_string.append((size_t)spec_length, ch);
     }
     // create program in device memory
-    d_items.resize(items.size());
-    CUDA_TRY(cudaMemcpyAsync(
-      d_items.data().get(), items.data(), items.size() * sizeof(items[0]), cudaMemcpyHostToDevice));
-    return d_items.data().get();
+    d_items.resize(items.size(), stream);
+    CUDA_TRY(cudaMemcpyAsync(d_items.data(),
+                             items.data(),
+                             items.size() * sizeof(items[0]),
+                             cudaMemcpyHostToDevice,
+                             stream));
   }
 
-  // these calls are only valid after compile_to_device is called
+  format_item const* format_items() { return d_items.data(); }
   size_type template_bytes() const { return static_cast<size_type>(template_string.size()); }
   size_type items_count() const { return static_cast<size_type>(d_items.size()); }
   int8_t subsecond_precision() const { return specifier_lengths.at('f'); }
@@ -374,8 +374,8 @@ struct dispatch_to_timestamps_fn {
                   mutable_column_view& results_view,
                   cudaStream_t stream) const
   {
-    format_compiler compiler(format.c_str(), units);
-    auto d_items   = compiler.compile_to_device();
+    format_compiler compiler(format.c_str(), stream);
+    auto d_items   = compiler.format_items();
     auto d_results = results_view.data<T>();
     parse_datetime<T> pfn{
       d_strings, d_items, compiler.items_count(), units, compiler.subsecond_precision()};
@@ -427,9 +427,166 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& strings,
   return results;
 }
 
+/**
+ * @brief Functor checks the strings against the given format items.
+ *
+ * This does no data conversion.
+ */
+struct check_datetime_format {
+  column_device_view const d_strings;
+  format_item const* d_format_items;
+  size_type items_count;
+
+  /**
+   * @brief Check the specified characters are between ['0','9'].
+   *
+   * @param str Beginning of characters to check.
+   * @param bytes Number of bytes to check.
+   * @return true if all digits are 0-9
+   */
+  __device__ bool check_digits(const char* str, size_type bytes)
+  {
+    return thrust::all_of(thrust::seq, str, str + bytes, [] __device__(char chr) {
+      return (chr >= '0' && chr <= '9');
+    });
+  }
+
+  /**
+   * @brief Check the specified characters are between ['0','9']
+   * and the resulting integer is within [`min_value`, `max_value`].
+   *
+   * @param str Beginning of characters to check.
+   * @param bytes Number of bytes to check.
+   * @param min_value Inclusive minimum value
+   * @param max_value Inclusive maximum value
+   * @return true if parsed value is between `min_value` and `max_value`.
+   */
+  __device__ bool check_value(const char* str, size_type bytes, int min_value, int max_value)
+  {
+    const char* ptr = str;
+    int32_t value   = 0;
+    for (size_type idx = 0; idx < bytes; ++idx) {
+      char chr = *ptr++;
+      if (chr < '0' || chr > '9') return false;
+      value = (value * 10) + static_cast<int32_t>(chr - '0');
+    }
+    return value >= min_value && value <= max_value;
+  }
+
+  /**
+   * @brief Check the string matches the format.
+   *
+   * Walk the `format_items` as we read the string characters
+   * checking the characters are valid for each format specifier.
+   * The checking here is a little more strict than the actual
+   * parser used for conversion.
+   */
+  __device__ bool check_string(string_view const& d_string)
+  {
+    auto ptr    = d_string.data();
+    auto length = d_string.size_bytes();
+    for (size_t idx = 0; idx < items_count; ++idx) {
+      auto item = d_format_items[idx];
+      // eliminate static character values first
+      if (item.item_type == format_char_type::literal) {
+        // check static character matches
+        if (*ptr != item.value) return false;
+        ptr += item.length;
+        length -= item.length;
+        continue;
+      }
+      // allow for specifiers to be truncated
+      if (item.value != 'f')
+        item.length = static_cast<int8_t>(std::min(static_cast<size_type>(item.length), length));
+
+      // special logic for each specifier
+      // reference: https://man7.org/linux/man-pages/man3/strptime.3.html
+      bool result = false;
+      switch (item.value) {
+        case 'Y': result = check_digits(ptr, item.length); break;
+        case 'y': result = check_digits(ptr, item.length); break;
+        case 'm': result = check_value(ptr, item.length, 1, 12); break;
+        case 'd': result = check_value(ptr, item.length, 1, 31); break;
+        case 'j': result = check_value(ptr, item.length, 1, 366); break;
+        case 'H': result = check_value(ptr, item.length, 0, 23); break;
+        case 'I': result = check_value(ptr, item.length, 1, 12); break;
+        case 'M': result = check_value(ptr, item.length, 0, 59); break;
+        case 'S': result = check_value(ptr, item.length, 0, 60); break;
+        case 'f': {
+          result = check_digits(ptr, std::min(static_cast<int32_t>(item.length), length));
+          break;
+        }
+        case 'p': {
+          if (item.length == 2) {
+            string_view am_pm(ptr, 2);
+            result = (am_pm.compare("AM", 2) == 0) || (am_pm.compare("am", 2) == 0) ||
+                     (am_pm.compare("PM", 2) == 0) || (am_pm.compare("pm", 2) == 0);
+          }
+          break;
+        }
+        case 'z': {  // timezone offset
+          if (item.length == 5) {
+            result = (*ptr == '-' || *ptr == '+') &&    // sign
+                     check_value(ptr + 1, 2, 0, 23) &&  // hour
+                     check_value(ptr + 3, 2, 0, 59);    // minute
+          }
+          break;
+        }
+        case 'Z': result = true;  // skip
+        default: break;
+      }
+      if (!result) return false;
+      ptr += item.length;
+      length -= item.length;
+    }
+    return true;
+  }
+
+  __device__ bool operator()(size_type idx)
+  {
+    if (d_strings.is_null(idx)) return false;
+    string_view d_str = d_strings.element<string_view>(idx);
+    if (d_str.empty()) return false;
+    return check_string(d_str);
+  }
+};
+
+std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& strings,
+                                           std::string const& format,
+                                           cudaStream_t stream,
+                                           rmm::mr::device_memory_resource* mr)
+{
+  size_type strings_count = strings.size();
+  if (strings_count == 0) return make_empty_column(data_type{type_id::BOOL8});
+
+  CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
+
+  auto strings_column = column_device_view::create(strings.parent(), stream);
+  auto d_strings      = *strings_column;
+
+  auto results   = make_numeric_column(data_type{type_id::BOOL8},
+                                     strings_count,
+                                     copy_bitmask(strings.parent(), stream, mr),
+                                     strings.null_count(),
+                                     stream,
+                                     mr);
+  auto d_results = results->mutable_view().data<bool>();
+
+  format_compiler compiler(format.c_str(), stream);
+  thrust::transform(
+    rmm::exec_policy(stream)->on(stream),
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_counting_iterator<size_type>(strings_count),
+    d_results,
+    check_datetime_format{d_strings, compiler.format_items(), compiler.items_count()});
+
+  results->set_null_count(strings.null_count());
+  return results;
+}
+
 }  // namespace detail
 
-// external API
+// external APIs
 
 std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& strings,
                                             data_type timestamp_type,
@@ -438,6 +595,14 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::to_timestamps(strings, timestamp_type, format, cudaStream_t{}, mr);
+}
+
+std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& strings,
+                                           std::string const& format,
+                                           rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::is_timestamp(strings, format, cudaStream_t{}, mr);
 }
 
 namespace detail {
@@ -714,8 +879,8 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
   timestamp_units units =
     cudf::type_dispatcher(timestamps.type(), dispatch_timestamp_to_units_fn());
 
-  format_compiler compiler(format.c_str(), units);
-  auto d_format_items = compiler.compile_to_device();
+  format_compiler compiler(format.c_str(), stream);
+  auto d_format_items = compiler.format_items();
 
   auto column   = column_device_view::create(timestamps, stream);
   auto d_column = *column;
