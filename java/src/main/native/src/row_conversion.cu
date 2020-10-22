@@ -123,6 +123,7 @@ void copy_to_fixed_width_columns(
         // But we might not use all of the threads if the number of rows does not go
         // evenly into the thread count. We don't want those threads to exit yet
         // because we may need them to copy data in for the next row group.
+        uint32_t active_mask = __ballot_sync(0xffffffff, row_index < num_rows);
         if (row_index < num_rows) {
             cudf::size_type col_index_start = threadIdx.y;
             cudf::size_type col_index_stride = blockDim.y;
@@ -171,12 +172,10 @@ void copy_to_fixed_width_columns(
                 cudf::bitmask_type * nm = output_nm[col_index];
                 int8_t * valid_byte = &row_vld_tmp[col_index/8];
                 cudf::size_type byte_bit_offset = col_index % 8;
-                if (*valid_byte & (1 << byte_bit_offset)) {
-                    // set the valid bit
-                    atomicOr_block(&nm[word_index(row_index)], 1 << intra_word_index(row_index));
-                } else {
-                    // set invalid bit
-                    atomicAnd_block(&nm[word_index(row_index)], ~(1 << intra_word_index(row_index)));
+                int predicate = *valid_byte & (1 << byte_bit_offset);
+                uint32_t bitmask = __ballot_sync(active_mask, predicate);
+                if (row_index % 32 == 0) {
+                    nm[word_index(row_index)] = bitmask;
                 }
             } // end column loop
         } // end row copy
@@ -368,8 +367,11 @@ static int calc_fixed_width_kernel_dims(
     // If we don't have enough shared memory there is no point in having more threads
     // per block that will just sit idle
     max_block_size = max_block_size > x_possible_block_size ? x_possible_block_size : max_block_size;
-    // Make sure that the x dimension is a multiple of 32 to help with memory access
-    // and also to let the atomic write operations happen at the block level.
+    // Make sure that the x dimension is a multiple of 32 this not only helps
+    // coalesce memory access it also lets us do a ballot sync for validity to write
+    // the data back out the warp level.  If x is a multiple of 32 then each thread in the y
+    // dimension is associated with one or more warps, that should correspond to the validity
+    // words directly.
     int block_size = (max_block_size / 32) * 32;
     CUDF_EXPECTS(block_size != 0, "Row size is too large to fit in shared memory");
 
