@@ -82,6 +82,8 @@ public final class DType {
       this.nativeId = nativeId;
       this.simpleName = simpleName;
     }
+
+    public int getNativeId() { return nativeId; }
   }
 
   final DTypeEnum typeId;
@@ -167,12 +169,6 @@ public final class DType {
    * @return size of type in bytes.
    */
   public int getSizeInBytes() { return typeId.sizeInBytes; }
-
-  /**
-   * Returns
-   * @return
-   */
-  public int getNativeId() { return typeId.nativeId; }
 
   /**
    * Returns scale for Decimal Type

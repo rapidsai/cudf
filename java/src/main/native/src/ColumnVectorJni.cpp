@@ -84,6 +84,20 @@ cudf::data_type timestamp_to_duration(cudf::data_type dt) {
   return cudf::data_type(duration_type_id);
 }
 
+bool decimal_type(cudf::type_id n_type) {
+  return n_type == cudf::type_id::DECIMAL32 || n_type == cudf::type_id::DECIMAL64 ;
+}
+
+cudf::data_type update_if_decimal_type(jint out_dtype, jint scale) {
+  cudf::type_id n_type = static_cast<cudf::type_id>(out_dtype);
+  cudf::data_type n_data_type;
+  if (decimal_type(n_type)) {
+    n_data_type = cudf::data_type(n_type, scale);
+  } else {
+    n_data_type = cudf::data_type(n_type);
+  }
+  return n_data_type;
+}
 } // anonymous namespace
 
 extern "C" {
@@ -293,7 +307,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_reduce(JNIEnv *env, jcl
     cudf::jni::auto_set_device(env);
     auto col = reinterpret_cast<cudf::column_view *>(j_col_view);
     auto agg = reinterpret_cast<cudf::aggregation *>(j_agg);
-    cudf::data_type out_dtype{static_cast<cudf::type_id>(j_dtype)};
+    cudf::data_type out_dtype = update_if_decimal_type(j_dtype, scale);
+
     std::unique_ptr<cudf::scalar> result = cudf::reduce(*col, agg->clone(), out_dtype);
     return reinterpret_cast<jlong>(result.release());
   }
@@ -700,7 +715,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castTo(JNIEnv *env, job
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
-    cudf::data_type n_data_type(static_cast<cudf::type_id>(type));
+    cudf::data_type n_data_type = update_if_decimal_type(type, scale);
     std::unique_ptr<cudf::column> result;
     if (n_data_type.id() == cudf::type_id::STRING) {
       switch (column->type().id()) {
@@ -1006,9 +1021,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_binaryOpVV(JNIEnv *env,
     auto lhs = reinterpret_cast<cudf::column_view *>(lhs_view);
     auto rhs = reinterpret_cast<cudf::column_view *>(rhs_view);
 
+    cudf::data_type n_data_type = update_if_decimal_type(out_dtype, scale);
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
     std::unique_ptr<cudf::column> result = cudf::binary_operation(
-        *lhs, *rhs, op, cudf::data_type(static_cast<cudf::type_id>(out_dtype)));
+        *lhs, *rhs, op, n_data_type);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -1024,10 +1040,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_binaryOpVS(JNIEnv *env,
     cudf::jni::auto_set_device(env);
     auto lhs = reinterpret_cast<cudf::column_view *>(lhs_view);
     cudf::scalar *rhs = reinterpret_cast<cudf::scalar *>(rhs_ptr);
+    cudf::data_type n_data_type = update_if_decimal_type(out_dtype, scale);
 
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
     std::unique_ptr<cudf::column> result = cudf::binary_operation(
-        *lhs, *rhs, op, cudf::data_type(static_cast<cudf::type_id>(out_dtype)));
+        *lhs, *rhs, op, n_data_type);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -1308,12 +1325,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeCudfColumnView(
     using cudf::column_view;
     cudf::jni::auto_set_device(env);
     cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
-    cudf::data_type n_data_type;
-    if ( n_type == cudf::type_id::DECIMAL32 || n_type == cudf::type_id::DECIMAL64 ) {
-      n_data_type = cudf::data_type(n_type, scale);
-    } else {
-      n_data_type = cudf::data_type(n_type);
-    }
+    cudf::data_type n_data_type = update_if_decimal_type(j_type, scale);
 
     std::unique_ptr<cudf::column_view> ret;
     void *data = reinterpret_cast<void *>(j_data);
@@ -1379,7 +1391,7 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeTypeScale(JNIEn
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
-    return static_cast<jint>(column->type().scale());
+    return column->type().scale();
   }
   CATCH_STD(env, 0);
 }
@@ -1646,12 +1658,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeEmptyCudfColumn(JNI
   try {
     cudf::jni::auto_set_device(env);
     cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
-    cudf::data_type n_data_type;
-    if ( n_type == cudf::type_id::DECIMAL32 || n_type == cudf::type_id::DECIMAL64 ) {
-      n_data_type = cudf::data_type(n_type, scale);
-    } else {
-      n_data_type = cudf::data_type(n_type);
-    }
+    cudf::data_type n_data_type = update_if_decimal_type(j_type, scale);
+
     std::unique_ptr<cudf::column> column(cudf::make_empty_column(n_data_type));
     return reinterpret_cast<jlong>(column.release());
   }

@@ -70,7 +70,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case TIMESTAMP_MILLISECONDS:
     case TIMESTAMP_MICROSECONDS:
     case TIMESTAMP_NANOSECONDS:
-      return new Scalar(type, makeTimestampTimeScalar(type.getNativeId(), 0, false));
+      return new Scalar(type, makeTimestampTimeScalar(type.typeId.getNativeId(), 0, false));
     case STRING:
       return new Scalar(type, makeStringScalar(null, false));
     case DURATION_DAYS:
@@ -79,7 +79,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case DURATION_MILLISECONDS:
     case DURATION_NANOSECONDS:
     case DURATION_SECONDS:
-      return new Scalar(type, makeDurationTimeScalar(type.getNativeId(), 0, false));
+      return new Scalar(type, makeDurationTimeScalar(type.typeId.getNativeId(), 0, false));
     default:
       throw new IllegalArgumentException("Unexpected type: " + type);
     }
@@ -253,7 +253,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         }
         return durationDaysFromInt(intValue);
       } else {
-        return new Scalar(type, makeDurationTimeScalar(type.getNativeId(), value, true));
+        return new Scalar(type, makeDurationTimeScalar(type.typeId.getNativeId(), value, true));
       }
     } else {
       throw new IllegalArgumentException("type is not a timestamp: " + type);
@@ -282,7 +282,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         }
         return timestampDaysFromInt(intValue);
       } else {
-        return new Scalar(type, makeTimestampTimeScalar(type.getNativeId(), value, true));
+        return new Scalar(type, makeTimestampTimeScalar(type.typeId.getNativeId(), value, true));
       }
     } else {
       throw new IllegalArgumentException("type is not a timestamp: " + type);
@@ -453,7 +453,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
 
   static long binaryOp(Scalar lhs, ColumnVector rhs, BinaryOp op, DType outputType) {
     return binaryOpSV(lhs.getScalarHandle(), rhs.getNativeView(),
-        op.nativeId, outputType.getNativeId(), outputType.getScale());
+        op.nativeId, outputType.typeId.getNativeId(), outputType.getScale());
   }
 
   private static native long binaryOpSV(long lhs, long rhs, int op, int dtype, int scale);

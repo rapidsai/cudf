@@ -200,7 +200,7 @@ public class JCudfSerialization {
 
       // Header for each column...
       for (int i = 0; i < numColumns; i++) {
-        dout.writeInt(types[i].getNativeId());
+        dout.writeInt(types[i].typeId.getNativeId());
         dout.writeInt(types[i].getScale());
         dout.writeInt((int) nullCounts[i]);
       }

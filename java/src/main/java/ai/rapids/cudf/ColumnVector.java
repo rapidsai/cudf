@@ -1339,12 +1339,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   static long binaryOp(ColumnVector lhs, ColumnVector rhs, BinaryOp op, DType outputType) {
     return binaryOpVV(lhs.getNativeView(), rhs.getNativeView(),
-        op.nativeId, outputType.getNativeId(), outputType.getScale());
+        op.nativeId, outputType.typeId.getNativeId(), outputType.getScale());
   }
 
   static long binaryOp(ColumnVector lhs, Scalar rhs, BinaryOp op, DType outputType) {
     return binaryOpVS(lhs.getNativeView(), rhs.getScalarHandle(),
-        op.nativeId, outputType.getNativeId(), outputType.getScale());
+        op.nativeId, outputType.typeId.getNativeId(), outputType.getScale());
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1565,7 +1565,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   public Scalar reduce(Aggregation aggregation, DType outType) {
     long nativeId = aggregation.createNativeInstance();
     try {
-      return new Scalar(outType, reduce(getNativeView(), nativeId, outType.getNativeId(), outType.getScale()));
+      return new Scalar(outType, reduce(getNativeView(), nativeId, outType.typeId.getNativeId(), outType.getScale()));
     } finally {
       Aggregation.close(nativeId);
     }
@@ -1698,7 +1698,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       // Optimization
       return incRefCount();
     }
-    return new ColumnVector(castTo(getNativeView(), type.getNativeId(), type.getScale()));
+    return new ColumnVector(castTo(getNativeView(), type.typeId.getNativeId(), type.getScale()));
   }
 
   /**
@@ -1982,7 +1982,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     assert format != null : "Format string may not be NULL";
     assert timestampType.isTimestamp() : "unsupported conversion to non-timestamp DType";
     return new ColumnVector(stringTimestampToTimestamp(getNativeView(),
-        timestampType.getNativeId(), format));
+        timestampType.typeId.getNativeId(), format));
   }
 
   /**
@@ -3222,13 +3222,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
         toClose.addAll(buffers);
       }
       if (rows == 0) {
-        this.columnHandle = makeEmptyCudfColumn(type.getNativeId(), type.getScale());
+        this.columnHandle = makeEmptyCudfColumn(type.typeId.getNativeId(), type.getScale());
       } else {
         long cd = data == null ? 0 : data.address;
         long cdSize = data == null ? 0 : data.length;
         long od = offsets == null ? 0 : offsets.address;
         long vd = valid == null ? 0 : valid.address;
-        this.viewHandle = makeCudfColumnView(type.getNativeId(), type.getScale(), cd, cdSize, od, vd, nc, rows, childColumnViewHandles) ;
+        this.viewHandle = makeCudfColumnView(type.typeId.getNativeId(), type.getScale(), cd, cdSize, od, vd, nc, rows, childColumnViewHandles) ;
       }
     }
 
@@ -3506,7 +3506,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       long offsetAddr = offsets == null ? 0 : offsets.address;
       long validAddr = valid == null ? 0 : valid.address;
       int nc = nullCount.orElse(OffHeapState.UNKNOWN_NULL_COUNT).intValue();
-      return makeCudfColumnView(dataType.getNativeId(), dataType.getScale() , dataAddr, dataLen,
+      return makeCudfColumnView(dataType.typeId.getNativeId(), dataType.getScale() , dataAddr, dataLen,
           offsetAddr, validAddr, nc, (int)rows, childrenColViews);
     }
 

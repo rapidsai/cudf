@@ -603,7 +603,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readParquet(ParquetOptions opts, File path) {
     return new Table(readParquet(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0, opts.timeUnit().getNativeId()));
+        path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId()));
   }
 
   /**
@@ -663,7 +663,7 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(readParquet(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len, opts.timeUnit().getNativeId()));
+        null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()));
   }
 
   /**
@@ -683,7 +683,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readORC(ORCOptions opts, File path) {
     return new Table(readORC(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes(), opts.timeUnit().getNativeId()));
+        path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId()));
   }
 
   /**
@@ -744,7 +744,7 @@ public final class Table implements AutoCloseable {
     assert offset >= 0 && offset < buffer.length;
     return new Table(readORC(opts.getIncludeColumnNames(),
         null, buffer.getAddress() + offset, len, opts.usingNumPyTypes(),
-        opts.timeUnit().getNativeId()));
+        opts.timeUnit().typeId.getNativeId()));
   }
 
   private static class ParquetTableWriter implements TableWriter {
