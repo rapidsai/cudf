@@ -181,16 +181,16 @@ __device__ uint32_t InitLevelSection(page_state_s *s,
                                      level_type lvl)
 {
   int32_t len;
-  int level_bits = s->col.level_bits[lvl];
-  int encoding   = lvl == level_type::DEFINITION ? s->page.definition_level_encoding
-                                               : s->page.repetition_level_encoding;
+  int level_bits    = s->col.level_bits[lvl];
+  Encoding encoding = lvl == level_type::DEFINITION ? s->page.definition_level_encoding
+                                                    : s->page.repetition_level_encoding;
 
   if (level_bits == 0) {
     len                       = 0;
     s->initial_rle_run[lvl]   = s->page.num_input_values * 2;  // repeated value
     s->initial_rle_value[lvl] = 0;
     s->lvl_start[lvl]         = cur;
-  } else if (encoding == RLE) {
+  } else if (encoding == Encoding::RLE) {
     if (cur + 4 < end) {
       uint32_t run;
       len = 4 + (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
@@ -212,7 +212,7 @@ __device__ uint32_t InitLevelSection(page_state_s *s,
       len      = 0;
       s->error = 2;
     }
-  } else if (encoding == BIT_PACKED) {
+  } else if (encoding == Encoding::BIT_PACKED) {
     len                       = (s->page.num_input_values * level_bits + 7) >> 3;
     s->initial_rle_run[lvl]   = ((s->page.num_input_values + 7) >> 3) * 2 + 1;  // literal run
     s->initial_rle_value[lvl] = 0;
@@ -1057,8 +1057,8 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
       s->dict_base = 0;
       s->dict_size = 0;
       switch (s->page.encoding) {
-        case PLAIN_DICTIONARY:
-        case RLE_DICTIONARY:
+        case Encoding::PLAIN_DICTIONARY:
+        case Encoding::RLE_DICTIONARY:
           // RLE-packed dictionary indices, first byte indicates index length in bits
           if (((s->col.data_type & 7) == BYTE_ARRAY) && (s->col.str_dict_index)) {
             // String dictionary: use index
@@ -1074,12 +1074,12 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
           s->dict_bits = (cur < end) ? *cur++ : 0;
           if (s->dict_bits > 32 || !s->dict_base) { s->error = (10 << 8) | s->dict_bits; }
           break;
-        case PLAIN:
+        case Encoding::PLAIN:
           s->dict_size = static_cast<int32_t>(end - cur);
           s->dict_val  = 0;
           if ((s->col.data_type & 7) == BOOLEAN) { s->dict_run = s->dict_size * 2 + 1; }
           break;
-        case RLE: s->dict_run = 0; break;
+        case Encoding::RLE: s->dict_run = 0; break;
         default:
           s->error = 1;  // Unsupported encoding
           break;
