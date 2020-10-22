@@ -30,6 +30,7 @@ cimport cudf._lib.cpp.copying as cpp_copying
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
 
+
 def copy_column(Column input_column):
     """
     Deep copies a column
