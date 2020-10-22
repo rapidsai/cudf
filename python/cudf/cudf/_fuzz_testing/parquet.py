@@ -47,6 +47,9 @@ class ParquetReader(IOFuzz):
                 cudf.utils.dtypes.ALL_TYPES
                 - {"category", "datetime64[ns]"}
                 - cudf.utils.dtypes.TIMEDELTA_TYPES
+                # TODO: Remove uint32 below after this bug is fixed
+                # https://github.com/pandas-dev/pandas/issues/37327
+                - {"uint32"}
             )
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
@@ -124,6 +127,9 @@ class ParquetWriter(IOFuzz):
             dtypes_list = list(
                 cudf.utils.dtypes.ALL_TYPES
                 - {"category", "timedelta64[ns]", "datetime64[ns]"}
+                # TODO: Remove uint32 below after this bug is fixed
+                # https://github.com/pandas-dev/pandas/issues/37327
+                - {"uint32"}
             )
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list

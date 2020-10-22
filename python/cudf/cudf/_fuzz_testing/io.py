@@ -55,7 +55,7 @@ class IOFuzz(object):
 
     @staticmethod
     def _rand(n):
-        return random.randrange(0, n)
+        return random.randrange(0, n + 1)
 
     def generate_input(self):
         raise NotImplementedError("Must be implemented by inherited class")
