@@ -8,7 +8,7 @@ import pandas as pd
 import cudf
 from cudf._fuzz_testing.json import JSONReader, JSONWriter
 from cudf._fuzz_testing.main import pythonfuzz
-from cudf._fuzz_testing.utils import run_test
+from cudf._fuzz_testing.utils import ALL_POSSIBLE_VALUES, run_test
 from cudf.tests.utils import assert_eq
 
 
@@ -23,7 +23,7 @@ def json_reader_test(json_buffer):
     assert_eq(gdf, pdf)
 
 
-@pythonfuzz(data_handle=JSONReader, params={"dtype": None})
+@pythonfuzz(data_handle=JSONReader, params={"dtype": ALL_POSSIBLE_VALUES})
 def json_reader_test_params(json_buffer, dtype):
     pdf = pd.read_json(json_buffer, dtype=dtype, orient="records", lines=True)
     pdf.columns = pdf.columns.astype("str")
@@ -54,7 +54,10 @@ def json_writer_test(pdf):
 
 @pythonfuzz(
     data_handle=JSONWriter,
-    params={"compression": ["gzip", "bz2", "zip", "xz", None], "dtype": None},
+    params={
+        "compression": ["gzip", "bz2", "zip", "xz", None],
+        "dtype": ALL_POSSIBLE_VALUES,
+    },
 )
 def json_writer_test_params(pdf, compression, dtype):
     gdf = cudf.from_pandas(pdf)

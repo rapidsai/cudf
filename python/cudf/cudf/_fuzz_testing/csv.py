@@ -8,6 +8,7 @@ import numpy as np
 import cudf
 from cudf._fuzz_testing.io import IOFuzz
 from cudf._fuzz_testing.utils import (
+    ALL_POSSIBLE_VALUES,
     _generate_rand_meta,
     pandas_dtypes_to_cudf_dtypes,
     pyarrow_to_pandas,
@@ -73,7 +74,7 @@ class CSVReader(IOFuzz):
     def set_rand_params(self, params):
         params_dict = {}
         for param, values in params.items():
-            if param == "usecols" and values is None:
+            if param == "usecols" and values == ALL_POSSIBLE_VALUES:
                 col_size = self._rand(len(self._df.columns))
                 col_val = np.random.choice(
                     [
@@ -86,7 +87,7 @@ class CSVReader(IOFuzz):
                 params_dict[param] = (
                     col_val if col_val is None else list(col_val)
                 )
-            elif param == "dtype" and values is None:
+            elif param == "dtype" and values == ALL_POSSIBLE_VALUES:
                 dtype_val = np.random.choice([None, self._df.dtypes.to_dict()])
                 if dtype_val is not None:
                     dtype_val = {
@@ -96,20 +97,20 @@ class CSVReader(IOFuzz):
                         for col_name, dtype in dtype_val.items()
                     }
                 params_dict[param] = dtype_val
-            elif param == "header" and values is None:
+            elif param == "header" and values == ALL_POSSIBLE_VALUES:
                 header_val = np.random.choice(
                     ["infer", np.random.randint(low=0, high=len(self._df))]
                 )
                 params_dict[param] = header_val
-            elif param == "skiprows" and values is None:
+            elif param == "skiprows" and values == ALL_POSSIBLE_VALUES:
                 params_dict[param] = np.random.randint(
                     low=0, high=len(self._df)
                 )
-            elif param == "skipfooter" and values is None:
+            elif param == "skipfooter" and values == ALL_POSSIBLE_VALUES:
                 params_dict[param] = np.random.randint(
                     low=0, high=len(self._df)
                 )
-            elif param == "nrows" and values is None:
+            elif param == "nrows" and values == ALL_POSSIBLE_VALUES:
                 nrows_val = np.random.choice(
                     [None, np.random.randint(low=0, high=len(self._df))]
                 )
@@ -171,7 +172,7 @@ class CSVWriter(IOFuzz):
     def set_rand_params(self, params):
         params_dict = {}
         for param, values in params.items():
-            if param == "columns" and values is None:
+            if param == "columns" and values == ALL_POSSIBLE_VALUES:
                 col_size = self._rand(len(self._current_buffer.columns))
                 params_dict[param] = list(
                     np.unique(
@@ -180,7 +181,7 @@ class CSVWriter(IOFuzz):
                         )
                     )
                 )
-            elif param == "chunksize" and values is None:
+            elif param == "chunksize" and values == ALL_POSSIBLE_VALUES:
                 params_dict[param] = np.random.choice(
                     [
                         None,

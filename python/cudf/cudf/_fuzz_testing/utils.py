@@ -8,6 +8,8 @@ import pyarrow as pa
 import cudf
 from cudf.tests.utils import assert_eq
 
+ALL_POSSIBLE_VALUES = "ALL_POSSIBLE_VALUES"
+
 pyarrow_dtypes_to_pandas_dtypes = {
     pa.uint8(): pd.UInt8Dtype(),
     pa.uint16(): pd.UInt16Dtype(),

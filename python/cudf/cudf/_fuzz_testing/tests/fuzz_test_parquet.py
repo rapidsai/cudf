@@ -8,7 +8,11 @@ import pandas as pd
 import cudf
 from cudf._fuzz_testing.main import pythonfuzz
 from cudf._fuzz_testing.parquet import ParquetReader, ParquetWriter
-from cudf._fuzz_testing.utils import compare_dataframe, run_test
+from cudf._fuzz_testing.utils import (
+    ALL_POSSIBLE_VALUES,
+    compare_dataframe,
+    run_test,
+)
 
 
 @pythonfuzz(data_handle=ParquetReader)
@@ -21,7 +25,10 @@ def parquet_reader_test(parquet_buffer):
 
 @pythonfuzz(
     data_handle=ParquetReader,
-    params={"columns": None, "use_pandas_metadata": [True, False]},
+    params={
+        "columns": ALL_POSSIBLE_VALUES,
+        "use_pandas_metadata": [True, False],
+    },
 )
 def parquet_reader_columns(parquet_buffer, columns, use_pandas_metadata):
     pdf = pd.read_parquet(

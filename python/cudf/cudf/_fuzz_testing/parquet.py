@@ -8,7 +8,11 @@ import numpy as np
 
 import cudf
 from cudf._fuzz_testing.io import IOFuzz
-from cudf._fuzz_testing.utils import _generate_rand_meta, pyarrow_to_pandas
+from cudf._fuzz_testing.utils import (
+    ALL_POSSIBLE_VALUES,
+    _generate_rand_meta,
+    pyarrow_to_pandas,
+)
 from cudf.tests import dataset_generator as dg
 
 logging.basicConfig(
@@ -87,7 +91,7 @@ class ParquetReader(IOFuzz):
     def set_rand_params(self, params):
         params_dict = {}
         for param, values in params.items():
-            if param == "columns" and values is None:
+            if param == "columns" and values == ALL_POSSIBLE_VALUES:
                 col_size = self._rand(len(self._df.columns))
                 params_dict[param] = list(
                     np.unique(np.random.choice(self._df.columns, col_size))
