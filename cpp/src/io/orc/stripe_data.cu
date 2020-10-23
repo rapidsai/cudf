@@ -91,7 +91,7 @@ struct orc_rowdec_state_s {
 };
 
 struct orc_strdict_state_s {
-  uint2 *local_dict;
+  DictionaryEntry *local_dict;
   uint32_t dict_pos;
   uint32_t dict_len;
 };
@@ -131,25 +131,27 @@ struct orcdec_state_s {
     orc_byterle_state_s rle8;
     orc_rowdec_state_s rowdec;
   } u;
-  union {
+  union values {
     uint8_t u8[NTHREADS * 8];
     uint32_t u32[NTHREADS * 2];
     int32_t i32[NTHREADS * 2];
     uint64_t u64[NTHREADS];
     int64_t i64[NTHREADS];
+    double f64[NTHREADS];
   } vals;
 };
 
 /**
  * @brief Initializes byte stream, modifying length and start position to keep the read pointer
- *8-byte aligned Assumes that the address range [start_address & ~7, (start_address + len - 1) | 7]
- *is valid
+ * 8-byte aligned.
  *
- * @param[in] bs Byte stream input
+ * Assumes that the address range [start_address & ~7, (start_address + len - 1) | 7]
+ * is valid.
+ *
+ * @param[in,out] bs Byte stream input
  * @param[in] base Pointer to raw byte stream data
  * @param[in] len Stream length in bytes
- *
- **/
+ */
 static __device__ void bytestream_init(volatile orc_bytestream_s *bs,
                                        const uint8_t *base,
                                        uint32_t len)
@@ -191,11 +193,12 @@ static __device__ void bytestream_flush_bytes(volatile orc_bytestream_s *bs,
  **/
 static __device__ void bytestream_fill(orc_bytestream_s *bs, int t)
 {
-  int count = bs->fill_count;
+  auto const count = bs->fill_count;
   if (t < count) {
-    int pos8 = (bs->fill_pos >> 3) + t;
-    bs->buf.u64[pos8 & ((BYTESTREAM_BFRSZ >> 3) - 1)] =
-      (reinterpret_cast<const uint2 *>(bs->base))[pos8];
+    auto const pos8 = (bs->fill_pos >> 3) + t;
+    memcpy(&bs->buf.u64[pos8 & ((BYTESTREAM_BFRSZ >> 3) - 1)],
+           &bs->base[pos8 * sizeof(uint2)],
+           sizeof(uint2));
   }
 }
 
@@ -1027,7 +1030,7 @@ static const __device__ __constant__ int64_t kPow5i[28] = {1,
  **/
 static __device__ int Decode_Decimals(orc_bytestream_s *bs,
                                       volatile orc_byterle_state_s *scratch,
-                                      volatile int64_t *vals,
+                                      volatile orcdec_state_s::values &vals,
                                       int val_scale,
                                       int numvals,
                                       int col_scale,
@@ -1045,8 +1048,8 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
         uint32_t pos = lastpos;
         pos += varint_length<uint4>(bs, pos);
         if (pos > maxpos) break;
-        *reinterpret_cast<volatile int32_t *>(&vals[n]) = lastpos;
-        lastpos                                         = pos;
+        vals.i64[n] = lastpos;
+        lastpos     = pos;
       }
       scratch->num_vals = n;
       bytestream_flush_bytes(bs, lastpos - bs->pos);
@@ -1054,21 +1057,21 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
     __syncthreads();
     uint32_t num_vals_to_read = scratch->num_vals;
     if (t >= num_vals_read and t < num_vals_to_read) {
-      int pos    = *reinterpret_cast<volatile int32_t *>(&vals[t]);
-      int128_s v = decode_varint128(bs, pos);
+      auto const pos = static_cast<int>(vals.i64[t]);
+      int128_s v     = decode_varint128(bs, pos);
 
       if (col_scale & ORC_DECIMAL2FLOAT64_SCALE) {
         double f      = Int128ToDouble_rn(v.lo, v.hi);
         int32_t scale = (t < numvals) ? val_scale : 0;
         if (scale >= 0)
-          reinterpret_cast<volatile double *>(vals)[t] = f / kPow10[min(scale, 39)];
+          vals.f64[t] = f / kPow10[min(scale, 39)];
         else
-          reinterpret_cast<volatile double *>(vals)[t] = f * kPow10[min(-scale, 39)];
+          vals.f64[t] = f * kPow10[min(-scale, 39)];
       } else {
         int32_t scale = (t < numvals) ? (col_scale & ~ORC_DECIMAL2FLOAT64_SCALE) - val_scale : 0;
         if (scale >= 0) {
-          scale   = min(scale, 27);
-          vals[t] = ((int64_t)v.lo * kPow5i[scale]) << scale;
+          scale       = min(scale, 27);
+          vals.i64[t] = ((int64_t)v.lo * kPow5i[scale]) << scale;
         } else  // if (scale < 0)
         {
           bool is_negative = (v.hi < 0);
@@ -1087,7 +1090,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
           } else {
             lo /= kPow5i[scale];
           }
-          vals[t] = (is_negative) ? -(int64_t)lo : (int64_t)lo;
+          vals.i64[t] = (is_negative) ? -(int64_t)lo : (int64_t)lo;
         }
       }
     }
@@ -1268,9 +1271,8 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
         (s->chunk.dict_len > 0)) {
       if (t == 0) {
         s->top.dict.dict_len   = s->chunk.dict_len;
-        s->top.dict.local_dict = reinterpret_cast<uint2 *>(
-          global_dictionary + s->chunk.dictionary_start);  // Local dictionary
-        s->top.dict.dict_pos = 0;
+        s->top.dict.local_dict = global_dictionary + s->chunk.dictionary_start;  // Local dictionary
+        s->top.dict.dict_pos   = 0;
         // CI_DATA2 contains the LENGTH stream coding the length of individual dictionary entries
         bytestream_init(&s->bs, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
       }
@@ -1296,10 +1298,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
           vals[t] = 0;
         }
         if (t < numvals) {
-          uint2 dict_entry;
-          dict_entry.x              = s->top.dict.dict_pos + vals[t] - len;
-          dict_entry.y              = len;
-          s->top.dict.local_dict[t] = dict_entry;
+          s->top.dict.local_dict[t] = {s->top.dict.dict_pos + vals[t] - len, len};
         }
         __syncthreads();
         if (t == 0) {
@@ -1691,7 +1690,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
           val_scale = (t < numvals) ? (int)s->vals.i64[skip + t] : 0;
           __syncthreads();
           numvals = Decode_Decimals(
-            &s->bs, &s->u.rle8, s->vals.i64, val_scale, numvals, s->chunk.decimal_scale, t);
+            &s->bs, &s->u.rle8, s->vals, val_scale, numvals, s->chunk.decimal_scale, t);
         }
         __syncthreads();
       } else if (s->chunk.type_kind == FLOAT) {
@@ -1778,29 +1777,26 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
             case VARCHAR:
             case CHAR: {
               nvstrdesc_s *strdesc = &static_cast<nvstrdesc_s *>(data_out)[row];
-              const uint8_t *ptr;
-              uint32_t count;
+              void const *ptr      = nullptr;
+              uint32_t count       = 0;
               if (IS_DICTIONARY(s->chunk.encoding_kind)) {
-                uint32_t dict_idx = s->vals.u32[t + vals_skipped];
-                ptr               = s->chunk.streams[CI_DICTIONARY];
+                auto const dict_idx = s->vals.u32[t + vals_skipped];
                 if (dict_idx < s->chunk.dict_len) {
-                  ptr += global_dictionary[s->chunk.dictionary_start + dict_idx].pos;
-                  count = global_dictionary[s->chunk.dictionary_start + dict_idx].len;
-                } else {
-                  count = 0;
-                  // ptr = (uint8_t *)0xdeadbeef;
+                  auto const &g_entry = global_dictionary[s->chunk.dictionary_start + dict_idx];
+
+                  ptr   = s->chunk.streams[CI_DICTIONARY] + g_entry.pos;
+                  count = g_entry.len;
                 }
               } else {
-                uint32_t dict_idx =
+                auto const dict_idx =
                   s->chunk.dictionary_start + s->vals.u32[t + vals_skipped] - secondary_val;
-                count = secondary_val;
-                ptr   = s->chunk.streams[CI_DATA] + dict_idx;
-                if (dict_idx + count > s->chunk.strm_len[CI_DATA]) {
-                  count = 0;
-                  // ptr = (uint8_t *)0xdeadbeef;
+
+                if (dict_idx + count <= s->chunk.strm_len[CI_DATA]) {
+                  ptr   = s->chunk.streams[CI_DATA] + dict_idx;
+                  count = secondary_val;
                 }
               }
-              strdesc->ptr   = reinterpret_cast<const char *>(ptr);
+              strdesc->ptr   = static_cast<char const *>(ptr);
               strdesc->count = count;
               break;
             }

@@ -87,7 +87,7 @@ class Fuzzer(object):
                     self._target(file_name)
                 else:
                     kwargs = self._data_handler.get_rand_params(self.params)
-                    logging.info("Parameters passed: ", kwargs)
+                    logging.info(f"Parameters passed: {str(kwargs)}")
                     self._target(file_name, **kwargs)
             except KeyboardInterrupt:
                 logging.info(
