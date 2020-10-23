@@ -1735,7 +1735,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
               int64_t seconds = s->vals.i64[t + vals_skipped] + s->top.data.utc_epoch;
               uint32_t nanos  = secondary_val;
               nanos           = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
-              if (tz_table.ttimes.size() != 0) {
+              if (!tz_table.ttimes.empty()) {
                 seconds += get_gmt_offset(tz_table.ttimes, tz_table.offsets, seconds);
               }
               if (seconds < 0 && nanos != 0) { seconds -= 1; }
