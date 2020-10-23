@@ -187,15 +187,12 @@ TEST_F(groupby_dictionary_count_test, basic)
   auto vals        = cudf::dictionary::encode(vals_w);
   auto expect_keys = cudf::dictionary::encode(expect_keys_w);
 
-  // test_single_agg(keys_w, vals_w, expect_keys_w, expect_vals, cudf::make_count_aggregation());
   test_single_agg(
     keys->view(), vals_w, expect_keys->view(), expect_vals, cudf::make_count_aggregation());
   test_single_agg(keys_w, vals->view(), expect_keys_w, expect_vals, cudf::make_count_aggregation());
   test_single_agg(
     keys->view(), vals->view(), expect_keys->view(), expect_vals, cudf::make_count_aggregation());
 
-  // test_single_agg(keys_w, vals_w, expect_keys_w, expect_vals, cudf::make_count_aggregation(),
-  // force_use_sort_impl::YES);
   test_single_agg(keys->view(),
                   vals_w,
                   expect_keys->view(),

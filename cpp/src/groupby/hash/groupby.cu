@@ -183,11 +183,15 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
       return std::move(transformed_result->release()[0]);
     };
 
+    auto col_type = col.type().id() == type_id::DICTIONARY32
+                      ? cudf::dictionary_column_view(col).keys().type()
+                      : col.type();
+
     for (auto&& agg : agg_v) {
       auto const& agg_ref = *agg;
       if (agg->kind == aggregation::COUNT_VALID or agg->kind == aggregation::COUNT_ALL) {
         dense_results->add_result(i, agg_ref, to_dense_agg_result(agg_ref));
-      } else if (col.type().id() == type_id::STRING and
+      } else if (col_type.id() == type_id::STRING and
                  (agg->kind == aggregation::MAX or agg->kind == aggregation::MIN)) {
         if (agg->kind == aggregation::MAX) {
           dense_results->add_result(i, agg_ref, transformed_result(aggregation::ARGMAX));

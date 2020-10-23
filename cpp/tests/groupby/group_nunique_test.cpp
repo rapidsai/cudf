@@ -200,31 +200,32 @@ TYPED_TEST(groupby_nunique_test, include_nulls)
 }
 // clang-format on
 
-struct groupby_dictionary_nunique_test : public cudf::test::BaseFixture {
-};
-
-TEST_F(groupby_dictionary_nunique_test, include_nulls)
+TYPED_TEST(groupby_nunique_test, dictionary)
 {
   using K = int32_t;
-  using V = int64_t;
+  using V = TypeParam;  // int64_t;
   using R = cudf::detail::target_type_t<V, aggregation::NUNIQUE>;
 
   // clang-format off
-  fixed_width_column_wrapper<K> keys_w(         {1, 2, 3, 3, 1, 2, 2, 1, 3, 3, 2, 4, 4, 2},
+  fixed_width_column_wrapper<K> keys_w(         {1, 2, 3, 3, 1, 2, 2, 1, 0, 3, 2, 4, 4, 2},
                                                 {1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1});
-  fixed_width_column_wrapper<V, int32_t> vals_w({0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
+  fixed_width_column_wrapper<V, int32_t> vals_w({0, 1, 2, 2, 3, 4, 0, 6, 7, 8, 9, 0, 0, 0},
                                                 {0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0});
 
                                           // { 1, 1,   2, 2, 2,   3, 3,   4}
   fixed_width_column_wrapper<K> expect_keys_w({1,      2,         3,      4}, all_valid());
                                           // { 3, 6,-  1, 4, 9,-  2*, 8,  -*}
                                           //  unique,  with null, dup,    dup null
-  fixed_width_column_wrapper<R> expect_vals(  {3, 4, 2, 1});
+  fixed_width_column_wrapper<R> expect_fixed_vals({3,  4,         2,      1});
+  fixed_width_column_wrapper<R> expect_bool_vals { 2,  2,         1,      1};
   // clang-format on
 
   auto keys        = cudf::dictionary::encode(keys_w);
   auto vals        = cudf::dictionary::encode(vals_w);
   auto expect_keys = cudf::dictionary::encode(expect_keys_w);
+
+  cudf::column_view expect_vals = (std::is_same<V, bool>()) ? cudf::column_view{expect_bool_vals}
+                                                            : cudf::column_view{expect_fixed_vals};
 
   test_single_agg(keys_w,
                   vals_w,
