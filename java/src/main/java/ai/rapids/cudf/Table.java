@@ -1648,8 +1648,9 @@ public final class Table implements AutoCloseable {
    *
    * The format of each row is similar in layout to a C struct where each column will have padding
    * in front of it to align it properly. Each row has padding inserted at the end so the next row
-   * is aligned to a 64-bit boundary. This is so the first column will always start at the beginning
-   * of the list of bytes and each row has a consistent layout for fixed width types.
+   * is aligned to a 64-bit boundary. This is so that the first column will always start at the
+   * beginning (first byte) of the list of bytes and each row has a consistent layout for fixed
+   * width types.
    * <p/>
    * Validity bytes are added to the end of the row. There will be one byte for each 8 columns in a
    * row. Because the validity is byte aligned there is no padding between it and the last column
