@@ -21,6 +21,8 @@ package ai.rapids.cudf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Objects;
@@ -80,6 +82,10 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case DURATION_NANOSECONDS:
     case DURATION_SECONDS:
       return new Scalar(type, makeDurationTimeScalar(type.typeId.getNativeId(), 0, false));
+    case DECIMAL32:
+      return new Scalar(type, makeDecimal32Scalar(0, type.getScale(), false));
+    case DECIMAL64:
+      return new Scalar(type, makeDecimal64Scalar(0L, type.getScale(), false));
     default:
       throw new IllegalArgumentException("Unexpected type: " + type);
     }
@@ -227,6 +233,20 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return Scalar.fromDouble(value.doubleValue());
   }
 
+  public static Scalar fromBigDecimal(BigDecimal value) {
+    if (value == null) {
+      return Scalar.fromNull(DType.create(DType.DTypeEnum.DECIMAL64, 0));
+    }
+    DType dt = DType.fromJavaBigDecimal(value);
+    long handle;
+    if (dt.typeId == DType.DTypeEnum.DECIMAL32) {
+      handle = makeDecimal32Scalar(value.unscaledValue().intValueExact(), -value.scale(), true);
+    } else {
+      handle = makeDecimal64Scalar(value.unscaledValue().longValueExact(), -value.scale(), true);
+    }
+    return new Scalar(dt, handle);
+  }
+
   public static Scalar timestampDaysFromInt(int value) {
     return new Scalar(DType.TIMESTAMP_DAYS, makeTimestampDaysScalar(value, true));
   }
@@ -328,6 +348,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native long makeDurationTimeScalar(int dtype, long value, boolean isValid);
   private static native long makeTimestampDaysScalar(int value, boolean isValid);
   private static native long makeTimestampTimeScalar(int dtypeNativeId, long value, boolean isValid);
+  private static native long makeDecimal32Scalar(int value, int scale, boolean isValid);
+  private static native long makeDecimal64Scalar(long value, int scale, boolean isValid);
 
 
   Scalar(DType type, long scalarHandle) {
@@ -424,6 +446,18 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
    */
   public double getDouble() {
     return getDouble(getScalarHandle());
+  }
+
+  /**
+   * Returns the scalar value as a BigDecimal.
+   */
+  public BigDecimal getBigDecimal() {
+    if (this.type.typeId == DType.DTypeEnum.DECIMAL32) {
+      return BigDecimal.valueOf(getInt(), -type.getScale());
+    } else if (this.type.typeId == DType.DTypeEnum.DECIMAL64) {
+      return BigDecimal.valueOf(getLong(), -type.getScale());
+    }
+    throw new IllegalArgumentException("Couldn't getBigDecimal from nonDecimal scalar");
   }
 
   /**
