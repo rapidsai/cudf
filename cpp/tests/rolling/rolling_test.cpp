@@ -58,10 +58,10 @@ TEST_F(RollingStringTest, NoNullStringMinMaxCount)
   auto got_count_all = cudf::rolling_window(
     input, window[0], window[0], 1, cudf::make_count_aggregation(cudf::null_policy::INCLUDE));
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_min, got_min->view());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_max, got_max->view());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count, got_count_valid->view());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count, got_count_all->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_min, got_min->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_max, got_max->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_count, got_count_valid->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_count, got_count_all->view());
 }
 
 TEST_F(RollingStringTest, NullStringMinMaxCount)
