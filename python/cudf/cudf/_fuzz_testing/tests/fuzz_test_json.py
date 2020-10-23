@@ -5,9 +5,9 @@ import sys
 import pandas as pd
 
 import cudf
-from cudf.testing.json import JSONReader, JSONWriter
-from cudf.testing.main import pythonfuzz
-from cudf.testing.utils import compare_content, run_test
+from cudf._fuzz_testing.json import JSONReader, JSONWriter
+from cudf._fuzz_testing.main import pythonfuzz
+from cudf._fuzz_testing.utils import compare_content, run_test
 from cudf.tests.utils import assert_eq
 
 
