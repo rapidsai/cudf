@@ -589,7 +589,6 @@ def test_concat_dataframe_with_multiIndex(df1, df2):
     assert_eq(expected, actual)
 
 
-
 @pytest.mark.parametrize(
     "objs",
     [
@@ -708,7 +707,7 @@ def test_concat_join_one_df(ignore_index, sort, join):
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("sort", [True, False])
 @pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0, 1])
+@pytest.mark.parametrize("axis", [1])
 def test_concat_join_no_overlapping_columns(ignore_index, sort, join, axis):
     pdf4 = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     pdf5 = pd.DataFrame({"c": [7, 8, 9], "d": [10, 11, 12]})
@@ -734,11 +733,12 @@ def test_concat_join_no_overlapping_columns(ignore_index, sort, join, axis):
     )
 
 
-@pytest.mark.parametrize("ignore_index", [False])
+@pytest.mark.parametrize("ignore_index", [False, True])
 @pytest.mark.parametrize("sort", [True, False])
 @pytest.mark.parametrize("join", ["inner", "outer"])
 @pytest.mark.parametrize("axis", [0])
-def test_concat_join_no_overlapping_columns_many_and_empty_ignore_index_false(
+# leaving out axis = 1 because pandas returns object index not range index
+def test_concat_join_no_overlapping_columns_many_and_empty_axis_0(
     ignore_index, sort, join, axis
 ):
     pdf4 = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
@@ -931,3 +931,77 @@ def test_concat_join_series(ignore_index, sort, join, axis):
             axis=axis,
         ),
     )
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(),
+        pd.DataFrame(index=[10, 20, 30]),
+        pd.DataFrame(
+            {"c": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+        ),
+        pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
+        pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+        pd.DataFrame({"l": [10]}),
+        pd.DataFrame({"l": [10]}, index=[200]),
+        pd.DataFrame([], index=[100]),
+        pd.DataFrame({"cat": pd.Series(["one", "two"], dtype="category")}),
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        [pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()],
+        [
+            pd.DataFrame(
+                {"b": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+            ),
+            pd.DataFrame(),
+            pd.DataFrame(),
+            pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
+        ],
+        [
+            pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+            pd.DataFrame({"l": [10]}),
+            pd.DataFrame({"k": [10]}, index=[200]),
+            pd.DataFrame(
+                {"cat": pd.Series(["two", "three"], dtype="category")}
+            ),
+        ],
+        [
+            pd.DataFrame([]),
+            pd.DataFrame([], index=[100]),
+            pd.DataFrame(
+                {"cat": pd.Series(["two", "three"], dtype="category")}
+            ),
+        ],
+    ],
+)
+@pytest.mark.parametrize("ignore_index", [True])
+@pytest.mark.parametrize("sort", [True])
+@pytest.mark.parametrize("join", ["inner"])
+@pytest.mark.parametrize("axis", [0])
+# leaving out axis 1, pandas returns range index as columns w empty dfs
+# we use pd.RangeIndex and return object index as columns
+def test_concat_join_empty_dataframes(
+    df, other, ignore_index, axis, join, sort
+):
+    other_pd = [df] + other
+
+    gdf = gd.from_pandas(df)
+    other_gd = [gdf] + [gd.from_pandas(o) for o in other]
+
+    expected = pd.concat(
+        other_pd, ignore_index=ignore_index, axis=axis, join=join, sort=sort
+    )
+    actual = gd.concat(
+        other_gd, ignore_index=ignore_index, axis=axis, join=join, sort=sort
+    )
+    if expected.shape != df.shape:
+        for key, col in actual[actual.columns].iteritems():
+            if is_categorical_dtype(col.dtype):
+                expected[key] = expected[key].fillna("-1")
+                actual[key] = col.astype("str").fillna("-1")
+        assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
+    assert_eq(expected, actual, check_index_type=False if gdf.empty else True)
