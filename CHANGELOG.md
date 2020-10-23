@@ -3,9 +3,11 @@
 ## New Features
 
 - PR #6460 Add is_timestamp format check API
+- PR #6581 Add JNI API to check if PTDS is enabled
 
 ## Improvements
 
+- PR #6384 Add CSV fuzz tests with varying function parameters
 - PR #6398 Remove function constructor macros in parquet reader
 - PR #6432 Add dictionary support to `cudf::upper_bound` and `cudf::lower_bound`
 - PR #6461 Replace index type-dispatch call with indexalator in cudf::scatter
@@ -19,6 +21,7 @@
 - PR #6504 Update Java bindings version to 0.17-SNAPSHOT
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
 - PR #6556 Add dictionary support to `cudf::inner_join`, `cudf::left_join` and `cudf::full_join`
+- PR #6566 Remove reinterpret_cast conversions between pointer types in ORC
 - PR #6544 Remove `fixed_point` precise round
 - PR #6555 Adapt JNI build to libcudf composition of multiple libraries
 - PR #6564 Load JNI library dependencies with a thread pool
