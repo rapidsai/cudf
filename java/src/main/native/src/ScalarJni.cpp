@@ -15,6 +15,7 @@
  */
 
 #include <cudf/binaryop.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
 #include "cudf_jni_apis.hpp"
@@ -388,6 +389,37 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeTimestampTimeScalar(JNIEn
       using ScalarType = cudf::scalar_type_t<int64_t>;
       static_cast<ScalarType *>(s.get())->set_value(static_cast<int64_t>(value));
     }
+    return reinterpret_cast<jlong>(s.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDecimal32Scalar(JNIEnv *env, jclass,
+                                                                       jint value,
+                                                                       jint scale,
+                                                                       jboolean is_valid) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const value_ = static_cast<int32_t>(value);
+    auto const scale_ = numeric::scale_type{static_cast<int32_t>(scale)};
+    std::unique_ptr<cudf::scalar> s = cudf::make_fixed_point_scalar<numeric::decimal32>(value_, scale_);
+    s->set_valid(is_valid);
+    return reinterpret_cast<jlong>(s.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDecimal64Scalar(JNIEnv *env, jclass,
+                                                                       jlong value,
+                                                                       jint scale,
+                                                                       jboolean is_valid) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const value_ = static_cast<int64_t>(value);
+    auto const scale_ = numeric::scale_type{static_cast<int32_t>(scale)};
+    std::unique_ptr<cudf::scalar> s = cudf::make_fixed_point_scalar<numeric::decimal64>(value_, scale_);
+    s->set_valid(is_valid);
     return reinterpret_cast<jlong>(s.release());
   }
   CATCH_STD(env, 0);

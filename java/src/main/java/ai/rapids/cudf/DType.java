@@ -15,10 +15,14 @@
  */
 package ai.rapids.cudf;
 
+import java.math.BigDecimal;
 import java.util.EnumSet;
 import java.util.Objects;
 
 public final class DType {
+
+  public static final int DECIMAL32_MAX_PRECISION = 10;
+  public static final int DECIMAL64_MAX_PRECISION = 19;
 
   /* enum representing various types. Whenever a new non-decimal type is added please make sure
   below sections are updated as well:
@@ -101,7 +105,7 @@ public final class DType {
   /**
    * Constructor for Decimal Type
    * @param id Enum representing data type.
-   * @param decimalScale scale - number of digits to the right of the decimal point in a number
+   * @param decimalScale Scale of fixed point decimal type
    */
   private DType(DTypeEnum id, int decimalScale) {
     typeId = id;
@@ -257,13 +261,39 @@ public final class DType {
         return ret;
       }
       if (nativeId == DTypeEnum.DECIMAL32.nativeId) {
+        if (-scale > DECIMAL32_MAX_PRECISION) {
+          throw new IllegalArgumentException(
+              "Scale " + (-scale) + " exceeds DECIMAL32_MAX_PRECISION " + DECIMAL32_MAX_PRECISION);
+        }
         return new DType(DTypeEnum.DECIMAL32, scale);
       }
       if (nativeId == DTypeEnum.DECIMAL64.nativeId) {
+        if (-scale > DECIMAL64_MAX_PRECISION) {
+          throw new IllegalArgumentException(
+              "Scale " + (-scale) + " exceeds DECIMAL64_MAX_PRECISION " + DECIMAL64_MAX_PRECISION);
+        }
         return new DType(DTypeEnum.DECIMAL64, scale);
       }
     }
     throw new IllegalArgumentException("Could not translate " + nativeId + " into a DType");
+  }
+
+  /**
+   * Create decimal-like DType using precision and scale of Java BigDecimal.
+   *
+   * @param dec BigDecimal
+   * @return DType
+   */
+  public static DType fromJavaBigDecimal(BigDecimal dec) {
+    // Notice: Compared to scale of Java BigDecimal, scale of libcudf works in opposite.
+    // So, we negate the scale value before passing it into constructor.
+    if (dec.precision() <= DECIMAL32_MAX_PRECISION) {
+      return new DType(DTypeEnum.DECIMAL32, -dec.scale());
+    } else if (dec.precision() <= DECIMAL64_MAX_PRECISION) {
+      return new DType(DTypeEnum.DECIMAL64, -dec.scale());
+    }
+    throw new IllegalArgumentException("Precision " + dec.precision() +
+        " exceeds max precision cuDF can support " + DECIMAL64_MAX_PRECISION);
   }
 
   /**
