@@ -1163,7 +1163,7 @@ class ColumnBase(Column, Serializable):
         if self.dtype.kind == "f":
             col = self.fillna(np.nan)
             newmask = libcudf.transform.nans_to_nulls(col)
-            self.set_mask(newmask)
+            self = self.set_mask(newmask)
         return self
 
     def _process_for_reduction(
@@ -1288,7 +1288,7 @@ def column_empty_like_same_mask(
     """
     result = column_empty_like(column, dtype)
     if column.nullable:
-        result.set_mask(column.mask)
+        result = result.set_mask(column.mask)
     return result
 
 
@@ -1574,7 +1574,7 @@ def as_column(
         elif np.issubdtype(col.dtype, np.floating):
             if nan_as_null or (mask is None and nan_as_null is None):
                 mask = libcudf.transform.nans_to_nulls(col.fillna(np.nan))
-                col.set_mask(mask)
+                col = col.set_mask(mask)
         elif np.issubdtype(col.dtype, np.datetime64):
             if nan_as_null or (mask is None and nan_as_null is None):
                 col = utils.time_col_replace_nulls(col)

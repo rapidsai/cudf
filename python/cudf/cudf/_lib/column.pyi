@@ -86,7 +86,7 @@ class Column:
     def set_base_mask(self, value: Union[Buffer, None]) -> None:
         ...
 
-    def set_mask(self, value: Union[Buffer, None]) -> None:
+    def set_mask(self, value: Union[Buffer, None]) -> "ColumnBase":
         ...
 
     @property
@@ -98,14 +98,14 @@ class Column:
         ...
 
     @property
-    def base_children(self) -> Tuple["Column", ...]:
+    def base_children(self) -> Tuple["ColumnBase", ...]:
         ...
 
     @property
-    def children(self) -> Tuple["Column", ...]:
+    def children(self) -> Tuple["ColumnBase", ...]:
         ...
 
-    def set_base_children(self, value: Tuple["Column", ...]) -> None:
+    def set_base_children(self, value: Tuple["ColumnBase", ...]) -> None:
         ...
 
     def _mimic_inplace(self, other_col, inplace=False):
