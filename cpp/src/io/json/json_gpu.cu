@@ -678,7 +678,8 @@ __global__ void detect_data_types_kernel(parse_options_view const opts,
         serialized_trie_contains(opts.trie_false, desc.value_begin, value_len)) {
       atomicAdd(&column_infos[desc.column].bool_count, 1);
     } else if (digit_count == int_req_number_cnt) {
-      cudf::size_type * ptr = cudf::io::gpu::get_counter_address(desc.value_begin, digit_count, column_infos[desc.column]);
+      cudf::size_type *ptr = cudf::io::gpu::get_counter_address(
+        desc.value_begin, digit_count, column_infos[desc.column]);
       atomicAdd(ptr, 1);
     } else if (is_like_float(
                  value_len, digit_count, decimal_count, dash_count + plus_count, exponent_count)) {
@@ -810,22 +811,20 @@ void convert_json_to_columns(parse_options_view const &opts,
  * @copydoc cudf::io::gpu::detect_data_types
  */
 
-std::vector<cudf::io::column_info> detect_data_types(
-  const parse_options_view &options,
-  device_span<char const> const data,
-  device_span<uint64_t const> const row_offsets,
-  bool do_set_null_count,
-  int num_columns,
-  col_map_type *col_map,
-  cudaStream_t stream)
+std::vector<cudf::io::column_info> detect_data_types(const parse_options_view &options,
+                                                     device_span<char const> const data,
+                                                     device_span<uint64_t const> const row_offsets,
+                                                     bool do_set_null_count,
+                                                     int num_columns,
+                                                     col_map_type *col_map,
+                                                     cudaStream_t stream)
 {
   int block_size;
   int min_grid_size;
   CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, detect_data_types_kernel));
 
-  rmm::device_vector<cudf::io::column_info> d_column_infos(num_columns,
-                                                                 cudf::io::column_info{});
+  rmm::device_vector<cudf::io::column_info> d_column_infos(num_columns, cudf::io::column_info{});
 
   if (do_set_null_count) {
     // Set the null count to the row count (all fields assumes to be null).

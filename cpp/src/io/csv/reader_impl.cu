@@ -546,7 +546,8 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
 
       for (int col = 0; col < num_active_cols_; col++) {
         unsigned long long int_count_total = column_stats[col].big_int_count +
-          column_stats[col].negative_small_int_count + column_stats[col].positive_small_int_count;
+                                             column_stats[col].negative_small_int_count +
+                                             column_stats[col].positive_small_int_count;
 
         if (column_stats[col].null_count == num_records_) {
           // Entire column is NULL; allocate the smallest amount of memory
@@ -567,7 +568,7 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
         } else if (column_stats[col].big_int_count == 0) {
           dtypes.emplace_back(cudf::type_id::INT64);
         } else if (column_stats[col].big_int_count != 0 &&
-            column_stats[col].negative_small_int_count != 0) {
+                   column_stats[col].negative_small_int_count != 0) {
           dtypes.emplace_back(cudf::type_id::STRING);
         } else {
           // Integers are stored as 64-bit to conform to PANDAS

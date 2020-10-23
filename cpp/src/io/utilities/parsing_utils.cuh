@@ -292,14 +292,10 @@ __inline__ __device__ T parse_numeric(const char* begin,
  * @param raw_data The pointer to beginning of character string
  * @param digit_count Total number of digits
  */
-__device__ __inline__ void
-  trim_zeros(
-    char const * &raw_data, long &digit_count)
+__device__ __inline__ void trim_zeros(char const*& raw_data, long& digit_count)
 {
-  char const * start_ptr = raw_data;
-  while (*raw_data == '0' && (raw_data < start_ptr + digit_count)) {
-    raw_data++;
-  }
+  char const* start_ptr = raw_data;
+  while (*raw_data == '0' && (raw_data < start_ptr + digit_count)) { raw_data++; }
   digit_count -= raw_data - start_ptr;
 }
 
@@ -310,11 +306,11 @@ __device__ __inline__ void
  * @return bool True if integer represented by character string is less
  * than or equal to int64 max
  */
-__device__ __inline__ bool
-  lex_compare_int64max(const char * raw_data)
+__device__ __inline__ bool lex_compare_int64max(const char* raw_data)
 {
   constexpr int int64_max_len = 19;
-  const char int64_max[] = {'9', '2', '2', '3', '3', '7', '2', '0', '3', '6', '8', '5', '4', '7', '7', '5', '8', '0', '7'};
+  const char int64_max[]      = {
+    '9', '2', '2', '3', '3', '7', '2', '0', '3', '6', '8', '5', '4', '7', '7', '5', '8', '0', '7'};
   for (int i = 0; i < int64_max_len; ++i) {
     if (raw_data[i] < int64_max[i]) {
       return true;
@@ -332,11 +328,11 @@ __device__ __inline__ bool
  * @return bool True if integer represented by character string is greater
  * than or equal to int64 min
  */
-__device__ __inline__ bool
-  lex_compare_int64min(const char * raw_data)
+__device__ __inline__ bool lex_compare_int64min(const char* raw_data)
 {
   constexpr int int64_min_len = 19;
-  const char int64_min[] = {'9', '2', '2', '3', '3', '7', '2', '0', '3', '6', '8', '5', '4', '7', '7', '5', '8', '0', '8'};
+  const char int64_min[]      = {
+    '9', '2', '2', '3', '3', '7', '2', '0', '3', '6', '8', '5', '4', '7', '7', '5', '8', '0', '8'};
   for (int i = 0; i < int64_min_len; ++i) {
     if (raw_data[i] < int64_min[i]) {
       return true;
@@ -354,13 +350,13 @@ __device__ __inline__ bool
  * @return bool True if integer represented by character string is less
  * than or equal to uint64 max
  */
-__device__ __inline__ bool
-  lex_compare_uint64max(const char * raw_data)
+__device__ __inline__ bool lex_compare_uint64max(const char* raw_data)
 {
   constexpr int uint64_max_len = 20;
-  const char uint64_max[] = {'1', '8', '4', '4', '6', '7', '4', '4', '0', '7', '3', '7', '0', '9', '5', '5', '1', '6', '1', '5'};
-  //This function is only called on raw_data such that the number of digits in
-  //raw_data is 20.
+  const char uint64_max[]      = {'1', '8', '4', '4', '6', '7', '4', '4', '0', '7',
+                             '3', '7', '0', '9', '5', '5', '1', '6', '1', '5'};
+  // This function is only called on raw_data such that the number of digits in
+  // raw_data is 20.
   for (int i = 0; i < uint64_max_len; ++i) {
     if (raw_data[i] < uint64_max[i]) {
       return true;
@@ -381,46 +377,46 @@ __device__ __inline__ bool
  * @return cudf::size_type* Pointer to appropriate counter that belong to
  * the interpreted data type
  */
-__device__ __inline__ cudf::size_type *
-  get_counter_address(
-    char const * raw_data, long digit_count, column_info& stats)
+__device__ __inline__ cudf::size_type* get_counter_address(char const* raw_data,
+                                                           long digit_count,
+                                                           column_info& stats)
 {
-  constexpr uint32_t int64_max_len = 19;
+  constexpr uint32_t int64_max_len  = 19;
   constexpr uint32_t uint64_max_len = 20;
-  bool is_negative = (*raw_data == '-');
-  //Skip parity sign
+  bool is_negative                  = (*raw_data == '-');
+  // Skip parity sign
   raw_data += (is_negative || (*raw_data == '+'));
 
-  if (digit_count < int64_max_len) { // CASE 0 : Accept validity
-    //If the length of the string representing the integer is smaller
-    //than string length of Int64Max then count this as an integer
-    //representable by int64
+  if (digit_count < int64_max_len) {  // CASE 0 : Accept validity
+    // If the length of the string representing the integer is smaller
+    // than string length of Int64Max then count this as an integer
+    // representable by int64
     return is_negative ? &stats.negative_small_int_count : &stats.positive_small_int_count;
   } else {
-    //Remove preceding zeros
+    // Remove preceding zeros
     trim_zeros(raw_data, digit_count);
   }
-  //After trimming the number of digits could be less than maximum
-  //int64 digit count
-  if (digit_count < int64_max_len) { // CASE 0 : Accept validity
-    //If the length of the string representing the integer is smaller
-    //than string length of Int64Max then count this as an integer
-    //representable by int64
+  // After trimming the number of digits could be less than maximum
+  // int64 digit count
+  if (digit_count < int64_max_len) {  // CASE 0 : Accept validity
+    // If the length of the string representing the integer is smaller
+    // than string length of Int64Max then count this as an integer
+    // representable by int64
     return is_negative ? &stats.negative_small_int_count : &stats.positive_small_int_count;
-  } else if (digit_count > uint64_max_len) { // CASE 1 : Reject validity
-    //If the length of the string representing the integer is greater
-    //than string length of UInt64Max then count this as a string
-    //since it cannot be represented as an int64 or uint64
+  } else if (digit_count > uint64_max_len) {  // CASE 1 : Reject validity
+    // If the length of the string representing the integer is greater
+    // than string length of UInt64Max then count this as a string
+    // since it cannot be represented as an int64 or uint64
     return &stats.string_count;
   } else if (digit_count == uint64_max_len && is_negative) {
-    //A negative integer of length UInt64Max digit count cannot be represented
-    //as a 64 bit integer
+    // A negative integer of length UInt64Max digit count cannot be represented
+    // as a 64 bit integer
     return &stats.string_count;
   }
 
-  if(digit_count == int64_max_len && is_negative) {
+  if (digit_count == int64_max_len && is_negative) {
     return lex_compare_int64max(raw_data) ? &stats.negative_small_int_count : &stats.string_count;
-  } else if(digit_count == int64_max_len && !is_negative) {
+  } else if (digit_count == int64_max_len && !is_negative) {
     return lex_compare_int64min(raw_data) ? &stats.positive_small_int_count : &stats.string_count;
   } else if (digit_count == uint64_max_len) {
     return lex_compare_uint64max(raw_data) ? &stats.big_int_count : &stats.string_count;
@@ -428,8 +424,6 @@ __device__ __inline__ cudf::size_type *
 
   return &stats.string_count;
 }
-
-
 
 }  // namespace gpu
 
