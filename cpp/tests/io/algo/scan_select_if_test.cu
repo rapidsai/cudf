@@ -16,7 +16,7 @@ class InclusiveCopyIfTest : public cudf::test::BaseFixture {
 
 struct simple_op {
   inline constexpr uint32_t operator()(uint32_t lhs, uint32_t rhs) { return lhs + rhs; }
-  inline constexpr bool operator()(uint32_t value) { return value % 3 == 0; }
+  inline constexpr bool operator()(uint32_t value) { return false; }
 };
 
 TEST_F(InclusiveCopyIfTest, CanScanSelectIf)
@@ -25,16 +25,21 @@ TEST_F(InclusiveCopyIfTest, CanScanSelectIf)
 
   auto op = simple_op{};
 
-  const uint32_t size = 4096;
+  const uint32_t size = 1 << 15;
 
   thrust::host_vector<uint32_t> h_result = scan_select_if(input, input + size, op, op);
 
   // 4096 / 3 = 1365.333...
-  ASSERT_EQ(static_cast<uint32_t>(1365), h_result.size());
+  // ASSERT_EQ(static_cast<uint32_t>(1365), h_result.size());
 
   for (uint32_t i = 0; i < h_result.size(); i++) {  //
-    EXPECT_EQ(static_cast<uint32_t>(i * 3 + 3), h_result[i]);
+    // ASSERT_EQ(static_cast<uint32_t>(i * 3 + 3), h_result[i]);
+    // EXPECT_EQ(static_cast<uint32_t>(-1), h_result[i]);
+    // EXPECT_EQ(static_cast<uint32_t>(i + 1), h_result[i]);
+    // EXPECT_EQ(static_cast<uint32_t>(i * 2 + 2), h_result[i]);
   }
+
+  FAIL();
 }
 
 struct successive_capitalization_state {
@@ -66,27 +71,33 @@ struct successive_capitalization_op {
 
 TEST_F(InclusiveCopyIfTest, CanScanSelectIfFloat)
 {
-  auto input_str = std::string("AbcDeFGhiJKlMnoP");
+  // auto input_str = std::string("AbcDeFGLiJKlMnoP");
 
-  auto input = rmm::device_vector<successive_capitalization_state>(input_str.size());
+  // auto input = rmm::device_vector<successive_capitalization_state>(input_str.size());
 
-  std::transform(input_str.begin(),  //
-                 input_str.end(),
-                 input.begin(),
-                 [](char value) { return successive_capitalization_state{value}; });
+  // std::transform(input_str.begin(),  //
+  //                input_str.end(),
+  //                input.begin(),
+  //                [](char value) { return successive_capitalization_state{value}; });
 
-  auto op = successive_capitalization_op{};
+  // auto op = successive_capitalization_op{};
 
-  thrust::host_vector<uint32_t> h_result = scan_select_if(  //
-    input.begin(),
-    input.end(),
-    op,
-    op);
+  // scan_select_if(  //
+  //   input.begin(),
+  //   input.end(),
+  //   op,
+  //   op);
 
-  ASSERT_EQ(static_cast<uint32_t>(2), h_result.size());
+  // thrust::host_vector<uint32_t> h_result = scan_select_if(  //
+  //   input.begin(),
+  //   input.end(),
+  //   op,
+  //   op);
 
-  ASSERT_EQ(static_cast<uint32_t>(6), h_result[0]);
-  ASSERT_EQ(static_cast<uint32_t>(10), h_result[1]);
+  // ASSERT_EQ(static_cast<uint32_t>(2), h_result.size());
+
+  // ASSERT_EQ(static_cast<uint32_t>(6), h_result[0]);
+  // ASSERT_EQ(static_cast<uint32_t>(10), h_result[1]);
 }
 
 // struct csv_row_start_op {

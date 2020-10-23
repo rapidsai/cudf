@@ -1,19 +1,19 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/device_buffer.hpp>
+#include <rmm/device_scalar.hpp>
+
+#include <thrust/iterator/transform_output_iterator.h>
 
 #include <cub/agent/single_pass_scan_operators.cuh>
+#include <cub/block/block_exchange.cuh>
 #include <cub/block/block_load.cuh>
 #include <cub/block/block_scan.cuh>
 #include <cub/block/block_store.cuh>
+#include <cub/util_device.cuh>
 
 #include <iterator>
-#include "cudf/types.hpp"
-#include "dependencies/cub/cub/block/block_exchange.cuh"
-#include "rmm/device_buffer.hpp"
-#include "rmm/device_scalar.hpp"
-#include "rmm/thrust_rmm_allocator.h"
-
 #include <type_traits>
 
 enum class select_scan_if_mode { count_only, count_and_gather, gather_only };
@@ -24,433 +24,382 @@ inline constexpr auto ceil_div(Dividend dividend, Divisor divisor)
   return dividend / divisor + (dividend % divisor != 0);
 }
 
-template <typename T, int N>
-inline __device__ void print_array_2(char const* message,
-                                     uint32_t num_items_remaining,
-                                     T (&items)[N])
-{
-  printf("b(%i) t(%i) remaining(%i) %s: %i %i\n",
-         blockIdx.x,
-         threadIdx.x,
-         num_items_remaining,
-         message,
-         items[0],
-         items[1]);
-}
-
-template <typename InputIterator,
-          typename OutputIterator,
-          typename OutputNumSelectedIterator,
-          typename ScanOp,
-          typename SelectOp,
-          int THREADS_PER_BLOCK,
-          int ITEMS_PER_THREAD>
+template <typename Policy>
 struct agent {
-  enum { ITEMS_PER_TILE = ITEMS_PER_THREAD * THREADS_PER_BLOCK };
-
-  using T = typename std::iterator_traits<InputIterator>::value_type;
-
-  using BlockLoadItem = cub::BlockLoad<  //
-    T,
-    THREADS_PER_BLOCK,
-    ITEMS_PER_THREAD,
-    cub::BlockLoadAlgorithm::BLOCK_LOAD_DIRECT>;
-
-  using BlockScanItem = cub::BlockScan<  //
-    T,
-    THREADS_PER_BLOCK,
-    cub::BlockScanAlgorithm::BLOCK_SCAN_RAKING>;
-
-  using BlockScanCount = cub::BlockScan<  //
-    uint32_t,
-    THREADS_PER_BLOCK,
-    cub::BlockScanAlgorithm::BLOCK_SCAN_RAKING>;
-
-  using PrefixOpItem  = cub::TilePrefixCallbackOp<T, ScanOp, cub::ScanTileState<T>>;
-  using PrefixOpCount = cub::TilePrefixCallbackOp<uint32_t, cub::Sum, cub::ScanTileState<uint32_t>>;
-
-  InputIterator d_input;
-  OutputIterator d_output;
-  OutputNumSelectedIterator d_num_selected_output;
+  typename Policy::InputIterator d_input;
+  typename Policy::OutputCountIterator d_output_count;
+  typename Policy::OutputIterator d_output;
   uint32_t num_items;
-  ScanOp scan_op;
-  SelectOp select_op;
-  cub::ScanTileState<uint32_t>& count_state;
-  cub::ScanTileState<T>& item_state;
-  select_scan_if_mode count_num_selected_only;
+  typename Policy::ScanOperator scan_op;
+  typename Policy::PredOperator pred_op;
+  typename Policy::ItemsTileState items_tile_state;
+  typename Policy::IndexTileState index_tile_state;
 
-  __device__ agent(InputIterator d_input,
-                   OutputIterator d_output,
-                   OutputNumSelectedIterator d_num_selected_output,
-                   uint32_t num_items,
-                   ScanOp scan_op,
-                   SelectOp select_op,
-                   cub::ScanTileState<uint32_t>& count_state,
-                   cub::ScanTileState<T>& item_state,
-                   select_scan_if_mode count_num_selected_only)
-    : d_input(d_input),
-      d_output(d_output),
-      d_num_selected_output(d_num_selected_output),
-      num_items(num_items),
-      scan_op(scan_op),
-      select_op(select_op),
-      count_state(count_state),
-      item_state(item_state),
-      count_num_selected_only(count_num_selected_only)
-  {
-  }
-
-  inline __device__ void consume_range(int num_tiles, int start_tile)
+  inline __device__ void consume_range(uint32_t num_tiles, uint32_t start_tile)
   {
     int tile_idx            = start_tile + blockIdx.x;
-    int tile_offset         = ITEMS_PER_TILE * tile_idx;
+    int tile_offset         = Policy::ITEMS_PER_TILE * tile_idx;
     int num_items_remaining = num_items - tile_offset;
 
-    if (num_items_remaining <= 0) { return; }
+    typename Policy::OutputCount num_selected;
 
-    typename std::iterator_traits<OutputNumSelectedIterator>::value_type num_selected;
+    if (num_items_remaining <= 0) { return; }
 
     if (tile_idx < num_tiles - 1) {
       num_selected = consume_tile<false>(tile_idx, tile_offset, num_items_remaining);
     } else {
       num_selected = consume_tile<true>(tile_idx, tile_offset, num_items_remaining);
-
       if (threadIdx.x == 0) {  //
-        *d_num_selected_output = num_selected;
-
+        // there exists a race condition somewhere... this number is too high sometimes.
+        *d_output_count = num_selected;
         printf("b(%i) t(%i) num selected: %i\n", blockIdx.x, threadIdx.x, num_selected);
       }
     }
   }
 
-  template <bool is_last_tile>
+  template <bool IS_LAST_TILE>
   inline __device__ uint32_t consume_tile(uint32_t tile_idx,
                                           uint32_t tile_offset,
                                           uint32_t num_items_remaining)
   {
-    T items[ITEMS_PER_THREAD];
+    typename Policy::Input items[Policy::ITEMS_PER_THREAD];
 
-    {
-      __shared__ typename BlockLoadItem::TempStorage item_load;
+    __shared__ typename Policy::ItemsBlockLoad::TempStorage item_load;
 
-      if (is_last_tile) {
-        BlockLoadItem(item_load).Load(d_input + tile_offset, items, num_items_remaining);
-      } else {
-        BlockLoadItem(item_load).Load(d_input + tile_offset, items);
-      }
+    if (IS_LAST_TILE) {
+      Policy::ItemsBlockLoad(item_load).Load(d_input + tile_offset, items, num_items_remaining);
+    } else {
+      Policy::ItemsBlockLoad(item_load).Load(d_input + tile_offset, items);
     }
 
     __syncthreads();
 
-    {
-      __shared__ typename BlockScanItem::TempStorage item_scan;
-      __shared__ typename PrefixOpItem::TempStorage item_prefix;
+    __shared__ typename Policy::ItemsBlockScan::TempStorage items_scan;
+    __shared__ typename Policy::ItemsPrefixCallback::TempStorage items_prefix;
 
-      // Scan Inputs
-      if (tile_idx == 0) {
-        T block_aggregate;
-        BlockScanItem(item_scan).InclusiveScan(items, items, scan_op, block_aggregate);
-        if (threadIdx.x == 0 and not is_last_tile) { item_state.SetInclusive(0, block_aggregate); }
-      } else {
-        auto prefix_op = PrefixOpItem(item_state, item_prefix, scan_op, tile_idx);
-        BlockScanItem(item_scan).InclusiveScan(items, items, scan_op, prefix_op);
+    // Scan Inputs
+
+    if (tile_idx == 0) {
+      typename Policy::Input block_aggregate;
+      Policy::ItemsBlockScan(items_scan).InclusiveScan(items, items, scan_op, block_aggregate);
+      if (threadIdx.x == 0 and not IS_LAST_TILE) {
+        items_tile_state.SetInclusive(0, block_aggregate);
       }
+    } else {
+      auto prefix_op =
+        Policy::ItemsPrefixCallback(items_tile_state, items_prefix, scan_op, tile_idx);
+      Policy::ItemsBlockScan(items_scan).InclusiveScan(items, items, scan_op, prefix_op);
     }
 
     __syncthreads();
 
-    uint32_t selection_flags[ITEMS_PER_THREAD];
+    uint32_t selection_flags[Policy::ITEMS_PER_THREAD];
 
     // Initialize Selection Flags
-    for (uint64_t i = 0; i < ITEMS_PER_THREAD; i++) {
+
+    for (uint64_t i = 0; i < Policy::ITEMS_PER_THREAD; i++) {
       selection_flags[i] = 0;
-      if (threadIdx.x * ITEMS_PER_THREAD + i < num_items_remaining) {
-        selection_flags[i] = select_op(items[i]);
+      if (threadIdx.x * Policy::ITEMS_PER_THREAD + i < num_items_remaining) {
+        selection_flags[i] = pred_op(items[i]);
       }
     }
 
     // Scan Selection
-    uint32_t selection_indices[ITEMS_PER_THREAD];
+
+    uint32_t selection_indices[Policy::ITEMS_PER_THREAD];
     uint32_t num_selections;
 
     __syncthreads();
-    {
-      __shared__ typename BlockScanCount::TempStorage count_scan;
-      __shared__ typename PrefixOpCount::TempStorage count_prefix;
 
-      if (tile_idx == 0) {
-        BlockScanCount(count_scan).ExclusiveSum(selection_flags, selection_indices, num_selections);
-        if (threadIdx.x == 0 and not is_last_tile) { count_state.SetInclusive(0, num_selections); }
-      } else {
-        auto prefix_op = PrefixOpCount(count_state, count_prefix, cub::Sum(), tile_idx);
-        BlockScanCount(count_scan).ExclusiveSum(selection_flags, selection_indices, prefix_op);
-        num_selections = prefix_op.GetInclusivePrefix();
+    __shared__ typename Policy::IndexBlockScan::TempStorage index_scan;
+    __shared__ typename Policy::IndexPrefixCallback::TempStorage index_prefix;
+
+    if (tile_idx == 0) {
+      Policy::IndexBlockScan(index_scan)
+        .ExclusiveSum(selection_flags, selection_indices, num_selections);
+      if (threadIdx.x == 0 and not IS_LAST_TILE) {
+        index_tile_state.SetInclusive(0, num_selections);
       }
+    } else {
+      auto prefix_op =
+        Policy::IndexPrefixCallback(index_tile_state, index_prefix, cub::Sum(), tile_idx);
+      Policy::IndexBlockScan(index_scan)
+        .ExclusiveSum(selection_flags, selection_indices, prefix_op);
+      num_selections = prefix_op.GetInclusivePrefix();
     }
-
-    printf("b(%i) t(%i) num selections: %i\n", blockIdx.x, threadIdx.x, num_selections);
 
     __syncthreads();
 
-    if (count_num_selected_only == select_scan_if_mode::count_only) {  //
+    if (threadIdx.x == 0 and num_selections != 0) {
+      printf("b(%i) t(%i) selected: %i\n", blockIdx.x, threadIdx.x, num_selections);
+    }
+
+    // return if unexpected number of selections (consumer doesn't know how to store values).
+
+    if (*d_output_count == 0) {  // best way to communicate this?
       return num_selections;
     }
 
     // Scatter
 
-    for (int i = 0; i < ITEMS_PER_THREAD; ++i) {
+    for (int i = 0; i < Policy::ITEMS_PER_THREAD; ++i) {
       if (selection_flags[i]) {
         if (selection_indices[i] < num_selections) {  //
-          d_output[selection_indices[i]] = i;
-          // d_idx_output[selection_indices[i]] = i;
-          // d_val_output[selection_indices[i]] = item[i];
+          d_output[selection_indices[i]] =
+            thrust::make_pair(tile_offset + threadIdx.x * Policy::ITEMS_PER_THREAD + i, items[i]);
+        } else {
+          printf("b(%i) t(%i) %i = %i\n", blockIdx.x, threadIdx.x, selection_indices[i], items[i]);
         }
       }
     }
-
     __syncthreads();
 
     return num_selections;
   }
 };
 
-template <typename T>
-struct scan_tile_state {
-  rmm::device_buffer buffer;
-  cub::ScanTileState<T> state;
+// ===== KERNELS ===================================================================================
 
-  scan_tile_state() = default;
-  scan_tile_state(uint32_t num_tiles)
-  {
-    uint64_t temp_storage_bytes;
-    CUDA_TRY(cub::ScanTileState<T>::AllocationSize(num_tiles, temp_storage_bytes));
-    buffer = rmm::device_buffer(temp_storage_bytes);
-    state  = cub::ScanTileState<T>();
-    state.Init(num_tiles, buffer.data(), temp_storage_bytes);
-  }
-};
-
-/**
- * @brief
- *
- * @tparam Policy
- * @param tile_state
- */
-template <typename T>
+template <typename Policy>
 __global__ void initialization_pass_kernel(  //
-  cub::ScanTileState<uint32_t> count_state,
-  cub::ScanTileState<T> item_state,
+  typename Policy::ItemsTileState items_state,
+  typename Policy::IndexTileState index_state,
   uint32_t num_tiles)
 {
-  count_state.InitializeStatus(num_tiles);
-  item_state.InitializeStatus(num_tiles);
+  items_state.InitializeStatus(num_tiles);
+  index_state.InitializeStatus(num_tiles);
 }
 
-template <typename T,
-          typename InputIterator,
-          typename OutputIterator,
-          typename OutputNumSelectedIterator,
-          typename ScanOp,
-          typename SelectOp,
-          int THREADS_PER_BLOCK,
-          int ITEMS_PER_THREAD>
+template <typename Policy>
 __global__ void execution_pass_kernel(  //
-  InputIterator d_input,
-  OutputIterator d_output,
-  OutputNumSelectedIterator d_num_selected_output,
-  ScanOp scan_op,
-  SelectOp select_op,
+  typename Policy::InputIterator d_input,
+  typename Policy::OutputCountIterator d_output_count,
+  typename Policy::OutputIterator d_output,
   uint32_t num_items,
+  typename Policy::ScanOperator scan_op,
+  typename Policy::PredOperator pred_op,
+  typename Policy::ItemsTileState items_tile_state,
+  typename Policy::IndexTileState index_tile_state,
   uint32_t num_tiles,
-  uint32_t start_tile,
-  cub::ScanTileState<uint32_t> count_state,
-  cub::ScanTileState<T> item_state,
-  select_scan_if_mode count_num_selected_only)
+  uint32_t start_tile)
 {
-  using Agent = agent<InputIterator,
-                      OutputIterator,
-                      OutputNumSelectedIterator,
-                      ScanOp,
-                      SelectOp,
-                      THREADS_PER_BLOCK,
-                      ITEMS_PER_THREAD>;
-
-  Agent(  //
+  auto agent_instance = agent<Policy>{
     d_input,
+    d_output_count,
     d_output,
-    d_num_selected_output,
     num_items,
     scan_op,
-    select_op,
-    count_state,
-    item_state,
-    count_num_selected_only)
-    .consume_range(num_tiles, start_tile);
+    pred_op,
+    items_tile_state,
+    index_tile_state  //
+  };
+
+  agent_instance.consume_range(num_tiles, start_tile);
 }
 
-/**
- * @brief
- *
- * @tparam Policy
- */
-template <typename InputIterator,  //
-          typename OutputIterator,
-          typename OutputNumResultsIterator,
-          typename ScanOp,
-          typename SelectOp>
-struct scan_select_if_dispatch {
-  using T      = typename std::iterator_traits<InputIterator>::value_type;
-  using TInput = T;
+// ===== POLICY ====================================================================================
 
-  static void allocation_size(uint32_t num_tiles, uint32_t& temp_storage_bytes)
-  {
-    uint64_t idx_state_bytes;
-    cub::ScanTileState<uint32_t>::AllocationSize(num_tiles, idx_state_bytes);
-
-    uint64_t val_state_bytes;
-    cub::ScanTileState<TInput>::AllocationSize(num_tiles, val_state_bytes);
-
-    temp_storage_bytes = idx_state_bytes + val_state_bytes;
-  }
-
-  InputIterator d_in;
-  uint32_t num_items;
-  uint32_t num_tiles;
-  ScanOp scan_op;
-  SelectOp select_op;
-  scan_tile_state<uint32_t> count_state;
-  scan_tile_state<T> item_state;
-
-  scan_select_if_dispatch(InputIterator d_in,  //
-                          InputIterator d_input_end,
-                          ScanOp scan_op,
-                          SelectOp select_op,
-                          cudaStream_t stream)
-    : d_in(d_in),  //
-      scan_op(scan_op),
-      select_op(select_op)
-  {
-    num_items   = d_input_end - d_in;
-    num_tiles   = ceil_div(num_items, ITEMS_PER_TILE);
-    count_state = scan_tile_state<uint32_t>(num_tiles);
-    item_state  = scan_tile_state<T>(num_tiles);
-  }
-
-  void initialize(cudaStream_t stream)
-  {
-    auto num_init_blocks       = ceil_div(num_tiles, THREADS_PER_BLOCK);
-    auto initialization_kernel = initialization_pass_kernel<T>;
-
-    initialization_kernel<<<num_init_blocks, THREADS_PER_BLOCK, 0, stream>>>(  //
-      count_state.state,
-      item_state.state,
-      num_tiles);
-
-    CHECK_CUDA(stream);
-  }
-
-  void execute(OutputIterator d_output,
-               OutputNumResultsIterator d_num_selected,
-               select_scan_if_mode count_num_selected_only,
-               cudaStream_t stream)
-  {
-    uint32_t max_blocks     = 1 << 15;
-    auto num_tiles_per_pass = num_tiles < max_blocks ? num_tiles : max_blocks;
-    auto execution_kernel   = execution_pass_kernel<  //
-      T,
-      InputIterator,
-      OutputIterator,
-      decltype(d_num_selected),
-      ScanOp,
-      SelectOp,
-      THREADS_PER_BLOCK,
-      ITEMS_PER_THREAD>;
-
-    CHECK_CUDA(stream);
-
-    for (uint32_t tile = 0; tile < num_tiles; tile += num_tiles_per_pass) {
-      num_tiles_per_pass = std::min(num_tiles_per_pass, num_tiles - tile);
-      execution_kernel<<<num_tiles_per_pass, THREADS_PER_BLOCK, 0, stream>>>(  //
-        d_in,
-        d_output,
-        d_num_selected,
-        scan_op,
-        select_op,
-        num_items,
-        num_tiles,
-        tile,
-        count_state.state,
-        item_state.state,
-        count_num_selected_only);
-
-      CHECK_CUDA(stream);
-    }
-  }
-};
-
-/**
- * @brief
- *
- * @tparam InputIterator
- * @tparam ScanOp
- * @tparam SelectOp
- * @param d_in
- * @param d_input_end
- * @param scan_op
- * @param select_op
- * @param stream
- * @param mr
- * @return rmm::device_vector<uint32_t>
- */
-template <typename InputIterator,
-          typename OutputValueIterator,
-          typename OutputIndexIterator,
-          typename NumSelectedIterator,
-          typename ScanOp,
-          typename SelectOp>
-void scan_select_if(  //
-  void* d_temp_storage,
-  size_t& temp_storage_bytes,
-  select_scan_if_mode mode,
-  InputIterator d_in,
-  OutputValueIterator d_value_out,
-  OutputIndexIterator d_index_out,
-  NumSelectedIterator d_count_out,
-  uint32_t num_items,
-  ScanOp scan_op,
-  SelectOp select_op,
-  cudaStream_t stream = 0)
-{
+template <typename InputIterator_,
+          typename OutputCountIterator_,
+          typename OutputIterator_,
+          typename ScanOperator_,
+          typename PredicateOperator_>
+struct policy {
   enum {
     THREADS_PER_BLOCK = 128,
     ITEMS_PER_THREAD  = 16,
     ITEMS_PER_TILE    = ITEMS_PER_THREAD * THREADS_PER_BLOCK,
   };
 
-  auto num_tiles = ceil_div(num_items, ITEMS_PER_TILE);
+  using InputIterator       = InputIterator_;
+  using OutputIterator      = OutputIterator_;
+  using OutputCountIterator = OutputCountIterator_;
 
-  using Dispatch = scan_select_if_dispatch<InputIterator,
-                                           OutputValueIterator,
-                                           OutputIndexIterator,
-                                           NumSelectedIterator,
-                                           ScanOp,
-                                           SelectOp>;
+  using ScanOperator = ScanOperator_;
+  using PredOperator = PredicateOperator_;
 
-  Dispatch::allocation_size(num_tiles, temp_storage_bytes);
+  using Offset      = typename std::iterator_traits<InputIterator>::difference_type;
+  using Input       = typename std::iterator_traits<InputIterator>::value_type;
+  using OutputCount = typename std::iterator_traits<OutputCountIterator>::value_type;
+  using OutputValue = typename std::iterator_traits<OutputIterator>::value_type;
+
+  // Item Load and Scan
+
+  using ItemsTileState      = cub::ScanTileState<Input>;
+  using ItemsPrefixCallback = cub::TilePrefixCallbackOp<  //
+    Input,
+    ScanOperator,
+    cub::ScanTileState<Input>>;
+
+  using ItemsBlockLoad = cub::BlockLoad<  //
+    Input,
+    THREADS_PER_BLOCK,
+    ITEMS_PER_THREAD,
+    cub::BlockLoadAlgorithm::BLOCK_LOAD_DIRECT>;
+
+  using ItemsBlockScan = cub::BlockScan<  //
+    Input,
+    THREADS_PER_BLOCK,
+    cub::BlockScanAlgorithm::BLOCK_SCAN_RAKING>;
+
+  // Index Scan
+
+  using IndexTileState      = cub::ScanTileState<uint32_t>;
+  using IndexPrefixCallback = cub::TilePrefixCallbackOp<  //
+    uint32_t,
+    cub::Sum,
+    cub::ScanTileState<uint32_t>>;
+
+  using IndexBlockScan = cub::BlockScan<  //
+    uint32_t,
+    THREADS_PER_BLOCK,
+    cub::BlockScanAlgorithm::BLOCK_SCAN_RAKING>;
+};
+
+// ===== ENTRY =====================================================================================
+
+template <typename InputIterator,
+          typename OutputCountIterator,
+          typename OutputIterator,
+          typename ScanOperator,
+          typename PredOperator>
+void scan_select_if(  //
+  void* d_temp_storage,
+  size_t& temp_storage_bytes,
+  InputIterator d_in,
+  OutputCountIterator d_count_out,
+  OutputIterator d_out,
+  uint32_t num_items,
+  ScanOperator scan_op,
+  PredOperator pred_op,
+  cudaStream_t stream = 0)
+{
+  using Policy =
+    policy<InputIterator, OutputCountIterator, OutputIterator, ScanOperator, PredOperator>;
+
+  uint32_t num_tiles = ceil_div(num_items, Policy::ITEMS_PER_TILE);
+
+  // calculate temp storage requirements
+
+  void* allocations[2];
+  size_t allocation_sizes[2];
+
+  Policy::ItemsTileState::AllocationSize(num_tiles, allocation_sizes[0]);
+  Policy::IndexTileState::AllocationSize(num_tiles, allocation_sizes[1]);
+
+  cub::AliasTemporaries(d_temp_storage, temp_storage_bytes, allocations, allocation_sizes);
 
   if (d_temp_storage == nullptr) { return; }
 
-  auto dispatcher = Dispatch(d_in,  //
-                             d_value_out,
-                             d_index_out,
-                             d_count_out,
-                             scan_op,
-                             select_op,
-                             stream);
+  // initialize
 
-  // initialize tile state and perform upsweep phase
-  dispatcher.initialize(stream);
-  dispatcher.execute(mode, stream);
+  typename Policy::ItemsTileState items_tile_state;
+  typename Policy::IndexTileState index_tile_state;
+
+  items_tile_state.Init(num_tiles, d_temp_storage, allocation_sizes[0]);
+  index_tile_state.Init(num_tiles, d_temp_storage, allocation_sizes[1]);
+
+  uint32_t num_init_blocks = ceil_div(num_tiles, Policy::THREADS_PER_BLOCK);
+
+  auto init_kernel = initialization_pass_kernel<Policy>;
+  init_kernel<<<num_init_blocks, Policy::THREADS_PER_BLOCK, 0, stream>>>(  //
+    items_tile_state,
+    index_tile_state,
+    num_tiles);
 
   CHECK_CUDA(stream);
+
+  // execute
+
+  auto exec_kernel = execution_pass_kernel<Policy>;
+
+  uint32_t tiles_per_pass = 1 << 10;
+
+  for (uint32_t start_tile = 0; start_tile < num_tiles; start_tile += tiles_per_pass) {
+    tiles_per_pass = std::min(tiles_per_pass, num_tiles - start_tile);
+
+    exec_kernel<<<tiles_per_pass, Policy::THREADS_PER_BLOCK, 0, stream>>>(  //
+      d_in,
+      d_count_out,
+      d_out,
+      num_items,
+      scan_op,
+      pred_op,
+      items_tile_state,
+      index_tile_state,
+      num_tiles,
+      start_tile);
+
+    CHECK_CUDA(stream);
+  }
+}
+
+template <typename InputIterator,
+          typename ScanOperator,
+          typename PredOperator>
+rmm::device_vector<typename InputIterator::value_type>  //
+scan_select_if(                                         //
+  InputIterator d_in_begin,
+  InputIterator d_in_end,
+  ScanOperator scan_op,
+  PredOperator pred_op,
+  cudaStream_t stream = 0)
+{
+  using Input = typename InputIterator::value_type;
+
+  auto output_projection = [] __device__(thrust::pair<uint32_t, Input> output) -> Input {
+    printf("b(%i) t(%i) (%i) (%i)\n", blockIdx.x, threadIdx.x, output.first, output.second);
+    return thrust::get<1>(output);
+  };
+
+  using OutputIterator = thrust::transform_output_iterator<decltype(output_projection), Input*>;
+
+  auto d_num_selections = rmm::device_scalar<uint32_t>(0, stream);
+
+  uint64_t temp_storage_bytes;
+
+  // query required temp storage (does not launch kernel)
+
+  scan_select_if(nullptr,
+                 temp_storage_bytes,
+                 d_in_begin,
+                 d_num_selections.data(),
+                 OutputIterator(nullptr, output_projection),
+                 d_in_end - d_in_begin,
+                 scan_op,
+                 pred_op,
+                 stream);
+
+  auto d_temp_storage = rmm::device_buffer(temp_storage_bytes, stream);
+
+  // phase 1 - determine number of results
+
+  scan_select_if(d_temp_storage.data(),
+                 temp_storage_bytes,
+                 d_in_begin,
+                 d_num_selections.data(),
+                 OutputIterator(nullptr, output_projection),
+                 d_in_end - d_in_begin,
+                 scan_op,
+                 pred_op,
+                 stream);
+
+  auto d_temp_storage_2 = rmm::device_buffer(temp_storage_bytes, stream);
+  auto d_output         = rmm::device_vector<Input>(d_num_selections.value(stream));
+
+  // phase 2 - gather results
+
+  scan_select_if(d_temp_storage_2.data(),
+                 temp_storage_bytes,
+                 d_in_begin,
+                 d_num_selections.data(),
+                 OutputIterator(d_output.data().get(), output_projection),
+                 d_in_end - d_in_begin,
+                 scan_op,
+                 pred_op,
+                 stream);
+
+  cudaStreamSynchronize(stream);
+
+  return d_output;
 }
