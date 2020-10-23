@@ -1295,7 +1295,14 @@ size_t multiplication_factor(cudf::data_type const& data_type)
 std::tuple<size_type, size_type> get_null_bounds_for_timestamp_column(
   column_view const& timestamp_column)
 {
-  auto num_rows          = timestamp_column.size();
+  auto num_rows  = timestamp_column.size();
+  auto num_nulls = timestamp_column.null_count();
+
+  if (num_nulls == num_rows) {
+    // Short-circuit: All nulls.
+    return std::make_tuple(0, num_rows);
+  }
+
   auto first_row_is_null = timestamp_column.null_count(0, 1) == 1;
   auto last_row_is_null  = timestamp_column.null_count(num_rows - 1, num_rows) == 1;
 
@@ -1303,9 +1310,9 @@ std::tuple<size_type, size_type> get_null_bounds_for_timestamp_column(
     // Neither first nor last rows are null. No nulls here.
     return std::make_tuple(0, 0);
   } else if (first_row_is_null) {
-    return std::make_tuple(0, timestamp_column.null_count());
+    return std::make_tuple(0, num_nulls);
   } else {
-    return std::make_tuple(num_rows - timestamp_column.null_count(), num_rows);
+    return std::make_tuple(num_rows - num_nulls, num_rows);
   }
 }
 
@@ -1428,8 +1435,16 @@ get_null_bounds_for_timestamp_column(column_view const& timestamp_column,
         auto group_start           = d_group_offsets[group_label];
         auto group_end             = d_group_offsets[group_label + 1];
         auto first_element_is_null = d_timestamps.is_null_nocheck(group_start);
-        auto last_element_is_null  = d_timestamps.is_null_nocheck(group_end);
-        if (first_element_is_null) {
+        auto last_element_is_null  = d_timestamps.is_null_nocheck(group_end - 1);
+        if (!first_element_is_null && !last_element_is_null) {
+          // Short circuit: No nulls.
+          d_null_start[group_label] = group_start;
+          d_null_end[group_label]   = group_start;
+        } else if (first_element_is_null && last_element_is_null) {
+          // Short circuit: All nulls.
+          d_null_start[group_label] = group_start;
+          d_null_end[group_label]   = group_end;
+        } else if (first_element_is_null) {
           // NULLS FIRST.
           d_null_start[group_label] = group_start;
           d_null_end[group_label]   = *thrust::partition_point(
