@@ -114,7 +114,7 @@ std::unique_ptr<column> remove_keys_fn(
   // Example: gather([0,max,1,max,2],[4,0,3,1,2,2,2,4,0]) => [2,0,max,max,1,1,1,2,0]
   auto table_indices = cudf::detail::gather(table_view{{map_indices->view()}},
                                             indices_view,
-                                            cudf::out_of_bounds_policy::NULLIFY,
+                                            cudf::out_of_bounds_policy::DONT_CHECK,
                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
                                             stream,
                                             mr)
