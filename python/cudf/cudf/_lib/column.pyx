@@ -566,7 +566,7 @@ cdef class Column:
         return result
 
     @staticmethod
-    cpdef Column from_scalar(Scalar val, size_type size):
+    def from_scalar(Scalar val, size_type size):
         cdef scalar* c_val = val.c_value.get()
         cdef unique_ptr[column] c_result
         with nogil:

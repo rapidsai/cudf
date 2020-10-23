@@ -1168,7 +1168,7 @@ class ColumnBase(Column, Serializable):
 
     def _process_for_reduction(
         self, skipna: bool = None, min_count: int = 0
-    ) -> "ColumnBase":
+    ) -> Union["ColumnBase", ScalarObj]:
         skipna = True if skipna is None else skipna
 
         if skipna:
@@ -1418,6 +1418,7 @@ def build_column(
             children=children,
         )
     else:
+        assert data is not None
         return cudf.core.column.NumericalColumn(
             data=data,
             dtype=dtype,

@@ -10,8 +10,15 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.scalar import Scalar
+from cudf._typing import Dtype, DtypeObj, ScalarObj
 from cudf.core.buffer import Buffer
-from cudf.core.column import as_column, build_column, column, string
+from cudf.core.column import (
+    ColumnBase,
+    as_column,
+    build_column,
+    column,
+    string,
+)
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     min_column_type,
@@ -20,9 +27,15 @@ from cudf.utils.dtypes import (
 )
 
 
-class NumericalColumn(column.ColumnBase):
+class NumericalColumn(ColumnBase):
     def __init__(
-        self, data, dtype, mask=None, size=None, offset=0, null_count=None
+        self,
+        data: Buffer,
+        dtype: DtypeObj,
+        mask: Buffer = None,
+        size: int = None,
+        offset: int = 0,
+        null_count: int = None,
     ):
         """
         Parameters
@@ -47,7 +60,7 @@ class NumericalColumn(column.ColumnBase):
             null_count=null_count,
         )
 
-    def __contains__(self, item):
+    def __contains__(self, item: ScalarObj) -> bool:
         """
         Returns True if column contains item, else False.
         """
@@ -65,10 +78,12 @@ class NumericalColumn(column.ColumnBase):
             self, column.as_column([item], dtype=self.dtype)
         ).any()
 
-    def unary_operator(self, unaryop):
+    def unary_operator(self, unaryop: str) -> "ColumnBase":
         return _numeric_column_unaryop(self, op=unaryop)
 
-    def binary_operator(self, binop, rhs, reflect=False):
+    def binary_operator(
+        self, binop: str, rhs: "ColumnBase", reflect: bool = False
+    ) -> "ColumnBase":
         int_dtypes = [
             np.dtype("int8"),
             np.dtype("int16"),
@@ -99,10 +114,10 @@ class NumericalColumn(column.ColumnBase):
             lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect
         )
 
-    def _apply_scan_op(self, op):
+    def _apply_scan_op(self, op: str) -> "ColumnBase":
         return libcudf.reduce.scan(op, self, True)
 
-    def normalize_binop_value(self, other):
+    def normalize_binop_value(self, other: "ColumnBase") -> "ColumnBase":
         if other is None:
             return other
         other_dtype = np.min_scalar_type(other)
@@ -121,20 +136,18 @@ class NumericalColumn(column.ColumnBase):
                     other, size=len(self), dtype=other_dtype
                 )
                 return column.build_column(
-                    data=Buffer.from_array_lik(ary),
-                    dtype=ary.dtype,
-                    mask=self.mask,
+                    data=Buffer(ary), dtype=ary.dtype, mask=self.mask,
                 )
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
-    def int2ip(self):
+    def int2ip(self) -> "ColumnBase":
         if self.dtype != np.dtype("int64"):
             raise TypeError("Only int64 type can be converted to ip")
 
         return libcudf.string_casting.int2ip(self)
 
-    def as_string_column(self, dtype, **kwargs):
+    def as_string_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
 
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
@@ -143,7 +156,7 @@ class NumericalColumn(column.ColumnBase):
         else:
             return as_column([], dtype="object")
 
-    def as_datetime_column(self, dtype, **kwargs):
+    def as_datetime_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
 
         return build_column(
             data=self.astype("int64").base_data,
@@ -153,7 +166,7 @@ class NumericalColumn(column.ColumnBase):
             size=self.size,
         )
 
-    def as_timedelta_column(self, dtype, **kwargs):
+    def as_timedelta_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
 
         return build_column(
             data=self.astype("int64").base_data,
@@ -163,52 +176,42 @@ class NumericalColumn(column.ColumnBase):
             size=self.size,
         )
 
-    def as_numerical_column(self, dtype, **kwargs):
+    def as_numerical_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype)
 
-    def sum(self, skipna=None, dtype=None, min_count=0):
-        result_col = self._process_for_reduction(
+    def reduce(self, op: str, skipna: bool = None, **kwargs) -> ScalarObj:
+        min_count = kwargs.pop("min_count", 0)
+        preprocessed = self._process_for_reduction(
             skipna=skipna, min_count=min_count
         )
-        if isinstance(result_col, cudf.core.column.ColumnBase):
-            return libcudf.reduce.reduce("sum", result_col, dtype=dtype)
+        if isinstance(preprocessed, ColumnBase):
+            return libcudf.reduce.reduce(op, preprocessed, **kwargs)
         else:
-            return result_col
+            return preprocessed
+
+    def sum(
+        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
+    ) -> ScalarObj:
+        return self.reduce(
+            "sum", skipna=skipna, dtype=dtype, min_count=min_count
+        )
 
     def product(self, skipna=None, dtype=None, min_count=0):
-        result_col = self._process_for_reduction(
-            skipna=skipna, min_count=min_count
+        return self.reduce(
+            "product", skipna=skipna, dtype=dtype, min_count=min_count
         )
-        if isinstance(result_col, cudf.core.column.ColumnBase):
-            return libcudf.reduce.reduce("product", result_col, dtype=dtype)
-        else:
-            return result_col
 
     def mean(self, skipna=None, dtype=np.float64):
-        result_col = self._process_for_reduction(skipna=skipna)
-        if isinstance(result_col, cudf.core.column.ColumnBase):
-            return libcudf.reduce.reduce("mean", result_col, dtype=dtype)
-        else:
-            return result_col
+        return self.reduce("mean", skipna=skipna, dtype=dtype)
 
     def var(self, skipna=None, ddof=1, dtype=np.float64):
-        result = self._process_for_reduction(skipna=skipna)
-        if isinstance(result, cudf.core.column.ColumnBase):
-            return libcudf.reduce.reduce("var", result, dtype=dtype, ddof=ddof)
-        else:
-            return result
+        return self.reduce("var", skipna=skipna, dtype=dtype, ddof=ddof)
 
     def std(self, skipna=None, ddof=1, dtype=np.float64):
-        result_col = self._process_for_reduction(skipna=skipna)
-        if isinstance(result_col, cudf.core.column.ColumnBase):
-            return libcudf.reduce.reduce(
-                "std", result_col, dtype=dtype, ddof=ddof
-            )
-        else:
-            return result_col
+        return self.reduce("std", skipna=skipna, dtype=dtype, ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
         return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)
