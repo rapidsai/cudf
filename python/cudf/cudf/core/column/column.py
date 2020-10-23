@@ -1544,9 +1544,7 @@ def as_column(
         if desc.get("mask", None) is not None:
             # Extract and remove the mask from arbitrary before
             # passing to cupy.asarray
-            mask = _mask_from_cuda_array_interface_desc(
-                arbitrary.__cuda_array_interface__
-            )
+            mask = _mask_from_cuda_array_interface_desc(arbitrary)
             arbitrary = SimpleNamespace(__cuda_array_interface__=desc.copy())
             arbitrary.__cuda_array_interface__["mask"] = None
             desc = arbitrary.__cuda_array_interface__
@@ -1565,9 +1563,7 @@ def as_column(
         ):
             arbitrary = cupy.ascontiguousarray(arbitrary)
 
-        data = _data_from_cuda_array_interface_desc(
-            arbitrary.__cuda_array_interface__
-        )
+        data = _data_from_cuda_array_interface_desc(arbitrary)
         col = build_column(data, dtype=current_dtype, mask=mask)
 
         if dtype is not None:
