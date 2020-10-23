@@ -71,7 +71,7 @@ struct CsvReaderNumericTypeTest : public CsvReaderTest {
 };
 
 // Declare typed test cases
-using SupportedNumericTypes = cudf::test::Types<uint64_t, double>;
+using SupportedNumericTypes = cudf::test::Types<int64_t, double>;
 TYPED_TEST_CASE(CsvReaderNumericTypeTest, SupportedNumericTypes);
 
 namespace {

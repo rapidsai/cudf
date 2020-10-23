@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,30 +16,24 @@
 
 #pragma once
 
-#include <cstdint>
-#include <io/utilities/column_stats.hpp>
-
-class SerialTrieNode;
+#include <cudf/types.hpp>
 
 namespace cudf {
 namespace io {
-namespace csv {
-namespace column_parse {
+
 /**
- * @brief Per-column parsing flags used for dtype detection and data conversion
+ * @brief Per-column histogram struct containing detected occurrences of each dtype
  */
-enum : uint8_t {
-  disabled       = 0,   ///< data is not read
-  enabled        = 1,   ///< data is read and parsed as usual
-  inferred       = 2,   ///< infer the dtype
-  as_default     = 4,   ///< no special decoding
-  as_hexadecimal = 8,   ///< decode with base-16
-  as_datetime    = 16,  ///< decode as date and/or time
+struct column_info {
+  cudf::size_type float_count;
+  cudf::size_type datetime_count;
+  cudf::size_type string_count;
+  cudf::size_type negative_small_int_count;
+  cudf::size_type positive_small_int_count;
+  cudf::size_type big_int_count;
+  cudf::size_type bool_count;
+  cudf::size_type null_count;
 };
-using flags = uint8_t;
 
-}  // namespace column_parse
-
-}  // namespace csv
 }  // namespace io
 }  // namespace cudf

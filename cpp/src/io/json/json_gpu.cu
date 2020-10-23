@@ -598,7 +598,7 @@ __global__ void detect_data_types_kernel(parse_options_view const opts,
                                          device_span<uint64_t const> const row_offsets,
                                          col_map_type *col_map,
                                          int num_columns,
-                                         device_span<column_info> const column_infos)
+                                         device_span<cudf::io::column_info> const column_infos)
 {
   auto const rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= row_offsets.size()) return;
@@ -678,11 +678,8 @@ __global__ void detect_data_types_kernel(parse_options_view const opts,
         serialized_trie_contains(opts.trie_false, desc.value_begin, value_len)) {
       atomicAdd(&column_infos[desc.column].bool_count, 1);
     } else if (digit_count == int_req_number_cnt) {
-      if (*desc.value_begin == '-') {
-        atomicAdd(&column_infos[desc.column].int_count, 1);
-      } else {
-        atomicAdd(&column_infos[desc.column].uint_count, 1);
-      }
+      cudf::size_type * ptr = cudf::io::gpu::get_counter_address(desc.value_begin, digit_count, column_infos[desc.column]);
+      atomicAdd(ptr, 1);
     } else if (is_like_float(
                  value_len, digit_count, decimal_count, dash_count + plus_count, exponent_count)) {
       atomicAdd(&column_infos[desc.column].float_count, 1);
@@ -810,10 +807,10 @@ void convert_json_to_columns(parse_options_view const &opts,
 }
 
 /**
- * @copydoc cudf::io::json::gpu::detect_data_types
+ * @copydoc cudf::io::gpu::detect_data_types
  */
 
-std::vector<cudf::io::json::column_info> detect_data_types(
+std::vector<cudf::io::column_info> detect_data_types(
   const parse_options_view &options,
   device_span<char const> const data,
   device_span<uint64_t const> const row_offsets,
@@ -827,8 +824,8 @@ std::vector<cudf::io::json::column_info> detect_data_types(
   CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, detect_data_types_kernel));
 
-  rmm::device_vector<cudf::io::json::column_info> d_column_infos(num_columns,
-                                                                 cudf::io::json::column_info{});
+  rmm::device_vector<cudf::io::column_info> d_column_infos(num_columns,
+                                                                 cudf::io::column_info{});
 
   if (do_set_null_count) {
     // Set the null count to the row count (all fields assumes to be null).
@@ -847,7 +844,7 @@ std::vector<cudf::io::json::column_info> detect_data_types(
 
   CUDA_TRY(cudaGetLastError());
 
-  auto h_column_infos = std::vector<cudf::io::json::column_info>(num_columns);
+  auto h_column_infos = std::vector<cudf::io::column_info>(num_columns);
 
   thrust::copy(d_column_infos.begin(), d_column_infos.end(), h_column_infos.begin());
 

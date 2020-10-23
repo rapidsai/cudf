@@ -190,7 +190,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
                       device_span<char const> csv_text,
                       device_span<column_parse::flags const> const column_flags,
                       device_span<uint64_t const> const row_offsets,
-                      device_span<column_parse::stats> d_columnData)
+                      device_span<column_info> d_columnData)
 {
   auto raw_csv = csv_text.data();
 
@@ -223,12 +223,12 @@ __global__ void __launch_bounds__(csvparse_block_dim)
       long field_len = pos - start;
 
       if (field_len <= 0 || serialized_trie_contains(opts.trie_na, raw_csv + start, field_len)) {
-        atomicAdd(&d_columnData[actual_col].countNULL, 1);
+        atomicAdd(&d_columnData[actual_col].null_count, 1);
       } else if (serialized_trie_contains(opts.trie_true, raw_csv + start, field_len) ||
                  serialized_trie_contains(opts.trie_false, raw_csv + start, field_len)) {
-        atomicAdd(&d_columnData[actual_col].countBool, 1);
+        atomicAdd(&d_columnData[actual_col].bool_count, 1);
       } else if (cudf::io::gpu::is_infinity(raw_csv + start, raw_csv + tempPos)) {
-        atomicAdd(&d_columnData[actual_col].countFloat, 1);
+        atomicAdd(&d_columnData[actual_col].float_count, 1);
       } else {
         long countNumber   = 0;
         long countDecimal  = 0;
@@ -273,25 +273,22 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
         if (field_len == 0) {
           // Ignoring whitespace and quotes can result in empty fields
-          atomicAdd(&d_columnData[actual_col].countNULL, 1);
+          atomicAdd(&d_columnData[actual_col].null_count, 1);
         } else if (column_flags[col] & column_parse::as_datetime) {
           // PANDAS uses `object` dtype if the date is unparseable
           if (is_datetime(countString, countDecimal, countColon, countDash, countSlash)) {
-            atomicAdd(&d_columnData[actual_col].countDateAndTime, 1);
+            atomicAdd(&d_columnData[actual_col].datetime_count, 1);
           } else {
-            atomicAdd(&d_columnData[actual_col].countString, 1);
+            atomicAdd(&d_columnData[actual_col].string_count, 1);
           }
         } else if (countNumber == int_req_number_cnt) {
-          if (raw_csv[start] == '-') {
-            atomicAdd(&d_columnData[actual_col].countInt64, 1);
-          } else {
-            atomicAdd(&d_columnData[actual_col].countUInt64, 1);
-          }
+          cudf::size_type * ptr = cudf::io::gpu::get_counter_address(raw_csv + start, countNumber, d_columnData[actual_col]);
+          atomicAdd(ptr, 1);
         } else if (is_floatingpoint(
                      field_len, countNumber, countDecimal, countDash + countPlus, countExponent)) {
-          atomicAdd(&d_columnData[actual_col].countFloat, 1);
+          atomicAdd(&d_columnData[actual_col].float_count, 1);
         } else {
-          atomicAdd(&d_columnData[actual_col].countString, 1);
+          atomicAdd(&d_columnData[actual_col].string_count, 1);
         }
       }
       actual_col++;
@@ -1044,7 +1041,7 @@ void __host__ remove_blank_rows(cudf::io::parse_options_view const &options,
   row_offsets.resize(new_end - row_offsets.begin());
 }
 
-thrust::host_vector<column_parse::stats> detect_column_types(
+thrust::host_vector<column_info> detect_column_types(
   cudf::io::parse_options_view const &options,
   device_span<char const> const data,
   device_span<column_parse::flags const> const column_flags,
@@ -1056,12 +1053,12 @@ thrust::host_vector<column_parse::stats> detect_column_types(
   const int block_size = csvparse_block_dim;
   const int grid_size  = (row_starts.size() + block_size - 1) / block_size;
 
-  auto d_stats = rmm::device_vector<column_parse::stats>(num_active_columns);
+  auto d_stats = rmm::device_vector<column_info>(num_active_columns);
 
   data_type_detection<<<grid_size, block_size, 0, stream>>>(
     options, data, column_flags, row_starts, d_stats);
 
-  return thrust::host_vector<column_parse::stats>(d_stats);
+  return thrust::host_vector<column_info>(d_stats);
 }
 
 void __host__ decode_row_column_data(cudf::io::parse_options_view const &options,
