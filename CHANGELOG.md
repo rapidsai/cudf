@@ -39,7 +39,7 @@
 - PR #6575 Fix JNI RMM initialize with no pool allocator limit
 
 
-# cuDF 0.16.0 (Date TBD)
+# cuDF 0.16.0 (21 Oct 2020)
 
 ## New Features
 
