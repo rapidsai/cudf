@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import cudf
 from cudf import Series
 from cudf.tests.utils import assert_eq
 
@@ -106,25 +107,90 @@ def test_can_cast_safely_has_nulls():
 
 @pytest.mark.skip
 @pytest.mark.parametrize(
-    "data_1d", [
-        [1, 2, 3, 4],
-        ['1.0', '2', -3],
+    "data", [
+        [],
+        [1, 2, 3],
+        [1.0, 2.0, 3.0],
+        [float('nan'), None]
+        [1, 2.0, -3, -1+4j, float('nan')],
+        ['1.0', '2.', '-.3', '1e6', 'inf', '-inf', '+inf', 'infinity', '-infinity', '+infinity'],
     ]
 )
 @pytest.mark.parametrize(
     "obj", [
-        
+        list, tuple, np.array, pd.Series
+    ]
+)
+def test_to_numeric_basic_1d(data, obj):
+    pobj = obj(data)
+    gobj = cudf.from_pandas(pobj)
+
+    expected = pd.to_numeric(pobj)
+    # got = cudf.to_numeric(gobj)
+
+    # assert_eq(expected, got)
+
+@pytest.mark.skip
+@pytest.mark.parametrize(
+    "data", [
+        [1, 2**11],
+        [1, 2**33],
+        [1, 2**65]
     ]
 )
 @pytest.mark.parametrize(
     "downcast", [
-        'integer', 'signed', 'unsigned', 'float'
+        "integer", "signed", "unsigned"
+    ]
+)
+def test_to_numeric_downcast_int(data, downcast):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+
+    expected = pd.to_numeric(ps, downcast=downcast)
+    # got = cudf.to_numeric(gs, downcast=downcast)
+
+    # assert_eq(expected, got)
+
+@pytest.mark.skip
+@pytest.mark.parametrize(
+    "data", [
+        [1.0, 2**11],
+        [1.0, 2**33],
+        [1.0, 2**65]
     ]
 )
 @pytest.mark.parametrize(
-    "errors", [
-        'ignore', 'raise', 'coerce'
+    "downcast", [
+        "float"
     ]
 )
-def test_to_numeric_basic(data_1d, downcast, errors):
-    pdf = 
+def test_to_numeric_downcast_float(data, downcast):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+
+    expected = pd.to_numeric(ps, downcast=downcast)
+    # got = cudf.to_numeric(gs, downcast=downcast)
+
+    # assert_eq(expected, got)
+
+@pytest.mark.skip
+@pytest.mark.parametrize(
+    "data", [
+        [1, 'a', 2.0],
+
+    ]
+)
+@pytest.mark.parametrize(
+    "error", [
+        "ignore", "raise", "coerce"
+    ]
+)
+def test_to_numeric_error(data, downcast):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+
+    expected = pd.to_numeric(ps, downcast=downcast)
+    # got = cudf.to_numeric(gs, downcast=downcast)
+
+    # assert_eq(expected, got)
