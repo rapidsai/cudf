@@ -6,6 +6,7 @@
 - PR #6581 Add JNI API to check if PTDS is enabled
 
 ## Improvements
+- PR #6430 Add struct type support to `to_arrow` and `from_arrow`
 
 - PR #6384 Add CSV fuzz tests with varying function parameters
 - PR #6385 Add JSON fuzz tests with varying function parameters
