@@ -4549,20 +4549,6 @@ class StringColumn(column.ColumnBase):
     def str(self, parent=None):
         return StringMethods(self, parent=parent)
 
-    def __sizeof__(self):
-        n = 0
-        if len(self.base_children) == 2:
-            n += (
-                self.base_children[0].__sizeof__()
-                + self.base_children[1].__sizeof__()
-            )
-        if self.base_mask is not None:
-            n += self.base_mask.size
-        return n
-
-    def _memory_usage(self, **kwargs):
-        return self.__sizeof__()
-
     def unary_operator(self, unaryop):
         raise TypeError(
             f"Series of dtype `str` cannot perform the operation: "

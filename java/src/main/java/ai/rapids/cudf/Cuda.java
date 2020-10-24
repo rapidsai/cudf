@@ -473,4 +473,9 @@ public class Cuda {
     }
     return isCompat;
   }
+
+  /**
+   * Whether per-thread default stream is enabled.
+   */
+  public static native boolean isPtdsEnabled();
 }

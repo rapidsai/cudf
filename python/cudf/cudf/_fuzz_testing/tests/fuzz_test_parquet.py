@@ -6,9 +6,9 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf.testing.main import pythonfuzz
-from cudf.testing.parquet import ParquetReader, ParquetWriter
-from cudf.testing.utils import run_test
+from cudf._fuzz_testing.main import pythonfuzz
+from cudf._fuzz_testing.parquet import ParquetReader, ParquetWriter
+from cudf._fuzz_testing.utils import compare_dataframe, run_test
 from cudf.tests.utils import assert_eq
 
 
@@ -61,7 +61,7 @@ def parquet_writer_test(pdf):
 @pythonfuzz(
     data_handle=ParquetWriter,
     params={
-        "row_group_size": np.random.random_integers(0, 10000, 100),
+        "row_group_size": np.random.random_integers(1, 10000, 100),
         "compression": ["snappy", None],
     },
 )
@@ -82,11 +82,11 @@ def parquet_writer_test_rowgroup_index_compression(
 
     actual = cudf.read_parquet(gd_file_name)
     expected = pd.read_parquet(pd_file_name)
-    assert_eq(actual, expected)
+    compare_dataframe(actual, expected)
 
     actual = cudf.read_parquet(pd_file_name)
     expected = pd.read_parquet(gd_file_name)
-    assert_eq(actual, expected)
+    compare_dataframe(actual, expected, nullable=False)
 
 
 if __name__ == "__main__":
