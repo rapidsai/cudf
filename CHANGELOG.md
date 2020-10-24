@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #6460 Add is_timestamp format check API
+- PR #6528 Enable `fixed_point` binary operations
 - PR #6581 Add JNI API to check if PTDS is enabled
 
 ## Improvements
