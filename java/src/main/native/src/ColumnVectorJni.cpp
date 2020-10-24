@@ -56,49 +56,8 @@
 #include <map_lookup.hpp>
 
 #include "cudf_jni_apis.hpp"
+#include "dtype_utils.hpp"
 
-namespace {
-
-// convert a timestamp type to the corresponding duration type
-cudf::data_type timestamp_to_duration(cudf::data_type dt) {
-  cudf::type_id duration_type_id;
-  switch (dt.id()) {
-    case cudf::type_id::TIMESTAMP_DAYS:
-      duration_type_id = cudf::type_id::DURATION_DAYS;
-      break;
-    case cudf::type_id::TIMESTAMP_SECONDS:
-      duration_type_id = cudf::type_id::DURATION_SECONDS;
-      break;
-    case cudf::type_id::TIMESTAMP_MILLISECONDS:
-      duration_type_id = cudf::type_id::DURATION_MILLISECONDS;
-      break;
-    case cudf::type_id::TIMESTAMP_MICROSECONDS:
-      duration_type_id = cudf::type_id::DURATION_MICROSECONDS;
-      break;
-    case cudf::type_id::TIMESTAMP_NANOSECONDS:
-      duration_type_id = cudf::type_id::DURATION_NANOSECONDS;
-      break;
-    default:
-      throw std::logic_error("Unexpected type in timestamp_to_duration");
-  }
-  return cudf::data_type(duration_type_id);
-}
-
-bool is_decimal_type(cudf::type_id n_type) {
-  return n_type == cudf::type_id::DECIMAL32 || n_type == cudf::type_id::DECIMAL64 ;
-}
-
-cudf::data_type make_data_type(jint out_dtype, jint scale) {
-  cudf::type_id n_type = static_cast<cudf::type_id>(out_dtype);
-  cudf::data_type n_data_type;
-  if (is_decimal_type(n_type)) {
-    n_data_type = cudf::data_type(n_type, scale);
-  } else {
-    n_data_type = cudf::data_type(n_type);
-  }
-  return n_data_type;
-}
-} // anonymous namespace
 
 extern "C" {
 
@@ -307,7 +266,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_reduce(JNIEnv *env, jcl
     cudf::jni::auto_set_device(env);
     auto col = reinterpret_cast<cudf::column_view *>(j_col_view);
     auto agg = reinterpret_cast<cudf::aggregation *>(j_agg);
-    cudf::data_type out_dtype = make_data_type(j_dtype, scale);
+    cudf::data_type out_dtype = dtype_utils::make_data_type(j_dtype, scale);
 
     std::unique_ptr<cudf::scalar> result = cudf::reduce(*col, agg->clone(), out_dtype);
     return reinterpret_cast<jlong>(result.release());
@@ -715,7 +674,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castTo(JNIEnv *env, jcl
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
-    cudf::data_type n_data_type = make_data_type(type, scale);
+    cudf::data_type n_data_type = dtype_utils::make_data_type(type, scale);
     std::unique_ptr<cudf::column> result;
     if (n_data_type.id() == cudf::type_id::STRING) {
       switch (column->type().id()) {
@@ -772,7 +731,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castTo(JNIEnv *env, jcl
           JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Numeric cast to non-day timestamp requires INT64", 0);
         }
       }
-      cudf::data_type duration_type = timestamp_to_duration(n_data_type);
+      cudf::data_type duration_type = dtype_utils::timestamp_to_duration(n_data_type);
       cudf::column_view duration_view = cudf::column_view(duration_type,
                                                           column->size(),
                                                           column->head(),
@@ -783,7 +742,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_castTo(JNIEnv *env, jcl
       // This is a temporary workaround to allow Java to cast from timestamp types to integral types
       // without forcing an intermediate duration column to be manifested.  Ultimately this style of
       // "reinterpret" casting will be supported via https://github.com/rapidsai/cudf/pull/5358
-      cudf::data_type duration_type = timestamp_to_duration(column->type());
+      cudf::data_type duration_type = dtype_utils::timestamp_to_duration(column->type());
       cudf::column_view duration_view = cudf::column_view(duration_type,
                                                           column->size(),
                                                           column->head(),
@@ -1021,7 +980,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_binaryOpVV(JNIEnv *env,
     auto lhs = reinterpret_cast<cudf::column_view *>(lhs_view);
     auto rhs = reinterpret_cast<cudf::column_view *>(rhs_view);
 
-    cudf::data_type n_data_type = make_data_type(out_dtype, scale);
+    cudf::data_type n_data_type = dtype_utils::make_data_type(out_dtype, scale);
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
     std::unique_ptr<cudf::column> result = cudf::binary_operation(
         *lhs, *rhs, op, n_data_type);
@@ -1040,7 +999,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_binaryOpVS(JNIEnv *env,
     cudf::jni::auto_set_device(env);
     auto lhs = reinterpret_cast<cudf::column_view *>(lhs_view);
     cudf::scalar *rhs = reinterpret_cast<cudf::scalar *>(rhs_ptr);
-    cudf::data_type n_data_type = make_data_type(out_dtype, scale);
+    cudf::data_type n_data_type = dtype_utils::make_data_type(out_dtype, scale);
 
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
     std::unique_ptr<cudf::column> result = cudf::binary_operation(
@@ -1325,7 +1284,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeCudfColumnView(
     using cudf::column_view;
     cudf::jni::auto_set_device(env);
     cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
-    cudf::data_type n_data_type = make_data_type(j_type, scale);
+    cudf::data_type n_data_type = dtype_utils::make_data_type(j_type, scale);
 
     std::unique_ptr<cudf::column_view> ret;
     void *data = reinterpret_cast<void *>(j_data);
@@ -1658,7 +1617,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeEmptyCudfColumn(JNI
   try {
     cudf::jni::auto_set_device(env);
     cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
-    cudf::data_type n_data_type = make_data_type(j_type, scale);
+    cudf::data_type n_data_type = dtype_utils::make_data_type(j_type, scale);
 
     std::unique_ptr<cudf::column> column(cudf::make_empty_column(n_data_type));
     return reinterpret_cast<jlong>(column.release());
