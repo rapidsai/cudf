@@ -17,41 +17,10 @@
 #include <iterator>
 #include <type_traits>
 
-enum class select_scan_if_mode { count_only, count_and_gather, gather_only };
-
 template <typename Dividend, typename Divisor>
 inline constexpr auto ceil_div(Dividend dividend, Divisor divisor)
 {
   return dividend / divisor + (dividend % divisor != 0);
-}
-
-template <typename T, int N>
-inline __device__ void print_array_16(  //
-  char const* message,
-  uint32_t num_items_remaining,
-  T (&values)[N])
-{
-  printf("b(%i) t(%i) %s (%i): %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i %i\n",
-         blockIdx.x,
-         threadIdx.x,
-         message,
-         num_items_remaining,
-         values[0],
-         values[1],
-         values[2],
-         values[3],
-         values[4],
-         values[5],
-         values[6],
-         values[7],
-         values[8],
-         values[9],
-         values[10],
-         values[11],
-         values[12],
-         values[13],
-         values[14],
-         values[15]);
 }
 
 template <typename Policy>
@@ -62,61 +31,52 @@ struct agent {
   uint32_t num_items;
   typename Policy::ScanOperator scan_op;
   typename Policy::PredOperator pred_op;
-  typename Policy::ItemsTileState items_tile_state;
-  typename Policy::IndexTileState index_tile_state;
+  typename Policy::ItemsTileState& items_tile_state;
+  typename Policy::IndexTileState& index_tile_state;
 
-  inline __device__ void consume_range(uint32_t num_tiles, uint32_t start_tile)
+  inline __device__ void consume_range(uint32_t const num_tiles, uint32_t const start_tile)
   {
-    uint32_t tile_idx            = start_tile + blockIdx.x;
-    uint32_t tile_offset         = Policy::ITEMS_PER_TILE * tile_idx;
-    uint32_t num_items_remaining = num_items - tile_offset;
+    uint32_t const tile_idx            = start_tile + blockIdx.x;
+    uint32_t const tile_offset         = Policy::ITEMS_PER_TILE * tile_idx;
+    uint32_t const num_items_remaining = num_items - tile_offset;
 
     typename Policy::OutputCount num_selected;
-
-    // if (num_items_remaining <= 0) { return; }
-
-    if (threadIdx.x == 0) {
-      printf(
-        "b(%i) t(%i) entry with tile_idx(%i), tile_offset(%i), and %i of %i items remaining.\n",
-        blockIdx.x,
-        threadIdx.x,
-        tile_idx,
-        tile_offset,
-        num_items_remaining,
-        num_items);
-    }
 
     if (tile_idx < num_tiles - 1) {
       num_selected = consume_tile<false>(tile_idx, tile_offset, num_items_remaining);
     } else {
       num_selected = consume_tile<true>(tile_idx, tile_offset, num_items_remaining);
-      if (threadIdx.x == 0) {  //
-        // is there a race condition somewhere?
-        printf("b(%i) t(%i) num selected: %i\n", blockIdx.x, threadIdx.x, num_selected);
-        *d_output_count = num_selected;
-      }
+      if (threadIdx.x == 0) { *d_output_count = num_selected; }
     }
   }
 
   template <bool IS_LAST_TILE>
-  inline __device__ uint32_t consume_tile(uint32_t tile_idx,
-                                          uint32_t tile_offset,
-                                          uint32_t num_items_remaining)
+  inline __device__ uint32_t consume_tile(uint32_t const tile_idx,
+                                          uint32_t const tile_offset,
+                                          uint32_t const num_items_remaining)
   {
     typename Policy::Input items[Policy::ITEMS_PER_THREAD];
 
-    __shared__ typename Policy::ItemsBlockLoad::TempStorage item_load;
-    __shared__ typename Policy::IndexBlockScan::TempStorage index_scan;
-    __shared__ typename Policy::IndexPrefixCallback::TempStorage index_prefix;
-    __shared__ typename Policy::ItemsBlockScan::TempStorage items_scan;
-    __shared__ typename Policy::ItemsPrefixCallback::TempStorage items_prefix;
+    __shared__ union {
+      typename Policy::ItemsBlockLoad::TempStorage item_load;
+      struct {
+        typename Policy::IndexBlockScan::TempStorage index_scan;
+        typename Policy::IndexPrefixCallback::TempStorage index_prefix;
+      };
+      struct {
+        typename Policy::ItemsBlockScan::TempStorage items_scan;
+        typename Policy::ItemsPrefixCallback::TempStorage items_prefix;
+      };
+    } temp_storage;
 
-    __syncthreads();
+    // Load Inputs
 
     if (IS_LAST_TILE) {
-      Policy::ItemsBlockLoad(item_load).Load(d_input + tile_offset, items, num_items_remaining);
+      Policy::ItemsBlockLoad(temp_storage.item_load)  //
+        .Load(d_input + tile_offset, items, num_items_remaining);
     } else {
-      Policy::ItemsBlockLoad(item_load).Load(d_input + tile_offset, items);
+      Policy::ItemsBlockLoad(temp_storage.item_load)  //
+        .Load(d_input + tile_offset, items);
     }
 
     __syncthreads();
@@ -125,76 +85,78 @@ struct agent {
 
     if (tile_idx == 0) {
       typename Policy::Input block_aggregate;
-      Policy::ItemsBlockScan(items_scan).InclusiveScan(items, items, scan_op, block_aggregate);
+      Policy::ItemsBlockScan(temp_storage.items_scan)  //
+        .InclusiveScan(                                //
+          items,
+          items,
+          scan_op,
+          block_aggregate);
+
       if (threadIdx.x == 0 and not IS_LAST_TILE) {
         items_tile_state.SetInclusive(0, block_aggregate);
       }
     } else {
-      auto prefix_op =
-        Policy::ItemsPrefixCallback(items_tile_state, items_prefix, scan_op, tile_idx);
-      Policy::ItemsBlockScan(items_scan).InclusiveScan(items, items, scan_op, prefix_op);
+      auto prefix_op = Policy::ItemsPrefixCallback(  //
+        items_tile_state,
+        temp_storage.items_prefix,
+        scan_op,
+        tile_idx);
+
+      Policy::ItemsBlockScan(temp_storage.items_scan)  //
+        .InclusiveScan(                                //
+          items,
+          items,
+          scan_op,
+          prefix_op);
     }
 
     __syncthreads();
-
-    // print_array_16("items", num_items_remaining, items);
-
-    // __syncthreads();
 
     uint32_t selection_flags[Policy::ITEMS_PER_THREAD];
 
     // Initialize Selection Flags
 
-    for (uint64_t i = 0; i < Policy::ITEMS_PER_THREAD; i++) {
+    for (uint32_t i = 0; i < Policy::ITEMS_PER_THREAD; i++) {
       selection_flags[i] = 0;
-      // if (threadIdx.x * Policy::ITEMS_PER_THREAD + i < num_items_remaining) {
-      //   if (pred_op(items[i])) { selection_flags[i] = 1; }
-      // }
+      if (threadIdx.x * Policy::ITEMS_PER_THREAD + i < num_items_remaining) {
+        if (pred_op(items[i])) { selection_flags[i] = 1; }
+      }
     }
 
     // Scan Selection
 
     __syncthreads();
 
-    // print_array_16("flags", num_items_remaining, selection_flags);
-
-    // __syncthreads();
-
-    uint32_t selection_indices[Policy::ITEMS_PER_THREAD] = {};
+    uint32_t selection_indices[Policy::ITEMS_PER_THREAD];
     uint32_t num_selections;
 
-    // for (uint64_t i = 0; i < Policy::ITEMS_PER_THREAD; i++) {
-    //   selection_indices[i] = 0;
-    //   // if (threadIdx.x * Policy::ITEMS_PER_THREAD + i < num_items_remaining) {
-    //   //   if (pred_op(items[i])) { selection_flags[i] = 1; }
-    //   // }
-    // }
-
-    print_array_16("indices", num_items_remaining, selection_indices);
-
     if (tile_idx == 0) {
-      Policy::IndexBlockScan(index_scan)
-        .ExclusiveScan(selection_flags, selection_indices, cub::Sum(), num_selections);
+      Policy::IndexBlockScan(temp_storage.index_scan)  //
+        .ExclusiveScan(                                //
+          selection_flags,
+          selection_indices,
+          cub::Sum(),
+          num_selections);
+
       if (threadIdx.x == 0 and not IS_LAST_TILE) {
         index_tile_state.SetInclusive(0, num_selections);
       }
     } else {
-      auto prefix_op =
-        Policy::IndexPrefixCallback(index_tile_state, index_prefix, cub::Sum(), tile_idx);
-      Policy::IndexBlockScan(index_scan)
-        .ExclusiveScan(selection_flags, selection_indices, cub::Sum(), prefix_op);
+      auto prefix_op = Policy::IndexPrefixCallback(  //
+        index_tile_state,
+        temp_storage.index_prefix,
+        cub::Sum(),
+        tile_idx);
+
+      Policy::IndexBlockScan(temp_storage.index_scan)  //
+        .ExclusiveScan(                                //
+          selection_flags,
+          selection_indices,
+          cub::Sum(),
+          prefix_op);
+
       num_selections = prefix_op.GetInclusivePrefix();
     }
-
-    __syncthreads();
-
-    // __syncthreads();
-
-    if (threadIdx.x == 0 and num_selections != 0) {
-      printf("b(%i) t(%i) selected: %i\n", blockIdx.x, threadIdx.x, num_selections);
-    }
-
-    // return if unexpected number of selections (consumer doesn't know how to store values).
 
     if (*d_output_count == 0) {  // best way to communicate this?
       return num_selections;
@@ -202,23 +164,20 @@ struct agent {
 
     // Scatter
 
-    for (int i = 0; i < Policy::ITEMS_PER_THREAD; ++i) {
+    for (uint32_t i = 0; i < Policy::ITEMS_PER_THREAD; ++i) {
       if (selection_flags[i]) {
         if (selection_indices[i] < num_selections) {  //
           d_output[selection_indices[i]] =
             thrust::make_pair(tile_offset + threadIdx.x * Policy::ITEMS_PER_THREAD + i, items[i]);
-        } else {
-          printf("b(%i) t(%i) %i = %i\n", blockIdx.x, threadIdx.x, selection_indices[i], items[i]);
         }
       }
     }
+
     __syncthreads();
 
     return num_selections;
   }
 };
-
-// ===== KERNELS ===================================================================================
 
 template <typename Policy>
 __global__ void initialization_pass_kernel(  //
@@ -265,7 +224,7 @@ template <typename InputIterator_,
           typename ScanOperator_,
           typename PredicateOperator_>
 struct policy {
-  enum {
+  enum : uint32_t {
     THREADS_PER_INIT_BLOCK = 128,
     THREADS_PER_BLOCK      = 128,
     ITEMS_PER_THREAD       = 16,
@@ -284,19 +243,18 @@ struct policy {
   using OutputCount = typename std::iterator_traits<OutputCountIterator>::value_type;
   using OutputValue = typename std::iterator_traits<OutputIterator>::value_type;
 
-  // Item Load and Scan
-
-  using ItemsTileState      = cub::ScanTileState<Input>;
-  using ItemsPrefixCallback = cub::TilePrefixCallbackOp<  //
-    Input,
-    ScanOperator,
-    cub::ScanTileState<Input>>;
+  // Items Load
 
   using ItemsBlockLoad = cub::BlockLoad<  //
     Input,
     THREADS_PER_BLOCK,
     ITEMS_PER_THREAD,
     cub::BlockLoadAlgorithm::BLOCK_LOAD_DIRECT>;
+
+  // Items Scan
+
+  using ItemsTileState      = cub::ScanTileState<Input>;
+  using ItemsPrefixCallback = cub::TilePrefixCallbackOp<Input, ScanOperator, ItemsTileState>;
 
   using ItemsBlockScan = cub::BlockScan<  //
     Input,
@@ -306,12 +264,8 @@ struct policy {
   // Index Scan
 
   using IndexTileState      = cub::ScanTileState<uint32_t>;
-  using IndexPrefixCallback = cub::TilePrefixCallbackOp<  //
-    uint32_t,
-    cub::Sum,
-    cub::ScanTileState<uint32_t>>;
-
-  using IndexBlockScan = cub::BlockScan<  //
+  using IndexPrefixCallback = cub::TilePrefixCallbackOp<uint32_t, cub::Sum, IndexTileState>;
+  using IndexBlockScan      = cub::BlockScan<  //
     uint32_t,
     THREADS_PER_BLOCK,
     cub::BlockScanAlgorithm::BLOCK_SCAN_RAKING>;
@@ -358,8 +312,8 @@ void scan_select_if(  //
   typename Policy::ItemsTileState items_tile_state;
   typename Policy::IndexTileState index_tile_state;
 
-  CUDA_TRY(items_tile_state.Init(num_tiles, d_temp_storage, allocation_sizes[0]));
-  CUDA_TRY(index_tile_state.Init(num_tiles, d_temp_storage, allocation_sizes[1]));
+  CUDA_TRY(items_tile_state.Init(num_tiles, allocations[0], allocation_sizes[0]));
+  CUDA_TRY(index_tile_state.Init(num_tiles, allocations[1], allocation_sizes[1]));
 
   uint32_t num_init_blocks = ceil_div(num_tiles, Policy::THREADS_PER_INIT_BLOCK);
 
@@ -410,7 +364,6 @@ scan_select_if(                                          //
   using Input = typename InputIterator::value_type;
 
   auto output_projection = [] __device__(thrust::pair<uint32_t, Input> output) -> Input {
-    printf("b(%i) t(%i) (%i) (%i)\n", blockIdx.x, threadIdx.x, output.first, output.second);
     return thrust::get<1>(output);
   };
 
