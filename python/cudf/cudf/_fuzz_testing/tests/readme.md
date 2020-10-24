@@ -75,24 +75,25 @@ A sample implementation of `set_rand_params` in a `data_handle` class:
 def set_rand_params(self, params):
     params_dict = {}
     for param, values in params.items():
-        if param == "columns" and values == ALL_POSSIBLE_VALUES:
-            col_size = self._rand(len(self._current_buffer.columns))
-            params_dict[param] = list(
-                np.unique(
-                    np.random.choice(
-                        self._current_buffer.columns, col_size
+        if values == ALL_POSSIBLE_VALUES:
+            if param == "columns":
+                col_size = self._rand(len(self._current_buffer.columns))
+                params_dict[param] = list(
+                    np.unique(
+                        np.random.choice(
+                            self._current_buffer.columns, col_size
+                        )
                     )
                 )
-            )
-        elif param == "chunksize" and values == ALL_POSSIBLE_VALUES:
-            params_dict[param] = np.random.choice(
-                [
-                    None,
-                    np.random.randint(
-                        low=1, high=max(1, len(self._current_buffer))
-                    ),
-                ]
-            )
+            elif param == "chunksize":
+                params_dict[param] = np.random.choice(
+                    [
+                        None,
+                        np.random.randint(
+                            low=1, high=max(1, len(self._current_buffer))
+                        ),
+                    ]
+                )
         else:
             params_dict[param] = np.random.choice(values)
     self._current_params["test_kwargs"] = self.process_kwargs(params_dict)

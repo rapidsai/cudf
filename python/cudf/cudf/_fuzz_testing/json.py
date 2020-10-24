@@ -12,10 +12,10 @@ from cudf._fuzz_testing.io import IOFuzz
 from cudf._fuzz_testing.utils import (
     ALL_POSSIBLE_VALUES,
     _generate_rand_meta,
-    pandas_dtypes_to_cudf_dtypes,
     pyarrow_to_pandas,
 )
 from cudf.tests import dataset_generator as dg
+from cudf.utils.dtypes import pandas_dtypes_to_cudf_dtypes
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
@@ -30,12 +30,10 @@ def _get_dtype_param_value(dtype_val):
         for col_name, dtype in dtype_val.items():
             if cudf.utils.dtypes.is_categorical_dtype(dtype):
                 processed_dtypes[col_name] = "category"
-            elif dtype in pandas_dtypes_to_cudf_dtypes:
-                processed_dtypes[col_name] = str(
-                    pandas_dtypes_to_cudf_dtypes[dtype]
-                )
             else:
-                processed_dtypes[col_name] = str(dtype)
+                processed_dtypes[col_name] = str(
+                    pandas_dtypes_to_cudf_dtypes.get(dtype, dtype)
+                )
         return processed_dtypes
     return dtype_val
 
