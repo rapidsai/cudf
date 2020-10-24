@@ -5,7 +5,7 @@ import pandas as pd
 import cudf
 from cudf.core.column import as_column
 from cudf.utils.dtypes import (
-    is_list_like,
+    can_convert_to_column, is_list_like,
     is_numerical_dtype,
     is_datetime_dtype,
     is_timedelta_dtype,
@@ -15,13 +15,13 @@ from cudf.utils.dtypes import (
     is_struct_dtype,
 )
 
-def as_numeric(arg, errors='raise', downcast=None):
+def to_numeric(arg, errors='raise', downcast=None):
     """
     Convert argument into numerical types.
 
     Parameters
     ----------
-    arg : list, tuple, 1d-array, series
+    arg : column-convertible
         The object to convert to numeric types
     errors : {'raise', 'ignore', 'coerce'}, defaults 'raise'
         Policy to handle errors during parsing. 
@@ -54,28 +54,27 @@ def as_numeric(arg, errors='raise', downcast=None):
     if downcast not in {None, 'integer', 'signed', 'unsigned', 'float'}:
         raise ValueError('invalid downcasting method provided')
 
-    if not is_list_like(arg) or (hasattr(arg, 'ndim') and arg.ndim > 1):
-        raise ValueError('arg must be a list, tuple, 1-d array, or Series')
+    if not can_convert_to_column(arg) or (hasattr(arg, 'ndim') and arg.ndim > 1):
+        raise ValueError('arg must be column convertible')
     
     col = as_column(arg)
+    dtype = col.dtype
 
-    if is_numerical_dtype(col):
-        pass
-    elif is_datetime_dtype(col) or is_timedelta_dtype(col):
+    if is_datetime_dtype(dtype) or is_timedelta_dtype(dtype):
         col = col.as_numerical_column(np.dtype('int64'))
-    elif is_categorical_dtype(col):
+    elif is_categorical_dtype(dtype):
         cat_dtype = col.dtype.type
         if is_numerical_dtype(cat_dtype):
             col = col.as_numerical_column(cat_dtype)
         else:
             try:
-                col = _convert_str_col(col._get_decategorized_column())
+                col = _convert_str_col(col._get_decategorized_column(), errors)
             except ValueError as e:
                 if errors == 'ignore':
                     return arg
                 else:
                     raise e
-    elif is_string_dtype(col):
+    elif is_string_dtype(dtype):
         try:
             col = _convert_str_col(col, errors)
         except ValueError as e:
@@ -83,8 +82,10 @@ def as_numeric(arg, errors='raise', downcast=None):
                 return arg
             else:
                 raise e
-    elif is_list_dtype(col) or is_struct_dtype(col):
+    elif is_list_dtype(dtype) or is_struct_dtype(dtype):
         raise ValueError('Input does not support nested datatypes')
+    elif is_numerical_dtype(dtype):
+        pass
     else:
         raise ValueError('Unrecognized datatype')
 
@@ -106,7 +107,7 @@ def as_numeric(arg, errors='raise', downcast=None):
     if isinstance(arg, (cudf.Series, pd.Series)):
         return cudf.Series(col)
     else:
-        return col.values
+        return col.to_array(fillna='pandas')
 
 def _convert_str_col(col, errors):
     if not is_string_dtype(col):
@@ -117,12 +118,12 @@ def _convert_str_col(col, errors):
         return col.as_numerical_column(dtype=np.dtype("i8"))
     is_float = col.str().isfloat()
     if is_float.all():
-        return col.as_numerical_column(dtpye=np.dtype('f'))
+        return col.as_numerical_column(dtype=np.dtype('d'))
     if is_integer.sum() + is_float.sum() == len(col):
-        return col.as_numerical_column(dtpye=np.dtype('f'))
+        return col.as_numerical_column(dtype=np.dtype('d'))
     # TODO: account for inf strings "[+|-]?(inf|infinity)"
     else:
         if errors == 'coerce':
-            return col.as_numerical_column(dtype=np.dtype('f'))
+            return col.as_numerical_column(dtype=np.dtype('d'))
         else:
             raise ValueError('Unable to convert some strings to numerics.')
