@@ -122,10 +122,10 @@ def test_can_cast_safely_has_nulls():
     ]
 )
 def test_to_numeric_basic_1d(data, obj):
-    pobj = obj(data)
-    gobj = cudf.from_pandas(pobj)
+    x = obj(data)
+    gobj = cudf.from_pandas(x)
 
-    expected = pd.to_numeric(pobj)
+    expected = pd.to_numeric(x)
     # got = cudf.to_numeric(gobj)
 
     # assert_eq(expected, got)
