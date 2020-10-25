@@ -54,9 +54,6 @@ class writer::impl {
   // ORC datasets are divided into fixed-size, independent stripes
   static constexpr uint32_t DEFAULT_STRIPE_SIZE = 64 * 1024 * 1024;
 
-  // ORC rows are divided into groups and assigned indexes for faster seeking
-  static constexpr uint32_t DEFAULT_ROW_INDEX_STRIDE = 10000;
-
   // ORC compresses streams into independent chunks
   static constexpr uint32_t DEFAULT_COMPRESSION_BLOCKSIZE = 256 * 1024;
 
@@ -325,7 +322,7 @@ class writer::impl {
   rmm::mr::device_memory_resource* _mr = nullptr;
 
   size_t max_stripe_size_           = DEFAULT_STRIPE_SIZE;
-  size_t row_index_stride_          = DEFAULT_ROW_INDEX_STRIDE;
+  size_t row_index_stride_          = default_row_index_stride;
   size_t compression_blocksize_     = DEFAULT_COMPRESSION_BLOCKSIZE;
   CompressionKind compression_kind_ = CompressionKind::NONE;
 

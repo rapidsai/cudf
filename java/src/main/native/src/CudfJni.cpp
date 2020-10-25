@@ -254,4 +254,8 @@ JNIEXPORT void JNI_OnUnload(JavaVM *vm, void *) {
   cudf::jni::release_host_memory_buffer_jni(env);
 }
 
+JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Cuda_isPtdsEnabled(JNIEnv *env, jclass, jlong size) {
+  return cudf::jni::is_ptds_enabled;
+}
+
 } // extern "C"
