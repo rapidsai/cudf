@@ -323,8 +323,6 @@ set(DECOMPRESSION_TEST_SRC
 
 ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
 
-set(AVRO_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/avro_test.cu")
 set(CSV_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/csv_test.cpp")
 set(ORC_TEST_SRC
@@ -333,22 +331,14 @@ set(PARQUET_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/parquet_test.cpp")
 set(JSON_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/json_test.cpp")
-set(CSV_TEST_NEW_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/io/csv_test_new.cu")
 
-ConfigureTest(AVRO_TEST "${AVRO_TEST_SRC}")
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 ConfigureTest(ORC_TEST "${ORC_TEST_SRC}")
 ConfigureTest(PARQUET_TEST "${PARQUET_TEST_SRC}")
 ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
-ConfigureTest(CSV_TEST_NEW "${CSV_TEST_NEW_SRC}")
 
 ###################################################################################################
 # - inclusive_copy_if tests -----------------------------------------------------------------------
-set(INCLUSIVE_COPY_IF_TEST_SRC
-"${CMAKE_CURRENT_SOURCE_DIR}/io/inclusive_copy_if_test.cu")
-
-ConfigureTest(INCLUSIVE_COPY_IF_TEST "${INCLUSIVE_COPY_IF_TEST_SRC}")
 
 set(SCAN_SELECT_IF_TEST_SRC
 "${CMAKE_CURRENT_SOURCE_DIR}/io/algo/scan_select_if_test.cu")
@@ -367,24 +357,24 @@ ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
 ###################################################################################################
 # - copying tests ---------------------------------------------------------------------------------
 
-# set(COPYING_TEST_SRC
-#     "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cpp"
-#     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
-#     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_str_tests.cu"
-#     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_list_tests.cu"
-#     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_struct_tests.cu"
-#     "${CMAKE_CURRENT_SOURCE_DIR}/copying/detail_gather_tests.cu"
-#     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cpp"
-#     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cpp"
-#     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cpp"
-#     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cpp"
-#     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu"
-#     "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_tests.cpp"
-#     "${CMAKE_CURRENT_SOURCE_DIR}/copying/get_value_tests.cpp"
-#     "${CMAKE_CURRENT_SOURCE_DIR}/copying/sample_tests.cpp"
-#     "${CMAKE_CURRENT_SOURCE_DIR}/copying/concatenate_tests.cu")
+set(COPYING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/utility_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_str_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_list_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_struct_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/detail_gather_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/get_value_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/sample_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/concatenate_tests.cu")
 
-# ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
+ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
 ###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------

@@ -227,14 +227,6 @@ set(ORC_READER_BENCH_SRC
 ConfigureBench(ORC_READER_BENCH "${ORC_READER_BENCH_SRC}")
 
 ###################################################################################################
-# - avro reader benchmark --------------------------------------------------------------------------
-
-set(AVRO_READER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/io/avro/avro_reader_benchmark.cu")
-
-ConfigureBench(AVRO_READER_BENCH "${AVRO_READER_BENCH_SRC}")
-
-###################################################################################################
 # - csv reader benchmark --------------------------------------------------------------------------
 
 set(CSV_READER_BENCH_SRC
