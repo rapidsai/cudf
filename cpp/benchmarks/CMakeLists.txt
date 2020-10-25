@@ -73,6 +73,14 @@ set(GATHER_BENCH_SRC
 ConfigureBench(GATHER_BENCH "${GATHER_BENCH_SRC}")
 
 ###################################################################################################
+# - scan_select_if benchmark ----------------------------------------------------------------------
+
+set(SCAN_SELECT_IF_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/io/algo/scan_select_if_benchmark.cu")
+
+ConfigureBench(SCAN_SELECT_IF_BENCH "${SCAN_SELECT_IF_BENCH_SRC}")
+
+###################################################################################################
 # - scatter benchmark -----------------------------------------------------------------------------
 
 set(SCATTER_BENCH_SRC

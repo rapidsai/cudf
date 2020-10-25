@@ -1,3 +1,4 @@
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
@@ -8,11 +9,8 @@
 #include <thrust/iterator/transform_output_iterator.h>
 
 #include <cub/agent/single_pass_scan_operators.cuh>
-#include <cub/block/block_exchange.cuh>
 #include <cub/block/block_load.cuh>
 #include <cub/block/block_scan.cuh>
-#include <cub/block/block_store.cuh>
-#include <cub/util_device.cuh>
 
 #include <iterator>
 #include <type_traits>
@@ -22,6 +20,8 @@ inline constexpr auto ceil_div(Dividend dividend, Divisor divisor)
 {
   return dividend / divisor + (dividend % divisor != 0);
 }
+
+// ===== Agent =====================================================================================
 
 template <typename Policy>
 struct agent {
@@ -34,7 +34,9 @@ struct agent {
   typename Policy::ItemsTileState& items_tile_state;
   typename Policy::IndexTileState& index_tile_state;
 
-  inline __device__ void consume_range(uint32_t const num_tiles, uint32_t const start_tile)
+  inline __device__ void consume_range(bool const do_scatter,
+                                       uint32_t const num_tiles,
+                                       uint32_t const start_tile)
   {
     uint32_t const tile_idx            = start_tile + blockIdx.x;
     uint32_t const tile_offset         = Policy::ITEMS_PER_TILE * tile_idx;
@@ -43,15 +45,16 @@ struct agent {
     typename Policy::OutputCount num_selected;
 
     if (tile_idx < num_tiles - 1) {
-      num_selected = consume_tile<false>(tile_idx, tile_offset, num_items_remaining);
+      num_selected = consume_tile<false>(do_scatter, tile_idx, tile_offset, Policy::ITEMS_PER_TILE);
     } else {
-      num_selected = consume_tile<true>(tile_idx, tile_offset, num_items_remaining);
+      num_selected = consume_tile<true>(do_scatter, tile_idx, tile_offset, num_items_remaining);
       if (threadIdx.x == 0) { *d_output_count = num_selected; }
     }
   }
 
   template <bool IS_LAST_TILE>
-  inline __device__ uint32_t consume_tile(uint32_t const tile_idx,
+  inline __device__ uint32_t consume_tile(bool const do_scatter,
+                                          uint32_t const tile_idx,
                                           uint32_t const tile_offset,
                                           uint32_t const num_items_remaining)
   {
@@ -125,8 +128,6 @@ struct agent {
 
     // Scan Selection
 
-    __syncthreads();
-
     uint32_t selection_indices[Policy::ITEMS_PER_THREAD];
     uint32_t num_selections;
 
@@ -158,9 +159,7 @@ struct agent {
       num_selections = prefix_op.GetInclusivePrefix();
     }
 
-    if (*d_output_count == 0) {  // best way to communicate this?
-      return num_selections;
-    }
+    if (not do_scatter) { return num_selections; }
 
     // Scatter
 
@@ -173,11 +172,11 @@ struct agent {
       }
     }
 
-    __syncthreads();
-
     return num_selections;
   }
 };
+
+// ===== Kernels ===================================================================================
 
 template <typename Policy>
 __global__ void initialization_pass_kernel(  //
@@ -199,6 +198,7 @@ __global__ void execution_pass_kernel(  //
   typename Policy::PredOperator pred_op,
   typename Policy::ItemsTileState items_tile_state,
   typename Policy::IndexTileState index_tile_state,
+  bool do_scatter,
   uint32_t num_tiles,
   uint32_t start_tile)
 {
@@ -213,10 +213,10 @@ __global__ void execution_pass_kernel(  //
     index_tile_state  //
   };
 
-  agent_instance.consume_range(num_tiles, start_tile);
+  agent_instance.consume_range(do_scatter, num_tiles, start_tile);
 }
 
-// ===== POLICY ====================================================================================
+// ===== Policy ====================================================================================
 
 template <typename InputIterator_,
           typename OutputCountIterator_,
@@ -259,7 +259,7 @@ struct policy {
   using ItemsBlockScan = cub::BlockScan<  //
     Input,
     THREADS_PER_BLOCK,
-    cub::BlockScanAlgorithm::BLOCK_SCAN_RAKING>;
+    cub::BlockScanAlgorithm::BLOCK_SCAN_WARP_SCANS>;
 
   // Index Scan
 
@@ -268,10 +268,10 @@ struct policy {
   using IndexBlockScan      = cub::BlockScan<  //
     uint32_t,
     THREADS_PER_BLOCK,
-    cub::BlockScanAlgorithm::BLOCK_SCAN_RAKING>;
+    cub::BlockScanAlgorithm::BLOCK_SCAN_WARP_SCANS>;
 };
 
-// ===== ENTRY =====================================================================================
+// ===== Entry =====================================================================================
 
 template <typename InputIterator,
           typename OutputCountIterator,
@@ -287,8 +287,12 @@ void scan_select_if(  //
   uint32_t num_items,
   ScanOperator scan_op,
   PredOperator pred_op,
+  bool do_initialize,
+  bool do_scatter,
   cudaStream_t stream = 0)
 {
+  CUDF_FUNC_RANGE();
+
   using Policy =
     policy<InputIterator, OutputCountIterator, OutputIterator, ScanOperator, PredOperator>;
 
@@ -315,15 +319,17 @@ void scan_select_if(  //
   CUDA_TRY(items_tile_state.Init(num_tiles, allocations[0], allocation_sizes[0]));
   CUDA_TRY(index_tile_state.Init(num_tiles, allocations[1], allocation_sizes[1]));
 
-  uint32_t num_init_blocks = ceil_div(num_tiles, Policy::THREADS_PER_INIT_BLOCK);
+  if (do_initialize) {
+    uint32_t num_init_blocks = ceil_div(num_tiles, Policy::THREADS_PER_INIT_BLOCK);
 
-  auto init_kernel = initialization_pass_kernel<Policy>;
-  init_kernel<<<num_init_blocks, Policy::THREADS_PER_INIT_BLOCK, 0, stream>>>(  //
-    items_tile_state,
-    index_tile_state,
-    num_tiles);
+    auto init_kernel = initialization_pass_kernel<Policy>;
+    init_kernel<<<num_init_blocks, Policy::THREADS_PER_INIT_BLOCK, 0, stream>>>(  //
+      items_tile_state,
+      index_tile_state,
+      num_tiles);
 
-  CHECK_CUDA(stream);
+    CHECK_CUDA(stream);
+  }
 
   // execute
 
@@ -343,6 +349,7 @@ void scan_select_if(  //
       pred_op,
       items_tile_state,
       index_tile_state,
+      do_scatter,
       num_tiles,
       start_tile);
 
@@ -359,8 +366,10 @@ scan_select_if(                                          //
   InputIterator d_in_end,
   ScanOperator scan_op,
   PredOperator pred_op,
-  cudaStream_t stream = 0)
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
+  CUDF_FUNC_RANGE();
   using Input = typename InputIterator::value_type;
 
   auto output_projection = [] __device__(thrust::pair<uint32_t, Input> output) -> Input {
@@ -383,11 +392,13 @@ scan_select_if(                                          //
                  d_in_end - d_in_begin,
                  scan_op,
                  pred_op,
+                 false,  // do_initialize
+                 false,  // do_scatter
                  stream);
 
   auto d_temp_storage = rmm::device_buffer(temp_storage_bytes, stream);
 
-  // phase 1 - determine number of resultsd_temp_storage
+  // phase 1 - determine number of results
 
   scan_select_if(d_temp_storage.data(),
                  temp_storage_bytes,
@@ -397,9 +408,11 @@ scan_select_if(                                          //
                  d_in_end - d_in_begin,
                  scan_op,
                  pred_op,
+                 true,   // do_initialize
+                 false,  // do_scatter
                  stream);
 
-  auto d_output = rmm::device_uvector<Input>(d_num_selections.value(stream), stream);
+  auto d_output = rmm::device_uvector<Input>(d_num_selections.value(stream), stream, mr);
 
   // phase 2 - gather results
 
@@ -411,9 +424,9 @@ scan_select_if(                                          //
                  d_in_end - d_in_begin,
                  scan_op,
                  pred_op,
+                 false,  // do_initialize
+                 true,   // do_scatter
                  stream);
-
-  cudaStreamSynchronize(stream);
 
   return d_output;
 }
