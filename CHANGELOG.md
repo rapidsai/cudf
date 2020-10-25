@@ -3,9 +3,11 @@
 ## New Features
 
 - PR #6460 Add is_timestamp format check API
+- PR #6528 Enable `fixed_point` binary operations
 - PR #6581 Add JNI API to check if PTDS is enabled
 
 ## Improvements
+- PR #6430 Add struct type support to `to_arrow` and `from_arrow`
 
 - PR #6384 Add CSV fuzz tests with varying function parameters
 - PR #6398 Remove function constructor macros in parquet reader
@@ -25,6 +27,7 @@
 - PR #6544 Remove `fixed_point` precise round
 - PR #6555 Adapt JNI build to libcudf composition of multiple libraries
 - PR #6564 Load JNI library dependencies with a thread pool
+- PR #6573 Create `cudf::detail::byte_cast` for `cudf::byte_cast`
 
 ## Bug Fixes
 
@@ -37,7 +40,7 @@
 - PR #6575 Fix JNI RMM initialize with no pool allocator limit
 
 
-# cuDF 0.16.0 (Date TBD)
+# cuDF 0.16.0 (21 Oct 2020)
 
 ## New Features
 
