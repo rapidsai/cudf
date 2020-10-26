@@ -216,9 +216,9 @@ public final class DType {
   @Override
   public String toString() {
     if (isDecimalType()) {
-      return "" + typeId + " scale:" + scale;
+      return typeId + " scale:" + scale;
     } else {
-      return "" + typeId;
+      return String.valueOf(typeId);
     }
   }
 
