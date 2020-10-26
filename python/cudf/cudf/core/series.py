@@ -836,20 +836,6 @@ class Series(Frame, Serializable):
         Series
             Same index as caller.
 
-        See Also
-        --------
-        Series.apply : For applying more complex functions on a Series.
-        DataFrame.apply : Apply a function row-/column-wise.
-        DataFrame.applymap : Apply a function elementwise on a whole DataFrame.
-
-        Notes
-        -----
-        When ``arg`` is a dictionary, values in Series that are not in the
-        dictionary (as keys) are converted to ``NaN``. However, if the
-        dictionary is a ``dict`` subclass that defines ``__missing__`` (i.e.
-        provides a method for default values), then this default is used
-        rather than ``NaN``.
-
         Examples
         --------
         >>> s = cudf.Series(['cat', 'dog', np.nan, 'rabbit'])
@@ -901,9 +887,7 @@ class Series(Frame, Serializable):
                 if self[i] not in arg.index:
                     result[i] = None
 
-        elif isinstance(
-            self._column, cudf.core.column.CategoricalColumn
-        ):
+        elif isinstance(self._column, cudf.core.column.CategoricalColumn):
             raise TypeError(
                 "User defined functions are currently not "
                 "supported on Series with dtypes `category`."
@@ -913,14 +897,12 @@ class Series(Frame, Serializable):
                 result = self.copy()
                 for i in range(len(self)):
                     result[i] = arg(self[i])
-                if na_action=='ignore':
+                if na_action == "ignore":
                     for i in range(len(self)):
-                        if self[i] == None:
+                        if self[i] is None:
                             result[i] = None
             else:
-                raise TypeError(
-                "'str' object is not callable "
-            )
+                raise TypeError("'str' object is not callable ")
         else:
             result = self.copy().applymap(arg)
         return result

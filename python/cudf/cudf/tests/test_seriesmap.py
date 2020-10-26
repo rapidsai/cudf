@@ -9,7 +9,6 @@ import pandas as pd
 import pytest
 
 from cudf import Series
-from cudf.tests import utils
 from cudf.tests.utils import assert_eq
 
 
@@ -43,9 +42,7 @@ def test_series_map_callable_numeric_basic():
     assert_eq(expected_function, actual_function)
 
 
-@pytest.mark.parametrize(
-    "nelem", list(product([2, 10, 100, 1000]))
-)
+@pytest.mark.parametrize("nelem", list(product([2, 10, 100, 1000])))
 def test_series_map_callable_numeric_random(nelem):
     # Generate data
     np.random.seed(0)
@@ -54,9 +51,7 @@ def test_series_map_callable_numeric_random(nelem):
     sr = Series(data)
 
     # Call applymap
-    out = sr.map(
-        lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x))
-    )
+    out = sr.map(lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x)))
 
     # Check
     expect = np.round(data)
@@ -79,12 +74,12 @@ def test_series_map_callable_numeric_random_dtype_change():
     np.testing.assert_array_equal(expect, got)
 
 
-@pytest.mark.parametrize("na_action", [None, 'ignore'])
+@pytest.mark.parametrize("na_action", [None, "ignore"])
 def test_series_map_callable_string(na_action):
     gd3 = cudf.Series(["cat", "dog", np.nan, "rabbit"])
     pdf3 = gd3.to_pandas()
 
-    expected_function = pdf3.map('I am a {}'.format, na_action=na_action)
-    actual_function = gd3.map('I am a {}'.format, na_action=na_action)
+    expected_function = pdf3.map("I am a {}".format, na_action=na_action)
+    actual_function = gd3.map("I am a {}".format, na_action=na_action)
 
     assert_eq(expected_function, actual_function)
