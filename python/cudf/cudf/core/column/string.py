@@ -4513,15 +4513,10 @@ class StringColumn(column.ColumnBase):
                 0
             ].dtype.itemsize
 
-            if self.offset:
-                child1_size = (
-                    self.base_children[0][-1]
-                    - self.base_children[0][self.offset]
-                ) * self.base_children[1].dtype.itemsize
-            else:
-                child1_size = (
-                    self.base_children[0][-1] - self.base_children[0][0]
-                ) * self.base_children[1].dtype.itemsize
+            child1_size = (
+                self.base_children[0][self.offset + self.size + 1]
+                - self.base_children[0][self.offset]
+            ) * self.base_children[1].dtype.itemsize
 
             n += child0_size + child1_size
         if self.nullable:
