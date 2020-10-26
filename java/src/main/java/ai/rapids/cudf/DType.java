@@ -240,7 +240,7 @@ public final class DType {
   /**
    * Factory method specialized for decimal DType instances.
    * @param dt  enum corresponding to datatype.
-   * @return scale base-10 exponent to multiply the unscaled value to produce the decimal value.
+   * @param scale base-10 exponent to multiply the unscaled value to produce the decimal value.
    * Example: Consider unscaled value = 123456
    *         if scale = -2, decimal value = 123456 * 10^-2 = 1234.56
    *         if scale = 2, decimal value = 123456 * 10^2 = 12345600
@@ -256,7 +256,7 @@ public final class DType {
   /**
    * Factory method for DType instances
    * @param nativeId nativeId of DataTypeEnun
-   * @return scale base-10 exponent to multiply the unscaled value to produce the decimal value
+   * @param scale base-10 exponent to multiply the unscaled value to produce the decimal value
    * Example: Consider unscaled value = 123456
    *         if scale = -2, decimal value = 123456 * 10^-2 = 1234.56
    *         if scale = 2, decimal value = 123456 * 10^2 = 12345600
