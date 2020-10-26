@@ -4506,6 +4506,17 @@ class StringColumn(column.ColumnBase):
             children=children,
         )
 
+    def __sizeof__(self):
+        n = 0
+        if len(self.base_children) == 2:
+            n += (
+                self.base_children[0].__sizeof__()
+                + self.base_children[1].__sizeof__()
+            )
+        if self.base_mask is not None:
+            n += self.base_mask.size
+        return n
+
     @property
     def base_size(self):
         if len(self.base_children) == 0:

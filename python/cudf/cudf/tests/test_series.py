@@ -697,3 +697,14 @@ def test_series_error_equality(sr1, sr2, op):
     gsr2 = cudf.from_pandas(sr2)
 
     assert_exceptions_equal(op, op, ([sr1, sr2],), ([gsr1, gsr2],))
+
+
+def test_series_memory_usage():
+    sr = cudf.Series([1, 2, 3, 4], dtype="int64")
+    assert sr.memory_usage() == 32
+
+    sliced_sr = sr[2:]
+    assert sliced_sr.memory_usage() == 16
+
+    sliced_sr[3] = None
+    assert sliced_sr.memory_usage() == 80

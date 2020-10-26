@@ -21,6 +21,14 @@ class ListColumn(ColumnBase):
             children=children,
         )
 
+    def __sizeof__(self):
+        n = 0
+        if self.nullable:
+            n += self.base_mask.size
+        for child in self.base_children:
+            n += child.__sizeof__()
+        return n
+
     @property
     def base_size(self):
         return len(self.base_children[0]) - 1
