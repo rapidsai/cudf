@@ -2144,6 +2144,42 @@ def test_string_str_rindex(data, sub, er):
 
 
 @pytest.mark.parametrize(
+    "data,sub",
+    [
+        (
+            ["abc", "xyz", "a", "ab", "123", "097"],
+            ["b", "y", "a", "c", "4", "8"],
+        ),
+        (
+            ["A B", "1.5", "3,000", "23", "³", "⅕"],
+            ["A B", ".", ",", "1", " ", " "],
+        ),
+        (
+            [" ", "\t", "\r", "\f ", "\n", ""],
+            ["", "\t", "\r", "xx", "yy", "zz"],
+        ),
+        (
+            ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+            ["$", "B", "ab", "*", "@", "dog"],
+        ),
+        (
+            ["hello", "there", "world", "-1234", "", "accént"],
+            ["lo", "e", "o", "+1234", " ", "e"],
+        ),
+        (
+            ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", "", "x", "é"],
+            ["A", "B", "C", " ", "y", "e"],
+        ),
+    ],
+)
+def test_string_contains_multi(data, sub):
+    gs = Series(data)
+    got = gs.str.contains(sub)
+    expect = Series([True, True, True, False, False, False])
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
     "data",
     [
         ["abc", "xyz", "a", "ab", "123", "097"],

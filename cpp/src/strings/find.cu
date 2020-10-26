@@ -243,7 +243,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   if (strings_count == 0) return make_empty_column(data_type{type_id::BOOL8});
 
   auto targets_count = targets.size();
-  CUDF_EXPECTS(targets_count > 0, "Must include at least one search target");
+  CUDF_EXPECTS(targets_count == strings_count, "strings and targets column must be the same size");
 
   auto targets_column = column_device_view::create(targets.parent(), stream);
   auto d_targets      = *targets_column;
@@ -290,6 +290,18 @@ std::unique_ptr<column> contains(
     return d_string.find(d_target) >= 0;
   };
   return contains_fn(strings, target, pfn, mr, stream);
+}
+
+std::unique_ptr<column> contains(
+  strings_column_view const& strings,
+  strings_column_view const& targets,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0)
+{
+  auto pfn = [] __device__(string_view d_string, string_view d_target) {
+    return d_string.find(d_target) >= 0;
+  };
+  return contains_fn(strings, targets, pfn, mr, stream);
 }
 
 std::unique_ptr<column> starts_with(
@@ -358,6 +370,14 @@ std::unique_ptr<column> contains(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::contains(strings, target, mr);
+}
+
+std::unique_ptr<column> contains(strings_column_view const& strings,
+                                 strings_column_view const& targets,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::contains(strings, targets, mr);
 }
 
 std::unique_ptr<column> starts_with(strings_column_view const& strings,
