@@ -50,10 +50,10 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <memory>
-#include "rmm/thrust_rmm_allocator.h"
-#include "thrust/execution_policy.h"
-#include "thrust/find.h"
-#include "thrust/transform.h"
+#include <rmm/thrust_rmm_allocator.h>
+#include <thrust/execution_policy.h>
+#include <thrust/find.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace detail {
@@ -1287,11 +1287,11 @@ size_t multiplication_factor(cudf::data_type const& data_type)
   }
 }
 
-// Given a single, ungrouped timestamp column, return the indices corresponding
-// to the first null timestamp, and (one past) the last null timestamp.
-// The input column is sorted, with all null values clustered either
-// at the beginning of the column or at the end.
-// If no null values are founds, null_begin and null_end are 0.
+/// Given a single, ungrouped timestamp column, return the indices corresponding
+/// to the first null timestamp, and (one past) the last null timestamp.
+/// The input column is sorted, with all null values clustered either
+/// at the beginning of the column or at the end.
+/// If no null values are founds, null_begin and null_end are 0.
 std::tuple<size_type, size_type> get_null_bounds_for_timestamp_column(
   column_view const& timestamp_column)
 {
@@ -1316,10 +1316,10 @@ std::tuple<size_type, size_type> get_null_bounds_for_timestamp_column(
   }
 }
 
-// Time-range window computation, with
-//   1. no grouping keys specified
-//   2. timetamps in ASCENDING order.
-// Treat as one single group.
+/// Time-range window computation, with
+///   1. no grouping keys specified
+///   2. timetamps in ASCENDING order.
+/// Treat as one single group.
 template <typename TimeT>
 std::unique_ptr<column> time_range_window_ASC(column_view const& input,
                                               column_view const& timestamp_column,
@@ -1397,15 +1397,15 @@ std::unique_ptr<column> time_range_window_ASC(column_view const& input,
     mr);
 }
 
-// Given a timestamp column grouped as specified in group_offsets,
-// return the following two vectors:
-//  1. Vector with one entry per group, indicating the offset in the group
-//     where the null values begin.
-//  2. Vector with one entry per group, indicating the offset in the group
-//     where the null values end. (i.e. 1 past the last null.)
-// Each group in the input timestamp column must be sorted,
-// with null values clustered at either the start or the end of each group.
-// If there are no nulls for any given group, (nulls_begin, nulls_end) == (0,0).
+/// Given a timestamp column grouped as specified in group_offsets,
+/// return the following two vectors:
+///  1. Vector with one entry per group, indicating the offset in the group
+///     where the null values begin.
+///  2. Vector with one entry per group, indicating the offset in the group
+///     where the null values end. (i.e. 1 past the last null.)
+/// Each group in the input timestamp column must be sorted,
+/// with null values clustered at either the start or the end of each group.
+/// If there are no nulls for any given group, (nulls_begin, nulls_end) == (0,0).
 std::tuple<rmm::device_vector<size_type>, rmm::device_vector<size_type>>
 get_null_bounds_for_timestamp_column(column_view const& timestamp_column,
                                      rmm::device_vector<size_type> const& group_offsets)
@@ -1568,10 +1568,10 @@ std::unique_ptr<column> time_range_window_ASC(
     mr);
 }
 
-// Time-range window computation, with
-//   1. no grouping keys specified
-//   2. timetamps in DESCENDING order.
-// Treat as one single group.
+/// Time-range window computation, with
+///   1. no grouping keys specified
+///   2. timetamps in DESCENDING order.
+/// Treat as one single group.
 template <typename TimeT>
 std::unique_ptr<column> time_range_window_DESC(column_view const& input,
                                                column_view const& timestamp_column,
