@@ -3,11 +3,14 @@
 ## New Features
 
 - PR #6460 Add is_timestamp format check API
+- PR #6528 Enable `fixed_point` binary operations
 - PR #6581 Add JNI API to check if PTDS is enabled
 
 ## Improvements
 
+- PR #6430 Add struct type support to `to_arrow` and `from_arrow`
 - PR #6384 Add CSV fuzz tests with varying function parameters
+- PR #6385 Add JSON fuzz tests with varying function parameters
 - PR #6398 Remove function constructor macros in parquet reader
 - PR #6432 Add dictionary support to `cudf::upper_bound` and `cudf::lower_bound`
 - PR #6461 Replace index type-dispatch call with indexalator in cudf::scatter
@@ -19,11 +22,14 @@
 - PR #6471 Replace index type-dispatch call with indexalator in cudf::strings::substring
 - PR #6485 Add File IO to cuIO benchmarks
 - PR #6504 Update Java bindings version to 0.17-SNAPSHOT
+- PR #6537 Refactor ORC timezone
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
 - PR #6566 Remove reinterpret_cast conversions between pointer types in ORC
 - PR #6544 Remove `fixed_point` precise round
 - PR #6555 Adapt JNI build to libcudf composition of multiple libraries
 - PR #6564 Load JNI library dependencies with a thread pool
+- PR #6573 Create `cudf::detail::byte_cast` for `cudf::byte_cast`
+- PR #6597 Use thread-local to track CUDA device in JNI
 - PR #6599 Replace `size()==0` with `empty()`, `is_empty()`
 
 ## Bug Fixes
@@ -35,9 +41,10 @@
 - PR #6543 Handle `np.nan` values in `isna`/`isnull`/`notna`/`notnull`
 - PR #6549 Fix memory_usage calls for list columns
 - PR #6575 Fix JNI RMM initialize with no pool allocator limit
+- PR #6595 Fix JNI build, broken by to_arrow() signature change
 
 
-# cuDF 0.16.0 (Date TBD)
+# cuDF 0.16.0 (21 Oct 2020)
 
 ## New Features
 

@@ -93,20 +93,23 @@ struct dispatch_to_arrow {
   /**
    * @brief Creates vector Arrays from given cudf column childrens
    */
-  std::vector<std::shared_ptr<arrow::Array>> fetch_child_array(column_view input_view,
-                                                               arrow::MemoryPool* ar_mr,
-                                                               cudaStream_t stream)
+  std::vector<std::shared_ptr<arrow::Array>> fetch_child_array(
+    column_view input_view,
+    std::vector<column_metadata> const& metadata,
+    arrow::MemoryPool* ar_mr,
+    cudaStream_t stream)
   {
     std::vector<std::shared_ptr<arrow::Array>> child_arrays;
     std::vector<size_type> child_indices(input_view.num_children());
     std::iota(child_indices.begin(), child_indices.end(), 0);
     std::transform(child_indices.begin(),
                    child_indices.end(),
+                   metadata.begin(),
                    std::back_inserter(child_arrays),
-                   [&input_view, &ar_mr, &stream](auto const& i) {
+                   [&input_view, &ar_mr, &stream](auto const& i, auto const& meta) {
                      auto c = input_view.child(i);
                      return type_dispatcher(
-                       c.type(), dispatch_to_arrow{}, c, c.type().id(), ar_mr, stream);
+                       c.type(), dispatch_to_arrow{}, c, c.type().id(), meta, ar_mr, stream);
                    });
     return child_arrays;
   }
@@ -114,6 +117,7 @@ struct dispatch_to_arrow {
   template <typename T>
   std::shared_ptr<arrow::Array> operator()(column_view input_view,
                                            cudf::type_id id,
+                                           column_metadata const& metadata,
                                            arrow::MemoryPool* ar_mr,
                                            cudaStream_t stream)
   {
@@ -128,6 +132,7 @@ struct dispatch_to_arrow {
 template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<bool>(column_view input,
                                                                   cudf::type_id id,
+                                                                  column_metadata const& metadata,
                                                                   arrow::MemoryPool* ar_mr,
                                                                   cudaStream_t stream)
 {
@@ -152,7 +157,11 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<bool>(column_view in
 
 template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
-  column_view input, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
+  column_view input,
+  cudf::type_id id,
+  column_metadata const& metadata,
+  arrow::MemoryPool* ar_mr,
+  cudaStream_t stream)
 {
   std::unique_ptr<column> tmp_column =
     ((input.offset() != 0) or
@@ -161,7 +170,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
       : nullptr;
 
   column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
-  auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
+  auto child_arrays      = fetch_child_array(input_view, {{}, {}}, ar_mr, stream);
   if (child_arrays.empty()) {
     arrow::Result<std::unique_ptr<arrow::Buffer>> result;
 
@@ -187,8 +196,48 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
 }
 
 template <>
+std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::struct_view>(
+  column_view input,
+  cudf::type_id id,
+  column_metadata const& metadata,
+  arrow::MemoryPool* ar_mr,
+  cudaStream_t stream)
+{
+  CUDF_EXPECTS(metadata.children_meta.size() == input.num_children(),
+               "Number of field names and number of children doesn't match\n");
+  std::unique_ptr<column> tmp_column = nullptr;
+
+  if (input.offset() != 0) { tmp_column = std::make_unique<cudf::column>(input); }
+
+  column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
+  auto child_arrays      = fetch_child_array(input_view, metadata.children_meta, ar_mr, stream);
+  auto mask              = fetch_mask_buffer(input_view, ar_mr, stream);
+
+  std::vector<std::shared_ptr<arrow::Field>> fields;
+  std::transform(child_arrays.cbegin(),
+                 child_arrays.cend(),
+                 metadata.children_meta.cbegin(),
+                 std::back_inserter(fields),
+                 [](auto const array, auto const meta) {
+                   return std::make_shared<arrow::Field>(
+                     meta.name, array->type(), array->null_count() > 0);
+                 });
+  auto dtype = std::make_shared<arrow::StructType>(fields);
+
+  return std::make_shared<arrow::StructArray>(dtype,
+                                              static_cast<int64_t>(input_view.size()),
+                                              child_arrays,
+                                              mask,
+                                              static_cast<int64_t>(input_view.null_count()));
+}
+
+template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::list_view>(
-  column_view input, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
+  column_view input,
+  cudf::type_id id,
+  column_metadata const& metadata,
+  arrow::MemoryPool* ar_mr,
+  cudaStream_t stream)
 {
   std::unique_ptr<column> tmp_column = nullptr;
   if ((input.offset() != 0) or
@@ -197,7 +246,9 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::list_view>(
   }
 
   column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
-  auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
+  auto children_meta =
+    metadata.children_meta.empty() ? std::vector<column_metadata>{{}, {}} : metadata.children_meta;
+  auto child_arrays = fetch_child_array(input_view, children_meta, ar_mr, stream);
   if (child_arrays.empty()) {
     return std::make_shared<arrow::ListArray>(arrow::list(arrow::null()), 0, nullptr, nullptr);
   }
@@ -214,7 +265,11 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::list_view>(
 
 template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::dictionary32>(
-  column_view input, cudf::type_id id, arrow::MemoryPool* ar_mr, cudaStream_t stream)
+  column_view input,
+  cudf::type_id id,
+  column_metadata const& metadata,
+  arrow::MemoryPool* ar_mr,
+  cudaStream_t stream)
 {
   // Arrow dictionary requires indices to be signed integer
   std::unique_ptr<column> dict_indices =
@@ -223,54 +278,64 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::dictionary32>(
          rmm::mr::get_current_device_resource(),
          stream);
   auto indices = dispatch_to_arrow{}.operator()<int32_t>(
-    dict_indices->view(), dict_indices->type().id(), ar_mr, stream);
-  auto dict_keys  = cudf::dictionary_column_view(input).keys();
-  auto dictionary = type_dispatcher(
-    dict_keys.type(), dispatch_to_arrow{}, dict_keys, dict_keys.type().id(), ar_mr, stream);
+    dict_indices->view(), dict_indices->type().id(), {}, ar_mr, stream);
+  auto dict_keys = cudf::dictionary_column_view(input).keys();
+  auto dictionary =
+    type_dispatcher(dict_keys.type(),
+                    dispatch_to_arrow{},
+                    dict_keys,
+                    dict_keys.type().id(),
+                    metadata.children_meta.empty() ? column_metadata{} : metadata.children_meta[0],
+                    ar_mr,
+                    stream);
 
   return std::make_shared<arrow::DictionaryArray>(
     arrow::dictionary(indices->type(), dictionary->type()), indices, dictionary);
 }
-
 }  // namespace
 
 std::shared_ptr<arrow::Table> to_arrow(table_view input,
-                                       std::vector<std::string> const& column_names,
+                                       std::vector<column_metadata> const& metadata,
                                        arrow::MemoryPool* ar_mr,
                                        cudaStream_t stream)
 {
-  CUDF_EXPECTS((column_names.size() == input.num_columns()),
-               "column names should be empty or should be equal to number of columns in table");
+  CUDF_EXPECTS((metadata.size() == input.num_columns()),
+               "columns' metadata should be equal to number of columns in table");
 
   std::vector<std::shared_ptr<arrow::Array>> arrays;
   std::vector<std::shared_ptr<arrow::Field>> fields;
-  bool const has_names = not column_names.empty();
 
-  std::transform(input.begin(), input.end(), std::back_inserter(arrays), [&](auto const& c) {
-    return c.type().id() != type_id::EMPTY
-             ? type_dispatcher(
-                 c.type(), detail::dispatch_to_arrow{}, c, c.type().id(), ar_mr, stream)
-             : std::make_shared<arrow::NullArray>(c.size());
-  });
+  size_type index = 0;
+  std::transform(
+    input.begin(),
+    input.end(),
+    metadata.begin(),
+    std::back_inserter(arrays),
+    [&](auto const& c, auto const& meta) {
+      return c.type().id() != type_id::EMPTY
+               ? type_dispatcher(
+                   c.type(), detail::dispatch_to_arrow{}, c, c.type().id(), meta, ar_mr, stream)
+               : std::make_shared<arrow::NullArray>(c.size());
+    });
 
   std::transform(
     arrays.begin(),
     arrays.end(),
-    column_names.begin(),
+    metadata.begin(),
     std::back_inserter(fields),
-    [](auto const& array, auto const& name) { return arrow::field(name, array->type()); });
+    [](auto const& array, auto const& meta) { return arrow::field(meta.name, array->type()); });
 
   return arrow::Table::Make(arrow::schema(fields), arrays);
 }
 }  // namespace detail
 
 std::shared_ptr<arrow::Table> to_arrow(table_view input,
-                                       std::vector<std::string> const& column_names,
+                                       std::vector<column_metadata> const& metadata,
                                        arrow::MemoryPool* ar_mr)
 {
   CUDF_FUNC_RANGE();
 
-  return detail::to_arrow(input, column_names, ar_mr);
+  return detail::to_arrow(input, metadata, ar_mr);
 }
 
 }  // namespace cudf
