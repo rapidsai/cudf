@@ -4509,7 +4509,9 @@ class StringColumn(column.ColumnBase):
     def __sizeof__(self):
         n = 0
         if len(self.base_children) == 2:
-            child0_size = self.size * self.base_children[0].dtype.itemsize
+            child0_size = (self.size + 1) * self.base_children[
+                0
+            ].dtype.itemsize
 
             if self.offset:
                 child1_size = (
