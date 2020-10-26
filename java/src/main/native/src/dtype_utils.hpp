@@ -15,7 +15,11 @@
  */
 #pragma once
 
-namespace dtype_utils{
+#include <cudf/types.hpp>
+#include <jni.h>
+
+namespace cudf {
+namespace jni {
 
 // convert a timestamp type to the corresponding duration type
 inline cudf::data_type timestamp_to_duration(cudf::data_type dt) {
@@ -57,4 +61,6 @@ inline cudf::data_type make_data_type(jint out_dtype, jint scale) {
   }
   return n_data_type;
 }
-} // namespace dtype_utils
+
+} // namespace jni
+} // namespace cudf

@@ -182,7 +182,9 @@ public final class DType {
 
   /**
    * Returns scale for Decimal Type
-   * @return scale
+   * @return scale If negative, the scale is the number of digits to the right of
+   * the decimal point. If  zero or positive, the unscaled value of the number is
+   * multiplied by ten to the power of the scale.
    */
   public int getScale() { return scale; }
 
@@ -224,7 +226,7 @@ public final class DType {
 
   /**
    * Factory method for non-decimal DType instances.
-   *
+   * @param dt  enum corresponding to datatype.
    * @return DType
    */
   public static DType create(DTypeEnum dt) {
@@ -236,7 +238,12 @@ public final class DType {
 
   /**
    * Factory method specialized for decimal DType instances.
-   *
+   * @param dt  enum corresponding to datatype.
+   * @param scale If negative, the scale is the number of digits to the right of the decimal point.
+   * If zero or positive, the unscaled value of the number is multiplied by ten to the power of the scale.
+   * Example: Consider unscaled value = 123456
+   *         if scale = -2, decimal value = 1234.56
+   *         if scale = 2, decimal value = 12345600
    * @return DType
    */
   public static DType create(DTypeEnum dt, int scale) {
@@ -249,7 +256,9 @@ public final class DType {
   /**
    * Factory method for DType instances
    * @param nativeId nativeId of DataTypeEnun
-   * @param scale  scale should be provided for decimal type
+   * @param scale  If negative, the scale is the number of digits to the right of the decimal point.
+   * If zero or positive, the unscaled value of the number is multiplied by ten to the power
+   * of the scale.
    * @return DType
    */
   public static DType fromNative(int nativeId, int scale) {

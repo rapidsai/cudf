@@ -435,7 +435,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_binaryOpSV(JNIEnv *env, jclas
     cudf::jni::auto_set_device(env);
     cudf::scalar *lhs = reinterpret_cast<cudf::scalar *>(lhs_ptr);
     auto rhs = reinterpret_cast<cudf::column_view *>(rhs_view);
-    cudf::data_type n_data_type = dtype_utils::make_data_type(out_dtype, scale);
+    cudf::data_type n_data_type = cudf::jni::make_data_type(out_dtype, scale);
 
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
     std::unique_ptr<cudf::column> result = cudf::binary_operation(
