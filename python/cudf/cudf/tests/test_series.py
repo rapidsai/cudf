@@ -708,3 +708,9 @@ def test_series_memory_usage():
 
     sliced_sr[3] = None
     assert sliced_sr.memory_usage() == 80
+
+    sr = cudf.Series(["hello world", "rapids ai", "abc", "z"])
+    assert sr.memory_usage() == 44
+
+    assert sr[3:].memory_usage() == 9  # z
+    assert sr[:1].memory_usage() == 19  # hello world

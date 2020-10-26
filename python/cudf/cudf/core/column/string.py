@@ -4506,6 +4506,23 @@ class StringColumn(column.ColumnBase):
             children=children,
         )
 
+        self._start_offset = None
+        self._end_offset = None
+
+    @property
+    def start_offset(self):
+        if self._start_offset is None:
+            self._start_offset = int(self.base_children[0][self.offset])
+        return self._start_offset
+
+    @property
+    def end_offset(self):
+        if self._end_offset is None:
+            self._end_offset = int(
+                self.base_children[0][self.offset + self.size]
+            )
+        return self._end_offset
+
     def __sizeof__(self):
         n = 0
         if len(self.base_children) == 2:
@@ -4514,8 +4531,7 @@ class StringColumn(column.ColumnBase):
             ].dtype.itemsize
 
             child1_size = (
-                self.base_children[0][self.offset + self.size + 1]
-                - self.base_children[0][self.offset]
+                self.end_offset - self.start_offset
             ) * self.base_children[1].dtype.itemsize
 
             n += child0_size + child1_size
