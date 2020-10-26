@@ -4509,10 +4509,19 @@ class StringColumn(column.ColumnBase):
     def __sizeof__(self):
         n = 0
         if len(self.base_children) == 2:
-            n += (
-                self.base_children[0].__sizeof__()
-                + self.base_children[1].__sizeof__()
-            )
+            child0_size = self.size * self.base_children[0].dtype.itemsize
+
+            if self.offset:
+                child1_size = (
+                    self.base_children[0][-1]
+                    - self.base_children[0][self.offset]
+                ) * self.base_children[1].dtype.itemsize
+            else:
+                child1_size = (
+                    self.base_children[0][-1] - self.base_children[0][0]
+                ) * self.base_children[1].dtype.itemsize
+
+            n += child0_size + child1_size
         if self.nullable:
             n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
         return n
