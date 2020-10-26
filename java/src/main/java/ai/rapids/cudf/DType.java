@@ -181,10 +181,11 @@ public final class DType {
   public int getSizeInBytes() { return typeId.sizeInBytes; }
 
   /**
-   * Returns scale for Decimal Type
-   * @return scale If negative, the scale is the number of digits to the right of
-   * the decimal point. If  zero or positive, the unscaled value of the number is
-   * multiplied by ten to the power of the scale.
+   * Returns scale for Decimal Type.
+   * @return scale base-10 exponent to multiply the unscaled value to produce the decimal value.
+   * Example: Consider unscaled value = 123456
+   *         if scale = -2, decimal value = 123456 * 10^-2 = 1234.56
+   *         if scale = 2, decimal value = 123456 * 10^2 = 12345600
    */
   public int getScale() { return scale; }
 
@@ -239,11 +240,10 @@ public final class DType {
   /**
    * Factory method specialized for decimal DType instances.
    * @param dt  enum corresponding to datatype.
-   * @param scale If negative, the scale is the number of digits to the right of the decimal point.
-   * If zero or positive, the unscaled value of the number is multiplied by ten to the power of the scale.
+   * @return scale base-10 exponent to multiply the unscaled value to produce the decimal value.
    * Example: Consider unscaled value = 123456
-   *         if scale = -2, decimal value = 1234.56
-   *         if scale = 2, decimal value = 12345600
+   *         if scale = -2, decimal value = 123456 * 10^-2 = 1234.56
+   *         if scale = 2, decimal value = 123456 * 10^2 = 12345600
    * @return DType
    */
   public static DType create(DTypeEnum dt, int scale) {
@@ -256,9 +256,10 @@ public final class DType {
   /**
    * Factory method for DType instances
    * @param nativeId nativeId of DataTypeEnun
-   * @param scale  If negative, the scale is the number of digits to the right of the decimal point.
-   * If zero or positive, the unscaled value of the number is multiplied by ten to the power
-   * of the scale.
+   * @return scale base-10 exponent to multiply the unscaled value to produce the decimal value
+   * Example: Consider unscaled value = 123456
+   *         if scale = -2, decimal value = 123456 * 10^-2 = 1234.56
+   *         if scale = 2, decimal value = 123456 * 10^2 = 12345600
    * @return DType
    */
   public static DType fromNative(int nativeId, int scale) {
