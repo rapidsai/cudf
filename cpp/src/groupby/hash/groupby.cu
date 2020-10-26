@@ -147,7 +147,12 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
     return std::move(transformed_result->release()[0]);
   };
 
-  // Declare overloads for each kind of a agg to dispatch
+  // Declare overloads for each kind of aggregation to dispatch
+  void visit(cudf::aggregation& agg) override
+  {
+    dense_results->add_result(i, agg, to_dense_agg_result(agg));
+  }
+
   void visit(cudf::detail::min_aggregation& agg) override
   {
     if (col.type().id() == type_id::STRING)
@@ -217,13 +222,8 @@ flatten_single_pass_aggs(std::vector<aggregation_request> const& requests)
     auto const& agg_v   = request.aggregations;
 
     for (auto&& agg : agg_v) {
-      auto comp_agg = dynamic_cast<cudf::detail::compound_aggregation*>(agg.get());
-      if (comp_agg == nullptr) {
-        insert_agg(i, request.values, agg->kind);
-      } else {
-        for (auto const& agg_s : comp_agg->get_simple_aggregations(request.values.type()))
-          insert_agg(i, request.values, agg_s.kind);
-      }
+      for (auto const& agg_s : agg->get_simple_aggregations(request.values.type()))
+        insert_agg(i, request.values, agg_s);
     }
   }
   return std::make_tuple(table_view(columns), std::move(agg_kinds), std::move(col_ids));
@@ -260,15 +260,7 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
     auto finalizer = hash_compound_agg_finalizer<decltype(to_dense_agg_result)>(
       sparse_results, dense_results, i, col, to_dense_agg_result, mr, stream);
 
-    for (auto&& agg : agg_v) {
-      auto const& agg_ref = *agg;
-      auto comp_agg       = dynamic_cast<cudf::detail::compound_aggregation*>(agg.get());
-      if (comp_agg == nullptr) {
-        dense_results->add_result(i, agg_ref, to_dense_agg_result(agg_ref));
-      } else {
-        comp_agg->finalize(finalizer);
-      }
-    }
+    for (auto&& agg : agg_v) { agg->finalize(finalizer); }
   }
 }
 

@@ -21,6 +21,16 @@
 #include <memory>
 
 namespace cudf {
+
+std::vector<aggregation::Kind> aggregation::get_simple_aggregations(data_type col_type) const
+{
+  return {this->kind};
+}
+void aggregation::finalize(cudf::detail::aggregation_finalizer& finalizer)
+{
+  finalizer.visit(*this);
+}
+
 /// Factory to create a SUM aggregation
 std::unique_ptr<aggregation> make_sum_aggregation()
 {

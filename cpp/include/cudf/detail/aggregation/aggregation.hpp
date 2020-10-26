@@ -28,14 +28,6 @@
 namespace cudf {
 namespace detail {
 
-class aggregation_finalizer;
-
-class compound_aggregation {
- public:
-  virtual std::vector<aggregation> get_simple_aggregations(data_type col_type) const = 0;
-  virtual void finalize(aggregation_finalizer& finalizer)                            = 0;
-};
-
 // Forward declare compound aggregations.
 class mean_aggregation;
 class std_var_aggregation;
@@ -46,6 +38,7 @@ class max_aggregation;
 class aggregation_finalizer {  // Declares the interface for the finalizer
  public:
   // Declare overloads for each kind of a agg to dispatch
+  virtual void visit(aggregation& agg)         = 0;
   virtual void visit(min_aggregation& agg)     = 0;
   virtual void visit(max_aggregation& agg)     = 0;
   virtual void visit(mean_aggregation& agg)    = 0;
@@ -55,15 +48,15 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
 /**
  * @brief Derived class for specifying a min aggregation
  */
-struct min_aggregation final : compound_aggregation, aggregation {
-  min_aggregation() : compound_aggregation{}, aggregation{MIN} {}
+struct min_aggregation final : aggregation {
+  min_aggregation() : aggregation{MIN} {}
 
-  std::vector<aggregation> get_simple_aggregations(data_type col_type) const override
+  std::vector<aggregation::Kind> get_simple_aggregations(data_type col_type) const override
   {
     if (col_type.id() == type_id::STRING)
-      return {aggregation{aggregation::ARGMIN}};
+      return {aggregation::ARGMIN};
     else
-      return {*this};
+      return {this->kind};
   }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
@@ -71,15 +64,15 @@ struct min_aggregation final : compound_aggregation, aggregation {
 /**
  * @brief Derived class for specifying a max aggregation
  */
-struct max_aggregation final : compound_aggregation, aggregation {
-  max_aggregation() : compound_aggregation{}, aggregation{MAX} {}
+struct max_aggregation final : aggregation {
+  max_aggregation() : aggregation{MAX} {}
 
-  std::vector<aggregation> get_simple_aggregations(data_type col_type) const override
+  std::vector<aggregation::Kind> get_simple_aggregations(data_type col_type) const override
   {
     if (col_type.id() == type_id::STRING)
-      return {aggregation{aggregation::ARGMAX}};
+      return {aggregation::ARGMAX};
     else
-      return {*this};
+      return {this->kind};
   }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
@@ -169,13 +162,13 @@ struct lead_lag_aggregation final : derived_aggregation<lead_lag_aggregation> {
 /**
  * @brief Derived class for specifying a mean aggregation
  */
-struct mean_aggregation final : compound_aggregation, aggregation {
-  mean_aggregation() : compound_aggregation{}, aggregation{MEAN} {}
+struct mean_aggregation final : aggregation {
+  mean_aggregation() : aggregation{MEAN} {}
 
-  std::vector<aggregation> get_simple_aggregations(data_type col_type) const override
+  std::vector<aggregation::Kind> get_simple_aggregations(data_type col_type) const override
   {
     CUDF_EXPECTS(is_fixed_width(col_type), "MEAN aggregation expects fixed width type");
-    return {aggregation{aggregation::SUM}, aggregation{aggregation::COUNT_VALID}};
+    return {aggregation::SUM, aggregation::COUNT_VALID};
   }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
@@ -183,18 +176,17 @@ struct mean_aggregation final : compound_aggregation, aggregation {
 /**
  * @brief Derived class for specifying a standard deviation/variance aggregation
  */
-struct std_var_aggregation final : derived_aggregation<std_var_aggregation>, compound_aggregation {
-  std_var_aggregation(aggregation::Kind k, size_type ddof)
-    : derived_aggregation{k}, compound_aggregation{}, _ddof{ddof}
+struct std_var_aggregation final : derived_aggregation<std_var_aggregation> {
+  std_var_aggregation(aggregation::Kind k, size_type ddof) : derived_aggregation{k}, _ddof{ddof}
   {
     CUDF_EXPECTS(k == aggregation::STD or k == aggregation::VARIANCE,
                  "std_var_aggregation can accept only STD, VARIANCE");
   }
   size_type _ddof;  ///< Delta degrees of freedom
 
-  std::vector<aggregation> get_simple_aggregations(data_type col_type) const override
+  std::vector<aggregation::Kind> get_simple_aggregations(data_type col_type) const override
   {
-    return {aggregation{aggregation::SUM}, aggregation{aggregation::COUNT_VALID}};
+    return {aggregation::SUM, aggregation::COUNT_VALID};
   }
 
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
