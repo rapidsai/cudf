@@ -8,7 +8,6 @@
 
 ## Improvements
 - PR #6430 Add struct type support to `to_arrow` and `from_arrow`
-
 - PR #6384 Add CSV fuzz tests with varying function parameters
 - PR #6398 Remove function constructor macros in parquet reader
 - PR #6432 Add dictionary support to `cudf::upper_bound` and `cudf::lower_bound`
@@ -37,7 +36,7 @@
 - PR #6543 Handle `np.nan` values in `isna`/`isnull`/`notna`/`notnull`
 - PR #6549 Fix memory_usage calls for list columns
 - PR #6575 Fix JNI RMM initialize with no pool allocator limit
-
+- PR #6596 Fix memory usage calculation
 
 # cuDF 0.16.0 (21 Oct 2020)
 
