@@ -535,8 +535,10 @@ class StringMethods(ColumnMethodsMixin):
 
         Parameters
         ----------
-        pat : str
+        pat : str or list-like
             Character sequence or regular expression.
+            If ``pat`` is list-like then regular expressions are not
+            accepted.
         regex : bool, default True
             If True, assumes the pattern is a regular expression.
             If False, treats the pattern as a literal string.
@@ -612,6 +614,18 @@ class StringMethods(ColumnMethodsMixin):
         2    False
         3     True
         4    False
+        dtype: bool
+
+        The ``pat`` may also be a list of strings in which case
+        the individual strings are searched in corresponding rows.
+
+        >>> s2 = cudf.Series(['house', 'dog', 'and', '', ''])
+        >>> s1.str.contains(s2)
+        0    False
+        1     True
+        2     True
+        3     True
+        4     null
         dtype: bool
         """
         if case is not True:
