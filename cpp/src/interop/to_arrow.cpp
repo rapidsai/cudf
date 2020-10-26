@@ -162,7 +162,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
 
   column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
   auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
-  if (child_arrays.size() == 0) {
+  if (child_arrays.empty()) {
     arrow::Result<std::unique_ptr<arrow::Buffer>> result;
 
     // Empty string will have only one value in offset of 4 bytes
@@ -198,7 +198,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::list_view>(
 
   column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
   auto child_arrays      = fetch_child_array(input_view, ar_mr, stream);
-  if (child_arrays.size() == 0) {
+  if (child_arrays.empty()) {
     return std::make_shared<arrow::ListArray>(arrow::list(arrow::null()), 0, nullptr, nullptr);
   }
 

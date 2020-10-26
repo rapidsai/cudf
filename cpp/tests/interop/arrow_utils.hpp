@@ -153,7 +153,7 @@ std::shared_ptr<arrow::Array> get_arrow_list_array(std::initializer_list<T> data
     offsets.size() - 1,
     offset_buffer,
     data_array,
-    mask.size() == 0 ? nullptr : arrow::internal::BytesToBits(mask).ValueOrDie());
+    mask.empty() ? nullptr : arrow::internal::BytesToBits(mask).ValueOrDie());
 }
 
 std::pair<std::unique_ptr<cudf::table>, std::shared_ptr<arrow::Table>> get_tables(

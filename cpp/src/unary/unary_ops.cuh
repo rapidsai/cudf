@@ -49,7 +49,7 @@ struct launcher {
       }
     }();
 
-    if (input.size() == 0) return output;
+    if (input.is_empty()) return output;
 
     auto output_view = output->mutable_view();
 

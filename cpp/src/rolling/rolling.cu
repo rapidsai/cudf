@@ -1062,7 +1062,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 {
   CUDF_FUNC_RANGE();
 
-  if (input.size() == 0) return empty_like(input);
+  if (input.is_empty()) return empty_like(input);
   CUDF_EXPECTS((min_periods >= 0), "min_periods must be non-negative");
 
   CUDF_EXPECTS((default_outputs.is_empty() || default_outputs.size() == input.size()),
@@ -1103,7 +1103,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 {
   CUDF_FUNC_RANGE();
 
-  if (preceding_window.size() == 0 || following_window.size() == 0 || input.size() == 0)
+  if (preceding_window.is_empty() || following_window.is_empty() || input.is_empty())
     return empty_like(input);
 
   CUDF_EXPECTS(preceding_window.type().id() == type_id::INT32 &&
@@ -1164,7 +1164,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 {
   CUDF_FUNC_RANGE();
 
-  if (input.size() == 0) return empty_like(input);
+  if (input.is_empty()) return empty_like(input);
 
   CUDF_EXPECTS((group_keys.num_columns() == 0 || group_keys.num_rows() == input.size()),
                "Size mismatch between group_keys and input vector.");
@@ -1531,41 +1531,39 @@ std::unique_ptr<column> grouped_time_range_rolling_window_impl(
     static_cast<TimestampImpl_t>(multiplication_factor(timestamp_column.type()))};
 
   if (timestamp_ordering == cudf::order::ASCENDING) {
-    return (group_offsets.size() == 0)
-             ? time_range_window_ASC(input,
-                                     timestamp_column,
-                                     preceding_window_in_days * mult_factor,
-                                     following_window_in_days * mult_factor,
-                                     min_periods,
-                                     aggr,
-                                     mr)
-             : time_range_window_ASC(input,
-                                     timestamp_column,
-                                     group_offsets,
-                                     group_labels,
-                                     preceding_window_in_days * mult_factor,
-                                     following_window_in_days * mult_factor,
-                                     min_periods,
-                                     aggr,
-                                     mr);
+    return (group_offsets.empty()) ? time_range_window_ASC(input,
+                                                           timestamp_column,
+                                                           preceding_window_in_days * mult_factor,
+                                                           following_window_in_days * mult_factor,
+                                                           min_periods,
+                                                           aggr,
+                                                           mr)
+                                   : time_range_window_ASC(input,
+                                                           timestamp_column,
+                                                           group_offsets,
+                                                           group_labels,
+                                                           preceding_window_in_days * mult_factor,
+                                                           following_window_in_days * mult_factor,
+                                                           min_periods,
+                                                           aggr,
+                                                           mr);
   } else {
-    return (group_offsets.size() == 0)
-             ? time_range_window_DESC(input,
-                                      timestamp_column,
-                                      preceding_window_in_days * mult_factor,
-                                      following_window_in_days * mult_factor,
-                                      min_periods,
-                                      aggr,
-                                      mr)
-             : time_range_window_DESC(input,
-                                      timestamp_column,
-                                      group_offsets,
-                                      group_labels,
-                                      preceding_window_in_days * mult_factor,
-                                      following_window_in_days * mult_factor,
-                                      min_periods,
-                                      aggr,
-                                      mr);
+    return (group_offsets.empty()) ? time_range_window_DESC(input,
+                                                            timestamp_column,
+                                                            preceding_window_in_days * mult_factor,
+                                                            following_window_in_days * mult_factor,
+                                                            min_periods,
+                                                            aggr,
+                                                            mr)
+                                   : time_range_window_DESC(input,
+                                                            timestamp_column,
+                                                            group_offsets,
+                                                            group_labels,
+                                                            preceding_window_in_days * mult_factor,
+                                                            following_window_in_days * mult_factor,
+                                                            min_periods,
+                                                            aggr,
+                                                            mr);
   }
 }
 
@@ -1583,7 +1581,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
 {
   CUDF_FUNC_RANGE();
 
-  if (input.size() == 0) return empty_like(input);
+  if (input.is_empty()) return empty_like(input);
 
   CUDF_EXPECTS((group_keys.num_columns() == 0 || group_keys.num_rows() == input.size()),
                "Size mismatch between group_keys and input vector.");

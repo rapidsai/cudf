@@ -330,7 +330,7 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
                              [&cudf_type, &mr, &stream](auto const& array_chunk) {
                                return get_column(*array_chunk, cudf_type, false, mr, stream);
                              });
-                   if (concat_columns.size() == 0) {
+                   if (concat_columns.empty()) {
                      return std::make_unique<column>(cudf_type, 0, rmm::device_buffer(0));
                    } else if (concat_columns.size() == 1) {
                      return std::move(concat_columns[0]);
