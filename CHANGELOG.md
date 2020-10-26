@@ -24,6 +24,7 @@
 - PR #6544 Remove `fixed_point` precise round
 - PR #6555 Adapt JNI build to libcudf composition of multiple libraries
 - PR #6564 Load JNI library dependencies with a thread pool
+- PR #6599 Replace `size()==0` with `empty()`, `is_empty()`
 
 ## Bug Fixes
 
