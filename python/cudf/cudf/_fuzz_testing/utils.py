@@ -1,38 +1,13 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import random
 
-import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 import cudf
 from cudf.tests.utils import assert_eq
+from cudf.utils.dtypes import pyarrow_dtypes_to_pandas_dtypes
 
-pyarrow_dtypes_to_pandas_dtypes = {
-    pa.uint8(): pd.UInt8Dtype(),
-    pa.uint16(): pd.UInt16Dtype(),
-    pa.uint32(): pd.UInt32Dtype(),
-    pa.uint64(): pd.UInt64Dtype(),
-    pa.int8(): pd.Int8Dtype(),
-    pa.int16(): pd.Int16Dtype(),
-    pa.int32(): pd.Int32Dtype(),
-    pa.int64(): pd.Int64Dtype(),
-    pa.bool_(): pd.BooleanDtype(),
-    pa.string(): pd.StringDtype(),
-}
-
-pandas_dtypes_to_cudf_dtypes = {
-    pd.UInt8Dtype(): np.dtype("uint8"),
-    pd.UInt16Dtype(): np.dtype("uint16"),
-    pd.UInt32Dtype(): np.dtype("uint32"),
-    pd.UInt64Dtype(): np.dtype("uint64"),
-    pd.Int8Dtype(): np.dtype("int8"),
-    pd.Int16Dtype(): np.dtype("int16"),
-    pd.Int32Dtype(): np.dtype("int32"),
-    pd.Int64Dtype(): np.dtype("int64"),
-    pd.BooleanDtype(): np.dtype("bool_"),
-    pd.StringDtype(): np.dtype("object"),
-}
+ALL_POSSIBLE_VALUES = "ALL_POSSIBLE_VALUES"
 
 
 def _generate_rand_meta(obj, dtypes_list):
