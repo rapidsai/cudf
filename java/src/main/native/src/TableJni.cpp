@@ -1191,7 +1191,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_convertCudfToArrowTable(JNIEnv
   try {
     cudf::jni::auto_set_device(env);
     std::unique_ptr<std::shared_ptr<arrow::Table>> result(new std::shared_ptr<arrow::Table>(nullptr));
-    *result = cudf::to_arrow(*tview, state->column_names);
+    auto column_metadata = std::vector<cudf::column_metadata>{};
+    column_metadata.reserve(state->column_names.size());
+    std::transform(
+      std::begin(state->column_names),
+      std::end(state->column_names),
+      std::back_inserter(column_metadata),
+      [](auto const& column_name) { return cudf::column_metadata{column_name}; }
+    );
+    *result = cudf::to_arrow(*tview, column_metadata);
     if (!result->get()) {
       return 0;
     }
