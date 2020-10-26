@@ -1532,38 +1532,38 @@ std::unique_ptr<column> grouped_time_range_rolling_window_impl(
 
   if (timestamp_ordering == cudf::order::ASCENDING) {
     return group_offsets.empty() ? time_range_window_ASC(input,
-                                                           timestamp_column,
-                                                           preceding_window_in_days * mult_factor,
-                                                           following_window_in_days * mult_factor,
-                                                           min_periods,
-                                                           aggr,
-                                                           mr)
-                                   : time_range_window_ASC(input,
-                                                           timestamp_column,
-                                                           group_offsets,
-                                                           group_labels,
-                                                           preceding_window_in_days * mult_factor,
-                                                           following_window_in_days * mult_factor,
-                                                           min_periods,
-                                                           aggr,
-                                                           mr);
+                                                         timestamp_column,
+                                                         preceding_window_in_days * mult_factor,
+                                                         following_window_in_days * mult_factor,
+                                                         min_periods,
+                                                         aggr,
+                                                         mr)
+                                 : time_range_window_ASC(input,
+                                                         timestamp_column,
+                                                         group_offsets,
+                                                         group_labels,
+                                                         preceding_window_in_days * mult_factor,
+                                                         following_window_in_days * mult_factor,
+                                                         min_periods,
+                                                         aggr,
+                                                         mr);
   } else {
     return group_offsets.empty() ? time_range_window_DESC(input,
-                                                            timestamp_column,
-                                                            preceding_window_in_days * mult_factor,
-                                                            following_window_in_days * mult_factor,
-                                                            min_periods,
-                                                            aggr,
-                                                            mr)
-                                   : time_range_window_DESC(input,
-                                                            timestamp_column,
-                                                            group_offsets,
-                                                            group_labels,
-                                                            preceding_window_in_days * mult_factor,
-                                                            following_window_in_days * mult_factor,
-                                                            min_periods,
-                                                            aggr,
-                                                            mr);
+                                                          timestamp_column,
+                                                          preceding_window_in_days * mult_factor,
+                                                          following_window_in_days * mult_factor,
+                                                          min_periods,
+                                                          aggr,
+                                                          mr)
+                                 : time_range_window_DESC(input,
+                                                          timestamp_column,
+                                                          group_offsets,
+                                                          group_labels,
+                                                          preceding_window_in_days * mult_factor,
+                                                          following_window_in_days * mult_factor,
+                                                          min_periods,
+                                                          aggr,
+                                                          mr);
   }
 }
 
