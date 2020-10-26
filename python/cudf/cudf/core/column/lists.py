@@ -21,10 +21,9 @@ class ListColumn(ColumnBase):
             null_count=null_count,
             children=children,
         )
-        self._cached_size = None
 
     def __sizeof__(self):
-        if self._cached_size is None:
+        if self._cached_sizeof is None:
             n = 0
             if self.nullable:
                 n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
@@ -55,9 +54,9 @@ class ListColumn(ColumnBase):
                 n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
                     current_base_child.size
                 )
-            self._cached_size = n
+            self._cached_sizeof = n
 
-        return self._cached_size
+        return self._cached_sizeof
 
     @property
     def base_size(self):
