@@ -15,6 +15,8 @@ from cudf.utils.dtypes import (
     is_struct_dtype,
 )
 
+import cudf._lib as libcudf
+
 def to_numeric(arg, errors='raise', downcast=None):
     """
     Convert argument into numerical types.
@@ -100,10 +102,12 @@ def to_numeric(arg, errors='raise', downcast=None):
         downcast_type_map['float'] = float_types[idx:]
 
         type_set = downcast_type_map[downcast]
-        downcast_dtype = next(np.dtype(t) for t in type_set if np.dtype(t).itemsize < col.dtype.itemsize)
+        for t in type_set:
+            downcast_dtype = np.dtype(t)
+            if downcast_dtype.itemsize <= col.dtype.itemsize and col.can_cast_safely(downcast_dtype):
+                col = libcudf.unary.cast(col, downcast_dtype)
+                break
 
-        col = col.astype(downcast_dtype)
-    
     if isinstance(arg, (cudf.Series, pd.Series)):
         return cudf.Series(col)
     else:

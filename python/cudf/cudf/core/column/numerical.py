@@ -512,10 +512,33 @@ class NumericalColumn(column.ColumnBase):
                     info = np.iinfo(to_dtype)
                 min_, max_ = info.min, info.max
 
-                if (self.min() > min_) and (self.max() < max_):
+                if (self.min() >= min_) and (self.max() < max_):
                     return True
                 else:
                     return False
+
+        # want to cast uint to int
+        elif self.dtype.kind == "i" and to_dtype.kind == "u":
+            i_max_ = np.iinfo(self.dtype).max
+            u_max_ = np.iinfo(to_dtype).max
+
+            if self.min() >= 0:
+                if i_max_ <= u_max_:
+                    return True
+                if self.max() < u_max_:
+                    return True
+            return False
+
+        # want to cast int to uint
+        elif self.dtype.kind == "u" and to_dtype.kind == "i":
+            u_max_ = np.iinfo(self.dtype).max
+            i_max_ = np.iinfo(to_dtype).max
+
+            if u_max_ <= i_max_:
+                return True
+            if self.max() < i_max_:
+                return True
+            return False
 
         # want to cast int to float
         elif to_dtype.kind == "f" and self.dtype.kind in {"i", "u"}:

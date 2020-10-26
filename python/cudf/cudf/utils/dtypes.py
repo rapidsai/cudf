@@ -115,6 +115,7 @@ def is_numerical_dtype(obj):
         np.issubdtype(obj, np.bool_)
         or np.issubdtype(obj, np.floating)
         or np.issubdtype(obj, np.signedinteger)
+        or np.issubdtype(obj, np.unsignedinteger)
     )
 
 
