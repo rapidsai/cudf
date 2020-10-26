@@ -134,7 +134,15 @@ def test_can_cast_safely_has_nulls():
             [pd.Timedelta(days=1, seconds=1), pd.Timedelta("-3 seconds 4ms")],
             dtype=np.dtype("<m8[ns]"),
         ),
-        # ['inf', '-inf', '+inf', 'infinity', '-infinity', '+infinity']
+        [
+            "inf",
+            "-inf",
+            "+inf",
+            "infinity",
+            "-infinity",
+            "+infinity",
+            "inFInity",
+        ],
     ],
 )
 def test_to_numeric_basic_1d(data):
