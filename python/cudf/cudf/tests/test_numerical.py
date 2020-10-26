@@ -180,3 +180,5 @@ def test_to_numeric_downcast_float(data, downcast):
 #     ]
 # )
 # def test_to_numeric_error(data, errors):
+#     if errors == 'raise':
+#         with 

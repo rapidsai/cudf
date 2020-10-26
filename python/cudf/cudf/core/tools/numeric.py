@@ -46,6 +46,12 @@ def to_numeric(arg, errors='raise', downcast=None):
     Depending on the input, if series is passed in, series is returned,
     otherwise ndarray
 
+    Notes
+    -------
+    An important difference from pandas is that this function does not accept
+    mixed numeric, non-numeric type sequences. For example `[1, 'a']`. A `TypeError`
+    will be raised when such input is received, regardless of `errors` parameter.
+
     Examples
     --------
     """
@@ -120,14 +126,21 @@ def _convert_str_col(col, errors):
     is_integer = col.str().isinteger()
     if is_integer.all():
         return col.as_numerical_column(dtype=np.dtype("i8"))
+    
+    # Account for `infinite` strings 
+    col = col.str().replace('+?([i|I]nf|[i|I]nfinity)$', 'Inf', regex=True)
+    col = col.str().replace('-([i|I]nf|[i|I]nfinity)$', '-Inf', regex=True)
+
     is_float = col.str().isfloat()
     if is_float.all():
         return col.as_numerical_column(dtype=np.dtype('d'))
     if is_integer.sum() + is_float.sum() == len(col):
         return col.as_numerical_column(dtype=np.dtype('d'))
-    # TODO: account for inf strings "[+|-]?(inf|infinity)"
     else:
         if errors == 'coerce':
-            return col.as_numerical_column(dtype=np.dtype('d'))
+            col = libcudf.string_casting.stod(col)
+            non_numerics = is_integer.binary_operator("or", is_float).unary_opeartor("not")
+            col[non_numerics] = None
+            return col
         else:
             raise ValueError('Unable to convert some strings to numerics.')
