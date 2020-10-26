@@ -43,17 +43,17 @@
 #include <thrust/binary_search.h>
 #include <rmm/device_scalar.hpp>
 
+#include <rmm/thrust_rmm_allocator.h>
 #include <thrust/detail/execution_policy.h>
+#include <thrust/execution_policy.h>
+#include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform.h>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <memory>
-#include <rmm/thrust_rmm_allocator.h>
-#include <thrust/execution_policy.h>
-#include <thrust/find.h>
-#include <thrust/transform.h>
 
 namespace cudf {
 namespace detail {
