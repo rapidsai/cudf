@@ -17,6 +17,27 @@ from cudf.tests.utils import (
 )
 
 
+def _series_na_data():
+    return [
+        pd.Series([0, 1, 2, np.nan, 4, None, 6]),
+        pd.Series(
+            [0, 1, 2, np.nan, 4, None, 6],
+            index=["q", "w", "e", "r", "t", "y", "u"],
+            name="a",
+        ),
+        pd.Series([0, 1, 2, 3, 4]),
+        pd.Series(["a", "b", "u", "h", "d"]),
+        pd.Series([None, None, np.nan, None, np.inf, -np.inf]),
+        pd.Series([]),
+        pd.Series(
+            [pd.NaT, pd.Timestamp("1939-05-27"), pd.Timestamp("1940-04-25")]
+        ),
+        pd.Series([np.nan]),
+        pd.Series([None]),
+        pd.Series(["a", "b", "", "c", None, "e"]),
+    ]
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -634,7 +655,26 @@ def test_series_mode(df, dropna):
     assert_eq(expected, actual, check_dtype=False)
 
 
-    assert_eq(expected_function, actual_function, check_dtype=False)
+@pytest.mark.parametrize("ps", _series_na_data())
+@pytest.mark.parametrize("nan_as_null", [True, False, None])
+def test_series_isnull_isna(ps, nan_as_null):
+
+    gs = cudf.Series.from_pandas(ps, nan_as_null=nan_as_null)
+
+    assert_eq(ps.isnull(), gs.isnull())
+    assert_eq(ps.isna(), gs.isna())
+
+
+@pytest.mark.parametrize("ps", _series_na_data())
+@pytest.mark.parametrize("nan_as_null", [True, False, None])
+def test_series_notnull_notna(ps, nan_as_null):
+
+    gs = cudf.Series.from_pandas(ps, nan_as_null=nan_as_null)
+
+    assert_eq(ps.notnull(), gs.notnull())
+    assert_eq(ps.notna(), gs.notna())
+
+
 @pytest.mark.parametrize(
     "sr1", [pd.Series([10, 11, 12], index=["a", "b", "z"]), pd.Series(["a"])]
 )

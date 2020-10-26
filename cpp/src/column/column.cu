@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -251,12 +252,15 @@ struct create_column_from_view {
 
     std::vector<std::unique_ptr<column>> children;
     children.reserve(view.num_children());
+    auto begin = view.offset();
+    auto end   = begin + view.size();
 
     std::transform(view.child_begin(),
                    view.child_end(),
                    std::back_inserter(children),
-                   [stream = this->stream, mr = this->mr](auto child) {
-                     return std::make_unique<column>(child, stream, mr);
+                   [begin, end, stream = this->stream, mr = this->mr](auto child) {
+                     return std::make_unique<column>(
+                       cudf::detail::slice(child, begin, end), stream, mr);
                    });
 
     auto num_rows = children.empty() ? 0 : children.front()->size();
@@ -264,7 +268,7 @@ struct create_column_from_view {
     return make_structs_column(num_rows,
                                std::move(children),
                                view.null_count(),
-                               cudf::copy_bitmask(view.null_mask(), 0, view.size(), stream, mr),
+                               cudf::copy_bitmask(view.null_mask(), begin, end, stream, mr),
                                stream,
                                mr);
   }
