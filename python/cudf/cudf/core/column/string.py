@@ -4513,8 +4513,8 @@ class StringColumn(column.ColumnBase):
                 self.base_children[0].__sizeof__()
                 + self.base_children[1].__sizeof__()
             )
-        if self.base_mask is not None:
-            n += self.base_mask.size
+        if self.nullable:
+            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
         return n
 
     @property

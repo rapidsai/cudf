@@ -2,6 +2,7 @@
 
 import pyarrow as pa
 
+import cudf
 from cudf.core.column import ColumnBase
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.utils.dtypes import is_list_dtype
@@ -24,7 +25,7 @@ class ListColumn(ColumnBase):
     def __sizeof__(self):
         n = 0
         if self.nullable:
-            n += self.base_mask.size
+            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
         for child in self.base_children:
             n += child.__sizeof__()
         return n
