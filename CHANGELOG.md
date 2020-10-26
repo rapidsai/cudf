@@ -7,6 +7,7 @@
 - PR #6581 Add JNI API to check if PTDS is enabled
 
 ## Improvements
+
 - PR #6430 Add struct type support to `to_arrow` and `from_arrow`
 - PR #6384 Add CSV fuzz tests with varying function parameters
 - PR #6398 Remove function constructor macros in parquet reader
