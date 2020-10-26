@@ -1295,25 +1295,18 @@ size_t multiplication_factor(cudf::data_type const& data_type)
 std::tuple<size_type, size_type> get_null_bounds_for_timestamp_column(
   column_view const& timestamp_column)
 {
-  auto num_rows  = timestamp_column.size();
-  auto num_nulls = timestamp_column.null_count();
+  auto const num_rows  = timestamp_column.size();
+  auto const num_nulls = timestamp_column.null_count();
 
-  if (num_nulls == num_rows) {
-    // Short-circuit: All nulls.
+  if (num_nulls == num_rows || num_nulls == 0) {
+    // Short-circuit: All nulls, or no nulls.
     return std::make_tuple(0, num_rows);
   }
 
-  auto first_row_is_null = timestamp_column.null_count(0, 1) == 1;
-  auto last_row_is_null  = timestamp_column.null_count(num_rows - 1, num_rows) == 1;
+  auto const first_row_is_null = timestamp_column.null_count(0, 1) == 1;
 
-  if (!timestamp_column.nullable() || (!first_row_is_null && !last_row_is_null)) {
-    // Neither first nor last rows are null. No nulls here.
-    return std::make_tuple(0, 0);
-  } else if (first_row_is_null) {
-    return std::make_tuple(0, num_nulls);
-  } else {
-    return std::make_tuple(num_rows - num_nulls, num_rows);
-  }
+  return first_row_is_null ? std::make_tuple(0, num_nulls)
+                           : std::make_tuple(num_rows - num_nulls, num_rows);
 }
 
 /// Time-range window computation, with
