@@ -340,10 +340,10 @@ ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 ###################################################################################################
 # - inclusive_copy_if tests -----------------------------------------------------------------------
 
-set(SCAN_SELECT_IF_TEST_SRC
-"${CMAKE_CURRENT_SOURCE_DIR}/algorithm/scan_select_if_test.cu")
+set(SCAN_COPY_IF_TEST_SRC
+"${CMAKE_CURRENT_SOURCE_DIR}/algorithm/scan_copy_if_test.cu")
 
-ConfigureTest(SCAN_SELECT_IF_TEST "${SCAN_SELECT_IF_TEST_SRC}")
+ConfigureTest(SCAN_COPY_IF_TEST "${SCAN_COPY_IF_TEST_SRC}")
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------

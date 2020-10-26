@@ -2,7 +2,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
-#include <cudf/algorithm/scan_select_if.cuh>
+#include <cudf/algorithm/scan_copy_if.cuh>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
@@ -28,7 +28,7 @@ TEST_F(InclusiveCopyIfTest, CanScanSelectIf)
 
   thrust::device_vector<uint32_t> h_input(input, input + input_size);
 
-  auto d_result = scan_select_if(h_input.begin(), h_input.end(), op, op);
+  auto d_result = scan_copy_if(h_input.begin(), h_input.end(), op, op);
 
   thrust::host_vector<uint32_t> h_result(d_result.size());
 
@@ -56,20 +56,11 @@ struct successive_capitalization_op {
     return {rhs.curr, lhs.curr};
   }
 
-  static inline constexpr bool is_capital(char value)
-  {                          //
-    return value >= 'A' and  //
-           value <= 'Z';
-  }
+  static inline constexpr bool is_capital(char value) { return value >= 'A' and value <= 'Z'; }
 
   inline __device__ bool operator()(successive_capitalization_state value)
   {
-    auto is_successive_capital = is_capital(value.prev) and  //
-                                 is_capital(value.curr);
-
-    printf("p(%i) c(%i) = %i\n", value.prev, value.curr, is_successive_capital);
-
-    return is_successive_capital;
+    return is_capital(value.prev) and is_capital(value.curr);
   }
 };
 
@@ -86,7 +77,7 @@ TEST_F(InclusiveCopyIfTest, CanDetectSuccessiveCapitals)
 
   auto op = successive_capitalization_op{};
 
-  auto d_result = scan_select_if(  //
+  auto d_result = scan_copy_if(  //
     input.begin(),
     input.end(),
     op,
@@ -175,7 +166,7 @@ TEST_F(InclusiveCopyIfTest, CanParseCsv)
 
   auto op = successive_capitalization_op{};
 
-  auto d_result = scan_select_if(  //
+  auto d_result = scan_copy_if(  //
     input.begin(),
     input.end(),
     op,

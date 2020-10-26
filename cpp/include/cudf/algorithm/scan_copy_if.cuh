@@ -288,7 +288,7 @@ template <typename InputIterator,
           typename OutputIterator,
           typename ScanOperator,
           typename PredOperator>
-void scan_select_if(  //
+void scan_copy_if(  //
   void* d_temp_storage,
   size_t& temp_storage_bytes,
   InputIterator d_in,
@@ -371,7 +371,7 @@ template <typename InputIterator,
           typename ScanOperator,
           typename PredOperator>
 rmm::device_uvector<typename InputIterator::value_type>  //
-scan_select_if(                                          //
+scan_copy_if(                                            //
   InputIterator d_in_begin,
   InputIterator d_in_end,
   ScanOperator scan_op,
@@ -394,49 +394,49 @@ scan_select_if(                                          //
 
   // query required temp storage (does not launch kernel)
 
-  scan_select_if(nullptr,
-                 temp_storage_bytes,
-                 d_in_begin,
-                 d_num_selections.data(),
-                 OutputIterator(nullptr, output_projection),
-                 d_in_end - d_in_begin,
-                 scan_op,
-                 pred_op,
-                 false,  // do_initialize
-                 false,  // do_scatter
-                 stream);
+  scan_copy_if(nullptr,
+               temp_storage_bytes,
+               d_in_begin,
+               d_num_selections.data(),
+               OutputIterator(nullptr, output_projection),
+               d_in_end - d_in_begin,
+               scan_op,
+               pred_op,
+               false,  // do_initialize
+               false,  // do_scatter
+               stream);
 
   auto d_temp_storage = rmm::device_buffer(temp_storage_bytes, stream);
 
   // phase 1 - determine number of results
 
-  scan_select_if(d_temp_storage.data(),
-                 temp_storage_bytes,
-                 d_in_begin,
-                 d_num_selections.data(),
-                 OutputIterator(nullptr, output_projection),
-                 d_in_end - d_in_begin,
-                 scan_op,
-                 pred_op,
-                 true,   // do_initialize
-                 false,  // do_scatter
-                 stream);
+  scan_copy_if(d_temp_storage.data(),
+               temp_storage_bytes,
+               d_in_begin,
+               d_num_selections.data(),
+               OutputIterator(nullptr, output_projection),
+               d_in_end - d_in_begin,
+               scan_op,
+               pred_op,
+               true,   // do_initialize
+               false,  // do_scatter
+               stream);
 
   auto d_output = rmm::device_uvector<Input>(d_num_selections.value(stream), stream, mr);
 
   // phase 2 - gather results
 
-  scan_select_if(d_temp_storage.data(),
-                 temp_storage_bytes,
-                 d_in_begin,
-                 d_num_selections.data(),
-                 OutputIterator(d_output.data(), output_projection),
-                 d_in_end - d_in_begin,
-                 scan_op,
-                 pred_op,
-                 false,  // do_initialize
-                 true,   // do_scatter
-                 stream);
+  scan_copy_if(d_temp_storage.data(),
+               temp_storage_bytes,
+               d_in_begin,
+               d_num_selections.data(),
+               OutputIterator(d_output.data(), output_projection),
+               d_in_end - d_in_begin,
+               scan_op,
+               pred_op,
+               false,  // do_initialize
+               true,   // do_scatter
+               stream);
 
   return d_output;
 }

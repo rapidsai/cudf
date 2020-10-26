@@ -73,12 +73,12 @@ set(GATHER_BENCH_SRC
 ConfigureBench(GATHER_BENCH "${GATHER_BENCH_SRC}")
 
 ###################################################################################################
-# - scan_select_if benchmark ----------------------------------------------------------------------
+# - scan_copy_if benchmark ------------------------------------------------------------------------
 
-set(SCAN_SELECT_IF_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/algorithm/scan_select_if_benchmark.cu")
+set(SCAN_COPY_IF_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/algorithm/scan_copy_if_benchmark.cu")
 
-ConfigureBench(SCAN_SELECT_IF_BENCH "${SCAN_SELECT_IF_BENCH_SRC}")
+ConfigureBench(SCAN_COPY_IF_BENCH "${SCAN_COPY_IF_BENCH_SRC}")
 
 ###################################################################################################
 # - scatter benchmark -----------------------------------------------------------------------------
