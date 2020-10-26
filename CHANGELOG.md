@@ -7,8 +7,8 @@
 - PR #6581 Add JNI API to check if PTDS is enabled
 
 ## Improvements
-- PR #6430 Add struct type support to `to_arrow` and `from_arrow`
 
+- PR #6430 Add struct type support to `to_arrow` and `from_arrow`
 - PR #6384 Add CSV fuzz tests with varying function parameters
 - PR #6385 Add JSON fuzz tests with varying function parameters
 - PR #6398 Remove function constructor macros in parquet reader
@@ -29,6 +29,7 @@
 - PR #6555 Adapt JNI build to libcudf composition of multiple libraries
 - PR #6564 Load JNI library dependencies with a thread pool
 - PR #6573 Create `cudf::detail::byte_cast` for `cudf::byte_cast`
+- PR #6597 Use thread-local to track CUDA device in JNI
 
 ## Bug Fixes
 
