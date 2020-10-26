@@ -4525,9 +4525,7 @@ class StringColumn(column.ColumnBase):
 
             n += child0_size + child1_size
         if self.nullable:
-            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
-                self.size - self.offset
-            )
+            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
         return n
 
     @property

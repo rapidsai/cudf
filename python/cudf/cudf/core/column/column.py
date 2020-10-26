@@ -181,7 +181,7 @@ class ColumnBase(Column, Serializable):
     def __sizeof__(self):
         n = self.data.size
         if self.nullable:
-            n += bitmask_allocation_size_bytes(self.size - self.offset)
+            n += bitmask_allocation_size_bytes(self.size)
         return n
 
     @classmethod
