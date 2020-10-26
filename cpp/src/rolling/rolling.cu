@@ -1300,7 +1300,7 @@ std::tuple<size_type, size_type> get_null_bounds_for_timestamp_column(
 
   if (num_nulls == num_rows || num_nulls == 0) {
     // Short-circuit: All nulls, or no nulls.
-    return std::make_tuple(0, num_rows);
+    return std::make_tuple(0, num_nulls);
   }
 
   auto const first_row_is_null = timestamp_column.null_count(0, 1) == 1;

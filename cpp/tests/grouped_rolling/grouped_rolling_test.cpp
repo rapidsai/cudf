@@ -1529,7 +1529,6 @@ TYPED_TEST(TypedNullTimestampTestForRangeQueries, CountMultiGroupAllNullTimestam
                                                               min_periods,
                                                               cudf::make_count_aggregation());
 
-  print(output->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
                                  fixed_width_column_wrapper<cudf::size_type>{
                                    {2, 3, 3, 3, 2, 4, 4, 4, 4, 4}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
