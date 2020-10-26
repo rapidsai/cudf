@@ -25,9 +25,31 @@ class ListColumn(ColumnBase):
     def __sizeof__(self):
         n = 0
         if self.nullable:
-            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
-        for child in self.base_children:
-            n += child.__sizeof__()
+            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
+                self.size - self.offset
+            )
+        if self.offset:
+            child0_size = (self.size + 1) * self.base_children[
+                0
+            ].dtype.itemsize
+            current_base_child = self.base_children[1]
+            current_offset = self.offset
+            n += child0_size
+            while type(current_base_child) is ListColumn:
+                child0_size = (
+                    current_base_child.size + 1 - current_offset
+                ) * current_base_child.base_children[0].dtype.itemsize
+                current_offset = current_base_child.base_children[0][
+                    current_offset
+                ]
+                n += child0_size
+                current_base_child = current_base_child.base_children[1]
+            n += (
+                current_base_child.size - current_offset + 1
+            ) * current_base_child.dtype.itemsize
+        else:
+            for child in self.base_children:
+                n += child.__sizeof__()
         return n
 
     @property
