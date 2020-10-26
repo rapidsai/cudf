@@ -102,7 +102,6 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
     stream);
   auto const left_selected  = matched.second.front();
   auto const right_selected = matched.second.back();
-  // auto const right_updated = update_table_from_matched(right, right_selected, right_on);
 
   // Only care about existence, so we'll use an unordered map (other joins need a multimap)
   using hash_table_type = concurrent_unordered_map<cudf::size_type, bool, row_hash, row_equality>;
@@ -154,7 +153,7 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
     });
 
   // rebuild left table for call to gather
-  auto const left_updated = update_table_from_matched(left, left_selected, left_on);
+  auto const left_updated = scatter_columns(left, left_selected, left_on);
   return cudf::detail::gather(
     left_updated.select(return_columns), gather_map.begin(), gather_map_end, false, mr);
 }

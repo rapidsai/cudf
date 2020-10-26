@@ -73,10 +73,6 @@ inline bool is_trivial_join(table_view const& left,
   return false;
 }
 
-cudf::table_view update_table_from_matched(cudf::table_view const& input,
-                                           cudf::table_view const& updated_table,
-                                           std::vector<size_type> const& indices);
-
 }  // namespace detail
 
 }  // namespace cudf

@@ -238,7 +238,7 @@ inline bool has_nulls(table_view view)
   return std::any_of(view.begin(), view.end(), [](column_view col) { return col.has_nulls(); });
 }
 
-/*
+/**
  * @brief Checks if two `table_view`s have columns of same types
  *
  * @param lhs left-side table_view operand
@@ -254,4 +254,22 @@ inline bool have_same_types(table_view const& lhs, table_view const& rhs)
     rhs.end(),
     [](column_view const& lcol, column_view const& rcol) { return (lcol.type() == rcol.type()); });
 }
+
+/**
+ * @brief Copy column_views from a table_view into another table_view according to
+ * a column indices map.
+ *
+ * The output table view, `out_table` is a copy of the `input` table_view but with
+ * elements updated according to `out_table[map[i]] = new_columns[i]` where `i` is
+ * `[0,new_columns.size())`
+ *
+ * @param input Table to receive the updated column views.
+ * @param new_columns Table of new columns to scatter into the output table view.
+ * @param map The indices where each new_column should be copied into the output.
+ * @return New table_view.
+ */
+table_view scatter_columns(table_view const& input,
+                           table_view const& new_columns,
+                           std::vector<size_type> const& map);
+
 }  // namespace cudf
