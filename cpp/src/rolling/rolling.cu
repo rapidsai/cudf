@@ -1531,7 +1531,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window_impl(
     static_cast<TimestampImpl_t>(multiplication_factor(timestamp_column.type()))};
 
   if (timestamp_ordering == cudf::order::ASCENDING) {
-    return (group_offsets.empty()) ? time_range_window_ASC(input,
+    return group_offsets.empty() ? time_range_window_ASC(input,
                                                            timestamp_column,
                                                            preceding_window_in_days * mult_factor,
                                                            following_window_in_days * mult_factor,
@@ -1548,7 +1548,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window_impl(
                                                            aggr,
                                                            mr);
   } else {
-    return (group_offsets.empty()) ? time_range_window_DESC(input,
+    return group_offsets.empty() ? time_range_window_DESC(input,
                                                             timestamp_column,
                                                             preceding_window_in_days * mult_factor,
                                                             following_window_in_days * mult_factor,
