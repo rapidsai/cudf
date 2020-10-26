@@ -17,21 +17,25 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
+#include <cudf/algorithm/scan_select_if.cuh>
+
 #include <cudf_test/column_wrapper.hpp>
-#include "../../../tests/io/algo/scan_select_if.cuh"
 
 #include <thrust/iterator/constant_iterator.h>
 
+#include <algorithm>
+
+template <typename T>
 struct simple_op {
-  inline constexpr uint32_t operator()(uint32_t lhs, uint32_t rhs) { return lhs + rhs; }
-  inline constexpr bool operator()(uint32_t value) { return value % 2 == 0; }
+  inline constexpr T operator()(T lhs, T rhs) { return lhs + rhs; }
+  inline constexpr bool operator()(T value) { return value % 2 == 0; }
 };
 
 static void BM_scan_select_if(benchmark::State& state)
 {
   using T             = uint64_t;
   uint32_t input_size = state.range(0);
-  auto op             = simple_op{};
+  auto op             = simple_op<T>{};
 
   auto input   = thrust::make_constant_iterator<T>(1);
   auto d_input = thrust::device_vector<T>(input, input + input_size);

@@ -84,6 +84,16 @@ struct agent {
 
     __syncthreads();
 
+    // Scan Inputs Locally
+
+    auto thread_aggregate = items[0];
+
+    for (uint32_t i = 1; i < Policy::ITEMS_PER_THREAD; i++) {
+      if (threadIdx.x * Policy::ITEMS_PER_THREAD + i < num_items_remaining) {
+        thread_aggregate = scan_op(thread_aggregate, items[i]);
+      };
+    };
+
     // Scan Inputs
 
     if (tile_idx == 0) {
