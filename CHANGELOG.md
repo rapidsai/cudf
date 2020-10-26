@@ -10,6 +10,7 @@
 
 - PR #6430 Add struct type support to `to_arrow` and `from_arrow`
 - PR #6384 Add CSV fuzz tests with varying function parameters
+- PR #6385 Add JSON fuzz tests with varying function parameters
 - PR #6398 Remove function constructor macros in parquet reader
 - PR #6432 Add dictionary support to `cudf::upper_bound` and `cudf::lower_bound`
 - PR #6461 Replace index type-dispatch call with indexalator in cudf::scatter
@@ -21,6 +22,7 @@
 - PR #6471 Replace index type-dispatch call with indexalator in cudf::strings::substring
 - PR #6485 Add File IO to cuIO benchmarks
 - PR #6504 Update Java bindings version to 0.17-SNAPSHOT
+- PR #6537 Refactor ORC timezone
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
 - PR #6566 Remove reinterpret_cast conversions between pointer types in ORC
 - PR #6544 Remove `fixed_point` precise round
@@ -38,6 +40,8 @@
 - PR #6549 Fix memory_usage calls for list columns
 - PR #6575 Fix JNI RMM initialize with no pool allocator limit
 - PR #6596 Fix memory usage calculation
+- PR #6595 Fix JNI build, broken by to_arrow() signature change
+
 
 # cuDF 0.16.0 (21 Oct 2020)
 
