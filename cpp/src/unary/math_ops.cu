@@ -236,8 +236,13 @@ std::unique_ptr<cudf::column> transform_fn(InputIterator begin,
 {
   auto const size = cudf::distance(begin, end);
 
-  std::unique_ptr<cudf::column> output = make_fixed_width_column(
-    data_type{type_to_id<OutputType>()}, size, null_mask, null_count, stream, mr);
+  std::unique_ptr<cudf::column> output =
+    make_fixed_width_column(data_type{type_to_id<OutputType>()},
+                            size,
+                            std::forward<rmm::device_buffer>(null_mask),
+                            null_count,
+                            stream,
+                            mr);
   if (size == 0) return output;
 
   auto output_view = output->mutable_view();
