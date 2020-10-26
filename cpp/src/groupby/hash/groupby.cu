@@ -271,8 +271,11 @@ void compute_single_pass_aggs(table_view const& keys,
                        : col.has_nulls();
                    auto mask_flag = (nullable) ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
 
+                   auto col_type = col.type().id() == type_id::DICTIONARY32
+                                     ? cudf::dictionary_column_view(col).keys().type()
+                                     : col.type();
                    return make_fixed_width_column(
-                     cudf::detail::target_type(col.type(), agg), col.size(), mask_flag, stream);
+                     cudf::detail::target_type(col_type, agg), col.size(), mask_flag, stream);
                  });
 
   table sparse_table(std::move(sparse_columns));
