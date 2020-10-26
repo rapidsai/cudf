@@ -127,9 +127,10 @@ def _convert_str_col(col, errors):
     if is_integer.all():
         return col.as_numerical_column(dtype=np.dtype("i8"))
     
-    # Account for `infinite` strings 
-    col = col.str().replace('+?([i|I]nf|[i|I]nfinity)$', 'Inf', regex=True)
-    col = col.str().replace('-([i|I]nf|[i|I]nfinity)$', '-Inf', regex=True)
+    # Account for `infinite` strings
+    col = col.str().lower()
+    col = col.str().replace('\+?(inf|infinity)$', 'Inf', regex=True)
+    col = col.str().replace('-(inf|infinity)$', '-Inf', regex=True)
 
     is_float = col.str().isfloat()
     if is_float.all():
@@ -139,7 +140,7 @@ def _convert_str_col(col, errors):
     else:
         if errors == 'coerce':
             col = libcudf.string_casting.stod(col)
-            non_numerics = is_integer.binary_operator("or", is_float).unary_opeartor("not")
+            non_numerics = is_integer.binary_operator("or", is_float).unary_operator("not")
             col[non_numerics] = None
             return col
         else:

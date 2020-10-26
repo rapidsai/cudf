@@ -169,16 +169,22 @@ def test_to_numeric_downcast_float(data, downcast):
 
     assert_eq(expected, got)
 
-# @pytest.mark.parametrize(
-#     "data", [
-#         pd.Series([1, 'a', '3'])
-#     ]
-# )
-# @pytest.mark.parametrize(
-#     "errors", [
-#         "ignore", "raise", "coerce"
-#     ]
-# )
-# def test_to_numeric_error(data, errors):
-#     if errors == 'raise':
-#         with 
+@pytest.mark.parametrize(
+    "data", [
+        pd.Series(['1', 'a', '3'])
+    ]
+)
+@pytest.mark.parametrize(
+    "errors", [
+        "ignore", "raise", "coerce"
+    ]
+)
+def test_to_numeric_error(data, errors):
+    if errors == 'raise':
+       with pytest.raises(ValueError, match='Unable to convert some strings to numerics.'):
+            cudf.to_numeric(data, errors=errors)
+    else:
+        expect = pd.to_numeric(data, errors=errors)
+        got = cudf.to_numeric(data, errors=errors)
+
+        assert_eq(expect, got)
