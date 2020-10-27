@@ -137,19 +137,17 @@ TYPED_TEST(groupby_sum_test, null_keys_and_values)
 }
 // clang-format on
 
-struct groupby_dictionary_sum_test : public cudf::test::BaseFixture {
-};
-
-TEST_F(groupby_dictionary_sum_test, basic)
+TYPED_TEST(groupby_sum_test, dictionary)
 {
   using K = int32_t;
-  using V = int32_t;
+  using V = TypeParam;  // int32_t;
   using R = cudf::detail::target_type_t<V, aggregation::SUM>;
 
   // clang-format off
   fixed_width_column_wrapper<K> keys_w     { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   fixed_width_column_wrapper<V, int> vals_w{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-  fixed_width_column_wrapper<K> expect_keys_w     { 1, 2,  3 };
+
+  fixed_width_column_wrapper<K> expect_keys_w   { 1, 2,  3 };
   fixed_width_column_wrapper<R, int> expect_vals{ 9, 19, 17};
   // clang-format on
 
@@ -170,18 +168,18 @@ TEST_F(groupby_dictionary_sum_test, basic)
                   expect_vals,
                   cudf::make_sum_aggregation(),
                   force_use_sort_impl::YES);
-  // test_single_agg(keys_w,
-  //                vals->view(),
-  //                expect_keys_w,
-  //                expect_vals,
-  //                cudf::make_sum_aggregation(),
-  //                force_use_sort_impl::YES);
-  // test_single_agg(keys->view(),
-  //                vals->view(),
-  //                expect_keys->view(),
-  //                expect_vals,
-  //                cudf::make_sum_aggregation(),
-  //                force_use_sort_impl::YES);
+  test_single_agg(keys_w,
+                  vals->view(),
+                  expect_keys_w,
+                  expect_vals,
+                  cudf::make_sum_aggregation(),
+                  force_use_sort_impl::YES);
+  test_single_agg(keys->view(),
+                  vals->view(),
+                  expect_keys->view(),
+                  expect_vals,
+                  cudf::make_sum_aggregation(),
+                  force_use_sort_impl::YES);
 }
 
 }  // namespace test
