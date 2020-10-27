@@ -122,9 +122,9 @@ struct PageInfo {
   int32_t chunk_idx;       // column chunk this page belongs to
   int32_t src_col_schema;  // schema index of this column
   uint8_t flags;           // PAGEINFO_FLAGS_XXX
-  uint8_t encoding;        // Encoding for data or dictionary page
-  uint8_t definition_level_encoding;  // Encoding used for definition levels (data page)
-  uint8_t repetition_level_encoding;  // Encoding used for repetition levels (data page)
+  Encoding encoding;       // Encoding for data or dictionary page
+  Encoding definition_level_encoding;  // Encoding used for definition levels (data page)
+  Encoding repetition_level_encoding;  // Encoding used for repetition levels (data page)
 
   int skipped_values;
   int skipped_leaf_values;

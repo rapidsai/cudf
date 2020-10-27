@@ -33,7 +33,7 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
                                rmm::mr::device_memory_resource* mr,
                                cudaStream_t stream)
 {
-  if (source.size() == 0) return make_empty_column(data_type{type_id::EMPTY});
+  if (source.is_empty()) return make_empty_column(data_type{type_id::EMPTY});
 
   column_view indices{source.indices().type(),
                       source.size(),

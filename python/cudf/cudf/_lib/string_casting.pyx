@@ -19,7 +19,8 @@ from cudf._lib.cpp.strings.convert.convert_booleans cimport (
 )
 from cudf._lib.cpp.strings.convert.convert_datetime cimport (
     to_timestamps as cpp_to_timestamps,
-    from_timestamps as cpp_from_timestamps
+    from_timestamps as cpp_from_timestamps,
+    is_timestamp as cpp_is_timestamp
 )
 from cudf._lib.cpp.strings.convert.convert_floats cimport (
     to_floats as cpp_to_floats,
@@ -568,6 +569,38 @@ def timestamp2int(
             cpp_to_timestamps(
                 input_column_view,
                 out_type,
+                c_timestamp_format))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def istimestamp(
+        Column input_col,
+        object format,
+        **kwargs):
+    """
+    Check input string column matches the specified timestamp format
+
+    Parameters
+    ----------
+    input_col : input column of type string
+
+    format : format string of timestamp specifiers
+
+    Returns
+    -------
+    A Column of boolean values identifying strings that matched the format.
+
+    """
+    if input_col.size == 0:
+        return as_column([], dtype=kwargs.get('dtype'))
+    cdef column_view input_column_view = input_col.view()
+    cdef string c_timestamp_format = <string>str(format).encode('UTF-8')
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(
+            cpp_is_timestamp(
+                input_column_view,
                 c_timestamp_format))
 
     return Column.from_unique_ptr(move(c_result))

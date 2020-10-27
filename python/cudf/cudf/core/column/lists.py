@@ -9,17 +9,10 @@ from cudf.utils.dtypes import is_list_dtype
 
 class ListColumn(ColumnBase):
     def __init__(
-        self,
-        data,
-        size,
-        dtype,
-        mask=None,
-        offset=0,
-        null_count=None,
-        children=(),
+        self, size, dtype, mask=None, offset=0, null_count=None, children=(),
     ):
         super().__init__(
-            data,
+            None,
             size,
             dtype,
             mask=mask,
@@ -68,6 +61,15 @@ class ListColumn(ColumnBase):
         return pa.ListArray.from_buffers(
             pa_type, len(self), buffers, children=[elements]
         )
+
+    def set_base_data(self, value):
+        if value is not None:
+            raise RuntimeError(
+                "ListColumn's do not use data attribute of Column, use "
+                "`set_base_children` instead"
+            )
+        else:
+            super().set_base_data(value)
 
 
 class ListMethods(ColumnMethodsMixin):

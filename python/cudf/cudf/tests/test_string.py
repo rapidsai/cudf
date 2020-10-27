@@ -14,7 +14,12 @@ from cudf import concat
 from cudf.core import DataFrame, Series
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import (
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    assert_eq,
+    assert_exceptions_equal,
+)
 from cudf.utils import dtypes as dtypeutils
 
 data_list = [
@@ -2406,13 +2411,13 @@ def test_string_typecast_error(data, obj_type, dtype):
     psr = pd.Series(data, dtype=obj_type)
     gsr = Series(data, dtype=obj_type)
 
-    try:
-        psr.astype(dtype=dtype)
-    except Exception as e:
-        with pytest.raises(type(e)):
-            gsr.astype(dtype=dtype)
-    else:
-        raise AssertionError("Was expecting `psr.astype` to fail")
+    assert_exceptions_equal(
+        lfunc=psr.astype,
+        rfunc=gsr.astype,
+        lfunc_args_and_kwargs=([dtype],),
+        rfunc_args_and_kwargs=([dtype],),
+        compare_error_message=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -2438,6 +2443,45 @@ def test_string_ishex():
     gsr = Series(["", None, "0x01a2b3c4d5e6f", "0789", "ABCDEF0"])
     got = gsr.str.ishex()
     expected = Series([False, None, True, True, True])
+    assert_eq(expected, got)
+
+
+def test_string_istimestamp():
+    gsr = Series(
+        [
+            "",
+            None,
+            "20201009 123456.987654AM+0100",
+            "1920111 012345.000001",
+            "18201235 012345.1",
+            "20201009 250001.2",
+            "20201009 129901.3",
+            "20201009 123499.4",
+            "20201009 000000.500000PM-0130",
+            "20201009:000000.600000",
+            "20201009 010203.700000PM-2500",
+            "20201009 010203.800000AM+0590",
+            "20201009 010203.900000AP-0000",
+        ]
+    )
+    got = gsr.str.istimestamp(r"%Y%m%d %H%M%S.%f%p%z")
+    expected = Series(
+        [
+            False,
+            None,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+        ]
+    )
     assert_eq(expected, got)
 
 
@@ -2755,39 +2799,28 @@ def test_string_product():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = Series(["1", "2", "3", "4", "5"])
 
-    try:
-        psr.product()
-    except Exception as e:
-        with pytest.raises(
-            type(e),
-            match=re.escape(f"cannot perform prod with type {sr.dtype}"),
-        ):
-            sr.product()
-    else:
-        raise AssertionError("psr.product() should've failed")
+    assert_exceptions_equal(
+        lfunc=psr.product,
+        rfunc=sr.product,
+        expected_error_message=re.escape(
+            f"cannot perform prod with type {sr.dtype}"
+        ),
+    )
 
 
 def test_string_var():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = Series(["1", "2", "3", "4", "5"])
 
-    try:
-        psr.var()
-    except Exception as e:
-        with pytest.raises(type(e)):
-            sr.var()
-    else:
-        raise AssertionError("psr.var() should've failed")
+    assert_exceptions_equal(
+        lfunc=psr.var, rfunc=sr.var, compare_error_message=False
+    )
 
 
 def test_string_std():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = Series(["1", "2", "3", "4", "5"])
 
-    try:
-        psr.std()
-    except Exception as e:
-        with pytest.raises(type(e)):
-            sr.std()
-    else:
-        raise AssertionError("psr.std() should've failed")
+    assert_exceptions_equal(
+        lfunc=psr.std, rfunc=sr.std, compare_error_message=False
+    )
