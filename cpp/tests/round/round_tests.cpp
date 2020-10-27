@@ -17,14 +17,25 @@
 #include <cudf/round.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/type_lists.hpp>
 
-struct RoundTests : public cudf::test::BaseFixture {
+template <typename T>
+struct RoundTestsIntegerTypes : public cudf::test::BaseFixture {
 };
 
-TEST_F(RoundTests, SimpleFixedPointTest)
+template <typename T>
+struct RoundTestsFloatingPointTypes : public cudf::test::BaseFixture {
+};
+
+using IntegerTypes = cudf::test::Types<int32_t, int64_t>;
+
+TYPED_TEST_CASE(RoundTestsIntegerTypes, IntegerTypes);
+TYPED_TEST_CASE(RoundTestsFloatingPointTypes, cudf::test::FloatingPointTypes);
+
+TYPED_TEST(RoundTestsIntegerTypes, SimpleFixedPointTest)
 {
   using namespace numeric;
-  using fp_wrapper = cudf::test::fixed_point_column_wrapper<int32_t>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<TypeParam>;
 
   auto const input    = fp_wrapper{{1140, 1150, 1160}, scale_type{-3}};
   auto const expected = fp_wrapper{{11, 12, 12}, scale_type{-1}};
@@ -36,10 +47,10 @@ TEST_F(RoundTests, SimpleFixedPointTest)
   // CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TEST_F(RoundTests, SimpleFloatingPointTest0)
+TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTest0)
 {
   using namespace numeric;
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<float>;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
   auto const input    = fw_wrapper{1.4, 1.5, 1.6};
   auto const expected = fw_wrapper{1, 2, 2};
@@ -48,10 +59,10 @@ TEST_F(RoundTests, SimpleFloatingPointTest0)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TEST_F(RoundTests, SimpleFloatingPointTest1)
+TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTest1)
 {
   using namespace numeric;
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<float>;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
   auto const input    = fw_wrapper{1.24, 1.25, 1.26};
   auto const expected = fw_wrapper{1.2, 1.3, 1.3};
@@ -60,10 +71,10 @@ TEST_F(RoundTests, SimpleFloatingPointTest1)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TEST_F(RoundTests, SimpleFloatingPointTestNeg1)
+TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestNeg1)
 {
   using namespace numeric;
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<float>;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
   auto const input    = fw_wrapper{12, 135, 1454, 1455, 1456};
   auto const expected = fw_wrapper{10, 140, 1450, 1460, 1460};
@@ -72,10 +83,10 @@ TEST_F(RoundTests, SimpleFloatingPointTestNeg1)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TEST_F(RoundTests, SimpleFloatingPointTestNeg2)
+TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestNeg2)
 {
   using namespace numeric;
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<float>;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
   auto const input    = fw_wrapper{12, 135, 1454, 1455, 1500};
   auto const expected = fw_wrapper{0, 100, 1500, 1500, 1500};
@@ -84,10 +95,10 @@ TEST_F(RoundTests, SimpleFloatingPointTestNeg2)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TEST_F(RoundTests, SimpleIntegerTestNeg2)
+TYPED_TEST(RoundTestsIntegerTypes, SimpleIntegerTestNeg2)
 {
   using namespace numeric;
-  using fw_wrapper = cudf::test::fixed_width_column_wrapper<int>;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
   auto const input    = fw_wrapper{12, 135, 1454, 1455, 1500};
   auto const expected = fw_wrapper{0, 100, 1500, 1500, 1500};
