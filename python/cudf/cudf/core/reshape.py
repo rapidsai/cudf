@@ -198,16 +198,14 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         elif isinstance(o, cudf.Series):
             typs.add(cudf.Series)
         else:
-            raise ValueError(f"cannot concatenate object of type {type(o)}")
+            raise TypeError(f"cannot concatenate object of type {type(o)}")
 
     allowed_typs = {cudf.Series, cudf.DataFrame}
 
     param_axis = _axis_map.get(axis, None)
     if param_axis is None:
         raise ValueError(
-            '`axis` must be 0 / "index" or 1 / "columns", got: {0}'.format(
-                param_axis
-            )
+            f'`axis` must be 0 / "index" or 1 / "columns", got: {param_axis}'
         )
     else:
         axis = param_axis
@@ -227,11 +225,9 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             for col in o._data.names:
                 if col in df._data:
                     raise NotImplementedError(
-                        "A Column with duplicate name found: {0}, cuDF\
-                        doesn't support having multiple columns with\
-                        same names yet.".format(
-                            col
-                        )
+                        f"A Column with duplicate name found: {col}, cuDF "
+                        f"doesn't support having multiple columns with "
+                        f"same names yet."
                     )
                 df[col] = o._data[col]
 
@@ -257,9 +253,9 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             _normalize_series_and_dataframe(objs, axis=axis)
             typ = cudf.DataFrame
         else:
-            raise ValueError(
-                "`concat` cannot concatenate objects of "
-                "types: %r." % sorted([t.__name__ for t in typs])
+            raise TypeError(
+                f"`concat` cannot concatenate objects of "
+                f"types: {sorted([t.__name__ for t in typs])}."
             )
 
     if typ is cudf.DataFrame:
@@ -296,7 +292,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     elif issubclass(typ, cudf.Index):
         return cudf.Index._concat(objs)
     else:
-        raise ValueError(f"cannot concatenate object of type {typ}")
+        raise TypeError(f"cannot concatenate object of type {typ}")
 
 
 def melt(
