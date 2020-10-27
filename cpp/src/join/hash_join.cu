@@ -215,13 +215,13 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type *)>> build_join_
                                           stream);
 
   row_hash hash_build{build_table};
-  rmm::device_scalar<int> failure(0, 0);
+  rmm::device_scalar<int> failure(0, stream);
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   detail::grid_1d config(build_table_num_rows, block_size);
-  build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, 0>>>(
+  build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
     *hash_table, hash_build, build_table_num_rows, failure.data());
   // Check error code from the kernel
-  if (failure.value() == 1) { CUDF_FAIL("Hash Table insert failure."); }
+  if (failure.value(stream) == 1) { CUDF_FAIL("Hash Table insert failure."); }
 
   return hash_table;
 }
