@@ -21,6 +21,7 @@ package ai.rapids.cudf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -369,6 +370,23 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
     assert type.equals(DType.BOOL8) : type + " is not a supported boolean type.";
     assertsForGet(index);
     return offHeap.data.getBoolean(index * type.getSizeInBytes());
+  }
+
+  /**
+   * Get the BigDecimal value at index.
+   */
+  public BigDecimal getBigDecimal(long index) {
+    assert type.isDecimalType() : type + " is not a supported decimal type.";
+    assertsForGet(index);
+    if (type.typeId == DType.DTypeEnum.DECIMAL32) {
+      int unscaledValue = offHeap.data.getInt(index * type.getSizeInBytes());
+      return BigDecimal.valueOf(unscaledValue, -type.getScale());
+    } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
+      long unscaledValue = offHeap.data.getLong(index * type.getSizeInBytes());
+      return BigDecimal.valueOf(unscaledValue, -type.getScale());
+    } else {
+      throw new IllegalStateException(type + " is not a supported decimal type.");
+    }
   }
 
   /**

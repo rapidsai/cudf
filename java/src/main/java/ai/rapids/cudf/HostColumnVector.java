@@ -18,6 +18,7 @@
 
 package ai.rapids.cudf;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -468,6 +469,42 @@ public final class HostColumnVector extends HostColumnVectorCore {
     });
   }
 
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls, but it is inefficient.
+   * Notice all input BigDecimals should share same scale.
+   */
+  public static HostColumnVector fromBigDecimals(BigDecimal... values) {
+    // 10000 is used as a default value of scale since no valid scale exceeds 19.
+    int scale = 10000;
+    DType.DTypeEnum typeId = DType.DTypeEnum.DECIMAL32;
+    for (BigDecimal v : values) {
+      if (v == null) {
+        continue;
+      }
+      if (scale == 10000) {
+        scale = v.scale();
+      }
+      // check scale consistence
+      assert v.scale() == scale : "Inconsistent decimal scale: " + scale + " vs " + v.scale();
+      // determine the underlying typeId according to maximum precision of inputs.
+      if (v.precision() > DType.DECIMAL64_MAX_PRECISION) {
+        throw new AssertionError("Decimal precision exceeds max precision: " + DType.DECIMAL64_MAX_PRECISION);
+      }
+      if (v.precision() > DType.DECIMAL32_MAX_PRECISION && typeId == DType.DTypeEnum.DECIMAL32) {
+        typeId = DType.DTypeEnum.DECIMAL64;
+      }
+    }
+    DType decType;
+    if (scale != 10000) {
+      decType = DType.create(typeId, -scale);
+    } else {
+      // If input is empty or all input numbers are null, set the default type.
+      decType = DType.create(DType.DTypeEnum.DECIMAL32, 0);
+    }
+    return build(decType, values.length, (b) -> b.appendBoxed(values));
+  }
+
   /**
    * Create a new vector from the given values.  This API supports inline nulls,
    * but is much slower than using a regular array and should really only be used
@@ -903,6 +940,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
         childBuilder.append((Byte) listElement);
       } else if (listElement instanceof Short) {
         childBuilder.append((Short) listElement);
+      // TODO: support decimal type as a child of nested type
+      // } else if (listElement instanceof BigDecimal) {
+      //  childBuilder.append((BigDecimal) listElement);
       } else if (listElement instanceof List) {
         childBuilder.append((List) listElement);
       } else if (listElement instanceof StructData) {
@@ -987,6 +1027,23 @@ public final class HostColumnVector extends HostColumnVectorCore {
       assert type == DType.BOOL8;
       assert currentIndex < rows;
       data.setBoolean(currentIndex * type.getSizeInBytes(), value);
+      currentIndex++;
+      currentByteIndex += type.getSizeInBytes();
+      return this;
+    }
+
+    public final ColumnBuilder append(BigDecimal value) {
+      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+      assert type.isDecimalType();
+      assert value.scale() == -type.getScale();
+      assert currentIndex < rows;
+      if (type.typeId == DType.DTypeEnum.DECIMAL32) {
+        data.setInt(currentIndex * type.getSizeInBytes(), value.unscaledValue().intValueExact());
+      } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
+        data.setLong(currentIndex * type.getSizeInBytes(), value.unscaledValue().longValueExact());
+      } else {
+        throw new IllegalStateException(type + " is not a supported decimal type.");
+      }
       currentIndex++;
       currentByteIndex += type.getSizeInBytes();
       return this;
@@ -1187,6 +1244,21 @@ public final class HostColumnVector extends HostColumnVectorCore {
       return this;
     }
 
+    public final Builder append(BigDecimal value) {
+      assert type.isDecimalType();
+      assert type.getScale() == -value.scale();
+      assert currentIndex < rows;
+      if (type.typeId == DType.DTypeEnum.DECIMAL32) {
+        data.setInt(currentIndex * type.getSizeInBytes(), value.unscaledValue().intValueExact());
+      } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
+        data.setLong(currentIndex * type.getSizeInBytes(), value.unscaledValue().longValueExact());
+      } else {
+        throw new IllegalStateException(type + " is not a supported decimal type.");
+      }
+      currentIndex++;
+      return this;
+    }
+
     public Builder append(String value) {
       assert value != null : "appendNull must be used to append null strings";
       return appendUTF8String(value.getBytes(StandardCharsets.UTF_8));
@@ -1280,6 +1352,24 @@ public final class HostColumnVector extends HostColumnVectorCore {
       assert (values.length + currentIndex) <= rows;
       data.setDoubles(currentIndex * type.getSizeInBytes(), values, 0, values.length);
       currentIndex += values.length;
+      return this;
+    }
+
+    /**
+     * Append multiple values.  This is very slow and should really only be used for tests.
+     * @param values the values to append, including nulls.
+     * @return this for chaining.
+     * @throws {@link IndexOutOfBoundsException}
+     */
+    public Builder appendBoxed(BigDecimal... values) throws IndexOutOfBoundsException {
+      assert type.isDecimalType();
+      for (BigDecimal v : values) {
+        if (v == null) {
+          appendNull();
+        } else {
+          append(v);
+        }
+      }
       return this;
     }
 
