@@ -877,32 +877,23 @@ class Series(Frame, Serializable):
         dtype: object
         """
         if isinstance(arg, dict):
-            result = self.copy().replace(arg)
-            for i in range(len(self)):
-                if self[i] not in arg.keys():
-                    result[i] = None
+            self_df = self.to_frame()
+            dataframe_1 = cudf.merge(cudf.Series(arg).to_frame(), self_df, how='left', sort=True)
+            dataframe_2 = self_df.join(dataframe_1,lsuffix='_caller', rsuffix='_other', how='left')
+            result = dataframe_2['0_other']
+            result.name = self.name
         elif isinstance(arg, cudf.Series):
-            result = self.copy().replace(arg.index, arg)
-            for i in range(len(self)):
-                if self[i] not in arg.index:
-                    result[i] = None
-
+            self_df = self.to_frame()
+            arg.name = self.name
+            dataframe_1 = cudf.merge(arg.to_frame(), self_df, how='left', sort=True)
+            dataframe_2 = self_df.join(dataframe_1,lsuffix='_caller', rsuffix='_other', how='left')
+            result = dataframe_2[str(str(self_df._column_names[0]) + '_other')]
+            result.name = self.name
         elif isinstance(self._column, cudf.core.column.CategoricalColumn):
             raise TypeError(
                 "User defined functions are currently not "
-                "supported on Series with dtypes `category`."
+                "supported on Series with dtypes `str` and`category`."
             )
-        elif is_string_dtype(self._column.dtype):
-            if callable(arg):
-                result = self.copy()
-                for i in range(len(self)):
-                    result[i] = arg(self[i])
-                if na_action == "ignore":
-                    for i in range(len(self)):
-                        if self[i] is None:
-                            result[i] = None
-            else:
-                raise TypeError("'str' object is not callable ")
         else:
             result = self.copy().applymap(arg)
         return result

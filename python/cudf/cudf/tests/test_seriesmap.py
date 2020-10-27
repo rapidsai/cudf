@@ -21,9 +21,9 @@ def test_series_map_basic():
 
     assert_eq(expected_dict, actual_dict)
 
-
-def test_series_map_series_input():
-    gd1 = cudf.Series(["cat", "dog", np.nan, "rabbit"])
+@pytest.mark.parametrize("name", ['a', None, 2])
+def test_series_map_series_input(name):
+    gd1 = cudf.Series(["cat", "dog", np.nan, "rabbit"], name=name)
     pdf1 = gd1.to_pandas()
 
     expected_series = pdf1.map(pd.Series({"cat": "kitten", "dog": "puppy"}))
@@ -72,14 +72,3 @@ def test_series_map_callable_numeric_random_dtype_change():
     expect = np.array(data, dtype=float)
     got = out.to_array()
     np.testing.assert_array_equal(expect, got)
-
-
-@pytest.mark.parametrize("na_action", [None, "ignore"])
-def test_series_map_callable_string(na_action):
-    gd3 = cudf.Series(["cat", "dog", np.nan, "rabbit"])
-    pdf3 = gd3.to_pandas()
-
-    expected_function = pdf3.map("I am a {}".format, na_action=na_action)
-    actual_function = gd3.map("I am a {}".format, na_action=na_action)
-
-    assert_eq(expected_function, actual_function)
