@@ -61,10 +61,8 @@ TEST_F(ScatterUntypedTests, ScatterScalarMapNulls)
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
 
-  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector;
-  const cudf::scalar* source_slr                         = new scalar_type_t<int32_t>(100);
-  std::reference_wrapper<const cudf::scalar> slr_wrapper = std::ref(*source_slr);
-  source_vector.push_back(slr_wrapper);
+  auto const source = scalar_type_t<int32_t>{100};
+  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{std::cref(source)};
 
   fixed_width_column_wrapper<int32_t> target({10, 20, 30, 40, 50, 60, 70, 80});
   fixed_width_column_wrapper<int32_t> scatter_map({-3, 3, 1, -1}, {0, 1, 1, 1});
