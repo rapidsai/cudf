@@ -32,7 +32,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
 {
   CUDF_EXPECTS(input.type().id() == type_id::BOOL8, "Input is not of type bool");
 
-  if (input.size() == 0) { return std::make_pair(std::make_unique<rmm::device_buffer>(), 0); }
+  if (input.is_empty()) { return std::make_pair(std::make_unique<rmm::device_buffer>(), 0); }
 
   auto input_device_view_ptr = column_device_view::create(input, stream);
   auto input_device_view     = *input_device_view_ptr;

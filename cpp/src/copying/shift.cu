@@ -121,7 +121,7 @@ std::unique_ptr<column> shift(column_view const& input,
   CUDF_EXPECTS(input.type() == fill_value.type(),
                "shift requires each fill value type to match the corresponding column type.");
 
-  if (input.size() == 0) { return empty_like(input); }
+  if (input.is_empty()) { return empty_like(input); }
 
   return type_dispatcher(input.type(), shift_functor{}, input, offset, fill_value, mr, stream);
 }
