@@ -878,16 +878,24 @@ class Series(Frame, Serializable):
         """
         if isinstance(arg, dict):
             self_df = self.to_frame()
-            dataframe_1 = cudf.merge(cudf.Series(arg).to_frame(), self_df, how='left', sort=True)
-            dataframe_2 = self_df.join(dataframe_1,lsuffix='_caller', rsuffix='_other', how='left')
-            result = dataframe_2['0_other']
+            dataframe_1 = cudf.merge(
+                cudf.Series(arg).to_frame(), self_df, how="left", sort=True
+            )
+            dataframe_2 = self_df.join(
+                dataframe_1, lsuffix="_caller", rsuffix="_other", how="left"
+            )
+            result = dataframe_2["0_other"]
             result.name = self.name
         elif isinstance(arg, cudf.Series):
             self_df = self.to_frame()
             arg.name = self.name
-            dataframe_1 = cudf.merge(arg.to_frame(), self_df, how='left', sort=True)
-            dataframe_2 = self_df.join(dataframe_1,lsuffix='_caller', rsuffix='_other', how='left')
-            result = dataframe_2[str(str(self_df._column_names[0]) + '_other')]
+            dataframe_1 = cudf.merge(
+                arg.to_frame(), self_df, how="left", sort=True
+            )
+            dataframe_2 = self_df.join(
+                dataframe_1, lsuffix="_caller", rsuffix="_other", how="left"
+            )
+            result = dataframe_2[str(str(self_df._column_names[0]) + "_other")]
             result.name = self.name
         elif isinstance(self._column, cudf.core.column.CategoricalColumn):
             raise TypeError(

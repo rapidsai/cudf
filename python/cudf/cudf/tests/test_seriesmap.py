@@ -21,7 +21,8 @@ def test_series_map_basic():
 
     assert_eq(expected_dict, actual_dict)
 
-@pytest.mark.parametrize("name", ['a', None, 2])
+
+@pytest.mark.parametrize("name", ["a", None, 2])
 def test_series_map_series_input(name):
     gd1 = cudf.Series(["cat", "dog", np.nan, "rabbit"], name=name)
     pdf1 = gd1.to_pandas()
