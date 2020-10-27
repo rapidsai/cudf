@@ -28,6 +28,7 @@ from cudf.tests.utils import (
     SIGNED_TYPES,
     UNSIGNED_TYPES,
     assert_eq,
+    assert_exceptions_equal,
 )
 
 
@@ -649,10 +650,13 @@ def test_index_where(data, condition, other, error):
                 .values,
             )
     else:
-        with pytest.raises(error):
-            ps.where(ps_condition, other=ps_other)
-        with pytest.raises(error):
-            gs.where(gs_condition, other=gs_other)
+        assert_exceptions_equal(
+            lfunc=ps.where,
+            rfunc=gs.where,
+            lfunc_args_and_kwargs=([ps_condition], {"other": ps_other}),
+            rfunc_args_and_kwargs=([gs_condition], {"other": gs_other}),
+            compare_error_message=False,
+        )
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + OTHER_TYPES)
@@ -788,13 +792,12 @@ def test_index_difference_sort_error():
     pdi = pd.Index([1, 2, 3])
     gdi = cudf.Index([1, 2, 3])
 
-    try:
-        pdi.difference(pdi, sort=True)
-    except Exception as e:
-        with pytest.raises(type(e), match=e.__str__()):
-            gdi.difference(gdi, sort=True)
-    else:
-        raise AssertionError("Expected pdi.difference to fail when sort=True")
+    assert_exceptions_equal(
+        pdi.difference,
+        gdi.difference,
+        ([pdi], {"sort": True}),
+        ([gdi], {"sort": True}),
+    )
 
 
 @pytest.mark.parametrize(
@@ -1077,8 +1080,14 @@ def test_index_append_error(data, other):
         gd_other.append(gd_data)
 
     sr = gd_other.to_series()
-    with pytest.raises(TypeError, match=r"all inputs must be Index"):
-        gd_data.append([sr])
+
+    assert_exceptions_equal(
+        lfunc=gd_data.to_pandas().append,
+        rfunc=gd_data.append,
+        lfunc_args_and_kwargs=([[sr.to_pandas()]],),
+        rfunc_args_and_kwargs=([[sr]],),
+        expected_error_message=r"all inputs must be Index",
+    )
 
 
 @pytest.mark.parametrize(
@@ -1326,30 +1335,39 @@ def test_index_sample_basic(n, frac, replace):
     gindex = cudf.Index(psr)
     random_state = 0
 
-    kind = None
-
     try:
         pout = psr.sample(
             n=n, frac=frac, replace=replace, random_state=random_state
         )
-    except BaseException as e:
-        kind = type(e)
-        msg = str(e)
-
-    if kind is not None:
-        with pytest.raises(kind, match=msg):
-            gout = gindex.sample(
-                n=n, frac=frac, replace=replace, random_state=random_state
-            )
+    except BaseException:
+        assert_exceptions_equal(
+            lfunc=psr.sample,
+            rfunc=gindex.sample,
+            lfunc_args_and_kwargs=(
+                [],
+                {
+                    "n": n,
+                    "frac": frac,
+                    "replace": replace,
+                    "random_state": random_state,
+                },
+            ),
+            rfunc_args_and_kwargs=(
+                [],
+                {
+                    "n": n,
+                    "frac": frac,
+                    "replace": replace,
+                    "random_state": random_state,
+                },
+            ),
+        )
     else:
         gout = gindex.sample(
             n=n, frac=frac, replace=replace, random_state=random_state
         )
 
-    if kind is not None:
-        return
-
-    assert pout.shape == gout.shape
+        assert pout.shape == gout.shape
 
 
 @pytest.mark.parametrize("n", [2, 5, 10, None])
@@ -1370,8 +1388,6 @@ def test_multiindex_sample_basic(n, frac, replace, axis):
     mul_index = cudf.Index(DataFrame.from_pandas(pdf))
     random_state = 0
 
-    kind = None
-
     try:
         pout = pdf.sample(
             n=n,
@@ -1380,19 +1396,31 @@ def test_multiindex_sample_basic(n, frac, replace, axis):
             random_state=random_state,
             axis=axis,
         )
-    except BaseException as e:
-        kind = type(e)
-        msg = str(e)
-
-    if kind is not None:
-        with pytest.raises(kind, match=msg):
-            gout = mul_index.sample(
-                n=n,
-                frac=frac,
-                replace=replace,
-                random_state=random_state,
-                axis=axis,
-            )
+    except BaseException:
+        assert_exceptions_equal(
+            lfunc=pdf.sample,
+            rfunc=mul_index.sample,
+            lfunc_args_and_kwargs=(
+                [],
+                {
+                    "n": n,
+                    "frac": frac,
+                    "replace": replace,
+                    "random_state": random_state,
+                    "axis": axis,
+                },
+            ),
+            rfunc_args_and_kwargs=(
+                [],
+                {
+                    "n": n,
+                    "frac": frac,
+                    "replace": replace,
+                    "random_state": random_state,
+                    "axis": axis,
+                },
+            ),
+        )
     else:
         gout = mul_index.sample(
             n=n,
@@ -1401,11 +1429,7 @@ def test_multiindex_sample_basic(n, frac, replace, axis):
             random_state=random_state,
             axis=axis,
         )
-
-    if kind is not None:
-        return
-
-    assert pout.shape == gout.shape
+        assert pout.shape == gout.shape
 
 
 @pytest.mark.parametrize(

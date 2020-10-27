@@ -229,7 +229,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     lists_column_view rhs_l(rhs);
 
     CUDF_EXPECTS(lhs_l.size() == rhs_l.size(), "List column size mismatch");
-    if (lhs_l.size() == 0) { return; }
+    if (lhs_l.is_empty()) { return; }
 
     // worst case - everything is different
     thrust::device_vector<int> differences(lhs.size());
@@ -598,7 +598,7 @@ struct column_view_printer {
                   std::string const& indent)
   {
     cudf::dictionary_column_view dictionary(col);
-    if (col.size() == 0) return;
+    if (col.is_empty()) return;
     std::vector<std::string> keys    = to_strings(dictionary.keys());
     std::vector<std::string> indices = to_strings({dictionary.indices().type(),
                                                    dictionary.size(),

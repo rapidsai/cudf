@@ -65,7 +65,7 @@ public class Schema {
     private final List<String> typeNames = new ArrayList<>();
 
     public Builder column(DType type, String name) {
-      typeNames.add(type.simpleName);
+      typeNames.add(type.getSimpleName());
       names.add(name);
       return this;
     }
