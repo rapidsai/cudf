@@ -4506,6 +4506,58 @@ class StringColumn(column.ColumnBase):
             children=children,
         )
 
+        self._start_offset = None
+        self._end_offset = None
+
+    @property
+    def start_offset(self):
+        if self._start_offset is None:
+            if (
+                len(self.base_children) == 2
+                and self.offset < self.base_children[0].size
+            ):
+                self._start_offset = int(self.base_children[0][self.offset])
+            else:
+                self._start_offset = 0
+
+        return self._start_offset
+
+    @property
+    def end_offset(self):
+        if self._end_offset is None:
+            if (
+                len(self.base_children) == 2
+                and (self.offset + self.size) < self.base_children[0].size
+            ):
+                self._end_offset = int(
+                    self.base_children[0][self.offset + self.size]
+                )
+            else:
+                self._end_offset = 0
+
+        return self._end_offset
+
+    def __sizeof__(self):
+        if self._cached_sizeof is None:
+            n = 0
+            if len(self.base_children) == 2:
+                child0_size = (self.size + 1) * self.base_children[
+                    0
+                ].dtype.itemsize
+
+                child1_size = (
+                    self.end_offset - self.start_offset
+                ) * self.base_children[1].dtype.itemsize
+
+                n += child0_size + child1_size
+            if self.nullable:
+                n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
+                    self.size
+                )
+            self._cached_sizeof = n
+
+        return self._cached_sizeof
+
     @property
     def base_size(self):
         if len(self.base_children) == 0:
