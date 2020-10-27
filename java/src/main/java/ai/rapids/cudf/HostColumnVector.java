@@ -35,7 +35,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
   /**
    * The size in bytes of an offset entry
    */
-  static final int OFFSET_SIZE = DType.INT32.sizeInBytes;
+  static final int OFFSET_SIZE = DType.INT32.getSizeInBytes();
   static {
     NativeDepsLoader.loadNativeDeps();
   }
@@ -176,7 +176,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       if (!type.isNestedType()) {
         HostMemoryBuffer hdata = this.offHeap.data;
         if (hdata != null) {
-          long dataLen = rows * type.sizeInBytes;
+          long dataLen = rows * type.getSizeInBytes();
           if (type == DType.STRING) {
             // This needs a different type
             dataLen = getEndStringOffset(rows - 1);
@@ -836,7 +836,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       growBuffersAndRows(true, 0);
       setNullAt(currentIndex);
       currentIndex++;
-      currentByteIndex += type.sizeInBytes;
+      currentByteIndex += type.getSizeInBytes();
       if (type == DType.STRING || type.isNestedType()) {
         offsets.setInt(currentIndex * OFFSET_SIZE, currentByteIndex);
       }
@@ -929,9 +929,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
       growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8;
       assert currentIndex < rows;
-      data.setByte(currentIndex * type.sizeInBytes, value);
+      data.setByte(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
-      currentByteIndex += type.sizeInBytes;
+      currentByteIndex += type.getSizeInBytes();
       return this;
     }
 
@@ -939,9 +939,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
       growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type == DType.INT16 || type == DType.UINT16;
       assert currentIndex < rows;
-      data.setShort(currentIndex * type.sizeInBytes, value);
+      data.setShort(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
-      currentByteIndex += type.sizeInBytes;
+      currentByteIndex += type.getSizeInBytes();
       return this;
     }
 
@@ -949,9 +949,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
       growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type.isBackedByInt();
       assert currentIndex < rows;
-      data.setInt(currentIndex * type.sizeInBytes, value);
+      data.setInt(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
-      currentByteIndex += type.sizeInBytes;
+      currentByteIndex += type.getSizeInBytes();
       return this;
     }
 
@@ -959,9 +959,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
       growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type.isBackedByLong();
       assert currentIndex < rows;
-      data.setLong(currentIndex * type.sizeInBytes, value);
+      data.setLong(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
-      currentByteIndex += type.sizeInBytes;
+      currentByteIndex += type.getSizeInBytes();
       return this;
     }
 
@@ -969,9 +969,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
       growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type == DType.FLOAT32;
       assert currentIndex < rows;
-      data.setFloat(currentIndex * type.sizeInBytes, value);
+      data.setFloat(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
-      currentByteIndex += type.sizeInBytes;
+      currentByteIndex += type.getSizeInBytes();
       return this;
     }
 
@@ -979,9 +979,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
       growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type == DType.FLOAT64;
       assert currentIndex < rows;
-      data.setDouble(currentIndex * type.sizeInBytes, value);
+      data.setDouble(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
-      currentByteIndex += type.sizeInBytes;
+      currentByteIndex += type.getSizeInBytes();
       return this;
     }
 
@@ -989,9 +989,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
       growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type == DType.BOOL8;
       assert currentIndex < rows;
-      data.setBoolean(currentIndex * type.sizeInBytes, value);
+      data.setBoolean(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
-      currentByteIndex += type.sizeInBytes;
+      currentByteIndex += type.getSizeInBytes();
       return this;
     }
 
@@ -1105,7 +1105,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
         // The first offset is always 0
         this.offsets.setInt(0, 0);
       } else {
-        this.data = HostMemoryBuffer.allocate(rows * type.sizeInBytes);
+        this.data = HostMemoryBuffer.allocate(rows * type.getSizeInBytes());
       }
     }
 
@@ -1129,31 +1129,31 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public final Builder append(boolean value) {
       assert type == DType.BOOL8;
       assert currentIndex < rows;
-      data.setByte(currentIndex * type.sizeInBytes, value ? (byte)1 : (byte)0);
+      data.setByte(currentIndex * type.getSizeInBytes(), value ? (byte)1 : (byte)0);
       currentIndex++;
       return this;
     }
 
     public final Builder append(byte value) {
-      assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8;
+      assert type.isBackedByByte();
       assert currentIndex < rows;
-      data.setByte(currentIndex * type.sizeInBytes, value);
+      data.setByte(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
       return this;
     }
 
     public final Builder append(byte value, long count) {
       assert (count + currentIndex) <= rows;
-      assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8;
-      data.setMemory(currentIndex * type.sizeInBytes, count, value);
+      assert type.isBackedByByte();
+      data.setMemory(currentIndex * type.getSizeInBytes(), count, value);
       currentIndex += count;
       return this;
     }
 
     public final Builder append(short value) {
-      assert type == DType.INT16 || type == DType.UINT16;
+      assert type.isBackedByShort();
       assert currentIndex < rows;
-      data.setShort(currentIndex * type.sizeInBytes, value);
+      data.setShort(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
       return this;
     }
@@ -1161,7 +1161,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public final Builder append(int value) {
       assert type.isBackedByInt();
       assert currentIndex < rows;
-      data.setInt(currentIndex * type.sizeInBytes, value);
+      data.setInt(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
       return this;
     }
@@ -1169,7 +1169,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public final Builder append(long value) {
       assert type.isBackedByLong();
       assert currentIndex < rows;
-      data.setLong(currentIndex * type.sizeInBytes, value);
+      data.setLong(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
       return this;
     }
@@ -1177,7 +1177,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public final Builder append(float value) {
       assert type == DType.FLOAT32;
       assert currentIndex < rows;
-      data.setFloat(currentIndex * type.sizeInBytes, value);
+      data.setFloat(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
       return this;
     }
@@ -1185,7 +1185,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public final Builder append(double value) {
       assert type == DType.FLOAT64;
       assert currentIndex < rows;
-      data.setDouble(currentIndex * type.sizeInBytes, value);
+      data.setDouble(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
       return this;
     }
@@ -1240,16 +1240,16 @@ public final class HostColumnVector extends HostColumnVectorCore {
 
     public Builder appendArray(byte... values) {
       assert (values.length + currentIndex) <= rows;
-      assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8;
-      data.setBytes(currentIndex * type.sizeInBytes, values, 0, values.length);
+      assert type.isBackedByByte();
+      data.setBytes(currentIndex * type.getSizeInBytes(), values, 0, values.length);
       currentIndex += values.length;
       return this;
     }
 
     public Builder appendArray(short... values) {
-      assert type == DType.INT16 || type == DType.UINT16;
+      assert type.isBackedByShort();
       assert (values.length + currentIndex) <= rows;
-      data.setShorts(currentIndex * type.sizeInBytes, values, 0, values.length);
+      data.setShorts(currentIndex * type.getSizeInBytes(), values, 0, values.length);
       currentIndex += values.length;
       return this;
     }
@@ -1257,7 +1257,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public Builder appendArray(int... values) {
       assert type.isBackedByInt();
       assert (values.length + currentIndex) <= rows;
-      data.setInts(currentIndex * type.sizeInBytes, values, 0, values.length);
+      data.setInts(currentIndex * type.getSizeInBytes(), values, 0, values.length);
       currentIndex += values.length;
       return this;
     }
@@ -1265,7 +1265,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public Builder appendArray(long... values) {
       assert type.isBackedByLong();
       assert (values.length + currentIndex) <= rows;
-      data.setLongs(currentIndex * type.sizeInBytes, values, 0, values.length);
+      data.setLongs(currentIndex * type.getSizeInBytes(), values, 0, values.length);
       currentIndex += values.length;
       return this;
     }
@@ -1273,7 +1273,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public Builder appendArray(float... values) {
       assert type == DType.FLOAT32;
       assert (values.length + currentIndex) <= rows;
-      data.setFloats(currentIndex * type.sizeInBytes, values, 0, values.length);
+      data.setFloats(currentIndex * type.getSizeInBytes(), values, 0, values.length);
       currentIndex += values.length;
       return this;
     }
@@ -1281,7 +1281,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public Builder appendArray(double... values) {
       assert type == DType.FLOAT64;
       assert (values.length + currentIndex) <= rows;
-      data.setDoubles(currentIndex * type.sizeInBytes, values, 0, values.length);
+      data.setDoubles(currentIndex * type.getSizeInBytes(), values, 0, values.length);
       currentIndex += values.length;
       return this;
     }
@@ -1430,15 +1430,15 @@ public final class HostColumnVector extends HostColumnVectorCore {
      */
     public final Builder append(HostColumnVector columnVector) {
       assert columnVector.rows <= (rows - currentIndex);
-      assert columnVector.type == type;
+      assert columnVector.type.equals(type);
 
       if (type == DType.STRING) {
         throw new UnsupportedOperationException(
             "Appending a string column vector client side is not currently supported");
       } else {
-        data.copyFromHostBuffer(currentIndex * type.sizeInBytes, columnVector.offHeap.data,
+        data.copyFromHostBuffer(currentIndex * type.getSizeInBytes(), columnVector.offHeap.data,
             0L,
-            columnVector.getRowCount() * type.sizeInBytes);
+            columnVector.getRowCount() * type.getSizeInBytes());
       }
 
       //As this is doing the append on the host assume that a null count is available
