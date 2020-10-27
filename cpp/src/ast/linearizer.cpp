@@ -83,7 +83,7 @@ void linearizer::intermediate_counter::give(cudf::size_type value)
  */
 cudf::size_type linearizer::intermediate_counter::find_first_missing() const
 {
-  if ((used_values.size() == 0) || (used_values.front() != 0)) {
+  if ((used_values.empty()) || (used_values.front() != 0)) {
     // Handle cases where the container is empty or first value is non-zero.
     return 0;
   } else {
@@ -197,7 +197,7 @@ cudf::size_type linearizer::visit(expression const& expr)
 
 cudf::data_type linearizer::get_root_data_type() const
 {
-  if (get_data_references().size() == 0) {
+  if (get_data_references().empty()) {
     return cudf::data_type(cudf::type_id::EMPTY);
   } else {
     return get_data_references().back().data_type;

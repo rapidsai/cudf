@@ -248,7 +248,7 @@ std::unique_ptr<table> scatter(table_view const& source,
                "Column types do not match between source and target");
   CUDF_EXPECTS(scatter_map.has_nulls() == false, "Scatter map contains nulls");
 
-  if (scatter_map.size() == 0) { return std::make_unique<table>(target, stream, mr); }
+  if (scatter_map.is_empty()) { return std::make_unique<table>(target, stream, mr); }
 
   // create index type normalizing iterator for the scatter_map
   auto map_begin = indexalator_factory::make_input_iterator(scatter_map);
@@ -267,7 +267,7 @@ std::unique_ptr<table> scatter(std::vector<std::unique_ptr<scalar>> const& sourc
                "Number of columns in source and target not equal");
   CUDF_EXPECTS(indices.has_nulls() == false, "indices contains nulls");
 
-  if (indices.size() == 0) { return std::make_unique<table>(target, stream, mr); }
+  if (indices.is_empty()) { return std::make_unique<table>(target, stream, mr); }
 
   // Create normalizing iterator for indices column
   auto map_begin = indexalator_factory::make_input_iterator(indices);
