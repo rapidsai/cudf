@@ -27,6 +27,7 @@
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/table/table.hpp>
+#include <string>
 
 #include <thrust/sequence.h>
 
@@ -143,6 +144,42 @@ TEST_F(StringColumnTest, ConcatenateColumnView)
   auto results = cudf::concatenate(strings_columns);
 
   cudf::test::strings_column_wrapper expected(h_strings.begin(), h_strings.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringColumnTest, ConcatenateTooManyColumns)
+{
+  std::vector<const char*> h_strings{"aaa",
+                                     "bb",
+                                     "",
+                                     "cccc",
+                                     "d",
+                                     "ééé",
+                                     "ff",
+                                     "gggg",
+                                     "",
+                                     "h",
+                                     "iiii",
+                                     "jjj",
+                                     "k",
+                                     "lllllll",
+                                     "mmmmm",
+                                     "n",
+                                     "oo",
+                                     "ppp"};
+
+  std::vector<const char*> expected_strings;
+  std::vector<cudf::test::strings_column_wrapper> wrappers;
+  std::vector<cudf::column_view> strings_columns;
+  std::string expected_string;
+  for (int i = 0; i < 200; ++i) {
+    wrappers.emplace_back(h_strings.data(), h_strings.data() + h_strings.size());
+    strings_columns.push_back(wrappers[i]);
+    expected_strings.insert(expected_strings.end(), h_strings.begin(), h_strings.end());
+  }
+  cudf::test::strings_column_wrapper expected(expected_strings.data(),
+                                              expected_strings.data() + expected_strings.size());
+  auto results = cudf::concatenate(strings_columns);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

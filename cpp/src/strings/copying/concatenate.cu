@@ -28,6 +28,12 @@
 #include <thrust/transform_reduce.h>
 #include <thrust/transform_scan.h>
 
+#define CUDF_STR_RANGE_IN(D, _STR)                                                     \
+  static ::nvtx3::registered_message<D> const nvtx3_##_STR##_name__{#_STR};            \
+  static ::nvtx3::event_attributes const nvtx3_##_STR##_attr__{nvtx3_##_STR##_name__}; \
+  ::nvtx3::domain_thread_range<D> const nvtx3_##_STR##range__{nvtx3_##_STR##_attr__};
+#define CUDF_STR_RANGE(_STR) CUDF_STR_RANGE_IN(cudf::libcudf_domain, _STR)
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -60,39 +66,89 @@ struct chars_size_transform {
   }
 };
 
+template <typename ColumnDeviceView>
+auto create_contiguous_device_views(std::vector<column_view> const& source_view,
+                                    cudaStream_t stream)
+{
+  // The columns must be converted to ColumnDeviceView
+  // objects and copied into device memory for the table_device_view's
+  // _columns member.
+  rmm::device_buffer* _descendant_storage = nullptr;
+  ColumnDeviceView* _columns              = nullptr;
+  if (source_view.size() > 0) {
+    //
+    // First calculate the size of memory needed to hold the
+    // table's ColumnDeviceViews. This is done by calling extent()
+    // for each of the table's ColumnViews columns.
+    std::size_t views_size_bytes =
+      std::accumulate(source_view.begin(), source_view.end(), 0, [](std::size_t init, auto col) {
+        return init + ColumnDeviceView::extent(col);
+      });
+    // A buffer of CPU memory is allocated to hold the ColumnDeviceView
+    // objects. Once filled, the CPU memory is then copied to device memory
+    // and the pointer is set in the _columns member.
+    std::vector<int8_t> h_buffer(views_size_bytes);
+    ColumnDeviceView* h_column = reinterpret_cast<ColumnDeviceView*>(h_buffer.data());
+    // Each ColumnDeviceView instance may have child objects which may
+    // require setting some internal device pointers before being copied
+    // from CPU to device.
+    // Allocate the device memory to be used in the result.
+    // We need this pointer in order to pass it down when creating the
+    // ColumnDeviceViews so the column can set the pointer(s) for any
+    // of its child objects.
+    _descendant_storage = new rmm::device_buffer(views_size_bytes, stream);
+    _columns            = reinterpret_cast<ColumnDeviceView*>(_descendant_storage->data());
+    // The beginning of the memory must be the fixed-sized ColumnDeviceView
+    // objects in order for _columns to be used as an array. Therefore,
+    // any child data is assigned to the end of this array (h_end/d_end).
+    auto h_end = (int8_t*)(h_column + source_view.size());
+    auto d_end = (int8_t*)(_columns + source_view.size());
+    // Create the ColumnDeviceView from each column within the CPU memory
+    // Any column child data should be copied into h_end and any
+    // internal pointers should be set using d_end.
+    for (auto itr = source_view.begin(); itr != source_view.end(); ++itr) {
+      auto col = *itr;
+      // convert the ColumnView into ColumnDeviceView
+      new (h_column) ColumnDeviceView(col, h_end, d_end);
+      h_column++;  // point to memory slot for the next ColumnDeviceView
+      // update the pointers for holding ColumnDeviceView's child data
+      auto col_child_data_size = (ColumnDeviceView::extent(col) - sizeof(ColumnDeviceView));
+      h_end += col_child_data_size;
+      d_end += col_child_data_size;
+    }
+    CUDA_TRY(
+      cudaMemcpyAsync(_columns, h_buffer.data(), views_size_bytes, cudaMemcpyDefault, stream));
+    CUDA_TRY(cudaStreamSynchronize(stream));
+  }
+  return std::make_tuple(std::move(std::unique_ptr<rmm::device_buffer>(_descendant_storage)),
+                         _columns);
+}
+
 auto create_strings_device_views(std::vector<column_view> const& views, cudaStream_t stream)
 {
+  CUDF_FUNC_RANGE();
   // Create device views for each input view
-  using CDViewPtr =
-    decltype(column_device_view::create(std::declval<column_view>(), std::declval<cudaStream_t>()));
-  auto device_view_owners = std::vector<CDViewPtr>(views.size());
-  std::transform(
-    views.cbegin(), views.cend(), device_view_owners.begin(), [stream](auto const& col) {
-      return column_device_view::create(col, stream);
-    });
-
+  CUDF_STR_RANGE(device_view_owners);
+  CUDF_STR_RANGE(create_contiguous_device_views);
   // Assemble contiguous array of device views
-  auto device_views = thrust::host_vector<column_device_view>();
-  device_views.reserve(views.size());
-  std::transform(device_view_owners.cbegin(),
-                 device_view_owners.cend(),
-                 std::back_inserter(device_views),
-                 [](auto const& col) { return *col; });
-  auto d_views = rmm::device_vector<column_device_view>{device_views};
+  auto contiguous_device_views = create_contiguous_device_views<column_device_view>(views, stream);
+  auto& device_view_owners     = std::get<0>(contiguous_device_views);
+  auto& device_views_ptr       = std::get<1>(contiguous_device_views);
 
+  CUDF_STR_RANGE(input_offsets);
   // Compute the partition offsets and size of offset column
   // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type
   auto input_offsets = thrust::host_vector<size_t>(views.size() + 1);
-  thrust::transform_inclusive_scan(
-    thrust::host,
-    device_views.cbegin(),
-    device_views.cend(),
-    std::next(input_offsets.begin()),
-    [](auto const& col) { return static_cast<size_t>(col.size()); },
-    thrust::plus<size_t>{});
+  auto offset_it     = std::next(input_offsets.begin());
+  thrust::transform(
+    thrust::host, views.cbegin(), views.cend(), offset_it, [](auto const& col) -> size_t {
+      return static_cast<size_t>(col.size());
+    });
+  thrust::inclusive_scan(thrust::host, offset_it, input_offsets.end(), offset_it);
   auto const d_input_offsets = rmm::device_vector<size_t>{input_offsets};
   auto const output_size     = input_offsets.back();
 
+  CUDF_STR_RANGE(d_partition_offsets);
   // Compute the partition offsets and size of chars column
   // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type
   // Note: Using separate transform and inclusive_scan because
@@ -101,8 +157,8 @@ auto create_strings_device_views(std::vector<column_view> const& views, cudaStre
   // referenced -- it is a deleted function
   auto d_partition_offsets = rmm::device_vector<size_t>(views.size() + 1);
   thrust::transform(rmm::exec_policy(stream)->on(stream),
-                    d_views.cbegin(),
-                    d_views.cend(),
+                    device_views_ptr,
+                    device_views_ptr + views.size(),
                     std::next(d_partition_offsets.begin()),
                     chars_size_transform{});
   thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
@@ -111,8 +167,9 @@ auto create_strings_device_views(std::vector<column_view> const& views, cudaStre
                          d_partition_offsets.begin());
   auto const output_chars_size = d_partition_offsets.back();
 
+  CUDF_STR_RANGE(return_statement);
   return std::make_tuple(std::move(device_view_owners),
-                         std::move(d_views),
+                         device_views_ptr,
                          std::move(d_input_offsets),
                          std::move(d_partition_offsets),
                          output_size,
@@ -215,6 +272,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
                                     rmm::mr::device_memory_resource* mr,
                                     cudaStream_t stream)
 {
+  CUDF_FUNC_RANGE();
   // Compute output sizes
   auto const device_views         = create_strings_device_views(columns, stream);
   auto const& d_views             = std::get<1>(device_views);
@@ -260,10 +318,10 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
     auto const kernel = has_nulls ? fused_concatenate_string_offset_kernel<block_size, true>
                                   : fused_concatenate_string_offset_kernel<block_size, false>;
     kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
-      d_views.data().get(),
+      d_views,
       d_input_offsets.data().get(),
       d_partition_offsets.data().get(),
-      static_cast<size_type>(d_views.size()),
+      static_cast<size_type>(columns.size()),
       strings_count,
       d_new_offsets,
       reinterpret_cast<bitmask_type*>(null_mask.data()),
@@ -280,9 +338,9 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
       cudf::detail::grid_1d config(total_bytes, block_size);
       auto const kernel = fused_concatenate_string_chars_kernel;
       kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
-        d_views.data().get(),
+        d_views,
         d_partition_offsets.data().get(),
-        static_cast<size_type>(d_views.size()),
+        static_cast<size_type>(columns.size()),
         total_bytes,
         d_new_chars);
     } else {
