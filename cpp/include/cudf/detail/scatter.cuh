@@ -142,9 +142,9 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
-    if (target_in.size() == 0)  // empty begets empty
+    if (target_in.is_empty())  // empty begets empty
       return make_empty_column(data_type{type_id::DICTIONARY32});
-    if (source_in.size() == 0)  // no input, just make a copy
+    if (source_in.is_empty())  // no input, just make a copy
       return std::make_unique<column>(target_in, stream, mr);
 
     // check the keys match
