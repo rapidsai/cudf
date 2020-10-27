@@ -183,7 +183,7 @@ public class JCudfSerialization {
       types = new DType[numColumns];
       nullCounts = new long[numColumns];
       for (int i = 0; i < numColumns; i++) {
-        types[i] = DType.fromNative(din.readInt());
+        types[i] = DType.fromNative(din.readInt(), din.readInt());
         nullCounts[i] = din.readInt();
       }
 
@@ -200,7 +200,8 @@ public class JCudfSerialization {
 
       // Header for each column...
       for (int i = 0; i < numColumns; i++) {
-        dout.writeInt(types[i].nativeId);
+        dout.writeInt(types[i].typeId.getNativeId());
+        dout.writeInt(types[i].getScale());
         dout.writeInt((int) nullCounts[i]);
       }
       dout.writeLong(dataLen);
@@ -564,7 +565,7 @@ public class JCudfSerialization {
           totalDataSize += padFor64byteAlignment(getRawStringDataLength(column, rowOffset, numRows));
         }
       } else {
-        totalDataSize += padFor64byteAlignment(column.getType().sizeInBytes * numRows);
+        totalDataSize += padFor64byteAlignment(column.getType().getSizeInBytes() * numRows);
       }
     }
     return totalDataSize;
@@ -593,7 +594,7 @@ public class JCudfSerialization {
         }
         totalDataSize += padFor64byteAlignment(stringDataLen);
       } else {
-        totalDataSize += padFor64byteAlignment(types[col].sizeInBytes * numRows);
+        totalDataSize += padFor64byteAlignment(types[col].getSizeInBytes() * numRows);
       }
     }
     return totalDataSize;
@@ -657,7 +658,7 @@ public class JCudfSerialization {
           bufferOffset += padFor64byteAlignment(dataLen);
         }
       } else {
-        dataLen = type.sizeInBytes * numRows;
+        dataLen = type.getSizeInBytes() * numRows;
         data = bufferOffset;
         bufferOffset += padFor64byteAlignment(dataLen);
       }
@@ -1170,8 +1171,8 @@ public class JCudfSerialization {
                                      long rowOffset,
                                      long numRows) throws IOException {
     DType type = column.getType();
-    long bytesToCopy = numRows * type.sizeInBytes;
-    long srcOffset = rowOffset * type.sizeInBytes;
+    long bytesToCopy = numRows * type.getSizeInBytes();
+    long srcOffset = rowOffset * type.getSizeInBytes();
     return copySlicedAndPad(out, column, BufferType.DATA, srcOffset, bytesToCopy);
   }
 
@@ -1186,7 +1187,7 @@ public class JCudfSerialization {
       long currentOffset = provider.getBufferStartOffset(BufferType.DATA);
       int numRowsForBatch = (int) provider.getRowCount();
 
-      int dataLeft = numRowsForBatch * type.sizeInBytes;
+      int dataLeft = numRowsForBatch * type.getSizeInBytes();
       out.copyDataFrom(dataBuffer, currentOffset, dataLeft);
       totalCopied += dataLeft;
     }
