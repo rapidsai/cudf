@@ -14,19 +14,21 @@
  * limitations under the License.
  */
 
-#include <initializer_list>
-#include <iterator>
-#include <tests/groupby/groupby_test_util.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/dictionary/encode.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
+#include <tests/groupby/groupby_test_util.hpp>
+
+#include <initializer_list>
+#include <iterator>
 #include <type_traits>
 #include <vector>
-#include "cudf/utilities/traits.hpp"
 
 namespace cudf {
 namespace test {
@@ -136,6 +138,36 @@ TYPED_TEST(groupby_mean_test, null_keys_and_values)
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 // clang-format on
+
+struct groupby_dictionary_mean_test : public cudf::test::BaseFixture {
+};
+
+TEST_F(groupby_dictionary_mean_test, basic)
+{
+  using K  = int32_t;
+  using V  = int16_t;
+  using R  = cudf::detail::target_type_t<V, aggregation::MEAN>;
+  using RT = typename std::conditional<cudf::is_duration<R>(), int, double>::type;
+
+  // clang-format off
+  fixed_width_column_wrapper<K> keys_w     { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  fixed_width_column_wrapper<V, int> vals_w{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+  fixed_width_column_wrapper<K> expect_keys_w       { 1,    2,     3    };
+  fixed_width_column_wrapper<R, double> expect_vals({ 9./3, 19./4, 17./3});
+  // clang-format on
+
+  auto keys        = cudf::dictionary::encode(keys_w);
+  auto vals        = cudf::dictionary::encode(vals_w);
+  auto expect_keys = cudf::dictionary::encode(expect_keys_w);
+
+  test_single_agg(keys_w, vals_w, expect_keys_w, expect_vals, cudf::make_mean_aggregation());
+  test_single_agg(
+    keys->view(), vals_w, expect_keys->view(), expect_vals, cudf::make_mean_aggregation());
+  test_single_agg(keys_w, vals->view(), expect_keys_w, expect_vals, cudf::make_mean_aggregation());
+  test_single_agg(
+    keys->view(), vals->view(), expect_keys->view(), expect_vals, cudf::make_mean_aggregation());
+}
 
 }  // namespace test
 }  // namespace cudf
