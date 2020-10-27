@@ -234,12 +234,10 @@ template <typename InputIterator_,
           typename ScanOperator_,
           typename PredicateOperator_>
 struct policy {
-  enum : uint32_t {
-    THREADS_PER_INIT_BLOCK = 128,
-    THREADS_PER_BLOCK      = 128,
-    ITEMS_PER_THREAD       = 16,
-    ITEMS_PER_TILE         = ITEMS_PER_THREAD * THREADS_PER_BLOCK,
-  };
+  static constexpr uint32_t THREADS_PER_INIT_BLOCK = 128;
+  static constexpr uint32_t THREADS_PER_BLOCK      = 128;
+  static constexpr uint32_t ITEMS_PER_THREAD       = 16;
+  static constexpr uint32_t ITEMS_PER_TILE         = ITEMS_PER_THREAD * THREADS_PER_BLOCK;
 
   using InputIterator       = InputIterator_;
   using OutputIterator      = OutputIterator_;
@@ -370,8 +368,8 @@ void scan_copy_if(  //
 template <typename InputIterator,
           typename ScanOperator,
           typename PredOperator>
-rmm::device_uvector<typename InputIterator::value_type>  //
-scan_copy_if(                                            //
+rmm::device_uvector<typename std::iterator_traits<InputIterator>::value_type>  //
+scan_copy_if(                                                                  //
   InputIterator d_in_begin,
   InputIterator d_in_end,
   ScanOperator scan_op,
@@ -380,7 +378,7 @@ scan_copy_if(                                            //
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_FUNC_RANGE();
-  using Input = typename InputIterator::value_type;
+  using Input = typename std::iterator_traits<InputIterator>::value_type;
 
   auto output_projection = [] __device__(thrust::pair<uint32_t, Input> output) -> Input {
     return thrust::get<1>(output);
