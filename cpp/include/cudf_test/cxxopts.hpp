@@ -1465,7 +1465,7 @@ inline std::string Options::help(const std::vector<std::string>& help_groups) co
 
   result += "\n\n";
 
-  if (help_groups.size() == 0) {
+  if (help_groups.empty()) {
     generate_all_groups_help(result);
   } else {
     generate_group_help(result, help_groups);

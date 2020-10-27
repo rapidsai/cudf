@@ -60,7 +60,7 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                              cudaStream_t stream,
                                              rmm::mr::device_memory_resource* mr)
 {
-  if (lists_column.size() == 0) return empty_like(lists_column.parent());
+  if (lists_column.is_empty()) return empty_like(lists_column.parent());
   auto const offsets_column = lists_column.offsets();
 
   // create a column_view with attributes of the parent and data from the offsets
