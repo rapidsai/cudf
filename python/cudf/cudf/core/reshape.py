@@ -316,7 +316,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             )
             return result
         else:
-            if join == "inner" and old_objs != objs:
+            if join == "inner" and len(old_objs) != len(objs):
                 # don't filter out empty df's
                 objs = old_objs
             result = cudf.DataFrame._concat(
