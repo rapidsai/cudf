@@ -14,23 +14,77 @@
  * limitations under the License.
  */
 
-#include "group_reductions.hpp"
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/types.hpp>
+
+#include <groupby/sort/group_reductions.hpp>
 #include <quantiles/quantiles_util.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
-
 #include <thrust/for_each.h>
 
 namespace cudf {
 namespace groupby {
 namespace detail {
 namespace {
+
+// TODO: replace with cudf::dictionary::detail::make_dictionary_iterator()
+template <typename KeyType>
+struct dictionary_access_fn {
+  dictionary_access_fn(column_device_view const& d_dictionary) : d_dictionary{d_dictionary} {}
+
+  __device__ KeyType operator()(size_type idx) const
+  {
+    if (d_dictionary.is_null(idx)) return KeyType{};
+    auto keys = d_dictionary.child(1);
+    return keys.element<KeyType>(static_cast<size_type>(d_dictionary.element<dictionary32>(idx)));
+  };
+
+ private:
+  column_device_view const d_dictionary;
+};
+
+template <typename ResultType, typename Iterator>
+struct calculate_quantile_fn {
+  Iterator values_iter;
+  column_device_view d_group_size;
+  mutable_column_device_view d_result;
+  size_type const* d_group_offset;
+  double const* d_quantiles;
+  size_type num_quantiles;
+  interpolation interpolation;
+
+  __device__ void operator()(size_type i)
+  {
+    size_type segment_size = d_group_size.element<size_type>(i);
+
+    auto d_itr = values_iter + d_group_offset[i];
+    thrust::transform(thrust::seq,
+                      d_quantiles,
+                      d_quantiles + num_quantiles,
+                      d_result.data<ResultType>() + i * num_quantiles,
+                      [d_itr, segment_size, interpolation = interpolation](auto q) {
+                        return cudf::detail::select_quantile_data<ResultType>(
+                          d_itr, segment_size, q, interpolation);
+                      });
+
+    size_type offset = i * num_quantiles;
+    thrust::for_each_n(thrust::seq,
+                       thrust::make_counting_iterator(0),
+                       num_quantiles,
+                       [d_result = d_result, segment_size, offset](size_type j) {
+                         if (segment_size == 0)
+                           d_result.set_null(offset + j);
+                         else
+                           d_result.set_valid(offset + j);
+                       });
+  }
+};
+
 struct quantiles_functor {
   template <typename T>
   std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
@@ -55,55 +109,39 @@ struct quantiles_functor {
     //            so that sorting isn't required. Then add support for pre-sorted
 
     // prepare args to be used by lambda below
-    auto values_view     = column_device_view::create(values);
-    auto group_size_view = column_device_view::create(group_sizes);
-    auto result_view     = mutable_column_device_view::create(result->mutable_view());
+    auto values_view     = column_device_view::create(values, stream);
+    auto group_size_view = column_device_view::create(group_sizes, stream);
+    auto result_view     = mutable_column_device_view::create(result->mutable_view(), stream);
 
     // For each group, calculate quantile
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
-                       thrust::make_counting_iterator(0),
-                       num_groups,
-                       [d_values       = *values_view,
-                        d_group_size   = *group_size_view,
-                        d_result       = *result_view,
-                        d_group_offset = group_offsets.data().get(),
-                        d_quantiles    = quantile.data().get(),
-                        num_quantiles  = quantile.size(),
-                        interpolation] __device__(size_type i) {
-                         size_type segment_size = d_group_size.element<size_type>(i);
-
-                         auto selector = [i, &d_values, d_group_offset](size_type j) {
-                           return d_values.element<T>(d_group_offset[i] + j);
-                         };
-
-                         thrust::transform(thrust::seq,
-                                           d_quantiles,
-                                           d_quantiles + num_quantiles,
-                                           d_result.data<ResultType>() + i * num_quantiles,
-                                           [selector, segment_size, interpolation](auto q) {
-                                             return cudf::detail::select_quantile<ResultType>(
-                                               selector, segment_size, q, interpolation);
-                                           });
-
-                         for (size_t j = 0; j < num_quantiles; j++) {
-                           size_type group_size = d_group_size.element<size_type>(i);
-                           if (group_size == 0)
-                             d_result.set_null(i * num_quantiles + j);
-                           else
-                             d_result.set_valid(i * num_quantiles + j);
-                         }
-
-                         // DEAR REVIEWER, would you prefer I do this instead of the loop above?
-                         // thrust::for_each_n(thrust::seq,
-                         //   thrust::make_counting_iterator(0), num_quantiles,
-                         //   [&d_result, &d_group_size, num_quantiles, i] (size_type j) {
-                         //     size_type group_size = d_group_size.element<size_type>(i);
-                         //     if (group_size == 0)
-                         //       d_result.set_null(i * num_quantiles + j);
-                         //     else
-                         //       d_result.set_valid(i * num_quantiles + j);
-                         //   });
-                       });
+    if (values.type().id() != type_id::DICTIONARY32) {
+      auto values_iter = values_view->begin<T>();
+      thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+                         thrust::make_counting_iterator(0),
+                         num_groups,
+                         calculate_quantile_fn<ResultType, decltype(values_iter)>{
+                           values_iter,
+                           *group_size_view,
+                           *result_view,
+                           group_offsets.data().get(),
+                           quantile.data().get(),
+                           static_cast<size_type>(quantile.size()),
+                           interpolation});
+    } else {
+      auto values_iter = thrust::make_transform_iterator(
+        thrust::make_counting_iterator<size_type>(0), dictionary_access_fn<T>{*values_view});
+      thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+                         thrust::make_counting_iterator(0),
+                         num_groups,
+                         calculate_quantile_fn<ResultType, decltype(values_iter)>{
+                           values_iter,
+                           *group_size_view,
+                           *result_view,
+                           group_offsets.data().get(),
+                           quantile.data().get(),
+                           static_cast<size_type>(quantile.size()),
+                           interpolation});
+    }
 
     return result;
   }
@@ -130,7 +168,11 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
 {
   rmm::device_vector<double> dv_quantiles(quantiles);
 
-  return type_dispatcher(values.type(),
+  auto values_type = values.type().id() == type_id::DICTIONARY32
+                       ? dictionary_column_view(values).keys().type()
+                       : values.type();
+
+  return type_dispatcher(values_type,
                          quantiles_functor{},
                          values,
                          group_sizes,
