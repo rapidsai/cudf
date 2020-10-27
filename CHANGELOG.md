@@ -31,8 +31,8 @@
 - PR #6564 Load JNI library dependencies with a thread pool
 - PR #6573 Create `cudf::detail::byte_cast` for `cudf::byte_cast`
 - PR #6597 Use thread-local to track CUDA device in JNI
-- PR #6514 Initial work for decimal type in Java/JNI
 - PR #6599 Replace `size()==0` with `empty()`, `is_empty()`
+- PR #6514 Initial work for decimal type in Java/JNI
 
 ## Bug Fixes
 
