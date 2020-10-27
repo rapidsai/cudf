@@ -9,6 +9,7 @@ import numpy as np
 import cudf
 from cudf._fuzz_testing.io import IOFuzz
 from cudf._fuzz_testing.utils import (
+    ALL_POSSIBLE_VALUES,
     _generate_rand_meta,
     pandas_to_avro,
     pyarrow_to_pandas,
@@ -69,13 +70,13 @@ class AvroReader(IOFuzz):
         )
         table = dg.rand_dataframe(dtypes_meta, num_rows, seed)
         df = pyarrow_to_pandas(table)
+        self._df = df
         logging.info(f"Shape of DataFrame generated: {table.shape}")
 
         file_obj = io.BytesIO()
         pandas_to_avro(df, file_io_obj=file_obj)
         file_obj.seek(0)
         self._current_buffer = copy.copy(file_obj.read())
-        # self._current_buffer = 'temp-file.avro'
         file_obj.seek(0)
         return (df, file_obj.read())
 
@@ -84,19 +85,19 @@ class AvroReader(IOFuzz):
             with open(file_name + "_crash.avro", "wb") as crash_dataset:
                 crash_dataset.write(self._current_buffer)
 
-    def get_rand_params(self, params):
+    def set_rand_params(self, params):
         params_dict = {}
         for param, values in params.items():
-            if param == "columns" and values is None:
-                col_size = self._rand(len(self._df.columns))
-                params_dict[param] = list(
-                    np.unique(np.random.choice(self._df.columns, col_size))
-                )
-            elif param in ("skiprows", "num_rows"):
-                params_dict[param] = np.random.choice(
-                    [None, self._rand(len(self._df))]
-                )
+            if values == ALL_POSSIBLE_VALUES:
+                if param == "columns":
+                    col_size = self._rand(len(self._df.columns))
+                    params_dict[param] = list(
+                        np.unique(np.random.choice(self._df.columns, col_size))
+                    )
+                elif param in ("skiprows", "num_rows"):
+                    params_dict[param] = np.random.choice(
+                        [None, self._rand(len(self._df))]
+                    )
             else:
                 params_dict[param] = np.random.choice(values)
-        self._current_params["test_kwargs"] = params_dict
-        return params_dict
+        self._current_params["test_kwargs"] = self.process_kwargs(params_dict)
