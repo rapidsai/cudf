@@ -307,6 +307,9 @@ add_library(cudfjni SHARED ${SOURCE_FILES})
 #Override RPATH for cudfjni
 SET_TARGET_PROPERTIES(cudfjni PROPERTIES BUILD_RPATH "\$ORIGIN")
 
+
+add_executable(row_test "src/to_rows_test.cpp" "src/row_conversion.cu")
+target_link_libraries(row_test ${CUDF_LIBS} ${ARROW_LIBRARY} ${CUDART_LIBRARY} cuda nvrtc)
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
 

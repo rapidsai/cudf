@@ -32,6 +32,10 @@
 namespace cudf {
 namespace java {
 
+/**
+ * Copy a simple vector to device memory asynchronously. Be sure to read
+ * the data on the same stream as is used to copy it.
+ */
 template <typename T>
 std::unique_ptr<rmm::device_uvector<T>> copy_to_dev_async(
         const std::vector<T> & input,
@@ -63,8 +67,6 @@ void copy_to_fixed_width_columns(
     // The second pass copies that chunk from shared memory out to the final location.
     
     // Because shared memory is limited we copy a subset of the rows at a time.
-    // We do not support copying a subset of the columns in a row yet, so we don't
-    // currently support a row that is wider than shared memory.
     // For simplicity we will refer to this as a row_group
 
     // In practice we have found writing more than 4 columns of data per thread
@@ -379,6 +381,11 @@ static int calc_fixed_width_kernel_dims(
     if (num_blocks < 1) {
         num_blocks = 1;
     } else if (num_blocks > 10240) {
+        // The maximum number of blocks supported in the x dimension is 2 ^ 31 - 1
+        // but in practice haveing too many can cause some overhead that I don't totally
+        // understand. Playing around with this haveing as little as 600 blocks appears
+        // to be able to saturate memory on V100, so this is an order of magnitude higher
+        // to try and future proof this a bit.
         num_blocks = 10240;
     }
     blocks.x = num_blocks;
@@ -468,7 +475,7 @@ static inline bool are_all_fixed_width(std::vector<cudf::data_type> const & sche
  * @param [out] column_size the size in bytes of the data for each columns in the row.
  * @return the size in bytes each row needs.
  */
-static inline int64_t compute_fixed_width_layout(
+static inline int32_t compute_fixed_width_layout(
         std::vector<cudf::data_type> const & schema,
         std::vector<cudf::size_type> & column_start,
         std::vector<cudf::size_type> & column_size) {
@@ -509,7 +516,7 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(
         std::vector<cudf::size_type> column_start;
         std::vector<cudf::size_type> column_size;
 
-        int64_t size_per_row = compute_fixed_width_layout(schema, column_start, column_size);
+        int32_t size_per_row = compute_fixed_width_layout(schema, column_start, column_size);
         auto dev_column_start = copy_to_dev_async(column_start, stream, mr);
         auto dev_column_size = copy_to_dev_async(column_size, stream, mr);
 
@@ -584,7 +591,7 @@ std::unique_ptr<cudf::table> convert_from_rows(
         std::vector<cudf::size_type> column_size;
 
         cudf::size_type num_rows = input.parent().size();
-        int64_t size_per_row = compute_fixed_width_layout(schema, column_start, column_size);
+        int32_t size_per_row = compute_fixed_width_layout(schema, column_start, column_size);
 
         // Ideally we would check that the offsets are all the same, etc. but for now
         // this is probably fine
