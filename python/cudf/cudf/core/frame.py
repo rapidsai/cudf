@@ -253,7 +253,7 @@ class Frame(libcudf.table.Table):
             old_dtypes = [dt for obj in objs for dt in obj.dtypes]
 
             if axis == 0:
-                if num_empty_input_frames > 0 or old_names == names_not_in_all:
+                if num_empty_input_frames > 0 or len(old_names) == len(names_not_in_all):
                     if ignore_index:
                         empty_has_index = True
                         num_empty_input_frames = len(objs)
