@@ -67,7 +67,7 @@ struct find_index_fn {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
-    if (input.size() == 0) return std::make_unique<numeric_scalar<uint32_t>>(0, false, stream, mr);
+    if (input.is_empty()) return std::make_unique<numeric_scalar<uint32_t>>(0, false, stream, mr);
     if (!key.is_valid())
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
     CUDF_EXPECTS(input.keys().type() == key.type(),
@@ -138,7 +138,7 @@ struct find_insert_index_fn {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
-    if (input.size() == 0) return std::make_unique<numeric_scalar<uint32_t>>(0, false, stream, mr);
+    if (input.is_empty()) return std::make_unique<numeric_scalar<uint32_t>>(0, false, stream, mr);
     if (!key.is_valid())
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
     CUDF_EXPECTS(input.keys().type() == key.type(),
