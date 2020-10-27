@@ -72,7 +72,7 @@ TEST_F(DictionaryScatterTest, ScatterScalar)
   auto target = cudf::dictionary::encode(strings_target);
   std::vector<std::reference_wrapper<const cudf::scalar>> source;
 
-  const cudf::string_scalar source_scalar = cudf::string_scalar("bbb");
+  const cudf::string_scalar source_scalar                       = cudf::string_scalar("bbb");
   std::reference_wrapper<const cudf::string_scalar> slr_wrapper = std::ref(source_scalar);
   source.emplace_back(slr_wrapper);
   cudf::test::fixed_width_column_wrapper<int32_t> scatter_map{0, 2, 3, 7};
