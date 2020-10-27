@@ -230,7 +230,6 @@ void posix_parser<Container>::skip_name()
 {
   CUDF_EXPECTS(cur < end, "Unexpected end of input stream");
 
-  auto c = *cur;
   while (cur < end && (*cur < '0' || *cur > '9') && (*cur != '-') && (*cur != '+') &&
          (*cur != ',')) {
     // skip any content between <>
