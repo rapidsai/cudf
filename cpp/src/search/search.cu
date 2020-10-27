@@ -209,7 +209,7 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
 namespace detail {
 bool contains(column_view const& col, scalar const& value, cudaStream_t stream)
 {
-  if (col.size() == 0) { return false; }
+  if (col.is_empty()) { return false; }
 
   if (not value.is_valid()) { return col.has_nulls(); }
 
@@ -230,11 +230,11 @@ struct multi_contains_dispatch {
                                                          stream,
                                                          mr);
 
-    if (haystack.size() == 0) { return result; }
+    if (haystack.is_empty()) { return result; }
 
     mutable_column_view result_view = result.get()->mutable_view();
 
-    if (needles.size() == 0) {
+    if (needles.is_empty()) {
       thrust::fill(rmm::exec_policy(stream)->on(stream),
                    result_view.begin<bool>(),
                    result_view.end<bool>(),

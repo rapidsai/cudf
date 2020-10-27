@@ -703,7 +703,11 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testFromScalarZeroRows() {
-    for (DType type : DType.values()) {
+    for (DType.DTypeEnum type : DType.DTypeEnum.values()) {
+      // Decimal type not supported yet. Update this once it is supported.
+      if (type == DType.DTypeEnum.DECIMAL32 || type == DType.DTypeEnum.DECIMAL64) {
+        continue;
+      }
       Scalar s = null;
       try {
         switch (type) {
@@ -747,7 +751,7 @@ public class ColumnVectorTest extends CudfTestBase {
         case TIMESTAMP_MILLISECONDS:
         case TIMESTAMP_MICROSECONDS:
         case TIMESTAMP_NANOSECONDS:
-          s = Scalar.timestampFromLong(type, 1234567890123456789L);
+          s = Scalar.timestampFromLong(DType.create(type), 1234567890123456789L);
           break;
         case STRING:
           s = Scalar.fromString("hello, world!");
@@ -759,7 +763,7 @@ public class ColumnVectorTest extends CudfTestBase {
         case DURATION_MILLISECONDS:
         case DURATION_MICROSECONDS:
         case DURATION_NANOSECONDS:
-          s = Scalar.durationFromLong(type, 21313);
+          s = Scalar.durationFromLong(DType.create(type), 21313);
           break;
           case EMPTY:
           case LIST:
@@ -770,7 +774,7 @@ public class ColumnVectorTest extends CudfTestBase {
         }
 
         try (ColumnVector c = ColumnVector.fromScalar(s, 0)) {
-          assertEquals(type, c.getType());
+          assertEquals(DType.create(type), c.getType());
           assertEquals(0, c.getRowCount());
           assertEquals(0, c.getNullCount());
         }
@@ -793,7 +797,10 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testFromScalar() {
     final int rowCount = 4;
-    for (DType type : DType.values()) {
+    for (DType.DTypeEnum type : DType.DTypeEnum.values()) {
+      if(type == DType.DTypeEnum.DECIMAL32 || type == DType.DTypeEnum.DECIMAL64) {
+        continue;
+      }
       Scalar s = null;
       ColumnVector expected = null;
       ColumnVector result = null;
@@ -871,25 +878,25 @@ public class ColumnVectorTest extends CudfTestBase {
         }
         case TIMESTAMP_SECONDS: {
           long v = 1234567890123456789L;
-          s = Scalar.timestampFromLong(type, v);
+          s = Scalar.timestampFromLong(DType.TIMESTAMP_SECONDS, v);
           expected = ColumnVector.timestampSecondsFromLongs(v, v, v, v);
           break;
         }
         case TIMESTAMP_MILLISECONDS: {
           long v = 1234567890123456789L;
-          s = Scalar.timestampFromLong(type, v);
+          s = Scalar.timestampFromLong(DType.TIMESTAMP_MILLISECONDS, v);
           expected = ColumnVector.timestampMilliSecondsFromLongs(v, v, v, v);
           break;
         }
         case TIMESTAMP_MICROSECONDS: {
           long v = 1234567890123456789L;
-          s = Scalar.timestampFromLong(type, v);
+          s = Scalar.timestampFromLong(DType.TIMESTAMP_MICROSECONDS, v);
           expected = ColumnVector.timestampMicroSecondsFromLongs(v, v, v, v);
           break;
         }
         case TIMESTAMP_NANOSECONDS: {
           long v = 1234567890123456789L;
-          s = Scalar.timestampFromLong(type, v);
+          s = Scalar.timestampFromLong(DType.TIMESTAMP_NANOSECONDS, v);
           expected = ColumnVector.timestampNanoSecondsFromLongs(v, v, v, v);
           break;
         }
@@ -907,25 +914,25 @@ public class ColumnVectorTest extends CudfTestBase {
         }
         case DURATION_MICROSECONDS: {
           long v = 1123123123L;
-          s = Scalar.durationFromLong(type, v);
+          s = Scalar.durationFromLong(DType.DURATION_MICROSECONDS, v);
           expected = ColumnVector.durationMicroSecondsFromLongs(v, v, v, v);
           break;
         }
         case DURATION_MILLISECONDS: {
           long v = 11212432423L;
-          s = Scalar.durationFromLong(type, v);
+          s = Scalar.durationFromLong(DType.DURATION_MILLISECONDS, v);
           expected = ColumnVector.durationMilliSecondsFromLongs(v, v, v, v);
           break;
         }
         case DURATION_NANOSECONDS: {
           long v = 12353245343L;
-          s = Scalar.durationFromLong(type, v);
+          s = Scalar.durationFromLong(DType.DURATION_NANOSECONDS, v);
           expected = ColumnVector.durationNanoSecondsFromLongs(v, v, v, v);
           break;
         }
         case DURATION_SECONDS: {
           long v = 132342321123L;
-          s = Scalar.durationFromLong(type, v);
+          s = Scalar.durationFromLong(DType.DURATION_SECONDS, v);
           expected = ColumnVector.durationSecondsFromLongs(v, v, v, v);
           break;
         }
@@ -956,14 +963,15 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testFromScalarNull() {
     final int rowCount = 4;
-    for (DType type : DType.values()) {
-      if (type == DType.EMPTY || type == DType.LIST || type == DType.STRUCT) {
+    for (DType.DTypeEnum type : DType.DTypeEnum.values()) {
+      if (type == DType.DTypeEnum.EMPTY || type == DType.DTypeEnum.LIST || type == DType.DTypeEnum.STRUCT
+          || type == DType.DTypeEnum.DECIMAL32 || type == DType.DTypeEnum.DECIMAL64) {
         continue;
       }
-      try (Scalar s = Scalar.fromNull(type);
+      try (Scalar s = Scalar.fromNull(DType.create(type));
            ColumnVector c = ColumnVector.fromScalar(s, rowCount);
            HostColumnVector hc = c.copyToHost()) {
-        assertEquals(type, c.getType());
+        assertEquals(type, c.getType().typeId);
         assertEquals(rowCount, c.getRowCount());
         assertEquals(rowCount, c.getNullCount());
         for (int i = 0; i < rowCount; ++i) {
