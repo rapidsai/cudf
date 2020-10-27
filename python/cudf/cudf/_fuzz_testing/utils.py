@@ -159,17 +159,22 @@ def convert_nulls_to_none(records, df):
         col
         for col in df.columns
         if df[col].dtype in pandas_dtypes_to_cudf_dtypes
+        or pd.api.types.is_datetime64_dtype(df[col].dtype)
+        or pd.api.types.is_timedelta64_dtype(df[col].dtype)
     ]
 
     for record in records:
         for col, value in record.items():
             if col in scalar_columns_convert:
-                if col in columns_with_nulls and value is pd.NA:
+                if col in columns_with_nulls and value in (pd.NA, pd.NaT):
                     record[col] = None
                 else:
-                    record[col] = (
-                        value if isinstance(value, str) else value.item()
-                    )
+                    if isinstance(value, str):
+                        record[col] = value
+                    elif isinstance(value, (pd.Timestamp, pd.Timedelta)):
+                        record[col] = int(value.value)
+                    else:
+                        record[col] = value.item()
 
     return records
 

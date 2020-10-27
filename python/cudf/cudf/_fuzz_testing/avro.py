@@ -51,9 +51,17 @@ class AvroReader(IOFuzz):
             dtypes_list = list(
                 cudf.utils.dtypes.ALL_TYPES
                 - {"category"}
-                - cudf.utils.dtypes.TIMEDELTA_TYPES
+                # No unsigned support in avro:
+                # https://avro.apache.org/docs/current/spec.html
                 - cudf.utils.dtypes.UNSIGNED_TYPES
+                # TODO: Remove DATETIME_TYPES once
+                # following bug is fixed:
+                # https://github.com/rapidsai/cudf/issues/6482
                 - cudf.utils.dtypes.DATETIME_TYPES
+                # TODO: Remove DURATION_TYPES once
+                # following bug is fixed:
+                # https://github.com/rapidsai/cudf/issues/6604
+                - cudf.utils.dtypes.TIMEDELTA_TYPES
             )
 
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
