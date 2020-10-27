@@ -19,6 +19,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
+#include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cmath>
@@ -251,27 +252,14 @@ std::unique_ptr<cudf::column> transform_fn(InputIterator begin,
   return output;
 }
 
-struct access_index_fn {
-  cudf::column_device_view d_dictionary;
-  __device__ size_type operator()(size_type idx)
-  {
-    if (d_dictionary.is_null(idx)) return 0;
-    return static_cast<size_type>(d_dictionary.element<dictionary32>(idx));
-  };
-};
-
 template <typename T, typename UFN>
 std::unique_ptr<cudf::column> transform_fn(cudf::dictionary_column_view const& input,
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream)
 {
   auto dictionary_view = cudf::column_device_view::create(input.parent(), stream);
-  auto keys_view       = cudf::column_device_view::create(input.keys(), stream);
-  auto dictionary_itr  = thrust::make_permutation_iterator(
-    keys_view->begin<T>(),
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                    access_index_fn{*dictionary_view}));
-  auto default_mr = rmm::mr::get_current_device_resource();
+  auto dictionary_itr  = dictionary::detail::make_dictionary_iterator<T>(*dictionary_view);
+  auto default_mr      = rmm::mr::get_current_device_resource();
   // call unary-op using temporary output buffer
   auto output = transform_fn<T, UFN>(dictionary_itr,
                                      dictionary_itr + input.size(),
@@ -386,7 +374,6 @@ struct BitwiseOpDispatcher {
       dictionary_col.keys().type(), dictionary_dispatch{}, dictionary_col, mr, stream);
   }
 
-  // template <typename T, typename std::enable_if_t<!std::is_integral<T>::value>* = nullptr>
   template <typename T,
             typename std::enable_if_t<!std::is_integral<T>::value and
                                       !std::is_same<T, dictionary32>::value>* = nullptr>
@@ -428,11 +415,7 @@ struct LogicalOpDispatcher {
                                              cudaStream_t stream)
     {
       auto dictionary_view = cudf::column_device_view::create(input.parent(), stream);
-      auto keys_view       = cudf::column_device_view::create(input.keys(), stream);
-      auto dictionary_itr  = thrust::make_permutation_iterator(
-        keys_view->begin<T>(),
-        thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                        access_index_fn{*dictionary_view}));
+      auto dictionary_itr  = dictionary::detail::make_dictionary_iterator<T>(*dictionary_view);
       return transform_fn<bool, UFN>(dictionary_itr,
                                      dictionary_itr + input.size(),
                                      copy_bitmask(input.parent(), stream, mr),
