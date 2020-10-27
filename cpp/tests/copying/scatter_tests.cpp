@@ -93,10 +93,8 @@ TEST_F(ScatterUntypedTests, ScatterScalarColumnNumberMismatch)
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
 
-  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector;
-  const cudf::scalar* source_slr                         = new scalar_type_t<int32_t>(100);
-  std::reference_wrapper<const cudf::scalar> slr_wrapper = std::ref(*source_slr);
-  source_vector.push_back(slr_wrapper);
+  auto const source = scalar_type_t<int32_t>(100);
+  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{std::cref(source)};
 
   fixed_width_column_wrapper<int32_t> target({10, 20, 30, 40, 50, 60, 70, 80});
   fixed_width_column_wrapper<int32_t> scatter_map({-3, 3, 1, -1});
@@ -127,10 +125,8 @@ TEST_F(ScatterUntypedTests, ScatterScalarDataTypeMismatch)
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
 
-  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector;
-  const cudf::scalar* source_slr                         = new scalar_type_t<int32_t>(100);
-  std::reference_wrapper<const cudf::scalar> slr_wrapper = std::ref(*source_slr);
-  source_vector.push_back(slr_wrapper);
+  auto const source = scalar_type_t<int32_t>(100);
+  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{std::cref(source)};
 
   fixed_width_column_wrapper<float> target({10, 20, 30, 40, 50, 60, 70, 80});
   fixed_width_column_wrapper<int32_t> scatter_map({-3, 3, 1, -1});
@@ -172,10 +168,8 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterScalarOutOfBounds)
   using scalar_ptr    = std::unique_ptr<cudf::scalar>;
   using scalar_vector = std::vector<scalar_ptr>;
 
-  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector;
-  const cudf::scalar* source_slr                         = new scalar_type_t<TypeParam>(100, true);
-  std::reference_wrapper<const cudf::scalar> slr_wrapper = std::ref(*source_slr);
-  source_vector.push_back(slr_wrapper);
+  auto const source = scalar_type_t<TypeParam>(100, true);
+  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{std::cref(source)};
 
   fixed_width_column_wrapper<TypeParam> target({10, 20, 30, 40, 50, 60, 70, 80});
   fixed_width_column_wrapper<TypeParam> upper_bound({-3, 3, 1, 8});
@@ -212,10 +206,8 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterScalarIndexType)
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
 
-  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector;
-  const cudf::scalar* source_slr                         = new scalar_type_t<TypeParam>(100, true);
-  std::reference_wrapper<const cudf::scalar> slr_wrapper = std::ref(*source_slr);
-  source_vector.push_back(slr_wrapper);
+  auto const source = scalar_type_t<TypeParam>(100, true);
+  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{std::cref(source)};
 
   fixed_width_column_wrapper<TypeParam> target({10, 20, 30, 40, 50, 60, 70, 80});
   fixed_width_column_wrapper<TypeParam> scatter_map({-3, 3, 1, -1});
@@ -260,10 +252,8 @@ TYPED_TEST(ScatterInvalidIndexTypeTests, ScatterScalarInvalidIndexType)
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
 
-  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector;
-  const cudf::scalar* source_slr                         = new scalar_type_t<int32_t>(100, true);
-  std::reference_wrapper<const cudf::scalar> slr_wrapper = std::ref(*source_slr);
-  source_vector.push_back(slr_wrapper);
+  auto const source = scalar_type_t<int32_t>(100, true);
+  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{std::cref(source)};
 
   fixed_width_column_wrapper<int32_t> target({10, 20, 30, 40, 50, 60, 70, 80});
   fixed_width_column_wrapper<TypeParam, int32_t> scatter_map({-3, 3, 1, -1});
@@ -303,11 +293,9 @@ TYPED_TEST(ScatterDataTypeTests, EmptyScalarScatterMap)
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
 
-  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector;
-  const cudf::scalar* source_slr =
-    new scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(100), true);
-  std::reference_wrapper<const cudf::scalar> slr_wrapper = std::ref(*source_slr);
-  source_vector.push_back(slr_wrapper);
+  auto const source =
+    scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(100), true);
+  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{std::cref(source)};
 
   fixed_width_column_wrapper<TypeParam, int32_t> target({10, 20, 30, 40, 50, 60, 70, 80});
   fixed_width_column_wrapper<int32_t> scatter_map({});
@@ -402,11 +390,9 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarNoNulls)
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
 
-  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector;
-  const cudf::scalar* source_slr =
-    new scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(100), true);
-  std::reference_wrapper<const cudf::scalar> slr_wrapper = std::ref(*source_slr);
-  source_vector.push_back(slr_wrapper);
+  auto const source =
+    scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(100), true);
+  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{std::cref(source)};
 
   fixed_width_column_wrapper<TypeParam, int32_t> target({10, 20, 30, 40, 50, 60, 70, 80});
   fixed_width_column_wrapper<int32_t> scatter_map({-3, 3, 1, -1});
@@ -425,11 +411,9 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarTargetNulls)
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
 
-  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector;
-  const cudf::scalar* source_slr =
-    new scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(100), true);
-  std::reference_wrapper<const cudf::scalar> slr_wrapper = std::ref(*source_slr);
-  source_vector.push_back(slr_wrapper);
+  auto const soursce =
+    scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(100), true);
+  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{std::cref(source)};
 
   fixed_width_column_wrapper<TypeParam, int32_t> target({10, 20, 30, 40, 50, 60, 70, 80},
                                                         {0, 0, 0, 0, 1, 1, 1, 1});
@@ -450,11 +434,9 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarSourceNulls)
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
 
-  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector;
-  const cudf::scalar* source_slr =
-    new scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(100), false);
-  std::reference_wrapper<const cudf::scalar> slr_wrapper = std::ref(*source_slr);
-  source_vector.push_back(slr_wrapper);
+  auto const source =
+    scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(100), false);
+  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{std::cref(source)};
 
   fixed_width_column_wrapper<TypeParam, int32_t> target({10, 20, 30, 40, 50, 60, 70, 80});
   fixed_width_column_wrapper<int32_t> scatter_map({-3, 3, 1, -1});
@@ -474,11 +456,9 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarBothNulls)
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
 
-  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector;
-  const cudf::scalar* source_slr =
-    new scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(100), false);
-  std::reference_wrapper<const cudf::scalar> slr_wrapper = std::ref(*source_slr);
-  source_vector.push_back(slr_wrapper);
+  auto const source =
+    scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(100), false);
+  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{std::cref(source)};
 
   fixed_width_column_wrapper<TypeParam, int32_t> target({10, 20, 30, 40, 50, 60, 70, 80},
                                                         {0, 0, 0, 0, 1, 1, 1, 1});
@@ -557,10 +537,8 @@ TEST_F(ScatterStringsTests, ScatterScalarNoNulls)
   using cudf::test::fixed_width_column_wrapper;
   using cudf::test::strings_column_wrapper;
 
-  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector;
-  const cudf::scalar* source_slr                         = new string_scalar("buffalo");
-  std::reference_wrapper<const cudf::scalar> slr_wrapper = std::ref(*source_slr);
-  source_vector.push_back(slr_wrapper);
+  auto const source = string_scalar("buffalo");
+  std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{std::cref(source)};
 
   std::vector<const char*> h_target{
     "Buffalo", "bison", "Buffalo", "bison", "bully", "bully", "Buffalo", "bison"};
