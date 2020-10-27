@@ -297,11 +297,11 @@ class Frame(libcudf.table.Table):
             names = [name for f in objs for name in f._column_names]
             names = OrderedDict.fromkeys(names).keys()
 
-        # else:
-        #     raise ValueError(
-        #         "Only can inner (intersect) or outer (union) when joining"
-        #         "the other axis"
-        #     )
+        else:
+            raise ValueError(
+                "Only can inner (intersect) or outer (union) when joining"
+                "the other axis"
+            )
 
         try:
             if sort:
