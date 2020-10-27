@@ -91,9 +91,9 @@ VectorPair concatenate_vector_pairs(VectorPair &a, VectorPair &b)
                "Mismatch between sizes of vectors in vector pair");
   CUDF_EXPECTS((b.first.size() == b.second.size()),
                "Mismatch between sizes of vectors in vector pair");
-  if (a.first.size() == 0) {
+  if (a.first.empty()) {
     return b;
-  } else if (b.first.size() == 0) {
+  } else if (b.first.empty()) {
     return a;
   }
   auto original_size = a.first.size();

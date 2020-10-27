@@ -1113,7 +1113,7 @@ class lists_column_wrapper : public detail::column_wrapper {
   {
     // if are at the bottom of the short column, it must be empty
     if (col.type().id() != type_id::LIST) {
-      CUDF_EXPECTS(col.size() == 0, "Encountered mismatched column!");
+      CUDF_EXPECTS(col.is_empty(), "Encountered mismatched column!");
 
       auto remainder = empty_like(expected_hierarchy);
       return remainder;
