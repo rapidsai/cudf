@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import pandas as pd
 import pytest
 
@@ -97,7 +99,7 @@ def test_column_size_mismatch():
     differing sizes throws an error.
     """
     with pytest.raises(ValueError):
-        _ = ColumnAccessor({"a": [1], "b": [1, 2]})
+        ColumnAccessor({"a": [1], "b": [1, 2]})
 
 
 def test_select_by_label_simple():

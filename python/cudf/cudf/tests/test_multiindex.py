@@ -4,6 +4,7 @@
 Test related to MultiIndex
 """
 import itertools
+import operator
 import re
 
 import cupy as cp
@@ -14,41 +15,59 @@ import pytest
 import cudf
 from cudf.core.column import as_column
 from cudf.core.index import as_index
-from cudf.tests.utils import assert_eq, assert_neq
+from cudf.tests.utils import assert_eq, assert_exceptions_equal, assert_neq
 
 
 def test_multiindex_levels_codes_validation():
     levels = [["a", "b"], ["c", "d"]]
+
     # Codes not a sequence of sequences
-    with pytest.raises(TypeError):
-        pd.MultiIndex(levels, [0, 1])
-    with pytest.raises(TypeError):
-        cudf.MultiIndex(levels, [0, 1])
+    assert_exceptions_equal(
+        lfunc=pd.MultiIndex,
+        rfunc=cudf.MultiIndex,
+        lfunc_args_and_kwargs=([levels, [0, 1]],),
+        rfunc_args_and_kwargs=([levels, [0, 1]],),
+        compare_error_message=False,
+    )
+
     # Codes don't match levels
-    with pytest.raises(ValueError):
-        pd.MultiIndex(levels, [[0], [1], [1]])
-    with pytest.raises(ValueError):
-        cudf.MultiIndex(levels, [[0], [1], [1]])
+    assert_exceptions_equal(
+        lfunc=pd.MultiIndex,
+        rfunc=cudf.MultiIndex,
+        lfunc_args_and_kwargs=([levels, [[0], [1], [1]]],),
+        rfunc_args_and_kwargs=([levels, [[0], [1], [1]]],),
+        compare_error_message=False,
+    )
+
     # Largest code greater than number of levels
-    with pytest.raises(ValueError):
-        pd.MultiIndex(levels, [[0, 1], [0, 2]])
-    with pytest.raises(ValueError):
-        cudf.MultiIndex(levels, [[0, 1], [0, 2]])
+    assert_exceptions_equal(
+        lfunc=pd.MultiIndex,
+        rfunc=cudf.MultiIndex,
+        lfunc_args_and_kwargs=([levels, [[0, 1], [0, 2]]],),
+        rfunc_args_and_kwargs=([levels, [[0, 1], [0, 2]]],),
+        compare_error_message=False,
+    )
+
     # Unequal code lengths
-    with pytest.raises(ValueError):
-        pd.MultiIndex(levels, [[0, 1], [0]])
-    with pytest.raises(ValueError):
-        cudf.MultiIndex(levels, [[0, 1], [0]])
+    assert_exceptions_equal(
+        lfunc=pd.MultiIndex,
+        rfunc=cudf.MultiIndex,
+        lfunc_args_and_kwargs=([levels, [[0, 1], [0]]],),
+        rfunc_args_and_kwargs=([levels, [[0, 1], [0]]],),
+        compare_error_message=False,
+    )
     # Didn't pass levels and codes
-    with pytest.raises(TypeError):
-        pd.MultiIndex()
-    with pytest.raises(TypeError):
-        cudf.MultiIndex()
+    assert_exceptions_equal(
+        lfunc=pd.MultiIndex, rfunc=cudf.MultiIndex, compare_error_message=False
+    )
+
     # Didn't pass non zero levels and codes
-    with pytest.raises(ValueError):
-        pd.MultiIndex([], [])
-    with pytest.raises(ValueError):
-        cudf.MultiIndex([], [])
+    assert_exceptions_equal(
+        lfunc=pd.MultiIndex,
+        rfunc=cudf.MultiIndex,
+        lfunc_args_and_kwargs=([[], []],),
+        rfunc_args_and_kwargs=([[], []],),
+    )
 
 
 def test_multiindex_construction():
@@ -128,10 +147,13 @@ def test_multiindex_row_shape():
     pdfIndex.names = ["alpha"]
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex, gdfIndex)
-    with pytest.raises(ValueError):
-        pdf.index = pdfIndex
-    with pytest.raises(ValueError):
-        gdf.index = gdfIndex
+
+    assert_exceptions_equal(
+        lfunc=operator.setitem,
+        rfunc=operator.setitem,
+        lfunc_args_and_kwargs=([], {"a": pdf, "b": "index", "c": pdfIndex}),
+        rfunc_args_and_kwargs=([], {"a": gdf, "b": "index", "c": gdfIndex}),
+    )
 
 
 @pytest.fixture
@@ -303,11 +325,13 @@ def test_multiindex_loc_rows_0(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    with pytest.raises(KeyError):
-        print(pdf.loc[("d",), :].to_pandas())
-    with pytest.raises(KeyError):
-        print(gdf.loc[("d",), :].to_pandas())
-    assert_eq(pdf, gdf)
+
+    assert_exceptions_equal(
+        lfunc=pdf.loc.__getitem__,
+        rfunc=gdf.loc.__getitem__,
+        lfunc_args_and_kwargs=([(("d",), slice(None, None, None))],),
+        rfunc_args_and_kwargs=([(("d",), slice(None, None, None))],),
+    )
 
 
 def test_multiindex_loc_rows_1_2_key(pdf, gdf, pdfIndex):
@@ -335,10 +359,13 @@ def test_multiindex_column_shape():
     pdfIndex.names = ["alpha"]
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex, gdfIndex)
-    with pytest.raises(ValueError):
-        pdf.columns = pdfIndex
-    with pytest.raises(ValueError):
-        gdf.columns = gdfIndex
+
+    assert_exceptions_equal(
+        lfunc=operator.setitem,
+        rfunc=operator.setitem,
+        lfunc_args_and_kwargs=([], {"a": pdf, "b": "columns", "c": pdfIndex}),
+        rfunc_args_and_kwargs=([], {"a": gdf, "b": "columns", "c": gdfIndex}),
+    )
 
 
 @pytest.mark.parametrize(
@@ -695,8 +722,8 @@ def test_multiindex_copy_deep(data, deep):
     same_ref = not deep
 
     if isinstance(data, dict):
-        from functools import reduce
         import operator
+        from functools import reduce
 
         gdf = cudf.DataFrame(data)
         mi1 = gdf.groupby(["Date", "Symbol"]).mean().index

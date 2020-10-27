@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import copy
 import itertools
@@ -275,7 +275,7 @@ def test_json_engine_selection():
 
     # should raise an exception
     with pytest.raises(ValueError):
-        df = cudf.read_json(json, lines=False, engine="cudf")
+        cudf.read_json(json, lines=False, engine="cudf")
 
 
 def test_json_bool_values():
