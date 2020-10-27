@@ -362,3 +362,15 @@ def test_orc_reader_decimal_type(datadir, orc_file):
     df["col8"] = df["col8"].astype("str")
 
     assert_eq(pdf, df)
+
+
+def test_int_overflow(tmpdir):
+    file_path = tmpdir.join("gdf_overflow.orc")
+    num_rows = 513
+    large_val = 1024*1024*1024
+    df = cudf.DataFrame({'a':[None]*num_rows}, dtype='int32')
+    df['a'][0] = large_val
+    df['a'][num_rows-1] = 99
+    df.to_orc(file_path)
+    
+    assert_eq(cudf.read_orc(file_path), df)

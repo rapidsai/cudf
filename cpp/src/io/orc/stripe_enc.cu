@@ -434,7 +434,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
         __syncwarp();
         if (t == 0) {
           uint32_t mode1_w, mode2_w;
-          T vrange_mode1, vrange_mode2;
+          typename std::make_unsigned<T>::type vrange_mode1, vrange_mode2;
           s->u.intrle.scratch.u64[0] = (uint64_t)vmin;
           if (sizeof(T) > 4) {
             vrange_mode1 = (is_signed) ? max(zigzag64(vmin), zigzag64(vmax)) : vmax;
@@ -490,16 +490,19 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
           dst[1] = (literal_run - 1) & 0xff;
         }
         dst += 2;
-        if (t < literal_run && is_signed) {
-          if (sizeof(T) > 4)
-            v0 = zigzag64(v0);
-          else
-            v0 = zigzag32(v0);
-        }
-        if (literal_w < 8)
+
+        if (literal_w < 8) {
           StoreBitsBigEndian(dst, (uint32_t)v0, literal_w, literal_run, t);
-        else if (t < literal_run)
-          StoreBytesBigEndian(dst + t * (literal_w >> 3), v0, (literal_w >> 3));
+        } else if (t < literal_run) {
+          typename std::make_unsigned<T>::type zzv0 = v0;
+          if (is_signed) {
+            if (sizeof(T) > 4)
+              zzv0 = zigzag64(v0);
+            else
+              zzv0 = zigzag32(v0);
+          }
+          StoreBytesBigEndian(dst + t * (literal_w >> 3), zzv0, (literal_w >> 3));
+        }
       } else if (literal_mode == 2) {
         // Patched base mode
         if (!t) {
