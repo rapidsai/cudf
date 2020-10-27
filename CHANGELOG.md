@@ -25,12 +25,14 @@
 - PR #6540 Add dictionary support to `cudf::unary_operation`
 - PR #6537 Refactor ORC timezone
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
+- PR #6557 Support nullable timestamp columns in time range window functions
 - PR #6566 Remove reinterpret_cast conversions between pointer types in ORC
 - PR #6544 Remove `fixed_point` precise round
 - PR #6555 Adapt JNI build to libcudf composition of multiple libraries
 - PR #6564 Load JNI library dependencies with a thread pool
 - PR #6573 Create `cudf::detail::byte_cast` for `cudf::byte_cast`
 - PR #6597 Use thread-local to track CUDA device in JNI
+- PR #6599 Replace `size()==0` with `empty()`, `is_empty()`
 
 ## Bug Fixes
 

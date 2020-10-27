@@ -302,7 +302,7 @@ void validate_cast_result(cudf::column_view expected, cudf::column_view actual)
   thrust::host_vector<T> h_data;
   std::vector<cudf::bitmask_type> null_mask;
   std::tie(h_data, null_mask) = to_host<T>(expected);
-  if (null_mask.size() == 0) {
+  if (null_mask.empty()) {
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(make_column<R, T>(h_data), actual);
   } else {
     thrust::host_vector<bool> h_null_mask(expected.size());
