@@ -1490,7 +1490,9 @@ class Frame(libcudf.table.Table):
             raise KeyError(method)
         method_enum = libcudf.sort.RankMethod[method.upper()]
         if na_option not in {"keep", "top", "bottom"}:
-            raise KeyError(na_option)
+            raise ValueError(
+                "na_option must be one of 'keep', 'top', or 'bottom'"
+            )
 
         # TODO code for selecting numeric columns
         source = self

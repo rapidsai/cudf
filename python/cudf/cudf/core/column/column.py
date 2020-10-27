@@ -179,11 +179,9 @@ class ColumnBase(Column, Serializable):
         return bool(libcudf.reduce.reduce("any", self, dtype=np.bool_))
 
     def __sizeof__(self):
-        n = self.base_data.size if self.base_data is not None else 0
+        n = self.data.size
         if self.nullable:
-            n += self.base_mask.size
-        for child in self.base_children:
-            n += child.__sizeof__()
+            n += bitmask_allocation_size_bytes(self.size)
         return n
 
     @classmethod
