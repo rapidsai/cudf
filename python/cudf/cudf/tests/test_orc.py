@@ -378,4 +378,3 @@ def test_orc_reader_tzif_timestamps(datadir):
     gdf = cudf.read_orc(path, engine="cudf").to_pandas()
 
     assert_eq(pdf, gdf)
-    
