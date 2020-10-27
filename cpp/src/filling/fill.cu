@@ -145,7 +145,7 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
-  if (input.size() == 0) return std::make_unique<cudf::column>(input, stream, mr);
+  if (input.is_empty()) return std::make_unique<cudf::column>(input, stream, mr);
   cudf::dictionary_column_view const target(input);
   CUDF_EXPECTS(target.keys().type() == value.type(), "Data type mismatch.");
 

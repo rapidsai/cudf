@@ -94,7 +94,7 @@ std::unique_ptr<column> transform(column_view const& input,
   std::unique_ptr<column> output = make_fixed_width_column(
     output_type, input.size(), copy_bitmask(input), cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
-  if (input.size() == 0) { return output; }
+  if (input.is_empty()) { return output; }
 
   mutable_column_view output_view = *output;
 

@@ -2,8 +2,9 @@
 
 ## New Features
 
-- PR #6460 Add is_timestamp format check API
 - PR #6528 Enable `fixed_point` binary operations
+- PR #6460 Add is_timestamp format check API
+- PR #6568 Add function to create hashed vocabulary file from raw vocabulary
 - PR #6581 Add JNI API to check if PTDS is enabled
 
 ## Improvements
@@ -24,12 +25,16 @@
 - PR #6504 Update Java bindings version to 0.17-SNAPSHOT
 - PR #6537 Refactor ORC timezone
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
+- PR #6557 Support nullable timestamp columns in time range window functions
 - PR #6566 Remove reinterpret_cast conversions between pointer types in ORC
 - PR #6544 Remove `fixed_point` precise round
+- PR #6552 Use `assert_exceptions_equal` to assert exceptions in pytests
 - PR #6555 Adapt JNI build to libcudf composition of multiple libraries
 - PR #6564 Load JNI library dependencies with a thread pool
 - PR #6573 Create `cudf::detail::byte_cast` for `cudf::byte_cast`
 - PR #6597 Use thread-local to track CUDA device in JNI
+- PR #6599 Replace `size()==0` with `empty()`, `is_empty()`
+- PR #6514 Initial work for decimal type in Java/JNI
 
 ## Bug Fixes
 
@@ -40,8 +45,10 @@
 - PR #6543 Handle `np.nan` values in `isna`/`isnull`/`notna`/`notnull`
 - PR #6549 Fix memory_usage calls for list columns
 - PR #6575 Fix JNI RMM initialize with no pool allocator limit
+- PR #6596 Fix memory usage calculation
 - PR #6595 Fix JNI build, broken by to_arrow() signature change
 - PR #6601 Fix timezone offset when reading ORC files
+- PR #6603 Use correct stream in hash_join.
 
 
 # cuDF 0.16.0 (21 Oct 2020)
