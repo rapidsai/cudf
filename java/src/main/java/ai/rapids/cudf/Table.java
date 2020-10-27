@@ -472,7 +472,7 @@ public final class Table implements AutoCloseable {
 
   private static native long[] convertToRows(long nativeHandle);
 
-  private static native long[] convertFromRows(long nativeColumnView, long[] types);
+  private static native long[] convertFromRows(long nativeColumnView, int[] types, int[] scale);
 
   private static native long[] repeatStaticCount(long tableHandle, int count);
 
@@ -1716,11 +1716,14 @@ public final class Table implements AutoCloseable {
   public static Table convertFromRows(ColumnVector vec, DType ... schema) {
     // TODO at some point we need a schema that support nesting so we can support nested types
     // TODO we will need scale at some point very soon too
-    long[] types = new long[schema.length];
+    int[] types = new int[schema.length];
+    int[] scale = new int[schema.length];
     for (int i = 0; i < schema.length; i++) {
-      types[i] = schema[i].nativeId;
+      types[i] = schema[i].typeId.nativeId;
+      scale[i] = schema[i].getScale();
+
     }
-    return new Table(convertFromRows(vec.getNativeView(), types));
+    return new Table(convertFromRows(vec.getNativeView(), types, scale));
   }
 
   /////////////////////////////////////////////////////////////////////////////
