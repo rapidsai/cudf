@@ -7,7 +7,12 @@ import pytest
 
 import cudf
 from cudf.core import DataFrame, Series
-from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import (
+    INTEGER_TYPES,
+    NUMERIC_TYPES,
+    assert_eq,
+    assert_exceptions_equal,
+)
 
 
 def test_series_replace():
@@ -463,9 +468,8 @@ def test_series_fillna_invalid_dtype(data_dtype):
     with pytest.raises(TypeError) as raises:
         gdf.fillna(fill_value)
     raises.match(
-        "Cannot safely cast non-equivalent {} to {}".format(
-            type(fill_value).__name__, gdf.dtype.type.__name__
-        )
+        f"Cannot safely cast non-equivalent"
+        f" {type(fill_value).__name__} to {gdf.dtype.type.__name__}"
     )
 
 
@@ -739,11 +743,13 @@ def test_replace_inplace():
         pdf.replace([], []), gdf.replace([], []),
     )
 
-    with pytest.raises(TypeError):
-        pdf.replace(-1, [])
-
-    with pytest.raises(TypeError):
-        gdf.replace(-1, [])
+    assert_exceptions_equal(
+        lfunc=pdf.replace,
+        rfunc=gdf.replace,
+        lfunc_args_and_kwargs=([], {"to_replace": -1, "value": []}),
+        rfunc_args_and_kwargs=([], {"to_replace": -1, "value": []}),
+        compare_error_message=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -910,10 +916,9 @@ def test_series_fillna_error():
     psr = pd.Series([1, 2, None, 3, None])
     gsr = cudf.from_pandas(psr)
 
-    try:
-        psr.fillna(pd.DataFrame({"a": [1, 2, 3]}))
-    except Exception as e:
-        with pytest.raises(type(e), match=str(e)):
-            gsr.fillna(cudf.DataFrame({"a": [1, 2, 3]}))
-    else:
-        raise AssertionError("Expected psr.fillna to fail")
+    assert_exceptions_equal(
+        psr.fillna,
+        gsr.fillna,
+        ([pd.DataFrame({"a": [1, 2, 3]})],),
+        ([cudf.DataFrame({"a": [1, 2, 3]})],),
+    )
