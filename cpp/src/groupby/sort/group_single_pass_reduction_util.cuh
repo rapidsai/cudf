@@ -65,7 +65,7 @@ struct reduce_functor {
                               stream,
                               mr);
 
-    if (values.size() == 0) { return result; }
+    if (values.is_empty()) { return result; }
 
     auto result_table = mutable_table_view({*result});
     cudf::detail::initialize_with_identity(result_table, {K}, stream);

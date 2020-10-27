@@ -49,6 +49,7 @@ class strings_column_view : private column_view {
   static constexpr size_type chars_column_index{1};
 
   using column_view::has_nulls;
+  using column_view::is_empty;
   using column_view::null_count;
   using column_view::null_mask;
   using column_view::offset;
