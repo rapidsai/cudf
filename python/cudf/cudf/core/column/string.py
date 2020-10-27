@@ -4512,7 +4512,10 @@ class StringColumn(column.ColumnBase):
     @property
     def start_offset(self):
         if self._start_offset is None:
-            if len(self.base_children) == 2:
+            if (
+                len(self.base_children) == 2
+                and self.offset < self.base_children[0].size
+            ):
                 self._start_offset = int(self.base_children[0][self.offset])
             else:
                 self._start_offset = 0
@@ -4522,7 +4525,10 @@ class StringColumn(column.ColumnBase):
     @property
     def end_offset(self):
         if self._end_offset is None:
-            if len(self.base_children) == 2:
+            if (
+                len(self.base_children) == 2
+                and (self.offset + self.size) < self.base_children[0].size
+            ):
                 self._end_offset = int(
                     self.base_children[0][self.offset + self.size]
                 )
