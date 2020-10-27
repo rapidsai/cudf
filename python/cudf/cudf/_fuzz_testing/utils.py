@@ -1,36 +1,38 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
 import random
 
 import fastavro
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
-pyarrow_dtypes_to_pandas_dtypes = {
-    pa.uint8(): pd.UInt8Dtype(),
-    pa.uint16(): pd.UInt16Dtype(),
-    pa.uint32(): pd.UInt32Dtype(),
-    pa.uint64(): pd.UInt64Dtype(),
-    pa.int8(): pd.Int8Dtype(),
-    pa.int16(): pd.Int16Dtype(),
-    pa.int32(): pd.Int32Dtype(),
-    pa.int64(): pd.Int64Dtype(),
-    pa.bool_(): pd.BooleanDtype(),
-    pa.string(): pd.StringDtype(),
-}
+import cudf
+from cudf.tests.utils import assert_eq
+from cudf.utils.dtypes import (
+    pandas_dtypes_to_cudf_dtypes,
+    pyarrow_dtypes_to_pandas_dtypes,
+)
 
-pandas_dtypes_to_cudf_dtypes = {
-    pd.UInt8Dtype(): np.dtype("uint8"),
-    pd.UInt16Dtype(): np.dtype("uint16"),
-    pd.UInt32Dtype(): np.dtype("uint32"),
-    pd.UInt64Dtype(): np.dtype("uint64"),
-    pd.Int8Dtype(): np.dtype("int8"),
-    pd.Int16Dtype(): np.dtype("int16"),
-    pd.Int32Dtype(): np.dtype("int32"),
-    pd.Int64Dtype(): np.dtype("int64"),
-    pd.BooleanDtype(): np.dtype("bool_"),
-    pd.StringDtype(): np.dtype("object"),
+ALL_POSSIBLE_VALUES = "ALL_POSSIBLE_VALUES"
+
+_PANDAS_TO_AVRO_SCHEMA_MAP = {
+    np.dtype("int8"): "int",
+    pd.Int8Dtype(): ["int", "null"],
+    pd.Int16Dtype(): ["int", "null"],
+    pd.Int32Dtype(): ["int", "null"],
+    pd.Int64Dtype(): ["long", "null"],
+    pd.BooleanDtype(): ["boolean", "null"],
+    pd.StringDtype(): ["string", "null"],
+    np.dtype("bool_"): "boolean",
+    np.dtype("int16"): "int",
+    np.dtype("int32"): "int",
+    np.dtype("int64"): "long",
+    np.dtype("O"): "string",
+    np.dtype("str"): "string",
+    np.dtype("float32"): "float",
+    np.dtype("float64"): "double",
+    np.dtype("<M8[ns]"): {"type": "long", "logicalType": "timestamp-millis"},
+    np.dtype("<M8[ms]"): {"type": "long", "logicalType": "timestamp-millis"},
+    np.dtype("<M8[us]"): {"type": "long", "logicalType": "timestamp-micros"},
 }
 
 
@@ -109,6 +111,18 @@ def pyarrow_to_pandas(table):
     return df
 
 
+def cudf_to_pandas(df):
+    pdf = df.to_pandas()
+    for col in pdf.columns:
+        if df[col].dtype in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes:
+            pdf[col] = pdf[col].astype(
+                cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes[df[col].dtype]
+            )
+        elif cudf.utils.dtypes.is_categorical_dtype(df[col].dtype):
+            pdf[col] = pdf[col].astype("category")
+    return pdf
+
+
 def compare_content(a, b):
     if a == b:
         return
@@ -118,29 +132,9 @@ def compare_content(a, b):
         )
 
 
-PANDAS_TO_AVRO_TYPES = {
-    np.dtype("int8"): "int",
-    pd.Int8Dtype(): ["int", "null"],
-    pd.Int16Dtype(): ["int", "null"],
-    pd.Int32Dtype(): ["int", "null"],
-    pd.Int64Dtype(): ["long", "null"],
-    pd.BooleanDtype(): ["boolean", "null"],
-    np.dtype("bool_"): "boolean",
-    np.dtype("int16"): "int",
-    np.dtype("int32"): "int",
-    np.dtype("int64"): "long",
-    np.dtype("O"): "string",
-    np.dtype("float32"): "float",
-    np.dtype("float64"): "double",
-    np.dtype("<M8[ns]"): {"type": "long", "logicalType": "timestamp-millis"},
-    np.dtype("<M8[ms]"): {"type": "long", "logicalType": "timestamp-millis"},
-    np.dtype("<M8[us]"): {"type": "long", "logicalType": "timestamp-micros"},
-}
-
-
-def get_dtype_info(dtype):
-    if dtype in PANDAS_TO_AVRO_TYPES:
-        return PANDAS_TO_AVRO_TYPES[dtype]
+def get_avro_dtype_info(dtype):
+    if dtype in _PANDAS_TO_AVRO_SCHEMA_MAP:
+        return _PANDAS_TO_AVRO_SCHEMA_MAP[dtype]
     else:
         print(dtype)
         raise TypeError(
@@ -149,10 +143,10 @@ def get_dtype_info(dtype):
         )
 
 
-def get_schema(df):
+def get_avro_schema(df):
 
     fields = [
-        {"name": col_name, "type": get_dtype_info(col_dtype)}
+        {"name": col_name, "type": get_avro_dtype_info(col_dtype)}
         for col_name, col_dtype in df.dtypes.items()
     ]
     schema = {"type": "record", "name": "Root", "fields": fields}
@@ -173,13 +167,15 @@ def convert_nulls_to_none(records, df):
                 if col in columns_with_nulls and value is pd.NA:
                     record[col] = None
                 else:
-                    record[col] = value.item()
+                    record[col] = (
+                        value if isinstance(value, str) else value.item()
+                    )
 
     return records
 
 
 def pandas_to_avro(df, file_name=None, file_io_obj=None):
-    schema = get_schema(df)
+    schema = get_avro_schema(df)
     avro_schema = fastavro.parse_schema(schema)
 
     records = df.to_dict("records")
@@ -190,3 +186,17 @@ def pandas_to_avro(df, file_name=None, file_io_obj=None):
             fastavro.writer(out, avro_schema, records)
     elif file_io_obj is not None:
         fastavro.writer(file_io_obj, avro_schema, records)
+
+
+def compare_dataframe(left, right, nullable=True):
+    if nullable and isinstance(left, cudf.DataFrame):
+        left = cudf_to_pandas(left)
+    if nullable and isinstance(right, cudf.DataFrame):
+        right = cudf_to_pandas(right)
+
+    if len(left.index) == 0 and len(right.index) == 0:
+        check_index_type = False
+    else:
+        check_index_type = True
+
+    return assert_eq(left, right, check_index_type=check_index_type)

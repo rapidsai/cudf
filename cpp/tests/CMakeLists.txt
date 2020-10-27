@@ -429,6 +429,7 @@ ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
 
 set(MERGE_TEST_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_test.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_dictionary_test.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_string_test.cpp")
 
 ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
