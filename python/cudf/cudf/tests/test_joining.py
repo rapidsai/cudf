@@ -1,11 +1,17 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
 from cudf.core import DataFrame, Series
-from cudf.tests.utils import INTEGER_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import (
+    INTEGER_TYPES,
+    NUMERIC_TYPES,
+    assert_eq,
+    assert_exceptions_equal,
+)
 
 
 def make_params():
@@ -453,19 +459,25 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
     gdf_left = DataFrame.from_pandas(pdf_left)
     gdf_right = DataFrame.from_pandas(pdf_right)
     if not set(pdf_left.columns).intersection(pdf_right.columns):
-        with pytest.raises(pd.core.reshape.merge.MergeError) as raises:
+        with pytest.raises(
+            pd.core.reshape.merge.MergeError,
+            match="No common columns to perform merge on",
+        ):
             pdf_left.merge(pdf_right)
-        raises.match("No common columns to perform merge on")
-        with pytest.raises(ValueError) as raises:
+        with pytest.raises(
+            ValueError, match="No common columns to perform merge on"
+        ):
             gdf_left.merge(gdf_right)
-        raises.match("No common columns to perform merge on")
     elif not [value for value in pdf_left if value in pdf_right]:
-        with pytest.raises(pd.core.reshape.merge.MergeError) as raises:
+        with pytest.raises(
+            pd.core.reshape.merge.MergeError,
+            match="No common columns to perform merge on",
+        ):
             pdf_left.merge(pdf_right)
-        raises.match("No common columns to perform merge on")
-        with pytest.raises(ValueError) as raises:
+        with pytest.raises(
+            ValueError, match="No common columns to perform merge on"
+        ):
             gdf_left.merge(gdf_right)
-        raises.match("No common columns to perform merge on")
     else:
         pdf_result = pdf_left.merge(pdf_right, how=how)
         gdf_result = gdf_left.merge(gdf_right, how=how)
@@ -604,10 +616,12 @@ def test_merge_suffixes():
         pdf.merge(pdf, suffixes=("left", "right")),
     )
 
-    with pytest.raises(ValueError) as info:
-        gdf.merge(gdf, lsuffix="left", rsuffix="right")
-
-    assert "suffixes=('left', 'right')" in str(info.value)
+    assert_exceptions_equal(
+        lfunc=pdf.merge,
+        rfunc=gdf.merge,
+        lfunc_args_and_kwargs=([pdf], {"lsuffix": "left", "rsuffix": "right"}),
+        rfunc_args_and_kwargs=([gdf], {"lsuffix": "left", "rsuffix": "right"}),
+    )
 
 
 def test_merge_left_on_right_on():
