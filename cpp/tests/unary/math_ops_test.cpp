@@ -331,6 +331,31 @@ TYPED_TEST(UnaryMathFloatOpsTest, SimpleRINT)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
+TYPED_TEST(UnaryMathFloatOpsTest, SimpleEXP)
+{
+  using T = TypeParam;
+  cudf::test::fixed_width_column_wrapper<T> input{T(1.5), T(3.5), T(-1.5), T(-3.5), T(0.0), T(NAN)};
+  cudf::test::fixed_width_column_wrapper<T> expected{T(std::exp(1.5)),
+                                                     T(std::exp(3.5)),
+                                                     T(std::exp(-1.5)),
+                                                     T(std::exp(-3.5)),
+                                                     T(std::exp(0.0)),
+                                                     T(NAN)};
+  auto output = cudf::unary_operation(input, cudf::unary_op::EXP);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, output->view());
+}
+
+TYPED_TEST(UnaryMathFloatOpsTest, SimpleLOG)
+{
+  using T = TypeParam;
+  cudf::test::fixed_width_column_wrapper<T> input{
+    T(1.5), T(3.5), T(1.0), T(INFINITY), T(0.0), T(NAN), T(-1.0)};
+  cudf::test::fixed_width_column_wrapper<T> expected{
+    T(std::log(1.5)), T(std::log(3.5)), T(+0.0), T(INFINITY), T(-INFINITY), T(NAN), T(NAN)};
+  auto output = cudf::unary_operation(input, cudf::unary_op::LOG);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, output->view());
+}
+
 TYPED_TEST(UnaryMathFloatOpsTest, DictionaryFLOOR)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input_w{{1.1, 3.3, 5.5, 7.7}};
@@ -349,6 +374,30 @@ TYPED_TEST(UnaryMathFloatOpsTest, DictionaryCEIL)
   auto expected = cudf::dictionary::encode(expected_w);
   auto output   = cudf::unary_operation(input->view(), cudf::unary_op::CEIL);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), output->view());
+}
+
+TYPED_TEST(UnaryMathFloatOpsTest, DictionaryEXP)
+{
+  using T = TypeParam;
+  cudf::test::fixed_width_column_wrapper<T> input_w{
+    T(1.5), T(3.5), T(-1.5), T(-3.5), T(0.0), T(NAN)};
+  auto input    = cudf::dictionary::encode(input_w);
+  auto output   = cudf::unary_operation(input->view(), cudf::unary_op::EXP);
+  auto expect   = cudf::unary_operation(input_w, cudf::unary_op::EXP);
+  auto expected = cudf::dictionary::encode(expect->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), output->view());
+}
+
+TYPED_TEST(UnaryMathFloatOpsTest, DictionaryLOG)
+{
+  using T = TypeParam;
+  cudf::test::fixed_width_column_wrapper<T> input_w{
+    T(1.5), T(3.5), T(1.0), T(INFINITY), T(0.0), T(NAN), T(-1.0)};
+  auto input    = cudf::dictionary::encode(input_w);
+  auto output   = cudf::unary_operation(input->view(), cudf::unary_op::LOG);
+  auto expect   = cudf::unary_operation(input_w, cudf::unary_op::LOG);
+  auto expected = cudf::dictionary::encode(expect->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), output->view());
 }
 
 TYPED_TEST(UnaryMathFloatOpsTest, RINTNonFloatingFail)
