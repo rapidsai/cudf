@@ -884,9 +884,9 @@ class Series(Frame, Serializable):
             res = lhs.merge(rhs, on="x", how="left").sort_values(
                 by="orig_order"
             )
-            res = res.drop_duplicates(subset="orig_order", ignore_index=True)
             result = res["s"]
             result.name = self.name
+            result.index = self.index
         elif isinstance(arg, cudf.Series):
             lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
             rhs = cudf.DataFrame(
@@ -899,16 +899,16 @@ class Series(Frame, Serializable):
             res = lhs.merge(rhs, on="x", how="left").sort_values(
                 by="orig_order"
             )
-            res = res.drop_duplicates(subset="orig_order", ignore_index=True)
             result = res["s"]
             result.name = self.name
+            result.index = self.index
         elif isinstance(self._column, cudf.core.column.CategoricalColumn):
             raise TypeError(
                 "User defined functions are currently not "
                 "supported on Series with dtypes `str` and`category`."
             )
         else:
-            result = self.copy().applymap(arg)
+            result = self.applymap(arg)
         return result
 
     def __getitem__(self, arg):
