@@ -19,6 +19,8 @@
 #include <io/comp/gpuinflate.h>
 #include <io/statistics/column_stats.h>
 
+#include "timezone.cuh"
+
 namespace cudf {
 namespace io {
 namespace orc {
@@ -273,14 +275,13 @@ cudaError_t DecodeOrcColumnData(ColumnDesc *chunks,
                                 DictionaryEntry *global_dictionary,
                                 uint32_t num_columns,
                                 uint32_t num_stripes,
-                                size_t max_rows            = ~0,
-                                size_t first_row           = 0,
-                                int64_t *tz_table          = 0,
-                                size_t tz_len              = 0,
-                                const RowGroup *row_groups = 0,
-                                uint32_t num_rowgroups     = 0,
-                                uint32_t rowidx_stride     = 0,
-                                cudaStream_t stream        = (cudaStream_t)0);
+                                size_t max_rows              = ~0,
+                                size_t first_row             = 0,
+                                timezone_table_view tz_table = {},
+                                const RowGroup *row_groups   = 0,
+                                uint32_t num_rowgroups       = 0,
+                                uint32_t rowidx_stride       = 0,
+                                cudaStream_t stream          = (cudaStream_t)0);
 
 /**
  * @brief Launches kernel for encoding column data

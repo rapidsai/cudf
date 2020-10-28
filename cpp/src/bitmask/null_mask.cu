@@ -471,7 +471,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
     CUDF_EXPECTS(end >= begin, "End index cannot be smaller than the starting index.");
   }
 
-  if (indices.size() == 0) {
+  if (indices.empty()) {
     return std::vector<size_type>{};
   } else if (bitmask == nullptr) {
     std::vector<size_type> ret(indices.size() / 2);
@@ -567,7 +567,7 @@ std::vector<size_type> segmented_count_unset_bits(bitmask_type const *bitmask,
                                                   std::vector<size_type> const &indices,
                                                   cudaStream_t stream)
 {
-  if (indices.size() == 0) {
+  if (indices.empty()) {
     return std::vector<size_type>{};
   } else if (bitmask == nullptr) {
     return std::vector<size_type>(indices.size() / 2, 0);
