@@ -81,7 +81,7 @@ private:
   std::size_t const size_align;
   std::atomic_size_t total_allocated{0};
 
-  void *do_allocate(std::size_t num_bytes, cudaStream_t stream) override {
+  void *do_allocate(std::size_t num_bytes, rmm::cuda_stream_view stream) override {
     // adjust size of allocation based on specified size alignment
     num_bytes = (num_bytes + size_align - 1) / size_align * size_align;
 
@@ -92,7 +92,7 @@ private:
     return result;
   }
 
-  void do_deallocate(void *p, std::size_t size, cudaStream_t stream) override {
+  void do_deallocate(void *p, std::size_t size, rmm::cuda_stream_view stream) override {
     size = (size + size_align - 1) / size_align * size_align;
 
     resource->deallocate(p, size, stream);
@@ -104,7 +104,7 @@ private:
 
   bool supports_get_mem_info() const noexcept override { return resource->supports_get_mem_info(); }
 
-  std::pair<size_t, size_t> do_get_mem_info(cudaStream_t stream) const override {
+  std::pair<size_t, size_t> do_get_mem_info(rmm::cuda_stream_view stream) const override {
     return resource->get_mem_info(stream);
   }
 
@@ -245,7 +245,7 @@ private:
     }
   }
 
-  void *do_allocate(std::size_t num_bytes, cudaStream_t stream) override {
+  void *do_allocate(std::size_t num_bytes, rmm::cuda_stream_view stream) override {
     std::size_t total_before;
     void *result;
     while (true) {
@@ -273,7 +273,7 @@ private:
     return result;
   }
 
-  void do_deallocate(void *p, std::size_t size, cudaStream_t stream) override {
+  void do_deallocate(void *p, std::size_t size, rmm::cuda_stream_view stream) override {
     auto total_before = get_total_bytes_allocated();
     resource->deallocate(p, size, stream);
     auto total_after = get_total_bytes_allocated();
@@ -283,7 +283,7 @@ private:
 
   bool supports_get_mem_info() const noexcept override { return resource->supports_get_mem_info(); }
 
-  std::pair<size_t, size_t> do_get_mem_info(cudaStream_t stream) const override {
+  std::pair<size_t, size_t> do_get_mem_info(rmm::cuda_stream_view stream) const override {
     return resource->get_mem_info(stream);
   }
 
@@ -451,7 +451,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocInternal(JNIEnv *env, jclas
   try {
     cudf::jni::auto_set_device(env);
     rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource();
-    cudaStream_t c_stream = reinterpret_cast<cudaStream_t>(stream);
+    auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
     void *ret = mr->allocate(size, c_stream);
     return reinterpret_cast<jlong>(ret);
   }
@@ -464,7 +464,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_free(JNIEnv *env, jclass clazz, j
     cudf::jni::auto_set_device(env);
     rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource();
     void *cptr = reinterpret_cast<void *>(ptr);
-    cudaStream_t c_stream = reinterpret_cast<cudaStream_t>(stream);
+    auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
     mr->deallocate(cptr, size, c_stream);
   }
   CATCH_STD(env, )

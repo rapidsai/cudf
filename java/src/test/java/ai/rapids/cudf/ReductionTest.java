@@ -55,7 +55,7 @@ class ReductionTest extends CudfTestBase {
     if (BOOL_REDUCTIONS.contains(op.kind)) {
       return Scalar.fromBool((Boolean) expectedObject);
     }
-    switch (baseType) {
+    switch (baseType.typeId) {
     case BOOL8:
       return Scalar.fromBool((Boolean) expectedObject);
     case INT8:
