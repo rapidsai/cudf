@@ -48,6 +48,7 @@
 - PR #6596 Fix memory usage calculation
 - PR #6595 Fix JNI build, broken by to_arrow() signature change
 - PR #6603 Use correct stream in hash_join.
+- PR #6607 Fix integer overflow in ORC encoder
 
 
 # cuDF 0.16.0 (21 Oct 2020)
