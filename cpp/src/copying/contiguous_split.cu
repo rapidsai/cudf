@@ -891,12 +891,27 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
                  "splits can't exceed size of input columns");
   }
 
+  size_t num_partitions = splits.size() + 1;
+
+  // if inputs are empty, just return num_partitions empty tables
+  if (input.column(0).size() == 0) {
+    std::vector<contiguous_split_result> result;
+    result.reserve(num_partitions);
+
+    auto iter = thrust::make_counting_iterator(0);
+    std::transform(
+      iter, iter + num_partitions, std::back_inserter(result), [&input](int partition_index) {
+        return contiguous_split_result{input, std::make_unique<rmm::device_buffer>()};
+      });
+
+    return std::move(result);
+  }
+
   size_t num_root_columns = input.num_columns();
 
   // compute # of source buffers (column data, validity, children), # of partitions
   // and total # of buffers
   size_type num_src_bufs = count_src_bufs(input.begin(), input.end());
-  size_t num_partitions  = splits.size() + 1;
   size_t num_bufs        = num_src_bufs * num_partitions;
 
   // compute total size of host-side temp data
