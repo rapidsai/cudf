@@ -2,8 +2,9 @@
 
 ## New Features
 
-- PR #6460 Add is_timestamp format check API
 - PR #6528 Enable `fixed_point` binary operations
+- PR #6460 Add is_timestamp format check API
+- PR #6568 Add function to create hashed vocabulary file from raw vocabulary
 - PR #6581 Add JNI API to check if PTDS is enabled
 - PR #6598 Add strings::contains API with target column parameter
 
@@ -35,6 +36,7 @@
 - PR #6597 Use thread-local to track CUDA device in JNI
 - PR #6599 Replace `size()==0` with `empty()`, `is_empty()`
 - PR #6514 Initial work for decimal type in Java/JNI
+- PR #6612 Update JNI to new RMM cuda_stream_view API
 
 ## Bug Fixes
 
@@ -47,6 +49,7 @@
 - PR #6575 Fix JNI RMM initialize with no pool allocator limit
 - PR #6596 Fix memory usage calculation
 - PR #6595 Fix JNI build, broken by to_arrow() signature change
+- PR #6603 Use correct stream in hash_join.
 
 
 # cuDF 0.16.0 (21 Oct 2020)

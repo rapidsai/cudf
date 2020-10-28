@@ -4224,6 +4224,8 @@ class StringMethods(ColumnMethodsMixin):
         ----------
         hash_file : str
             Path to hash file containing vocabulary of words with token-ids.
+            This can be created from the raw vocabulary
+            using the ``cudf.utils.hash_vocab_utils.hash_vocab`` function
         max_length : int, Default is 64
             Limits the length of the sequence returned.
             If tokenized string is shorter than max_length,
