@@ -88,6 +88,7 @@ class TimeDeltaColumn(column.ColumnBase):
         # Workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
 
+        # Pandas supports only `timedelta64[ns]`, hence the cast.
         pd_series = pd.Series(
             self.astype("timedelta64[ns]").to_arrow(), copy=True
         )
