@@ -1,3 +1,5 @@
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+
 import warnings
 
 import numpy as np
@@ -161,7 +163,8 @@ def to_numeric(arg, errors="raise", downcast=None):
     if isinstance(arg, (cudf.Series, pd.Series)):
         return cudf.Series(col)
     else:
-        return col.to_array(fillna="pandas")
+        col = col.fillna(col.default_na_value())
+        return col.values
 
 
 def _convert_str_col(col, errors, _downcast=None):
@@ -170,15 +173,18 @@ def _convert_str_col(col, errors, _downcast=None):
 
     Converts to integer column if all strings are integer-like (isinteger.all)
     Otherwise, converts to float column if all strings are float-like (
-        isfloat.all)
+    isfloat.all)
+
     If error == 'coerce', fill non-numerics strings with null
+
+    Looks ahead to ``downcast`` parameter, if the float may be casted to
+    integer, then only process in float32 pipeline.
 
     Parameters
     ----------
     col : The string column to convert, must be string dtype
-    errors : {'raise', 'ignore', 'coerce'}, same as to_numeric
-    _downcast : Same as ``downcast`` parameter, to check for float->integer
-    conversion
+    errors : {'raise', 'ignore', 'coerce'}, same as ``to_numeric``
+    _downcast : Same as ``to_numeric``, see description for use
 
     Returns
     -------
@@ -202,7 +208,7 @@ def _convert_str_col(col, errors, _downcast=None):
             warnings.warn(UserWarning('Downcasting from float to int will be '
             'limited by float32 precision.'))
             return col.as_numerical_column(dtype=np.dtype("f"))
-        else:    
+        else:
             return col.as_numerical_column(dtype=np.dtype("d"))
     else:
         if errors == "coerce":

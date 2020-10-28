@@ -515,6 +515,8 @@ class NumericalColumn(column.ColumnBase):
                 if self.dtype.kind == "f":
                     # Exclude 'np.inf', '-np.inf'
                     s = cudf.Series(self)
+                    # TODO: replace np.inf with cudf scalar when 
+                    # https://github.com/rapidsai/cudf/pull/6297 merges
                     non_infs = s[
                         ((s == np.inf) | (s == -np.inf)).logical_not()
                     ]
@@ -523,7 +525,9 @@ class NumericalColumn(column.ColumnBase):
                     col = self
 
                 min_ = col.min()
-                if min_ is np.nan:
+                # TODO: depending on implementation of cudf scalar and future
+                # refactor of min/max, change the test method
+                if np.isnan(min_):
                     # Column contains only infs
                     return True
 
@@ -533,7 +537,7 @@ class NumericalColumn(column.ColumnBase):
                 else:
                     return False
 
-        # want to cast uint to int
+        # want to cast int to uint
         elif self.dtype.kind == "i" and to_dtype.kind == "u":
             i_max_ = np.iinfo(self.dtype).max
             u_max_ = np.iinfo(to_dtype).max
@@ -545,7 +549,7 @@ class NumericalColumn(column.ColumnBase):
                     return True
             return False
 
-        # want to cast int to uint
+        # want to cast uint to int
         elif self.dtype.kind == "u" and to_dtype.kind == "i":
             u_max_ = np.iinfo(self.dtype).max
             i_max_ = np.iinfo(to_dtype).max
@@ -557,7 +561,7 @@ class NumericalColumn(column.ColumnBase):
             return False
 
         # want to cast int to float
-        elif to_dtype.kind == "f" and self.dtype.kind in {"i", "u"}:
+        elif self.dtype.kind in {"i", "u"} and to_dtype.kind == "f":
             info = np.finfo(to_dtype)
             biggest_exact_int = 2 ** (info.nmant + 1)
             if (self.min() >= -biggest_exact_int) and (
@@ -576,7 +580,7 @@ class NumericalColumn(column.ColumnBase):
                     return False
 
         # want to cast float to int:
-        elif to_dtype.kind in {"i", "u"} and self.dtype.kind == "f":
+        elif self.dtype.kind == "f" and to_dtype.kind in {"i", "u"}:
             info = np.iinfo(to_dtype)
             min_, max_ = info.min, info.max
             # best we can do is hope to catch it here and avoid compare
