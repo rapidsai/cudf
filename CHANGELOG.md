@@ -49,7 +49,7 @@
 - PR #6596 Fix memory usage calculation
 - PR #6595 Fix JNI build, broken by to_arrow() signature change
 - PR #6603 Use correct stream in hash_join.
-
+- PR #6616 Block `fixed_point` `cudf::concatenate` with different scales
 
 # cuDF 0.16.0 (21 Oct 2020)
 
