@@ -20,6 +20,11 @@ namespace cudf {
 namespace dictionary {
 namespace detail {
 
+/**
+ * @brief Accessor functor for returning a dictionary key element in a dictionary iterator.
+ *
+ * @tparam KeyType The type of the dictionary's key element.
+ */
 template <typename KeyType>
 struct dictionary_access_fn {
   dictionary_access_fn(column_device_view const& d_dictionary) : d_dictionary{d_dictionary} {}
@@ -38,9 +43,12 @@ struct dictionary_access_fn {
 /**
  * @brief Create dictionary iterator that produces key elements.
  *
+ * The iterator returns `keys[indices[i]]` where the `keys` are the dictionary's key
+ * elements and the `indices` are the dictionary's index elements.
  *
  * @throw cudf::logic_error if `dictionary_column` is not a dictionary column.
  *
+ * @tparam KeyType The type of the dictionary's key element.
  * @param dictionary_column The dictionary device view to iterate.
  * @return Iterator
  */
