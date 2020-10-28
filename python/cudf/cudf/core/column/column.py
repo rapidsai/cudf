@@ -123,11 +123,26 @@ class ColumnBase(Column, Serializable):
     def __len__(self):
         return self.size
 
-    def to_pandas(self, index=None, **kwargs):
+    def to_pandas(self, index=None, nullable=False, **kwargs):
         if str(self.dtype) in NUMERIC_TYPES and self.null_count == 0:
-            pd_series = pd.Series(cupy.asnumpy(self.values))
+            pd_series = pd.Series(
+                cupy.asnumpy(self.values),
+                dtype=cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes.get(
+                    self.dtype, self.dtype
+                )
+                if nullable
+                else None,
+            )
         else:
             pd_series = self.to_arrow().to_pandas(**kwargs)
+            if (
+                nullable
+                and self.dtype
+                in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes
+            ):
+                pd_series = pd_series.astype(
+                    cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes[self.dtype]
+                )
         if index is not None:
             pd_series.index = index
         return pd_series

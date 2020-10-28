@@ -1116,9 +1116,9 @@ class MultiIndex(Index):
         else:
             return mi
 
-    def to_pandas(self, **kwargs):
+    def to_pandas(self, nullable=False, **kwargs):
         if hasattr(self, "_source_data"):
-            result = self._source_data.to_pandas()
+            result = self._source_data.to_pandas(nullable=nullable)
             result.columns = self.names
             return pd.MultiIndex.from_frame(result)
 

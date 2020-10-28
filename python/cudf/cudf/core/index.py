@@ -579,7 +579,7 @@ class Index(Frame, Serializable):
         """
         return self._values.any()
 
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         """
         Convert to a Pandas Index.
 
@@ -1735,7 +1735,7 @@ class RangeIndex(Index):
         """
         return self._values.to_gpu_array(fillna=fillna)
 
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         return pd.RangeIndex(
             start=self._start,
             stop=self._stop,
@@ -2320,7 +2320,7 @@ class DatetimeIndex(GenericIndex):
         """
         return self._get_dt_field("weekday")
 
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         nanos = self._values.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
 
@@ -2413,7 +2413,7 @@ class TimedeltaIndex(GenericIndex):
         out._initialize(data, **kwargs)
         return out
 
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         return pd.TimedeltaIndex(
             self._values.to_pandas(),
             name=self.name,
@@ -2612,7 +2612,7 @@ class StringIndex(GenericIndex):
         out._initialize(values, **kwargs)
         return out
 
-    def to_pandas(self):
+    def to_pandas(self, nullable=False):
         return pd.Index(self.to_array(), name=self.name, dtype="object")
 
     def take(self, indices):
