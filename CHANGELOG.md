@@ -35,6 +35,7 @@
 - PR #6597 Use thread-local to track CUDA device in JNI
 - PR #6599 Replace `size()==0` with `empty()`, `is_empty()`
 - PR #6514 Initial work for decimal type in Java/JNI
+- PR #6605 Reduce HtoD copies in `cudf::concatenate` of string columns
 
 ## Bug Fixes
 
