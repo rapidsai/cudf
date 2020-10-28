@@ -1,3 +1,5 @@
+import sys
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -73,6 +75,9 @@ def test_can_cast_safely_mixed_kind():
     # not integer float
     data = Series([1.0, 2.0, 3.5], dtype="float32")._column
     assert not data.can_cast_safely(to_dtype)
+
+    data = Series([10.0, 11.0, 2000.0], dtype="float64")._column
+    assert data.can_cast_safely(to_dtype)
 
     # float out of int range
     data = Series([1.0, 2.0, 1.0 * (2 ** 31)], dtype="float32")._column
@@ -170,7 +175,12 @@ def test_to_numeric_basic_1d(data):
     assert_eq(expected, got)
 
 
-@pytest.mark.parametrize("data", [[1, 2 ** 11], [1, 2 ** 33], [1, 2 ** 63]])
+@pytest.mark.parametrize("data", [
+    [1, 2 ** 11], 
+    [1, 2 ** 33], 
+    [1, 2 ** 63], 
+    [np.iinfo(np.int64).max, np.iinfo(np.int64).min]
+])
 @pytest.mark.parametrize(
     "downcast", ["integer", "signed", "unsigned", "float"]
 )
@@ -188,11 +198,16 @@ def test_to_numeric_downcast_int(data, downcast):
     "data",
     [
         [1.0, 2.0 ** 11],
+        [-1.0, -2.0 ** 11],
         [1.0, 2.0 ** 33],
+        [-1.0, -2.0 ** 33],
         [1.0, 2.0 ** 65],
+        [-1.0, -2.0 ** 65],
         [1.0, float("inf")],
         [1.0, float("-inf")],
         [1.0, float("nan")],
+        [1.0, 2.0, 3.0, 4.0],
+        [1.0, 1.5, 2.6, 3.4],
     ],
 )
 @pytest.mark.parametrize(
@@ -207,12 +222,21 @@ def test_to_numeric_downcast_float(data, downcast):
 
     assert_eq(expected, got)
 
-
-@pytest.mark.parametrize("data", [["1.0", "2e3"], ["10.0", "11.0", "2e3"]])
 @pytest.mark.parametrize(
-    "downcast", ["signed", "integer", "unsigned", "float"]
+    "data",
+    [
+        [1.0, 2.0 ** 129],
+        [1.0, 2.0 ** 257],
+        [1.0, 1.79e308],
+        [-1.0, -2.0 ** 129],
+        [-1.0, -2.0 ** 257],
+        [-1.0, -1.79e308]
+    ],
 )
-def test_to_numeric_downcast_string(data, downcast):
+@pytest.mark.parametrize(
+    "downcast", ["signed", "integer", "unsigned"]
+)
+def test_to_numeric_downcast_large_float(data, downcast):
     ps = pd.Series(data)
     gs = cudf.from_pandas(ps)
 
@@ -220,6 +244,99 @@ def test_to_numeric_downcast_string(data, downcast):
     got = cudf.to_numeric(gs, downcast=downcast)
 
     assert_eq(expected, got)
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1.0, 2.0 ** 129],
+        [1.0, 2.0 ** 257],
+        [1.0, 1.79e308],
+        [-1.0, -2.0 ** 129],
+        [-1.0, -2.0 ** 257],
+        [-1.0, -1.79e308]
+    ],
+)
+@pytest.mark.parametrize(
+    "downcast", ["float"]
+)
+def test_to_numeric_downcast_large_float_pd_bug(data, downcast):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+
+    expected = pd.to_numeric(ps, downcast=downcast)
+    got = cudf.to_numeric(gs, downcast=downcast)
+
+    with pytest.raises(AssertionError, match="Series are different"):
+        assert_eq(expected, got)
+
+
+
+@pytest.mark.parametrize("data", [
+    ["1", "2", "3"], 
+    [str(np.iinfo(np.int64).max), str(np.iinfo(np.int64).min)],
+])
+@pytest.mark.parametrize(
+    "downcast", ["signed", "integer", "unsigned", "float"]
+)
+def test_to_numeric_downcast_string_int(data, downcast):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+
+    expected = pd.to_numeric(ps, downcast=downcast)
+    got = cudf.to_numeric(gs, downcast=downcast)
+
+    assert_eq(expected, got)
+
+@pytest.mark.parametrize("data", [
+    ["10.0", "11.0", "2e3"], 
+    ["1.0", "2e3"], 
+    ["1", "10", "1.0", "2e3"], # int-float mixed
+])
+@pytest.mark.parametrize(
+    "downcast", ["signed", "integer", "unsigned", "float"]
+)
+def test_to_numeric_downcast_string_float(data, downcast):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+
+    expected = pd.to_numeric(ps, downcast=downcast)
+    
+    if downcast in {'signed', 'integer', 'unsigned'}:
+        with pytest.warns(UserWarning, match='Downcasting from float to int '
+            'will be limited by float32 precision.'):
+            got = cudf.to_numeric(gs, downcast=downcast)
+    else:
+        got = cudf.to_numeric(gs, downcast=downcast)
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("data", [
+    ["2e128", "-2e128"],
+    ["1.79769313486231e308", "-1.79769313486231e308"],  # 2 digits relaxed from 
+                                                        # np.finfo(np.float64)
+                                                        # .min/max
+])
+@pytest.mark.parametrize(
+    "downcast", ["signed", "integer", "unsigned", "float"]
+)
+def test_to_numeric_downcast_string_large_float(data, downcast):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+
+    if downcast == 'float':
+        expected = pd.to_numeric(ps, downcast=downcast)
+        got = cudf.to_numeric(gs, downcast=downcast)
+
+        with pytest.raises(AssertionError, match="Series are different"):
+            assert_eq(expected, got)
+    else:
+        expected = pd.Series([np.inf, -np.inf])
+        with pytest.warns(UserWarning, match='Downcasting from float to int '
+            'will be limited by float32 precision.'):
+            got = cudf.to_numeric(gs, downcast=downcast)
+
+        assert_eq(expected, got)
 
 
 @pytest.mark.parametrize("data", [pd.Series(["1", "a", "3"])])

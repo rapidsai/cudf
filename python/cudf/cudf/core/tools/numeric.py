@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pandas as pd
 
@@ -112,7 +114,7 @@ def to_numeric(arg, errors="raise", downcast=None):
             col = col.as_numerical_column(cat_dtype)
         else:
             try:
-                col = _convert_str_col(col._get_decategorized_column(), errors)
+                col = _convert_str_col(col._get_decategorized_column(), errors, downcast)
             except ValueError as e:
                 if errors == "ignore":
                     return arg
@@ -120,7 +122,7 @@ def to_numeric(arg, errors="raise", downcast=None):
                     raise e
     elif is_string_dtype(dtype):
         try:
-            col = _convert_str_col(col, errors)
+            col = _convert_str_col(col, errors, downcast)
         except ValueError as e:
             if errors == "ignore":
                 return arg
@@ -133,6 +135,10 @@ def to_numeric(arg, errors="raise", downcast=None):
     else:
         raise ValueError("Unrecognized datatype")
 
+    # str->float conversion may require lower precision
+    if col.dtype == np.dtype("f"):
+        col = col.as_numerical_column("d")
+
     if downcast:
         downcast_type_map = {
             "integer": list(np.typecodes["Integer"]),
@@ -144,32 +150,13 @@ def to_numeric(arg, errors="raise", downcast=None):
         downcast_type_map["float"] = float_types[idx:]
 
         type_set = downcast_type_map[downcast]
-        is_similar_kind_cast = (
-            col.dtype.kind == "f" and downcast == "float"
-        ) or (
-            col.dtype.kind in {"i", "u"}
-            and downcast in {"integer", "signed", "unsigned"}
-        )
 
         for t in type_set:
             downcast_dtype = np.dtype(t)
             if downcast_dtype.itemsize <= col.dtype.itemsize:
-                if is_similar_kind_cast:
-                    if col.can_cast_safely(downcast_dtype):
-                        col = libcudf.unary.cast(col, downcast_dtype)
-                        break
-                else:
-                    if _can_cast_no_overflow(col, downcast_dtype):
-                        # Round off for float -> (u)int
-                        if col.dtype.kind == "f" and downcast_dtype.kind in {
-                            "i",
-                            "u",
-                        }:
-                            # TODO: use libcudf round once
-                            # https://github.com/rapidsai/cudf/pull/6562 merges
-                            col = col.round()
-                        col = libcudf.unary.cast(col, downcast_dtype)
-                        break
+                if col.can_cast_safely(downcast_dtype):
+                    col = libcudf.unary.cast(col, downcast_dtype)
+                    break
 
     if isinstance(arg, (cudf.Series, pd.Series)):
         return cudf.Series(col)
@@ -177,7 +164,7 @@ def to_numeric(arg, errors="raise", downcast=None):
         return col.to_array(fillna="pandas")
 
 
-def _convert_str_col(col, errors):
+def _convert_str_col(col, errors, _downcast=None):
     """
     Converts a string column to numeric column
 
@@ -190,6 +177,8 @@ def _convert_str_col(col, errors):
     ----------
     col : The string column to convert, must be string dtype
     errors : {'raise', 'ignore', 'coerce'}, same as to_numeric
+    _downcast : Same as ``downcast`` parameter, to check for float->integer
+    conversion
 
     Returns
     -------
@@ -209,7 +198,12 @@ def _convert_str_col(col, errors):
 
     is_float = col.str().isfloat()
     if is_float.all():
-        return col.as_numerical_column(dtype=np.dtype("d"))
+        if _downcast in {'unsigned', 'signed', 'integer'}:
+            warnings.warn(UserWarning('Downcasting from float to int will be '
+            'limited by float32 precision.'))
+            return col.as_numerical_column(dtype=np.dtype("f"))
+        else:    
+            return col.as_numerical_column(dtype=np.dtype("d"))
     else:
         if errors == "coerce":
             col = libcudf.string_casting.stod(col)
@@ -220,22 +214,3 @@ def _convert_str_col(col, errors):
             return col
         else:
             raise ValueError("Unable to convert some strings to numerics.")
-
-
-def _can_cast_no_overflow(col, to_dtype):
-    """
-    Return true if values in `col` can be casted to `to_dtype` without
-    overflowing.
-
-    The difference between `NumericColumn.can_cast_safely` is that this
-    function does not check if casting from float to integers, fractional
-    information maybe lost.
-    """
-    if to_dtype.kind == "f":
-        info = np.finfo(to_dtype)
-    else:
-        info = np.iinfo(to_dtype)
-    lower_, upper_ = info.min, info.max
-
-    min_, max_ = col.min(), col.max()
-    return min_ >= lower_ and max_ < upper_
