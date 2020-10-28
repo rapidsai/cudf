@@ -1,12 +1,32 @@
+/*
+ *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ */
+
 package ai.rapids.cudf;
 
+import ai.rapids.cudf.HostColumnVector.Builder;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.Random;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DecimalColumnVectorTest extends CudfTestBase {
   private final Random rdSeed = new Random();
@@ -66,7 +86,7 @@ public class DecimalColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testOverrunningTheBuffer() {
-    try (HostColumnVector.Builder builder = HostColumnVector.builder(DType.create(DType.DTypeEnum.DECIMAL32, 4), 3)) {
+    try (Builder builder = HostColumnVector.builder(DType.create(DType.DTypeEnum.DECIMAL32, 4), 3)) {
       assertThrows(AssertionError.class,
           () -> builder.append(decimal32Zoo[0]).appendNull().appendBoxed(decimal32Zoo[1], decimal32Zoo[2]).build());
     }
@@ -111,7 +131,7 @@ public class DecimalColumnVectorTest extends CudfTestBase {
         for (int dstPrefilledSize = 0; dstPrefilledSize < dstSize; dstPrefilledSize++) {
           final int srcSize = dstSize - dstPrefilledSize;
           for (int sizeOfDataNotToAdd = 0; sizeOfDataNotToAdd <= dstPrefilledSize; sizeOfDataNotToAdd++) {
-            try (HostColumnVector.Builder dst = HostColumnVector.builder(decType, dstSize);
+            try (Builder dst = HostColumnVector.builder(decType, dstSize);
                  HostColumnVector src = HostColumnVector.build(decType, srcSize, (b) -> {
                    for (int i = 0; i < srcSize; i++) {
                      if (random.nextBoolean()) {
@@ -121,7 +141,7 @@ public class DecimalColumnVectorTest extends CudfTestBase {
                      }
                    }
                  });
-                 HostColumnVector.Builder gtBuilder = HostColumnVector.builder(decType, dstPrefilledSize)) {
+                 Builder gtBuilder = HostColumnVector.builder(decType, dstPrefilledSize)) {
               assertEquals(dstSize, srcSize + dstPrefilledSize);
               //add the first half of the prefilled list
               for (int i = 0; i < dstPrefilledSize - sizeOfDataNotToAdd; i++) {
