@@ -940,9 +940,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
         childBuilder.append((Byte) listElement);
       } else if (listElement instanceof Short) {
         childBuilder.append((Short) listElement);
-      // TODO: support decimal type as a child of nested type
-      // } else if (listElement instanceof BigDecimal) {
-      //  childBuilder.append((BigDecimal) listElement);
+       } else if (listElement instanceof BigDecimal) {
+        childBuilder.append((BigDecimal) listElement);
       } else if (listElement instanceof List) {
         childBuilder.append((List) listElement);
       } else if (listElement instanceof StructData) {

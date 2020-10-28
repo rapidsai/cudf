@@ -21,6 +21,7 @@ package ai.rapids.cudf;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -2962,6 +2963,28 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testListOfListsCvDecimals() {
+    List<BigDecimal> list1 = Arrays.asList(BigDecimal.valueOf(1.1), BigDecimal.valueOf(2.2), BigDecimal.valueOf(3.3));
+    List<BigDecimal> list2 = Arrays.asList(BigDecimal.valueOf(4.4), BigDecimal.valueOf(5.5), BigDecimal.valueOf(6.6));
+    List<BigDecimal> list3 = Arrays.asList(BigDecimal.valueOf(10.1), BigDecimal.valueOf(20.2), BigDecimal.valueOf(30.3));
+    List<List<BigDecimal>> mainList1 = new ArrayList<>();
+    mainList1.add(list1);
+    mainList1.add(list2);
+    List<List<BigDecimal>> mainList2 = new ArrayList<>();
+    mainList2.add(list3);
+
+    HostColumnVector.BasicType basicType = new HostColumnVector.BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, -1));
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.ListType(true, basicType)), mainList1, mainList2);
+        HostColumnVector hcv = res.copyToHost()) {
+      List<List<BigDecimal>> ret1 = hcv.getList(0);
+      List<List<BigDecimal>> ret2 = hcv.getList(1);
+      assertEquals(mainList1, ret1, "Lists don't match");
+      assertEquals(mainList2, ret2, "Lists don't match");
+    }
+  }
+
+  @Test
   void testConcatLists() {
     List<Integer> list1 = Arrays.asList(0, 1, 2, 3);
     List<Integer> list2 = Arrays.asList(6, 2, 4, 5);
@@ -3043,6 +3066,34 @@ public class ColumnVectorTest extends CudfTestBase {
     try(ColumnVector expected = ColumnVector.fromLists(
         new HostColumnVector.ListType(true,
             new HostColumnVector.BasicType(true, DType.INT32)),
+        val1, val2, val3, val4, val5, val6);
+        HostColumnVector hostColumnVector = expected.copyToHost()) {
+      List<String> ret1 = hostColumnVector.getList(0);
+      List<String> ret2 = hostColumnVector.getList(1);
+      List<String> ret3 = hostColumnVector.getList(2);
+      List<String> ret4 = hostColumnVector.getList(3);
+      List<String> ret5 = hostColumnVector.getList(4);
+      List<String> ret6 = hostColumnVector.getList(5);
+      assertEquals(val1, ret1, "Lists don't match");
+      assertEquals(val2, ret2, "Lists don't match");
+      assertEquals(val3, ret3, "Lists don't match");
+      assertEquals(val4, ret4, "Lists don't match");
+      assertEquals(val5, ret5, "Lists don't match");
+      assertEquals(val6, ret6, "Lists don't match");
+    }
+  }
+
+  @Test
+  void testHcvOfDecimals() {
+    List<BigDecimal> val1 = Arrays.asList(BigDecimal.ONE, BigDecimal.TEN);
+    List<BigDecimal> val2 = Arrays.asList(BigDecimal.ZERO);
+    List<BigDecimal> val3 = null;
+    List<BigDecimal> val4 = Arrays.asList();
+    List<BigDecimal> val5 = Arrays.asList(BigDecimal.valueOf(123), BigDecimal.valueOf(100));
+    List<BigDecimal> val6 = Arrays.asList(BigDecimal.valueOf(100000), BigDecimal.valueOf(20000));
+    try(ColumnVector expected = ColumnVector.fromLists(
+        new HostColumnVector.ListType(true,
+            new HostColumnVector.BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, 0))),
         val1, val2, val3, val4, val5, val6);
         HostColumnVector hostColumnVector = expected.copyToHost()) {
       List<String> ret1 = hostColumnVector.getList(0);

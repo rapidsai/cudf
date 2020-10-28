@@ -536,6 +536,8 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
       case INT16: return offHeap.data.getShort(rowOffset);
       case BOOL8: return offHeap.data.getBoolean(rowOffset);
       case STRING: return getString(rowIndex);
+      case DECIMAL32: return BigDecimal.valueOf(offHeap.data.getInt(rowOffset), -type.getScale());
+      case DECIMAL64: return BigDecimal.valueOf(offHeap.data.getLong(rowOffset), -type.getScale());
       default: throw new UnsupportedOperationException("Do not support " + type);
     }
   }

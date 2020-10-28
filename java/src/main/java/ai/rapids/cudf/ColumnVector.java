@@ -24,6 +24,7 @@ import ai.rapids.cudf.WindowOptions.FrameType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -3783,6 +3784,15 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   public static ColumnVector fromStrings(String... values) {
     try (HostColumnVector host = HostColumnVector.fromStrings(values)) {
       return host.copyToDevice();
+    }
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls.
+   */
+  public static ColumnVector fromBigDecimals(BigDecimal... values) {
+    try (HostColumnVector hcv = HostColumnVector.fromBigDecimals(values)) {
+      return hcv.copyToDevice();
     }
   }
 
