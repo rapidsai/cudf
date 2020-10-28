@@ -27,12 +27,7 @@
 #include <thrust/for_each.h>
 #include <thrust/transform_reduce.h>
 #include <thrust/transform_scan.h>
-
-#define CUDF_STR_RANGE_IN(D, _STR)                                                     \
-  static ::nvtx3::registered_message<D> const nvtx3_##_STR##_name__{#_STR};            \
-  static ::nvtx3::event_attributes const nvtx3_##_STR##_attr__{nvtx3_##_STR##_name__}; \
-  ::nvtx3::domain_thread_range<D> const nvtx3_##_STR##range__{nvtx3_##_STR##_attr__};
-#define CUDF_STR_RANGE(_STR) CUDF_STR_RANGE_IN(cudf::libcudf_domain, _STR)
+#include <numeric>
 
 namespace cudf {
 namespace strings {
@@ -128,14 +123,14 @@ auto create_strings_device_views(std::vector<column_view> const& views, cudaStre
 {
   CUDF_FUNC_RANGE();
   // Create device views for each input view
-  CUDF_STR_RANGE(device_view_owners);
-  CUDF_STR_RANGE(create_contiguous_device_views);
+  cudf::thread_range r1{"device_view_owners"};
+  cudf::thread_range r2{"create_contiguous_device_views"};
   // Assemble contiguous array of device views
   auto contiguous_device_views = create_contiguous_device_views<column_device_view>(views, stream);
   auto& device_view_owners     = std::get<0>(contiguous_device_views);
   auto& device_views_ptr       = std::get<1>(contiguous_device_views);
 
-  CUDF_STR_RANGE(input_offsets);
+  cudf::thread_range r3{"input_offsets"};
   // Compute the partition offsets and size of offset column
   // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type
   auto input_offsets = thrust::host_vector<size_t>(views.size() + 1);
@@ -148,7 +143,7 @@ auto create_strings_device_views(std::vector<column_view> const& views, cudaStre
   auto const d_input_offsets = rmm::device_vector<size_t>{input_offsets};
   auto const output_size     = input_offsets.back();
 
-  CUDF_STR_RANGE(d_partition_offsets);
+  cudf::thread_range r4{"d_partition_offsets"};
   // Compute the partition offsets and size of chars column
   // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type
   // Note: Using separate transform and inclusive_scan because
@@ -167,7 +162,7 @@ auto create_strings_device_views(std::vector<column_view> const& views, cudaStre
                          d_partition_offsets.begin());
   auto const output_chars_size = d_partition_offsets.back();
 
-  CUDF_STR_RANGE(return_statement);
+  cudf::thread_range r5{"return_statement"};
   return std::make_tuple(std::move(device_view_owners),
                          device_views_ptr,
                          std::move(d_input_offsets),
