@@ -136,10 +136,9 @@ def get_avro_dtype_info(dtype):
     if dtype in _PANDAS_TO_AVRO_SCHEMA_MAP:
         return _PANDAS_TO_AVRO_SCHEMA_MAP[dtype]
     else:
-        print(dtype)
         raise TypeError(
-            "Unsupported dtype according to avro spec:"
-            " https://avro.apache.org/docs/current/spec.html"
+            f"Unsupported dtype({dtype}) according to avro spec:"
+            f" https://avro.apache.org/docs/current/spec.html"
         )
 
 
