@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import re
 
@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf as gd
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, assert_exceptions_equal
 from cudf.utils.dtypes import is_categorical_dtype
 
 
@@ -96,39 +96,43 @@ def test_concat_errors():
     df, df2, gdf, gdf2 = make_frames()
 
     # No objs
-    try:
-        pd.concat([])
-    except Exception as e:
-        with pytest.raises(type(e), match=e.__str__()):
-            gd.concat([])
-    else:
-        raise AssertionError("Expected pd.concat to fail for empty input")
+    assert_exceptions_equal(
+        lfunc=pd.concat,
+        rfunc=gd.concat,
+        lfunc_args_and_kwargs=([], {"objs": []}),
+        rfunc_args_and_kwargs=([], {"objs": []}),
+    )
 
     # All None
-    try:
-        pd.concat([None, None])
-    except Exception as e:
-        with pytest.raises(type(e), match=e.__str__()):
-            gd.concat([None, None])
-    else:
-        raise AssertionError("Expected pd.concat to fail for all None input")
+    assert_exceptions_equal(
+        lfunc=pd.concat,
+        rfunc=gd.concat,
+        lfunc_args_and_kwargs=([], {"objs": [None, None]}),
+        rfunc_args_and_kwargs=([], {"objs": [None, None]}),
+    )
 
     # Mismatched types
-    with pytest.raises(
-        ValueError,
-        match=re.escape(
+    assert_exceptions_equal(
+        lfunc=pd.concat,
+        rfunc=gd.concat,
+        lfunc_args_and_kwargs=([], {"objs": [df, df.index, df.x]}),
+        rfunc_args_and_kwargs=([], {"objs": [gdf, gdf.index, gdf.x]}),
+        expected_error_message=re.escape(
             "`concat` cannot concatenate objects of "
             "types: ['DataFrame', 'RangeIndex', 'Series']."
         ),
-    ):
-        gd.concat([gdf, gdf.index, gdf.x])
+    )
 
     # Unknown type
-    with pytest.raises(
-        ValueError,
-        match=re.escape("cannot concatenate object of type <class 'str'>"),
-    ):
-        gd.concat(["bar", "foo"])
+    assert_exceptions_equal(
+        lfunc=pd.concat,
+        rfunc=gd.concat,
+        lfunc_args_and_kwargs=([], {"objs": ["bar", "foo"]}),
+        rfunc_args_and_kwargs=([], {"objs": ["bar", "foo"]}),
+        expected_error_message=re.escape(
+            "cannot concatenate object of type <class 'str'>"
+        ),
+    )
 
     # Mismatched index dtypes
     gdf3 = gdf2.copy()
@@ -139,13 +143,18 @@ def test_concat_errors():
         gd.concat([gdf3, gdf4])
 
     # Bad axis value
-    with pytest.raises(
-        ValueError,
-        match=re.escape(
+    assert_exceptions_equal(
+        lfunc=pd.concat,
+        rfunc=gd.concat,
+        lfunc_args_and_kwargs=(
+            [],
+            {"objs": [gdf.to_pandas(), gdf2.to_pandas()], "axis": "bad_value"},
+        ),
+        rfunc_args_and_kwargs=([], {"objs": [gdf, gdf2], "axis": "bad_value"}),
+        expected_error_message=re.escape(
             '`axis` must be 0 / "index"' ' or 1 / "columns", got: None'
         ),
-    ):
-        gd.concat([gdf, gdf2], axis="bad_value")
+    )
 
 
 def test_concat_misordered_columns():
@@ -321,15 +330,12 @@ def test_pandas_concat_compatibility_axis1_eq_index():
     ps1 = s1.to_pandas()
     ps2 = s2.to_pandas()
 
-    try:
-        pd.concat([ps1, ps2], axis=1)
-    except Exception as e:
-        with pytest.raises(type(e), match=e.__str__()):
-            gd.concat([s1, s2], axis=1)
-    else:
-        raise AssertionError(
-            "Expected pd.concat to fail for different index when axis=1"
-        )
+    assert_exceptions_equal(
+        lfunc=pd.concat,
+        rfunc=gd.concat,
+        lfunc_args_and_kwargs=([], {"objs": [ps1, ps2], "axis": 1}),
+        rfunc_args_and_kwargs=([], {"objs": [s1, s2], "axis": 1}),
+    )
 
 
 def test_concat_duplicate_columns():

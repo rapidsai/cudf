@@ -8,7 +8,11 @@ import pandas as pd
 import cudf
 from cudf._fuzz_testing.csv import CSVReader, CSVWriter
 from cudf._fuzz_testing.main import pythonfuzz
-from cudf._fuzz_testing.utils import compare_content, run_test
+from cudf._fuzz_testing.utils import (
+    ALL_POSSIBLE_VALUES,
+    compare_content,
+    run_test,
+)
 from cudf.tests.utils import assert_eq
 
 
@@ -48,10 +52,10 @@ def csv_writer_test(pdf):
             "--<>--",
             "-+><+-",
         ],
-        "columns": None,
+        "columns": ALL_POSSIBLE_VALUES,
         "index": [True, False],
         "line_terminator": ["\n", "\r", "\r\n"],
-        "chunksize": None,
+        "chunksize": ALL_POSSIBLE_VALUES,
     },
 )
 def csv_writer_test_params(
@@ -105,12 +109,12 @@ def csv_writer_test_params(
 @pythonfuzz(
     data_handle=CSVReader,
     params={
-        "dtype": None,
-        "usecols": None,
-        "header": None,
-        "skiprows": None,
-        "skipfooter": None,
-        "nrows": None,
+        "dtype": ALL_POSSIBLE_VALUES,
+        "usecols": ALL_POSSIBLE_VALUES,
+        "header": ALL_POSSIBLE_VALUES,
+        "skiprows": ALL_POSSIBLE_VALUES,
+        "skipfooter": ALL_POSSIBLE_VALUES,
+        "nrows": ALL_POSSIBLE_VALUES,
     },
 )
 def csv_reader_test_params(csv_buffer, dtype, header, skiprows):
