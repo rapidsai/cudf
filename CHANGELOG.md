@@ -36,6 +36,7 @@
 - PR #6599 Replace `size()==0` with `empty()`, `is_empty()`
 - PR #6514 Initial work for decimal type in Java/JNI
 - PR #6608 Improve subword tokenizer docs
+- PR #6612 Update JNI to new RMM cuda_stream_view API
 
 ## Bug Fixes
 
