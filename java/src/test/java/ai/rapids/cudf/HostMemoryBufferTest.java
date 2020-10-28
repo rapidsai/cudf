@@ -82,8 +82,8 @@ public class HostMemoryBufferTest extends CudfTestBase {
   public void testGetInt() {
     try (HostMemoryBuffer hostMemoryBuffer = HostMemoryBuffer.allocate(16)) {
       long offset = 1;
-      hostMemoryBuffer.setInt(offset * DType.INT32.sizeInBytes, 2);
-      assertEquals(2, hostMemoryBuffer.getInt(offset * DType.INT32.sizeInBytes));
+      hostMemoryBuffer.setInt(offset * DType.INT32.getSizeInBytes(), 2);
+      assertEquals(2, hostMemoryBuffer.getInt(offset * DType.INT32.getSizeInBytes()));
     }
   }
 
@@ -91,8 +91,8 @@ public class HostMemoryBufferTest extends CudfTestBase {
   public void testGetByte() {
     try (HostMemoryBuffer hostMemoryBuffer = HostMemoryBuffer.allocate(16)) {
       long offset = 1;
-      hostMemoryBuffer.setByte(offset * DType.INT8.sizeInBytes, (byte) 2);
-      assertEquals((byte) 2, hostMemoryBuffer.getByte(offset * DType.INT8.sizeInBytes));
+      hostMemoryBuffer.setByte(offset * DType.INT8.getSizeInBytes(), (byte) 2);
+      assertEquals((byte) 2, hostMemoryBuffer.getByte(offset * DType.INT8.getSizeInBytes()));
     }
   }
 
@@ -100,8 +100,8 @@ public class HostMemoryBufferTest extends CudfTestBase {
   public void testGetLong() {
     try (HostMemoryBuffer hostMemoryBuffer = HostMemoryBuffer.allocate(16)) {
       long offset = 1;
-      hostMemoryBuffer.setLong(offset * DType.INT64.sizeInBytes, 3);
-      assertEquals(3, hostMemoryBuffer.getLong(offset * DType.INT64.sizeInBytes));
+      hostMemoryBuffer.setLong(offset * DType.INT64.getSizeInBytes(), 3);
+      assertEquals(3, hostMemoryBuffer.getLong(offset * DType.INT64.getSizeInBytes()));
     }
   }
 
@@ -109,7 +109,7 @@ public class HostMemoryBufferTest extends CudfTestBase {
   public void testGetLongs() {
     try (HostMemoryBuffer hostMemoryBuffer = HostMemoryBuffer.allocate(16)) {
       hostMemoryBuffer.setLong(0, 3);
-      hostMemoryBuffer.setLong(DType.INT64.sizeInBytes, 10);
+      hostMemoryBuffer.setLong(DType.INT64.getSizeInBytes(), 10);
       long[] results = new long[2];
       hostMemoryBuffer.getLongs(results, 0, 0, 2);
       assertEquals(3, results[0]);

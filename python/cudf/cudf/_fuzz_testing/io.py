@@ -55,7 +55,7 @@ class IOFuzz(object):
 
     @staticmethod
     def _rand(n):
-        return random.randrange(0, n)
+        return random.randrange(0, n + 1)
 
     def generate_input(self):
         raise NotImplementedError("Must be implemented by inherited class")
@@ -80,9 +80,20 @@ class IOFuzz(object):
         self._current_params = copy.copy(param)
         return dtypes_meta, num_rows, num_cols, seed
 
-    def get_rand_params(self, params):
+    def set_rand_params(self, params):
         params_dict = {
             param: np.random.choice(values) for param, values in params.items()
         }
-        self._current_params["test_kwargs"] = params_dict
-        return params_dict
+        self._current_params["test_kwargs"] = self.process_kwargs(
+            params_dict=params_dict
+        )
+
+    def process_kwargs(self, params_dict):
+        return {
+            key: bool(value)
+            if isinstance(value, np.bool_)
+            else str(value)
+            if isinstance(value, np.dtype)
+            else value
+            for key, value in params_dict.items()
+        }

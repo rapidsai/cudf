@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 import datetime
 import datetime as dt
+import operator
 import re
 
 import cupy as cp
@@ -12,7 +13,12 @@ import pytest
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.core.index import DatetimeIndex
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import (
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    assert_eq,
+    assert_exceptions_equal,
+)
 
 
 def data1():
@@ -645,13 +651,9 @@ def test_to_datetime_errors(data):
     else:
         gd_data = pd_data
 
-    try:
-        pd.to_datetime(pd_data)
-    except Exception as e:
-        with pytest.raises(type(e), match=re.escape(str(e))):
-            cudf.to_datetime(gd_data)
-    else:
-        raise AssertionError("Was expecting `pd.to_datetime` to fail")
+    assert_exceptions_equal(
+        pd.to_datetime, cudf.to_datetime, ([pd_data],), ([gd_data],)
+    )
 
 
 def test_to_datetime_not_implemented():
@@ -837,13 +839,16 @@ def test_str_to_datetime_error():
     psr = pd.Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
     gsr = Series(["2001-01-01", "2002-02-02", "2000-01-05", "None"])
 
-    try:
-        psr.astype("datetime64[s]")
-    except Exception:
-        with pytest.raises(ValueError):
-            gsr.astype("datetime64[s]")
-    else:
-        raise AssertionError("Expected psr.astype('datetime64[s]') to fail")
+    assert_exceptions_equal(
+        lfunc=psr.astype,
+        rfunc=gsr.astype,
+        lfunc_args_and_kwargs=(["datetime64[s]"],),
+        rfunc_args_and_kwargs=(["datetime64[s]"],),
+        check_exception_type=False,
+        expected_error_message=re.escape(
+            "Could not convert `None` value to datetime"
+        ),
+    )
 
 
 @pytest.mark.parametrize(
@@ -956,79 +961,82 @@ def test_datetime_series_ops_with_scalars(data, other_scalars, dtype, op):
         assert_eq(expected, actual)
 
     elif op == "sub":
-        with pytest.raises(TypeError):
-            expected = other_scalars - psr
-        with pytest.raises(TypeError):
-            actual = other_scalars - gsr
+        assert_exceptions_equal(
+            lfunc=operator.sub,
+            rfunc=operator.sub,
+            lfunc_args_and_kwargs=([other_scalars, psr],),
+            rfunc_args_and_kwargs=([other_scalars, gsr],),
+            compare_error_message=False,
+        )
 
 
 def test_datetime_invalid_ops():
     sr = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
     psr = sr.to_pandas()
 
-    try:
-        psr + pd.Timestamp(1513393355.5, unit="s")
-    except TypeError:
-        with pytest.raises(TypeError):
-            sr + pd.Timestamp(1513393355.5, unit="s")
-    else:
-        raise AssertionError("Expected psr + pd.Timestamp to fail")
+    assert_exceptions_equal(
+        lfunc=operator.add,
+        rfunc=operator.add,
+        lfunc_args_and_kwargs=([psr, pd.Timestamp(1513393355.5, unit="s")],),
+        rfunc_args_and_kwargs=([sr, pd.Timestamp(1513393355.5, unit="s")],),
+        compare_error_message=False,
+    )
 
-    try:
-        psr / pd.Timestamp(1513393355.5, unit="s")
-    except TypeError:
-        with pytest.raises(TypeError):
-            sr / pd.Timestamp(1513393355.5, unit="s")
-    else:
-        raise AssertionError("Expected psr / pd.Timestamp to fail")
+    assert_exceptions_equal(
+        lfunc=operator.truediv,
+        rfunc=operator.truediv,
+        lfunc_args_and_kwargs=([psr, pd.Timestamp(1513393355.5, unit="s")],),
+        rfunc_args_and_kwargs=([sr, pd.Timestamp(1513393355.5, unit="s")],),
+        compare_error_message=False,
+    )
 
-    try:
-        psr + psr
-    except TypeError:
-        with pytest.raises(TypeError):
-            sr + sr
-    else:
-        raise AssertionError("Expected psr + psr to fail")
+    assert_exceptions_equal(
+        lfunc=operator.add,
+        rfunc=operator.add,
+        lfunc_args_and_kwargs=([psr, psr],),
+        rfunc_args_and_kwargs=([sr, sr],),
+        compare_error_message=False,
+    )
 
-    try:
-        psr // psr
-    except TypeError:
-        with pytest.raises(TypeError):
-            sr // sr
-    else:
-        raise AssertionError("Expected psr // psr to fail")
+    assert_exceptions_equal(
+        lfunc=operator.floordiv,
+        rfunc=operator.floordiv,
+        lfunc_args_and_kwargs=([psr, psr],),
+        rfunc_args_and_kwargs=([sr, sr],),
+        compare_error_message=False,
+    )
 
-    try:
-        psr // pd.Timestamp(1513393355.5, unit="s")
-    except TypeError:
-        with pytest.raises(TypeError):
-            sr // pd.Timestamp(1513393355.5, unit="s")
-    else:
-        raise AssertionError("Expected psr // pd.Timestamp to fail")
+    assert_exceptions_equal(
+        lfunc=operator.floordiv,
+        rfunc=operator.floordiv,
+        lfunc_args_and_kwargs=([psr, pd.Timestamp(1513393355.5, unit="s")],),
+        rfunc_args_and_kwargs=([sr, pd.Timestamp(1513393355.5, unit="s")],),
+        compare_error_message=False,
+    )
 
-    try:
-        psr + 1
-    except TypeError:
-        with pytest.raises(TypeError):
-            sr + 1
-    else:
-        raise AssertionError("Expected psr + 1 to fail")
+    assert_exceptions_equal(
+        lfunc=operator.add,
+        rfunc=operator.add,
+        lfunc_args_and_kwargs=([psr, 1],),
+        rfunc_args_and_kwargs=([sr, 1],),
+        compare_error_message=False,
+    )
 
-    try:
-        psr / "a"
-    except TypeError:
-        with pytest.raises(TypeError):
-            sr / "a"
-    else:
-        raise AssertionError("Expected psr / 'a' to fail")
+    assert_exceptions_equal(
+        lfunc=operator.truediv,
+        rfunc=operator.truediv,
+        lfunc_args_and_kwargs=([psr, "a"],),
+        rfunc_args_and_kwargs=([sr, "a"],),
+        compare_error_message=False,
+    )
 
-    try:
-        psr * 1
-    except TypeError:
-        with pytest.raises(TypeError):
-            sr * 1
-    else:
-        raise AssertionError("Expected psr * 1 to fail")
+    assert_exceptions_equal(
+        lfunc=operator.mul,
+        rfunc=operator.mul,
+        lfunc_args_and_kwargs=([psr, 1],),
+        rfunc_args_and_kwargs=([sr, 1],),
+        compare_error_message=False,
+    )
 
 
 @pytest.mark.parametrize(

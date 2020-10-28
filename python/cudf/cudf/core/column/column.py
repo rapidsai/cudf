@@ -181,7 +181,7 @@ class ColumnBase(Column, Serializable):
     def __sizeof__(self):
         n = self.data.size
         if self.nullable:
-            n += self.mask.size
+            n += bitmask_allocation_size_bytes(self.size)
         return n
 
     @classmethod
@@ -331,7 +331,7 @@ class ColumnBase(Column, Serializable):
             libcudf.table.Table(
                 cudf.core.column_accessor.ColumnAccessor({"None": self})
             ),
-            ["None"],
+            [["None"]],
             keep_index=False,
         )["None"].chunk(0)
 
@@ -752,7 +752,14 @@ class ColumnBase(Column, Serializable):
     def isnull(self):
         """Identify missing values in a Column.
         """
-        return libcudf.unary.is_null(self)
+        result = libcudf.unary.is_null(self)
+
+        if self.dtype.kind == "f":
+            # Need to consider `np.nan` values incase
+            # of a float column
+            result = result.binary_operator("or", libcudf.unary.is_nan(self))
+
+        return result
 
     def isna(self):
         """Identify missing values in a Column. Alias for isnull.
@@ -762,7 +769,16 @@ class ColumnBase(Column, Serializable):
     def notnull(self):
         """Identify non-missing values in a Column.
         """
-        return libcudf.unary.is_valid(self)
+        result = libcudf.unary.is_valid(self)
+
+        if self.dtype.kind == "f":
+            # Need to consider `np.nan` values incase
+            # of a float column
+            result = result.binary_operator(
+                "and", libcudf.unary.is_non_nan(self)
+            )
+
+        return result
 
     def notna(self):
         """Identify non-missing values in a Column. Alias for notnull.
@@ -1343,7 +1359,7 @@ def build_column(
     ----------
     data : Buffer
         The data buffer (can be None if constructing certain Column
-        types like StringColumn or CategoricalColumn)
+        types like StringColumn, ListColumn, or CategoricalColumn)
     dtype
         The dtype associated with the Column to construct
     mask : Buffer, optional
@@ -1397,7 +1413,6 @@ def build_column(
         )
     elif is_list_dtype(dtype):
         return cudf.core.column.ListColumn(
-            data=data,
             size=size,
             dtype=dtype,
             mask=mask,

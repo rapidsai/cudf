@@ -18,33 +18,32 @@ export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
 export NIGHTLY_VERSION=$(echo $BRANCH_VERSION | awk -F. '{print $2}')
 export PROJECTS=(cudf libcudf)
 
-logger "Check environment..."
+gpuci_logger "Check environment..."
 env
 
-logger "Check GPU usage..."
+gpuci_logger "Check GPU usage..."
 nvidia-smi
 
-logger "Activate conda env..."
-source activate rapids
-# TODO: Move installs to docs-build-env meta package
-conda install -c anaconda beautifulsoup4 jq
-pip install sphinx-markdown-tables
+gpuci_logger "Activate conda env..."
+. /opt/conda/etc/profile.d/conda.sh
+conda activate rapids
 
-
-logger "Check versions..."
+gpuci_logger "Check versions..."
 python --version
 $CC --version
 $CXX --version
-conda list
+conda info
+conda config --show-sources
+conda list --show-channel-urls
 
 
 #libcudf Doxygen build
-logger "Build libcudf docs..."
+gpuci_logger "Build libcudf docs..."
 cd $PROJECT_WORKSPACE/cpp/doxygen
 doxygen Doxyfile
 
 #cudf Sphinx Build
-logger "Build cuDF docs..."
+gpuci_logger "Build cuDF docs..."
 cd $PROJECT_WORKSPACE/docs/cudf
 make html
 
@@ -55,7 +54,7 @@ for PROJECT in ${PROJECTS[@]}; do
     if [ ! -d "api/$PROJECT/$BRANCH_VERSION" ]; then
         mkdir -p api/$PROJECT/$BRANCH_VERSION
     fi
-    rm -rf $DOCS_WORKSPACE/api/$PROJECT/$BRANCH_VERSION/*	
+    rm -rf $DOCS_WORKSPACE/api/$PROJECT/$BRANCH_VERSION/*
 done
 
 

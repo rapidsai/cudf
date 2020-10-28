@@ -58,7 +58,7 @@ std::unique_ptr<table> quantiles(table_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  if (q.size() == 0) { return empty_like(input); }
+  if (q.empty()) { return empty_like(input); }
 
   CUDF_EXPECTS(interp == interpolation::HIGHER || interp == interpolation::LOWER ||
                  interp == interpolation::NEAREST,
