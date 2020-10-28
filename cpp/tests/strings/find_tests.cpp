@@ -73,7 +73,8 @@ TEST_F(StringsFindTest, Contains)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    cudf::test::strings_column_wrapper targets({"Hello", "é", "e", "x", "t", "e"});
+    cudf::test::strings_column_wrapper targets({"Hello", "é", "e", "x", "", ""},
+                                               {1, 1, 1, 1, 1, 0});
     cudf::test::fixed_width_column_wrapper<bool> expected({0, 1, 0, 0, 1, 0}, {1, 1, 0, 1, 1, 1});
     auto results = cudf::strings::contains(strings_view, cudf::strings_column_view(targets));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
