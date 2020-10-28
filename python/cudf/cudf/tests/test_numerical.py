@@ -8,6 +8,7 @@ from cudf.tests.utils import assert_eq
 
 
 def test_can_cast_safely_same_kind():
+    # 'i' -> 'i'
     data = Series([1, 2, 3], dtype="int32")._column
     to_dtype = np.dtype("int64")
 
@@ -21,6 +22,7 @@ def test_can_cast_safely_same_kind():
     data = Series([1, 2, 2 ** 31], dtype="int64")._column
     assert not data.can_cast_safely(to_dtype)
 
+    # 'u' -> 'u'
     data = Series([1, 2, 3], dtype="uint32")._column
     to_dtype = np.dtype("uint64")
 
@@ -32,6 +34,15 @@ def test_can_cast_safely_same_kind():
     assert data.can_cast_safely(to_dtype)
 
     data = Series([1, 2, 2 ** 33], dtype="uint64")._column
+    assert not data.can_cast_safely(to_dtype)
+
+    # 'f' -> 'f'
+    data = Series([np.inf, 1.0], dtype="float64")._column
+    to_dtype = np.dtype("float32")
+    assert data.can_cast_safely(to_dtype)
+
+    data = Series([np.finfo('float32').max*2, 1.0], dtype="float64")._column
+    to_dtype = np.dtype("float32")
     assert not data.can_cast_safely(to_dtype)
 
 
@@ -65,6 +76,11 @@ def test_can_cast_safely_mixed_kind():
 
     # float out of int range
     data = Series([1.0, 2.0, 1.0 * (2 ** 31)], dtype="float32")._column
+    assert not data.can_cast_safely(to_dtype)
+
+    # negative signed integers casting to unsigned integers
+    data = Series([-1, 0, 1], dtype="int32")._column
+    to_dtype = np.dtype("uint32")
     assert not data.can_cast_safely(to_dtype)
 
 
