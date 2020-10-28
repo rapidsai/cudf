@@ -111,8 +111,9 @@ std::unique_ptr<column> contains(
  * The 'output[i] = true` if string `targets[i]` is found inside `strings[i]` otherwise
  * `output[i] = false`.
  * If `target[i]` is an empty string, true is returned for `output[i]`.
+ * If `target[i]` is null, false is returned for `output[i]`.
  *
- * Any null string entries return corresponding null entries in the output column.
+ * Any null `strings[i]` row results in a null `output[i]` row.
  *
  * @throw cudf::logic_error if `strings.size() != targets.size()`.
  *
