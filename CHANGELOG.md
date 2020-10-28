@@ -2,8 +2,9 @@
 
 ## New Features
 
-- PR #6460 Add is_timestamp format check API
 - PR #6528 Enable `fixed_point` binary operations
+- PR #6460 Add is_timestamp format check API
+- PR #6568 Add function to create hashed vocabulary file from raw vocabulary
 - PR #6581 Add JNI API to check if PTDS is enabled
 
 ## Improvements
@@ -45,7 +46,9 @@
 - PR #6543 Handle `np.nan` values in `isna`/`isnull`/`notna`/`notnull`
 - PR #6549 Fix memory_usage calls for list columns
 - PR #6575 Fix JNI RMM initialize with no pool allocator limit
+- PR #6596 Fix memory usage calculation
 - PR #6595 Fix JNI build, broken by to_arrow() signature change
+- PR #6603 Use correct stream in hash_join.
 
 
 # cuDF 0.16.0 (21 Oct 2020)
