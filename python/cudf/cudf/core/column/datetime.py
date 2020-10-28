@@ -108,6 +108,19 @@ class DatetimeColumn(column.ColumnBase):
     def weekday(self):
         return self.get_dt_field("weekday")
 
+    def to_pandas(self, index=None, **kwargs):
+        # Workaround until following issue is fixed:
+        # https://issues.apache.org/jira/browse/ARROW-9772
+
+        pd_series = pd.Series(
+            self.astype("datetime64[ns]").to_arrow(), copy=True
+        )
+
+        if index is not None:
+            pd_series.index = index
+
+        return pd_series
+
     def get_dt_field(self, field):
         return libcudf.datetime.extract_datetime_component(self, field)
 
