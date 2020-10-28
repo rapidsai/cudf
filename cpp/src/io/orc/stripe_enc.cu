@@ -91,16 +91,19 @@ struct orcenc_state_s {
   } lengths;
 };
 
-static inline __device__ uint32_t zigzag32(int32_t v)
+static inline __device__ uint32_t zigzag(uint32_t v) { return v; }
+static inline __device__ uint64_t zigzag(uint64_t v) { return v; }
+static inline __device__ uint32_t zigzag(int32_t v)
 {
   int32_t s = (v >> 31);
   return ((v ^ s) * 2) - s;
 }
-static inline __device__ uint64_t zigzag64(int64_t v)
+static inline __device__ uint64_t zigzag(int64_t v)
 {
   int64_t s = (v < 0) ? 1 : 0;
   return ((v ^ -s) * 2) + s;
 }
+
 static inline __device__ uint32_t CountLeadingBytes32(uint32_t v) { return __clz(v) >> 3; }
 static inline __device__ uint32_t CountLeadingBytes64(uint64_t v) { return __clzll(v) >> 3; }
 
@@ -437,12 +440,12 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
           typename std::make_unsigned<T>::type vrange_mode1, vrange_mode2;
           s->u.intrle.scratch.u64[0] = (uint64_t)vmin;
           if (sizeof(T) > 4) {
-            vrange_mode1 = (is_signed) ? max(zigzag64(vmin), zigzag64(vmax)) : vmax;
+            vrange_mode1 = (is_signed) ? max(zigzag(vmin), zigzag(vmax)) : vmax;
             vrange_mode2 = vmax - vmin;
             mode1_w      = 8 - min(CountLeadingBytes64(vrange_mode1), 7);
             mode2_w      = 8 - min(CountLeadingBytes64(vrange_mode2), 7);
           } else {
-            vrange_mode1 = (is_signed) ? max(zigzag32(vmin), zigzag32(vmax)) : vmax;
+            vrange_mode1 = (is_signed) ? max(zigzag(vmin), zigzag(vmax)) : vmax;
             vrange_mode2 = vmax - vmin;
             mode1_w      = 4 - min(CountLeadingBytes32(vrange_mode1), 3);
             mode2_w      = 4 - min(CountLeadingBytes32(vrange_mode2), 3);
@@ -491,16 +494,11 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
         }
         dst += 2;
 
+        typename std::make_unsigned<T>::type zzv0 = v0;
+        if (t < literal_run) { zzv0 = zigzag(v0); }
         if (literal_w < 8) {
-          StoreBitsBigEndian(dst, (uint32_t)v0, literal_w, literal_run, t);
+          StoreBitsBigEndian(dst, zzv0, literal_w, literal_run, t);
         } else if (t < literal_run) {
-          typename std::make_unsigned<T>::type zzv0 = v0;
-          if (is_signed) {
-            if (sizeof(T) > 4)
-              zzv0 = zigzag64(v0);
-            else
-              zzv0 = zigzag32(v0);
-          }
           StoreBytesBigEndian(dst + t * (literal_w >> 3), zzv0, (literal_w >> 3));
         }
       } else if (literal_mode == 2) {
@@ -555,7 +553,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
     if (delta_run > 0) {
       if (t == literal_run) {
         int64_t delta       = (int64_t)v1 - (int64_t)v0;
-        uint64_t delta_base = (is_signed) ? (sizeof(T) > 4) ? zigzag64(v0) : zigzag32(v0) : v0;
+        uint64_t delta_base = zigzag(v0);
         if (delta == 0 && delta_run >= 3 && delta_run <= 10) {
           // Short repeat
           uint32_t delta_bw = 8 - min(CountLeadingBytes64(delta_base), 7);
@@ -567,7 +565,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
           s->u.intrle.hdr_bytes = 1 + delta_bw;
         } else {
           // Delta
-          uint64_t delta_u = zigzag64(delta);
+          uint64_t delta_u = zigzag(delta);
           uint32_t bytecnt = 2;
           dst[0]           = 0xC0 + ((delta_run - 1) >> 8);
           dst[1]           = (delta_run - 1) & 0xff;

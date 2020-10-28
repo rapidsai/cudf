@@ -370,7 +370,7 @@ def test_int_overflow(tmpdir):
     large_val = 1024*1024*1024
     df = cudf.DataFrame({'a':[None]*num_rows}, dtype='int32')
     df['a'][0] = large_val
-    df['a'][num_rows-1] = 99
+    df['a'][num_rows-1] = 1
     df.to_orc(file_path)
     
     assert_eq(cudf.read_orc(file_path), df)
