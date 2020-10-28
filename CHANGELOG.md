@@ -50,6 +50,8 @@
 - PR #6595 Fix JNI build, broken by to_arrow() signature change
 - PR #6603 Use correct stream in hash_join.
 - PR #6616 Block `fixed_point` `cudf::concatenate` with different scales
+- PR #6617 Fix JNI native dependency load order
+
 
 # cuDF 0.16.0 (21 Oct 2020)
 
