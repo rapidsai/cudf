@@ -7709,8 +7709,12 @@ def test_dataframe_error_equality(df1, df2, op):
         "sum",
         "min",
         {"a": ["sum", "min"], "b": ["min"], "c": ["max"]},
+        {"a": "sum", "b": "min", "c": "max"},
+        {"a": np.sum, "b": np.min, "c": np.max},
+        {"a": ["sum", "min"], "b": "min", "c": ["max"]},
     ],
 )
+#@pytest.mark.parametrize("axis",[0,1])
 def test_agg_for_dataframes(data, aggs):
     pdf = pd.DataFrame(data)
     gdf = gd.DataFrame(data)

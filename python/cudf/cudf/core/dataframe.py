@@ -1,5 +1,5 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-from __future__ import division, print_function
+from __future__ import division
 
 import inspect
 import itertools
@@ -865,28 +865,28 @@ class DataFrame(Frame, Serializable):
         """
         return len(self.index)
 
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+    def __array_uaggs__(self, uaggs, method, *inputs, **kwargs):
         import cudf
 
-        if method == "__call__" and hasattr(cudf, ufunc.__name__):
-            func = getattr(cudf, ufunc.__name__)
-            return func(self)
+        if method == "__call__" and hasattr(cudf, uaggs.__name__):
+            aggs = getattr(cudf, uaggs.__name__)
+            return aggs(self)
         else:
             return NotImplemented
 
-    def __array_function__(self, func, types, args, kwargs):
+    def __array_aggstion__(self, aggs, types, args, kwargs):
 
         cudf_df_module = DataFrame
         cudf_series_module = Series
 
-        for submodule in func.__module__.split(".")[1:]:
+        for submodule in aggs.__module__.split(".")[1:]:
             # point cudf to the correct submodule
             if hasattr(cudf_df_module, submodule):
                 cudf_df_module = getattr(cudf_df_module, submodule)
             else:
                 return NotImplemented
 
-        fname = func.__name__
+        fname = aggs.__name__
 
         handled_types = [cudf_df_module, cudf_series_module]
 
@@ -895,12 +895,12 @@ class DataFrame(Frame, Serializable):
                 return NotImplemented
 
         if hasattr(cudf_df_module, fname):
-            cudf_func = getattr(cudf_df_module, fname)
-            # Handle case if cudf_func is same as numpy function
-            if cudf_func is func:
+            cudf_aggs = getattr(cudf_df_module, fname)
+            # Handle case if cudf_aggs is same as numpy aggstion
+            if cudf_aggs is aggs:
                 return NotImplemented
             else:
-                return cudf_func(*args, **kwargs)
+                return cudf_aggs(*args, **kwargs)
         else:
             return NotImplemented
 
@@ -1169,7 +1169,7 @@ class DataFrame(Frame, Serializable):
 
     def _clean_nulls_from_dataframe(self, df):
         """
-        This function converts all ``null`` values to ``<NA>`` for
+        This aggstion converts all ``null`` values to ``<NA>`` for
         representation as a string in `__repr__`.
 
         Since we utilize Pandas `__repr__` at all places in our code
@@ -3238,7 +3238,7 @@ class DataFrame(Frame, Serializable):
     ):
         """Alter column and index labels.
 
-        Function / dict values must be unique (1-to-1). Labels not contained in
+        aggstion / dict values must be unique (1-to-1). Labels not contained in
         a dict / Series will be left as-is. Extra labels listed don’t throw an
         error.
 
@@ -3250,14 +3250,14 @@ class DataFrame(Frame, Serializable):
 
         Parameters
         ----------
-        mapper : dict-like or function, default None
-            optional dict-like or functions transformations to apply to
+        mapper : dict-like or aggstion, default None
+            optional dict-like or aggstions transformations to apply to
             the index/column values depending on selected ``axis``.
         index : dict-like, default None
             Optional dict-like transformations to apply to the index axis'
-            values. Does not support functions for axis 0 yet.
-        columns : dict-like or function, default None
-            optional dict-like or functions transformations to apply to
+            values. Does not support aggstions for axis 0 yet.
+        columns : dict-like or aggstion, default None
+            optional dict-like or aggstions transformations to apply to
             the columns axis' values.
         axis : int, default 0
             Axis to rename with mapper.
@@ -3723,44 +3723,84 @@ class DataFrame(Frame, Serializable):
         )
 
     def agg(self, aggs):
+        """ 
+        Aggregate using one or more operations over the specified axis.
+
+        Parameters
+        ----------
+        aggs : aggstion, str, list or dict
+            aggstion to use for aggregating data. Accepted combinations are:
+                string aggstion name (ex: "sum")
+                list of aggstions  (ex: ["sum", "min", "max"])
+                dict of axis labels specified operations per column
+                aggstion(ex: np.sum): must either work when passed a DataFrame or passed to DataFrame.apply
+
+        axis : {0 or ‘index’, 1 or ‘columns’}, default 0
+            If 0 or ‘index’: apply aggstion to each column
+            If 1 or ‘columns’: apply aggstion to each row.
+        
+        Returns 
+        -------
+        scalar : when Series.agg is called with single aggstion
+        Series : when DataFrame.agg is called with a single aggstion
+        DataFrame : when DataFrame.agg is called with several aggstions
+
+        Notes
+        -----
+        Difference from pandas:
+          * Not supporting: *args, **kwargs
+
+        """
+        
         dtypes = [self[col].dtype for col in self._column_names]
-        common_dtype = np.find_common_type(dtypes, [])
+        common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
         df_normalized = self.astype(common_dtype)
 
         if isinstance(aggs, list):
             result = cudf.DataFrame()
+            # TODO : Could allow simultaneous pass multi-aggregation functionality as a future optimization
             for agg in aggs:
                 result[agg] = getattr(df_normalized, agg)()
 
         elif isinstance(aggs, str):
             result = cudf.DataFrame()
-            result[aggs] = getattr(df_normalized, aggs)()
+            result[aggs] = getattr(df_normalized,aggs)()
             result = result.T.loc[aggs]
             result.name = None
             return result
 
         elif isinstance(aggs, dict):
-            cols = aggs.keys()
-            idxs = set()
-            for agg_l in aggs.values():
-                for agg in agg_l:
-                    idxs.add(agg)
+            cols=aggs.keys()
+            idxs=set()
+            for val in aggs.values():
+                #print(idxs, val)
+                if isinstance(val, list):
+                    idxs.update(val)
+                elif isinstance(val, str):
+                    idxs.add(val)    
             idxs = sorted(list(idxs))
+            for agg in idxs:
+                if agg is callable:
+                    raise NotImplementedError("callable parameter is not implemented yet")
             result = cudf.DataFrame(index=idxs, columns=cols)
             for key in aggs.keys():
                 col = df_normalized[key]
-                ans = cudf.Series(
-                    [None] * len(idxs), index=idxs, dtype=col.dtype
-                )
-                for agg in aggs.get(key):
-                    ans[agg] = getattr(col, agg)()
+                col_empty =  column_empty(len(idxs), dtype=col.dtype, masked=True)
+                ans = cudf.Series(data=col_empty, index=idxs)
+                if isinstance(aggs.get(key),list):
+                    # TODO : Could allow simultaneous pass multi-aggregation functionality as a future optimization
+                    for agg in aggs.get(key):
+                        #print(agg)
+                        ans[agg] = getattr(col, agg)()
+                elif isinstance(aggs.get(key),str):
+                    ans[aggs.get(key)] = getattr(col, agg)()
                 result[key] = ans
             return result
+
         elif callable(aggs):
             raise NotImplementedError(
                 "callable parameter is not implemented yet"
             )
-
         else:
             raise ValueError("argument must be a string or list")
         return result.T.sort_index(axis=1, ascending=True)
@@ -4204,7 +4244,7 @@ class DataFrame(Frame, Serializable):
     @applyutils.doc_apply()
     def apply_rows(
         self,
-        func,
+        aggs,
         incols,
         outcols,
         kwargs,
@@ -4212,7 +4252,7 @@ class DataFrame(Frame, Serializable):
         cache_key=None,
     ):
         """
-        Apply a row-wise user defined function.
+        Apply a row-wise user defined aggstion.
 
         Parameters
         ----------
@@ -4220,13 +4260,13 @@ class DataFrame(Frame, Serializable):
 
         Examples
         --------
-        The user function should loop over the columns and set the output for
+        The user aggstion should loop over the columns and set the output for
         each row. Loop execution order is arbitrary, so each iteration of
         the loop **MUST** be independent of each other.
 
-        When ``func`` is invoked, the array args corresponding to the
+        When ``aggs`` is invoked, the array args corresponding to the
         input/output are strided so as to improve GPU parallelism.
-        The loop in the function resembles serial code, but executes
+        The loop in the aggstion resembles serial code, but executes
         concurrently in multiple threads.
 
         >>> import cudf
@@ -4266,12 +4306,12 @@ class DataFrame(Frame, Serializable):
                 current_col_dtype
             ):
                 raise TypeError(
-                    "User defined functions are currently not "
+                    "User defined aggstions are currently not "
                     "supported on Series with dtypes `str` and `category`."
                 )
         return applyutils.apply_rows(
             self,
-            func,
+            aggs,
             incols,
             outcols,
             kwargs,
@@ -4282,7 +4322,7 @@ class DataFrame(Frame, Serializable):
     @applyutils.doc_applychunks()
     def apply_chunks(
         self,
-        func,
+        aggs,
         incols,
         outcols,
         kwargs=None,
@@ -4292,7 +4332,7 @@ class DataFrame(Frame, Serializable):
         tpb=None,
     ):
         """
-        Transform user-specified chunks using the user-provided function.
+        Transform user-specified chunks using the user-provided aggstion.
 
         Parameters
         ----------
@@ -4302,7 +4342,7 @@ class DataFrame(Frame, Serializable):
         Examples
         --------
 
-        For ``tpb > 1``, ``func`` is executed by ``tpb`` number of threads
+        For ``tpb > 1``, ``aggs`` is executed by ``tpb`` number of threads
         concurrently.  To access the thread id and count,
         use ``numba.cuda.threadIdx.x`` and ``numba.cuda.blockDim.x``,
         respectively (See `numba CUDA kernel documentation`_).
@@ -4316,7 +4356,7 @@ class DataFrame(Frame, Serializable):
 
         By looping over the range
         ``range(cuda.threadIdx.x, in1.size, cuda.blockDim.x)``, the *kernel*
-        function can be used with any *tpb* in an efficient manner.
+        aggstion can be used with any *tpb* in an efficient manner.
 
         >>> from numba import cuda
         >>> @cuda.jit
@@ -4337,7 +4377,7 @@ class DataFrame(Frame, Serializable):
             raise ValueError("*chunks* must be defined")
         return applyutils.apply_chunks(
             self,
-            func,
+            aggs,
             incols,
             outcols,
             kwargs,
@@ -5242,9 +5282,9 @@ class DataFrame(Frame, Serializable):
         q : float or array-like
             0 <= q <= 1, the quantile(s) to compute
         axis : int
-            axis is a NON-FUNCTIONAL parameter
+            axis is a NON-aggsTIONAL parameter
         numeric_only : boolean
-            numeric_only is a NON-FUNCTIONAL parameter
+            numeric_only is a NON-aggsTIONAL parameter
         interpolation : {`linear`, `lower`, `higher`, `midpoint`, `nearest`}
             This parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.
@@ -5530,7 +5570,7 @@ class DataFrame(Frame, Serializable):
         Parameters
         ----------
         axis: {index (0), columns(1)}
-            Axis for the function to be applied on.
+            Axis for the aggstion to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
         level: int or level name, default None
@@ -5575,7 +5615,7 @@ class DataFrame(Frame, Serializable):
         Parameters
         ----------
         axis: {index (0), columns(1)}
-            Axis for the function to be applied on.
+            Axis for the aggstion to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
         level: int or level name, default None
@@ -5628,7 +5668,7 @@ class DataFrame(Frame, Serializable):
         ----------
 
         axis: {index (0), columns(1)}
-            Axis for the function to be applied on.
+            Axis for the aggstion to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
         dtype: data type
@@ -5686,7 +5726,7 @@ class DataFrame(Frame, Serializable):
         ----------
 
         axis: {index (0), columns(1)}
-            Axis for the function to be applied on.
+            Axis for the aggstion to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
         dtype: data type
@@ -5744,7 +5784,7 @@ class DataFrame(Frame, Serializable):
         ----------
 
         axis: {index (0), columns(1)}
-            Axis for the function to be applied on.
+            Axis for the aggstion to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
         dtype: data type
@@ -5930,7 +5970,7 @@ class DataFrame(Frame, Serializable):
         Parameters
         ----------
         axis : {0 or 'index', 1 or 'columns'}
-            Axis for the function to be applied on.
+            Axis for the aggstion to be applied on.
         skipna : bool, default True
             Exclude NA/null values when computing the result.
         level : int or level name, default None
@@ -5941,7 +5981,7 @@ class DataFrame(Frame, Serializable):
             use everything, then use only numeric data. Not implemented for
             Series.
         **kwargs
-            Additional keyword arguments to be passed to the function.
+            Additional keyword arguments to be passed to the aggstion.
 
         Returns
         -------
@@ -6084,7 +6124,7 @@ class DataFrame(Frame, Serializable):
         ----------
 
         axis: {index (0), columns(1)}
-            Axis for the function to be applied on.
+            Axis for the aggstion to be applied on.
         skipna: bool, default True
             Exclude NA/null values. If an entire row/column is NA, the result
             will be NA.
@@ -6140,7 +6180,7 @@ class DataFrame(Frame, Serializable):
         ----------
 
         axis: {index (0), columns(1)}
-            Axis for the function to be applied on.
+            Axis for the aggstion to be applied on.
         skipna: bool, default True
             Exclude NA/null values. If an entire row/column is NA, the result
             will be NA.
@@ -6847,7 +6887,7 @@ class DataFrame(Frame, Serializable):
 
         See Also
         --------
-        cudf.core.reshape.concat : General function to concatenate DataFrame or
+        cudf.core.reshape.concat : General aggstion to concatenate DataFrame or
             objects.
 
         Notes
@@ -7177,7 +7217,7 @@ def _align_indices(lhs, rhs):
 
 def _setitem_with_dataframe(input_df, replace_df, input_cols=None, mask=None):
     """
-        This function sets item dataframes relevant columns with replacement df
+        This aggstion sets item dataframes relevant columns with replacement df
         :param input_df: Dataframe to be modified inplace
         :param replace_df: Replacement DataFrame to replace values with
         :param input_cols: columns to replace in the input dataframe
