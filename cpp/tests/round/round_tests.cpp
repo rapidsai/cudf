@@ -117,12 +117,27 @@ TEST_F(RoundTests, Int64AtBoundary)
   using namespace numeric;
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<int64_t>;
 
-  auto const m        = std::numeric_limits<int64_t>::max();  // 9223372036854775807
-  auto const input    = fw_wrapper{m};
+  auto const m     = std::numeric_limits<int64_t>::max();  // 9223372036854775807
+  auto const input = fw_wrapper{m};
+
   auto const expected = fw_wrapper{9223372036854775800};
   auto const result   = cudf::round(input, -2, cudf::round_option::HALF_UP);
-
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+
+  auto const expected2 = fw_wrapper{9223372036850000000};
+  auto const result2   = cudf::round(input, -7, cudf::round_option::HALF_UP);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
+
+  auto const expected3 = fw_wrapper{9223372000000000000};
+  auto const result3   = cudf::round(input, -11, cudf::round_option::HALF_UP);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, result3->view());
+
+  auto const result4 = cudf::round(input, -12, cudf::round_option::HALF_UP);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, result4->view());
+
+  auto const expected5 = fw_wrapper{9000000000000000000};
+  auto const result5   = cudf::round(input, -18, cudf::round_option::HALF_UP);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected5, result5->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
