@@ -778,8 +778,8 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointConcatentate)
   using decimalXX  = TypeParam;
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<decimalXX>;
 
-  auto vec = std::vector<decimalXX>(1000);
-  std::iota(std::begin(vec), std::end(vec), decimalXX{});
+  auto begin = cudf::test::make_counting_transform_iterator(0, [](auto i) { return decimalXX{i}; });
+  auto const vec = std::vector<decimalXX>(begin, begin + 1000);
 
   auto const a = fw_wrapper(vec.begin(), /***/ vec.begin() + 300);
   auto const b = fw_wrapper(vec.begin() + 300, vec.begin() + 700);
