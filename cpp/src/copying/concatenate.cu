@@ -336,6 +336,15 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
                            [&type](auto const& c) { return c.type() == type; }),
                "Type mismatch in columns to concatenate.");
 
+  if (is_fixed_point(columns_to_concat.front().type())) {
+    CUDF_EXPECTS(std::adjacent_find(columns_to_concat.cbegin(),
+                                    columns_to_concat.cend(),
+                                    [](auto const& l, auto const& r) {
+                                      return l.type().scale() != r.type().scale();
+                                    }) == columns_to_concat.cend(),
+                 "Fixed-point columns need to have same scale before concatenating.");
+  }
+
   if (std::all_of(columns_to_concat.begin(), columns_to_concat.end(), [](column_view const& c) {
         return c.is_empty();
       })) {
@@ -359,6 +368,16 @@ std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_conc
                                     have_same_types(first_table, t);
                            }),
                "Mismatch in table columns to concatenate.");
+
+  if (is_fixed_point(tables_to_concat.front().column(0).type())) {
+    CUDF_EXPECTS(std::adjacent_find(tables_to_concat.cbegin(),
+                                    tables_to_concat.cend(),
+                                    [](auto const& l, auto const& r) {
+                                      return l.column(0).type().scale() !=
+                                             r.column(0).type().scale();
+                                    }) == tables_to_concat.cend(),
+                 "Fixed-point columns need to have same scale before concatenating.");
+  }
 
   std::vector<std::unique_ptr<column>> concat_columns;
   for (size_type i = 0; i < first_table.num_columns(); ++i) {
