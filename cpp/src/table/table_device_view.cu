@@ -94,5 +94,7 @@ template class table_device_view_base<column_device_view, table_view>;
 // Explicit instantiation for a device table of mutable views
 template class table_device_view_base<mutable_column_device_view, mutable_table_view>;
 
+template class table_device_view_base<column_device_view, list_of_column_views>;
+
 }  // namespace detail
 }  // namespace cudf

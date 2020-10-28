@@ -22,6 +22,7 @@
 #include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/table/table_device_view.cuh>
 
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
@@ -61,64 +62,6 @@ struct chars_size_transform {
   }
 };
 
-template <typename ColumnDeviceView>
-auto create_contiguous_device_views(std::vector<column_view> const& source_view,
-                                    cudaStream_t stream)
-{
-  // The columns must be converted to ColumnDeviceView
-  // objects and copied into device memory for the table_device_view's
-  // _columns member.
-  rmm::device_buffer* _descendant_storage = nullptr;
-  ColumnDeviceView* _columns              = nullptr;
-  if (source_view.size() > 0) {
-    //
-    // First calculate the size of memory needed to hold the
-    // table's ColumnDeviceViews. This is done by calling extent()
-    // for each of the table's ColumnViews columns.
-    std::size_t views_size_bytes =
-      std::accumulate(source_view.begin(), source_view.end(), 0, [](std::size_t init, auto col) {
-        return init + ColumnDeviceView::extent(col);
-      });
-    // A buffer of CPU memory is allocated to hold the ColumnDeviceView
-    // objects. Once filled, the CPU memory is then copied to device memory
-    // and the pointer is set in the _columns member.
-    std::vector<int8_t> h_buffer(views_size_bytes);
-    ColumnDeviceView* h_column = reinterpret_cast<ColumnDeviceView*>(h_buffer.data());
-    // Each ColumnDeviceView instance may have child objects which may
-    // require setting some internal device pointers before being copied
-    // from CPU to device.
-    // Allocate the device memory to be used in the result.
-    // We need this pointer in order to pass it down when creating the
-    // ColumnDeviceViews so the column can set the pointer(s) for any
-    // of its child objects.
-    _descendant_storage = new rmm::device_buffer(views_size_bytes, stream);
-    _columns            = reinterpret_cast<ColumnDeviceView*>(_descendant_storage->data());
-    // The beginning of the memory must be the fixed-sized ColumnDeviceView
-    // objects in order for _columns to be used as an array. Therefore,
-    // any child data is assigned to the end of this array (h_end/d_end).
-    auto h_end = (int8_t*)(h_column + source_view.size());
-    auto d_end = (int8_t*)(_columns + source_view.size());
-    // Create the ColumnDeviceView from each column within the CPU memory
-    // Any column child data should be copied into h_end and any
-    // internal pointers should be set using d_end.
-    for (auto itr = source_view.begin(); itr != source_view.end(); ++itr) {
-      auto col = *itr;
-      // convert the ColumnView into ColumnDeviceView
-      new (h_column) ColumnDeviceView(col, h_end, d_end);
-      h_column++;  // point to memory slot for the next ColumnDeviceView
-      // update the pointers for holding ColumnDeviceView's child data
-      auto col_child_data_size = (ColumnDeviceView::extent(col) - sizeof(ColumnDeviceView));
-      h_end += col_child_data_size;
-      d_end += col_child_data_size;
-    }
-    CUDA_TRY(
-      cudaMemcpyAsync(_columns, h_buffer.data(), views_size_bytes, cudaMemcpyDefault, stream));
-    CUDA_TRY(cudaStreamSynchronize(stream));
-  }
-  return std::make_tuple(std::move(std::unique_ptr<rmm::device_buffer>(_descendant_storage)),
-                         _columns);
-}
-
 auto create_strings_device_views(std::vector<column_view> const& views, cudaStream_t stream)
 {
   CUDF_FUNC_RANGE();
@@ -126,9 +69,9 @@ auto create_strings_device_views(std::vector<column_view> const& views, cudaStre
   cudf::thread_range r1{"device_view_owners"};
   cudf::thread_range r2{"create_contiguous_device_views"};
   // Assemble contiguous array of device views
-  auto contiguous_device_views = create_contiguous_device_views<column_device_view>(views, stream);
-  auto& device_view_owners     = std::get<0>(contiguous_device_views);
-  auto& device_views_ptr       = std::get<1>(contiguous_device_views);
+  auto device_view_owners =
+    list_of_column_device_views::create(list_of_column_views{views}, stream);
+  auto device_views_ptr = device_view_owners->begin();
 
   cudf::thread_range r3{"input_offsets"};
   // Compute the partition offsets and size of offset column

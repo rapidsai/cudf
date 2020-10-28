@@ -39,9 +39,9 @@ class table_device_view_base {
   table_device_view_base& operator=(table_device_view_base const&) = default;
   table_device_view_base& operator=(table_device_view_base&&) = default;
 
-  __device__ ColumnDeviceView* begin() const noexcept { return _columns; }
+  __device__ __host__ ColumnDeviceView* begin() const noexcept { return _columns; }
 
-  __device__ ColumnDeviceView* end() const noexcept { return _columns + _num_columns; }
+  __device__ __host__ ColumnDeviceView* end() const noexcept { return _columns + _num_columns; }
 
   __device__ ColumnDeviceView const& column(size_type column_index) const noexcept
   {
@@ -106,6 +106,35 @@ class mutable_table_device_view
   mutable_table_device_view(mutable_table_view source_view, cudaStream_t stream)
     : detail::table_device_view_base<mutable_column_device_view, mutable_table_view>(source_view,
                                                                                      stream)
+  {
+  }
+};
+
+class list_of_column_views {
+ private:
+  std::vector<column_view> _columns{};  ///< ColumnViews to columns of any sizes
+ public:
+  list_of_column_views(std::vector<column_view> const& cols) : _columns{cols} {}
+  using iterator = decltype(std::begin(_columns));
+  iterator begin() { return std::begin(_columns); }
+  iterator end() noexcept { return std::end(_columns); }
+  size_type num_columns() const noexcept { return _columns.size(); }
+  size_type num_rows() const noexcept { return -1; }
+};
+
+class list_of_column_device_views
+  : public detail::table_device_view_base<column_device_view, list_of_column_views> {
+ public:
+  static auto create(list_of_column_views source_view, cudaStream_t stream = 0)
+  {
+    auto deleter = [](list_of_column_device_views* t) { t->destroy(); };
+    return std::unique_ptr<list_of_column_device_views, decltype(deleter)>{
+      new list_of_column_device_views(source_view, stream), deleter};
+  }
+
+ private:
+  list_of_column_device_views(list_of_column_views source_view, cudaStream_t stream)
+    : detail::table_device_view_base<column_device_view, list_of_column_views>(source_view, stream)
   {
   }
 };
