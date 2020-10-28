@@ -1338,7 +1338,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, i
   }
   while (s->u.rowdec.nz_count < s->top.data.max_vals &&
          s->top.data.cur_row + s->top.data.nrows < s->top.data.end_row) {
-    uint32_t nrows = min(s->top.data.end_row - s->top.data.cur_row,
+    uint32_t nrows = min(s->top.data.end_row - (s->top.data.cur_row + s->top.data.nrows),
                          min((ROWDEC_BFRSZ - s->u.rowdec.nz_count) * 2, NTHREADS));
     if (s->chunk.strm_len[CI_PRESENT] > 0) {
       // We have a present stream
@@ -1645,6 +1645,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
         __syncthreads();
       } else if (s->chunk.type_kind == BOOLEAN) {
         int n = ((numvals + 7) >> 3);
+        if (t == 0 and s->top.data.cur_row == 20000) printf("RGSL: n is %u and numvals is %u and buffered count is %u and number of values written %u s->top.data.index.run_pos[CI_DATA] %u\n", n, numvals, s->top.data.buffered_count, s->top.data.nrows, s->top.data.index.run_pos[CI_DATA]);
         if (n > s->top.data.buffered_count) {
           numvals = Byte_RLE(&s->bs,
                              &s->u.rle8,
@@ -1667,6 +1668,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
           if (t == 0) { s->top.data.buffered_count = n; }
         }
         numvals = min(numvals << 3u, s->top.data.max_vals);
+        if (s->top.data.cur_row == 20000 and t == 0) printf("RGSL: numvals is %u and secondary_val is %u and buffered count at the end %u\n", numvals, secondary_val, s->top.data.buffered_count);
       } else if (s->chunk.type_kind == LONG || s->chunk.type_kind == TIMESTAMP ||
                  s->chunk.type_kind == DECIMAL) {
         orc_bytestream_s *bs = (s->chunk.type_kind == DECIMAL) ? &s->bs2 : &s->bs;
@@ -1723,6 +1725,8 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
             __syncthreads();
             if (t == 0) { s->top.data.index.run_pos[CI_DATA] = 0; }
           }
+          if (t == 0 and s->top.data.cur_row == 20000) printf("RGSL: While updating numvals is %u and number of values written %u and s->top.data.max_vals %u and run pos is %u\n", numvals, s->top.data.nrows, s->top.data.max_vals, run_pos);
+
         }
       }
       if (t == 0 && numvals + vals_skipped > 0 && numvals < s->top.data.max_vals) {
@@ -1734,6 +1738,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
       __syncthreads();
       // Use the valid bits to compute non-null row positions until we get a full batch of values to
       // decode
+      if (t == 0 and s->top.data.cur_row == 20000) printf("RGSL : Setting max_vals to %u \n", s->top.data.max_vals);
       DecodeRowPositions(s, first_row, t);
       if (!s->top.data.nrows && !s->u.rowdec.nz_count && !vals_skipped) {
         // This is a bug (could happen with bitstream errors with a bad run that would produce more
@@ -1761,8 +1766,10 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
               break;
             case BYTE: static_cast<uint8_t *>(data_out)[row] = s->vals.u8[t + vals_skipped]; break;
             case BOOLEAN:
+              if (row == 20000) printf("RGSL :Value deduced is %d at 20000 from %u t is %u and val skipped is %u \n", ((s->vals.u8[(t + vals_skipped) >> 3] >> ((~t) & 7)) & 1), (t + vals_skipped) >> 3, t, vals_skipped);
+              if (row == 20003) printf("RGSL :Value deduced is %d at 20003 from %u t is %u and val skipped is %u \n", ((s->vals.u8[(t + vals_skipped) >> 3] >> ((~t) & 7)) & 1), (t + vals_skipped) >> 3, t, vals_skipped);
               static_cast<uint8_t *>(data_out)[row] =
-                (s->vals.u8[(t + vals_skipped) >> 3] >> ((~t) & 7)) & 1;
+                (s->vals.u8[(t + vals_skipped) >> 3] >> ((~(t + vals_skipped)) & 7)) & 1;
               break;
             case DATE:
               if (s->chunk.dtype_len == 8) {
