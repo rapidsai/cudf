@@ -510,9 +510,23 @@ class NumericalColumn(column.ColumnBase):
                     info = np.finfo(to_dtype)
                 elif "int" in to_dtype.name:
                     info = np.iinfo(to_dtype)
-                min_, max_ = info.min, info.max
+                lower_, upper_ = info.min, info.max
 
-                if (self.min() >= min_) and (self.max() < max_):
+                if self.dtype.kind == 'f':
+                    # Exclude 'np.inf', '-np.inf'
+                    s = cudf.Series(self)
+                    non_infs = s[((s == np.inf) | (s == -np.inf)).logical_not()]
+                    col = non_infs._column
+                else:
+                    col = self
+
+                min_ = col.min()
+                if min_ is np.nan:
+                    # Column contains only infs
+                    return True
+                
+                max_ = col.max()
+                if (min_ >= lower_) and (max_ < upper_):
                     return True
                 else:
                     return False
