@@ -37,18 +37,19 @@ def to_numeric(arg, errors="raise", downcast=None):
         type, this method will determine the smallest possible
         dtype from the following sets:
 
-        * {'integer', 'signed'}: all integer types greater or equal to `np.int8`
+        * {'integer', 'signed'}: all integer types greater or equal to
+          `np.int8`
         * {'unsigned'}: all unsigned types greater or equal to `np.uint8`
         * {'float'}: all floating types greater or equal to `np.float32`
-        
-        Note that downcast behavior is decoupled from parsing. Errors 
-        encountered during downcast is raised regardless of ``errors`` 
+
+        Note that downcast behavior is decoupled from parsing. Errors
+        encountered during downcast is raised regardless of ``errors``
         parameter.
-        
+
     Returns
     -------
     Series or ndarray
-        Depending on the input, if series is passed in, series is returned, 
+        Depending on the input, if series is passed in, series is returned,
         otherwise ndarray
 
     Notes
@@ -143,13 +144,16 @@ def to_numeric(arg, errors="raise", downcast=None):
         downcast_type_map["float"] = float_types[idx:]
 
         type_set = downcast_type_map[downcast]
-        is_similar_kind_cast = (col.dtype.kind == 'f' and downcast == 'float') or (col.dtype.kind in {'i', 'u'} and downcast in {'integer', 'signed', 'unsigned'})
+        is_similar_kind_cast = (
+            col.dtype.kind == "f" and downcast == "float"
+        ) or (
+            col.dtype.kind in {"i", "u"}
+            and downcast in {"integer", "signed", "unsigned"}
+        )
 
         for t in type_set:
             downcast_dtype = np.dtype(t)
-            if (
-                downcast_dtype.itemsize <= col.dtype.itemsize
-            ):
+            if downcast_dtype.itemsize <= col.dtype.itemsize:
                 if is_similar_kind_cast:
                     if col.can_cast_safely(downcast_dtype):
                         col = libcudf.unary.cast(col, downcast_dtype)
@@ -157,13 +161,15 @@ def to_numeric(arg, errors="raise", downcast=None):
                 else:
                     if _can_cast_no_overflow(col, downcast_dtype):
                         # Round off for float -> (u)int
-                        if col.dtype.kind == 'f' and downcast_dtype.kind in {'i', 'u'}:
-                            # TODO: use libcudf round once 
+                        if col.dtype.kind == "f" and downcast_dtype.kind in {
+                            "i",
+                            "u",
+                        }:
+                            # TODO: use libcudf round once
                             # https://github.com/rapidsai/cudf/pull/6562 merges
                             col = col.round()
                         col = libcudf.unary.cast(col, downcast_dtype)
                         break
-
 
     if isinstance(arg, (cudf.Series, pd.Series)):
         return cudf.Series(col)
@@ -215,16 +221,17 @@ def _convert_str_col(col, errors):
         else:
             raise ValueError("Unable to convert some strings to numerics.")
 
+
 def _can_cast_no_overflow(col, to_dtype):
     """
-    Return true if values in `col` can be casted to `to_dtype` without 
+    Return true if values in `col` can be casted to `to_dtype` without
     overflowing.
 
     The difference between `NumericColumn.can_cast_safely` is that this
     function does not check if casting from float to integers, fractional
     information maybe lost.
     """
-    if to_dtype.kind == 'f':
+    if to_dtype.kind == "f":
         info = np.finfo(to_dtype)
     else:
         info = np.iinfo(to_dtype)

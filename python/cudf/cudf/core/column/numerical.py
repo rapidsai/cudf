@@ -512,10 +512,12 @@ class NumericalColumn(column.ColumnBase):
                     info = np.iinfo(to_dtype)
                 lower_, upper_ = info.min, info.max
 
-                if self.dtype.kind == 'f':
+                if self.dtype.kind == "f":
                     # Exclude 'np.inf', '-np.inf'
                     s = cudf.Series(self)
-                    non_infs = s[((s == np.inf) | (s == -np.inf)).logical_not()]
+                    non_infs = s[
+                        ((s == np.inf) | (s == -np.inf)).logical_not()
+                    ]
                     col = non_infs._column
                 else:
                     col = self
@@ -524,7 +526,7 @@ class NumericalColumn(column.ColumnBase):
                 if min_ is np.nan:
                     # Column contains only infs
                     return True
-                
+
                 max_ = col.max()
                 if (min_ >= lower_) and (max_ < upper_):
                     return True
