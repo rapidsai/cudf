@@ -216,6 +216,23 @@ __global__ void copy_partition(int num_src_bufs,
               buf_info[buf_index].bit_shift);
 }
 
+// The block of function below are all related:
+//
+// compute_offset_stack_size()
+// setup_src_buf_data()
+// count_src_bufs()
+// setup_source_buf_info()
+// build_output_columns()
+//
+// Critically, they all traverse the hierarchy of source columns and their children
+// in a specific order to guarantee they produce various outputs in a consistent
+// way.  For example, setup_src_buf_info() produces a series of information
+// structs that must appear in the same order that setup_src_buf_data() produces
+// buffers.
+//
+// So please be careful if you change the way in which these functions and
+// functors traverse the hierarchy.
+
 /**
  * @brief Compute total device memory stack size needed to process nested
  * offsets per-output buffer.
