@@ -866,7 +866,8 @@ class Series(Frame, Serializable):
         1       4
         2       9
         3       16
-        dtype: object
+        4       NaN
+        dtype: int64
 
         Please note map does not currently support user defined functions
         with dtypes `str` and`category`.
