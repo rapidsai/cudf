@@ -90,9 +90,10 @@ struct round_fn {
                         input.end<T>(),
                         out_view.begin<T>(),
                         [n, m] __device__(T e) -> T {
-                          auto const rounding_digit = (e / m) % 10;
+                          auto const rounding_digit = static_cast<int64_t>(fabs((e / m) % 10));
                           auto const digits         = e / n;
-                          return rounding_digit < 5 ? digits * n : (digits + 1) * n;
+                          auto const adjust         = e > 0 ? 1 : -1;
+                          return rounding_digit < 5 ? digits * n : (digits + adjust) * n;
                         });
     }
 
