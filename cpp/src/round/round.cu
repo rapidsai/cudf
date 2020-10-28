@@ -83,12 +83,17 @@ struct round_fn {
     if (decimal_places < 0) {
       auto out_view = result->mutable_view();
       auto const n  = static_cast<int64_t>(std::pow(10, -decimal_places));
+      auto const m  = n / 10;
 
       thrust::transform(rmm::exec_policy(stream)->on(stream),
                         input.begin<T>(),
                         input.end<T>(),
                         out_view.begin<T>(),
-                        [n] __device__(T e) -> T { return llround(1.0 * e / n) * n; });
+                        [n, m] __device__(T e) -> T {
+                          auto const rounding_digit = (e / m) % 10;
+                          auto const digits         = e / n;
+                          return rounding_digit < 5 ? digits * n : (digits + 1) * n;
+                        });
     }
 
     return result;
