@@ -13,7 +13,7 @@ from cudf.tests.utils import assert_eq
 
 
 def test_series_map_basic():
-    gd1 = cudf.Series(["cat", "dog", np.nan, "rabbit"])
+    gd1 = cudf.Series(["cat", np.nan, "rabbit", "dog"])
     pdf1 = gd1.to_pandas()
 
     expected_dict = pdf1.map({"cat": "kitten", "dog": "puppy"})

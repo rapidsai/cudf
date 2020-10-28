@@ -24,6 +24,8 @@ from cudf.core.column import (
     as_column,
     column,
     column_empty_like,
+    arange,
+    full,
 )
 from cudf.core.column.categorical import (
     CategoricalAccessor as CategoricalAccessor,
@@ -857,45 +859,47 @@ class Series(Frame, Serializable):
         3      NaN
         dtype: object
 
-        It also accepts a function:
-
-        >>> s.map('I am a {}'.format)
-        0       I am a cat
-        1       I am a dog
-        2       I am a nan
-        3    I am a rabbit
+        It also accepts numeric functions:
+        >>> s = cudf.Series([1, 2, 3, 4, np.nan])
+        >>> s.map(lambda x: x ** 2)
+        0       1
+        1       4
+        2       9
+        3       16
         dtype: object
 
-        To avoid applying the function to missing values (and keep them as
-        ``NaN``) ``na_action='ignore'`` can be used:
-
-        >>> s.map('I am a {}'.format, na_action='ignore')
-        0     I am a cat
-        1     I am a dog
-        2            NaN
-        3  I am a rabbit
-        dtype: object
+        Please note map does not currently support user defined functions
+        with dtypes `str` and`category`.
         """
         if isinstance(arg, dict):
-            self_df = self.to_frame()
-            dataframe_1 = cudf.merge(
-                cudf.Series(arg).to_frame(), self_df, how="left", sort=True
+            lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
+            rhs = cudf.DataFrame(
+                {
+                    "x": arg.keys(),
+                    "s": arg.values(),
+                    "bool": full(len(arg), True, dtype=self.dtype),
+                }
             )
-            dataframe_2 = self_df.join(
-                dataframe_1, lsuffix="_caller", rsuffix="_other", how="left"
+            res = lhs.merge(rhs, on="x", how="left").sort_values(
+                by="orig_order"
             )
-            result = dataframe_2["0_other"]
+            res = res.drop_duplicates(subset="orig_order", ignore_index=True)
+            result = res["s"]
             result.name = self.name
         elif isinstance(arg, cudf.Series):
-            self_df = self.to_frame()
-            arg.name = self.name
-            dataframe_1 = cudf.merge(
-                arg.to_frame(), self_df, how="left", sort=True
+            lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
+            rhs = cudf.DataFrame(
+                {
+                    "x": arg.keys(),
+                    "s": arg,
+                    "bool": full(len(arg), True, dtype=self.dtype),
+                }
             )
-            dataframe_2 = self_df.join(
-                dataframe_1, lsuffix="_caller", rsuffix="_other", how="left"
+            res = lhs.merge(rhs, on="x", how="left").sort_values(
+                by="orig_order"
             )
-            result = dataframe_2[str(str(self_df._column_names[0]) + "_other")]
+            res = res.drop_duplicates(subset="orig_order", ignore_index=True)
+            result = res["s"]
             result.name = self.name
         elif isinstance(self._column, cudf.core.column.CategoricalColumn):
             raise TypeError(
