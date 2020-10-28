@@ -192,11 +192,7 @@ TYPED_TEST(groupby_quantile_test, interpolation_types)
 }
 // clang-format on
 
-// struct groupby_dictionary_quantile_test : public cudf::test::BaseFixture {
-//};
-
 TYPED_TEST(groupby_quantile_test, dictionary)
-// TEST_F(groupby_dictionary_quantile_test, dictionary)
 {
   using K = int32_t;
   using V = TypeParam;

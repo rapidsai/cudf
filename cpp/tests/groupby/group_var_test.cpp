@@ -21,6 +21,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/dictionary/encode.hpp>
 
 namespace cudf {
 namespace test {
@@ -141,6 +142,38 @@ TYPED_TEST(groupby_var_test, ddof_non_default)
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 // clang-format on
+
+TYPED_TEST(groupby_var_test, dictionary)
+{
+  using K = int32_t;
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, aggregation::VARIANCE>;
+
+  // clang-format off
+  fixed_width_column_wrapper<K> keys_w{ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  fixed_width_column_wrapper<V> vals_w{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+                                        //   { 1, 1, 1,  2, 2, 2, 2,  3, 3, 3}
+  fixed_width_column_wrapper<K> expect_keys_w{ 1,        2,           3      };
+                                        //   { 0, 3, 6,  1, 4, 5, 9,  2, 7, 8}
+  fixed_width_column_wrapper<R> expect_vals( {   9.,      131./12,     31./3 }, all_valid());
+  // clang-format on
+
+  auto keys        = cudf::dictionary::encode(keys_w);
+  auto vals        = cudf::dictionary::encode(vals_w);
+  auto expect_keys = cudf::dictionary::encode(expect_keys_w);
+
+  test_single_agg(keys_w, vals_w, expect_keys_w, expect_vals, cudf::make_variance_aggregation());
+  test_single_agg(
+    keys->view(), vals_w, expect_keys->view(), expect_vals, cudf::make_variance_aggregation());
+  test_single_agg(
+    keys_w, vals->view(), expect_keys_w, expect_vals, cudf::make_variance_aggregation());
+  test_single_agg(keys->view(),
+                  vals->view(),
+                  expect_keys->view(),
+                  expect_vals,
+                  cudf::make_variance_aggregation());
+}
 
 }  // namespace test
 }  // namespace cudf
