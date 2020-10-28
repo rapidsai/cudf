@@ -478,12 +478,12 @@ class parquet_writer_options {
    */
   void enable_return_filemetadata(bool req) { _return_filemetadata = req; }
 
-/**
- * @brief Sets timestamp writing preferences. INT96 timestamps will be written
- * if `true` and TIMESTAMP_MICROS will be written if `false`.
- * 
- * @param req Boolean value to enable/disable writing of INT96 timestamps
- */
+  /**
+   * @brief Sets timestamp writing preferences. INT96 timestamps will be written
+   * if `true` and TIMESTAMP_MICROS will be written if `false`.
+   *
+   * @param req Boolean value to enable/disable writing of INT96 timestamps
+   */
   void enable_int96_timestamps(bool req) { _write_timestamps_as_int96 = req; }
 
   /**
@@ -581,7 +581,7 @@ class parquet_writer_options_builder {
 
   /**
    * @brief Sets whether int96 timestamps are written or not in parquet_writer_options.
-   * 
+   *
    * @param enabled Boolean value to enable/disable int96 timestamps.
    * @return this for chaining.
    */
@@ -846,7 +846,9 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
  * returned from write_parquet_chunked_begin().
  * @param[in] int96_timestamps Write out timestamps as INT96 type
  */
-void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_state> state, bool int96_timestamps = false);
+void write_parquet_chunked(table_view const& table,
+                           std::shared_ptr<pq_chunked_state> state,
+                           bool int96_timestamps = false);
 
 /**
  * @brief Finish writing a chunked/stream parquet file.

@@ -50,16 +50,13 @@ struct pq_chunked_state {
   /// only used in the write_chunked() case. copied from the (optionally) user supplied
   /// argument to write_parquet_chunked_begin()
   bool single_write_mode;
-  /// Write out int96 timestamps
-  bool int96_timestamps_;
 
   pq_chunked_state() = default;
 
   pq_chunked_state(table_metadata const* metadata,
                    SingleWriteMode mode = SingleWriteMode::NO,
-                   cudaStream_t str     = 0,
-                   bool int96_timestamps = false)
-    : user_metadata{metadata}, single_write_mode{mode == SingleWriteMode::YES}, stream{str}, int96_timestamps_(int96_timestamps)
+                   cudaStream_t str     = 0)
+    : user_metadata{metadata}, single_write_mode{mode == SingleWriteMode::YES}, stream{str}
   {
   }
 };

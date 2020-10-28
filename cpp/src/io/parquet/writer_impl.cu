@@ -228,7 +228,7 @@ class parquet_column_view {
       case cudf::type_id::TIMESTAMP_SECONDS:
         if (int96_timestamps) {
           _physical_type  = Type::INT96;
-          _converted_type = ConvertedType::INTERVAL;
+          _converted_type = ConvertedType::UNKNOWN;
         } else {
           _physical_type  = Type::INT64;
           _converted_type = ConvertedType::TIMESTAMP_MILLIS;
@@ -239,7 +239,7 @@ class parquet_column_view {
       case cudf::type_id::TIMESTAMP_MILLISECONDS:
         if (int96_timestamps) {
           _physical_type  = Type::INT96;
-          _converted_type = ConvertedType::INTERVAL;
+          _converted_type = ConvertedType::UNKNOWN;
         } else {
           _physical_type  = Type::INT64;
           _converted_type = ConvertedType::TIMESTAMP_MILLIS;
@@ -249,7 +249,7 @@ class parquet_column_view {
       case cudf::type_id::TIMESTAMP_MICROSECONDS:
         if (int96_timestamps) {
           _physical_type  = Type::INT96;
-          _converted_type = ConvertedType::INTERVAL;
+          _converted_type = ConvertedType::UNKNOWN;
         } else {
           _physical_type  = Type::INT64;
           _converted_type = ConvertedType::TIMESTAMP_MICROS;
@@ -259,7 +259,7 @@ class parquet_column_view {
       case cudf::type_id::TIMESTAMP_NANOSECONDS:
         if (int96_timestamps) {
           _physical_type  = Type::INT96;
-          _converted_type = ConvertedType::INTERVAL;
+          _converted_type = ConvertedType::UNKNOWN;
         } else {
           _physical_type  = Type::INT64;
           _converted_type = ConvertedType::TIMESTAMP_MICROS;
@@ -621,7 +621,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
   bool int96_timestamps,
   cudaStream_t stream)
 {
-  pq_chunked_state state{metadata, SingleWriteMode::YES, stream, int96_timestamps};
+  pq_chunked_state state{metadata, SingleWriteMode::YES, stream};
 
   write_chunked_begin(state);
   write_chunk(table, state, int96_timestamps);
@@ -656,7 +656,7 @@ void writer::impl::write_chunk(table_view const &table,
 
     num_rows = std::max<uint32_t>(num_rows, col.size());
     parquet_columns.emplace_back(
-      current_id, col, state.user_metadata, state.stream, int96_timestamps);
+      current_id, col, state.user_metadata, int96_timestamps, state.stream);
   }
 
   if (state.user_metadata_with_nullability.column_nullable.size() > 0) {
@@ -727,8 +727,7 @@ void writer::impl::write_chunk(table_view const &table,
         list_schema[nesting_depth * 2].name = "element";
         list_schema[nesting_depth * 2].repetition_type =
           col.leaf_col().nullable() ? OPTIONAL : REQUIRED;
-        auto const physical_type = col.physical_type();
-        list_schema[nesting_depth * 2].type           = physical_type == INT96 ? FIXED_LEN_BYTE_ARRAY : physical_type;
+        list_schema[nesting_depth * 2].type           = col.physical_type();
         list_schema[nesting_depth * 2].converted_type = col.converted_type();
         list_schema[nesting_depth * 2].num_children   = 0;
 
@@ -742,8 +741,7 @@ void writer::impl::write_chunk(table_view const &table,
       } else {
         SchemaElement col_schema{};
         // Column metadata
-        auto const physical_type = col.physical_type();
-        col_schema.type           = physical_type == INT96 ? FIXED_LEN_BYTE_ARRAY : physical_type;
+        col_schema.type           = col.physical_type();
         col_schema.converted_type = col.converted_type();
         // because the repetition type is global (in the sense of, not per-rowgroup or per
         // write_chunk() call) we cannot know up front if the user is going to end up passing tables
@@ -830,8 +828,7 @@ void writer::impl::write_chunk(table_view const &table,
     }
     desc->num_values     = col.data_count();
     desc->num_rows       = col.row_count();
-    auto const physical_type = col.physical_type();
-    desc->physical_type  = static_cast<uint8_t>(physical_type == INT96 ? FIXED_LEN_BYTE_ARRAY : physical_type);
+    desc->physical_type  = static_cast<uint8_t>(col.physical_type());
     desc->converted_type = static_cast<uint8_t>(col.converted_type());
   }
 

@@ -33,7 +33,6 @@ enum statistics_dtype {
   dtype_float32,
   dtype_float64,
   dtype_string,
-  dtype_int96,
 };
 
 struct stats_column_desc {

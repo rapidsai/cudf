@@ -323,7 +323,9 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
  * @copydoc cudf::io::write_parquet_chunked
  *
  **/
-void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_state> state, bool int96_timestamps)
+void write_parquet_chunked(table_view const& table,
+                           std::shared_ptr<pq_chunked_state> state,
+                           bool int96_timestamps)
 {
   CUDF_FUNC_RANGE();
   state->wp->write_chunk(table, *state, int96_timestamps);
