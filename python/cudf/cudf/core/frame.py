@@ -215,8 +215,6 @@ class Frame(libcudf.table.Table):
 
         # flag to indicate at least one empty input frame also has an index
         empty_has_index = False
-        # flag to indicate no overlapping column names
-        inner_join_axis_one = False
         # flag to indicate empty columns after inner join in axis 1
         empty_inner = False
         # length of output frame's RangeIndex if all input frames are empty,
@@ -250,41 +248,45 @@ class Frame(libcudf.table.Table):
             names_not_in_all = [name for name in old_names if name not in i]
             names = [name for name in old_names if name in i]
             names = OrderedDict.fromkeys(names).keys()
-            old_dtypes = [dt for obj in objs for dt in obj.dtypes]
 
             if axis == 0:
-                if num_empty_input_frames > 0 or len(old_names) == len(names_not_in_all):
+                if num_empty_input_frames > 0 or len(old_names) == len(
+                    names_not_in_all
+                ):
                     if ignore_index:
                         empty_has_index = True
                         num_empty_input_frames = len(objs)
                         result_index_length = sum(len(obj) for obj in objs)
             if axis == 1:
-                inner_join_axis_one = True
+                df = cudf.DataFrame()
                 objs, match_index = _align_objs(objs, how=join)
                 if any(obj.empty for obj in objs):
                     empty_inner = True
-                    if ignore_index:
-                        # column names change
-                        result = cudf.DataFrame(
-                            columns=pd.RangeIndex(len(old_names))
-                        )
-                    else:
-                        # retains column names
-                        result = cudf.DataFrame(columns=old_names)
-                    # column dtypes are retained
-                    result.index = cudf.RangeIndex(0)
-                    cols = [col for col in result._column_names]
-                    old_dtypes = [dt for obj in objs for dt in obj.dtypes]
-                    new_dtypes = dict(zip(cols, old_dtypes))
-                    result = result.astype(dtype=new_dtypes)
-                    categories = []
-                    names = [col for col in result._column_names]
-                else:
-                    result = objs[0].join(objs[1], how="inner")
-                    for obj in objs[2:]:
-                        result = result.join(obj, how="inner")
-                objs = [result]
-                names = [name for f in objs for name in f._column_names]
+
+                for idx, o in enumerate(objs):
+                    if idx == 0 and not ignore_index:
+                        df.index = o.index
+                    for col in o._data.names:
+                        if col in df._data:
+                            raise NotImplementedError(
+                                f"A Column with duplicate name"
+                                f"found: {col}, cuDF doesn't support "
+                                f"having multiple columns with"
+                                f"same names yet."
+                            )
+                        df[col] = o._data[col]
+
+                result_columns = objs[0].columns
+                for o in objs[1:]:
+                    result_columns = result_columns.append(o.columns)
+
+                df.columns = result_columns.unique()
+                if ignore_index:
+                    df.reset_index(drop=True, inplace=True)
+                    df.columns = pd.RangeIndex(len(df.columns))
+
+                objs = [df]
+                names = [col for col in df._column_names]
 
             if not axis == 1:
                 objs = [obj.copy(deep=False) for obj in objs]
@@ -333,21 +335,17 @@ class Frame(libcudf.table.Table):
         # combined index + table columns list
         first_data_column_position = len(indices) - len(names)
 
-        if not empty_inner:
-            # Get the non-null columns and their dtypes
-            non_null_cols, dtypes = _get_non_null_cols_and_dtypes(
-                indices, columns
-            )
+        # if not empty_inner:
+        # Get the non-null columns and their dtypes
+        non_null_cols, dtypes = _get_non_null_cols_and_dtypes(indices, columns)
 
-            # Infer common dtypes between numeric columns
-            # and combine CategoricalColumn categories
-            categories = _find_common_dtypes_and_categories(
-                non_null_cols, dtypes
-            )
+        # Infer common dtypes between numeric columns
+        # and combine CategoricalColumn categories
+        categories = _find_common_dtypes_and_categories(non_null_cols, dtypes)
 
-            # Cast all columns to a common dtype, assign combined categories,
-            # and back-fill missing columns with all-null columns
-            _cast_cols_to_common_dtypes(indices, columns, dtypes, categories)
+        # Cast all columns to a common dtype, assign combined categories,
+        # and back-fill missing columns with all-null columns
+        _cast_cols_to_common_dtypes(indices, columns, dtypes, categories)
 
         # Construct input tables with the index and data columns in the same
         # order. This strips the given index/column names and replaces the
@@ -413,17 +411,7 @@ class Frame(libcudf.table.Table):
         if isinstance(objs[0].columns, pd.MultiIndex):
             out.columns = objs[0].columns
         else:
-            if inner_join_axis_one and ignore_index:
-                names = [i for i in range(len(names))]
             out.columns = names
-
-            if (
-                inner_join_axis_one
-                and ignore_index
-                and num_empty_input_frames > 0
-            ):
-                dtypes = dict(zip(indices, old_dtypes))
-                out = out.astype(dtype=dtypes)
         if not ignore_index:
             out._index.name = objs[0]._index.name
             out._index.names = objs[0]._index.names

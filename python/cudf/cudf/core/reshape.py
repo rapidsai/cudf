@@ -247,10 +247,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             )
             return result
 
-        if all(obj.empty for obj in objs):
-            return cudf.DataFrame()
-        else:
-            objs, match_index = _align_objs(objs, how=join)
+        objs, match_index = _align_objs(objs, how=join)
 
         for idx, o in enumerate(objs):
             if idx == 0 and not ignore_index:
