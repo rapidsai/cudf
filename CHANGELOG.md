@@ -36,6 +36,7 @@
 - PR #6597 Use thread-local to track CUDA device in JNI
 - PR #6599 Replace `size()==0` with `empty()`, `is_empty()`
 - PR #6514 Initial work for decimal type in Java/JNI
+- PR #6612 Update JNI to new RMM cuda_stream_view API
 
 ## Bug Fixes
 
@@ -49,6 +50,7 @@
 - PR #6596 Fix memory usage calculation
 - PR #6595 Fix JNI build, broken by to_arrow() signature change
 - PR #6603 Use correct stream in hash_join.
+- PR #6617 Fix JNI native dependency load order
 
 
 # cuDF 0.16.0 (21 Oct 2020)
