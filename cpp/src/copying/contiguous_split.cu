@@ -147,7 +147,8 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
     size_t remainder = num_bytes < 16 ? num_bytes : 16 + (num_bytes % 16);
 
     // if we're performing a value shift (offsets), or a bit shift (validity) the # of bytes and
-    // alignment must be a multiple of 4
+    // alignment must be a multiple of 4. value shifting and bit shifting are mututally exclusive
+    // and will never both be true at the same time.
     if (value_shift || bit_shift) {
       int idx    = (num_bytes - remainder) / 4;
       uint32_t v = remainder > 0 ? (reinterpret_cast<uint32_t*>(src)[idx] - value_shift) : 0;
@@ -894,20 +895,16 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
   size_t total_temp_size = indices_size + src_buf_info_size + buf_sizes_size + dst_buf_info_size +
                            src_bufs_size + dst_bufs_size;
 
+  // clang-format off
   // allocate host
   std::vector<uint8_t> host_buf(total_temp_size);
-  // distribute
+  // distribute  
   uint8_t* cur_h_buf   = host_buf.data();
-  size_type* h_indices = reinterpret_cast<size_type*>(cur_h_buf);
-  cur_h_buf += indices_size;
-  src_buf_info* h_src_buf_info = reinterpret_cast<src_buf_info*>(cur_h_buf);
-  cur_h_buf += src_buf_info_size;
-  size_t* h_buf_sizes = reinterpret_cast<size_t*>(cur_h_buf);
-  cur_h_buf += buf_sizes_size;
-  dst_buf_info* h_dst_buf_info = reinterpret_cast<dst_buf_info*>(cur_h_buf);
-  cur_h_buf += dst_buf_info_size;
-  uint8_t** h_src_bufs = reinterpret_cast<uint8_t**>(cur_h_buf);
-  cur_h_buf += src_bufs_size;
+  size_type* h_indices = reinterpret_cast<size_type*>(cur_h_buf);             cur_h_buf += indices_size;
+  src_buf_info* h_src_buf_info = reinterpret_cast<src_buf_info*>(cur_h_buf);  cur_h_buf += src_buf_info_size;
+  size_t* h_buf_sizes = reinterpret_cast<size_t*>(cur_h_buf);                 cur_h_buf += buf_sizes_size;
+  dst_buf_info* h_dst_buf_info = reinterpret_cast<dst_buf_info*>(cur_h_buf);  cur_h_buf += dst_buf_info_size;
+  uint8_t** h_src_bufs = reinterpret_cast<uint8_t**>(cur_h_buf);              cur_h_buf += src_bufs_size;
   uint8_t** h_dst_bufs = reinterpret_cast<uint8_t**>(cur_h_buf);
 
   // compute stack space needed for nested list offset calculation (needed on gpu only)
@@ -919,19 +916,14 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
   rmm::device_buffer device_buf{total_device_temp_size, stream, mr};
   // distribute
   uint8_t* cur_d_buf   = reinterpret_cast<uint8_t*>(device_buf.data());
-  size_type* d_indices = reinterpret_cast<size_type*>(cur_d_buf);
-  cur_d_buf += indices_size;
-  src_buf_info* d_src_buf_info = reinterpret_cast<src_buf_info*>(cur_d_buf);
-  cur_d_buf += src_buf_info_size;
-  size_t* d_buf_sizes = reinterpret_cast<size_t*>(cur_d_buf);
-  cur_d_buf += buf_sizes_size;
-  dst_buf_info* d_dst_buf_info = reinterpret_cast<dst_buf_info*>(cur_d_buf);
-  cur_d_buf += dst_buf_info_size;
-  uint8_t** d_src_bufs = reinterpret_cast<uint8_t**>(cur_d_buf);
-  cur_d_buf += src_bufs_size;
-  uint8_t** d_dst_bufs = reinterpret_cast<uint8_t**>(cur_d_buf);
-  cur_d_buf += dst_bufs_size;
+  size_type* d_indices = reinterpret_cast<size_type*>(cur_d_buf);             cur_d_buf += indices_size;
+  src_buf_info* d_src_buf_info = reinterpret_cast<src_buf_info*>(cur_d_buf);  cur_d_buf += src_buf_info_size;
+  size_t* d_buf_sizes = reinterpret_cast<size_t*>(cur_d_buf);                 cur_d_buf += buf_sizes_size;
+  dst_buf_info* d_dst_buf_info = reinterpret_cast<dst_buf_info*>(cur_d_buf);  cur_d_buf += dst_buf_info_size;
+  uint8_t** d_src_bufs = reinterpret_cast<uint8_t**>(cur_d_buf);              cur_d_buf += src_bufs_size;
+  uint8_t** d_dst_bufs = reinterpret_cast<uint8_t**>(cur_d_buf);              cur_d_buf += dst_bufs_size;
   size_type* d_offset_stack = reinterpret_cast<size_type*>(cur_d_buf);
+  // clang-format on
 
   // compute splits -> indices.
   {
