@@ -82,7 +82,7 @@ struct round_fn {
     // integers by definition have no fractional part, so result of "rounding" is a no-op
     if (decimal_places < 0) {
       auto out_view = result->mutable_view();
-      auto const n  = static_cast<int32_t>(std::pow(10, -decimal_places));
+      auto const n  = static_cast<int64_t>(std::pow(10, -decimal_places));
 
       thrust::transform(rmm::exec_policy(stream)->on(stream),
                         input.begin<T>(),

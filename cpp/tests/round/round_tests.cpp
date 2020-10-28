@@ -19,6 +19,11 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <limits>
+
+struct RoundTests : public cudf::test::BaseFixture {
+};
+
 template <typename T>
 struct RoundTestsIntegerTypes : public cudf::test::BaseFixture {
 };
@@ -102,6 +107,19 @@ TYPED_TEST(RoundTestsIntegerTypes, SimpleIntegerTestNeg2)
 
   auto const input    = fw_wrapper{12, 135, 1454, 1455, 1500};
   auto const expected = fw_wrapper{0, 100, 1500, 1500, 1500};
+  auto const result   = cudf::round(input, -2, cudf::round_option::HALF_UP);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(RoundTests, Int64AtBoundary)
+{
+  using namespace numeric;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<int64_t>;
+
+  auto const m        = std::numeric_limits<int64_t>::max();  // 9223372036854775807
+  auto const input    = fw_wrapper{m};
+  auto const expected = fw_wrapper{9223372036854775800};
   auto const result   = cudf::round(input, -2, cudf::round_option::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
