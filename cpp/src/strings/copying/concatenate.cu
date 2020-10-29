@@ -69,7 +69,7 @@ auto create_strings_device_views(std::vector<column_view> const& views, cudaStre
   cudf::thread_range r2{"create_contiguous_device_views"};
   // Assemble contiguous array of device views
   auto device_view_owners = std::unique_ptr<rmm::device_buffer>(
-    contiguous_copy_column_views<column_device_view>(views, stream));
+    contiguous_copy_column_device_views<column_device_view>(views, stream));
   auto device_views_ptr = reinterpret_cast<column_device_view*>(device_view_owners->data());
 
   cudf::thread_range r3{"input_offsets"};
