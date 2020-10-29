@@ -693,7 +693,8 @@ def test_concat_join_many_df_and_empty_df(ignore_index, sort, join):
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("sort", [True, False])
 @pytest.mark.parametrize("join", ["inner", "outer"])
-def test_concat_join_one_df(ignore_index, sort, join):
+@pytest.mark.parametrize("axis", [0, 1])
+def test_concat_join_one_df(ignore_index, sort, join, axis):
     pdf1 = pd.DataFrame(
         {
             "x": range(10),
@@ -705,8 +706,8 @@ def test_concat_join_one_df(ignore_index, sort, join):
     gdf1 = gd.from_pandas(pdf1)
 
     assert_eq(
-        pd.concat([pdf1], sort=sort, join=join, ignore_index=ignore_index),
-        gd.concat([gdf1], sort=sort, join=join, ignore_index=ignore_index),
+        pd.concat([pdf1], sort=sort, join=join, ignore_index=ignore_index, axis=axis),
+        gd.concat([gdf1], sort=sort, join=join, ignore_index=ignore_index, axis=axis),
     )
 
 
