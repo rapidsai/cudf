@@ -225,24 +225,20 @@ class posix_parser {
   typename Container::const_iterator const end;
 };
 
+/**
+ * @brief Skips the next name token.
+ *
+ * Name can be a string of letters, such as EST, or an arbitrary string surrounded by angle
+ * brackets, such as <UTC-05>
+ */
 template <class Container>
 void posix_parser<Container>::skip_name()
 {
-  CUDF_EXPECTS(cur < end, "Unexpected end of input stream");
+  cur = std::find_if(cur, end, [](auto c) {
+    return std::isdigit(c) || c == '-' || c == ',' || c == '+' || c == '<';
+  });
 
-  while (cur < end && (*cur < '0' || *cur > '9') && (*cur != '-') && (*cur != '+') &&
-         (*cur != ',')) {
-    // skip any content between <>
-    if (*cur == '<') {
-      while (++cur < end) {
-        if (*cur == '>') {
-          ++cur;
-          return;
-        }
-      }
-    }
-    ++cur;
-  }
+  if (*cur == '<') cur = std::next(std::find(cur, end, '>'));
 }
 
 template <class Container>
