@@ -43,14 +43,16 @@ public class DecimalColumnVectorTest extends CudfTestBase {
   };
 
   private final BigDecimal[] boundaryDecimal32 = new BigDecimal[]{
-      new BigDecimal("999999999"),
-      new BigDecimal("-999999999"),
-  };
+      new BigDecimal("999999999"), new BigDecimal("-999999999")};
 
   private final BigDecimal[] boundaryDecimal64 = new BigDecimal[]{
-      new BigDecimal("999999999999999999"),
-      new BigDecimal("-999999999999999999"),
-  };
+      new BigDecimal("999999999999999999"), new BigDecimal("-999999999999999999")};
+
+  private final BigDecimal[] overflowDecimal32 = new BigDecimal[]{
+      BigDecimal.valueOf(Integer.MAX_VALUE), BigDecimal.valueOf(Integer.MIN_VALUE)};
+
+  private final BigDecimal[] overflowDecimal64 = new BigDecimal[]{
+      BigDecimal.valueOf(Long.MAX_VALUE), BigDecimal.valueOf(Long.MIN_VALUE)};
 
   @Test
   public void testCreateColumnVectorBuilder() {
@@ -113,8 +115,7 @@ public class DecimalColumnVectorTest extends CudfTestBase {
     assertThrows(AssertionError.class,
         () -> HostColumnVector.fromDecimals(BigDecimal.valueOf(12.3), BigDecimal.valueOf(1.23)));
     // precision overflow
-    assertThrows(AssertionError.class,
-        () -> HostColumnVector.fromDecimals(new BigDecimal("12345678901234567890")));
+    assertThrows(AssertionError.class, () -> HostColumnVector.fromDecimals(overflowDecimal64));
   }
 
   @Test
@@ -123,6 +124,10 @@ public class DecimalColumnVectorTest extends CudfTestBase {
     DecimalColumnVectorTest.testDecimalInternal(decimal64Zoo);
     DecimalColumnVectorTest.testDecimalInternal(boundaryDecimal32);
     DecimalColumnVectorTest.testDecimalInternal(boundaryDecimal64);
+    // Safe max precision of Decimal32 is 9, so integers have 10 digits will be backed by DECIMAL64.
+    try (ColumnVector cv = ColumnVector.fromDecimals(overflowDecimal32)) {
+      assertEquals(DType.create(DType.DTypeEnum.DECIMAL64, 0), cv.getDataType());
+    }
   }
 
   private static void testDecimalInternal(BigDecimal[] decimalZoo) {
@@ -145,7 +150,6 @@ public class DecimalColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testAppendVector() {
-    Random random = new Random(192312989128L);
     for (DType decType : new DType[]{
         DType.create(DType.DTypeEnum.DECIMAL32, -6),
         DType.create(DType.DTypeEnum.DECIMAL64, -10)}) {
@@ -156,10 +160,10 @@ public class DecimalColumnVectorTest extends CudfTestBase {
             try (Builder dst = HostColumnVector.builder(decType, dstSize);
                  HostColumnVector src = HostColumnVector.build(decType, srcSize, (b) -> {
                    for (int i = 0; i < srcSize; i++) {
-                     if (random.nextBoolean()) {
+                     if (rdSeed.nextBoolean()) {
                        b.appendNull();
                      } else {
-                       b.append(BigDecimal.valueOf(random.nextInt(), -decType.getScale()));
+                       b.append(BigDecimal.valueOf(rdSeed.nextInt(), -decType.getScale()));
                      }
                    }
                  });
@@ -167,11 +171,11 @@ public class DecimalColumnVectorTest extends CudfTestBase {
               assertEquals(dstSize, srcSize + dstPrefilledSize);
               //add the first half of the prefilled list
               for (int i = 0; i < dstPrefilledSize - sizeOfDataNotToAdd; i++) {
-                if (random.nextBoolean()) {
+                if (rdSeed.nextBoolean()) {
                   dst.appendNull();
                   gtBuilder.appendNull();
                 } else {
-                  BigDecimal a = BigDecimal.valueOf(random.nextInt(), -decType.getScale());
+                  BigDecimal a = BigDecimal.valueOf(rdSeed.nextInt(), -decType.getScale());
                   dst.append(a);
                   gtBuilder.append(a);
                 }
