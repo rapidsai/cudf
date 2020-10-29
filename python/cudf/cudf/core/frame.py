@@ -339,7 +339,6 @@ class Frame(libcudf.table.Table):
         # combined index + table columns list
         first_data_column_position = len(indices) - len(names)
 
-        # if not empty_inner:
         # Get the non-null columns and their dtypes
         non_null_cols, dtypes = _get_non_null_cols_and_dtypes(indices, columns)
 
