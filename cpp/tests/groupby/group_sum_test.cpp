@@ -155,7 +155,6 @@ TYPED_TEST(groupby_sum_test, dictionary)
   auto vals        = cudf::dictionary::encode(vals_w);
   auto expect_keys = cudf::dictionary::encode(expect_keys_w);
 
-  // test_single_agg(keys_w, vals_w, expect_keys_w, expect_vals_w, cudf::make_sum_aggregation());
   test_single_agg(
     keys->view(), vals_w, expect_keys->view(), expect_vals, cudf::make_sum_aggregation());
   test_single_agg(keys_w, vals->view(), expect_keys_w, expect_vals, cudf::make_sum_aggregation());

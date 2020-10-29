@@ -184,15 +184,13 @@ TEST_F(groupby_dictionary_argmax_test, basic)
   auto vals        = cudf::dictionary::encode(vals_w);
   auto expect_keys = cudf::dictionary::encode(expect_keys_w);
 
-  // test_single_agg(keys_w, vals_w, expect_keys_w, expect_vals, cudf::make_argmax_aggregation());
   test_single_agg(
     keys->view(), vals_w, expect_keys->view(), expect_vals, cudf::make_argmax_aggregation());
   test_single_agg(
     keys_w, vals->view(), expect_keys_w, expect_vals, cudf::make_argmax_aggregation());
   test_single_agg(
     keys->view(), vals->view(), expect_keys->view(), expect_vals, cudf::make_argmax_aggregation());
-  // test_single_agg(keys_w, vals_w, expect_keys_w, expect_vals, cudf::make_argmax_aggregation(),
-  // force_use_sort_impl::YES);
+
   test_single_agg(keys->view(),
                   vals_w,
                   expect_keys->view(),
@@ -211,16 +209,6 @@ TEST_F(groupby_dictionary_argmax_test, basic)
                   expect_vals,
                   cudf::make_argmax_aggregation(),
                   force_use_sort_impl::YES);
-
-  // groupby::aggregation_request request{ vals_w };
-  // request.aggregations.push_back(cudf::make_argmax_aggregation());
-  // groupby::groupby gb_obj(table_view({keys->view()}), null_policy::EXCLUDE, sorted::NO, {}, {});
-  // std::vector<groupby::aggregation_request> requests;
-  // requests.emplace_back(std::move(request));
-  // auto result = gb_obj.aggregate(requests);
-  // printf("table columns = %d\n", result.first->num_columns());
-  // cudf::test::print(result.first->view().column(0));
-  // cudf::test::print(result.second[0].results[0]->view());
 }
 
 }  // namespace test

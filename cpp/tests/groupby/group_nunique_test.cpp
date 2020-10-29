@@ -203,7 +203,7 @@ TYPED_TEST(groupby_nunique_test, include_nulls)
 TYPED_TEST(groupby_nunique_test, dictionary)
 {
   using K = int32_t;
-  using V = TypeParam;  // int64_t;
+  using V = TypeParam;
   using R = cudf::detail::target_type_t<V, aggregation::NUNIQUE>;
 
   // clang-format off

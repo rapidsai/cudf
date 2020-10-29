@@ -21,6 +21,8 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/dictionary/encode.hpp>
+#include <cudf/dictionary/update_keys.hpp>
 
 namespace cudf {
 namespace test {
@@ -293,7 +295,10 @@ TYPED_TEST(groupby_nth_element_test, exclude_nulls_negative_index)
   test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg));
 }
 
-TYPED_TEST(groupby_nth_element_test, basic_string)
+struct groupby_nth_element_string_test : public cudf::test::BaseFixture {
+};
+
+TEST_F(groupby_nth_element_string_test, basic_string)
 {
   using K = int32_t;
   using V = std::string;
@@ -343,6 +348,45 @@ TYPED_TEST(groupby_nth_element_test, basic_string)
   test_single_agg(keys, vals, expect_keys, expect_vals7, std::move(agg));
 }
 // clang-format on
+
+TEST_F(groupby_nth_element_string_test, dictionary)
+{
+  using K = int32_t;
+
+  // clang-format off
+  fixed_width_column_wrapper<K>keys_w   {1,   2,   3,   1,   2,   2,   1,   3,   3,   2};
+  strings_column_wrapper        vals_w{"AB", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+  // groupby =>  key:  { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
+  //             vals: {AB, 3, 6, 1, 4, 5, 9, 2, 7, 8};
+  fixed_width_column_wrapper<K> expect_keys_w{ 1,   2,   3};
+  strings_column_wrapper expect_vals_w       {"6", "5", "8"};
+  // clang-format on
+
+  auto keys        = cudf::dictionary::encode(keys_w);
+  auto vals        = cudf::dictionary::encode(vals_w);
+  auto expect_keys = cudf::dictionary::encode(expect_keys_w);
+  auto expect_vals = cudf::dictionary::encode(expect_vals_w);
+  expect_vals      = cudf::dictionary::set_keys(expect_vals->view(),
+                                           cudf::dictionary_column_view(vals->view()).keys());
+
+  test_single_agg(keys->view(),
+                  vals_w,
+                  expect_keys->view(),
+                  expect_vals_w,
+                  cudf::make_nth_element_aggregation(2));
+
+  test_single_agg(keys_w,
+                  vals->view(),
+                  expect_keys_w,
+                  expect_vals->view(),
+                  cudf::make_nth_element_aggregation(2));
+
+  test_single_agg(keys->view(),
+                  vals->view(),
+                  expect_keys->view(),
+                  expect_vals->view(),
+                  cudf::make_nth_element_aggregation(2));
+}
 
 }  // namespace test
 }  // namespace cudf

@@ -192,7 +192,6 @@ TEST_F(groupby_dictionary_max_test, basic)
   expect_vals      = cudf::dictionary::set_keys(expect_vals->view(),
                                            cudf::dictionary_column_view(vals->view()).keys());
 
-  // test_single_agg(keys_w, vals_w, expect_keys_w, expect_vals_w, cudf::make_max_aggregation());
   test_single_agg(
     keys->view(), vals_w, expect_keys->view(), expect_vals_w, cudf::make_max_aggregation());
   test_single_agg(
@@ -203,12 +202,6 @@ TEST_F(groupby_dictionary_max_test, basic)
                   expect_vals->view(),
                   cudf::make_max_aggregation());
 
-  // test_single_agg(keys_w,
-  //                vals_w,
-  //                expect_keys_w,
-  //                expect_vals_w,
-  //                cudf::make_max_aggregation(),
-  //                force_use_sort_impl::YES);
   test_single_agg(keys->view(),
                   vals_w,
                   expect_keys->view(),
