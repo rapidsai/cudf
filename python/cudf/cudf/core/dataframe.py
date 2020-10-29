@@ -4787,7 +4787,7 @@ class DataFrame(Frame, Serializable):
                 sort=False,
             )
 
-    def to_pandas(self, **kwargs):
+    def to_pandas(self, nullable=False, **kwargs):
         """
         Convert to a Pandas DataFrame.
 
@@ -4814,7 +4814,9 @@ class DataFrame(Frame, Serializable):
             out_columns = self.columns
 
         for i, col_key in enumerate(self._data):
-            out_data[i] = self._data[col_key].to_pandas(index=out_index)
+            out_data[i] = self._data[col_key].to_pandas(
+                index=out_index, nullable=nullable
+            )
 
         if isinstance(self.columns, Index):
             out_columns = self.columns.to_pandas()
