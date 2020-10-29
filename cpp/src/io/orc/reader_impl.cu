@@ -191,7 +191,7 @@ class metadata {
       for (size_t i = 0, count = 0; i < ff.stripes.size(); ++i) {
         count += ff.stripes[i].numberOfRows;
         if (count > static_cast<size_t>(row_start)) {
-          if (selection.size() == 0) {
+          if (selection.empty()) {
             stripe_skip_rows =
               static_cast<size_type>(row_start - (count - ff.stripes[i].numberOfRows));
           }
@@ -254,7 +254,7 @@ class metadata {
     } else {
       // For now, only select all leaf nodes
       for (int i = 0; i < get_num_columns(); ++i) {
-        if (ff.types[i].subtypes.size() == 0) {
+        if (ff.types[i].subtypes.empty()) {
           selection.emplace_back(i);
           if (ff.types[i].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
         }
@@ -627,7 +627,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   }
 
   // If no rows or stripes to read, return empty columns
-  if (num_rows <= 0 || selected_stripes.size() == 0) {
+  if (num_rows <= 0 || selected_stripes.empty()) {
     std::transform(column_types.cbegin(),
                    column_types.cend(),
                    std::back_inserter(out_columns),
