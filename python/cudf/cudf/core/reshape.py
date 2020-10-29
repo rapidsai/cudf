@@ -235,17 +235,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
         old_objs = objs
         objs = [obj for obj in objs if obj.shape != (0, 0)]
+        empty_inner = False
         if join == "inner":
             # don't filter out empty df's
             objs = old_objs
-            result = cudf.DataFrame._concat(
-                objs,
-                axis=axis,
-                join=join,
-                ignore_index=ignore_index,
-                sort=sort,
-            )
-            return result
+            if any(obj.empty for obj in objs):
+                empty_inner = True
 
         objs, match_index = _align_objs(objs, how=join)
 
