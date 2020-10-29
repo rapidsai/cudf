@@ -54,7 +54,6 @@ TYPED_TEST(RoundTestsIntegerTypes, SimpleFixedPointTest)
 
 TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTest0)
 {
-  using namespace numeric;
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
   auto const input    = fw_wrapper{1.4, 1.5, 1.6};
@@ -66,7 +65,6 @@ TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTest0)
 
 TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTest1)
 {
-  using namespace numeric;
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
   auto const input    = fw_wrapper{1.24, 1.25, 1.26};
@@ -78,7 +76,6 @@ TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTest1)
 
 TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestNeg1)
 {
-  using namespace numeric;
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
   auto const input    = fw_wrapper{12, 135, 1454, 1455, 1456};
@@ -90,7 +87,6 @@ TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestNeg1)
 
 TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestNeg2)
 {
-  using namespace numeric;
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
   auto const input    = fw_wrapper{12, 135, 1454, 1455, 1500};
@@ -102,7 +98,6 @@ TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestNeg2)
 
 TYPED_TEST(RoundTestsFloatingPointTypes, LargeFloatingPoint)
 {
-  using namespace numeric;
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
   auto transform   = [](int i) -> float { return i % 2 == 0 ? i + 0.44 : i + 0.56; };
@@ -155,7 +150,6 @@ TYPED_TEST(RoundTestsFloatingPointTypes, SameSignificatDigits)
 
 TYPED_TEST(RoundTestsIntegerTypes, SimpleIntegerTestNeg2)
 {
-  using namespace numeric;
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
   auto const input    = fw_wrapper{12, 135, 1454, 1455, 1500};
@@ -167,7 +161,6 @@ TYPED_TEST(RoundTestsIntegerTypes, SimpleIntegerTestNeg2)
 
 TYPED_TEST(RoundTestsIntegerTypes, SimpleNegativeInteger)
 {
-  using namespace numeric;
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
   auto const input    = fw_wrapper{-12, -135, -1454, -1455, -1500};
@@ -179,7 +172,6 @@ TYPED_TEST(RoundTestsIntegerTypes, SimpleNegativeInteger)
 
 TEST_F(RoundTests, Int64AtBoundary)
 {
-  using namespace numeric;
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<int64_t>;
 
   auto const m     = std::numeric_limits<int64_t>::max();  // 9223372036854775807
