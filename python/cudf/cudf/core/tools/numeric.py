@@ -199,8 +199,7 @@ def _convert_str_col(col, errors, _downcast=None):
     if is_integer.all():
         return col.as_numerical_column(dtype=np.dtype("i8"))
 
-    # Account for `inf` strings
-    col = _proc_inf_strings(col)
+    col = _proc_inf_null_strings(col)
 
     is_float = col.str().isfloat()
     if is_float.all():
@@ -217,20 +216,28 @@ def _convert_str_col(col, errors, _downcast=None):
     else:
         if errors == "coerce":
             col = libcudf.string_casting.stod(col)
-            non_numerics = is_integer.binary_operator(
-                "or", is_float
-            ).unary_operator("not")
+            non_numerics = is_float.unary_operator("not")
             col[non_numerics] = None
             return col
         else:
             raise ValueError("Unable to convert some strings to numerics.")
 
 
-def _proc_inf_strings(col):
+def _proc_inf_null_strings(col):
     col = col.str().lower()
+    col = _proc_null_strings(col)
+    col = _proc_inf_strings(col)
+    return col
+
+
+def _proc_null_strings(col):
+    s = cudf.Series(col)
+    s = s.where(s != "", "NaN")
+    return s._column
+
+
+def _proc_inf_strings(col):
     col = col.str().replace(
-        ["+infinity", "-infinity", "infinity", "+inf", "-inf", "inf"],
-        ["Inf", "-Inf", "Inf", "Inf", "-Inf", "Inf"],
-        regex=False,
+        ["+", "inf", "inity"], ["", "Inf", ""], regex=False,
     )
     return col
