@@ -84,6 +84,20 @@ class TimeDeltaColumn(column.ColumnBase):
             null_count=self.null_count,
         )
 
+    def to_pandas(self, index=None, **kwargs):
+        # Workaround until following issue is fixed:
+        # https://issues.apache.org/jira/browse/ARROW-9772
+
+        # Pandas supports only `timedelta64[ns]`, hence the cast.
+        pd_series = pd.Series(
+            self.astype("timedelta64[ns]").to_array("NAT"), copy=False
+        )
+
+        if index is not None:
+            pd_series.index = index
+
+        return pd_series
+
     def _binary_op_floordiv(self, rhs):
         lhs, rhs = self, rhs
         if pd.api.types.is_timedelta64_dtype(rhs.dtype):
