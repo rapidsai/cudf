@@ -100,6 +100,24 @@ TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestNeg2)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TYPED_TEST(RoundTestsFloatingPointTypes, LargeFloatingPoint)
+{
+  using namespace numeric;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
+
+  auto transform   = [](int i) -> float { return i % 2 == 0 ? i + 0.44 : i + 0.56; };
+  auto begin       = cudf::test::make_counting_transform_iterator(0, transform);
+  auto const input = fw_wrapper(begin, begin + 2000);
+
+  auto transform2     = [](int i) { return i % 2 == 0 ? i + 0.4 : i + 0.6; };
+  auto begin2         = cudf::test::make_counting_transform_iterator(0, transform2);
+  auto const expected = fw_wrapper(begin2, begin2 + 2000);
+
+  auto const result = cudf::round(input, 1, cudf::round_option::HALF_UP);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TYPED_TEST(RoundTestsIntegerTypes, SimpleIntegerTestNeg2)
 {
   using namespace numeric;
