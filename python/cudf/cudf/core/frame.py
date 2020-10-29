@@ -261,37 +261,6 @@ class Frame(libcudf.table.Table):
                     obj.drop(
                         columns=non_intersecting_columns, inplace=True, errors="ignore"
                     )
-            if axis == 1:
-                df = cudf.DataFrame()
-                objs, match_index = _align_objs(objs, how=join)
-                if any(obj.empty for obj in objs):
-                    empty_inner = True
-
-                for idx, o in enumerate(objs):
-                    if idx == 0 and not ignore_index:
-                        df.index = o.index
-                    for col in o._data.names:
-                        if col in df._data:
-                            raise NotImplementedError(
-                                f"A Column with duplicate name"
-                                f"found: {col}, cuDF doesn't support "
-                                f"having multiple columns with"
-                                f"same names yet."
-                            )
-                        df[col] = o._data[col]
-
-                result_columns = objs[0].columns
-                for o in objs[1:]:
-                    result_columns = result_columns.append(o.columns)
-
-                df.columns = result_columns.unique()
-                if ignore_index:
-                    df.reset_index(drop=True, inplace=True)
-                    df.columns = pd.RangeIndex(len(df.columns))
-
-                objs = [df]
-                names = [col for col in df._column_names]
-
             if not axis == 1:
                 objs = [obj.copy(deep=False) for obj in objs]
                 for obj in objs:
