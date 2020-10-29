@@ -101,7 +101,6 @@ struct round_fn {
   }
 };
 
-// TODO docs
 std::unique_ptr<column> round(column_view const& input,
                               int32_t decimal_places,
                               cudf::round_option round,

@@ -26,7 +26,6 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-
 std::unique_ptr<column> round(
   column_view const& input,
   int32_t decimal_places,
