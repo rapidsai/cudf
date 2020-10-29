@@ -1000,9 +1000,7 @@ def test_concat_join_series(ignore_index, sort, join, axis):
 @pytest.mark.parametrize("ignore_index", [True])
 @pytest.mark.parametrize("sort", [True])
 @pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0])
-# leaving out axis 1, pandas returns range index as columns w empty dfs
-# we use pd.RangeIndex and return object index as columns
+@pytest.mark.parametrize("axis", [0, 1])
 def test_concat_join_empty_dataframes(
     df, other, ignore_index, axis, join, sort
 ):
