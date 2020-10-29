@@ -27,6 +27,8 @@ namespace cudf {
 
 namespace detail {
 
+int64_t pow10(int32_t exponent) { return static_cast<int64_t>(std::pow(10, exponent)); }
+
 struct round_fn {
   template <typename T, typename... Args>
   std::enable_if_t<not cudf::is_numeric<T>(), std::unique_ptr<column>> operator()(Args&&... args)
@@ -44,7 +46,7 @@ struct round_fn {
   {
     auto result   = cudf::make_fixed_width_column(input.type(), input.size());
     auto out_view = result->mutable_view();
-    auto const n  = static_cast<int32_t>(std::pow(10, std::abs(decimal_places)));
+    auto const n  = pow10(std::abs(decimal_places));
 
     if (decimal_places == 0)
       thrust::transform(rmm::exec_policy(stream)->on(stream),
