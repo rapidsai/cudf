@@ -282,8 +282,10 @@ __global__ void __launch_bounds__(csvparse_block_dim)
             atomicAdd(&d_columnData[actual_col].string_count, 1);
           }
         } else if (countNumber == int_req_number_cnt) {
-          cudf::size_type *ptr = cudf::io::gpu::get_counter_address(
-            raw_csv + start, countNumber, d_columnData[actual_col]);
+          bool is_negative       = (raw_csv[start] == '-');
+          char const *data_begin = raw_csv + start + (is_negative || (raw_csv[start] == '+'));
+          cudf::size_type *ptr   = cudf::io::gpu::infer_integral_field_counter(
+            data_begin, data_begin + countNumber, is_negative, d_columnData[actual_col]);
           atomicAdd(ptr, 1);
         } else if (is_floatingpoint(
                      field_len, countNumber, countDecimal, countDash + countPlus, countExponent)) {

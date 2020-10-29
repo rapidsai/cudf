@@ -287,26 +287,13 @@ __inline__ __device__ T parse_numeric(const char* begin,
 }
 
 /**
- * @brief Trim zeros at the beginning of raw_data
- *
- * @param raw_data The pointer to beginning of character string
- * @param digit_count Total number of digits
- */
-__device__ __inline__ void trim_zeros(char const*& raw_data, long& digit_count)
-{
-  char const* start_ptr = raw_data;
-  while (*raw_data == '0' && (raw_data < start_ptr + digit_count)) { raw_data++; }
-  digit_count -= raw_data - start_ptr;
-}
-
-/**
  * @brief Lexicographically compare digits in input against int64 max
  *
  * @param raw_data The pointer to beginning of character string
  * @return bool True if integer represented by character string is less
  * than or equal to int64 max
  */
-__device__ __inline__ bool lex_compare_int64max(const char* raw_data)
+__device__ __inline__ bool less_equal_than_int64max(const char* raw_data)
 {
   constexpr int int64_max_len = 19;
   const char int64_max[]      = {
@@ -328,7 +315,7 @@ __device__ __inline__ bool lex_compare_int64max(const char* raw_data)
  * @return bool True if integer represented by character string is greater
  * than or equal to int64 min
  */
-__device__ __inline__ bool lex_compare_int64min(const char* raw_data)
+__device__ __inline__ bool greater_equal_than_int64min(const char* raw_data)
 {
   constexpr int int64_min_len = 19;
   const char int64_min[]      = {
@@ -350,7 +337,7 @@ __device__ __inline__ bool lex_compare_int64min(const char* raw_data)
  * @return bool True if integer represented by character string is less
  * than or equal to uint64 max
  */
-__device__ __inline__ bool lex_compare_uint64max(const char* raw_data)
+__device__ __inline__ bool less_equal_than_uint64max(const char* raw_data)
 {
   constexpr int uint64_max_len = 20;
   const char uint64_max[]      = {'1', '8', '4', '4', '6', '7', '4', '4', '0', '7',
@@ -377,32 +364,33 @@ __device__ __inline__ bool lex_compare_uint64max(const char* raw_data)
  * @return cudf::size_type* Pointer to appropriate counter that belong to
  * the interpreted data type
  */
-__device__ __inline__ cudf::size_type* get_counter_address(char const* raw_data,
-                                                           long digit_count,
-                                                           column_info& stats)
+__device__ __inline__ cudf::size_type* infer_integral_field_counter(char const* data_begin,
+                                                                    char const* data_end,
+                                                                    bool is_negative,
+                                                                    column_info& stats)
 {
-  constexpr uint32_t int64_max_len  = 19;
-  constexpr uint32_t uint64_max_len = 20;
-  bool is_negative                  = (*raw_data == '-');
-  // Skip parity sign
-  raw_data += (is_negative || (*raw_data == '+'));
+  constexpr int32_t int64_max_len  = 19;
+  constexpr int32_t uint64_max_len = 20;
 
-  if (digit_count < int64_max_len) {  // CASE 0 : Accept validity
-    // If the length of the string representing the integer is smaller
-    // than string length of Int64Max then count this as an integer
-    // representable by int64
-    return is_negative ? &stats.negative_small_int_count : &stats.positive_small_int_count;
-  } else {
-    // Remove preceding zeros
-    trim_zeros(raw_data, digit_count);
+  int32_t digit_count = data_end - data_begin;
+
+  // Remove preceding zeros
+  if (digit_count >= int64_max_len) {
+    // Trim zeros at the beginning of raw_data
+    while (*data_begin == '0' && (data_begin < data_end)) { data_begin++; }
   }
+  digit_count = data_end - data_begin;
+
   // After trimming the number of digits could be less than maximum
   // int64 digit count
   if (digit_count < int64_max_len) {  // CASE 0 : Accept validity
     // If the length of the string representing the integer is smaller
     // than string length of Int64Max then count this as an integer
     // representable by int64
-    return is_negative ? &stats.negative_small_int_count : &stats.positive_small_int_count;
+    // If digit_count is 0 then ignore - sign, i.e. -000..00 should
+    // be treated as a positive small integer
+    return is_negative && (digit_count != 0) ? &stats.negative_small_int_count
+                                             : &stats.positive_small_int_count;
   } else if (digit_count > uint64_max_len) {  // CASE 1 : Reject validity
     // If the length of the string representing the integer is greater
     // than string length of UInt64Max then count this as a string
@@ -415,11 +403,13 @@ __device__ __inline__ cudf::size_type* get_counter_address(char const* raw_data,
   }
 
   if (digit_count == int64_max_len && is_negative) {
-    return lex_compare_int64max(raw_data) ? &stats.negative_small_int_count : &stats.string_count;
+    return greater_equal_than_int64min(data_begin) ? &stats.negative_small_int_count
+                                                   : &stats.string_count;
   } else if (digit_count == int64_max_len && !is_negative) {
-    return lex_compare_int64min(raw_data) ? &stats.positive_small_int_count : &stats.string_count;
+    return less_equal_than_int64max(data_begin) ? &stats.positive_small_int_count
+                                                : &stats.big_int_count;
   } else if (digit_count == uint64_max_len) {
-    return lex_compare_uint64max(raw_data) ? &stats.big_int_count : &stats.string_count;
+    return less_equal_than_uint64max(data_begin) ? &stats.big_int_count : &stats.string_count;
   }
 
   return &stats.string_count;

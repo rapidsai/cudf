@@ -678,8 +678,10 @@ __global__ void detect_data_types_kernel(parse_options_view const opts,
         serialized_trie_contains(opts.trie_false, desc.value_begin, value_len)) {
       atomicAdd(&column_infos[desc.column].bool_count, 1);
     } else if (digit_count == int_req_number_cnt) {
-      cudf::size_type *ptr = cudf::io::gpu::get_counter_address(
-        desc.value_begin, digit_count, column_infos[desc.column]);
+      bool is_negative       = (*desc.value_begin == '-');
+      char const *data_begin = desc.value_begin + (is_negative || (*desc.value_begin == '+'));
+      cudf::size_type *ptr   = cudf::io::gpu::infer_integral_field_counter(
+        data_begin, data_begin + digit_count, is_negative, column_infos[desc.column]);
       atomicAdd(ptr, 1);
     } else if (is_like_float(
                  value_len, digit_count, decimal_count, dash_count + plus_count, exponent_count)) {
