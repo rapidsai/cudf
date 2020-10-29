@@ -3283,8 +3283,9 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
         if not isinstance(sub, str):
-            msg = "expected a string object, not {0}"
-            raise TypeError(msg.format(type(sub).__name__))
+            raise TypeError(
+                f"expected a string object, not {type(sub).__name__}"
+            )
 
         if end is None:
             end = -1
@@ -3339,8 +3340,9 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
         if not isinstance(sub, str):
-            msg = "expected a string object, not {0}"
-            raise TypeError(msg.format(type(sub).__name__))
+            raise TypeError(
+                f"expected a string object, not {type(sub).__name__}"
+            )
 
         if end is None:
             end = -1
@@ -3391,8 +3393,9 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
         if not isinstance(sub, str):
-            msg = "expected a string object, not {0}"
-            raise TypeError(msg.format(type(sub).__name__))
+            raise TypeError(
+                f"expected a string object, not {type(sub).__name__}"
+            )
 
         if end is None:
             end = -1
@@ -3448,8 +3451,9 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
         if not isinstance(sub, str):
-            msg = "expected a string object, not {0}"
-            raise TypeError(msg.format(type(sub).__name__))
+            raise TypeError(
+                f"expected a string object, not {type(sub).__name__}"
+            )
 
         if end is None:
             end = -1
@@ -4488,9 +4492,8 @@ def _massage_string_arg(value, name, allow_col=False):
         allowed_types.append("Column")
 
     raise ValueError(
-        "Expected {} for {} but got {}".format(
-            _expected_types_format(allowed_types), name, type(value)
-        )
+        f"Expected {_expected_types_format(allowed_types)} "
+        f"for {name} but got {type(value)}"
     )
 
 
@@ -4866,7 +4869,7 @@ class StringColumn(column.ColumnBase):
             )
             return col
         else:
-            raise TypeError("cannot broadcast {}".format(type(other)))
+            raise TypeError(f"cannot broadcast {type(other)}")
 
     def default_na_value(self):
         return None

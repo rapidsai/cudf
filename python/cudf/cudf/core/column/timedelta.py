@@ -248,7 +248,7 @@ class TimeDeltaColumn(column.ColumnBase):
         elif np.isscalar(other):
             return as_scalar(other)
         else:
-            raise TypeError("cannot normalize {}".format(type(other)))
+            raise TypeError(f"cannot normalize {type(other)}")
 
     @property
     def as_numerical(self):

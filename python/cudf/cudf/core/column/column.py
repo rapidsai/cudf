@@ -266,8 +266,8 @@ class ColumnBase(Column, Serializable):
         newsize = sum(map(len, objs))
         if newsize > libcudf.MAX_COLUMN_SIZE:
             raise MemoryError(
-                "Result of concat cannot have "
-                "size > {}".format(libcudf.MAX_COLUMN_SIZE_STR)
+                f"Result of concat cannot have "
+                f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
             )
 
         # Filter out inputs that have 0 length

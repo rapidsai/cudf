@@ -57,9 +57,7 @@ def _nonempty_index(idx):
             levels=levels, codes=codes, names=idx.names
         )
 
-    raise TypeError(
-        "Don't know how to handle index of type {0}".format(type(idx))
-    )
+    raise TypeError(f"Don't know how to handle index of type {type(idx)}")
 
 
 def _get_non_empty_data(s):
@@ -174,9 +172,7 @@ def make_meta_object(x, index=None):
     elif isinstance(x, (list, tuple)):
         if not all(isinstance(i, tuple) and len(i) == 2 for i in x):
             raise ValueError(
-                "Expected iterable of tuples of (name, dtype), got {0}".format(
-                    x
-                )
+                f"Expected iterable of tuples of (name, dtype), got {x}"
             )
         return cudf.DataFrame(
             {c: _empty_series(c, d, index=index) for (c, d) in x},
@@ -197,7 +193,7 @@ def make_meta_object(x, index=None):
     if is_scalar(x):
         return _nonempty_scalar(x)
 
-    raise TypeError("Don't know how to create metadata from {0}".format(x))
+    raise TypeError(f"Don't know how to create metadata from {x}")
 
 
 @concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))

@@ -93,8 +93,10 @@ class NumericalColumn(column.ColumnBase):
         elif rhs is None:
             out_dtype = self.dtype
         else:
-            msg = "{!r} operator not supported between {} and {}"
-            raise TypeError(msg.format(binop, type(self), type(rhs)))
+            raise TypeError(
+                f"'{binop}' operator not supported between "
+                f"{type(self).__name__} and {type(rhs).__name__}"
+            )
         return _numeric_column_binop(
             lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect
         )
@@ -126,7 +128,7 @@ class NumericalColumn(column.ColumnBase):
                     mask=self.mask,
                 )
         else:
-            raise TypeError("cannot broadcast {}".format(type(other)))
+            raise TypeError(f"cannot broadcast {type(other)}")
 
     def int2ip(self):
         if self.dtype != np.dtype("int64"):
@@ -376,9 +378,7 @@ class NumericalColumn(column.ColumnBase):
         elif dkind == "b":
             return self.dtype.type(False)
         else:
-            raise TypeError(
-                "numeric column of {} has no NaN value".format(self.dtype)
-            )
+            raise TypeError(f"numeric column of {self.dtype} has no NaN value")
 
     def find_and_replace(self, to_replace, replacement, all_nan):
         """
@@ -416,9 +416,8 @@ class NumericalColumn(column.ColumnBase):
             fill_value_casted = self.dtype.type(fill_value)
             if not np.isnan(fill_value) and (fill_value_casted != fill_value):
                 raise TypeError(
-                    "Cannot safely cast non-equivalent {} to {}".format(
-                        type(fill_value).__name__, self.dtype.name
-                    )
+                    f"Cannot safely cast non-equivalent "
+                    f"{type(fill_value).__name__} to {self.dtype.name}"
                 )
             fill_value = fill_value_casted
         else:

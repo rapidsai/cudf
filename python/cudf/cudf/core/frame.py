@@ -711,9 +711,8 @@ class Frame(libcudf.table.Table):
             and (isinstance(other, float) and not np.isnan(other))
         ) and (self.dtype.type(other) != other):
             raise TypeError(
-                "Cannot safely cast non-equivalent {} to {}".format(
-                    type(other).__name__, self.dtype.name
-                )
+                f"Cannot safely cast non-equivalent "
+                f"{type(other).__name__} to {self.dtype.name}"
             )
 
         return (
@@ -780,9 +779,8 @@ class Frame(libcudf.table.Table):
                 return out
             else:
                 raise ValueError(
-                    "Inappropriate input {} and other {} combination".format(
-                        type(self), type(other)
-                    )
+                    f"Inappropriate input {type(self)} "
+                    f"and other {type(other)} combination"
                 )
 
     def where(self, cond, other=None, inplace=False):
@@ -1354,7 +1352,7 @@ class Frame(libcudf.table.Table):
             subset = (subset,)
         diff = set(subset) - set(self._data)
         if len(diff) != 0:
-            raise KeyError("columns {!r} do not exist".format(diff))
+            raise KeyError(f"columns {diff} do not exist")
         subset_cols = [
             name for name, col in self._data.items() if name in subset
         ]
@@ -1999,7 +1997,7 @@ class Frame(libcudf.table.Table):
             subset = (subset,)
         diff = set(subset) - set(self._data)
         if len(diff) != 0:
-            raise KeyError("columns {!r} do not exist".format(diff))
+            raise KeyError(f"columns {diff} do not exist")
         subset_cols = [name for name in self._column_names if name in subset]
         if len(subset_cols) == 0:
             return self.copy(deep=True)
@@ -3033,9 +3031,7 @@ class Frame(libcudf.table.Table):
 
         # must actually support the requested merge type
         if how not in ["left", "inner", "outer", "leftanti", "leftsemi"]:
-            raise NotImplementedError(
-                "{!r} merge not supported yet".format(how)
-            )
+            raise NotImplementedError(f"{how} merge not supported yet")
 
         # Passing 'on' with 'left_on' or 'right_on' is potentially ambiguous
         if on:
@@ -3076,14 +3072,14 @@ class Frame(libcudf.table.Table):
             on_keys = [on] if not isinstance(on, list) else on
             for key in on_keys:
                 if not (key in lhs._data.keys() and key in rhs._data.keys()):
-                    raise KeyError("Key {} not in both operands".format(on))
+                    raise KeyError(f"Key {on} not in both operands")
         else:
             for key in left_on:
                 if key not in lhs._data.keys():
-                    raise KeyError('Key "{}" not in left operand'.format(key))
+                    raise KeyError(f'Key "{key}" not in left operand')
             for key in right_on:
                 if key not in rhs._data.keys():
-                    raise KeyError('Key "{}" not in right operand'.format(key))
+                    raise KeyError(f'Key "{key}" not in right operand')
 
     def _merge(
         self,
@@ -3249,19 +3245,16 @@ def _get_replacement_values(to_replace, replacement, col_name, column):
             # If both are non-scalar
             if len(to_replace) != len(replacement):
                 raise ValueError(
-                    "Replacement lists must be "
-                    "of same length."
-                    "Expected {}, got {}.".format(
-                        len(to_replace), len(replacement)
-                    )
+                    f"Replacement lists must be "
+                    f"of same length."
+                    f"Expected {len(to_replace)}, got {len(replacement)}."
                 )
     else:
         if not is_scalar(replacement):
             raise TypeError(
-                "Incompatible types '{}' and '{}' "
-                "for *to_replace* and *replacement*.".format(
-                    type(to_replace).__name__, type(replacement).__name__
-                )
+                f"Incompatible types '{type(to_replace).__name__}' "
+                f"and '{type(replacement).__name__}' "
+                f"for *to_replace* and *replacement*."
             )
         to_replace = [to_replace]
         replacement = [replacement]

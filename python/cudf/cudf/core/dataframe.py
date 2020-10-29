@@ -678,8 +678,9 @@ class DataFrame(Frame, Serializable):
         elif isinstance(arg, DataFrame):
             return self.where(arg)
         else:
-            msg = "__getitem__ on type {!r} is not supported"
-            raise TypeError(msg.format(type(arg)))
+            raise TypeError(
+                f"__getitem__ on type {type(arg)} is not supported"
+            )
 
     @annotate("DATAFRAME_SETITEM", color="blue", domain="cudf_python")
     def __setitem__(self, arg, value):
@@ -689,10 +690,10 @@ class DataFrame(Frame, Serializable):
             # not handling set_item where arg = df & value = df
             if isinstance(value, DataFrame):
                 msg = (
-                    "__setitem__ with arg = {!r} and "
-                    "value = {!r} is not supported"
+                    f"__setitem__ with arg = {type(value)} and "
+                    f"value = {type(arg)} is not supported"
                 )
-                raise TypeError(msg.format(type(value), type(arg)))
+                raise TypeError(msg)
             else:
                 for col_name in self._data:
                     scatter_map = arg[col_name]
@@ -790,8 +791,9 @@ class DataFrame(Frame, Serializable):
                             self._data[col][:] = value
 
         else:
-            msg = "__setitem__ on type {!r} is not supported"
-            raise TypeError(msg.format(type(arg)))
+            raise TypeError(
+                f"__setitem__ on type {type(arg)} is not supported"
+            )
 
     def __delitem__(self, name):
         """
@@ -2967,16 +2969,16 @@ class DataFrame(Frame, Serializable):
         """
         num_cols = len(self._data)
         if name in self._data:
-            raise NameError("duplicated column name {!r}".format(name))
+            raise NameError(f"duplicated column name {name}")
 
         if loc < 0:
             loc = num_cols + loc + 1
 
         if not (0 <= loc <= num_cols):
             raise ValueError(
-                "insert location must be within range {}, {}".format(
-                    -(num_cols + 1) * (num_cols > 0), num_cols * (num_cols > 0)
-                )
+                f"insert location must be within range "
+                f"{-(num_cols + 1) * (num_cols > 0)}, "
+                f"{num_cols * (num_cols > 0)}"
             )
 
         if is_scalar(value):
@@ -3202,7 +3204,7 @@ class DataFrame(Frame, Serializable):
         """Drop a column by *name*
         """
         if name not in self._data:
-            raise KeyError("column {!r} does not exist".format(name))
+            raise KeyError(f"column '{name}' does not exist")
         del self._data[name]
 
     def drop_duplicates(
@@ -3402,21 +3404,19 @@ class DataFrame(Frame, Serializable):
         dtype = find_common_type([col.dtype for col in cols])
         for k, c in self._data.items():
             if c.has_nulls:
-                errmsg = (
-                    "column {!r} has null values. "
-                    "hint: use .fillna() to replace null values"
+                raise ValueError(
+                    f"column '{k}' has null values. "
+                    f"hint: use .fillna() to replace null values"
                 )
-                raise ValueError(errmsg.format(k))
         cupy_dtype = dtype
         if np.issubdtype(cupy_dtype, np.datetime64):
             cupy_dtype = np.dtype("int64")
 
         if order not in ("F", "C"):
-            errmsg = (
+            raise ValueError(
                 "order parameter should be 'C' for row major or 'F' for"
                 "column major GPU matrix"
             )
-            raise ValueError(errmsg.format(k))
 
         matrix = cupy.empty(shape=(nrow, ncol), dtype=cupy_dtype, order=order)
         for colidx, inpcol in enumerate(cols):
@@ -4142,9 +4142,8 @@ class DataFrame(Frame, Serializable):
 
             if not isinstance(local_dict, dict):
                 raise TypeError(
-                    "local_dict type: expected dict but found {!r}".format(
-                        type(local_dict)
-                    )
+                    f"local_dict type: expected dict but found "
+                    f"{type(local_dict)}"
                 )
 
             # Get calling environment
@@ -5070,9 +5069,7 @@ class DataFrame(Frame, Serializable):
         """
         if data.ndim != 1 and data.ndim != 2:
             raise ValueError(
-                "records dimension expected 1 or 2 but found {!r}".format(
-                    data.ndim
-                )
+                f"records dimension expected 1 or 2 but found {data.ndim}"
             )
 
         num_cols = len(data[0])
@@ -5085,8 +5082,10 @@ class DataFrame(Frame, Serializable):
 
         else:
             if len(columns) != num_cols:
-                msg = "columns length expected {!r} but found {!r}"
-                raise ValueError(msg.format(num_cols, len(columns)))
+                raise ValueError(
+                    f"columns length expected {num_cols} "
+                    f"but found {len(columns)}"
+                )
             names = columns
 
         df = DataFrame()
@@ -5376,7 +5375,7 @@ class DataFrame(Frame, Serializable):
                     f"only list-like or dict-like objects are "
                     f"allowed to be passed to DataFrame.isin(), "
                     f"you passed a "
-                    f"{type(values).__name__}"
+                    f"'{type(values).__name__}'"
                 )
 
             result_df = DataFrame()

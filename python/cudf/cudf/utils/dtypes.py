@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import datetime as dt
 import numbers
 from collections import namedtuple
@@ -490,7 +492,7 @@ def check_cast_unsupported_dtype(dtype):
         return np.dtype("float32")
 
     raise NotImplementedError(
-        "Cannot cast {0} dtype, as it is not supported by CuDF.".format(dtype)
+        f"Cannot cast {dtype} dtype, as it is not supported by CuDF."
     )
 
 

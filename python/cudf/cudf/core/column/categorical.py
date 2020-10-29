@@ -403,8 +403,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         # list. If not, raise an error to match Pandas behavior
         if not removals_mask.all():
             vals = removals[~removals_mask].to_array()
-            msg = "removals must all be in old categories: {}".format(vals)
-            raise ValueError(msg)
+            raise ValueError(f"removals must all be in old categories: {vals}")
 
         new_categories = cats[~cats.isin(removals)]._column
         out_col = self._column
