@@ -228,10 +228,9 @@ def _convert_str_col(col, errors, _downcast=None):
 
 def _proc_inf_strings(col):
     col = col.str().lower()
-    col = col.str().replace("+infinity", "Inf", regex=False)
-    col = col.str().replace("-infinity", "-Inf", regex=False)
-    col = col.str().replace("infinity", "Inf", regex=False)
-    col = col.str().replace("+inf", "Inf", regex=False)
-    col = col.str().replace("-inf", "-Inf", regex=False)
-    col = col.str().replace("inf", "Inf", regex=False)
+    col = col.str().replace(
+        ["+infinity", "-infinity", "infinity", "+inf", "-inf", "inf"],
+        ["Inf", "-Inf", "Inf", "Inf", "-Inf", "Inf"],
+        regex=False,
+    )
     return col
