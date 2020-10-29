@@ -4684,16 +4684,16 @@ class StringColumn(column.ColumnBase):
                         kwargs.update(format=fmt)
 
             # Check for None strings
-            if len(self) > 0 and self.binary_operator("eq", "None").any():
+            if len(self) > 0 and (self == "None").any():
                 raise ValueError("Could not convert `None` value to datetime")
 
-            boolean_match = self.binary_operator("eq", "NaT")
+            boolean_match = self == "NaT"
         elif out_dtype.type is np.timedelta64:
             if "format" not in kwargs:
                 if len(self) > 0:
                     kwargs.update(format="%D days %H:%M:%S")
 
-            boolean_match = self.binary_operator("eq", "NaT")
+            boolean_match = self == "NaT"
         elif out_dtype.kind in {"i", "u"}:
             if not cpp_is_integer(self).all():
                 raise ValueError(

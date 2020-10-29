@@ -874,9 +874,6 @@ class CategoricalColumn(column.ColumnBase):
             f"{unaryop}"
         )
 
-    def __eq__(self, other):
-        return self.binary_operator("eq", other).all()
-
     def binary_operator(self, op, rhs, reflect=False):
 
         if not (self.ordered and rhs.ordered) and op not in ("eq", "ne"):
@@ -1243,7 +1240,7 @@ def pandas_categorical_as_column(categorical, codes=None):
     codes = categorical.codes if codes is None else codes
     codes = column.as_column(codes)
 
-    valid_codes = codes.binary_operator("ne", codes.dtype.type(-1))
+    valid_codes = codes != codes.dtype.type(-1)
 
     mask = None
     if not valid_codes.all():

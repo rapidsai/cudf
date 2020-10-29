@@ -5069,10 +5069,10 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     if a_col.null_count and b_col.null_count:
         a_nulls = a_col.isna()
         b_nulls = b_col.isna()
-        null_values = a_nulls.binary_operator("or", b_nulls)
+        null_values = a_nulls | b_nulls
 
         if equal_nan is True:
-            equal_nulls = a_nulls.binary_operator("and", b_nulls)
+            equal_nulls = a_nulls & b_nulls
 
         del a_nulls, b_nulls
     elif a_col.null_count:

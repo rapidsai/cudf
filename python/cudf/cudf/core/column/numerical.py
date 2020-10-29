@@ -226,11 +226,7 @@ class NumericalColumn(column.ColumnBase):
 
         n = len(self)
         miu = self.mean()
-        m4_numerator = (
-            self.binary_operator("sub", miu).binary_operator(
-                "pow", self.normalize_binop_value(4)
-            )
-        ).sum()
+        m4_numerator = ((self - miu) ** self.normalize_binop_value(4)).sum()
         V = self.var()
 
         if V == 0:
@@ -255,13 +251,7 @@ class NumericalColumn(column.ColumnBase):
 
         n = len(self)
         miu = self.mean()
-        m3 = (
-            (
-                self.binary_operator("sub", miu).binary_operator(
-                    "pow", self.normalize_binop_value(3)
-                )
-            ).sum()
-        ) / n
+        m3 = (((self - miu) ** self.normalize_binop_value(3)).sum()) / n
         m2 = self.var(ddof=0)
 
         if m2 == 0:
@@ -324,9 +314,7 @@ class NumericalColumn(column.ColumnBase):
         ):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
-        result = self.binary_operator("sub", self.mean()).binary_operator(
-            "mul", other.binary_operator("sub", other.mean())
-        )
+        result = (self - self.mean()) * (other - other.mean())
         cov_sample = result.sum() / (len(self) - 1)
         return cov_sample
 
@@ -588,13 +576,12 @@ def _safe_cast_to_int(col, dtype):
         return col
 
     new_col = col.astype(dtype)
-    if new_col.binary_operator("eq", col).all():
+    if (new_col == col).all():
         return new_col
     else:
         raise TypeError(
-            "Cannot safely cast non-equivalent {} to {}".format(
-                col.dtype.type.__name__, np.dtype(dtype).type.__name__
-            )
+            f"Cannot safely cast non-equivalent "
+            f"{col.dtype.type.__name__} to {np.dtype(dtype).type.__name__}"
         )
 
 
