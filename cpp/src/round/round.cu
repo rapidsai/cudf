@@ -40,7 +40,7 @@ struct round_fn {
   std::enable_if_t<cudf::is_floating_point<T>(), std::unique_ptr<column>> operator()(
     column_view const& input,
     int32_t decimal_places,
-    cudf::round_option round,
+    cudf::rounding_method method,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
   {
@@ -74,7 +74,7 @@ struct round_fn {
   std::enable_if_t<std::is_integral<T>::value, std::unique_ptr<column>> operator()(
     column_view const& input,
     int32_t decimal_places,
-    cudf::round_option round,
+    cudf::rounding_method method,
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
   {
@@ -105,7 +105,7 @@ struct round_fn {
 
 std::unique_ptr<column> round(column_view const& input,
                               int32_t decimal_places,
-                              cudf::round_option round,
+                              cudf::rounding_method method,
                               rmm::mr::device_memory_resource* mr,
                               cudaStream_t stream)
 {
@@ -114,18 +114,18 @@ std::unique_ptr<column> round(column_view const& input,
   // TODO when fixed_point supported, have to adjust type
   if (input.size() == 0) return empty_like(input);
 
-  return type_dispatcher(input.type(), round_fn{}, input, decimal_places, round, mr, stream);
+  return type_dispatcher(input.type(), round_fn{}, input, decimal_places, method, mr, stream);
 }
 
 }  // namespace detail
 
 std::unique_ptr<column> round(column_view const& input,
                               int32_t decimal_places,
-                              round_option round,
+                              rounding_method method,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::round(input, decimal_places, round, mr);
+  return cudf::detail::round(input, decimal_places, method, mr);
 }
 
 }  // namespace cudf

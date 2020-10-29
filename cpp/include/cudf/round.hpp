@@ -28,14 +28,13 @@ namespace cudf {
  */
 
 /**
- * @brief Options for rounding with `cudf::round`
+ * @brief Different rounding methods for `cudf::round`
  */
-enum class round_option : int32_t { HALF_UP };
+enum class rounding_method : int32_t { HALF_UP };
 
 /**
  * @brief Rounds all the values in a column to the specified @p decimal_places
  *
- * `cudf::round` currently supports HALF_UP rounding for integer and floating point numbers.
  * `cudf::round` currently supports HALF_UP rounding for integer and floating point numbers.
  * When @p decimal_places is positive, rounds to the corresponding number of decimal places.
  * When @p decimal_places is negative, rounds by removing @p decimal_places digits left of the
@@ -54,7 +53,7 @@ enum class round_option : int32_t { HALF_UP };
  *
  * @param input          Column of values to be rounded
  * @param decimal_places Number of decimal places to round to
- * @param round          Rounding option
+ * @param method         Rounding method
  * @param mr             Device memory resource used to allocate the returned column's device memory
  *
  * @return std::unique_ptr<column> Column with each of the values rounded
@@ -62,7 +61,7 @@ enum class round_option : int32_t { HALF_UP };
 std::unique_ptr<column> round(
   column_view const& input,
   int32_t decimal_places              = 0,
-  round_option round                  = round_option::HALF_UP,
+  rounding_method method              = rounding_method::HALF_UP,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

@@ -23,14 +23,15 @@ namespace cudf {
 namespace detail {
 
 /**
- * @copydoc cudf::round(column_view const&, int32_t, round_option, rmm::mr::device_memory_resource*)
+ * @copydoc cudf::round(column_view const&, int32_t, rounding_method,
+ * rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> round(
   column_view const& input,
   int32_t decimal_places,
-  round_option round,
+  rounding_method method,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
