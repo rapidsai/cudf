@@ -114,7 +114,7 @@ class DatetimeColumn(column.ColumnBase):
 
         # Pandas supports only `datetime64[ns]`, hence the cast.
         pd_series = pd.Series(
-            self.astype("datetime64[ns]").to_arrow(), copy=True
+            self.astype("datetime64[ns]").to_array("NAT"), copy=False
         )
 
         if index is not None:

@@ -4806,7 +4806,7 @@ class DataFrame(Frame, Serializable):
         """
 
         out_data = {}
-        out_index = self.index.to_pandas(nullable=nullable)
+        out_index = self.index.to_pandas()
 
         if not isinstance(self.columns, pd.Index):
             out_columns = self.columns.to_pandas()
