@@ -261,12 +261,6 @@ class Frame(libcudf.table.Table):
                     obj.drop(
                         columns=non_intersecting_columns, inplace=True, errors="ignore"
                     )
-            if not axis == 1:
-                objs = [obj.copy(deep=False) for obj in objs]
-                for obj in objs:
-                    obj.drop(
-                        columns=names_not_in_all, inplace=True, errors="ignore"
-                    )
         elif join == "outer":
             # Get a list of the unique table column names
             names = [name for f in objs for name in f._column_names]
