@@ -21,7 +21,10 @@ package ai.rapids.cudf;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.StringJoiner;
 import java.util.function.Consumer;
@@ -469,40 +472,25 @@ public final class HostColumnVector extends HostColumnVectorCore {
     });
   }
 
-
   /**
    * Create a new vector from the given values.  This API supports inline nulls, but it is inefficient.
    * Notice all input BigDecimals should share same scale.
    */
-  public static HostColumnVector fromBigDecimals(BigDecimal... values) {
-    // 10000 is used as a default value of scale since no valid scale exceeds 19.
-    int scale = 10000;
+  public static HostColumnVector fromDecimals(BigDecimal... values) {
+    // Try to fetch the element with max precision. Fill with ZERO if inputs is empty.
+    BigDecimal maxPrecisionDec = Arrays.stream(values).filter(Objects::nonNull)
+        .max(Comparator.comparingInt(BigDecimal::precision))
+        .orElse(BigDecimal.ZERO);
+    // Select appropriate underlying type according to max precision.
     DType.DTypeEnum typeId = DType.DTypeEnum.DECIMAL32;
-    for (BigDecimal v : values) {
-      if (v == null) {
-        continue;
-      }
-      if (scale == 10000) {
-        scale = v.scale();
-      }
-      // check scale consistence
-      assert v.scale() == scale : "Inconsistent decimal scale: " + scale + " vs " + v.scale();
-      // determine the underlying typeId according to maximum precision of inputs.
-      if (v.precision() > DType.DECIMAL64_MAX_PRECISION) {
-        throw new AssertionError("Decimal precision exceeds max precision: " + DType.DECIMAL64_MAX_PRECISION);
-      }
-      if (v.precision() > DType.DECIMAL32_MAX_PRECISION && typeId == DType.DTypeEnum.DECIMAL32) {
-        typeId = DType.DTypeEnum.DECIMAL64;
-      }
+    if (maxPrecisionDec.precision() > DType.DECIMAL64_MAX_PRECISION) {
+      throw new AssertionError("Decimal precision exceeds max precision: " + DType.DECIMAL64_MAX_PRECISION);
+    } else if (maxPrecisionDec.precision() > DType.DECIMAL32_MAX_PRECISION) {
+      typeId = DType.DTypeEnum.DECIMAL64;
     }
-    DType decType;
-    if (scale != 10000) {
-      decType = DType.create(typeId, -scale);
-    } else {
-      // If input is empty or all input numbers are null, set the default type.
-      decType = DType.create(DType.DTypeEnum.DECIMAL32, 0);
-    }
-    return build(decType, values.length, (b) -> b.appendBoxed(values));
+    // Because all scales are same, just take scale of maxPrecisionDec.
+    int scale = -maxPrecisionDec.scale();
+    return build(DType.create(typeId, scale), values.length, (b) -> b.appendBoxed(values));
   }
 
   /**

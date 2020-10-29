@@ -3790,8 +3790,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   /**
    * Create a new vector from the given values.  This API supports inline nulls.
    */
-  public static ColumnVector fromBigDecimals(BigDecimal... values) {
-    try (HostColumnVector hcv = HostColumnVector.fromBigDecimals(values)) {
+  public static ColumnVector fromDecimals(BigDecimal... values) {
+    try (HostColumnVector hcv = HostColumnVector.fromDecimals(values)) {
       return hcv.copyToDevice();
     }
   }

@@ -23,25 +23,33 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.util.Random;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class DecimalColumnVectorTest extends CudfTestBase {
-  private final Random rdSeed = new Random();
+  private final Random rdSeed = new Random(1234);
 
   private final BigDecimal[] decimal32Zoo = new BigDecimal[]{
-    BigDecimal.valueOf(rdSeed.nextInt(1000000000), 4),
-    BigDecimal.valueOf(rdSeed.nextInt(1000000000), 4),
-    BigDecimal.valueOf(rdSeed.nextInt(1000000000), 4),
+    BigDecimal.valueOf(rdSeed.nextInt() / 10, 4),
+    BigDecimal.valueOf(rdSeed.nextInt() / 10, 4),
+    BigDecimal.valueOf(rdSeed.nextInt() / 10, 4),
+    BigDecimal.valueOf(rdSeed.nextInt() / 10, 4),
   };
 
   private final BigDecimal[] decimal64Zoo = new BigDecimal[]{
-    BigDecimal.valueOf(rdSeed.nextLong(), 10),
-    BigDecimal.valueOf(rdSeed.nextLong(), 10),
+    BigDecimal.valueOf(rdSeed.nextLong() / 10, 10),
+    BigDecimal.valueOf(rdSeed.nextLong() / 10, 10),
     null,
-    BigDecimal.valueOf(rdSeed.nextLong(), 10),
+    BigDecimal.valueOf(rdSeed.nextLong() / 10, 10),
+  };
+
+  private final BigDecimal[] boundaryDecimal32 = new BigDecimal[]{
+      new BigDecimal("999999999"),
+      new BigDecimal("-999999999"),
+  };
+
+  private final BigDecimal[] boundaryDecimal64 = new BigDecimal[]{
+      new BigDecimal("999999999999999999"),
+      new BigDecimal("-999999999999999999"),
   };
 
   @Test
@@ -58,15 +66,15 @@ public class DecimalColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testUpperIndexOutOfBoundsException() {
-    try (HostColumnVector decColumnVector = HostColumnVector.fromBigDecimals(decimal32Zoo)) {
-      assertThrows(AssertionError.class, () -> decColumnVector.getBigDecimal(3));
+    try (HostColumnVector decColumnVector = HostColumnVector.fromDecimals(decimal32Zoo)) {
+      assertThrows(AssertionError.class, () -> decColumnVector.getBigDecimal(4));
       assertFalse(decColumnVector.hasNulls());
     }
   }
 
   @Test
   public void testLowerIndexOutOfBoundsException() {
-    try (HostColumnVector doubleColumnVector = HostColumnVector.fromBigDecimals(decimal32Zoo)) {
+    try (HostColumnVector doubleColumnVector = HostColumnVector.fromDecimals(decimal32Zoo)) {
       assertFalse(doubleColumnVector.hasNulls());
       assertThrows(AssertionError.class, () -> doubleColumnVector.getBigDecimal(-1));
     }
@@ -74,13 +82,20 @@ public class DecimalColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testAddingNullValues() {
-    try (HostColumnVector cv = HostColumnVector.fromBigDecimals(decimal64Zoo)) {
-      assertTrue(cv.hasNulls());
-      assertEquals(1, cv.getNullCount());
-      assertFalse(cv.isNull(0));
-      assertFalse(cv.isNull(1));
-      assertTrue(cv.isNull(2));
-      assertFalse(cv.isNull(3));
+    try (HostColumnVector cv = HostColumnVector.fromDecimals(decimal64Zoo)) {
+      int nullCount = 0;
+      int index = 0;
+      for (BigDecimal dec : decimal64Zoo) {
+        if (dec == null) {
+          assertTrue(cv.isNull(index));
+          nullCount++;
+        } else {
+          assertFalse(cv.isNull(index));
+        }
+        index++;
+      }
+      assertEquals(nullCount > 0, cv.hasNulls());
+      assertEquals(nullCount, cv.getNullCount());
     }
   }
 
@@ -94,30 +109,37 @@ public class DecimalColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testDecimalValidation() {
+    // inconsistent scales
     assertThrows(AssertionError.class,
-        () -> HostColumnVector.fromBigDecimals(BigDecimal.valueOf(123, 1), BigDecimal.valueOf(123, 2)));
+        () -> HostColumnVector.fromDecimals(BigDecimal.valueOf(12.3), BigDecimal.valueOf(1.23)));
+    // precision overflow
     assertThrows(AssertionError.class,
-        () -> HostColumnVector.fromBigDecimals(new BigDecimal("12345678901234567890")));
+        () -> HostColumnVector.fromDecimals(new BigDecimal("12345678901234567890")));
   }
 
   @Test
   public void testDecimalSpecifics() {
-    try (HostColumnVector cv = HostColumnVector.fromBigDecimals(decimal32Zoo)) {
-      assertEquals(DType.DTypeEnum.DECIMAL32, cv.getType().typeId);
-      assertEquals(-4, cv.getType().getScale());
-      assertFalse(cv.hasNulls());
-      assertEquals(decimal32Zoo[0], cv.getBigDecimal(0));
-      assertEquals(decimal32Zoo[1], cv.getBigDecimal(1));
-      assertEquals(decimal32Zoo[2], cv.getBigDecimal(2));
-    }
-    try (HostColumnVector cv = HostColumnVector.fromBigDecimals(decimal64Zoo)) {
-      assertEquals(DType.DTypeEnum.DECIMAL64, cv.getType().typeId);
-      assertEquals(-10, cv.getType().getScale());
-      assertTrue(cv.hasNulls());
-      assertEquals(decimal64Zoo[0], cv.getBigDecimal(0));
-      assertEquals(decimal64Zoo[1], cv.getBigDecimal(1));
-      assertThrows(AssertionError.class, () -> cv.getBigDecimal(2));
-      assertEquals(decimal64Zoo[3], cv.getBigDecimal(3));
+    DecimalColumnVectorTest.testDecimalInternal(decimal32Zoo);
+    DecimalColumnVectorTest.testDecimalInternal(decimal64Zoo);
+    DecimalColumnVectorTest.testDecimalInternal(boundaryDecimal32);
+    DecimalColumnVectorTest.testDecimalInternal(boundaryDecimal64);
+  }
+
+  private static void testDecimalInternal(BigDecimal[] decimalZoo) {
+    try (ColumnVector cv = ColumnVector.fromDecimals(decimalZoo)) {
+      try (HostColumnVector hcv = cv.copyToHost()) {
+        assertEquals(decimalZoo.length, hcv.rows);
+        int index = 0;
+        for (BigDecimal dec : decimalZoo) {
+          if (dec == null) {
+            assertTrue(hcv.isNull(index));
+          } else {
+            assertFalse(hcv.isNull(index));
+            assertEquals(dec, hcv.getBigDecimal(index));
+          }
+          index++;
+        }
+      }
     }
   }
 

@@ -21,8 +21,8 @@ import java.util.Objects;
 
 public final class DType {
 
-  public static final int DECIMAL32_MAX_PRECISION = 10;
-  public static final int DECIMAL64_MAX_PRECISION = 19;
+  public static final int DECIMAL32_MAX_PRECISION = 9;
+  public static final int DECIMAL64_MAX_PRECISION = 18;
 
   /* enum representing various types. Whenever a new non-decimal type is added please make sure
   below sections are updated as well:
