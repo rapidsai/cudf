@@ -21,6 +21,7 @@
 
 #include <cassert>
 #include <memory>
+#include <numeric>
 
 /**
  * @file table_device_view.cuh
@@ -110,32 +111,54 @@ class mutable_table_device_view
   }
 };
 
-class list_of_column_views {
- private:
-  std::vector<column_view> _columns{};  ///< ColumnViews to columns of any sizes
- public:
-  list_of_column_views(std::vector<column_view> const& cols) : _columns{cols} {}
-  using iterator = decltype(std::begin(_columns));
-  iterator begin() { return std::begin(_columns); }
-  iterator end() noexcept { return std::end(_columns); }
-  size_type num_columns() const noexcept { return _columns.size(); }
-  size_type num_rows() const noexcept { return -1; }
-};
-
-class list_of_column_device_views
-  : public detail::table_device_view_base<column_device_view, list_of_column_views> {
- public:
-  static auto create(list_of_column_views source_view, cudaStream_t stream = 0)
-  {
-    auto deleter = [](list_of_column_device_views* t) { t->destroy(); };
-    return std::unique_ptr<list_of_column_device_views, decltype(deleter)>{
-      new list_of_column_device_views(source_view, stream), deleter};
+template <typename ColumnDeviceView, typename HostTableView>
+auto contiguous_copy_column_device_views(HostTableView source_view, cudaStream_t stream)
+{
+  //
+  // First calculate the size of memory needed to hold the
+  // table's ColumnDeviceViews. This is done by calling extent()
+  // for each of the table's ColumnViews columns.
+  std::size_t views_size_bytes =
+    std::accumulate(source_view.begin(), source_view.end(), 0, [](std::size_t init, auto col) {
+      return init + ColumnDeviceView::extent(col);
+    });
+  auto num_columns = std::distance(source_view.begin(), source_view.end());
+  // A buffer of CPU memory is allocated to hold the ColumnDeviceView
+  // objects. Once filled, the CPU memory is then copied to device memory
+  // and the pointer is set in the _columns member.
+  std::vector<int8_t> h_buffer(views_size_bytes);
+  ColumnDeviceView* h_column = reinterpret_cast<ColumnDeviceView*>(h_buffer.data());
+  // Each ColumnDeviceView instance may have child objects which may
+  // require setting some internal device pointers before being copied
+  // from CPU to device.
+  // Allocate the device memory to be used in the result.
+  // We need this pointer in order to pass it down when creating the
+  // ColumnDeviceViews so the column can set the pointer(s) for any
+  // of its child objects.
+  auto _descendant_storage = new rmm::device_buffer(views_size_bytes, stream);
+  auto _columns            = reinterpret_cast<ColumnDeviceView*>(_descendant_storage->data());
+  // The beginning of the memory must be the fixed-sized ColumnDeviceView
+  // objects in order for _columns to be used as an array. Therefore,
+  // any child data is assigned to the end of this array (h_end/d_end).
+  auto h_end = (int8_t*)(h_column + num_columns);
+  auto d_end = (int8_t*)(_columns + num_columns);
+  // Create the ColumnDeviceView from each column within the CPU memory
+  // Any column child data should be copied into h_end and any
+  // internal pointers should be set using d_end.
+  for (auto itr = source_view.begin(); itr != source_view.end(); ++itr) {
+    auto col = *itr;
+    // convert the ColumnView into ColumnDeviceView
+    new (h_column) ColumnDeviceView(col, h_end, d_end);
+    h_column++;  // point to memory slot for the next ColumnDeviceView
+    // update the pointers for holding ColumnDeviceView's child data
+    auto col_child_data_size = (ColumnDeviceView::extent(col) - sizeof(ColumnDeviceView));
+    h_end += col_child_data_size;
+    d_end += col_child_data_size;
   }
 
- private:
-  list_of_column_device_views(list_of_column_views source_view, cudaStream_t stream)
-    : detail::table_device_view_base<column_device_view, list_of_column_views>(source_view, stream)
-  {
-  }
-};
+  CUDA_TRY(cudaMemcpyAsync(_columns, h_buffer.data(), views_size_bytes, cudaMemcpyDefault, stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
+  return _descendant_storage;
+}
+
 }  // namespace cudf

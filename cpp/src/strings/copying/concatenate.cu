@@ -28,7 +28,6 @@
 #include <thrust/for_each.h>
 #include <thrust/transform_reduce.h>
 #include <thrust/transform_scan.h>
-#include <numeric>
 
 namespace cudf {
 namespace strings {
@@ -69,9 +68,9 @@ auto create_strings_device_views(std::vector<column_view> const& views, cudaStre
   cudf::thread_range r1{"device_view_owners"};
   cudf::thread_range r2{"create_contiguous_device_views"};
   // Assemble contiguous array of device views
-  auto device_view_owners =
-    list_of_column_device_views::create(list_of_column_views{views}, stream);
-  auto device_views_ptr = device_view_owners->begin();
+  auto device_view_owners = std::unique_ptr<rmm::device_buffer>(
+    contiguous_copy_column_views<column_device_view>(views, stream));
+  auto device_views_ptr = reinterpret_cast<column_device_view*>(device_view_owners->data());
 
   cudf::thread_range r3{"input_offsets"};
   // Compute the partition offsets and size of offset column
