@@ -86,6 +86,7 @@ from cudf._lib.strings.convert.convert_urls import (
 from cudf._lib.strings.extract import extract as cpp_extract
 from cudf._lib.strings.find import (
     contains as cpp_contains,
+    contains_multiple as cpp_contains_multiple,
     endswith as cpp_endswith,
     endswith_multiple as cpp_endswith_multiple,
     find as cpp_find,
@@ -534,8 +535,10 @@ class StringMethods(ColumnMethodsMixin):
 
         Parameters
         ----------
-        pat : str
+        pat : str or list-like
             Character sequence or regular expression.
+            If ``pat`` is list-like then regular expressions are not
+            accepted.
         regex : bool, default True
             If True, assumes the pattern is a regular expression.
             If False, treats the pattern as a literal string.
@@ -612,6 +615,18 @@ class StringMethods(ColumnMethodsMixin):
         3     True
         4    False
         dtype: bool
+
+        The ``pat`` may also be a list of strings in which case
+        the individual strings are searched in corresponding rows.
+
+        >>> s2 = cudf.Series(['house', 'dog', 'and', '', ''])
+        >>> s1.str.contains(s2)
+        0    False
+        1     True
+        2     True
+        3     True
+        4     null
+        dtype: bool
         """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
@@ -620,12 +635,20 @@ class StringMethods(ColumnMethodsMixin):
         elif na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
 
-        return self._return_or_inplace(
-            cpp_contains_re(self._column, pat)
-            if regex is True
-            else cpp_contains(self._column, as_scalar(pat, "str")),
-            **kwargs,
-        )
+        if pat is None:
+            result_col = column.column_empty(
+                len(self._column), dtype="bool", masked=True
+            )
+        elif is_scalar(pat):
+            if regex is True:
+                result_col = cpp_contains_re(self._column, pat)
+            else:
+                result_col = cpp_contains(self._column, as_scalar(pat, "str"))
+        else:
+            result_col = cpp_contains_multiple(
+                self._column, column.as_column(pat, dtype="str")
+            )
+        return self._return_or_inplace(result_col, **kwargs)
 
     def replace(
         self, pat, repl, n=-1, case=None, flags=0, regex=True, **kwargs
