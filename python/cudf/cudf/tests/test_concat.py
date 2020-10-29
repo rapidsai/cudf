@@ -710,27 +710,43 @@ def test_concat_join_one_df(ignore_index, sort, join):
     )
 
 
+@pytest.mark.parametrize(
+    "pdf1,pdf2",
+    [
+        (
+            pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
+            pd.DataFrame({"c": [7, 8, 9], "d": [10, 11, 12]}),
+        ),
+        (
+            pd.DataFrame(
+                {"a": [1, 2, 3], "b": [4, 5, 6]}, index=["p", "q", "r"]
+            ),
+            pd.DataFrame(
+                {"c": [7, 8, 9], "d": [10, 11, 12]}, index=["r", "p", "z"]
+            ),
+        ),
+    ],
+)
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("sort", [True, False])
 @pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [1])
-def test_concat_join_no_overlapping_columns(ignore_index, sort, join, axis):
-    pdf4 = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    pdf5 = pd.DataFrame({"c": [7, 8, 9], "d": [10, 11, 12]})
-
-    gdf4 = gd.from_pandas(pdf4)
-    gdf5 = gd.from_pandas(pdf5)
+@pytest.mark.parametrize("axis", [0, 1])
+def test_concat_join_no_overlapping_columns(
+    pdf1, pdf2, ignore_index, sort, join, axis
+):
+    gdf1 = gd.from_pandas(pdf1)
+    gdf2 = gd.from_pandas(pdf2)
 
     assert_eq(
         pd.concat(
-            [pdf4, pdf5],
+            [pdf1, pdf2],
             sort=sort,
             join=join,
             ignore_index=ignore_index,
             axis=axis,
         ),
         gd.concat(
-            [gdf4, gdf5],
+            [gdf1, gdf2],
             sort=sort,
             join=join,
             ignore_index=ignore_index,
