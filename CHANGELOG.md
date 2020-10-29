@@ -2,8 +2,9 @@
 
 ## New Features
 
-- PR #6460 Add is_timestamp format check API
 - PR #6528 Enable `fixed_point` binary operations
+- PR #6460 Add is_timestamp format check API
+- PR #6568 Add function to create hashed vocabulary file from raw vocabulary
 - PR #6581 Add JNI API to check if PTDS is enabled
 
 ## Improvements
@@ -22,6 +23,7 @@
 - PR #6471 Replace index type-dispatch call with indexalator in cudf::strings::substring
 - PR #6485 Add File IO to cuIO benchmarks
 - PR #6504 Update Java bindings version to 0.17-SNAPSHOT
+- PR #6540 Add dictionary support to `cudf::unary_operation`
 - PR #6537 Refactor ORC timezone
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
 - PR #6557 Support nullable timestamp columns in time range window functions
@@ -34,6 +36,8 @@
 - PR #6597 Use thread-local to track CUDA device in JNI
 - PR #6599 Replace `size()==0` with `empty()`, `is_empty()`
 - PR #6514 Initial work for decimal type in Java/JNI
+- PR #6608 Improve subword tokenizer docs
+- PR #6612 Update JNI to new RMM cuda_stream_view API
 - PR #6579 Update scatter APIs to use reference wrapper / const scalar
 
 ## Bug Fixes
@@ -45,7 +49,11 @@
 - PR #6543 Handle `np.nan` values in `isna`/`isnull`/`notna`/`notnull`
 - PR #6549 Fix memory_usage calls for list columns
 - PR #6575 Fix JNI RMM initialize with no pool allocator limit
+- PR #6582 Add missing `device_scalar` stream parameters
+- PR #6596 Fix memory usage calculation
 - PR #6595 Fix JNI build, broken by to_arrow() signature change
+- PR #6603 Use correct stream in hash_join.
+- PR #6617 Fix JNI native dependency load order
 
 
 # cuDF 0.16.0 (21 Oct 2020)
