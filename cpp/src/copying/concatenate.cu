@@ -330,18 +330,18 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
 {
   CUDF_EXPECTS(not columns_to_concat.empty(), "Unexpected empty list of columns to concatenate.");
 
-  data_type const type = columns_to_concat.front().type();
+  auto const& type = columns_to_concat.front().type();
   CUDF_EXPECTS(std::all_of(columns_to_concat.begin(),
                            columns_to_concat.end(),
                            [&type](auto const& c) { return c.type() == type; }),
                "Type mismatch in columns to concatenate.");
 
   if (is_fixed_point(columns_to_concat.front().type())) {
-    CUDF_EXPECTS(std::adjacent_find(columns_to_concat.cbegin(),
-                                    columns_to_concat.cend(),
-                                    [](auto const& l, auto const& r) {
-                                      return l.type().scale() != r.type().scale();
-                                    }) == columns_to_concat.cend(),
+    CUDF_EXPECTS(std::all_of(columns_to_concat.cbegin(),
+                             columns_to_concat.cend(),
+                             [scale = columns_to_concat.front().type().scale()](auto const& c) {
+                               return scale == c.type().scale();
+                             }),
                  "Fixed-point columns need to have same scale before concatenating.");
   }
 
@@ -360,7 +360,7 @@ std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_conc
 {
   if (tables_to_concat.empty()) { return std::make_unique<table>(); }
 
-  table_view const first_table = tables_to_concat.front();
+  auto const& first_table = tables_to_concat.front();
   CUDF_EXPECTS(std::all_of(tables_to_concat.cbegin(),
                            tables_to_concat.cend(),
                            [&first_table](auto const& t) {
@@ -370,12 +370,10 @@ std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_conc
                "Mismatch in table columns to concatenate.");
 
   if (is_fixed_point(tables_to_concat.front().column(0).type())) {
-    CUDF_EXPECTS(std::adjacent_find(tables_to_concat.cbegin(),
-                                    tables_to_concat.cend(),
-                                    [](auto const& l, auto const& r) {
-                                      return l.column(0).type().scale() !=
-                                             r.column(0).type().scale();
-                                    }) == tables_to_concat.cend(),
+    CUDF_EXPECTS(std::all_of(tables_to_concat.cbegin(),
+                             tables_to_concat.cend(),
+                             [scale = tables_to_concat.front().column(0).type().scale()](
+                               auto const& t) { return scale == t.column(0).type().scale(); }),
                  "Fixed-point columns need to have same scale before concatenating.");
   }
 
