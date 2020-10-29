@@ -811,7 +811,7 @@ TEST_F(FixedPointTest, FixedPointConcatentate)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(FixedPointTest, FixedPointConcatentateFail)
+TEST_F(FixedPointTest, FixedPointScaleMismatch)
 {
   using namespace numeric;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<int32_t>;
