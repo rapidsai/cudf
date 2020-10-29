@@ -21,7 +21,7 @@
 namespace cudf {
 
 /**
- * @addtogroup transformation_binaryops
+ * @addtogroup transformation_unaryops
  * @{
  * @file
  * @brief Column APIs for round
@@ -30,15 +30,25 @@ namespace cudf {
 /**
  * @brief Options for rounding with `cudf::round`
  */
-enum class round_option : int32_t { HALF_UP, HALF_EVEN };
+enum class round_option : int32_t { HALF_UP };
 
 /**
- * @brief Rounds all the values in a column to the specified `decimal_places`
+ * @brief Rounds all the values in a column to the specified @p decimal_places
  *
  * `cudf::round` currently supports HALF_UP rounding for integer and floating point numbers.
- * When `decimal_places` is positive, it is rounding to the corresponding number of decimal places.
- * When `decimal_places` is negative, it is effectively rounding by removing `decimal_places`
- * number(s) left of the decimal point.
+ * `cudf::round` currently supports HALF_UP rounding for integer and floating point numbers.
+ * When @p decimal_places is positive, rounds to the corresponding number of decimal places.
+ * When @p decimal_places is negative, rounds by removing @p decimal_places digits left of the
+ * decimal point.
+ *
+ * Example:
+ * ```
+ * column_view col; // contains { 1.729, 17.29, 172.9, 1729 };
+ *
+ * auto result1 = cudf::round(col);     // yields { 2,   17,   173,   1729 }
+ * auto result2 = cudf::round(col, 1);  // yields { 1.7, 17.3, 172.9, 1729 }
+ * auto result3 = cudf::round(col, -1); // yields { 0,   20,   170,   1730 }
+ * ```
  *
  * Info of HALF_UP rounding: https://en.wikipedia.org/wiki/Rounding#Round_half_up
  *

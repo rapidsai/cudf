@@ -21,6 +21,7 @@
 namespace cudf {
 //! Inner interfaces and implementations
 namespace detail {
+
 /**
  * @copydoc cudf::round(column_view const&, int32_t, round_option, rmm::mr::device_memory_resource*)
  *

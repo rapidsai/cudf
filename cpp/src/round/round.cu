@@ -31,7 +31,7 @@ struct round_fn {
   template <typename T, typename... Args>
   std::enable_if_t<not cudf::is_numeric<T>(), std::unique_ptr<column>> operator()(Args&&... args)
   {
-    CUDF_FAIL("Type not currenlty support for cudf::round");
+    CUDF_FAIL("Type not support for cudf::round");
   }
 
   template <typename T>
@@ -83,7 +83,7 @@ struct round_fn {
     if (decimal_places < 0) {
       auto out_view = result->mutable_view();
       auto const n  = static_cast<int64_t>(std::pow(10, -decimal_places));
-      auto const m  = n / 10;
+      auto const m  = n / 10;  // need 10 ^ (decimal_places - 1) to isolate rounding_digit
 
       thrust::transform(rmm::exec_policy(stream)->on(stream),
                         input.begin<T>(),
@@ -107,7 +107,6 @@ std::unique_ptr<column> round(column_view const& input,
                               rmm::mr::device_memory_resource* mr,
                               cudaStream_t stream)
 {
-  CUDF_EXPECTS(round == round_option::HALF_UP, "HALF_EVEN currently not supported.");
   CUDF_EXPECTS(cudf::is_numeric(input.type()), "Only integral/floating point currently supported.");
 
   // TODO when fixed_point supported, have to adjust type
