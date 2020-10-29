@@ -1973,6 +1973,15 @@ class Series(Frame, Serializable):
             and sets it to the pandas.Series. If ``index`` is ``False``,
             no index conversion is performed and pandas.Series will assign
             a default index.
+        nullable : Boolean, Default False
+            If ``nullable`` is ``True``, the resulting series will be
+            having a corresponding nullable Pandas dtype. If ``nullable``
+            is ``False``, the resulting series will either convert null
+            values to ``np.nan`` or ``None`` depending on the dtype.
+
+        Returns
+        -------
+        out : Pandas Series
 
         Examples
         --------
@@ -1986,6 +1995,22 @@ class Series(Frame, Serializable):
         dtype: int64
         >>> type(pds)
         <class 'pandas.core.series.Series'>
+
+        Use ``nullable`` parameter to get Pandas Nullable dtype:
+
+        >>> ser = cudf.Series([10, 20, None, 30])
+        >>> ser
+        0      10
+        1      20
+        2    <NA>
+        3      30
+        dtype: int64
+        >>> ser.to_pandas(nullable=True)
+        0      10
+        1      20
+        2    <NA>
+        3      30
+        dtype: Int64
         """
 
         if index is True:
