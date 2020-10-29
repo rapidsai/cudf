@@ -51,19 +51,19 @@ struct round_fn {
                         input.begin<T>(),
                         input.end<T>(),
                         out_view.begin<T>(),
-                        [] __device__(T e) -> T { return llround(e); });
+                        [] __device__(T e) -> T { return ::round(e); });
     else if (decimal_places > 0)
       thrust::transform(rmm::exec_policy(stream)->on(stream),
                         input.begin<T>(),
                         input.end<T>(),
                         out_view.begin<T>(),
-                        [n] __device__(T e) -> T { return llround(e * n) * 1.0 / n; });
+                        [n] __device__(T e) -> T { return ::round(e * n) * 1.0 / n; });
     else  // decimal_places < 0
       thrust::transform(rmm::exec_policy(stream)->on(stream),
                         input.begin<T>(),
                         input.end<T>(),
                         out_view.begin<T>(),
-                        [n] __device__(T e) -> T { return llround(e / n) * n; });
+                        [n] __device__(T e) -> T { return ::round(e / n) * n; });
 
     return result;
   }
