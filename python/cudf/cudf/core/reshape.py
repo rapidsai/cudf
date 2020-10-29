@@ -266,6 +266,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             result_columns = result_columns.append(o.columns)
 
         df.columns = result_columns.unique()
+        if empty_inner:
+            df.index = cudf.RangeIndex(0)
         if ignore_index:
             df.reset_index(drop=True, inplace=True)
             df.columns = pd.RangeIndex(len(df.columns))
