@@ -358,8 +358,6 @@ class Frame(libcudf.table.Table):
         # to the result frame.
         if empty_has_index and num_empty_input_frames == len(objs):
             out._index = cudf.RangeIndex(result_index_length)
-        if empty_inner:
-            out._index = cudf.RangeIndex(0)
         # Reassign the categories for any categorical table cols
         _reassign_categories(
             categories, out._data, indices[first_data_column_position:]
