@@ -308,7 +308,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * Get the starting element offset for the list or string at index
    */
-  long getStartListOffset(long index) {
+  public long getStartListOffset(long index) {
     assert type.equals(DType.STRING) || type.equals(DType.LIST): type +
       " is not a supported string or list type.";
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
@@ -326,7 +326,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * Get the ending element offset for the list or string at index.
    */
-  long getEndListOffset(long index) {
+  public long getEndListOffset(long index) {
     assert type.equals(DType.STRING) || type.equals(DType.LIST): type +
       " is not a supported string or list type.";
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
