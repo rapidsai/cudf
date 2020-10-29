@@ -742,8 +742,7 @@ def test_concat_join_no_overlapping_columns(ignore_index, sort, join, axis):
 @pytest.mark.parametrize("ignore_index", [False, True])
 @pytest.mark.parametrize("sort", [True, False])
 @pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0])
-# leaving out axis = 1 because pandas returns object index not range index
+@pytest.mark.parametrize("axis", [0, 1])
 def test_concat_join_no_overlapping_columns_many_and_empty_axis_0(
     ignore_index, sort, join, axis
 ):
@@ -763,21 +762,24 @@ def test_concat_join_no_overlapping_columns_many_and_empty_axis_0(
     gdf6 = gd.from_pandas(pdf6)
     gdf_empty = gd.from_pandas(pdf_empty)
 
+    expected = pd.concat(
+        [pdf4, pdf5, pdf6, pdf_empty],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
+    actual = gd.concat(
+        [gdf4, gdf5, gdf6, gdf_empty],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
     assert_eq(
-        pd.concat(
-            [pdf4, pdf5, pdf6, pdf_empty],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        ),
-        gd.concat(
-            [gdf4, gdf5, gdf6, gdf_empty],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        ),
+        expected,
+        actual,
+        check_index_type=False if len(expected) == 0 else True,
     )
 
 
