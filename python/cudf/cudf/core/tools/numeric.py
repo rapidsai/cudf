@@ -116,7 +116,9 @@ def to_numeric(arg, errors="raise", downcast=None):
             col = col.as_numerical_column(cat_dtype)
         else:
             try:
-                col = _convert_str_col(col._get_decategorized_column(), errors, downcast)
+                col = _convert_str_col(
+                    col._get_decategorized_column(), errors, downcast
+                )
             except ValueError as e:
                 if errors == "ignore":
                     return arg
@@ -198,15 +200,17 @@ def _convert_str_col(col, errors, _downcast=None):
         return col.as_numerical_column(dtype=np.dtype("i8"))
 
     # Account for `inf` strings
-    col = col.str().lower()
-    col = col.str().replace("\\+?(inf|infinity)$", "Inf", regex=True)
-    col = col.str().replace("-(inf|infinity)$", "-Inf", regex=True)
+    col = _proc_inf_strings(col)
 
     is_float = col.str().isfloat()
     if is_float.all():
-        if _downcast in {'unsigned', 'signed', 'integer'}:
-            warnings.warn(UserWarning('Downcasting from float to int will be '
-            'limited by float32 precision.'))
+        if _downcast in {"unsigned", "signed", "integer"}:
+            warnings.warn(
+                UserWarning(
+                    "Downcasting from float to int will be "
+                    "limited by float32 precision."
+                )
+            )
             return col.as_numerical_column(dtype=np.dtype("f"))
         else:
             return col.as_numerical_column(dtype=np.dtype("d"))
@@ -220,3 +224,14 @@ def _convert_str_col(col, errors, _downcast=None):
             return col
         else:
             raise ValueError("Unable to convert some strings to numerics.")
+
+
+def _proc_inf_strings(col):
+    col = col.str().lower()
+    col = col.str().replace("+infinity", "Inf", regex=False)
+    col = col.str().replace("-infinity", "-Inf", regex=False)
+    col = col.str().replace("infinity", "Inf", regex=False)
+    col = col.str().replace("+inf", "Inf", regex=False)
+    col = col.str().replace("-inf", "-Inf", regex=False)
+    col = col.str().replace("inf", "Inf", regex=False)
+    return col

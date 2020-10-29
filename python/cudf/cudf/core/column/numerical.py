@@ -515,7 +515,7 @@ class NumericalColumn(column.ColumnBase):
                 if self.dtype.kind == "f":
                     # Exclude 'np.inf', '-np.inf'
                     s = cudf.Series(self)
-                    # TODO: replace np.inf with cudf scalar when 
+                    # TODO: replace np.inf with cudf scalar when
                     # https://github.com/rapidsai/cudf/pull/6297 merges
                     non_infs = s[
                         ((s == np.inf) | (s == -np.inf)).logical_not()
