@@ -240,23 +240,27 @@ class Frame(libcudf.table.Table):
                     empty_has_index = empty_has_index or len(obj) > 0
 
         if join == "inner":
-            old_names = [name for obj in objs for name in obj._column_names]
-            setobjs = [set(obj._column_names) for obj in objs]
-            i = set(setobjs[0])
-            for x in setobjs[1:]:
-                i = i & set(x)
-            names_not_in_all = [name for name in old_names if name not in i]
-            names = [name for name in old_names if name in i]
-            names = OrderedDict.fromkeys(names).keys()
+            import operator
+            all_columns_list = [obj._column_names for obj in objs]
+            intersecting_columns = functools.reduce(np.intersect1d, all_columns_list)
+            non_intersecting_columns = functools.reduce(operator.or_, (obj.columns for obj in objs)) ^ intersecting_columns
+            names = OrderedDict.fromkeys(intersecting_columns).keys()
 
             if axis == 0:
-                if num_empty_input_frames > 0 or len(old_names) == len(
-                    names_not_in_all
-                ):
-                    if ignore_index:
-                        empty_has_index = True
-                        num_empty_input_frames = len(objs)
-                        result_index_length = sum(len(obj) for obj in objs)
+                if ignore_index and (num_empty_input_frames > 0 or len(intersecting_columns) == 0):
+                    # When ignore_index is True and if there is
+                    # at least 1 empty dataframe and no
+                    # intersecting columns are present, an empty dataframe
+                    # needs to be returned just with an Index.
+                    empty_has_index = True
+                    num_empty_input_frames = len(objs)
+                    result_index_length = sum(len(obj) for obj in objs)
+
+                objs = [obj.copy(deep=False) for obj in objs]
+                for obj in objs:
+                    obj.drop(
+                        columns=non_intersecting_columns, inplace=True, errors="ignore"
+                    )
             if axis == 1:
                 df = cudf.DataFrame()
                 objs, match_index = _align_objs(objs, how=join)
