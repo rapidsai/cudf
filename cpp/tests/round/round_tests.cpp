@@ -118,6 +118,41 @@ TYPED_TEST(RoundTestsFloatingPointTypes, LargeFloatingPoint)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TYPED_TEST(RoundTestsFloatingPointTypes, SameSignificatDigits)
+{
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
+
+  auto const input    = fw_wrapper{9.87654321};
+  auto const expected = fw_wrapper{9.88};
+  auto const result   = cudf::round(input, 2, cudf::round_option::HALF_UP);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+
+  auto const input2    = fw_wrapper{987.654321};
+  auto const expected2 = fw_wrapper{988};
+  auto const result2   = cudf::round(input2);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
+
+  auto const input3    = fw_wrapper{987654.321};
+  auto const expected3 = fw_wrapper{988000};
+  auto const result3   = cudf::round(input3, -3, cudf::round_option::HALF_UP);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, result3->view());
+
+  auto const input4    = fw_wrapper{9876543.21};
+  auto const expected4 = fw_wrapper{9880000};
+  auto const result4   = cudf::round(input4, -4, cudf::round_option::HALF_UP);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected4, result4->view());
+
+  auto const input5    = fw_wrapper{0.0000987654321};
+  auto const expected5 = fw_wrapper{0.0000988};
+  auto const result5   = cudf::round(input5, 7, cudf::round_option::HALF_UP);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected5, result5->view());
+}
+
 TYPED_TEST(RoundTestsIntegerTypes, SimpleIntegerTestNeg2)
 {
   using namespace numeric;
