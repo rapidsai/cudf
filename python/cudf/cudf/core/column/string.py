@@ -4880,8 +4880,10 @@ class StringColumn(column.ColumnBase):
                 return lhs.str().cat(others=rhs)
             elif op in ("eq", "ne", "gt", "lt", "ge", "le"):
                 return _string_column_binop(self, rhs, op=op, out_dtype="bool")
-        msg = "{!r} operator not supported between {} and {}"
-        raise TypeError(msg.format(op, type(self), type(rhs)))
+
+        raise TypeError(
+            f"{op} operator not supported between {type(self)} and {type(rhs)}"
+        )
 
     @property
     def is_unique(self):

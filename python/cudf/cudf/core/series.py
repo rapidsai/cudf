@@ -855,7 +855,7 @@ class Series(Frame, Serializable):
         """Always raise TypeError when converting a Series
         into a boolean.
         """
-        raise TypeError("can't compute boolean for {!r}".format(type(self)))
+        raise TypeError(f"can't compute boolean for {type(self)}")
 
     def values_to_string(self, nrows=None):
         """Returns a list of string for each element.

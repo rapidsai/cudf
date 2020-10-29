@@ -5373,10 +5373,10 @@ class DataFrame(Frame, Serializable):
         else:
             if not is_list_like(values):
                 raise TypeError(
-                    "only list-like or dict-like objects are "
-                    "allowed to be passed to DataFrame.isin(), "
-                    "you passed a "
-                    "{0!r}".format(type(values).__name__)
+                    f"only list-like or dict-like objects are "
+                    f"allowed to be passed to DataFrame.isin(), "
+                    f"you passed a "
+                    f"{type(values).__name__}"
                 )
 
             result_df = DataFrame()
@@ -6528,9 +6528,7 @@ class DataFrame(Frame, Serializable):
         # can't both include AND exclude!
         if not include.isdisjoint(exclude):
             raise ValueError(
-                "include and exclude overlap on {inc_ex}".format(
-                    inc_ex=(include & exclude)
-                )
+                f"include and exclude overlap on {(include & exclude)}"
             )
 
         # include all subtypes

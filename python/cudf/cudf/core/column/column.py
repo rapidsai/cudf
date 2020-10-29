@@ -1132,11 +1132,26 @@ class ColumnBase(Column, Serializable):
     def __floordiv__(self, other):
         return self.binary_operator("floordiv", other)
 
+    def __truediv__(self, other):
+        return self.binary_operator("truediv", other)
+
     def __mod__(self, other):
         return self.binary_operator("mod", other)
 
     def __pow__(self, other):
         return self.binary_operator("pow", other)
+
+    def __lt__(self, other):
+        return self.binary_operator("lt", other)
+
+    def __gt__(self, other):
+        return self.binary_operator("gt", other)
+
+    def __le__(self, other):
+        return self.binary_operator("le", other)
+
+    def __ge__(self, other):
+        return self.binary_operator("ge", other)
 
     def searchsorted(
         self, value, side="left", ascending=True, na_position="last"
