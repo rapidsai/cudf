@@ -84,9 +84,9 @@ class AvroReader(IOFuzz):
         file_obj = io.BytesIO()
         pandas_to_avro(df, file_io_obj=file_obj)
         file_obj.seek(0)
-        self._current_buffer = copy.copy(file_obj.read())
-        file_obj.seek(0)
-        return (df, file_obj.read())
+        buf = file_obj.read()
+        self._current_buffer = copy.copy(buf)
+        return (df, buf)
 
     def write_data(self, file_name):
         if self._current_buffer is not None:
