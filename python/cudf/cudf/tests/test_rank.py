@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from cudf.core import DataFrame
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 
 class TestRank:
@@ -81,17 +81,52 @@ class TestRank:
         pdf["col1"] = self.col1
         pdf["col2"] = self.col2
         gdf = DataFrame.from_pandas(pdf)
-        with pytest.raises(KeyError):
-            gdf["col1"].rank(
-                method="randomname", na_option="keep", ascending=True, pct=True
-            )
-        with pytest.raises(KeyError):
-            gdf["col1"].rank(
-                method="first",
-                na_option="randomname",
-                ascending=True,
-                pct=True,
-            )
+
+        assert_exceptions_equal(
+            lfunc=pdf["col1"].rank,
+            rfunc=gdf["col1"].rank,
+            lfunc_args_and_kwargs=(
+                [],
+                {
+                    "method": "randomname",
+                    "na_option": "keep",
+                    "ascending": True,
+                    "pct": True,
+                },
+            ),
+            rfunc_args_and_kwargs=(
+                [],
+                {
+                    "method": "randomname",
+                    "na_option": "keep",
+                    "ascending": True,
+                    "pct": True,
+                },
+            ),
+        )
+
+        assert_exceptions_equal(
+            lfunc=pdf["col1"].rank,
+            rfunc=gdf["col1"].rank,
+            lfunc_args_and_kwargs=(
+                [],
+                {
+                    "method": "first",
+                    "na_option": "randomname",
+                    "ascending": True,
+                    "pct": True,
+                },
+            ),
+            rfunc_args_and_kwargs=(
+                [],
+                {
+                    "method": "first",
+                    "na_option": "randomname",
+                    "ascending": True,
+                    "pct": True,
+                },
+            ),
+        )
 
     sort_group_args = [
         np.full((3,), np.nan),

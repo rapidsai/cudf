@@ -230,7 +230,7 @@ std::unique_ptr<column> fused_concatenate(std::vector<column_view> const& views,
   auto out_view   = out_col->mutable_view();
   auto d_out_view = mutable_column_device_view::create(out_view, stream);
 
-  rmm::device_scalar<size_type> d_valid_count(0);
+  rmm::device_scalar<size_type> d_valid_count(0, stream);
 
   // Launch kernel
   constexpr size_type block_size{256};

@@ -358,7 +358,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   CUDF_EXPECTS(input.type() == replacement.type(), "Data type mismatch");
   CUDF_EXPECTS(replacement.size() == input.size(), "Column size mismatch");
 
-  if (input.size() == 0) { return cudf::empty_like(input); }
+  if (input.is_empty()) { return cudf::empty_like(input); }
 
   if (!input.has_nulls()) { return std::make_unique<cudf::column>(input); }
 
@@ -371,7 +371,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             rmm::mr::device_memory_resource* mr,
                                             cudaStream_t stream)
 {
-  if (input.size() == 0) { return cudf::empty_like(input); }
+  if (input.is_empty()) { return cudf::empty_like(input); }
 
   if (!input.has_nulls() || !replacement.is_valid()) {
     return std::make_unique<cudf::column>(input, stream, mr);
