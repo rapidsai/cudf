@@ -190,6 +190,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 data=objs[0]._data.copy(deep=True),
                 index=cudf.RangeIndex(len(objs[0])),
             )
+            if axis == 1:
+                result.columns = pd.RangeIndex(len(result.columns))
         else:
             result = objs[0].copy()
         return result
@@ -237,7 +239,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         objs = [obj for obj in objs if obj.shape != (0, 0)]
         empty_inner = False
         if join == "inner":
-            # don't filter out empty df's
+            #don't filter out empty df's
             objs = old_objs
             if any(obj.empty for obj in objs):
                 empty_inner = True
@@ -245,6 +247,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         objs, match_index = _align_objs(objs, how=join)
 
         for idx, o in enumerate(objs):
+            #if join is inner the index remains unchanged
+            #and (not ignore_index or join=='inner')
             if idx == 0 and not ignore_index:
                 df.index = o.index
             for col in o._data.names:
@@ -260,13 +264,28 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         for o in objs[1:]:
             result_columns = result_columns.append(o.columns)
 
-        df.columns = result_columns.unique()
-        if empty_inner:
-            df.index = cudf.RangeIndex(0)
         if ignore_index:
-            df.reset_index(drop=True, inplace=True)
-            df.columns = pd.RangeIndex(len(df.columns))
+            df.columns = pd.RangeIndex(len(result_columns.unique()))
+        else:
+            df.columns = result_columns.unique()
+        if empty_inner:
+            if join=='inner':
+                df.index = cudf.RangeIndex(0)
+            else:
+                df.reset_index(drop=True, inplace=True)
+        # #     return df
+        #     df.index = o.index
+            #if join is inner the index remains unchanged
+            # if not join=='inner':
+            #     df.reset_index(drop=True, inplace=True)
+            #join inner always produces sorted index
             return df
+        # if ignore_index and not join == "inner":
+        #     df.index = cudf.RangeIndex(max(len(obj) for obj in objs))
+        #     return df
+        elif ignore_index:
+            df.index = o.index
+            return df.sort_index()
         elif not match_index:
             return df.sort_index()
         else:

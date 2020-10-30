@@ -3,6 +3,7 @@ import copy
 import functools
 import warnings
 from collections import OrderedDict, abc as abc
+import operator
 
 import cupy
 import numpy as np
@@ -22,7 +23,6 @@ from cudf.utils.dtypes import (
     is_scalar,
     min_scalar_type,
 )
-from cudf.core.reshape import _align_objs
 
 
 class Frame(libcudf.table.Table):
@@ -215,8 +215,6 @@ class Frame(libcudf.table.Table):
 
         # flag to indicate at least one empty input frame also has an index
         empty_has_index = False
-        # flag to indicate empty columns after inner join in axis 1
-        empty_inner = False
         # length of output frame's RangeIndex if all input frames are empty,
         # and at least one has an index
         result_index_length = 0
@@ -240,14 +238,23 @@ class Frame(libcudf.table.Table):
                     empty_has_index = empty_has_index or len(obj) > 0
 
         if join == "inner":
-            import operator
             all_columns_list = [obj._column_names for obj in objs]
-            intersecting_columns = functools.reduce(np.intersect1d, all_columns_list)
-            non_intersecting_columns = functools.reduce(operator.or_, (obj.columns for obj in objs)) ^ intersecting_columns
+            #get column names present in ALL objs
+            intersecting_columns = functools.reduce(
+                np.intersect1d, all_columns_list
+            )
+            #get column names not present in all objs
+            non_intersecting_columns = (
+                functools.reduce(operator.or_, (obj.columns for obj in objs))
+                ^ intersecting_columns
+            )
             names = OrderedDict.fromkeys(intersecting_columns).keys()
 
             if axis == 0:
-                if ignore_index and (num_empty_input_frames > 0 or len(intersecting_columns) == 0):
+                if ignore_index and (
+                    num_empty_input_frames > 0
+                    or len(intersecting_columns) == 0
+                ):
                     # When ignore_index is True and if there is
                     # at least 1 empty dataframe and no
                     # intersecting columns are present, an empty dataframe
@@ -257,9 +264,12 @@ class Frame(libcudf.table.Table):
                     result_index_length = sum(len(obj) for obj in objs)
 
                 objs = [obj.copy(deep=False) for obj in objs]
+                #remove columns not present in all objs
                 for obj in objs:
                     obj.drop(
-                        columns=non_intersecting_columns, inplace=True, errors="ignore"
+                        columns=non_intersecting_columns,
+                        inplace=True,
+                        errors="ignore",
                     )
         elif join == "outer":
             # Get a list of the unique table column names
