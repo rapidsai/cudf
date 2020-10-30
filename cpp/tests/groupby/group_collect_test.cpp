@@ -21,6 +21,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/dictionary/encode.hpp>
 
 namespace cudf {
 namespace test {
@@ -85,6 +86,38 @@ TYPED_TEST(groupby_collect_test, CollectLists)
 
   auto agg = cudf::make_collect_aggregation();
   test_single_agg(keys, values, expect_keys, expect_vals, std::move(agg));
+}
+
+TYPED_TEST(groupby_collect_test, dictionary)
+{
+  using K = int32_t;
+  using V = TypeParam;
+
+  fixed_width_column_wrapper<K, int32_t> keys_w{1, 1, 1, 2, 2, 2};
+  fixed_width_column_wrapper<V, int32_t> vals_w{1, 2, 3, 4, 5, 6};
+
+  fixed_width_column_wrapper<K, int32_t> expect_keys_w{1, 2};
+  lists_column_wrapper<V, int32_t> expect_vals_w{{1, 2, 3}, {4, 5, 6}};
+
+  auto keys        = cudf::dictionary::encode(keys_w);
+  auto vals        = cudf::dictionary::encode(vals_w);
+  auto expect_keys = cudf::dictionary::encode(expect_keys_w);
+  fixed_width_column_wrapper<int32_t> offsets({0, 3, 6});
+  auto expect_vals = cudf::make_lists_column(cudf::column_view(offsets).size() - 1,
+                                             std::make_unique<cudf::column>(offsets),
+                                             cudf::dictionary::encode(vals_w),
+                                             0,
+                                             rmm::device_buffer{0});
+
+  test_single_agg(
+    keys->view(), vals_w, expect_keys->view(), expect_vals_w, cudf::make_collect_aggregation());
+  test_single_agg(
+    keys_w, vals->view(), expect_keys_w, expect_vals->view(), cudf::make_collect_aggregation());
+  test_single_agg(keys->view(),
+                  vals->view(),
+                  expect_keys->view(),
+                  expect_vals->view(),
+                  cudf::make_collect_aggregation());
 }
 
 }  // namespace test
