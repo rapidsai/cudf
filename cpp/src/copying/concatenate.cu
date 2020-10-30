@@ -342,7 +342,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
                              [scale = columns_to_concat.front().type().scale()](auto const& c) {
                                return scale == c.type().scale();
                              }),
-                 "Fixed-point columns need to have same scale before concatenating.");
+                 "fixed_point columns need to have same scale before concatenating.");
   }
 
   if (std::all_of(columns_to_concat.begin(), columns_to_concat.end(), [](column_view const& c) {
@@ -375,7 +375,7 @@ std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_conc
                              tables_to_concat.cend(),
                              [scale = tables_to_concat.front().column(0).type().scale()](
                                auto const& t) { return scale == t.column(0).type().scale(); }),
-                 "Fixed-point columns need to have same scale before concatenating.");
+                 "fixed_point columns need to have same scale before concatenating.");
   }
 
   std::vector<std::unique_ptr<column>> concat_columns;
