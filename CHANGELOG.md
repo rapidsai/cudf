@@ -42,6 +42,7 @@
 - PR #6608 Improve subword tokenizer docs
 - PR #6612 Update JNI to new RMM cuda_stream_view API
 - PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
+- PR #6623 Add operator overloading to column and clean up error messages
 
 ## Bug Fixes
 
@@ -58,6 +59,7 @@
 - PR #6603 Use correct stream in hash_join.
 - PR #6607 Fix integer overflow in ORC encoder
 - PR #6617 Fix JNI native dependency load order
+- PR #6629 Fix JNI CMake
 
 
 # cuDF 0.16.0 (21 Oct 2020)
