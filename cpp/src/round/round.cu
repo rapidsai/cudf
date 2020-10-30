@@ -106,7 +106,7 @@ struct round_fn {
     auto result = cudf::make_fixed_width_column(input.type(), input.size());
 
     auto out_view = result->mutable_view();
-    auto const n  = static_cast<int64_t>(std::pow(10, -decimal_places));
+    auto const n  = static_cast<T>(std::pow(10, -decimal_places));
     auto const m  = n / 10;  // need 10 ^ (decimal_places - 1) to isolate rounding_digit
 
     thrust::transform(rmm::exec_policy(stream)->on(stream),
