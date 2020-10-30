@@ -1213,7 +1213,7 @@ def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
 
     assert_eq(pdf, gdf)
 
-    # Write out the gdf using the GPU accelerated writer
+    # Write out the gdf using the GPU accelerated writer with INT96 timestamps
     gdf.to_parquet(gdf_fname.strpath, index=None, int96_timestamps=True)
 
     assert os.path.exists(gdf_fname)
@@ -1221,6 +1221,7 @@ def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
     expect = pdf
     got = pd.read_parquet(gdf_fname)
 
+    # verify INT96 timestamps were converted back to the same data.
     assert_eq(expect, got, check_categorical=False)
 
 

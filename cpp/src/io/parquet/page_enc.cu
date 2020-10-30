@@ -939,6 +939,15 @@ static __device__ void PlainBoolEncode(page_enc_state_s *s,
   }
 }
 
+/**
+ * @brief Converts a 64-bit timestamp into an int96 timstamp that is returned as an int64 and
+ * uint32. Does not deal with time zones.
+ *
+ * @param timestamp uint64 timestamp to convert
+ * @param converted_type logical data type of the timestamp(TIMESTAMP_MILLIS or TIMESTAMP_MICROS)
+ * @return std::pair<uint64_t,uint32_t> where the uint64 is the number of ticks on the last day
+ * since midnight and the uint32 indicates the number of days from Julian epoch.
+ */
 static __device__ std::pair<int64_t, int32_t> convert_64bit_timestamp_to_int96(
   int64_t timestamp, uint8_t converted_type)
 {
