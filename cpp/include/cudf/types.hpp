@@ -275,6 +275,20 @@ class data_type {
    **/
   CUDA_HOST_DEVICE_CALLABLE int32_t scale() const noexcept { return _fixed_point_scale; }
 
+  /**
+   * @brief Compares two `data_type` objects for equality.
+   *
+   * Equality is based both on `id` and metadata (i.e. fixed_point scale)
+   *
+   * @param dtype  The second `data_type` to compare
+   * @return true  `this` is equal to @p `dtype`
+   * @return false `this` is not equal to @p `dtype`
+   */
+  inline bool operator==(data_type const& dtype) const
+  {
+    return std::tie(_id, _fixed_point_scale) == std::tie(dtype._id, dtype._fixed_point_scale);
+  }
+
  private:
   type_id _id{type_id::EMPTY};
 
@@ -282,23 +296,6 @@ class data_type {
 
   int32_t _fixed_point_scale{};  // numeric::scale_type not available here, use int32_t
 };
-
-/**
- * @brief Compares two `data_type` objects for equality.
- *
- * // TODO Define exactly what it means for two `data_type`s to be equal. e.g.,
- * are two timestamps with different resolutions equal? How about decimals with
- * different scale/precision?
- *
- * @param lhs The first `data_type` to compare
- * @param rhs The second `data_type` to compare
- * @return true `lhs` is equal to `rhs`
- * @return false `lhs` is not equal to `rhs`
- */
-inline bool operator==(data_type const& lhs, data_type const& rhs)
-{
-  return std::make_pair(lhs.id(), lhs.scale()) == std::make_pair(rhs.id(), rhs.scale());
-}
 
 /**
  * @brief Compares two `data_type` objects for inequality.
