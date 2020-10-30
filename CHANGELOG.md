@@ -57,6 +57,7 @@
 - PR #6603 Use correct stream in hash_join.
 - PR #6607 Fix integer overflow in ORC encoder
 - PR #6617 Fix JNI native dependency load order
+- PR #6632 Fix DataFrame initialization from list of dicts
 
 
 # cuDF 0.16.0 (21 Oct 2020)
