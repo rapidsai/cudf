@@ -41,6 +41,7 @@
 - PR #6514 Initial work for decimal type in Java/JNI
 - PR #6608 Improve subword tokenizer docs
 - PR #6612 Update JNI to new RMM cuda_stream_view API
+- PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
 
 ## Bug Fixes
 
@@ -55,6 +56,7 @@
 - PR #6596 Fix memory usage calculation
 - PR #6595 Fix JNI build, broken by to_arrow() signature change
 - PR #6603 Use correct stream in hash_join.
+- PR #6607 Fix integer overflow in ORC encoder
 - PR #6617 Fix JNI native dependency load order
 
 
