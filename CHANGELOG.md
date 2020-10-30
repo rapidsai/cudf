@@ -6,6 +6,7 @@
 - PR #6460 Add is_timestamp format check API
 - PR #6568 Add function to create hashed vocabulary file from raw vocabulary
 - PR #6581 Add JNI API to check if PTDS is enabled
+- PR #6598 Add strings::contains API with target column parameter
 
 ## Improvements
 
@@ -32,6 +33,7 @@
 - PR #6552 Use `assert_exceptions_equal` to assert exceptions in pytests
 - PR #6555 Adapt JNI build to libcudf composition of multiple libraries
 - PR #6564 Load JNI library dependencies with a thread pool
+- PR #6578 Add in java column to row conversion
 - PR #6573 Create `cudf::detail::byte_cast` for `cudf::byte_cast`
 - PR #6597 Use thread-local to track CUDA device in JNI
 - PR #6599 Replace `size()==0` with `empty()`, `is_empty()`
@@ -39,6 +41,8 @@
 - PR #6608 Improve subword tokenizer docs
 - PR #6612 Update JNI to new RMM cuda_stream_view API
 - PR #6579 Update scatter APIs to use reference wrapper / const scalar
+- PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
+- PR #6623 Add operator overloading to column and clean up error messages
 
 ## Bug Fixes
 
@@ -53,7 +57,9 @@
 - PR #6596 Fix memory usage calculation
 - PR #6595 Fix JNI build, broken by to_arrow() signature change
 - PR #6603 Use correct stream in hash_join.
+- PR #6607 Fix integer overflow in ORC encoder
 - PR #6617 Fix JNI native dependency load order
+- PR #6629 Fix JNI CMake
 
 
 # cuDF 0.16.0 (21 Oct 2020)

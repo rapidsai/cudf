@@ -86,6 +86,7 @@ from cudf._lib.strings.convert.convert_urls import (
 from cudf._lib.strings.extract import extract as cpp_extract
 from cudf._lib.strings.find import (
     contains as cpp_contains,
+    contains_multiple as cpp_contains_multiple,
     endswith as cpp_endswith,
     endswith_multiple as cpp_endswith_multiple,
     find as cpp_find,
@@ -534,8 +535,10 @@ class StringMethods(ColumnMethodsMixin):
 
         Parameters
         ----------
-        pat : str
+        pat : str or list-like
             Character sequence or regular expression.
+            If ``pat`` is list-like then regular expressions are not
+            accepted.
         regex : bool, default True
             If True, assumes the pattern is a regular expression.
             If False, treats the pattern as a literal string.
@@ -612,6 +615,18 @@ class StringMethods(ColumnMethodsMixin):
         3     True
         4    False
         dtype: bool
+
+        The ``pat`` may also be a list of strings in which case
+        the individual strings are searched in corresponding rows.
+
+        >>> s2 = cudf.Series(['house', 'dog', 'and', '', ''])
+        >>> s1.str.contains(s2)
+        0    False
+        1     True
+        2     True
+        3     True
+        4     null
+        dtype: bool
         """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
@@ -620,12 +635,20 @@ class StringMethods(ColumnMethodsMixin):
         elif na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
 
-        return self._return_or_inplace(
-            cpp_contains_re(self._column, pat)
-            if regex is True
-            else cpp_contains(self._column, as_scalar(pat, "str")),
-            **kwargs,
-        )
+        if pat is None:
+            result_col = column.column_empty(
+                len(self._column), dtype="bool", masked=True
+            )
+        elif is_scalar(pat):
+            if regex is True:
+                result_col = cpp_contains_re(self._column, pat)
+            else:
+                result_col = cpp_contains(self._column, as_scalar(pat, "str"))
+        else:
+            result_col = cpp_contains_multiple(
+                self._column, column.as_column(pat, dtype="str")
+            )
+        return self._return_or_inplace(result_col, **kwargs)
 
     def replace(
         self, pat, repl, n=-1, case=None, flags=0, regex=True, **kwargs
@@ -3260,8 +3283,9 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
         if not isinstance(sub, str):
-            msg = "expected a string object, not {0}"
-            raise TypeError(msg.format(type(sub).__name__))
+            raise TypeError(
+                f"expected a string object, not {type(sub).__name__}"
+            )
 
         if end is None:
             end = -1
@@ -3316,8 +3340,9 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
         if not isinstance(sub, str):
-            msg = "expected a string object, not {0}"
-            raise TypeError(msg.format(type(sub).__name__))
+            raise TypeError(
+                f"expected a string object, not {type(sub).__name__}"
+            )
 
         if end is None:
             end = -1
@@ -3368,8 +3393,9 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
         if not isinstance(sub, str):
-            msg = "expected a string object, not {0}"
-            raise TypeError(msg.format(type(sub).__name__))
+            raise TypeError(
+                f"expected a string object, not {type(sub).__name__}"
+            )
 
         if end is None:
             end = -1
@@ -3425,8 +3451,9 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
         if not isinstance(sub, str):
-            msg = "expected a string object, not {0}"
-            raise TypeError(msg.format(type(sub).__name__))
+            raise TypeError(
+                f"expected a string object, not {type(sub).__name__}"
+            )
 
         if end is None:
             end = -1
@@ -4465,9 +4492,8 @@ def _massage_string_arg(value, name, allow_col=False):
         allowed_types.append("Column")
 
     raise ValueError(
-        "Expected {} for {} but got {}".format(
-            _expected_types_format(allowed_types), name, type(value)
-        )
+        f"Expected {_expected_types_format(allowed_types)} "
+        f"for {name} but got {type(value)}"
     )
 
 
@@ -4661,16 +4687,16 @@ class StringColumn(column.ColumnBase):
                         kwargs.update(format=fmt)
 
             # Check for None strings
-            if len(self) > 0 and self.binary_operator("eq", "None").any():
+            if len(self) > 0 and (self == "None").any():
                 raise ValueError("Could not convert `None` value to datetime")
 
-            boolean_match = self.binary_operator("eq", "NaT")
+            boolean_match = self == "NaT"
         elif out_dtype.type is np.timedelta64:
             if "format" not in kwargs:
                 if len(self) > 0:
                     kwargs.update(format="%D days %H:%M:%S")
 
-            boolean_match = self.binary_operator("eq", "NaT")
+            boolean_match = self == "NaT"
         elif out_dtype.kind in {"i", "u"}:
             if not cpp_is_integer(self).all():
                 raise ValueError(
@@ -4843,7 +4869,7 @@ class StringColumn(column.ColumnBase):
             )
             return col
         else:
-            raise TypeError("cannot broadcast {}".format(type(other)))
+            raise TypeError(f"cannot broadcast {type(other)}")
 
     def default_na_value(self):
         return None
@@ -4857,8 +4883,10 @@ class StringColumn(column.ColumnBase):
                 return lhs.str().cat(others=rhs)
             elif op in ("eq", "ne", "gt", "lt", "ge", "le"):
                 return _string_column_binop(self, rhs, op=op, out_dtype="bool")
-        msg = "{!r} operator not supported between {} and {}"
-        raise TypeError(msg.format(op, type(self), type(rhs)))
+
+        raise TypeError(
+            f"{op} operator not supported between {type(self)} and {type(rhs)}"
+        )
 
     @property
     def is_unique(self):
