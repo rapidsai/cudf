@@ -177,7 +177,7 @@ class ColumnBase(Column, Serializable):
         if check_dtypes:
             if self.dtype != other.dtype:
                 return False
-        return self.binary_operator("eq", other).min()
+        return (self == other).min()
 
     def all(self):
         return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
@@ -266,8 +266,8 @@ class ColumnBase(Column, Serializable):
         newsize = sum(map(len, objs))
         if newsize > libcudf.MAX_COLUMN_SIZE:
             raise MemoryError(
-                "Result of concat cannot have "
-                "size > {}".format(libcudf.MAX_COLUMN_SIZE_STR)
+                f"Result of concat cannot have "
+                f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
             )
 
         # Filter out inputs that have 0 length
@@ -764,7 +764,7 @@ class ColumnBase(Column, Serializable):
         if self.dtype.kind == "f":
             # Need to consider `np.nan` values incase
             # of a float column
-            result = result.binary_operator("or", libcudf.unary.is_nan(self))
+            result = result | libcudf.unary.is_nan(self)
 
         return result
 
@@ -781,9 +781,7 @@ class ColumnBase(Column, Serializable):
         if self.dtype.kind == "f":
             # Need to consider `np.nan` values incase
             # of a float column
-            result = result.binary_operator(
-                "and", libcudf.unary.is_non_nan(self)
-            )
+            result = result & libcudf.unary.is_non_nan(self)
 
         return result
 
@@ -1110,6 +1108,51 @@ class ColumnBase(Column, Serializable):
 
         return output
 
+    def __add__(self, other):
+        return self.binary_operator("add", other)
+
+    def __sub__(self, other):
+        return self.binary_operator("sub", other)
+
+    def __mul__(self, other):
+        return self.binary_operator("mul", other)
+
+    def __eq__(self, other):
+        return self.binary_operator("eq", other)
+
+    def __ne__(self, other):
+        return self.binary_operator("ne", other)
+
+    def __or__(self, other):
+        return self.binary_operator("or", other)
+
+    def __and__(self, other):
+        return self.binary_operator("and", other)
+
+    def __floordiv__(self, other):
+        return self.binary_operator("floordiv", other)
+
+    def __truediv__(self, other):
+        return self.binary_operator("truediv", other)
+
+    def __mod__(self, other):
+        return self.binary_operator("mod", other)
+
+    def __pow__(self, other):
+        return self.binary_operator("pow", other)
+
+    def __lt__(self, other):
+        return self.binary_operator("lt", other)
+
+    def __gt__(self, other):
+        return self.binary_operator("gt", other)
+
+    def __le__(self, other):
+        return self.binary_operator("le", other)
+
+    def __ge__(self, other):
+        return self.binary_operator("ge", other)
+
     def searchsorted(
         self, value, side="left", ascending=True, na_position="last"
     ):
@@ -1266,9 +1309,7 @@ class ColumnBase(Column, Serializable):
         if nrows * ncols == 0:
             return cudf.core.frame.Frame({})
 
-        scatter_map = column_indices.binary_operator(
-            "mul", np.int32(nrows)
-        ).binary_operator("add", row_indices)
+        scatter_map = (column_indices * np.int32(nrows)) + row_indices
         target = cudf.core.frame.Frame(
             {None: column_empty_like(self, masked=True, newsize=nrows * ncols)}
         )
