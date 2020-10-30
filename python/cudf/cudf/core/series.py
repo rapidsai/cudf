@@ -888,6 +888,12 @@ class Series(Frame, Serializable):
             result.name = self.name
             result.index = self.index
         elif isinstance(arg, cudf.Series):
+            if not arg.index.is_unique:
+                raise ValueError(
+                    """Reindexing only valid with
+                uniquely valued Index objects
+                """
+                )
             lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
             rhs = cudf.DataFrame(
                 {
