@@ -115,7 +115,7 @@ size_type estimate_join_output_size(table_device_view build_table,
   do {
     sample_probe_num_rows = std::min(sample_probe_num_rows, probe_table_num_rows);
 
-    size_estimate.set_value(0);
+    size_estimate.set_value(0, stream);
 
     row_hash hash_probe{probe_table};
     row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
@@ -135,9 +135,9 @@ size_type estimate_join_output_size(table_device_view build_table,
     // increase the estimated output size by a factor of the ratio between the
     // probe and build tables
     if (sample_probe_num_rows < probe_table_num_rows) {
-      h_size_estimate = size_estimate.value() * probe_to_build_ratio;
+      h_size_estimate = size_estimate.value(stream) * probe_to_build_ratio;
     } else {
-      h_size_estimate = size_estimate.value();
+      h_size_estimate = size_estimate.value(stream);
     }
 
     // Detect overflow
