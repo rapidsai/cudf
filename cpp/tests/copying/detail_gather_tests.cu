@@ -86,7 +86,7 @@ TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest)
   std::unique_ptr<cudf::table> result =
     cudf::detail::gather(source_table,
                          gather_map,
-                         cudf::out_of_bounds_policy::DONT_CHECK,
+                         cudf::out_of_bounds_policy::NULLIFY,
                          cudf::detail::negative_index_policy::NOT_ALLOWED);
 
   auto expect_data =
@@ -97,6 +97,6 @@ TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest)
     expect_data, expect_data + (source_size * 2), expect_valid);
 
   for (auto i = 0; i < source_table.num_columns(); ++i) {
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect_column, result->view().column(i));
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_column, result->view().column(i));
   }
 }

@@ -58,7 +58,7 @@ TEST_F(GatherTestStr, Gather)
   cudf::test::fixed_width_column_wrapper<int32_t> gather_map(h_map.begin(), h_map.end());
   auto results = cudf::detail::gather(source_table,
                                       gather_map,
-                                      cudf::out_of_bounds_policy::DONT_CHECK,
+                                      cudf::out_of_bounds_policy::NULLIFY,
                                       cudf::detail::negative_index_policy::NOT_ALLOWED);
 
   std::vector<const char*> h_expected;
@@ -75,7 +75,7 @@ TEST_F(GatherTestStr, Gather)
   }
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(), h_expected.end(), expected_validity.begin());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view().column(0), expected);
 }
 
 TEST_F(GatherTestStr, GatherIgnoreOutOfBounds)
@@ -99,7 +99,7 @@ TEST_F(GatherTestStr, GatherIgnoreOutOfBounds)
   }
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(), h_expected.end(), expected_validity.begin());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view().column(0), expected);
 }
 
 TEST_F(GatherTestStr, GatherZeroSizeStringsColumn)

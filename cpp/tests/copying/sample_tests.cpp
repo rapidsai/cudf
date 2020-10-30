@@ -56,7 +56,7 @@ TEST_F(SampleTest, RowMultipleSamplingDisallowed)
     auto out_table  = cudf::sample(input, n_samples, cudf::sample_with_replacement::FALSE, i);
     auto sorted_out = cudf::sort(out_table->view());
 
-    CUDF_TEST_EXPECT_TABLES_EQUAL(input, sorted_out->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input, sorted_out->view());
   }
 }
 
