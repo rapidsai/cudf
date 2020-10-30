@@ -400,7 +400,7 @@ class DataFrame(Frame, Serializable):
         self._index = as_index(index)
 
         # list-of-dicts case
-        if np.all(isinstance(d, dict) for d in data):
+        if len(data) > 0 and np.all(isinstance(d, dict) for d in data):
             data = DataFrame.from_pandas(pd.DataFrame(data))
             self._data = data._data
         else:
@@ -414,7 +414,7 @@ class DataFrame(Frame, Serializable):
 
             for col_name, col in enumerate(data):
                 self._data[col_name] = column.as_column(col)
-
+        if columns:
             self.columns = columns
 
     def _init_from_dict_like(self, data, index=None, columns=None):
