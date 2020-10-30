@@ -47,14 +47,14 @@ T __device__ generic_abs(T value)
 }
 
 template <typename T, typename std::enable_if_t<std::is_signed<T>::value>* = nullptr>
-T __device__ is_positive(T value)
+bool __device__ is_positive(T value)
 {
   return value >= 0;
 }
 
 // this is needed to suppress warning: pointless comparison of unsigned integer with zero
 template <typename T, typename std::enable_if_t<not std::is_signed<T>::value>* = nullptr>
-T __device__ is_positive(T value)
+bool __device__ is_positive(T value)
 {
   return true;
 }
