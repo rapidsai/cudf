@@ -86,15 +86,8 @@ public class DecimalColumnVectorTest extends CudfTestBase {
   public void testAddingNullValues() {
     try (HostColumnVector cv = HostColumnVector.fromDecimals(decimal64Zoo)) {
       int nullCount = 0;
-      int index = 0;
-      for (BigDecimal dec : decimal64Zoo) {
-        if (dec == null) {
-          assertTrue(cv.isNull(index));
-          nullCount++;
-        } else {
-          assertFalse(cv.isNull(index));
-        }
-        index++;
+      for (int i = 0; i < decimal64Zoo.length; ++i) {
+        assertEquals(decimal64Zoo[i] == null, cv.isNull(i));
       }
       assertEquals(nullCount > 0, cv.hasNulls());
       assertEquals(nullCount, cv.getNullCount());
