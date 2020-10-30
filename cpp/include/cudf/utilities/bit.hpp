@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cassert>
+#include <climits>
 #include <cudf/types.hpp>
 
 /**

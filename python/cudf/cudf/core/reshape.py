@@ -437,9 +437,8 @@ def melt(
         missing = set(id_vars) - set(frame.columns)
         if not len(missing) == 0:
             raise KeyError(
-                "The following 'id_vars' are not present"
-                " in the DataFrame: {missing}"
-                "".format(missing=list(missing))
+                f"The following 'id_vars' are not present"
+                f" in the DataFrame: {list(missing)}"
             )
     else:
         id_vars = []
@@ -452,9 +451,8 @@ def melt(
         missing = set(value_vars) - set(frame.columns)
         if not len(missing) == 0:
             raise KeyError(
-                "The following 'value_vars' are not present"
-                " in the DataFrame: {missing}"
-                "".format(missing=list(missing))
+                f"The following 'value_vars' are not present"
+                f" in the DataFrame: {list(missing)}"
             )
     else:
         # then all remaining columns in frame
@@ -480,10 +478,9 @@ def melt(
     overlap = set(id_vars).intersection(set(value_vars))
     if not len(overlap) == 0:
         raise KeyError(
-            "'value_vars' and 'id_vars' cannot have overlap."
-            " The following 'value_vars' are ALSO present"
-            " in 'id_vars': {overlap}"
-            "".format(overlap=list(overlap))
+            f"'value_vars' and 'id_vars' cannot have overlap."
+            f" The following 'value_vars' are ALSO present"
+            f" in 'id_vars': {list(overlap)}"
         )
 
     N = len(frame)
@@ -622,17 +619,12 @@ def get_dummies(
         columns = df.select_dtypes(include=encode_fallback_dtypes).columns
 
     def length_check(obj, name):
-        err_msg = (
-            "Length of '{name}' ({len_obj}) did not match the "
-            "length of the columns being encoded ({len_required})."
-        )
-
         if cudf.utils.dtypes.is_list_like(obj):
             if len(obj) != len(columns):
-                err_msg = err_msg.format(
-                    name=name, len_obj=len(obj), len_required=len(columns)
+                raise ValueError(
+                    f"Length of '{name}' ({len(obj)}) did not match the "
+                    f"length of the columns being encoded ({len(columns)})."
                 )
-                raise ValueError(err_msg)
 
     length_check(prefix, "prefix")
     length_check(prefix_sep, "prefix_sep")
