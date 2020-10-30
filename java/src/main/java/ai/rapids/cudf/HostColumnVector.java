@@ -36,9 +36,6 @@ public final class HostColumnVector extends HostColumnVectorCore {
    * The size in bytes of an offset entry
    */
   static final int OFFSET_SIZE = DType.INT32.getSizeInBytes();
-  static {
-    NativeDepsLoader.loadNativeDeps();
-  }
 
   private int refCount;
 
@@ -66,7 +63,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
    */
 
   //Constructor for lists and struct
-  HostColumnVector(DType type, long rows, Optional<Long> nullCount,
+  public HostColumnVector(DType type, long rows, Optional<Long> nullCount,
                    HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
                    HostMemoryBuffer offsetBuffer, List<HostColumnVectorCore> nestedHcv) {
     super(type, rows, nullCount, hostDataBuffer, hostValidityBuffer, offsetBuffer, nestedHcv);
@@ -165,6 +162,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
    */
   public ColumnVector copyToDevice() {
     if (rows == 0) {
+      // TODO this does not work for nested types!!!
       return new ColumnVector(type, 0, Optional.of(0L), null, null, null);
     }
     // The simplest way is just to copy the buffers and pass them down.

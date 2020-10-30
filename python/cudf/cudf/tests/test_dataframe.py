@@ -7755,3 +7755,138 @@ def test_dataframe_error_equality(df1, df2, op):
     gdf2 = gd.from_pandas(df2)
 
     assert_exceptions_equal(op, op, ([df1, df2],), ([gdf1, gdf2],))
+
+
+@pytest.mark.parametrize(
+    "df,expected_pdf",
+    [
+        (
+            gd.DataFrame(
+                {
+                    "a": gd.Series([1, 2, None, 3], dtype="uint8"),
+                    "b": gd.Series([23, None, None, 32], dtype="uint16"),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series([1, 2, None, 3], dtype=pd.UInt8Dtype()),
+                    "b": pd.Series(
+                        [23, None, None, 32], dtype=pd.UInt16Dtype()
+                    ),
+                }
+            ),
+        ),
+        (
+            gd.DataFrame(
+                {
+                    "a": gd.Series([None, 123, None, 1], dtype="uint32"),
+                    "b": gd.Series(
+                        [234, 2323, 23432, None, None, 224], dtype="uint64"
+                    ),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        [None, 123, None, 1], dtype=pd.UInt32Dtype()
+                    ),
+                    "b": pd.Series(
+                        [234, 2323, 23432, None, None, 224],
+                        dtype=pd.UInt64Dtype(),
+                    ),
+                }
+            ),
+        ),
+        (
+            gd.DataFrame(
+                {
+                    "a": gd.Series([-10, 1, None, -1, None, 3], dtype="int8"),
+                    "b": gd.Series([111, None, 222, None, 13], dtype="int16"),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        [-10, 1, None, -1, None, 3], dtype=pd.Int8Dtype()
+                    ),
+                    "b": pd.Series(
+                        [111, None, 222, None, 13], dtype=pd.Int16Dtype()
+                    ),
+                }
+            ),
+        ),
+        (
+            gd.DataFrame(
+                {
+                    "a": gd.Series(
+                        [11, None, 22, 33, None, 2, None, 3], dtype="int32"
+                    ),
+                    "b": gd.Series(
+                        [32431, None, None, 32322, 0, 10, -32324, None],
+                        dtype="int64",
+                    ),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        [11, None, 22, 33, None, 2, None, 3],
+                        dtype=pd.Int32Dtype(),
+                    ),
+                    "b": pd.Series(
+                        [32431, None, None, 32322, 0, 10, -32324, None],
+                        dtype=pd.Int64Dtype(),
+                    ),
+                }
+            ),
+        ),
+        (
+            gd.DataFrame(
+                {
+                    "a": gd.Series(
+                        [True, None, False, None, False, True, True, False],
+                        dtype="bool_",
+                    ),
+                    "b": gd.Series(
+                        [
+                            "abc",
+                            "a",
+                            None,
+                            "hello world",
+                            "foo buzz",
+                            "",
+                            None,
+                            "rapids ai",
+                        ],
+                        dtype="object",
+                    ),
+                }
+            ),
+            pd.DataFrame(
+                {
+                    "a": pd.Series(
+                        [True, None, False, None, False, True, True, False],
+                        dtype=pd.BooleanDtype(),
+                    ),
+                    "b": pd.Series(
+                        [
+                            "abc",
+                            "a",
+                            None,
+                            "hello world",
+                            "foo buzz",
+                            "",
+                            None,
+                            "rapids ai",
+                        ],
+                        dtype=pd.StringDtype(),
+                    ),
+                }
+            ),
+        ),
+    ],
+)
+def test_dataframe_to_pandas_nullable_dtypes(df, expected_pdf):
+    actual_pdf = df.to_pandas(nullable=True)
+
+    assert_eq(actual_pdf, expected_pdf)

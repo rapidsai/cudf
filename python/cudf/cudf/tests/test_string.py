@@ -2151,6 +2151,49 @@ def test_string_str_rindex(data, sub, er):
 
 
 @pytest.mark.parametrize(
+    "data,sub,expect",
+    [
+        (
+            ["abc", "xyz", "a", "ab", "123", "097"],
+            ["b", "y", "a", "c", "4", "8"],
+            [True, True, True, False, False, False],
+        ),
+        (
+            ["A B", "1.5", "3,000", "23", "³", "⅕"],
+            ["A B", ".", ",", "1", " ", " "],
+            [True, True, True, False, False, False],
+        ),
+        (
+            [" ", "\t", "\r", "\f ", "\n", ""],
+            ["", "\t", "\r", "xx", "yy", "zz"],
+            [True, True, True, False, False, False],
+        ),
+        (
+            ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+            ["$", "B", "ab", "*", "@", "dog"],
+            [True, True, True, False, False, False],
+        ),
+        (
+            ["hello", "there", "world", "-1234", None, "accént"],
+            ["lo", "e", "o", "+1234", " ", "e"],
+            [True, True, True, False, None, False],
+        ),
+        (
+            ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", "", "x", None],
+            ["A", "B", "C", " ", "y", "e"],
+            [True, True, True, False, False, None],
+        ),
+    ],
+)
+def test_string_contains_multi(data, sub, expect):
+    gs = Series(data)
+    sub = Series(sub)
+    got = gs.str.contains(sub)
+    expect = Series(expect)
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
     "data",
     [
         ["abc", "xyz", "a", "ab", "123", "097"],
