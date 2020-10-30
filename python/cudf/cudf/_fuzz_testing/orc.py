@@ -97,6 +97,8 @@ class OrcReader(IOFuzz):
                     [None, self._rand(len(self._df))]
                 )
             else:
+                if not isinstance(values, list):
+                    raise TypeError("values must be of type list")
                 params_dict[param] = np.random.choice(values)
         self._current_params["test_kwargs"] = self.process_kwargs(params_dict)
 
