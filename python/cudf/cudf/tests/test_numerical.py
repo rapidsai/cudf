@@ -293,12 +293,12 @@ def test_to_numeric_downcast_string_int(data, downcast):
 @pytest.mark.parametrize(
     "data",
     [
-        [""],  # pure null strings
+        [""],  # pure empty strings
         ["10.0", "11.0", "2e3"],
         ["1.0", "2e3"],
         ["1", "10", "1.0", "2e3"],  # int-float mixed
         ["1", "10", "1.0", "2e3", "2e+3", "2e-3"],
-        ["1", "10", "1.0", "2e3", "", ""],  # mixed null strings
+        ["1", "10", "1.0", "2e3", "", ""],  # mixed empty strings
     ],
 )
 @pytest.mark.parametrize(

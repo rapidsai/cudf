@@ -199,7 +199,7 @@ def _convert_str_col(col, errors, _downcast=None):
     if is_integer.all():
         return col.as_numerical_column(dtype=np.dtype("i8"))
 
-    col = _proc_inf_null_strings(col)
+    col = _proc_inf_empty_strings(col)
 
     is_float = col.str().isfloat()
     if is_float.all():
@@ -223,20 +223,27 @@ def _convert_str_col(col, errors, _downcast=None):
             raise ValueError("Unable to convert some strings to numerics.")
 
 
-def _proc_inf_null_strings(col):
+def _proc_inf_empty_strings(col):
+    """Handles empty and infinity strings
+    """
     col = col.str().lower()
-    col = _proc_null_strings(col)
+    col = _proc_empty_strings(col)
     col = _proc_inf_strings(col)
     return col
 
 
-def _proc_null_strings(col):
+def _proc_empty_strings(col):
+    """Replaces empty strings with NaN
+    """
     s = cudf.Series(col)
     s = s.where(s != "", "NaN")
     return s._column
 
 
 def _proc_inf_strings(col):
+    """Convert "inf/infinity" strings into "Inf", the native string
+    representing infinity in libcudf
+    """
     col = col.str().replace(
         ["+", "inf", "inity"], ["", "Inf", ""], regex=False,
     )
