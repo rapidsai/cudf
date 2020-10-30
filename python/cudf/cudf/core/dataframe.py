@@ -398,18 +398,24 @@ class DataFrame(Frame, Serializable):
             index = as_index(index)
 
         self._index = as_index(index)
-        data = list(itertools.zip_longest(*data))
 
-        if columns is not None and len(data) == 0:
-            data = [
-                cudf.core.column.column_empty(row_count=0, dtype=None)
-                for _ in columns
-            ]
+        # list-of-dicts case
+        if np.all(isinstance(d, dict) for d in data):
+            data = DataFrame.from_pandas(pd.DataFrame(data))
+            self._data = data._data
+        else:
+            data = list(itertools.zip_longest(*data))
 
-        for col_name, col in enumerate(data):
-            self._data[col_name] = column.as_column(col)
+            if columns is not None and len(data) == 0:
+                data = [
+                    cudf.core.column.column_empty(row_count=0, dtype=None)
+                    for _ in columns
+                ]
 
-        self.columns = columns
+            for col_name, col in enumerate(data):
+                self._data[col_name] = column.as_column(col)
+
+            self.columns = columns
 
     def _init_from_dict_like(self, data, index=None, columns=None):
         data = data.copy()
