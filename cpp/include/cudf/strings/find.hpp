@@ -84,6 +84,7 @@ std::unique_ptr<column> rfind(
   size_type start                     = 0,
   size_type stop                      = -1,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /**
  * @brief Returns a column of boolean values for each string where true indicates
  * the target string was found within that string in the provided column.
@@ -101,6 +102,29 @@ std::unique_ptr<column> rfind(
 std::unique_ptr<column> contains(
   strings_column_view const& strings,
   string_scalar const& target,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a column of boolean values for each string where true indicates
+ * the corresponding target string was found within that string in the provided column.
+ *
+ * The 'output[i] = true` if string `targets[i]` is found inside `strings[i]` otherwise
+ * `output[i] = false`.
+ * If `target[i]` is an empty string, true is returned for `output[i]`.
+ * If `target[i]` is null, false is returned for `output[i]`.
+ *
+ * Any null `strings[i]` row results in a null `output[i]` row.
+ *
+ * @throw cudf::logic_error if `strings.size() != targets.size()`.
+ *
+ * @param strings Strings instance for this operation.
+ * @param targets Strings column of targets to check row-wise in `strings`.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New type_id::BOOL8 column.
+ */
+std::unique_ptr<column> contains(
+  strings_column_view const& strings,
+  strings_column_view const& targets,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -134,6 +158,8 @@ std::unique_ptr<column> starts_with(
  * output column.
  *
  * Any null string entries in `targets` return corresponding null entries in the output columns.
+ *
+ * @throw cudf::logic_error if `strings.size() != targets.size()`.
  *
  * @param strings Strings instance for this operation.
  * @param targets Strings instance for this operation.
@@ -176,6 +202,8 @@ std::unique_ptr<column> ends_with(
  * output column.
  *
  * Any null string entries in `targets` return corresponding null entries in the output columns.
+ *
+ * @throw cudf::logic_error if `strings.size() != targets.size()`.
  *
  * @param strings Strings instance for this operation.
  * @param targets Strings instance for this operation.
