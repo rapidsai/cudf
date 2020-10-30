@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import os
 from io import BytesIO
@@ -378,3 +378,16 @@ def test_orc_reader_tzif_timestamps(datadir):
     gdf = cudf.read_orc(path, engine="cudf").to_pandas()
 
     assert_eq(pdf, gdf)
+
+
+def test_int_overflow(tmpdir):
+    file_path = tmpdir.join("gdf_overflow.orc")
+
+    # The number of rows and the large element trigger delta encoding
+    num_rows = 513
+    df = cudf.DataFrame({"a": [None] * num_rows}, dtype="int32")
+    df["a"][0] = 1024 * 1024 * 1024
+    df["a"][num_rows - 1] = 1
+    df.to_orc(file_path)
+
+    assert_eq(cudf.read_orc(file_path), df)
