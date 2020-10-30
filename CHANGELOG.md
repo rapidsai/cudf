@@ -41,6 +41,7 @@
 - PR #6608 Improve subword tokenizer docs
 - PR #6612 Update JNI to new RMM cuda_stream_view API
 - PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
+- PR #6627 Block `table_view` of `fixed_point`s with different scales
 
 ## Bug Fixes
 
