@@ -239,7 +239,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         objs = [obj for obj in objs if obj.shape != (0, 0)]
         empty_inner = False
         if join == "inner":
-            #don't filter out empty df's
+            # don't filter out empty df's
             objs = old_objs
             if any(obj.empty for obj in objs):
                 empty_inner = True
@@ -247,8 +247,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         objs, match_index = _align_objs(objs, how=join)
 
         for idx, o in enumerate(objs):
-            #if join is inner the index remains unchanged
-            #and (not ignore_index or join=='inner')
+            # if join is inner the index remains unchanged
+            # and (not ignore_index or join=='inner')
             if idx == 0 and not ignore_index:
                 df.index = o.index
             for col in o._data.names:
@@ -269,16 +269,16 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         else:
             df.columns = result_columns.unique()
         if empty_inner:
-            if join=='inner':
+            if join == "inner":
                 df.index = cudf.RangeIndex(0)
             else:
                 df.reset_index(drop=True, inplace=True)
-        # #     return df
-        #     df.index = o.index
-            #if join is inner the index remains unchanged
+            # #     return df
+            #     df.index = o.index
+            # if join is inner the index remains unchanged
             # if not join=='inner':
             #     df.reset_index(drop=True, inplace=True)
-            #join inner always produces sorted index
+            # join inner always produces sorted index
             return df
         # if ignore_index and not join == "inner":
         #     df.index = cudf.RangeIndex(max(len(obj) for obj in objs))

@@ -239,11 +239,11 @@ class Frame(libcudf.table.Table):
 
         if join == "inner":
             all_columns_list = [obj._column_names for obj in objs]
-            #get column names present in ALL objs
+            # get column names present in ALL objs
             intersecting_columns = functools.reduce(
                 np.intersect1d, all_columns_list
             )
-            #get column names not present in all objs
+            # get column names not present in all objs
             non_intersecting_columns = (
                 functools.reduce(operator.or_, (obj.columns for obj in objs))
                 ^ intersecting_columns
@@ -264,7 +264,7 @@ class Frame(libcudf.table.Table):
                     result_index_length = sum(len(obj) for obj in objs)
 
                 objs = [obj.copy(deep=False) for obj in objs]
-                #remove columns not present in all objs
+                # remove columns not present in all objs
                 for obj in objs:
                     obj.drop(
                         columns=non_intersecting_columns,

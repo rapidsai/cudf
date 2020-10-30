@@ -798,9 +798,7 @@ def test_concat_join_no_overlapping_columns_many_and_empty(
         axis=axis,
     )
     assert_eq(
-        expected,
-        actual,
-        check_index_type=False,
+        expected, actual, check_index_type=False,
     )
 
 
@@ -859,10 +857,10 @@ def test_concat_join_no_overlapping_columns_many_and_empty2(
         objs_gd, sort=sort, join=join, ignore_index=ignore_index, axis=axis,
     )
     assert_eq(
-        expected, actual,
+        expected,
+        actual,
         check_index_type=False if len(expected) == 0 else True,
     )
-
 
 
 @pytest.mark.parametrize("ignore_index", [True, False])
