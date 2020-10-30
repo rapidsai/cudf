@@ -18,6 +18,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <algorithm>
 #include <cassert>
@@ -29,9 +30,20 @@ template <typename ColumnView>
 table_view_base<ColumnView>::table_view_base(std::vector<ColumnView> const& cols) : _columns{cols}
 {
   if (num_columns() > 0) {
-    std::for_each(_columns.begin(), _columns.end(), [this](ColumnView col) {
-      CUDF_EXPECTS(col.size() == _columns.front().size(), "Column size mismatch.");
-    });
+    CUDF_EXPECTS(
+      std::all_of(_columns.cbegin(),
+                  _columns.cend(),
+                  [size = _columns.front().size()](auto const& col) { return col.size() == size; }),
+      "Column size mismatch.");
+
+    if (is_fixed_point(_columns.front().type())) {
+      CUDF_EXPECTS(std::all_of(_columns.cbegin(),
+                               _columns.cend(),
+                               [scale = _columns.front().type().scale()](auto const& c) {
+                                 return scale == c.type().scale();
+                               }),
+                   "fixed_point table_view columns must same scale.");
+    }
     _num_rows = _columns.front().size();
   } else {
     _num_rows = 0;
@@ -73,7 +85,7 @@ table_view table_view::select(std::vector<size_type> const& column_indices) cons
 // Convert mutable view to immutable view
 mutable_table_view::operator table_view()
 {
-  std::vector<column_view> cols{begin(), end()};
+  std::vector<column_view> const cols{begin(), end()};
   return table_view{cols};
 }
 

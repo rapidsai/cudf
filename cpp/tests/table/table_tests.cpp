@@ -150,4 +150,23 @@ TEST_F(TableTest, CreateFromViewVectorEmptyTables)
   EXPECT_EQ(final_view.num_columns(), 0);
 }
 
+struct FixedPointTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(FixedPointTest, FixedPointScaleMismatch)
+{
+  using namespace numeric;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<int32_t>;
+
+  auto begin     = thrust::make_counting_iterator(0);
+  auto const vec = std::vector<int32_t>(begin, begin + 600);
+
+  auto const a = fp_wrapper(vec.begin(), /***/ vec.begin() + 200, scale_type{-1});
+  auto const b = fp_wrapper(vec.begin() + 200, vec.begin() + 400, scale_type{-2});
+  auto const c = fp_wrapper(vec.begin() + 400, vec.end(), /*****/ scale_type{-3});
+
+  auto const fixed_point_columns = std::vector<cudf::column_view>{a, b, c};
+  EXPECT_THROW(cudf::table_view{fixed_point_columns}, cudf::logic_error);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
