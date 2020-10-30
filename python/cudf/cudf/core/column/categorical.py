@@ -928,7 +928,7 @@ class CategoricalColumn(column.ColumnBase):
             " if you need this functionality."
         )
 
-    def to_pandas(self, index=None):
+    def to_pandas(self, index=None, nullable=False):
         signed_dtype = min_signed_type(len(self.categories))
         codes = self.cat().codes.astype(signed_dtype).fillna(-1).to_array()
         categories = self.categories.to_pandas()

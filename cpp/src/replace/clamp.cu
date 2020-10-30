@@ -290,7 +290,7 @@ std::unique_ptr<column> dispatch_clamp::operator()<numeric::decimal64>(
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
-  CUDF_FAIL("clamp for decimal32 not supported");
+  CUDF_FAIL("clamp for decimal64 not supported");
 }
 
 template <>

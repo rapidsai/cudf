@@ -149,6 +149,28 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
 }
 
 template <>
+std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<numeric::decimal64>(
+  cudf::size_type source_begin,
+  cudf::size_type source_end,
+  cudf::size_type target_begin,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  CUDF_FAIL("decimal64 type not supported");
+}
+
+template <>
+std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<numeric::decimal32>(
+  cudf::size_type source_begin,
+  cudf::size_type source_end,
+  cudf::size_type target_begin,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
+{
+  CUDF_FAIL("decimal32 type not supported");
+}
+
+template <>
 std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf::dictionary32>(
   cudf::size_type source_begin,
   cudf::size_type source_end,

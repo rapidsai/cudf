@@ -8,7 +8,7 @@ import pytest
 import cudf
 from cudf._lib.transform import mask_to_bools
 from cudf.core.column.column import as_column
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, assert_exceptions_equal
 from cudf.utils import dtypes as dtypeutils
 
 dtypes = sorted(
@@ -211,7 +211,6 @@ def test_column_view_valid_numeric_to_numeric(data, from_dtype, to_dtype):
         (np.arange(9), "int8", "int64"),
         (np.arange(3), "int8", "int16"),
         (np.arange(6), "int8", "float32"),
-        (np.arange(2), "int64", "datetime64[ns]"),
         (np.arange(1), "int8", "datetime64[ns]"),
     ],
 )
@@ -219,16 +218,13 @@ def test_column_view_invalid_numeric_to_numeric(data, from_dtype, to_dtype):
     cpu_data = np.asarray(data, dtype=from_dtype)
     gpu_data = as_column(data, dtype=from_dtype)
 
-    try:
-        cpu_data = cpu_data.view(to_dtype)
-    except ValueError as error:
-        if "size must be a divisor" in str(error):
-            with pytest.raises(
-                ValueError, match="Can not divide",
-            ):
-                gpu_data = gpu_data.view(to_dtype)
-        else:
-            raise error
+    assert_exceptions_equal(
+        lfunc=cpu_data.view,
+        rfunc=gpu_data.view,
+        lfunc_args_and_kwargs=([to_dtype],),
+        rfunc_args_and_kwargs=([to_dtype],),
+        expected_error_message="Can not divide",
+    )
 
 
 @pytest.mark.parametrize(

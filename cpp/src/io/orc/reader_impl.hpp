@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,7 +106,7 @@ class reader::impl {
    * @param num_dicts Number of dictionary entries required
    * @param skip_rows Number of rows to offset from start
    * @param num_rows Number of rows to output
-   * @param timezone_table Local time to UTC conversion table
+   * @param tz_table Local time to UTC conversion table
    * @param row_groups List of row index descriptors
    * @param row_index_stride Distance between each row index
    * @param out_buffers Output columns' device buffers
@@ -116,7 +116,7 @@ class reader::impl {
                           size_t num_dicts,
                           size_t skip_rows,
                           size_t num_rows,
-                          const std::vector<int64_t> &timezone_table,
+                          timezone_table const &tz_table,
                           const rmm::device_vector<gpu::RowGroup> &row_groups,
                           size_t row_index_stride,
                           std::vector<column_buffer> &out_buffers,
