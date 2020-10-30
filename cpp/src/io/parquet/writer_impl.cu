@@ -228,24 +228,24 @@ class parquet_column_view {
       case cudf::type_id::TIMESTAMP_SECONDS:
         _physical_type  = int96_timestamps ? Type::INT96 : Type::INT64;
         _converted_type = ConvertedType::TIMESTAMP_MILLIS;
-        _stats_dtype = statistics_dtype::dtype_timestamp64;
-        _ts_scale    = 1000;
+        _stats_dtype    = statistics_dtype::dtype_timestamp64;
+        _ts_scale       = 1000;
         break;
       case cudf::type_id::TIMESTAMP_MILLISECONDS:
         _physical_type  = int96_timestamps ? Type::INT96 : Type::INT64;
         _converted_type = ConvertedType::TIMESTAMP_MILLIS;
-        _stats_dtype = statistics_dtype::dtype_timestamp64;
+        _stats_dtype    = statistics_dtype::dtype_timestamp64;
         break;
       case cudf::type_id::TIMESTAMP_MICROSECONDS:
         _physical_type  = int96_timestamps ? Type::INT96 : Type::INT64;
         _converted_type = ConvertedType::TIMESTAMP_MICROS;
-        _stats_dtype = statistics_dtype::dtype_timestamp64;
+        _stats_dtype    = statistics_dtype::dtype_timestamp64;
         break;
       case cudf::type_id::TIMESTAMP_NANOSECONDS:
         _physical_type  = int96_timestamps ? Type::INT96 : Type::INT64;
         _converted_type = ConvertedType::TIMESTAMP_MICROS;
-        _stats_dtype = statistics_dtype::dtype_timestamp64;
-        _ts_scale    = -1000;  // negative value indicates division by absolute value
+        _stats_dtype    = statistics_dtype::dtype_timestamp64;
+        _ts_scale       = -1000;  // negative value indicates division by absolute value
         break;
       case cudf::type_id::STRING:
         _physical_type  = Type::BYTE_ARRAY;
@@ -723,7 +723,8 @@ void writer::impl::write_chunk(table_view const &table,
         // Column metadata
         auto const &physical_type = col.physical_type();
         col_schema.type           = physical_type;
-        col_schema.converted_type = physical_type == parquet::Type::INT96 ? ConvertedType::UNKNOWN : col.converted_type();
+        col_schema.converted_type =
+          physical_type == parquet::Type::INT96 ? ConvertedType::UNKNOWN : col.converted_type();
         // because the repetition type is global (in the sense of, not per-rowgroup or per
         // write_chunk() call) we cannot know up front if the user is going to end up passing tables
         // with nulls/no nulls in the multiple write_chunk() case.  so we'll do some special
@@ -807,11 +808,12 @@ void writer::impl::write_chunk(table_view const &table,
     } else {
       desc->level_bits = (state.md.schema[1 + i].repetition_type == OPTIONAL) ? 1 : 0;
     }
-    desc->num_values     = col.data_count();
-    desc->num_rows       = col.row_count();
+    desc->num_values          = col.data_count();
+    desc->num_rows            = col.row_count();
     auto const &physical_type = col.physical_type();
-    desc->physical_type  = static_cast<uint8_t>(physical_type);
-    desc->converted_type = static_cast<uint8_t>(physical_type == INT96 ? ConvertedType::UNKNOWN : col.converted_type());
+    desc->physical_type       = static_cast<uint8_t>(physical_type);
+    desc->converted_type =
+      static_cast<uint8_t>(physical_type == INT96 ? ConvertedType::UNKNOWN : col.converted_type());
   }
 
   // Init page fragments
