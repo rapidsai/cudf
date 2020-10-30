@@ -20,6 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -32,26 +33,6 @@ namespace cudf {
 namespace groupby {
 namespace detail {
 namespace {
-
-// TODO: replace with cudf::dictionary::detail::make_dictionary_pair_iterator()
-template <typename KeyType, bool has_nulls>
-struct dictionary_access_fn {
-  dictionary_access_fn(column_device_view const& d_dictionary) : d_dictionary{d_dictionary}
-  {
-    if (has_nulls) { CUDF_EXPECTS(d_dictionary.nullable(), "unexpected non-nullable column"); }
-  }
-
-  __device__ thrust::pair<KeyType, bool> operator()(size_type idx) const
-  {
-    if (has_nulls && d_dictionary.is_null(idx)) return {KeyType{}, false};
-    auto keys = d_dictionary.child(1);
-    return {keys.element<KeyType>(static_cast<size_type>(d_dictionary.element<dictionary32>(idx))),
-            true};
-  };
-
- private:
-  column_device_view const d_dictionary;
-};
 
 template <typename ResultType, typename Iterator>
 struct var_transform {
@@ -144,13 +125,11 @@ struct var_functor {
     } else {
       if (values.has_nulls()) {
         auto values_iter =
-          thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                          dictionary_access_fn<T, true>{*values_view});
+          cudf::dictionary::detail::make_dictionary_pair_iterator<T, true>(*values_view);
         reduce_by_key_fn(values_iter, group_labels, d_means, d_group_sizes, ddof, d_result, stream);
       } else {
         auto values_iter =
-          thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                          dictionary_access_fn<T, false>{*values_view});
+          cudf::dictionary::detail::make_dictionary_pair_iterator<T, false>(*values_view);
         reduce_by_key_fn(values_iter, group_labels, d_means, d_group_sizes, ddof, d_result, stream);
       }
     }

@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 
 #include <groupby/sort/group_reductions.hpp>
@@ -30,22 +31,6 @@ namespace cudf {
 namespace groupby {
 namespace detail {
 namespace {
-
-// TODO: replace with cudf::dictionary::detail::make_dictionary_iterator()
-template <typename KeyType>
-struct dictionary_access_fn {
-  dictionary_access_fn(column_device_view const& d_dictionary) : d_dictionary{d_dictionary} {}
-
-  __device__ KeyType operator()(size_type idx) const
-  {
-    if (d_dictionary.is_null(idx)) return KeyType{};
-    auto keys = d_dictionary.child(1);
-    return keys.element<KeyType>(static_cast<size_type>(d_dictionary.element<dictionary32>(idx)));
-  };
-
- private:
-  column_device_view const d_dictionary;
-};
 
 template <typename ResultType, typename Iterator>
 struct calculate_quantile_fn {
@@ -127,8 +112,7 @@ struct quantiles_functor {
                            static_cast<size_type>(quantile.size()),
                            interpolation});
     } else {
-      auto values_iter = thrust::make_transform_iterator(
-        thrust::make_counting_iterator<size_type>(0), dictionary_access_fn<T>{*values_view});
+      auto values_iter = cudf::dictionary::detail::make_dictionary_iterator<T>(*values_view);
       thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
                          thrust::make_counting_iterator(0),
                          num_groups,
