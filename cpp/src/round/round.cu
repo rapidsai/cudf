@@ -22,6 +22,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <type_traits>
 
 namespace cudf {
 
@@ -32,6 +33,18 @@ double __device__ generic_round(double d) { return ::round(d); }
 
 float __device__ generic_modf(float a, float* b) { return modff(a, b); }
 double __device__ generic_modf(double a, double* b) { return modf(a, b); }
+
+template <typename T, typename std::enable_if_t<std::is_signed<T>::value>* = nullptr>
+T __device__ generic_abs(T value)
+{
+  return abs(value);
+}
+
+template <typename T, typename std::enable_if_t<not std::is_signed<T>::value>* = nullptr>
+T __device__ generic_abs(T value)
+{
+  return value;
+}
 
 struct round_fn {
   template <typename T, typename... Args>
@@ -100,10 +113,10 @@ struct round_fn {
                         input.end<T>(),
                         out_view.begin<T>(),
                         [n, m] __device__(T e) -> T {
-                          auto const rounding_digit = static_cast<int64_t>(fabs((e / m) % 10));
+                          auto const rounding_digit = generic_abs((e / m) % 10);
                           auto const digits         = e / n;
-                          auto const adjust         = e > 0 ? 1 : -1;
-                          return rounding_digit < 5 ? digits * n : (digits + adjust) * n;
+                          auto const adjust         = rounding_digit < 5 ? 0 : e > 0 ? 1 : -1;
+                          return (digits + adjust) * n;
                         });
     }
 
