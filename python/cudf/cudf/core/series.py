@@ -890,10 +890,9 @@ class Series(Frame, Serializable):
         elif isinstance(arg, cudf.Series):
             if not arg.index.is_unique:
                 raise ValueError(
-                    """Reindexing only valid with
+                '''Reindexing only valid with
                 uniquely valued Index objects
-                """
-                )
+                ''')
             lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
             rhs = cudf.DataFrame(
                 {
@@ -908,11 +907,6 @@ class Series(Frame, Serializable):
             result = res["s"]
             result.name = self.name
             result.index = self.index
-        elif isinstance(self._column, cudf.core.column.CategoricalColumn):
-            raise TypeError(
-                "User defined functions are currently not "
-                "supported on Series with dtypes `str` and`category`."
-            )
         else:
             result = self.applymap(arg)
         return result
@@ -2064,7 +2058,7 @@ class Series(Frame, Serializable):
         """
         return self._column.to_gpu_array(fillna=fillna)
 
-    def to_pandas(self, index=True, nullable=False, **kwargs):
+    def to_pandas(self, index=True, **kwargs):
         """
         Convert to a Pandas Series.
 
@@ -2092,7 +2086,7 @@ class Series(Frame, Serializable):
 
         if index is True:
             index = self.index.to_pandas()
-        s = self._column.to_pandas(index=index, nullable=nullable)
+        s = self._column.to_pandas(index=index)
         s.name = self.name
         return s
 
