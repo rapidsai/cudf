@@ -27,6 +27,12 @@ namespace cudf {
 
 namespace detail {
 
+float __device__ generic_round(float f) { return roundf(f); }
+double __device__ generic_round(double d) { return ::round(d); }
+
+float __device__ generic_modf(float a, float* b) { return modff(a, b); }
+double __device__ generic_modf(double a, double* b) { return modf(a, b); }
+
 struct round_fn {
   template <typename T, typename... Args>
   std::enable_if_t<not cudf::is_numeric<T>(), std::unique_ptr<column>> operator()(Args&&... args)
@@ -44,30 +50,30 @@ struct round_fn {
   {
     auto result   = cudf::make_fixed_width_column(input.type(), input.size());
     auto out_view = result->mutable_view();
-    auto const n  = std::pow(10, std::abs(decimal_places));
+    T const n     = std::pow(10, std::abs(decimal_places));
 
     if (decimal_places == 0)
       thrust::transform(rmm::exec_policy(stream)->on(stream),
                         input.begin<T>(),
                         input.end<T>(),
                         out_view.begin<T>(),
-                        [] __device__(T e) -> T { return ::round(e); });
+                        [] __device__(T e) -> T { return generic_round(e); });
     else if (decimal_places > 0)
       thrust::transform(rmm::exec_policy(stream)->on(stream),
                         input.begin<T>(),
                         input.end<T>(),
                         out_view.begin<T>(),
                         [n] __device__(T e) -> T {
-                          double integer_part;
-                          double fractional_part = std::modf(e, &integer_part);
-                          return integer_part + ::round(fractional_part * n) / n;
+                          T integer_part;
+                          T const fractional_part = generic_modf(e, &integer_part);
+                          return integer_part + generic_round(fractional_part * n) / n;
                         });
     else  // decimal_places < 0
       thrust::transform(rmm::exec_policy(stream)->on(stream),
                         input.begin<T>(),
                         input.end<T>(),
                         out_view.begin<T>(),
-                        [n] __device__(T e) -> T { return ::round(e / n) * n; });
+                        [n] __device__(T e) -> T { return generic_round(e / n) * n; });
 
     return result;
   }
