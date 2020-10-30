@@ -414,8 +414,6 @@ rmm::device_buffer bitmask_and(std::vector<bitmask_type const *> const &masks,
   rmm::device_buffer dest_mask{};
   auto num_bytes = bitmask_allocation_size_bytes(mask_size);
 
-  auto number_of_mask_words = num_bitmask_words(mask_size);
-
   dest_mask = rmm::device_buffer{num_bytes, stream, mr};
   inplace_bitmask_and(
     static_cast<bitmask_type *>(dest_mask.data()), masks, begin_bits, mask_size, stream, mr);
@@ -447,7 +445,7 @@ cudf::size_type count_set_bits(bitmask_type const *bitmask,
   count_set_bits_kernel<block_size><<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
     bitmask, start, stop - 1, non_zero_count.data());
 
-  return non_zero_count.value();
+  return non_zero_count.value(stream);
 }
 
 cudf::size_type count_unset_bits(bitmask_type const *bitmask,
@@ -473,7 +471,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
     CUDF_EXPECTS(end >= begin, "End index cannot be smaller than the starting index.");
   }
 
-  if (indices.size() == 0) {
+  if (indices.empty()) {
     return std::vector<size_type>{};
   } else if (bitmask == nullptr) {
     std::vector<size_type> ret(indices.size() / 2);
@@ -569,7 +567,7 @@ std::vector<size_type> segmented_count_unset_bits(bitmask_type const *bitmask,
                                                   std::vector<size_type> const &indices,
                                                   cudaStream_t stream)
 {
-  if (indices.size() == 0) {
+  if (indices.empty()) {
     return std::vector<size_type>{};
   } else if (bitmask == nullptr) {
     return std::vector<size_type>(indices.size() / 2, 0);

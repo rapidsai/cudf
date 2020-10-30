@@ -14,7 +14,12 @@ from cudf import concat
 from cudf.core import DataFrame, Series
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import (
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    assert_eq,
+    assert_exceptions_equal,
+)
 from cudf.utils import dtypes as dtypeutils
 
 data_list = [
@@ -2144,6 +2149,49 @@ def test_string_str_rindex(data, sub, er):
 
 
 @pytest.mark.parametrize(
+    "data,sub,expect",
+    [
+        (
+            ["abc", "xyz", "a", "ab", "123", "097"],
+            ["b", "y", "a", "c", "4", "8"],
+            [True, True, True, False, False, False],
+        ),
+        (
+            ["A B", "1.5", "3,000", "23", "³", "⅕"],
+            ["A B", ".", ",", "1", " ", " "],
+            [True, True, True, False, False, False],
+        ),
+        (
+            [" ", "\t", "\r", "\f ", "\n", ""],
+            ["", "\t", "\r", "xx", "yy", "zz"],
+            [True, True, True, False, False, False],
+        ),
+        (
+            ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+            ["$", "B", "ab", "*", "@", "dog"],
+            [True, True, True, False, False, False],
+        ),
+        (
+            ["hello", "there", "world", "-1234", None, "accént"],
+            ["lo", "e", "o", "+1234", " ", "e"],
+            [True, True, True, False, None, False],
+        ),
+        (
+            ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", "", "x", None],
+            ["A", "B", "C", " ", "y", "e"],
+            [True, True, True, False, False, None],
+        ),
+    ],
+)
+def test_string_contains_multi(data, sub, expect):
+    gs = Series(data)
+    sub = Series(sub)
+    got = gs.str.contains(sub)
+    expect = Series(expect)
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
     "data",
     [
         ["abc", "xyz", "a", "ab", "123", "097"],
@@ -2404,13 +2452,13 @@ def test_string_typecast_error(data, obj_type, dtype):
     psr = pd.Series(data, dtype=obj_type)
     gsr = Series(data, dtype=obj_type)
 
-    try:
-        psr.astype(dtype=dtype)
-    except Exception as e:
-        with pytest.raises(type(e)):
-            gsr.astype(dtype=dtype)
-    else:
-        raise AssertionError("Was expecting `psr.astype` to fail")
+    assert_exceptions_equal(
+        lfunc=psr.astype,
+        rfunc=gsr.astype,
+        lfunc_args_and_kwargs=([dtype],),
+        rfunc_args_and_kwargs=([dtype],),
+        compare_error_message=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -2792,39 +2840,28 @@ def test_string_product():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = Series(["1", "2", "3", "4", "5"])
 
-    try:
-        psr.product()
-    except Exception as e:
-        with pytest.raises(
-            type(e),
-            match=re.escape(f"cannot perform prod with type {sr.dtype}"),
-        ):
-            sr.product()
-    else:
-        raise AssertionError("psr.product() should've failed")
+    assert_exceptions_equal(
+        lfunc=psr.product,
+        rfunc=sr.product,
+        expected_error_message=re.escape(
+            f"cannot perform prod with type {sr.dtype}"
+        ),
+    )
 
 
 def test_string_var():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = Series(["1", "2", "3", "4", "5"])
 
-    try:
-        psr.var()
-    except Exception as e:
-        with pytest.raises(type(e)):
-            sr.var()
-    else:
-        raise AssertionError("psr.var() should've failed")
+    assert_exceptions_equal(
+        lfunc=psr.var, rfunc=sr.var, compare_error_message=False
+    )
 
 
 def test_string_std():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = Series(["1", "2", "3", "4", "5"])
 
-    try:
-        psr.std()
-    except Exception as e:
-        with pytest.raises(type(e)):
-            sr.std()
-    else:
-        raise AssertionError("psr.std() should've failed")
+    assert_exceptions_equal(
+        lfunc=psr.std, rfunc=sr.std, compare_error_message=False
+    )

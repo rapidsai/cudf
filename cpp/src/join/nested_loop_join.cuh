@@ -86,7 +86,7 @@ size_type estimate_nested_loop_join_output_size(table_device_view left,
   int num_sms{-1};
   CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev_id));
 
-  size_estimate.set_value(0);
+  size_estimate.set_value(0, stream);
 
   row_equality equality{left, right, compare_nulls == null_equality::EQUAL};
   // Determine number of output rows without actually building the output to simply
@@ -95,7 +95,7 @@ size_type estimate_nested_loop_join_output_size(table_device_view left,
     left, right, JoinKind, equality, size_estimate.data());
   CHECK_CUDA(stream);
 
-  h_size_estimate = size_estimate.value();
+  h_size_estimate = size_estimate.value(stream);
 
   return h_size_estimate;
 }
