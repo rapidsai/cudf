@@ -190,21 +190,12 @@ def to_datetime(
                     )
 
                     if times_column is None:
-                        times_column = current_col.binary_operator(
-                            binop="mul", rhs=factor
-                        )
+                        times_column = current_col * factor
                     else:
-                        times_column = times_column.binary_operator(
-                            binop="add",
-                            rhs=current_col.binary_operator(
-                                binop="mul", rhs=factor
-                            ),
-                        )
+                        times_column = times_column + (current_col * factor)
             if times_column is not None:
-                col = (
-                    col.astype(dtype="int64")
-                    .binary_operator(binop="add", rhs=times_column)
-                    .astype(dtype=col.dtype)
+                col = (col.astype(dtype="int64") + times_column).astype(
+                    dtype=col.dtype
                 )
             return cudf.Series(col, index=arg.index)
         elif isinstance(arg, cudf.Index):
@@ -269,7 +260,7 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
             factor = as_scalar(
                 column.datetime._numpy_to_pandas_conversion[unit]
             )
-            col = col.binary_operator(binop="mul", rhs=factor)
+            col = col * factor
 
         if format is not None:
             # Converting to int because,
@@ -297,7 +288,7 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
                 column.datetime._numpy_to_pandas_conversion[unit]
                 / column.datetime._numpy_to_pandas_conversion["s"]
             )
-            col = col.binary_operator(binop="mul", rhs=factor)
+            col = col * factor
 
         if format is not None:
             col = col.astype("str").as_datetime_column(
