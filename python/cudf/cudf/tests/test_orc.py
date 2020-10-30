@@ -362,3 +362,12 @@ def test_orc_reader_decimal_type(datadir, orc_file):
     df["col8"] = df["col8"].astype("str")
 
     assert_eq(pdf, df)
+
+
+def test_orc_reader_boolean_type(datadir):
+    file_path = datadir / "TestOrcFile.boolean.orc"
+
+    pdf = pd.read_orc(file_path)
+    df = cudf.read_orc(file_path).to_pandas()
+
+    assert_eq(pdf, df)
