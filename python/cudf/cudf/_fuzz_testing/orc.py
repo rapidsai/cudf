@@ -51,9 +51,10 @@ class OrcReader(IOFuzz):
             dtypes_list = list(
                 cudf.utils.dtypes.ALL_TYPES
                 - {"category"}
+                # Following dtypes are not supported by orc
+                # https://orc.apache.org/specification/ORCv0/
                 - cudf.utils.dtypes.TIMEDELTA_TYPES
                 - cudf.utils.dtypes.UNSIGNED_TYPES
-                - cudf.utils.dtypes.DATETIME_TYPES
             )
 
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
