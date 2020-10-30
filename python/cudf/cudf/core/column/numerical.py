@@ -3,11 +3,11 @@
 from numbers import Number
 
 import numpy as np
+from nvtx import annotate
 from pandas.api.types import is_integer_dtype
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.nvtx import annotate
 from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.scalar import Scalar
 from cudf.core.buffer import Buffer
@@ -93,8 +93,10 @@ class NumericalColumn(column.ColumnBase):
         elif rhs is None:
             out_dtype = self.dtype
         else:
-            msg = "{!r} operator not supported between {} and {}"
-            raise TypeError(msg.format(binop, type(self), type(rhs)))
+            raise TypeError(
+                f"'{binop}' operator not supported between "
+                f"{type(self).__name__} and {type(rhs).__name__}"
+            )
         return _numeric_column_binop(
             lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect
         )
@@ -126,7 +128,7 @@ class NumericalColumn(column.ColumnBase):
                     mask=self.mask,
                 )
         else:
-            raise TypeError("cannot broadcast {}".format(type(other)))
+            raise TypeError(f"cannot broadcast {type(other)}")
 
     def int2ip(self):
         if self.dtype != np.dtype("int64"):
@@ -226,11 +228,7 @@ class NumericalColumn(column.ColumnBase):
 
         n = len(self)
         miu = self.mean()
-        m4_numerator = (
-            self.binary_operator("sub", miu).binary_operator(
-                "pow", self.normalize_binop_value(4)
-            )
-        ).sum()
+        m4_numerator = ((self - miu) ** self.normalize_binop_value(4)).sum()
         V = self.var()
 
         if V == 0:
@@ -255,13 +253,7 @@ class NumericalColumn(column.ColumnBase):
 
         n = len(self)
         miu = self.mean()
-        m3 = (
-            (
-                self.binary_operator("sub", miu).binary_operator(
-                    "pow", self.normalize_binop_value(3)
-                )
-            ).sum()
-        ) / n
+        m3 = (((self - miu) ** self.normalize_binop_value(3)).sum()) / n
         m2 = self.var(ddof=0)
 
         if m2 == 0:
@@ -324,9 +316,7 @@ class NumericalColumn(column.ColumnBase):
         ):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
-        result = self.binary_operator("sub", self.mean()).binary_operator(
-            "mul", other.binary_operator("sub", other.mean())
-        )
+        result = (self - self.mean()) * (other - other.mean())
         cov_sample = result.sum() / (len(self) - 1)
         return cov_sample
 
@@ -388,9 +378,7 @@ class NumericalColumn(column.ColumnBase):
         elif dkind == "b":
             return self.dtype.type(False)
         else:
-            raise TypeError(
-                "numeric column of {} has no NaN value".format(self.dtype)
-            )
+            raise TypeError(f"numeric column of {self.dtype} has no NaN value")
 
     def find_and_replace(self, to_replace, replacement, all_nan):
         """
@@ -428,9 +416,8 @@ class NumericalColumn(column.ColumnBase):
             fill_value_casted = self.dtype.type(fill_value)
             if not np.isnan(fill_value) and (fill_value_casted != fill_value):
                 raise TypeError(
-                    "Cannot safely cast non-equivalent {} to {}".format(
-                        type(fill_value).__name__, self.dtype.name
-                    )
+                    f"Cannot safely cast non-equivalent "
+                    f"{type(fill_value).__name__} to {self.dtype.name}"
                 )
             fill_value = fill_value_casted
         else:
@@ -588,13 +575,12 @@ def _safe_cast_to_int(col, dtype):
         return col
 
     new_col = col.astype(dtype)
-    if new_col.binary_operator("eq", col).all():
+    if (new_col == col).all():
         return new_col
     else:
         raise TypeError(
-            "Cannot safely cast non-equivalent {} to {}".format(
-                col.dtype.type.__name__, np.dtype(dtype).type.__name__
-            )
+            f"Cannot safely cast non-equivalent "
+            f"{col.dtype.type.__name__} to {np.dtype(dtype).type.__name__}"
         )
 
 

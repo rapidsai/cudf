@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
  **/
 
 #include "reader_impl.hpp"
-#include "timezone.h"
+#include "timezone.cuh"
 
 #include <io/comp/gpuinflate.h>
 
@@ -191,7 +191,7 @@ class metadata {
       for (size_t i = 0, count = 0; i < ff.stripes.size(); ++i) {
         count += ff.stripes[i].numberOfRows;
         if (count > static_cast<size_t>(row_start)) {
-          if (selection.size() == 0) {
+          if (selection.empty()) {
             stripe_skip_rows =
               static_cast<size_type>(row_start - (count - ff.stripes[i].numberOfRows));
           }
@@ -254,7 +254,7 @@ class metadata {
     } else {
       // For now, only select all leaf nodes
       for (int i = 0; i < get_num_columns(); ++i) {
-        if (ff.types[i].subtypes.size() == 0) {
+        if (ff.types[i].subtypes.empty()) {
           selection.emplace_back(i);
           if (ff.types[i].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
         }
@@ -521,7 +521,7 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
                                       size_t num_dicts,
                                       size_t skip_rows,
                                       size_t num_rows,
-                                      const std::vector<int64_t> &timezone_table,
+                                      timezone_table const &tz_table,
                                       const rmm::device_vector<gpu::RowGroup> &row_groups,
                                       size_t row_index_stride,
                                       std::vector<column_buffer> &out_buffers,
@@ -542,9 +542,6 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
   // Allocate global dictionary for deserializing
   rmm::device_vector<gpu::DictionaryEntry> global_dict(num_dicts);
 
-  // Allocate timezone transition table timestamp conversion
-  rmm::device_vector<int64_t> tz_table = timezone_table;
-
   CUDA_TRY(cudaMemcpyAsync(
     chunks.device_ptr(), chunks.host_ptr(), chunks.memory_size(), cudaMemcpyHostToDevice, stream));
   CUDA_TRY(gpu::DecodeNullsAndStringDictionaries(chunks.device_ptr(),
@@ -560,8 +557,7 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
                                     num_stripes,
                                     num_rows,
                                     skip_rows,
-                                    tz_table.data().get(),
-                                    tz_table.size(),
+                                    tz_table.view(),
                                     row_groups.data().get(),
                                     row_groups.size() / num_columns,
                                     row_index_stride,
@@ -631,7 +627,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   }
 
   // If no rows or stripes to read, return empty columns
-  if (num_rows <= 0 || selected_stripes.size() == 0) {
+  if (num_rows <= 0 || selected_stripes.empty()) {
     std::transform(column_types.cbegin(),
                    column_types.cend(),
                    std::back_inserter(out_columns),
@@ -767,12 +763,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       }
 
       // Setup table for converting timestamp columns from local to UTC time
-      std::vector<int64_t> tz_table;
-      if (_has_timestamp_column) {
-        CUDF_EXPECTS(
-          BuildTimezoneTransitionTable(tz_table, selected_stripes[0].second->writerTimezone),
-          "Cannot setup timezone LUT");
-      }
+      auto const tz_table =
+        _has_timestamp_column
+          ? build_timezone_transition_table(selected_stripes[0].second->writerTimezone)
+          : timezone_table{};
 
       std::vector<column_buffer> out_buffers;
       for (size_t i = 0; i < column_types.size(); ++i) {

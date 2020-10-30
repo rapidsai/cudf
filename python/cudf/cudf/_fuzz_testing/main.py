@@ -18,6 +18,7 @@ class PythonFuzz(object):
             runs=kwargs.get("runs", -1),
             max_string_length=kwargs.get("max_string_length", None),
             params=params,
+            write_data_on_failure=kwargs.get("write_data_on_failure", True),
         )
 
     def __call__(self, *args, **kwargs):

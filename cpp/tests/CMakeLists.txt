@@ -264,6 +264,7 @@ ConfigureTest(FIXED_POINT_TEST "${FIXED_POINT_TEST_SRC}")
 # - unary tests -----------------------------------------------------------------------------------
 
 set(UNARY_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/unary/math_ops_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unary/unary_ops_test.cpp")
 
 ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
@@ -429,6 +430,7 @@ ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
 
 set(MERGE_TEST_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_test.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_dictionary_test.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_string_test.cpp")
 
 ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
@@ -459,6 +461,14 @@ set(GROUPED_ROLLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/grouped_rolling/grouped_rolling_test.cpp")
 
 ConfigureTest(GROUPED_ROLLING_TEST "${GROUPED_ROLLING_TEST_SRC}")
+
+###################################################################################################
+# - lead/lag rolling tests ---------------------------------------------------------------------------------
+
+set(LEAD_LAG_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/lead_lag/lead_lag_test.cpp")
+
+ConfigureTest(LEAD_LAG_TEST "${LEAD_LAG_TEST_SRC}")
 
 ###################################################################################################
 # - filling test ----------------------------------------------------------------------------------

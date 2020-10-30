@@ -221,11 +221,11 @@ struct metadata : public FileMetaData {
 
     const auto len           = source->size();
     const auto header_buffer = source->host_read(0, header_len);
-    const auto header        = (const file_header_s *)header_buffer->data();
+    const auto header        = reinterpret_cast<const file_header_s *>(header_buffer->data());
     const auto ender_buffer  = source->host_read(len - ender_len, ender_len);
-    const auto ender         = (const file_ender_s *)ender_buffer->data();
+    const auto ender         = reinterpret_cast<const file_ender_s *>(ender_buffer->data());
     CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
-    CUDF_EXPECTS(header->magic == PARQUET_MAGIC && ender->magic == PARQUET_MAGIC,
+    CUDF_EXPECTS(header->magic == parquet_magic && ender->magic == parquet_magic,
                  "Corrupted header or footer");
     CUDF_EXPECTS(ender->footer_len != 0 && ender->footer_len <= (len - header_len - ender_len),
                  "Incorrect footer length");
@@ -899,7 +899,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
         inflate_out[argc].status        = static_cast<uint32_t>(-1000);
         inflate_out[argc].reserved      = 0;
 
-        pages[page].page_data = (uint8_t *)inflate_in[argc].dstDevice;
+        pages[page].page_data = static_cast<uint8_t *>(inflate_in[argc].dstDevice);
         decomp_offset += inflate_in[argc].dstSize;
         argc++;
       });
@@ -1250,7 +1250,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
 
       // the final offset for a list at level N is the size of it's child
       int offset = child.type.id() == type_id::LIST ? child.size - 1 : child.size;
-      cudaMemcpyAsync(((int32_t *)out_buf.data()) + (out_buf.size - 1),
+      cudaMemcpyAsync(static_cast<int32_t *>(out_buf.data()) + (out_buf.size - 1),
                       &offset,
                       sizeof(offset),
                       cudaMemcpyHostToDevice,

@@ -9,12 +9,12 @@ from uuid import uuid4
 import cupy
 import numpy as np
 import pandas as pd
+from nvtx import annotate
 from pandas._config import get_option
 from pandas.api.types import is_dict_like
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.nvtx import annotate
 from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
 from cudf.core.column import (
@@ -855,7 +855,7 @@ class Series(Frame, Serializable):
         """Always raise TypeError when converting a Series
         into a boolean.
         """
-        raise TypeError("can't compute boolean for {!r}".format(type(self)))
+        raise TypeError(f"can't compute boolean for {type(self)}")
 
     def values_to_string(self, nrows=None):
         """Returns a list of string for each element.
@@ -1071,6 +1071,12 @@ class Series(Frame, Serializable):
 
         result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
+            if fn in cudf.utils.utils._EQUALITY_OPS:
+                if not self.index.equals(other.index):
+                    raise ValueError(
+                        "Can only compare identically-labeled "
+                        "Series objects"
+                    )
             lhs, rhs = _align_indices([self, other], allow_non_unique=True)
         else:
             lhs, rhs = self, other
@@ -1956,7 +1962,7 @@ class Series(Frame, Serializable):
         """
         return self._column.to_gpu_array(fillna=fillna)
 
-    def to_pandas(self, index=True, **kwargs):
+    def to_pandas(self, index=True, nullable=False, **kwargs):
         """
         Convert to a Pandas Series.
 
@@ -1984,7 +1990,7 @@ class Series(Frame, Serializable):
 
         if index is True:
             index = self.index.to_pandas()
-        s = self._column.to_pandas(index=index)
+        s = self._column.to_pandas(index=index, nullable=nullable)
         s.name = self.name
         return s
 
@@ -4017,18 +4023,12 @@ class Series(Frame, Serializable):
         group_keys=True,
         as_index=None,
         dropna=True,
-        method=None,
     ):
         if group_keys is not True:
             raise NotImplementedError(
                 "The group_keys keyword is not yet implemented"
             )
         else:
-            if method is not None:
-                warnings.warn(
-                    "The 'method' argument is deprecated and will be unused",
-                    DeprecationWarning,
-                )
             return SeriesGroupBy(
                 self, by=by, level=level, dropna=dropna, sort=sort
             )
@@ -5069,10 +5069,10 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     if a_col.null_count and b_col.null_count:
         a_nulls = a_col.isna()
         b_nulls = b_col.isna()
-        null_values = a_nulls.binary_operator("or", b_nulls)
+        null_values = a_nulls | b_nulls
 
         if equal_nan is True:
-            equal_nulls = a_nulls.binary_operator("and", b_nulls)
+            equal_nulls = a_nulls & b_nulls
 
         del a_nulls, b_nulls
     elif a_col.null_count:

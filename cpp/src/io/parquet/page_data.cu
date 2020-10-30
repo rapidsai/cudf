@@ -181,16 +181,16 @@ __device__ uint32_t InitLevelSection(page_state_s *s,
                                      level_type lvl)
 {
   int32_t len;
-  int level_bits = s->col.level_bits[lvl];
-  int encoding   = lvl == level_type::DEFINITION ? s->page.definition_level_encoding
-                                               : s->page.repetition_level_encoding;
+  int level_bits    = s->col.level_bits[lvl];
+  Encoding encoding = lvl == level_type::DEFINITION ? s->page.definition_level_encoding
+                                                    : s->page.repetition_level_encoding;
 
   if (level_bits == 0) {
     len                       = 0;
     s->initial_rle_run[lvl]   = s->page.num_input_values * 2;  // repeated value
     s->initial_rle_value[lvl] = 0;
     s->lvl_start[lvl]         = cur;
-  } else if (encoding == RLE) {
+  } else if (encoding == Encoding::RLE) {
     if (cur + 4 < end) {
       uint32_t run;
       len = 4 + (cur[0]) + (cur[1] << 8) + (cur[2] << 16) + (cur[3] << 24);
@@ -212,7 +212,7 @@ __device__ uint32_t InitLevelSection(page_state_s *s,
       len      = 0;
       s->error = 2;
     }
-  } else if (encoding == BIT_PACKED) {
+  } else if (encoding == Encoding::BIT_PACKED) {
     len                       = (s->page.num_input_values * level_bits + 7) >> 3;
     s->initial_rle_run[lvl]   = ((s->page.num_input_values + 7) >> 3) * 2 + 1;  // literal run
     s->initial_rle_value[lvl] = 0;
@@ -532,10 +532,10 @@ inline __device__ void gpuOutputString(volatile page_state_s *s, int src_pos, vo
   }
   if (s->dtype_len == 4) {
     // Output hash
-    *reinterpret_cast<uint32_t *>(dstv) = device_str2hash32(ptr, len);
+    *static_cast<uint32_t *>(dstv) = device_str2hash32(ptr, len);
   } else {
     // Output string descriptor
-    nvstrdesc_s *dst = reinterpret_cast<nvstrdesc_s *>(dstv);
+    nvstrdesc_s *dst = static_cast<nvstrdesc_s *>(dstv);
     dst->ptr         = ptr;
     dst->count       = len;
   }
@@ -571,9 +571,9 @@ inline __device__ void gpuStoreOutput(uint32_t *dst,
   src8 -= ofs;  // align to 32-bit boundary
   ofs <<= 3;    // bytes -> bits
   if (dict_pos < dict_size) {
-    bytebuf = *(const uint32_t *)(src8 + dict_pos);
+    bytebuf = *reinterpret_cast<const uint32_t *>(src8 + dict_pos);
     if (ofs) {
-      uint32_t bytebufnext = *(const uint32_t *)(src8 + dict_pos + 4);
+      uint32_t bytebufnext = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 4);
       bytebuf              = __funnelshift_r(bytebuf, bytebufnext, ofs);
     }
   } else {
@@ -600,10 +600,10 @@ inline __device__ void gpuStoreOutput(uint2 *dst,
   src8 -= ofs;  // align to 32-bit boundary
   ofs <<= 3;    // bytes -> bits
   if (dict_pos < dict_size) {
-    v.x = *(const uint32_t *)(src8 + dict_pos + 0);
-    v.y = *(const uint32_t *)(src8 + dict_pos + 4);
+    v.x = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 0);
+    v.y = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 4);
     if (ofs) {
-      uint32_t next = *(const uint32_t *)(src8 + dict_pos + 8);
+      uint32_t next = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 8);
       v.x           = __funnelshift_r(v.x, v.y, ofs);
       v.y           = __funnelshift_r(v.y, next, ofs);
     }
@@ -642,11 +642,11 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s, int src
   if (dict_pos + 4 < dict_size) {
     uint3 v;
     int64_t nanos, secs, days;
-    v.x = *(const uint32_t *)(src8 + dict_pos + 0);
-    v.y = *(const uint32_t *)(src8 + dict_pos + 4);
-    v.z = *(const uint32_t *)(src8 + dict_pos + 8);
+    v.x = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 0);
+    v.y = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 4);
+    v.z = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 8);
     if (ofs) {
-      uint32_t next = *(const uint32_t *)(src8 + dict_pos + 12);
+      uint32_t next = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 12);
       v.x           = __funnelshift_r(v.x, v.y, ofs);
       v.y           = __funnelshift_r(v.y, v.z, ofs);
       v.z           = __funnelshift_r(v.z, next, ofs);
@@ -699,10 +699,10 @@ inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s *s, int src
     uint2 v;
     int64_t val;
     int32_t ts_scale;
-    v.x = *(const uint32_t *)(src8 + dict_pos + 0);
-    v.y = *(const uint32_t *)(src8 + dict_pos + 4);
+    v.x = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 0);
+    v.y = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 4);
     if (ofs) {
-      uint32_t next = *(const uint32_t *)(src8 + dict_pos + 8);
+      uint32_t next = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 8);
       v.x           = __funnelshift_r(v.x, v.y, ofs);
       v.y           = __funnelshift_r(v.y, next, ofs);
     }
@@ -877,16 +877,16 @@ static __device__ void gpuOutputGeneric(volatile page_state_s *s,
     for (unsigned int i = 0; i < len; i += 4) {
       uint32_t bytebuf;
       if (dict_pos < dict_size) {
-        bytebuf = *(const uint32_t *)(src8 + dict_pos);
+        bytebuf = *reinterpret_cast<const uint32_t *>(src8 + dict_pos);
         if (ofs) {
-          uint32_t bytebufnext = *(const uint32_t *)(src8 + dict_pos + 4);
+          uint32_t bytebufnext = *reinterpret_cast<const uint32_t *>(src8 + dict_pos + 4);
           bytebuf              = __funnelshift_r(bytebuf, bytebufnext, ofs);
         }
       } else {
         bytebuf = 0;
       }
       dict_pos += 4;
-      *(uint32_t *)(dst8 + i) = bytebuf;
+      *reinterpret_cast<uint32_t *>(dst8 + i) = bytebuf;
     }
   }
 }
@@ -914,7 +914,7 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
   // Fetch page info
   // NOTE: Assumes that sizeof(PageInfo) <= 256 (and is padded to 4 bytes)
   if (t < sizeof(PageInfo) / sizeof(uint32_t)) {
-    ((uint32_t *)&s->page)[t] = ((const uint32_t *)p)[t];
+    reinterpret_cast<uint32_t *>(&s->page)[t] = reinterpret_cast<const uint32_t *>(p)[t];
   }
   __syncthreads();
   if (s->page.flags & PAGEINFO_FLAGS_DICTIONARY) { return false; }
@@ -923,7 +923,8 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
   if ((uint32_t)chunk_idx < (uint32_t)num_chunks) {
     // NOTE: Assumes that sizeof(ColumnChunkDesc) <= 256 (and is padded to 4 bytes)
     if (t < sizeof(ColumnChunkDesc) / sizeof(uint32_t)) {
-      ((uint32_t *)&s->col)[t] = ((const uint32_t *)&chunks[chunk_idx])[t];
+      reinterpret_cast<uint32_t *>(&s->col)[t] =
+        reinterpret_cast<const uint32_t *>(&chunks[chunk_idx])[t];
     }
   }
 
@@ -1031,7 +1032,7 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
             output_offset = pni->page_start_value;
           }
 
-          pni->data_out = reinterpret_cast<uint8_t *>(s->col.column_data_base[idx]);
+          pni->data_out = static_cast<uint8_t *>(s->col.column_data_base[idx]);
           if (pni->data_out != nullptr) {
             // anything below max depth with a valid data pointer must be a list, so the
             // element size is the size of the offset type.
@@ -1056,8 +1057,8 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
       s->dict_base = 0;
       s->dict_size = 0;
       switch (s->page.encoding) {
-        case PLAIN_DICTIONARY:
-        case RLE_DICTIONARY:
+        case Encoding::PLAIN_DICTIONARY:
+        case Encoding::RLE_DICTIONARY:
           // RLE-packed dictionary indices, first byte indicates index length in bits
           if (((s->col.data_type & 7) == BYTE_ARRAY) && (s->col.str_dict_index)) {
             // String dictionary: use index
@@ -1073,12 +1074,12 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
           s->dict_bits = (cur < end) ? *cur++ : 0;
           if (s->dict_bits > 32 || !s->dict_base) { s->error = (10 << 8) | s->dict_bits; }
           break;
-        case PLAIN:
+        case Encoding::PLAIN:
           s->dict_size = static_cast<int32_t>(end - cur);
           s->dict_val  = 0;
           if ((s->col.data_type & 7) == BOOLEAN) { s->dict_run = s->dict_size * 2 + 1; }
           break;
-        case RLE: s->dict_run = 0; break;
+        case Encoding::RLE: s->dict_run = 0; break;
         default:
           s->error = 1;  // Unsupported encoding
           break;
@@ -1681,25 +1682,25 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
         int leaf_level_index = s->col.max_nesting_depth - 1;
 
         uint32_t dtype_len = s->dtype_len;
-        uint8_t *dst       = s->page.nesting[leaf_level_index].data_out +
-                       static_cast<size_t>(output_value_idx) * dtype_len;
+        void *dst          = s->page.nesting[leaf_level_index].data_out +
+                    static_cast<size_t>(output_value_idx) * dtype_len;
         if (dtype == BYTE_ARRAY)
           gpuOutputString(s, src_pos, dst);
         else if (dtype == BOOLEAN)
-          gpuOutputBoolean(s, src_pos, dst);
+          gpuOutputBoolean(s, src_pos, static_cast<uint8_t *>(dst));
         else if (s->col.converted_type == DECIMAL)
-          gpuOutputDecimal(s, src_pos, reinterpret_cast<double *>(dst), dtype);
+          gpuOutputDecimal(s, src_pos, static_cast<double *>(dst), dtype);
         else if (dtype == INT96)
-          gpuOutputInt96Timestamp(s, src_pos, reinterpret_cast<int64_t *>(dst));
+          gpuOutputInt96Timestamp(s, src_pos, static_cast<int64_t *>(dst));
         else if (dtype_len == 8) {
           if (s->ts_scale)
-            gpuOutputInt64Timestamp(s, src_pos, reinterpret_cast<int64_t *>(dst));
+            gpuOutputInt64Timestamp(s, src_pos, static_cast<int64_t *>(dst));
           else
-            gpuOutputFast(s, src_pos, reinterpret_cast<uint2 *>(dst));
+            gpuOutputFast(s, src_pos, static_cast<uint2 *>(dst));
         } else if (dtype_len == 4)
-          gpuOutputFast(s, src_pos, reinterpret_cast<uint32_t *>(dst));
+          gpuOutputFast(s, src_pos, static_cast<uint32_t *>(dst));
         else
-          gpuOutputGeneric(s, src_pos, dst, dtype_len);
+          gpuOutputGeneric(s, src_pos, static_cast<uint8_t *>(dst), dtype_len);
       }
 
       if (t == out_thread0) { *(volatile int32_t *)&s->out_pos = target_pos; }
@@ -1729,7 +1730,9 @@ struct chunk_row_output_iter {
 };
 
 struct start_offset_output_iterator {
-  PageInfo *p;
+  PageInfo *pages;
+  int *page_indices;
+  int cur_index;
   int src_col_schema;
   int nesting_depth;
   int empty               = 0;
@@ -1741,21 +1744,21 @@ struct start_offset_output_iterator {
 
   start_offset_output_iterator operator+ __host__ __device__(int i)
   {
-    return start_offset_output_iterator{p + i, src_col_schema, nesting_depth};
+    return start_offset_output_iterator{
+      pages, page_indices, cur_index + i, src_col_schema, nesting_depth};
   }
 
-  void operator++ __host__ __device__() { p++; }
+  void operator++ __host__ __device__() { cur_index++; }
 
-  reference operator[] __device__(int i) { return dereference(p + i); }
-  reference operator*__device__() { return dereference(p); }
+  reference operator[] __device__(int i) { return dereference(cur_index + i); }
+  reference operator*__device__() { return dereference(cur_index); }
 
  private:
-  reference __device__ dereference(PageInfo *p)
+  reference __device__ dereference(int index)
   {
-    if (p->src_col_schema != src_col_schema || p->flags & PAGEINFO_FLAGS_DICTIONARY) {
-      return empty;
-    }
-    return p->nesting[nesting_depth].page_start_value;
+    PageInfo const &p = pages[page_indices[index]];
+    if (p.src_col_schema != src_col_schema || p.flags & PAGEINFO_FLAGS_DICTIONARY) { return empty; }
+    return p.nesting[nesting_depth].page_start_value;
   }
 };
 
@@ -1803,6 +1806,39 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
   // back, this value will get overwritten later on).
   pages.device_to_host(stream, true);
 
+  // ordering of pages is by input column schema, repeated across row groups.  so
+  // if we had 3 columns, each with 2 pages, and 1 row group, our schema values might look like
+  //
+  // 1, 1, 2, 2, 3, 3
+  //
+  // However, if we had more than one row group, the pattern would be
+  //
+  // 1, 1, 2, 2, 3, 3, 1, 1, 2, 2, 3, 3
+  // ^ row group 0     |
+  //                   ^ row group 1
+  //
+  // To use exclusive_scan_by_key, the ordering we actually want is
+  //
+  // 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
+  //
+  // We also need to preserve key-relative page ordering, so we need to use a stable sort.
+  rmm::device_uvector<int> page_keys(pages.size(), stream);
+  rmm::device_uvector<int> page_index(pages.size(), stream);
+  {
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+                      pages.device_ptr(),
+                      pages.device_ptr() + pages.size(),
+                      page_keys.begin(),
+                      [] __device__(PageInfo const &page) { return page.src_col_schema; });
+
+    thrust::sequence(rmm::exec_policy(stream)->on(stream), page_index.begin(), page_index.end());
+    thrust::stable_sort_by_key(rmm::exec_policy(stream)->on(stream),
+                               page_keys.begin(),
+                               page_keys.end(),
+                               page_index.begin(),
+                               thrust::less<int>());
+  }
+
   // compute output column sizes by examining the pages of the -input- columns
   for (size_t idx = 0; idx < input_columns.size(); idx++) {
     auto const &input_col = input_columns[idx];
@@ -1814,15 +1850,18 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
       auto &out_buf = (*cols)[input_col.nesting[l_idx]];
       cols          = &out_buf.children;
 
+      // size iterator. indexes pages by sorted order
       auto size_input = thrust::make_transform_iterator(
-        pages.device_ptr(), [src_col_schema, l_idx] __device__(PageInfo const &page) {
+        page_index.begin(),
+        [src_col_schema, l_idx, pages = pages.device_ptr()] __device__(int index) {
+          auto const &page = pages[index];
           if (page.src_col_schema != src_col_schema || page.flags & PAGEINFO_FLAGS_DICTIONARY) {
             return 0;
           }
           return page.nesting[l_idx].size;
         });
 
-      // column size
+      // compute column size.
       // for struct columns, higher levels of the output columns are shared between input
       // columns. so don't compute any given level more than once.
       if (out_buf.size == 0) {
@@ -1836,16 +1875,16 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
         out_buf.create(size, stream, mr);
       }
 
-      // per-page start offset
-      auto key_input = thrust::make_transform_iterator(
-        pages.device_ptr(), [] __device__(PageInfo const &page) { return page.src_col_schema; });
-      thrust::exclusive_scan_by_key(
-        rmm::exec_policy(stream)->on(stream),
-        key_input,
-        key_input + pages.size(),
-        size_input,
-        start_offset_output_iterator{
-          pages.device_ptr(), static_cast<int>(src_col_schema), static_cast<int>(l_idx)});
+      // compute per-page start offset
+      thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream),
+                                    page_keys.begin(),
+                                    page_keys.end(),
+                                    size_input,
+                                    start_offset_output_iterator{pages.device_ptr(),
+                                                                 page_index.begin(),
+                                                                 0,
+                                                                 static_cast<int>(src_col_schema),
+                                                                 static_cast<int>(l_idx)});
     }
   }
 

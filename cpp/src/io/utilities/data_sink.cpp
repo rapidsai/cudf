@@ -39,7 +39,7 @@ class file_sink : public data_sink {
   void host_write(void const* data, size_t size) override
   {
     _output_stream.seekp(_bytes_written);
-    _output_stream.write(reinterpret_cast<char const*>(data), size);
+    _output_stream.write(static_cast<char const*>(data), size);
     _bytes_written += size;
   }
 
@@ -78,7 +78,7 @@ class host_buffer_sink : public data_sink {
 
   void host_write(void const* data, size_t size) override
   {
-    char const* char_array = reinterpret_cast<char const*>(data);
+    auto char_array = static_cast<char const*>(data);
     buffer_->insert(buffer_->end(), char_array, char_array + size);
   }
 

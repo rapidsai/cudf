@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import datetime as dt
 import numbers
 from collections import namedtuple
@@ -43,6 +45,32 @@ cudf_dtypes_to_pandas_dtypes = {
     np.dtype("int64"): pd.Int64Dtype(),
     np.dtype("bool_"): pd.BooleanDtype(),
     np.dtype("object"): pd.StringDtype(),
+}
+
+pyarrow_dtypes_to_pandas_dtypes = {
+    pa.uint8(): pd.UInt8Dtype(),
+    pa.uint16(): pd.UInt16Dtype(),
+    pa.uint32(): pd.UInt32Dtype(),
+    pa.uint64(): pd.UInt64Dtype(),
+    pa.int8(): pd.Int8Dtype(),
+    pa.int16(): pd.Int16Dtype(),
+    pa.int32(): pd.Int32Dtype(),
+    pa.int64(): pd.Int64Dtype(),
+    pa.bool_(): pd.BooleanDtype(),
+    pa.string(): pd.StringDtype(),
+}
+
+pandas_dtypes_to_cudf_dtypes = {
+    pd.UInt8Dtype(): np.dtype("uint8"),
+    pd.UInt16Dtype(): np.dtype("uint16"),
+    pd.UInt32Dtype(): np.dtype("uint32"),
+    pd.UInt64Dtype(): np.dtype("uint64"),
+    pd.Int8Dtype(): np.dtype("int8"),
+    pd.Int16Dtype(): np.dtype("int16"),
+    pd.Int32Dtype(): np.dtype("int32"),
+    pd.Int64Dtype(): np.dtype("int64"),
+    pd.BooleanDtype(): np.dtype("bool_"),
+    pd.StringDtype(): np.dtype("object"),
 }
 
 SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
@@ -464,7 +492,7 @@ def check_cast_unsupported_dtype(dtype):
         return np.dtype("float32")
 
     raise NotImplementedError(
-        "Cannot cast {0} dtype, as it is not supported by CuDF.".format(dtype)
+        f"Cannot cast {dtype} dtype, as it is not supported by CuDF."
     )
 
 
@@ -499,3 +527,44 @@ def _get_nan_for_dtype(dtype):
         return dtype.type("nan")
     else:
         return np.float64("nan")
+
+
+def find_common_type(dtypes):
+    """
+    Wrapper over np.find_common_type to handle special cases
+
+    Corner cases:
+    1. "M8", "M8" -> "M8" | "m8", "m8" -> "m8"
+
+    Parameters
+    ----------
+    dtypes : iterable, sequence of dtypes to find common types
+
+    Returns
+    -------
+    dtype : np.dtype optional, the result from np.find_common_type,
+    None if input is empty
+
+    """
+
+    if len(dtypes) == 0:
+        return None
+
+    # Aggregate same types
+    dtypes = set(dtypes)
+
+    # Corner case 1:
+    # Resort to np.result_type to handle "M" and "m" types separately
+    dt_dtypes = set(filter(lambda t: is_datetime_dtype(t), dtypes))
+    if len(dt_dtypes) > 0:
+        dtypes = dtypes - dt_dtypes
+        dtypes.add(np.result_type(*dt_dtypes))
+
+    td_dtypes = set(
+        filter(lambda t: pd.api.types.is_timedelta64_dtype(t), dtypes)
+    )
+    if len(td_dtypes) > 0:
+        dtypes = dtypes - td_dtypes
+        dtypes.add(np.result_type(*td_dtypes))
+
+    return np.find_common_type(list(dtypes), [])
