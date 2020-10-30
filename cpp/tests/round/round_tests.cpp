@@ -170,6 +170,17 @@ TEST_F(RoundTests, DoubleMaxTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TEST_F(RoundTests, AvoidOverFlowTest)
+{
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<double>;
+
+  auto const input    = fw_wrapper{std::numeric_limits<double>::max()};
+  auto const expected = fw_wrapper{std::numeric_limits<double>::max()};
+  auto const result   = cudf::round(input, 2, cudf::rounding_method::HALF_UP);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TYPED_TEST(RoundTestsIntegerTypes, SimpleIntegerTestNeg2)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
