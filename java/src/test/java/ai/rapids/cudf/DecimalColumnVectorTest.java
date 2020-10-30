@@ -205,7 +205,7 @@ public class DecimalColumnVectorTest extends CudfTestBase {
                      if (rdSeed.nextBoolean()) {
                        b.appendNull();
                      } else {
-                       b.append(BigDecimal.valueOf(rdSeed.nextInt(), -decType.getScale()));
+                       b.append(BigDecimal.valueOf(rdSeed.nextInt() / 10, -decType.getScale()));
                      }
                    }
                  });
@@ -217,8 +217,8 @@ public class DecimalColumnVectorTest extends CudfTestBase {
                   dst.appendNull();
                   gtBuilder.appendNull();
                 } else {
-                  BigDecimal a = BigDecimal.valueOf(rdSeed.nextInt(), -decType.getScale());
-                  dst.append(a);
+                  BigDecimal a = BigDecimal.valueOf(rdSeed.nextInt() / 10, -decType.getScale());
+                  dst.appendUnscaledDecimal(a.unscaledValue().intValueExact());
                   gtBuilder.append(a);
                 }
               }
