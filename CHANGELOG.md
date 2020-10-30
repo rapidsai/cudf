@@ -57,13 +57,13 @@
 - PR #6575 Fix JNI RMM initialize with no pool allocator limit
 - PR #6636 Fix orc boolean column corruption issue
 - PR #6582 Add missing `device_scalar` stream parameters
-- PR #6596 Fix memory usage calculation	
-- PR #6595 Fix JNI build, broken by to_arrow() signature change	
-- PR #6601 Fix timezone offset when reading ORC files	
-- PR #6603 Use correct stream in hash_join.	
-- PR #6607 Fix integer overflow in ORC encoder	
-- PR #6617 Fix JNI native dependency load order	
-- PR #6629 Fix JNI CMake	
+- PR #6596 Fix memory usage calculation
+- PR #6595 Fix JNI build, broken by to_arrow() signature change
+- PR #6601 Fix timezone offset when reading ORC files
+- PR #6603 Use correct stream in hash_join.
+- PR #6607 Fix integer overflow in ORC encoder
+- PR #6617 Fix JNI native dependency load order
+- PR #6629 Fix JNI CMake
 - PR #6633 Fix Java HostColumnVector unnecessarily loading native dependencies
 
 
