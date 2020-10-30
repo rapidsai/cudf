@@ -6,6 +6,7 @@
 - PR #6460 Add is_timestamp format check API
 - PR #6568 Add function to create hashed vocabulary file from raw vocabulary
 - PR #6581 Add JNI API to check if PTDS is enabled
+- PR #6625 Add INT96 timestamp writing option to parquet writer
 
 ## Improvements
 
