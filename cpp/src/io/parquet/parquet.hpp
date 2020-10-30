@@ -45,22 +45,29 @@ struct file_ender_s {
 };
 
 // thrift generated code simplified.
-struct StringType { };
-struct MapType { };
-struct ListType { };
-struct EnumType { };
+struct StringType {
+};
+struct MapType {
+};
+struct ListType {
+};
+struct EnumType {
+};
 struct DecimalType {
   int32_t scale     = 0;
   int32_t precision = 0;
 };
-struct DateType { };
+struct DateType {
+};
 
-struct MilliSeconds { };
-struct MicroSeconds { };
+struct MilliSeconds {
+};
+struct MicroSeconds {
+};
 typedef struct _TimeUnit__isset {
   _TimeUnit__isset() : MILLIS(false), MICROS(false) {}
-  bool MILLIS :1;
-  bool MICROS :1;
+  bool MILLIS : 1;
+  bool MICROS : 1;
 } _TimeUnit__isset;
 
 struct TimeUnit {
@@ -68,7 +75,6 @@ struct TimeUnit {
   MilliSeconds MILLIS;
   MicroSeconds MICROS;
 };
-
 
 struct TimeType {
   bool isAdjustedToUTC = false;
@@ -82,9 +88,12 @@ struct IntType {
   int8_t bitWidth = 0;
   bool isSigned   = false;
 };
-struct NullType { };
-struct JsonType { };
-struct BsonType { };
+struct NullType {
+};
+struct JsonType {
+};
+struct BsonType {
+};
 
 // thrift generated code simplified.
 typedef struct _LogicalType__isset {

@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
+#include <stdio.h>
 #include <algorithm>
 #include <io/parquet/parquet.hpp>
-#include <stdio.h>
 
 namespace cudf {
 namespace io {
@@ -205,6 +205,13 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
     return true;                                                                    \
     }
 
+#define PARQUET_END_STRUCT_DEBUG(str)                                               \
+  default: printf(str "unknown fld %d of type %d\n", fld, t); skip_struct_field(t); \
+    }                                                                               \
+    }                                                                               \
+    return true;                                                                    \
+    }
+
 #define PARQUET_FLD_EMPTY_STRUCT(id, m) \
   case id:                              \
     c            = getb();              \
@@ -231,19 +238,14 @@ PARQUET_FLD_ENUM(6, converted_type, ConvertedType)
 PARQUET_FLD_INT32(7, decimal_scale)
 PARQUET_FLD_INT32(8, decimal_precision)
 PARQUET_FLD_STRUCT(10, logical_type)
-//PARQUET_END_STRUCT()
-  default: printf("unknown fld %d of type %d\n", fld, t); skip_struct_field(t); \
-    }                                                                               \
-    }                                                                               \
-    return true;                                                                    \
-    }
+PARQUET_END_STRUCT_DEBUG("sch")
 
 PARQUET_BEGIN_STRUCT(LogicalType)
 PARQUET_FLD_EMPTY_STRUCT(1, STRING)
 PARQUET_FLD_EMPTY_STRUCT(2, MAP)
 PARQUET_FLD_EMPTY_STRUCT(3, LIST)
 PARQUET_FLD_EMPTY_STRUCT(4, ENUM)
-PARQUET_FLD_EMPTY_STRUCT(5, DECIMAL)    // TODO read the struct
+PARQUET_FLD_EMPTY_STRUCT(5, DECIMAL)  // TODO read the struct
 PARQUET_FLD_EMPTY_STRUCT(6, DATE)
 PARQUET_FLD_EMPTY_STRUCT(7, TIME)       // TODO read the struct
 PARQUET_FLD_EMPTY_STRUCT(8, TIMESTAMP)  // TODO read the struct
@@ -251,13 +253,7 @@ PARQUET_FLD_EMPTY_STRUCT(10, INTEGER)   // TODO read the struct
 PARQUET_FLD_EMPTY_STRUCT(11, UNKNOWN)
 PARQUET_FLD_EMPTY_STRUCT(12, JSON)
 PARQUET_FLD_EMPTY_STRUCT(13, BSON)
-//PARQUET_END_STRUCT()
-  default: \
-  printf("L unknown fld %d of type %d\n", fld, t); skip_struct_field(t); \
-    }                                                                               \
-    }                                                                               \
-    return true;                                                                    \
-    }
+PARQUET_END_STRUCT_DEBUG("L")
 
 PARQUET_BEGIN_STRUCT(RowGroup)
 PARQUET_FLD_STRUCT_LIST(1, columns)

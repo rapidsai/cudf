@@ -146,8 +146,9 @@ type_id to_type_id(SchemaElement const &schema,
 
     // maps are just List<Struct<>>.
     case parquet::MAP:
-    case parquet::LIST: return type_id::LIST;
-    //case parquet::NA: return type_id::EMPTY;
+    case parquet::LIST:
+      return type_id::LIST;
+      // case parquet::NA: return type_id::EMPTY; //TODO(kn): enable after Null/Empty column support
 
     default: break;
   }
@@ -659,7 +660,8 @@ class aggregate_metadata {
       // Load subset of columns; include PANDAS index unless excluded
       std::vector<std::string> local_use_names = use_names;
       if (include_index) { add_pandas_index_names(local_use_names); }
-      for (const auto &use_name : local_use_names) std::cout << use_name << ","; std::cout << "\n";
+      for (const auto &use_name : local_use_names) std::cout << use_name << ",";
+      std::cout << "\n";
       for (const auto &use_name : local_use_names) {
         for (size_t schema_idx = 1; schema_idx < pfm.schema.size(); schema_idx++) {
           auto const &schema = pfm.schema[schema_idx];
