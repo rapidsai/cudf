@@ -25,6 +25,7 @@ def orc_reader_test(input_tuple, skiprows, columns, num_rows):
     # TODO: Remove skiprows=0 after
     # following issue is fixed:
     # https://github.com/rapidsai/cudf/issues/6563
+    skiprows = 0
 
     pdf, parquet_buffer = input_tuple
     expected_pdf = pdf[skiprows:]
