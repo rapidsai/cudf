@@ -42,6 +42,7 @@
 - PR #6514 Initial work for decimal type in Java/JNI
 - PR #6608 Improve subword tokenizer docs
 - PR #6612 Update JNI to new RMM cuda_stream_view API
+- PR #6579 Update scatter APIs to use reference wrapper / const scalar
 - PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
 - PR #6623 Add operator overloading to column and clean up error messages
 
