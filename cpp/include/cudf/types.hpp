@@ -297,7 +297,7 @@ class data_type {
  */
 inline bool operator==(data_type const& lhs, data_type const& rhs)
 {
-  return std::tie(lhs.id(), lhs.scale()) == std::tie(rhs.id(), rhs.scale());
+  return std::make_pair(lhs.id(), lhs.scale()) == std::make_pair(rhs.id(), rhs.scale());
 }
 
 /**
