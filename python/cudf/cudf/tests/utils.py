@@ -261,7 +261,7 @@ def gen_rand(dtype, size, **kwargs):
         low = kwargs.get("low", 0)
         high = kwargs.get("high", 1)
         return np.random.randint(low=low, high=high, size=size).astype(np.bool)
-    raise NotImplementedError("dtype.kind={}".format(dtype.kind))
+    raise NotImplementedError(f"dtype.kind={dtype.kind}")
 
 
 def gen_rand_series(dtype, size, **kwargs):
