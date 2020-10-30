@@ -208,7 +208,7 @@ def _scatter_scalar(scalars, Column scatter_map,
     for val, col in zip(scalars, target_table._columns):
         slr = as_scalar(val, col.dtype)
         source_scalars.push_back(reference_wrapper[constscalar](
-            slr.c_value.get()[0]))
+            slr.get_raw_ptr()[0]))
     cdef column_view scatter_map_view = scatter_map.view()
     cdef table_view target_table_view = target_table.data_view()
 
@@ -473,7 +473,7 @@ def _copy_if_else_column_column(Column lhs, Column rhs, Column boolean_mask):
 
 def _copy_if_else_scalar_column(Scalar lhs, Column rhs, Column boolean_mask):
 
-    cdef scalar* lhs_scalar = lhs.c_value.get()
+    cdef const scalar* lhs_scalar = lhs.get_raw_ptr()
     cdef column_view rhs_view = rhs.view()
     cdef column_view boolean_mask_view = boolean_mask.view()
 
@@ -494,7 +494,7 @@ def _copy_if_else_scalar_column(Scalar lhs, Column rhs, Column boolean_mask):
 def _copy_if_else_column_scalar(Column lhs, Scalar rhs, Column boolean_mask):
 
     cdef column_view lhs_view = lhs.view()
-    cdef scalar* rhs_scalar = rhs.c_value.get()
+    cdef const scalar* rhs_scalar = rhs.get_raw_ptr()
     cdef column_view boolean_mask_view = boolean_mask.view()
 
     cdef unique_ptr[column] c_result
@@ -513,8 +513,8 @@ def _copy_if_else_column_scalar(Column lhs, Scalar rhs, Column boolean_mask):
 
 def _copy_if_else_scalar_scalar(Scalar lhs, Scalar rhs, Column boolean_mask):
 
-    cdef scalar* lhs_scalar = lhs.c_value.get()
-    cdef scalar* rhs_scalar = rhs.c_value.get()
+    cdef const scalar* lhs_scalar = lhs.get_raw_ptr()
+    cdef const scalar* rhs_scalar = rhs.get_raw_ptr()
     cdef column_view boolean_mask_view = boolean_mask.view()
 
     cdef unique_ptr[column] c_result
@@ -584,7 +584,7 @@ def _boolean_mask_scatter_scalar(list input_scalars, Table target_table,
     cdef Scalar scl
     for scl in input_scalars:
         input_scalar_vector.push_back(reference_wrapper[constscalar](
-            scl.c_value.get()[0]))
+            scl.get_raw_ptr()[0]))
     cdef table_view target_table_view = target_table.view()
     cdef column_view boolean_mask_view = boolean_mask.view()
 
@@ -635,7 +635,7 @@ def shift(Column input, int offset, object fill_value=None):
 
     cdef column_view c_input = input.view()
     cdef int32_t c_offset = offset
-    cdef scalar* c_fill_value = fill.c_value.get()
+    cdef const scalar* c_fill_value = fill.get_raw_ptr()
     cdef unique_ptr[column] c_output
 
     with nogil:
