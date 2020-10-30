@@ -336,15 +336,6 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
                            [&type](auto const& c) { return c.type() == type; }),
                "Type mismatch in columns to concatenate.");
 
-  if (is_fixed_point(columns_to_concat.front().type())) {
-    CUDF_EXPECTS(std::all_of(columns_to_concat.cbegin(),
-                             columns_to_concat.cend(),
-                             [scale = columns_to_concat.front().type().scale()](auto const& c) {
-                               return scale == c.type().scale();
-                             }),
-                 "fixed_point columns need to have same scale before concatenating.");
-  }
-
   if (std::all_of(columns_to_concat.begin(), columns_to_concat.end(), [](column_view const& c) {
         return c.is_empty();
       })) {

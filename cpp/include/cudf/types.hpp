@@ -295,7 +295,10 @@ class data_type {
  * @return true `lhs` is equal to `rhs`
  * @return false `lhs` is not equal to `rhs`
  */
-inline bool operator==(data_type const& lhs, data_type const& rhs) { return lhs.id() == rhs.id(); }
+inline bool operator==(data_type const& lhs, data_type const& rhs)
+{
+  return lhs.id() == rhs.id() and lhs.scale() == rhs.scale();
+}
 
 /**
  * @brief Compares two `data_type` objects for inequality.
