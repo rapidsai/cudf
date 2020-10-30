@@ -148,6 +148,28 @@ TYPED_TEST(RoundTestsFloatingPointTypes, SameSignificatDigits)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected5, result5->view());
 }
 
+TEST_F(RoundTests, FloatMaxTest)
+{
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<float>;
+
+  auto const input    = fw_wrapper{std::numeric_limits<float>::max()};  // 3.40282e+38
+  auto const expected = fw_wrapper{3.4e+38};
+  auto const result   = cudf::round(input, -37, cudf::rounding_method::HALF_UP);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(RoundTests, DoubleMaxTest)
+{
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<double>;
+
+  auto const input    = fw_wrapper{std::numeric_limits<double>::max() - 5e+306};  // 1.74769e+308
+  auto const expected = fw_wrapper{1.7e+308};
+  auto const result   = cudf::round(input, -307, cudf::rounding_method::HALF_UP);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TYPED_TEST(RoundTestsIntegerTypes, SimpleIntegerTestNeg2)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
