@@ -99,26 +99,26 @@ struct round_fn {
     rmm::mr::device_memory_resource* mr,
     cudaStream_t stream)
   {
-    auto result = cudf::make_fixed_width_column(input.type(), input.size());
-
     // only need to handle the case where decimal_places is < zero
     // integers by definition have no fractional part, so result of "rounding" is a no-op
-    if (decimal_places < 0) {
-      auto out_view = result->mutable_view();
-      auto const n  = static_cast<int64_t>(std::pow(10, -decimal_places));
-      auto const m  = n / 10;  // need 10 ^ (decimal_places - 1) to isolate rounding_digit
+    if (decimal_places >= 0) return std::make_unique<cudf::column>(input, stream, mr);
 
-      thrust::transform(rmm::exec_policy(stream)->on(stream),
-                        input.begin<T>(),
-                        input.end<T>(),
-                        out_view.begin<T>(),
-                        [n, m] __device__(T e) -> T {
-                          auto const rounding_digit = generic_abs((e / m) % 10);
-                          auto const digits         = e / n;
-                          auto const adjust         = rounding_digit < 5 ? 0 : e > 0 ? 1 : -1;
-                          return (digits + adjust) * n;
-                        });
-    }
+    auto result = cudf::make_fixed_width_column(input.type(), input.size());
+
+    auto out_view = result->mutable_view();
+    auto const n  = static_cast<int64_t>(std::pow(10, -decimal_places));
+    auto const m  = n / 10;  // need 10 ^ (decimal_places - 1) to isolate rounding_digit
+
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+                      input.begin<T>(),
+                      input.end<T>(),
+                      out_view.begin<T>(),
+                      [n, m] __device__(T e) -> T {
+                        auto const rounding_digit = generic_abs((e / m) % 10);
+                        auto const digits         = e / n;
+                        auto const adjust         = rounding_digit < 5 ? 0 : e > 0 ? 1 : -1;
+                        return (digits + adjust) * n;
+                      });
 
     return result;
   }
