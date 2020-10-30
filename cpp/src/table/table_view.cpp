@@ -87,14 +87,14 @@ mutable_table_view::mutable_table_view(std::vector<mutable_table_view> const& vi
 {
 }
 
-table_view scatter_columns(table_view const& input,
-                           table_view const& new_columns,
-                           std::vector<size_type> const& map)
+table_view scatter_columns(table_view const& source,
+                           std::vector<size_type> const& map,
+                           table_view const& target)
 {
-  std::vector<cudf::column_view> updated_columns(input.begin(), input.end());
+  std::vector<cudf::column_view> updated_columns(target.begin(), target.end());
   // scatter(updated_table.begin(),updated_table.end(),indices.begin(),updated_columns.begin());
-  for (size_type idx = 0; idx < new_columns.num_columns(); ++idx)
-    updated_columns[map[idx]] = new_columns.column(idx);
+  for (size_type idx = 0; idx < source.num_columns(); ++idx)
+    updated_columns[map[idx]] = source.column(idx);
   return table_view{updated_columns};
 }
 

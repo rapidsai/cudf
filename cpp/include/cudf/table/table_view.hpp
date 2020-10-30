@@ -259,17 +259,17 @@ inline bool have_same_types(table_view const& lhs, table_view const& rhs)
  * @brief Copy column_views from a table_view into another table_view according to
  * a column indices map.
  *
- * The output table view, `out_table` is a copy of the `input` table_view but with
- * elements updated according to `out_table[map[i]] = new_columns[i]` where `i` is
- * `[0,new_columns.size())`
+ * The output table view, `out_table` is a copy of the `target` table_view but with
+ * elements updated according to `out_table[map[i]] = source[i]` where `i` is
+ * `[0,source.size())`
  *
- * @param input Table to receive the updated column views.
- * @param new_columns Table of new columns to scatter into the output table view.
+ * @param source Table of new columns to scatter into the output table view.
  * @param map The indices where each new_column should be copied into the output.
+ * @param target Table to receive the updated column views.
  * @return New table_view.
  */
-table_view scatter_columns(table_view const& input,
-                           table_view const& new_columns,
-                           std::vector<size_type> const& map);
+table_view scatter_columns(table_view const& source,
+                           std::vector<size_type> const& map,
+                           table_view const& target);
 
 }  // namespace cudf

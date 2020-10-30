@@ -41,8 +41,8 @@ std::unique_ptr<table> inner_join(
     rmm::mr::get_current_device_resource(),  // temporary objects returned
     stream);
   // now rebuild the table views with the updated ones
-  auto const left  = scatter_columns(left_input, matched.second.front(), left_on);
-  auto const right = scatter_columns(right_input, matched.second.back(), right_on);
+  auto const left  = scatter_columns(matched.second.front(), left_on, left_input);
+  auto const right = scatter_columns(matched.second.back(), right_on, right_input);
 
   // For `inner_join`, we can freely choose either the `left` or `right` table to use for
   // building/probing the hash map. Because building is typically more expensive than probing, we
@@ -93,8 +93,8 @@ std::unique_ptr<table> left_join(
     rmm::mr::get_current_device_resource(),                      // temporary objects returned
     stream);
   // now rebuild the table views with the updated ones
-  table_view const left  = scatter_columns(left_input, matched.second.front(), left_on);
-  table_view const right = scatter_columns(right_input, matched.second.back(), right_on);
+  table_view const left  = scatter_columns(matched.second.front(), left_on, left_input);
+  table_view const right = scatter_columns(matched.second.back(), right_on, right_input);
 
   cudf::hash_join hj_obj(right, right_on, stream);
   return hj_obj.left_join(left, left_on, columns_in_common, compare_nulls, mr, stream);
@@ -117,8 +117,8 @@ std::unique_ptr<table> full_join(
     rmm::mr::get_current_device_resource(),                      // temporary objects returned
     stream);
   // now rebuild the table views with the updated ones
-  table_view const left  = scatter_columns(left_input, matched.second.front(), left_on);
-  table_view const right = scatter_columns(right_input, matched.second.back(), right_on);
+  table_view const left  = scatter_columns(matched.second.front(), left_on, left_input);
+  table_view const right = scatter_columns(matched.second.back(), right_on, right_input);
 
   cudf::hash_join hj_obj(right, right_on, stream);
   return hj_obj.full_join(left, left_on, columns_in_common, compare_nulls, mr, stream);
