@@ -133,18 +133,6 @@ def pyarrow_to_pandas(table):
     return df
 
 
-def cudf_to_pandas(df):
-    pdf = df.to_pandas()
-    for col in pdf.columns:
-        if df[col].dtype in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes:
-            pdf[col] = pdf[col].astype(
-                cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes[df[col].dtype]
-            )
-        elif cudf.utils.dtypes.is_categorical_dtype(df[col].dtype):
-            pdf[col] = pdf[col].astype("category")
-    return pdf
-
-
 def compare_content(a, b):
     if a == b:
         return
@@ -262,11 +250,25 @@ def _preprocess_to_orc_tuple(df):
     return tuple_list
 
 
+def pandas_to_orc(df, file_name=None, file_io_obj=None):
+    schema = get_orc_schema(df)
+
+    tuple_list = _preprocess_to_orc_tuple(df)
+
+    if file_name is not None:
+        with open(file_name, "wb") as data:
+            with pyorc.Writer(data, str(schema)) as writer:
+                writer.writerows(tuple_list)
+    elif file_io_obj is not None:
+        with pyorc.Writer(file_io_obj, str(schema)) as writer:
+            writer.writerows(tuple_list)
+
+
 def compare_dataframe(left, right, nullable=True):
     if nullable and isinstance(left, cudf.DataFrame):
-        left = cudf_to_pandas(left)
+        left = left.to_pandas(nullable=True)
     if nullable and isinstance(right, cudf.DataFrame):
-        right = cudf_to_pandas(right)
+        right = right.to_pandas(nullable=True)
 
     if len(left.index) == 0 and len(right.index) == 0:
         check_index_type = False

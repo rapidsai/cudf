@@ -6,15 +6,26 @@ import sys
 import cudf
 from cudf._fuzz_testing.main import pythonfuzz
 from cudf._fuzz_testing.orc import OrcReader, OrcWriter
-from cudf._fuzz_testing.utils import compare_dataframe, run_test
+from cudf._fuzz_testing.utils import (
+    ALL_POSSIBLE_VALUES,
+    compare_dataframe,
+    run_test,
+)
 
 
 @pythonfuzz(
     data_handle=OrcReader,
-    params={"columns": None, "skiprows": None, "num_rows": None},
+    params={
+        "columns": ALL_POSSIBLE_VALUES,
+        "skiprows": ALL_POSSIBLE_VALUES,
+        "num_rows": ALL_POSSIBLE_VALUES,
+    },
 )
-def orc_reader_test(input_tuple, columns, num_rows):
-    skiprows = 0
+def orc_reader_test(input_tuple, skiprows, columns, num_rows):
+    # TODO: Remove skiprows=0 after
+    # following issue is fixed:
+    # https://github.com/rapidsai/cudf/issues/6563
+
     pdf, parquet_buffer = input_tuple
     expected_pdf = pdf[skiprows:]
     if num_rows is not None:
