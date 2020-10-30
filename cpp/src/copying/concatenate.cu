@@ -369,7 +369,8 @@ std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_conc
                            }),
                "Mismatch in table columns to concatenate.");
 
-  if (is_fixed_point(tables_to_concat.front().column(0).type())) {
+  if (tables_to_concat.front().num_columns() > 0 &&
+      is_fixed_point(tables_to_concat.front().column(0).type())) {
     CUDF_EXPECTS(std::all_of(tables_to_concat.cbegin(),
                              tables_to_concat.cend(),
                              [scale = tables_to_concat.front().column(0).type().scale()](
