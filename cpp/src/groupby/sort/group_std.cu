@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -133,7 +133,7 @@ struct var_functor {
     auto d_group_sizes  = group_sizes.data<size_type>();
     auto d_result       = result->mutable_view().data<ResultType>();
 
-    if (values.type().id() != type_id::DICTIONARY32) {
+    if (!cudf::is_dictionary(values.type())) {
       if (values.has_nulls()) {
         auto values_iter = d_values.pair_begin<T, true>();
         reduce_by_key_fn(values_iter, group_labels, d_means, d_group_sizes, ddof, d_result, stream);
@@ -194,7 +194,7 @@ std::unique_ptr<column> group_var(column_view const& values,
                                   rmm::mr::device_memory_resource* mr,
                                   cudaStream_t stream)
 {
-  auto values_type = values.type().id() == type_id::DICTIONARY32
+  auto values_type = cudf::is_dictionary(values.type())
                        ? dictionary_column_view(values).keys().type()
                        : values.type();
 

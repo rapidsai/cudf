@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,7 +73,7 @@ struct reduce_functor {
     auto resultview = mutable_column_device_view::create(result->mutable_view());
     auto valuesview = column_device_view::create(values);
 
-    if (values.type().id() != type_id::DICTIONARY32) {
+    if (!cudf::is_dictionary(values.type())) {
       thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
                          thrust::make_counting_iterator(0),
                          values.size(),

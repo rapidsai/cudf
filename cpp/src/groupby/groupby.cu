@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,7 +109,7 @@ void verify_valid_requests(std::vector<aggregation_request> const& requests)
       [](auto const& request) {
         return std::all_of(
           request.aggregations.begin(), request.aggregations.end(), [&request](auto const& agg) {
-            auto values_type = request.values.type().id() == type_id::DICTIONARY32
+            auto values_type = cudf::is_dictionary(request.values.type())
                                  ? cudf::dictionary_column_view(request.values).keys().type()
                                  : request.values.type();
             return cudf::detail::is_valid_aggregation(values_type, agg->kind);

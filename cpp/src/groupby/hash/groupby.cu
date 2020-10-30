@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-20, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,7 +106,7 @@ flatten_single_pass_aggs(std::vector<aggregation_request> const& requests)
       col_ids.push_back(i);
     };
 
-    auto values_type = request.values.type().id() == type_id::DICTIONARY32
+    auto values_type = cudf::is_dictionary(request.values.type())
                          ? cudf::dictionary_column_view(request.values).keys().type()
                          : request.values.type();
     for (auto&& agg : agg_v) {
@@ -183,7 +183,7 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
       return std::move(transformed_result->release()[0]);
     };
 
-    auto col_type = col.type().id() == type_id::DICTIONARY32
+    auto col_type = cudf::is_dictionary(col.type())
                       ? cudf::dictionary_column_view(col).keys().type()
                       : col.type();
 
@@ -271,7 +271,7 @@ void compute_single_pass_aggs(table_view const& keys,
                        : col.has_nulls();
                    auto mask_flag = (nullable) ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
 
-                   auto col_type = col.type().id() == type_id::DICTIONARY32
+                   auto col_type = cudf::is_dictionary(col.type())
                                      ? cudf::dictionary_column_view(col).keys().type()
                                      : col.type();
                    return make_fixed_width_column(

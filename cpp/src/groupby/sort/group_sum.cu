@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ std::unique_ptr<column> group_sum(column_view const& values,
                                   rmm::mr::device_memory_resource* mr,
                                   cudaStream_t stream)
 {
-  auto values_type = values.type().id() == type_id::DICTIONARY32
+  auto values_type = cudf::is_dictionary(values.type())
                        ? dictionary_column_view(values).keys().type()
                        : values.type();
   return type_dispatcher(

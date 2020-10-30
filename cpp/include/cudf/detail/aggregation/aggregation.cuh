@@ -276,8 +276,12 @@ struct elementwise_aggregator {
   }
 };
 
-///////////////////////////////////////////////////////////////////////////////////
-
+/**
+ * @brief Function object to update a single element in a target column using
+ * the dictionary key addressed by the specific index.
+ *
+ * `target[target_index] = d_dictionary.keys[d_dictionary.indices[source_index]]`
+ */
 struct update_target_from_dictionary {
   template <typename KeyType>
   std::enable_if_t<is_fixed_width<KeyType>() && !is_fixed_point<KeyType>()> __device__
@@ -300,6 +304,12 @@ struct update_target_from_dictionary {
              size_type& source_index) const noexcept {};
 };
 
+/**
+ * @brief Specialization function for dictionary type and aggregation SUM.
+ *
+ * @tparam target_has_nulls Indicates presence of null elements in `target`
+ * @tparam source_has_nulls Indicates presence of null elements in `source`.
+ */
 template <bool target_has_nulls, bool source_has_nulls>
 struct update_target_element<dictionary32, aggregation::SUM, target_has_nulls, source_has_nulls> {
   __device__ void operator()(mutable_column_device_view target,
@@ -319,8 +329,6 @@ struct update_target_element<dictionary32, aggregation::SUM, target_has_nulls, s
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
-
-///////////////////////////////////////////////////////////////////////////////////
 
 /**
  * @brief Updates a row in `target` by performing elementwise aggregation

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
-#include <cudf/types.hpp>
 
 #include <groupby/sort/group_reductions.hpp>
 #include <quantiles/quantiles_util.hpp>
@@ -114,7 +113,7 @@ struct quantiles_functor {
     auto result_view     = mutable_column_device_view::create(result->mutable_view(), stream);
 
     // For each group, calculate quantile
-    if (values.type().id() != type_id::DICTIONARY32) {
+    if (!cudf::is_dictionary(values.type())) {
       auto values_iter = values_view->begin<T>();
       thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
                          thrust::make_counting_iterator(0),
@@ -168,7 +167,7 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
 {
   rmm::device_vector<double> dv_quantiles(quantiles);
 
-  auto values_type = values.type().id() == type_id::DICTIONARY32
+  auto values_type = cudf::is_dictionary(values.type())
                        ? dictionary_column_view(values).keys().type()
                        : values.type();
 
