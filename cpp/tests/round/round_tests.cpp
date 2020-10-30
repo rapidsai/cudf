@@ -203,6 +203,17 @@ TYPED_TEST(RoundTestsIntegerTypes, SimpleNegativeInteger)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TYPED_TEST(RoundTestsIntegerTypes, SimplePositiveInteger)
+{
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
+
+  auto const input    = fw_wrapper{-12, -135, -1454, -1455, -1500};
+  auto const expected = fw_wrapper{-12, -135, -1454, -1455, -1500};
+  auto const result   = cudf::round(input, 2, cudf::rounding_method::HALF_UP);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TEST_F(RoundTests, Int64AtBoundary)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<int64_t>;
