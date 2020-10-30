@@ -143,6 +143,7 @@ def is_numerical_dtype(obj):
         np.issubdtype(obj, np.bool_)
         or np.issubdtype(obj, np.floating)
         or np.issubdtype(obj, np.signedinteger)
+        or np.issubdtype(obj, np.unsignedinteger)
     )
 
 
@@ -156,6 +157,14 @@ def is_datetime_dtype(obj):
     if not hasattr(obj, "str"):
         return False
     return "M8" in obj.str
+
+
+def is_timedelta_dtype(obj):
+    if obj is None:
+        return False
+    if not hasattr(obj, "str"):
+        return False
+    return "m8" in obj.str
 
 
 def is_categorical_dtype(obj):

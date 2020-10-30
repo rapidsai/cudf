@@ -6,6 +6,7 @@
 - PR #6460 Add is_timestamp format check API
 - PR #6568 Add function to create hashed vocabulary file from raw vocabulary
 - PR #6581 Add JNI API to check if PTDS is enabled
+- PR #6592 Add `cudf.to_numeric` function
 - PR #6598 Add strings::contains API with target column parameter
 
 ## Improvements
@@ -24,6 +25,7 @@
 - PR #6471 Replace index type-dispatch call with indexalator in cudf::strings::substring
 - PR #6485 Add File IO to cuIO benchmarks
 - PR #6504 Update Java bindings version to 0.17-SNAPSHOT
+- PR #6489 Add `AVRO` fuzz tests with varying function parameters
 - PR #6540 Add dictionary support to `cudf::unary_operation`
 - PR #6537 Refactor ORC timezone
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
@@ -41,6 +43,7 @@
 - PR #6514 Initial work for decimal type in Java/JNI
 - PR #6608 Improve subword tokenizer docs
 - PR #6612 Update JNI to new RMM cuda_stream_view API
+- PR #6579 Update scatter APIs to use reference wrapper / const scalar
 - PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
 - PR #6623 Add operator overloading to column and clean up error messages
 
@@ -56,10 +59,12 @@
 - PR #6582 Add missing `device_scalar` stream parameters
 - PR #6596 Fix memory usage calculation
 - PR #6595 Fix JNI build, broken by to_arrow() signature change
+- PR #6601 Fix timezone offset when reading ORC files
 - PR #6603 Use correct stream in hash_join.
 - PR #6607 Fix integer overflow in ORC encoder
 - PR #6617 Fix JNI native dependency load order
 - PR #6629 Fix JNI CMake
+- PR #6633 Fix Java HostColumnVector unnecessarily loading native dependencies
 
 
 # cuDF 0.16.0 (21 Oct 2020)
