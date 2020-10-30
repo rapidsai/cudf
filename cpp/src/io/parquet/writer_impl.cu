@@ -226,44 +226,24 @@ class parquet_column_view {
         _stats_dtype    = statistics_dtype::dtype_int32;
         break;
       case cudf::type_id::TIMESTAMP_SECONDS:
-        if (int96_timestamps) {
-          _physical_type  = Type::INT96;
-          _converted_type = ConvertedType::UNKNOWN;
-        } else {
-          _physical_type  = Type::INT64;
-          _converted_type = ConvertedType::TIMESTAMP_MILLIS;
-        }
+        _physical_type  = int96_timestamps ? Type::INT96 : Type::INT64;
+        _converted_type = ConvertedType::TIMESTAMP_MILLIS;
         _stats_dtype = statistics_dtype::dtype_timestamp64;
         _ts_scale    = 1000;
         break;
       case cudf::type_id::TIMESTAMP_MILLISECONDS:
-        if (int96_timestamps) {
-          _physical_type  = Type::INT96;
-          _converted_type = ConvertedType::UNKNOWN;
-        } else {
-          _physical_type  = Type::INT64;
-          _converted_type = ConvertedType::TIMESTAMP_MILLIS;
-        }
+        _physical_type  = int96_timestamps ? Type::INT96 : Type::INT64;
+        _converted_type = ConvertedType::TIMESTAMP_MILLIS;
         _stats_dtype = statistics_dtype::dtype_timestamp64;
         break;
       case cudf::type_id::TIMESTAMP_MICROSECONDS:
-        if (int96_timestamps) {
-          _physical_type  = Type::INT96;
-          _converted_type = ConvertedType::UNKNOWN;
-        } else {
-          _physical_type  = Type::INT64;
-          _converted_type = ConvertedType::TIMESTAMP_MICROS;
-        }
+        _physical_type  = int96_timestamps ? Type::INT96 : Type::INT64;
+        _converted_type = ConvertedType::TIMESTAMP_MICROS;
         _stats_dtype = statistics_dtype::dtype_timestamp64;
         break;
       case cudf::type_id::TIMESTAMP_NANOSECONDS:
-        if (int96_timestamps) {
-          _physical_type  = Type::INT96;
-          _converted_type = ConvertedType::UNKNOWN;
-        } else {
-          _physical_type  = Type::INT64;
-          _converted_type = ConvertedType::TIMESTAMP_MICROS;
-        }
+        _physical_type  = int96_timestamps ? Type::INT96 : Type::INT64;
+        _converted_type = ConvertedType::TIMESTAMP_MICROS;
         _stats_dtype = statistics_dtype::dtype_timestamp64;
         _ts_scale    = -1000;  // negative value indicates division by absolute value
         break;
@@ -741,8 +721,9 @@ void writer::impl::write_chunk(table_view const &table,
       } else {
         SchemaElement col_schema{};
         // Column metadata
-        col_schema.type           = col.physical_type();
-        col_schema.converted_type = col.converted_type();
+        auto const &physical_type = col.physical_type();
+        col_schema.type           = physical_type;
+        col_schema.converted_type = physical_type == parquet::Type::INT96 ? ConvertedType::UNKNOWN : col.converted_type();
         // because the repetition type is global (in the sense of, not per-rowgroup or per
         // write_chunk() call) we cannot know up front if the user is going to end up passing tables
         // with nulls/no nulls in the multiple write_chunk() case.  so we'll do some special
@@ -828,8 +809,9 @@ void writer::impl::write_chunk(table_view const &table,
     }
     desc->num_values     = col.data_count();
     desc->num_rows       = col.row_count();
-    desc->physical_type  = static_cast<uint8_t>(col.physical_type());
-    desc->converted_type = static_cast<uint8_t>(col.converted_type());
+    auto const &physical_type = col.physical_type();
+    desc->physical_type  = static_cast<uint8_t>(physical_type);
+    desc->converted_type = static_cast<uint8_t>(physical_type == INT96 ? ConvertedType::UNKNOWN : col.converted_type());
   }
 
   // Init page fragments
