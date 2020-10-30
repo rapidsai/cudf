@@ -61,6 +61,7 @@
 - PR #6607 Fix integer overflow in ORC encoder
 - PR #6617 Fix JNI native dependency load order
 - PR #6629 Fix JNI CMake
+- PR #6633 Fix Java HostColumnVector unnecessarily loading native dependencies
 
 
 # cuDF 0.16.0 (21 Oct 2020)
