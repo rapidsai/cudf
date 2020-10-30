@@ -46,6 +46,19 @@ T __device__ generic_abs(T value)
   return value;
 }
 
+template <typename T, typename std::enable_if_t<std::is_signed<T>::value>* = nullptr>
+T __device__ is_positive(T value)
+{
+  return value >= 0;
+}
+
+// this is needed to suppress warning: pointless comparison of unsigned integer with zero
+template <typename T, typename std::enable_if_t<not std::is_signed<T>::value>* = nullptr>
+T __device__ is_positive(T value)
+{
+  return true;
+}
+
 struct round_fn {
   template <typename T, typename... Args>
   std::enable_if_t<not cudf::is_numeric<T>(), std::unique_ptr<column>> operator()(Args&&... args)
@@ -114,10 +127,9 @@ struct round_fn {
                       input.end<T>(),
                       out_view.begin<T>(),
                       [n, m] __device__(T e) -> T {
-                        auto const rounding_digit = generic_abs((e / m) % 10);
-                        auto const digits         = e / n;
-                        auto const adjust         = rounding_digit < 5 ? 0 : e > 0 ? 1 : -1;
-                        return (digits + adjust) * n;
+                        auto const down = (e / n) * n;
+                        auto const sign = is_positive(e) ? 1 : -1;
+                        return down + sign * (generic_abs(e - down) >= n / 2 ? n : 0);
                       });
 
     return result;
