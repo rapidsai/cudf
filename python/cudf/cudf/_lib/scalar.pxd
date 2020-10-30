@@ -13,7 +13,7 @@ cdef class Scalar:
     cdef object _host_dtype
 
     cdef const scalar* get_raw_ptr(self)
-    
+
     @staticmethod
     cdef Scalar from_unique_ptr(unique_ptr[scalar] ptr)
 
