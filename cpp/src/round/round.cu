@@ -47,14 +47,14 @@ T __device__ generic_abs(T value)
 }
 
 template <typename T, typename std::enable_if_t<std::is_signed<T>::value>* = nullptr>
-bool __device__ is_positive(T value)
+bool __device__ is_negative(T value)
 {
   return value >= 0;
 }
 
 // this is needed to suppress warning: pointless comparison of unsigned integer with zero
 template <typename T, typename std::enable_if_t<not std::is_signed<T>::value>* = nullptr>
-bool __device__ is_positive(T value)
+bool __device__ is_negative(T value)
 {
   return true;
 }
@@ -128,7 +128,7 @@ struct round_fn {
                       out_view.begin<T>(),
                       [n, m] __device__(T e) -> T {
                         auto const down = (e / n) * n;
-                        auto const sign = is_positive(e) ? 1 : -1;
+                        auto const sign = is_negative(e) ? 1 : -1;
                         return down + sign * (generic_abs(e - down) >= n / 2 ? n : 0);
                       });
 
