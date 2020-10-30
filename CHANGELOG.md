@@ -7,6 +7,7 @@
 - PR #6568 Add function to create hashed vocabulary file from raw vocabulary
 - PR #6581 Add JNI API to check if PTDS is enabled
 - PR #6615 Add support for list and struct types to contiguous_split
+- PR #6634 Add struct support to concatenate
 
 ## Improvements
 
