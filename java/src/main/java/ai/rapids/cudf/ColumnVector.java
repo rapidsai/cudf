@@ -3777,9 +3777,31 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   /**
-   * Create a new string vector from the given values.  This API
-   * supports inline nulls. This is really intended to be used only for testing as
-   * it is slow and memory intensive to translate between java strings and UTF8 strings.
+   * Create a new decimal vector from unscaled values (int array) and scale.
+   * The created vector is of type DType.DECIMAL32, whose max precision is 9.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static ColumnVector decimalFromInts(int scale, int... values) {
+    try (HostColumnVector host = HostColumnVector.decimalFromInts(scale, values)) {
+      return host.copyToDevice();
+    }
+  }
+
+  /**
+   * Create a new decimal vector from unscaled values (long array) and scale.
+   * The created vector is of type DType.DECIMAL64, whose max precision is 18.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static ColumnVector decimalFromLongs(int scale, long... values) {
+    try (HostColumnVector host = HostColumnVector.decimalFromLongs(scale, values)) {
+      return host.copyToDevice();
+    }
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than building from primitive array of unscaledValue.
+   * Notice all input BigDecimals should share same scale.
    */
   public static ColumnVector fromStrings(String... values) {
     try (HostColumnVector host = HostColumnVector.fromStrings(values)) {
@@ -3788,7 +3810,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   /**
-   * Create a new vector from the given values.  This API supports inline nulls.
+   * Create a new vector from the given values.  This API supports inline nulls, but it is inefficient.
+   * Notice all input BigDecimals should share same scale.
    */
   public static ColumnVector fromDecimals(BigDecimal... values) {
     try (HostColumnVector hcv = HostColumnVector.fromDecimals(values)) {

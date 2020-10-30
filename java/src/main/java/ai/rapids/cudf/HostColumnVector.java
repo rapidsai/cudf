@@ -446,6 +446,32 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   /**
+   * Create a new decimal vector from unscaled values (int array) and scale.
+   * The created vector is of type DType.DECIMAL32, whose max precision is 9.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static HostColumnVector decimalFromInts(int scale, int... values) {
+    if (-scale > DType.DECIMAL32_MAX_PRECISION) {
+      throw new IllegalArgumentException(
+          "Scale " + scale + " exceeds the max precision of DECIMAL32: " + DType.DECIMAL32_MAX_PRECISION);
+    }
+    return build(DType.create(DType.DTypeEnum.DECIMAL32, scale), values.length, (b) -> b.appendUnscaledDecimalArray(values));
+  }
+
+  /**
+   * Create a new decimal vector from unscaled values (long array) and scale.
+   * The created vector is of type DType.DECIMAL64, whose max precision is 18.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static HostColumnVector decimalFromLongs(int scale, long... values) {
+    if (-scale > DType.DECIMAL64_MAX_PRECISION) {
+      throw new IllegalArgumentException(
+          "Scale " + scale + " exceeds the max precision of DECIMAL64: " + DType.DECIMAL64_MAX_PRECISION);
+    }
+    return build(DType.create(DType.DTypeEnum.DECIMAL64, scale), values.length, (b) -> b.appendUnscaledDecimalArray(values));
+  }
+
+  /**
    * Create a new string vector from the given values.  This API
    * supports inline nulls. This is really intended to be used only for testing as
    * it is slow and memory intensive to translate between java strings and UTF8 strings.
@@ -473,7 +499,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   /**
-   * Create a new vector from the given values.  This API supports inline nulls, but it is inefficient.
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than building from primitive array of unscaledValue.
    * Notice all input BigDecimals should share same scale.
    */
   public static HostColumnVector fromDecimals(BigDecimal... values) {
@@ -481,16 +508,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
     BigDecimal maxPrecisionDec = Arrays.stream(values).filter(Objects::nonNull)
         .max(Comparator.comparingInt(BigDecimal::precision))
         .orElse(BigDecimal.ZERO);
-    // Select appropriate underlying type according to max precision.
-    DType.DTypeEnum typeId = DType.DTypeEnum.DECIMAL32;
-    if (maxPrecisionDec.precision() > DType.DECIMAL64_MAX_PRECISION) {
-      throw new AssertionError("Decimal precision exceeds max precision: " + DType.DECIMAL64_MAX_PRECISION);
-    } else if (maxPrecisionDec.precision() > DType.DECIMAL32_MAX_PRECISION) {
-      typeId = DType.DTypeEnum.DECIMAL64;
-    }
-    // Because all scales are same, just take scale of maxPrecisionDec.
-    int scale = -maxPrecisionDec.scale();
-    return build(DType.create(typeId, scale), values.length, (b) -> b.appendBoxed(values));
+
+    return build(DType.fromJavaBigDecimal(maxPrecisionDec), values.length, (b) -> b.appendBoxed(values));
   }
 
   /**
@@ -928,7 +947,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
         childBuilder.append((Byte) listElement);
       } else if (listElement instanceof Short) {
         childBuilder.append((Short) listElement);
-       } else if (listElement instanceof BigDecimal) {
+      } else if (listElement instanceof BigDecimal) {
         childBuilder.append((BigDecimal) listElement);
       } else if (listElement instanceof List) {
         childBuilder.append((List) listElement);
@@ -1246,6 +1265,22 @@ public final class HostColumnVector extends HostColumnVectorCore {
       return this;
     }
 
+    public final Builder appendUnscaledDecimal(int value) {
+      assert type.typeId == DType.DTypeEnum.DECIMAL32;
+      assert currentIndex < rows;
+      data.setInt(currentIndex * type.getSizeInBytes(), value);
+      currentIndex++;
+      return this;
+    }
+
+    public final Builder appendUnscaledDecimal(long value) {
+      assert type.typeId == DType.DTypeEnum.DECIMAL64;
+      assert currentIndex < rows;
+      data.setLong(currentIndex * type.getSizeInBytes(), value);
+      currentIndex++;
+      return this;
+    }
+
     public Builder append(String value) {
       assert value != null : "appendNull must be used to append null strings";
       return appendUTF8String(value.getBytes(StandardCharsets.UTF_8));
@@ -1338,6 +1373,22 @@ public final class HostColumnVector extends HostColumnVectorCore {
       assert type == DType.FLOAT64;
       assert (values.length + currentIndex) <= rows;
       data.setDoubles(currentIndex * type.getSizeInBytes(), values, 0, values.length);
+      currentIndex += values.length;
+      return this;
+    }
+
+    public Builder appendUnscaledDecimalArray(int... values) {
+      assert type.typeId == DType.DTypeEnum.DECIMAL32;
+      assert (values.length + currentIndex) <= rows;
+      data.setInts(currentIndex * type.getSizeInBytes(), values, 0, values.length);
+      currentIndex += values.length;
+      return this;
+    }
+
+    public Builder appendUnscaledDecimalArray(long... values) {
+      assert type.typeId == DType.DTypeEnum.DECIMAL64;
+      assert (values.length + currentIndex) <= rows;
+      data.setLongs(currentIndex * type.getSizeInBytes(), values, 0, values.length);
       currentIndex += values.length;
       return this;
     }

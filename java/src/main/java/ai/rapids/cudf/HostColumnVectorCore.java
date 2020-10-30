@@ -375,7 +375,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * Get the BigDecimal value at index.
    */
-  public BigDecimal getBigDecimal(long index) {
+  public final BigDecimal getBigDecimal(long index) {
     assert type.isDecimalType() : type + " is not a supported decimal type.";
     assertsForGet(index);
     if (type.typeId == DType.DTypeEnum.DECIMAL32) {

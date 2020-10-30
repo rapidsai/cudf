@@ -704,11 +704,8 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testFromScalarZeroRows() {
+    int mockScale = -8;
     for (DType.DTypeEnum type : DType.DTypeEnum.values()) {
-      // Decimal type not supported yet. Update this once it is supported.
-      if (type == DType.DTypeEnum.DECIMAL32 || type == DType.DTypeEnum.DECIMAL64) {
-        continue;
-      }
       Scalar s = null;
       try {
         switch (type) {
@@ -745,6 +742,12 @@ public class ColumnVectorTest extends CudfTestBase {
         case FLOAT64:
           s = Scalar.fromDouble(1.23456789);
           break;
+        case DECIMAL32:
+          s = Scalar.fromDecimal(mockScale, 123456789);
+          break;
+        case DECIMAL64:
+          s = Scalar.fromDecimal(mockScale, 1234567890123456789L);
+          break;
         case TIMESTAMP_DAYS:
           s = Scalar.timestampDaysFromInt(12345);
           break;
@@ -775,7 +778,11 @@ public class ColumnVectorTest extends CudfTestBase {
         }
 
         try (ColumnVector c = ColumnVector.fromScalar(s, 0)) {
-          assertEquals(DType.create(type), c.getType());
+          if (type == DType.DTypeEnum.DECIMAL32 || type == DType.DTypeEnum.DECIMAL64) {
+            assertEquals(DType.create(type, mockScale), c.getType());
+          } else {
+            assertEquals(DType.create(type), c.getType());
+          }
           assertEquals(0, c.getRowCount());
           assertEquals(0, c.getNullCount());
         }
@@ -965,11 +972,16 @@ public class ColumnVectorTest extends CudfTestBase {
   void testFromScalarNull() {
     final int rowCount = 4;
     for (DType.DTypeEnum type : DType.DTypeEnum.values()) {
-      if (type == DType.DTypeEnum.EMPTY || type == DType.DTypeEnum.LIST || type == DType.DTypeEnum.STRUCT
-          || type == DType.DTypeEnum.DECIMAL32 || type == DType.DTypeEnum.DECIMAL64) {
+      if (type == DType.DTypeEnum.EMPTY || type == DType.DTypeEnum.LIST || type == DType.DTypeEnum.STRUCT) {
         continue;
       }
-      try (Scalar s = Scalar.fromNull(DType.create(type));
+      DType dType;
+      if (type == DType.DTypeEnum.DECIMAL32 || type == DType.DTypeEnum.DECIMAL64) {
+        dType = DType.create(type, -8);
+      } else {
+        dType = DType.create(type);
+      }
+      try (Scalar s = Scalar.fromNull(dType);
            ColumnVector c = ColumnVector.fromScalar(s, rowCount);
            HostColumnVector hc = c.copyToHost()) {
         assertEquals(type, c.getType().typeId);
