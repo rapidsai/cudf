@@ -369,15 +369,6 @@ std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_conc
                            }),
                "Mismatch in table columns to concatenate.");
 
-  if (tables_to_concat.front().num_columns() > 0 &&
-      is_fixed_point(tables_to_concat.front().column(0).type())) {
-    CUDF_EXPECTS(std::all_of(tables_to_concat.cbegin(),
-                             tables_to_concat.cend(),
-                             [scale = tables_to_concat.front().column(0).type().scale()](
-                               auto const& t) { return scale == t.column(0).type().scale(); }),
-                 "fixed_point columns need to have same scale before concatenating.");
-  }
-
   std::vector<std::unique_ptr<column>> concat_columns;
   for (size_type i = 0; i < first_table.num_columns(); ++i) {
     std::vector<column_view> cols;
