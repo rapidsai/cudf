@@ -57,7 +57,11 @@ struct round_fn {
                         input.begin<T>(),
                         input.end<T>(),
                         out_view.begin<T>(),
-                        [n] __device__(T e) -> T { return ::round(e * n) / n; });
+                        [n] __device__(T e) -> T {
+                          double integer_part;
+                          double fractional_part = std::modf(e, &integer_part);
+                          return integer_part + ::round(fractional_part * n) / n;
+                        });
     else  // decimal_places < 0
       thrust::transform(rmm::exec_policy(stream)->on(stream),
                         input.begin<T>(),
