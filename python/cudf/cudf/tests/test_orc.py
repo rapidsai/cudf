@@ -364,6 +364,22 @@ def test_orc_reader_decimal_type(datadir, orc_file):
     assert_eq(pdf, df)
 
 
+@pytest.mark.filterwarnings("ignore:Using CPU")
+def test_orc_reader_tzif_timestamps(datadir):
+    # Contains timstamps in the range covered by the TZif file
+    # Other timedate tests only cover "future" times
+    path = datadir / "TestOrcFile.lima_timezone.orc"
+    try:
+        orcfile = pa.orc.ORCFile(path)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+
+    pdf = orcfile.read().to_pandas()
+    gdf = cudf.read_orc(path, engine="cudf").to_pandas()
+
+    assert_eq(pdf, gdf)
+
+
 def test_int_overflow(tmpdir):
     file_path = tmpdir.join("gdf_overflow.orc")
 
