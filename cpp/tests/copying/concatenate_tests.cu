@@ -785,9 +785,9 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointConcatentate)
   auto const b = fw_wrapper(vec.begin() + 300, vec.begin() + 700);
   auto const c = fw_wrapper(vec.begin() + 700, vec.end());
 
-  auto const fixed_point_columns = std::vector<cudf::column_view>{a, b, c};
-  auto const results             = cudf::concatenate(fixed_point_columns);
-  auto const expected            = fw_wrapper(vec.begin(), vec.end());
+  auto const columns  = std::vector<cudf::column_view>{a, b, c};
+  auto const results  = cudf::concatenate(columns);
+  auto const expected = fw_wrapper(vec.begin(), vec.end());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
@@ -804,9 +804,9 @@ TEST_F(FixedPointTest, FixedPointConcatentate)
   auto const b = fp_wrapper(vec.begin() + 300, vec.begin() + 700, scale_type{-2});
   auto const c = fp_wrapper(vec.begin() + 700, vec.end(), /*****/ scale_type{-2});
 
-  auto const fixed_point_columns = std::vector<cudf::column_view>{a, b, c};
-  auto const results             = cudf::concatenate(fixed_point_columns);
-  auto const expected            = fp_wrapper(vec.begin(), vec.end(), scale_type{-2});
+  auto const columns  = std::vector<cudf::column_view>{a, b, c};
+  auto const results  = cudf::concatenate(columns);
+  auto const expected = fp_wrapper(vec.begin(), vec.end(), scale_type{-2});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
@@ -823,8 +823,8 @@ TEST_F(FixedPointTest, FixedPointScaleMismatch)
   auto const b = fp_wrapper(vec.begin() + 300, vec.begin() + 700, scale_type{-2});
   auto const c = fp_wrapper(vec.begin() + 700, vec.end(), /*****/ scale_type{-3});
 
-  auto const fixed_point_columns = std::vector<cudf::column_view>{a, b, c};
-  EXPECT_THROW(cudf::concatenate(fixed_point_columns), cudf::logic_error);
+  auto const columns = std::vector<cudf::column_view>{a, b, c};
+  EXPECT_THROW(cudf::concatenate(columns), cudf::logic_error);
 }
 
 struct DictionaryConcatTest : public cudf::test::BaseFixture {
