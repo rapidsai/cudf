@@ -330,7 +330,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
 {
   CUDF_EXPECTS(not columns_to_concat.empty(), "Unexpected empty list of columns to concatenate.");
 
-  auto const& type = columns_to_concat.front().type();
+  data_type const type = columns_to_concat.front().type();
   CUDF_EXPECTS(std::all_of(columns_to_concat.begin(),
                            columns_to_concat.end(),
                            [&type](auto const& c) { return c.type() == type; }),
@@ -351,7 +351,7 @@ std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_conc
 {
   if (tables_to_concat.empty()) { return std::make_unique<table>(); }
 
-  auto const& first_table = tables_to_concat.front();
+  table_view const first_table = tables_to_concat.front();
   CUDF_EXPECTS(std::all_of(tables_to_concat.cbegin(),
                            tables_to_concat.cend(),
                            [&first_table](auto const& t) {
