@@ -8,6 +8,7 @@
 - PR #6581 Add JNI API to check if PTDS is enabled
 - PR #6592 Add `cudf.to_numeric` function
 - PR #6598 Add strings::contains API with target column parameter
+- PR #6638 Add support for `pipe` API
 
 ## Improvements
 
