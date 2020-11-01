@@ -394,3 +394,16 @@ def pa_mask_buffer_to_mask(mask_buf, size):
         dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
         return Buffer(dbuf)
     return Buffer(mask_buf)
+
+
+def _pipe(obj, func, *args, **kwargs):
+    if isinstance(func, tuple):
+        func, target = func
+        if target in kwargs:
+            raise ValueError(
+                f"{target} is both the pipe target and a keyword argument"
+            )
+        kwargs[target] = obj
+        return func(*args, **kwargs)
+    else:
+        return func(obj, *args, **kwargs)
