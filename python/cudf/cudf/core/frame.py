@@ -1094,7 +1094,7 @@ class Frame(libcudf.table.Table):
         ...    .pipe((func, 'arg2'), arg1=a, arg3=c)
         ...  )
         """
-        return utils._pipe(self, func, *args, **kwargs)
+        return cudf.core.common.pipe(self, func, *args, **kwargs)
 
     @annotate("SCATTER_BY_MAP", color="green", domain="cudf_python")
     def scatter_by_map(

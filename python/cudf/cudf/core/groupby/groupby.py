@@ -10,7 +10,7 @@ from nvtx import annotate
 import cudf
 from cudf._lib import groupby as libgroupby
 from cudf.core.abc import Serializable
-from cudf.utils.utils import _pipe, cached_property
+from cudf.utils.utils import cached_property
 
 
 class GroupBy(Serializable):
@@ -359,7 +359,7 @@ class GroupBy(Serializable):
         a  2
         b  2
         """
-        return _pipe(self, func, *args, **kwargs)
+        return cudf.core.common.pipe(self, func, *args, **kwargs)
 
     def apply(self, function):
         """Apply a python transformation function over the grouped chunk.
