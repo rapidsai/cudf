@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cstdint>
-#include <io/utilities/column_stats.hpp>
+#include <io/utilities/column_histogram.hpp>
 
 class SerialTrieNode;
 

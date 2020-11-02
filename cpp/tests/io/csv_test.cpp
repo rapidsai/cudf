@@ -256,35 +256,21 @@ void write_csv_helper(std::string const& filename,
 }
 
 template <typename T>
-std::vector<std::string> append_zeros(const std::vector<T>& input,
-                                      int zero_count         = 0,
-                                      bool add_positive_sign = false)
+std::string assign(T input)
+{
+  return std::to_string(input);
+}
+
+std::string assign(std::string input) { return input; }
+
+template <typename T>
+std::vector<std::string> prepend_zeros(const std::vector<T>& input,
+                                       int zero_count         = 0,
+                                       bool add_positive_sign = false)
 {
   std::vector<std::string> output(input.size());
   std::transform(input.begin(), input.end(), output.begin(), [=](const T& num) {
-    auto str         = std::to_string(num);
-    bool is_negative = (str[0] == '-');
-    if (is_negative) {
-      str.insert(1, zero_count, '0');
-      return str;
-    } else if (add_positive_sign) {
-      return "+" + std::string(zero_count, '0') + str;
-    } else {
-      str.insert(0, zero_count, '0');
-      return str;
-    }
-  });
-  return output;
-}
-
-template <>
-std::vector<std::string> append_zeros<std::string>(const std::vector<std::string>& input,
-                                                   int zero_count,
-                                                   bool add_positive_sign)
-{
-  std::vector<std::string> output(input.size());
-  std::transform(input.begin(), input.end(), output.begin(), [=](const std::string& num) {
-    auto str         = num;
+    auto str         = assign(num);
     bool is_negative = (str[0] == '-');
     if (is_negative) {
       str.insert(1, zero_count, '0');
@@ -1604,11 +1590,11 @@ TEST_F(CsvReaderTest, ParseInRangeIntegers)
   auto input_less_equal_uint64_max =
     column_wrapper<uint64_t>(less_equal_uint64_max.begin(), less_equal_uint64_max.end());
 
-  auto small_int_append_zeros               = append_zeros(small_int, 32, true);
-  auto less_equal_int64_max_append_zeros    = append_zeros(less_equal_int64_max, 32, true);
-  auto greater_equal_int64_min_append_zeros = append_zeros(greater_equal_int64_min, 17);
-  auto greater_int64_max_append_zeros       = append_zeros(greater_int64_max, 5);
-  auto less_equal_uint64_max_append_zeros   = append_zeros(less_equal_uint64_max, 8, true);
+  auto small_int_append_zeros               = prepend_zeros(small_int, 32, true);
+  auto less_equal_int64_max_append_zeros    = prepend_zeros(less_equal_int64_max, 32, true);
+  auto greater_equal_int64_min_append_zeros = prepend_zeros(greater_equal_int64_min, 17);
+  auto greater_int64_max_append_zeros       = prepend_zeros(greater_int64_max, 5);
+  auto less_equal_uint64_max_append_zeros   = prepend_zeros(less_equal_uint64_max, 8, true);
 
   auto input_small_int_append =
     column_wrapper<cudf::string_view>(small_int_append_zeros.begin(), small_int_append_zeros.end());
@@ -1633,7 +1619,7 @@ TEST_F(CsvReaderTest, ParseInRangeIntegers)
                                                input_less_equal_uint64_max_append};
   cudf::table_view input_table{input_columns};
 
-  auto filepath = temp_env->get_temp_filepath("../InRangeIntegerParsing.csv");
+  auto filepath = temp_env->get_temp_filepath("ParseInRangeIntegers.csv");
 
   write_csv_helper(filepath, input_table, false);
 
@@ -1683,11 +1669,11 @@ TEST_F(CsvReaderTest, ParseOutOfRangeIntegers)
   auto input_mixed_range =
     column_wrapper<cudf::string_view>(mixed_range.begin(), mixed_range.end());
 
-  auto out_of_range_positive_append_zeros = append_zeros(out_of_range_positive, 32, true);
-  auto out_of_range_negative_append_zeros = append_zeros(out_of_range_negative, 5);
-  auto greater_uint64_max_append_zeros    = append_zeros(greater_uint64_max, 8, true);
-  auto less_int64_min_append_zeros        = append_zeros(less_int64_min, 17);
-  auto mixed_range_append_zeros           = append_zeros(mixed_range, 2, true);
+  auto out_of_range_positive_append_zeros = prepend_zeros(out_of_range_positive, 32, true);
+  auto out_of_range_negative_append_zeros = prepend_zeros(out_of_range_negative, 5);
+  auto greater_uint64_max_append_zeros    = prepend_zeros(greater_uint64_max, 8, true);
+  auto less_int64_min_append_zeros        = prepend_zeros(less_int64_min, 17);
+  auto mixed_range_append_zeros           = prepend_zeros(mixed_range, 2, true);
 
   auto input_out_of_range_positive_append = column_wrapper<cudf::string_view>(
     out_of_range_positive_append_zeros.begin(), out_of_range_positive_append_zeros.end());
