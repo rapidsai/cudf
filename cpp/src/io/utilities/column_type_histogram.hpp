@@ -24,7 +24,7 @@ namespace io {
 /**
  * @brief Per-column histogram struct containing detected occurrences of each dtype
  */
-struct column_histogram {
+struct column_type_histogram {
   cudf::size_type float_count;
   cudf::size_type datetime_count;
   cudf::size_type string_count;

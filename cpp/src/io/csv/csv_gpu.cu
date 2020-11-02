@@ -190,7 +190,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
                       device_span<char const> csv_text,
                       device_span<column_parse::flags const> const column_flags,
                       device_span<uint64_t const> const row_offsets,
-                      device_span<column_histogram> d_columnData)
+                      device_span<column_type_histogram> d_columnData)
 {
   auto raw_csv = csv_text.data();
 
@@ -1044,7 +1044,7 @@ void __host__ remove_blank_rows(cudf::io::parse_options_view const &options,
   row_offsets.resize(new_end - row_offsets.begin());
 }
 
-thrust::host_vector<column_histogram> detect_column_types(
+thrust::host_vector<column_type_histogram> detect_column_types(
   cudf::io::parse_options_view const &options,
   device_span<char const> const data,
   device_span<column_parse::flags const> const column_flags,
@@ -1056,12 +1056,12 @@ thrust::host_vector<column_histogram> detect_column_types(
   const int block_size = csvparse_block_dim;
   const int grid_size  = (row_starts.size() + block_size - 1) / block_size;
 
-  auto d_stats = rmm::device_vector<column_histogram>(num_active_columns);
+  auto d_stats = rmm::device_vector<column_type_histogram>(num_active_columns);
 
   data_type_detection<<<grid_size, block_size, 0, stream>>>(
     options, data, column_flags, row_starts, d_stats);
 
-  return thrust::host_vector<column_histogram>(d_stats);
+  return thrust::host_vector<column_type_histogram>(d_stats);
 }
 
 void __host__ decode_row_column_data(cudf::io::parse_options_view const &options,

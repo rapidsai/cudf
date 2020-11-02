@@ -17,6 +17,6 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <io/utilities/column_histogram.hpp>
+#include <io/utilities/column_type_histogram.hpp>
 
 class SerialTrieNode;

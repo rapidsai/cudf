@@ -593,12 +593,13 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
  * @param[in] num_columns The number of columns of input data
  * @param[out] column_infos The count for each column data type
  */
-__global__ void detect_data_types_kernel(parse_options_view const opts,
-                                         device_span<char const> const data,
-                                         device_span<uint64_t const> const row_offsets,
-                                         col_map_type *col_map,
-                                         int num_columns,
-                                         device_span<cudf::io::column_histogram> const column_infos)
+__global__ void detect_data_types_kernel(
+  parse_options_view const opts,
+  device_span<char const> const data,
+  device_span<uint64_t const> const row_offsets,
+  col_map_type *col_map,
+  int num_columns,
+  device_span<cudf::io::column_type_histogram> const column_infos)
 {
   auto const rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= row_offsets.size()) return;
@@ -813,7 +814,7 @@ void convert_json_to_columns(parse_options_view const &opts,
  * @copydoc cudf::io::gpu::detect_data_types
  */
 
-std::vector<cudf::io::column_histogram> detect_data_types(
+std::vector<cudf::io::column_type_histogram> detect_data_types(
   const parse_options_view &options,
   device_span<char const> const data,
   device_span<uint64_t const> const row_offsets,
@@ -827,8 +828,8 @@ std::vector<cudf::io::column_histogram> detect_data_types(
   CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, detect_data_types_kernel));
 
-  rmm::device_vector<cudf::io::column_histogram> d_column_infos(num_columns,
-                                                                cudf::io::column_histogram{});
+  rmm::device_vector<cudf::io::column_type_histogram> d_column_infos(
+    num_columns, cudf::io::column_type_histogram{});
 
   if (do_set_null_count) {
     // Set the null count to the row count (all fields assumes to be null).
@@ -847,7 +848,7 @@ std::vector<cudf::io::column_histogram> detect_data_types(
 
   CUDA_TRY(cudaGetLastError());
 
-  auto h_column_infos = std::vector<cudf::io::column_histogram>(num_columns);
+  auto h_column_infos = std::vector<cudf::io::column_type_histogram>(num_columns);
 
   thrust::copy(d_column_infos.begin(), d_column_infos.end(), h_column_infos.begin());
 

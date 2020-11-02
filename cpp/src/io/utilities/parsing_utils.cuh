@@ -286,6 +286,16 @@ __inline__ __device__ T parse_numeric(const char* begin,
   return value * sign;
 }
 
+/**
+ * @brief Lexicographically compare digits in input against string
+ * representing an integer
+ *
+ * @param raw_data The pointer to beginning of character string
+ * @param golden The pointer to beginning of character string representing
+ * the value to be compared against
+ * @return bool True if integer represented by character string is less
+ * than or equal to golden data
+ */
 template <int N>
 __device__ __inline__ bool less_equal_than(const char* data, const char (&golden)[N])
 {
@@ -311,7 +321,7 @@ __device__ __inline__ bool less_equal_than(const char* data, const char (&golden
 __device__ __inline__ cudf::size_type* infer_integral_field_counter(char const* data_begin,
                                                                     char const* data_end,
                                                                     bool is_negative,
-                                                                    column_histogram& stats)
+                                                                    column_type_histogram& stats)
 {
   static constexpr char uint64_max_abs[] = "18446744073709551615";
   static constexpr char int64_min_abs[]  = "9223372036854775808";
