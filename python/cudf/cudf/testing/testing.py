@@ -199,9 +199,7 @@ def assert_column_equal(
         msg1 = f"{left.to_array()}"
         msg2 = f"{right.to_array()}"
         try:
-            diff = left.apply_boolean_mask(
-                left.binary_operator("ne", right)
-            ).size
+            diff = left.apply_boolean_mask(left != right).size
             diff = diff * 100.0 / left.size
         except BaseException:
             diff = 100.0

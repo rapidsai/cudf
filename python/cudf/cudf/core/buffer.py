@@ -1,3 +1,4 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
 import functools
 import operator
 import pickle
@@ -116,11 +117,9 @@ class Buffer(Serializable):
 
         if header["desc"]["shape"] != buf.__cuda_array_interface__["shape"]:
             raise ValueError(
-                "Recieved a `Buffer` with the wrong size."
-                " Expected {0}, but got {1}".format(
-                    header["desc"]["shape"],
-                    buf.__cuda_array_interface__["shape"],
-                )
+                f"Recieved a `Buffer` with the wrong size."
+                f" Expected {header['desc']['shape']}, "
+                f"but got {buf.__cuda_array_interface__['shape']}"
             )
 
         return buf
