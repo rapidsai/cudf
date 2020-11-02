@@ -55,6 +55,7 @@
 - PR #6543 Handle `np.nan` values in `isna`/`isnull`/`notna`/`notnull`
 - PR #6549 Fix memory_usage calls for list columns
 - PR #6575 Fix JNI RMM initialize with no pool allocator limit
+- PR #6636 Fix orc boolean column corruption issue
 - PR #6582 Add missing `device_scalar` stream parameters
 - PR #6596 Fix memory usage calculation
 - PR #6595 Fix JNI build, broken by to_arrow() signature change
