@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Random;
@@ -70,13 +71,32 @@ public class DecimalColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testCreateColumnVectorBuilder() {
-    try (ColumnVector decColumnVector = ColumnVector.build(DType.create(DType.DTypeEnum.DECIMAL32, -5), 3,
+    try (ColumnVector cv = ColumnVector.build(DType.create(DType.DTypeEnum.DECIMAL32, -5), 3,
         (b) -> b.append(BigDecimal.valueOf(123456789, 5)))) {
-      assertFalse(decColumnVector.hasNulls());
+      assertFalse(cv.hasNulls());
     }
-    try (ColumnVector decColumnVector = ColumnVector.build(DType.create(DType.DTypeEnum.DECIMAL64, -10), 3,
+    try (ColumnVector cv = ColumnVector.build(DType.create(DType.DTypeEnum.DECIMAL64, -10), 3,
         (b) -> b.append(BigDecimal.valueOf(1023040506070809L, 10)))) {
-      assertFalse(decColumnVector.hasNulls());
+      assertFalse(cv.hasNulls());
+    }
+    // test building ColumnVector from BigDecimal values with varying scales
+    try (ColumnVector cv = ColumnVector.build(DType.create(DType.DTypeEnum.DECIMAL64, -5), 7,
+        (b) -> b.append(BigDecimal.valueOf(123456, 0), RoundingMode.UNNECESSARY)
+            .append(BigDecimal.valueOf(123456, 2), RoundingMode.UNNECESSARY)
+            .append(BigDecimal.valueOf(123456, 5))
+            .append(BigDecimal.valueOf(123456, 7), RoundingMode.HALF_UP)
+            .append(BigDecimal.valueOf(123456, 7), RoundingMode.FLOOR)
+            .append(BigDecimal.valueOf(123456, 9), RoundingMode.HALF_DOWN)
+            .append(BigDecimal.valueOf(123456, 9), RoundingMode.CEILING))) {
+      try (HostColumnVector hcv = cv.copyToHost()) {
+        assertEquals(12345600000L, hcv.getLong(0));
+        assertEquals(123456000L, hcv.getLong(1));
+        assertEquals(123456L, hcv.getLong(2));
+        assertEquals(1235L, hcv.getLong(3));
+        assertEquals(1234L, hcv.getLong(4));
+        assertEquals(12L, hcv.getLong(5));
+        assertEquals(13L, hcv.getLong(6));
+      }
     }
   }
 
@@ -130,13 +150,7 @@ public class DecimalColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  public void testDecimalSpecifics() {
-    DecimalColumnVectorTest.testDecimalImpl(false, dec32Scale, decimal32Zoo);
-    DecimalColumnVectorTest.testDecimalImpl(true, dec64Scale, decimal64Zoo);
-    DecimalColumnVectorTest.testDecimalImpl(false, 0, boundaryDecimal32);
-    DecimalColumnVectorTest.testDecimalImpl(true, 0, boundaryDecimal64);
-    DecimalColumnVectorTest.testUnscaledDec32Impl(dec32Scale, unscaledDec32Zoo);
-    DecimalColumnVectorTest.testUnscaledDec64Impl(dec64Scale, unscaledDec64Zoo);
+  public void testDecimalGeneral() {
     // Safe max precision of Decimal32 is 9, so integers have 10 digits will be backed by DECIMAL64.
     try (ColumnVector cv = ColumnVector.fromDecimals(overflowDecimal32)) {
       assertEquals(DType.create(DType.DTypeEnum.DECIMAL64, 0), cv.getDataType());
@@ -148,6 +162,14 @@ public class DecimalColumnVectorTest extends CudfTestBase {
         assertEquals(0L, hcv.getBigDecimal(0).longValue());
       }
     }
+  }
+
+  @Test
+  public void testDecimalFromDecimals() {
+    DecimalColumnVectorTest.testDecimalImpl(false, dec32Scale, decimal32Zoo);
+    DecimalColumnVectorTest.testDecimalImpl(true, dec64Scale, decimal64Zoo);
+    DecimalColumnVectorTest.testDecimalImpl(false, 0, boundaryDecimal32);
+    DecimalColumnVectorTest.testDecimalImpl(true, 0, boundaryDecimal64);
   }
 
   private static void testDecimalImpl(boolean isInt64, int scale, BigDecimal[] decimalZoo) {
@@ -168,26 +190,65 @@ public class DecimalColumnVectorTest extends CudfTestBase {
     }
   }
 
-  private static void testUnscaledDec32Impl(int scale, int[] unscaledZoo) {
-    try (ColumnVector cv = ColumnVector.decimalFromInts(-scale, unscaledZoo)) {
+  @Test
+  private void testDecimalFromInts() {
+    try (ColumnVector cv = ColumnVector.decimalFromInts(-DecimalColumnVectorTest.dec32Scale, DecimalColumnVectorTest.unscaledDec32Zoo)) {
       try (HostColumnVector hcv = cv.copyToHost()) {
-        for (int i = 0; i < unscaledZoo.length; i++) {
-          assertEquals(unscaledZoo[i], hcv.getInt(i));
-          assertEquals(BigDecimal.valueOf(unscaledZoo[i], scale), hcv.getBigDecimal(i));
+        for (int i = 0; i < DecimalColumnVectorTest.unscaledDec32Zoo.length; i++) {
+          assertEquals(DecimalColumnVectorTest.unscaledDec32Zoo[i], hcv.getInt(i));
+          assertEquals(BigDecimal.valueOf(DecimalColumnVectorTest.unscaledDec32Zoo[i], DecimalColumnVectorTest.dec32Scale), hcv.getBigDecimal(i));
         }
       }
     }
   }
 
-  private static void testUnscaledDec64Impl(int scale, long[] unscaledZoo) {
-    try (ColumnVector cv = ColumnVector.decimalFromLongs(-scale, unscaledZoo)) {
+  @Test
+  private static void testDecimalFromLongs() {
+    try (ColumnVector cv = ColumnVector.decimalFromLongs(-DecimalColumnVectorTest.dec64Scale, DecimalColumnVectorTest.unscaledDec64Zoo)) {
       try (HostColumnVector hcv = cv.copyToHost()) {
-        for (int i = 0; i < unscaledZoo.length; i++) {
-          assertEquals(unscaledZoo[i], hcv.getLong(i));
-          assertEquals(BigDecimal.valueOf(unscaledZoo[i], scale), hcv.getBigDecimal(i));
+        for (int i = 0; i < DecimalColumnVectorTest.unscaledDec64Zoo.length; i++) {
+          assertEquals(DecimalColumnVectorTest.unscaledDec64Zoo[i], hcv.getLong(i));
+          assertEquals(BigDecimal.valueOf(DecimalColumnVectorTest.unscaledDec64Zoo[i], DecimalColumnVectorTest.dec64Scale), hcv.getBigDecimal(i));
         }
       }
     }
+  }
+
+  @Test
+  public void testDecimalFromDoubles() {
+    try (ColumnVector cv = ColumnVector.decimalFromDoubles(DType.DTypeEnum.DECIMAL32, -3, 123456, -2.4567, 3.00001, -1111e-5)) {
+      try (HostColumnVector hcv = cv.copyToHost()) {
+        assertEquals(123456, hcv.getBigDecimal(0).doubleValue());
+        assertEquals(-2.456, hcv.getBigDecimal(1).doubleValue());
+        assertEquals(3, hcv.getBigDecimal(2).doubleValue());
+        assertEquals(-0.011, hcv.getBigDecimal(3).doubleValue());
+      }
+    }
+    try (ColumnVector cv = ColumnVector.decimalFromDoubles(DType.DTypeEnum.DECIMAL64, -10, 1.2345678, -2.45e-9, 3.000012, -1111e-15)) {
+      try (HostColumnVector hcv = cv.copyToHost()) {
+        assertEquals(1.2345678, hcv.getBigDecimal(0).doubleValue());
+        assertEquals(-2.4e-9, hcv.getBigDecimal(1).doubleValue());
+        assertEquals(3.000012, hcv.getBigDecimal(2).doubleValue());
+        assertEquals(0, hcv.getBigDecimal(3).doubleValue());
+      }
+    }
+    try (ColumnVector cv = ColumnVector.decimalFromDoubles(DType.DTypeEnum.DECIMAL64, 10, 1.234e20, -1.234e10, 9.9e9)) {
+      try (HostColumnVector hcv = cv.copyToHost()) {
+        assertEquals(1.234e20, hcv.getBigDecimal(0).doubleValue());
+        assertEquals(-1e10, hcv.getBigDecimal(1).doubleValue());
+        assertEquals(0, hcv.getBigDecimal(2).doubleValue());
+      }
+    }
+    assertThrows(IllegalArgumentException.class,
+        () -> {
+          try (ColumnVector cv = ColumnVector.decimalFromDoubles(DType.DTypeEnum.DECIMAL32, -5, 10000)) {
+          }
+        });
+    assertThrows(IllegalArgumentException.class,
+        () -> {
+          try (ColumnVector cv = ColumnVector.decimalFromDoubles(DType.DTypeEnum.DECIMAL64, 10, 1e100)) {
+          }
+        });
   }
 
   @Test

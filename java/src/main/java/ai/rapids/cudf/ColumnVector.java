@@ -3799,6 +3799,18 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   /**
+   * Create a new decimal vector from double floats with scale and decimal type.
+   * All doubles will be rescaled according to [[scale]]. Then the integral part of rescaled double will be put to ColumnVector.
+   * If any overflow occurs in extracting integral part, an IllegalArgumentException will be thrown.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static ColumnVector decimalFromDoubles(DType.DTypeEnum type, int scale, double... values) {
+    try (HostColumnVector host = HostColumnVector.decimalFromDoubles(type, scale, values)) {
+      return host.copyToDevice();
+    }
+  }
+
+  /**
    * Create a new string vector from the given values.  This API
    * supports inline nulls. This is really intended to be used only for testing as
    * it is slow and memory intensive to translate between java strings and UTF8 strings.

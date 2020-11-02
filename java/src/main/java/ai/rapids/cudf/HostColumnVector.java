@@ -19,6 +19,11 @@
 package ai.rapids.cudf;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
+import java.nio.Buffer;
+import java.nio.IntBuffer;
+import java.nio.LongBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -461,6 +466,50 @@ public final class HostColumnVector extends HostColumnVectorCore {
    */
   public static HostColumnVector decimalFromLongs(int scale, long... values) {
     return build(DType.create(DType.DTypeEnum.DECIMAL64, scale), values.length, (b) -> b.appendUnscaledDecimalArray(values));
+  }
+
+  /**
+   * Create a new decimal vector from double floats with scale and decimal type.
+   * All doubles will be rescaled according to [[scale]]. Then the integral part of rescaled double will be put to ColumnVector.
+   * If any overflow occurs in extracting integral part, an IllegalArgumentException will be thrown.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static HostColumnVector decimalFromDoubles(DType.DTypeEnum type, int scale, double... values) {
+    long ratio = (long) Math.pow(10, Math.abs(scale));
+    Buffer buffer;
+    if (type == DType.DTypeEnum.DECIMAL32) {
+      buffer = IntBuffer.allocate(values.length);
+    } else {
+      buffer = LongBuffer.allocate(values.length);
+    }
+    for (double v : values) {
+      double scaledDouble;
+      if (scale > 0) {
+        scaledDouble = v / ratio;
+      } else {
+        scaledDouble = v * ratio;
+      }
+      if (type == DType.DTypeEnum.DECIMAL32) {
+        if (scaledDouble > 999999999 || scaledDouble < -99999999) {
+          throw new IllegalArgumentException(
+              "Value(" + v + ") with scale(" + scale + ") overflows the capacity of DTypeEnum.DECIMAL32");
+        }
+        ((IntBuffer)buffer).put((int) scaledDouble);
+      } else {
+        if (scaledDouble > Long.MAX_VALUE || scaledDouble < Long.MIN_VALUE) {
+          throw new IllegalArgumentException(
+              "Value(" + v + ") with scale(" + scale + ") overflows the capacity of DTypeEnum.DECIMAL64");
+        }
+        ((LongBuffer)buffer).put((long) scaledDouble);
+      }
+    }
+    if (type == DType.DTypeEnum.DECIMAL32) {
+      int[] unscaledValues = ((IntBuffer)buffer).array();
+      return build(DType.create(type, scale), values.length, (b) -> b.appendUnscaledDecimalArray(unscaledValues));
+    } else {
+      long[] unscaledValues = ((LongBuffer)buffer).array();
+      return build(DType.create(type, scale), values.length, (b) -> b.appendUnscaledDecimalArray(unscaledValues));
+    }
   }
 
   /**
@@ -1243,13 +1292,25 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public final Builder append(BigDecimal value) {
+      return append(value, null);
+    }
+
+    //
+    public final Builder append(BigDecimal value, RoundingMode roundingMode) {
       assert type.isDecimalType();
-      assert type.getScale() == -value.scale();
       assert currentIndex < rows;
+      BigInteger unscaledValue;
+      // rescaled input decimal if RoundingMode set
+      if (roundingMode == null) {
+        assert -type.getScale() == value.scale();
+        unscaledValue = value.unscaledValue();
+      } else {
+        unscaledValue = value.setScale(-type.getScale(), roundingMode).unscaledValue();
+      }
       if (type.typeId == DType.DTypeEnum.DECIMAL32) {
-        data.setInt(currentIndex * type.getSizeInBytes(), value.unscaledValue().intValueExact());
+        data.setInt(currentIndex * type.getSizeInBytes(), unscaledValue.intValueExact());
       } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
-        data.setLong(currentIndex * type.getSizeInBytes(), value.unscaledValue().longValueExact());
+        data.setLong(currentIndex * type.getSizeInBytes(), unscaledValue.longValueExact());
       } else {
         throw new IllegalStateException(type + " is not a supported decimal type.");
       }
