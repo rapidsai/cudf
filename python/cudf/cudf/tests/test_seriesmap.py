@@ -73,3 +73,13 @@ def test_series_map_callable_numeric_random_dtype_change():
     expect = np.array(data, dtype=float)
     got = out.to_array()
     np.testing.assert_array_equal(expect, got)
+
+
+def test_series_map_non_unique_index():
+    # Test for changing the out_dtype using applymap
+
+    gd2 = cudf.Series([1, 2, 3, 4, np.nan])
+
+    with pytest.raises(ValueError) as exc_info: 
+        assert gd2.map(cudf.Series(['a','b','c'], index=[1, 1, 2]))
+    

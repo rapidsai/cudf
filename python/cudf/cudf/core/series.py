@@ -823,7 +823,7 @@ class Series(Frame, Serializable):
 
         Used for substituting each value in a Series with another value,
         that may be derived from a function, a ``dict`` or
-        a :class:`Series`.
+        a ``Series``.
 
         Parameters
         ----------
@@ -869,8 +869,7 @@ class Series(Frame, Serializable):
         4       NaN
         dtype: int64
 
-        Please note map does not currently support user defined functions
-        with dtypes `str` and`category`.
+        Please note map currently only supports fixed-width numeric types.
         """
         if isinstance(arg, dict):
             lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
