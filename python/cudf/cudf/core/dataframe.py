@@ -4816,7 +4816,8 @@ class DataFrame(Frame, Serializable):
         >>> type(pdf)
         <class 'pandas.core.frame.DataFrame'>
 
-        Use ``nullable`` parameter to get Pandas Nullable dtypes:
+        ``nullable`` parameter can be used to control
+        whether dtype can be Pandas Nullable or not:
 
         >>> df = cudf.DataFrame({'a': [0, None, 2], 'b': [True, False, None]})
         >>> df
@@ -4833,6 +4834,16 @@ class DataFrame(Frame, Serializable):
         >>> pdf.dtypes
         a      Int64
         b    boolean
+        dtype: object
+        >>> pdf = df.to_pandas(nullable=False)
+        >>> pdf
+            a      b
+        0  0.0   True
+        1  NaN  False
+        2  2.0   None
+        >>> pdf.dtypes
+        a    float64
+        b     object
         dtype: object
         """
 

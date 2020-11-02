@@ -1996,7 +1996,8 @@ class Series(Frame, Serializable):
         >>> type(pds)
         <class 'pandas.core.series.Series'>
 
-        Use ``nullable`` parameter to get Pandas Nullable dtype:
+        ``nullable`` parameter can be used to control
+        whether dtype can be Pandas Nullable or not:
 
         >>> ser = cudf.Series([10, 20, None, 30])
         >>> ser
@@ -2011,6 +2012,12 @@ class Series(Frame, Serializable):
         2    <NA>
         3      30
         dtype: Int64
+        >>> ser.to_pandas(nullable=False)
+        0    10.0
+        1    20.0
+        2     NaN
+        3    30.0
+        dtype: float64
         """
 
         if index is True:
