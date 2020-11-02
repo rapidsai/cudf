@@ -80,6 +80,5 @@ def test_series_map_non_unique_index():
 
     gd2 = cudf.Series([1, 2, 3, 4, np.nan])
 
-    with pytest.raises(ValueError) as exc_info: 
-        assert gd2.map(cudf.Series(['a','b','c'], index=[1, 1, 2]))
-    
+    with pytest.raises(ValueError):
+        assert gd2.map(cudf.Series(["a", "b", "c"], index=[1, 1, 2]))
