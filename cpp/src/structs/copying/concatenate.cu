@@ -23,6 +23,9 @@
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/structs/structs_column_view.hpp>
+
+#include <structs/utilities.hpp>
+
 #include <memory>
 
 namespace cudf {
@@ -38,34 +41,19 @@ std::unique_ptr<column> concatenate(
   cudaStream_t stream                 = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  // concatenate children.
-  std::vector<std::unique_ptr<cudf::column>> children;
-  children.reserve(columns.size());
-  auto child_index = thrust::make_counting_iterator(0);
-  std::transform(child_index,
-                 child_index + columns[0].num_children(),
+  // get ordered children
+  auto ordered_children = extract_ordered_struct_children(columns);
+
+  // concatenate them
+  std::vector<std::unique_ptr<column>> children;
+  children.reserve(columns[0].num_children());
+  std::transform(ordered_children.begin(),
+                 ordered_children.end(),
                  std::back_inserter(children),
-                 [&columns, mr, stream](int child_index) {
-                   std::vector<column_view> children;
-
-                   auto col_index = thrust::make_counting_iterator(0);
-                   std::transform(
-                     col_index,
-                     col_index + columns.size(),
-                     std::back_inserter(children),
-                     [&columns, child_index](int col_index) {
-                       structs_column_view scv(columns[col_index]);
-
-                       CUDF_EXPECTS(columns[0].num_children() == scv.num_children(),
-                                    "Mismatch in number of children during struct concatenate");
-                       CUDF_EXPECTS(
-                         columns[0].child(child_index).type() == scv.child(child_index).type(),
-                         "Mismatch in number of children during struct concatenate");
-                       return scv.get_sliced_child(child_index);
-                     });
-
-                   return cudf::detail::concatenate(children, mr, stream);
+                 [mr, stream](std::vector<column_view> const& cols) {
+                   return cudf::detail::concatenate(cols, mr, stream);
                  });
+
   size_type total_length = children[0]->size();
 
   // if any of the input columns have nulls, construct the output mask
