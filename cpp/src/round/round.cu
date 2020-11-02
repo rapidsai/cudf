@@ -25,8 +25,8 @@
 #include <type_traits>
 
 namespace cudf {
-
 namespace detail {
+namespace {  // anonymous
 
 float __device__ generic_round(float f) { return roundf(f); }
 double __device__ generic_round(double d) { return ::round(d); }
@@ -49,7 +49,7 @@ T __device__ generic_abs(T value)
 template <typename T, typename std::enable_if_t<std::is_signed<T>::value>* = nullptr>
 bool __device__ is_negative(T value)
 {
-  return value >= 0;
+  return value < 0;
 }
 
 // this is needed to suppress warning: pointless comparison of unsigned integer with zero
@@ -58,6 +58,7 @@ bool __device__ is_negative(T value)
 {
   return true;
 }
+}  // anonymous namespace
 
 struct round_fn {
   template <typename T, typename... Args>
@@ -127,7 +128,7 @@ struct round_fn {
                       out_view.begin<T>(),
                       [n] __device__(T e) -> T {
                         auto const down = (e / n) * n;
-                        auto const sign = is_negative(e) ? 1 : -1;
+                        auto const sign = is_negative(e) ? -1 : 1;
                         return down + sign * (generic_abs(e - down) >= n / 2 ? n : 0);
                       });
 
