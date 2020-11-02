@@ -541,8 +541,10 @@ public final class HostColumnVector extends HostColumnVectorCore {
 
   /**
    * Create a new vector from the given values.  This API supports inline nulls,
-   * but is much slower than building from primitive array of unscaledValue.
-   * Notice all input BigDecimals should share same scale.
+   * but is much slower than building from primitive array of unscaledValues.
+   * Notice:
+   *  1. All input BigDecimals should share same scale.
+   *  2. The scale will be zero if all input values are null.
    */
   public static HostColumnVector fromDecimals(BigDecimal... values) {
     // Try to fetch the element with max precision. Fill with ZERO if inputs is empty.

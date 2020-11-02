@@ -3822,8 +3822,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   /**
-   * Create a new vector from the given values.  This API supports inline nulls, but it is inefficient.
-   * Notice all input BigDecimals should share same scale.
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than building from primitive array of unscaledValues.
+   * Notice:
+   *  1. All input BigDecimals should share same scale.
+   *  2. The scale will be zero if all input values are null.
    */
   public static ColumnVector fromDecimals(BigDecimal... values) {
     try (HostColumnVector hcv = HostColumnVector.fromDecimals(values)) {
