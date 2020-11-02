@@ -1333,7 +1333,7 @@ static __device__ void DecodeRowPositions(orcdec_state_s *s, size_t first_row, i
   }
   while (s->u.rowdec.nz_count < s->top.data.max_vals &&
          s->top.data.cur_row + s->top.data.nrows < s->top.data.end_row) {
-    uint32_t nrows = min(s->top.data.end_row - s->top.data.cur_row,
+    uint32_t nrows = min(s->top.data.end_row - (s->top.data.cur_row + s->top.data.nrows),
                          min((ROWDEC_BFRSZ - s->u.rowdec.nz_count) * 2, NTHREADS));
     if (s->chunk.strm_len[CI_PRESENT] > 0) {
       // We have a present stream
@@ -1553,8 +1553,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
       __syncthreads();
       // Account for skipped values
       if (num_rowgroups > 0 && !s->is_string) {
-        uint32_t run_pos = s->top.data.index.run_pos[CI_DATA]
-                           << ((s->chunk.type_kind == BOOLEAN) ? 3 : 0);
+        uint32_t run_pos = s->top.data.index.run_pos[CI_DATA];
         numvals = min(numvals + run_pos, (s->chunk.type_kind == BOOLEAN) ? NTHREADS * 2 : NTHREADS);
       }
       // Decode the primary data stream
@@ -1641,8 +1640,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
       } else {
         vals_skipped = 0;
         if (num_rowgroups > 0) {
-          uint32_t run_pos = s->top.data.index.run_pos[CI_DATA]
-                             << ((s->chunk.type_kind == BOOLEAN) ? 3 : 0);
+          uint32_t run_pos = s->top.data.index.run_pos[CI_DATA];
           if (run_pos) {
             vals_skipped = min(numvals, run_pos);
             numvals -= vals_skipped;
@@ -1688,7 +1686,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
             case BYTE: static_cast<uint8_t *>(data_out)[row] = s->vals.u8[t + vals_skipped]; break;
             case BOOLEAN:
               static_cast<uint8_t *>(data_out)[row] =
-                (s->vals.u8[(t + vals_skipped) >> 3] >> ((~t) & 7)) & 1;
+                (s->vals.u8[(t + vals_skipped) >> 3] >> ((~(t + vals_skipped)) & 7)) & 1;
               break;
             case DATE:
               if (s->chunk.dtype_len == 8) {
