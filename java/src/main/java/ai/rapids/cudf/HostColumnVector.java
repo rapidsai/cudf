@@ -36,9 +36,6 @@ public final class HostColumnVector extends HostColumnVectorCore {
    * The size in bytes of an offset entry
    */
   static final int OFFSET_SIZE = DType.INT32.getSizeInBytes();
-  static {
-    NativeDepsLoader.loadNativeDeps();
-  }
 
   private int refCount;
 

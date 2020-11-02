@@ -27,6 +27,7 @@ class Fuzzer(object):
         runs=-1,
         max_string_length=None,
         params=None,
+        write_data_on_failure=True,
     ):
 
         self._target = target
@@ -43,6 +44,7 @@ class Fuzzer(object):
         self._start_time = None
         self.runs = runs
         self.params = params
+        self.write_data_on_failure = write_data_on_failure
 
     def log_stats(self):
         end_time = datetime.datetime.now()
@@ -74,7 +76,8 @@ class Fuzzer(object):
             f.write(str(error))
         logging.info(f"Crash exception was written to {crash_log_path}")
 
-        self._data_handler.write_data(error_file_name)
+        if self.write_data_on_failure:
+            self._data_handler.write_data(error_file_name)
 
     def start(self):
 
