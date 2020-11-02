@@ -144,14 +144,14 @@ void launch_kernel(mutable_table_view input, T** d_ptr, int work_per_thread)
     // std::vector<cudf::util::cuda::scoped_stream> v_stream(n_cols);
     for (int c = 0; c < n_cols; c++) {
       auto d_column = mutable_column_device_view::create(input.column(c));
-      // cudf::type_dispatcher(
-      //  d_column->type(), ColumnHandle<functor_type>{}, *d_column, work_per_thread);
+      cudf::type_dispatcher(
+        d_column->type(), ColumnHandle<functor_type>{}, *d_column, work_per_thread);
     }
   } else if (dispatching_type == DEVICE_DISPATCHING) {
     auto d_table_view = mutable_table_device_view::create(input);
-    // auto f            = device_dispatching_kernel<functor_type>;
+    auto f            = device_dispatching_kernel<functor_type>;
     // Launch the kernel
-    // f<<<grid_size, block_size>>>(*d_table_view);
+    f<<<grid_size, block_size>>>(*d_table_view);
   } else if (dispatching_type == NO_DISPATCHING) {
     auto f = no_dispatching_kernel<functor_type, T>;
     // Launch the kernel
