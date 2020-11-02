@@ -14,6 +14,8 @@
 # limitations under the License.
 #=============================================================================
 
+project(cudf-GoogleBenchmark)
+
 include(ExternalProject)
 
 ExternalProject_Add(GoogleBenchmark

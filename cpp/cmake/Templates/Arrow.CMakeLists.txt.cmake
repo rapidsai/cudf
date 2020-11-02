@@ -14,6 +14,8 @@
 # limitations under the License.
 #=============================================================================
 
+project(cudf-Arrow)
+
 include(ExternalProject)
 
 ExternalProject_Add(Arrow

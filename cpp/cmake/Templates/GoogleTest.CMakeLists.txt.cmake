@@ -14,6 +14,8 @@
 # limitations under the License.
 #=============================================================================
 
+project(cudf-GoogleTest)
+
 include(ExternalProject)
 
 ExternalProject_Add(GoogleTest
