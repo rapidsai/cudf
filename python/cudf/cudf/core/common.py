@@ -1,3 +1,6 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
+
 def pipe(obj, func, *args, **kwargs):
     """
     Apply a function ``func`` to object ``obj`` either by passing obj as the
