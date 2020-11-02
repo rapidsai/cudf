@@ -75,7 +75,13 @@ struct round_fn {
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr)
   {
-    auto result   = cudf::make_fixed_width_column(input.type(), input.size());
+    auto result = cudf::make_fixed_width_column(input.type(),
+                                                input.size(),
+                                                copy_bitmask(input, stream, mr),
+                                                cudf::UNKNOWN_NULL_COUNT,
+                                                stream,
+                                                mr);
+
     auto out_view = result->mutable_view();
     T const n     = std::pow(10, std::abs(decimal_places));
 
@@ -117,7 +123,12 @@ struct round_fn {
     // integers by definition have no fractional part, so result of "rounding" is a no-op
     if (decimal_places >= 0) return std::make_unique<cudf::column>(input, stream, mr);
 
-    auto result = cudf::make_fixed_width_column(input.type(), input.size());
+    auto result = cudf::make_fixed_width_column(input.type(),
+                                                input.size(),
+                                                copy_bitmask(input, stream, mr),
+                                                cudf::UNKNOWN_NULL_COUNT,
+                                                stream,
+                                                mr);
 
     auto out_view = result->mutable_view();
     auto const n  = static_cast<T>(std::pow(10, -decimal_places));
