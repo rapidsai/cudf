@@ -21,7 +21,9 @@
 #include <cudf/round.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
 #include <type_traits>
 
 namespace cudf {
@@ -30,6 +32,9 @@ namespace detail {
 
 float __device__ generic_round(float f) { return roundf(f); }
 double __device__ generic_round(double d) { return ::round(d); }
+
+float __device__ generic_round_half_even(float f) { return rintf(f); }
+double __device__ generic_round_half_even(double d) { return ::rint(d); }
 
 float __device__ generic_modf(float a, float* b) { return modff(a, b); }
 double __device__ generic_modf(double a, double* b) { return modf(a, b); }
@@ -78,29 +83,55 @@ struct round_fn {
     auto out_view = result->mutable_view();
     T const n     = std::pow(10, std::abs(decimal_places));
 
-    if (decimal_places == 0)
-      thrust::transform(rmm::exec_policy(stream)->on(stream),
-                        input.begin<T>(),
-                        input.end<T>(),
-                        out_view.begin<T>(),
-                        [] __device__(T e) -> T { return generic_round(e); });
-    else if (decimal_places > 0)
-      thrust::transform(rmm::exec_policy(stream)->on(stream),
-                        input.begin<T>(),
-                        input.end<T>(),
-                        out_view.begin<T>(),
-                        [n] __device__(T e) -> T {
-                          T integer_part;
-                          T const fractional_part = generic_modf(e, &integer_part);
-                          return integer_part + generic_round(fractional_part * n) / n;
-                        });
-    else  // decimal_places < 0
-      thrust::transform(rmm::exec_policy(stream)->on(stream),
-                        input.begin<T>(),
-                        input.end<T>(),
-                        out_view.begin<T>(),
-                        [n] __device__(T e) -> T { return generic_round(e / n) * n; });
+    if (method == rounding_method::HALF_UP) {
+      if (decimal_places == 0)
+        thrust::transform(rmm::exec_policy(stream)->on(stream),
+                          input.begin<T>(),
+                          input.end<T>(),
+                          out_view.begin<T>(),
+                          [] __device__(T e) -> T { return generic_round(e); });
+      else if (decimal_places > 0)
+        thrust::transform(rmm::exec_policy(stream)->on(stream),
+                          input.begin<T>(),
+                          input.end<T>(),
+                          out_view.begin<T>(),
+                          [n] __device__(T e) -> T {
+                            T integer_part;
+                            T const fractional_part = generic_modf(e, &integer_part);
+                            return integer_part + generic_round(fractional_part * n) / n;
+                          });
+      else  // decimal_places < 0
+        thrust::transform(rmm::exec_policy(stream)->on(stream),
+                          input.begin<T>(),
+                          input.end<T>(),
+                          out_view.begin<T>(),
+                          [n] __device__(T e) -> T { return generic_round(e / n) * n; });
+    } else {
+      CUDF_EXPECTS(method == rounding_method::HALF_EVEN, "Unexpected rounding method.");
 
+      if (decimal_places == 0)
+        thrust::transform(rmm::exec_policy(stream)->on(stream),
+                          input.begin<T>(),
+                          input.end<T>(),
+                          out_view.begin<T>(),
+                          [] __device__(T e) -> T { return generic_round_half_even(e); });
+      else if (decimal_places > 0)
+        thrust::transform(rmm::exec_policy(stream)->on(stream),
+                          input.begin<T>(),
+                          input.end<T>(),
+                          out_view.begin<T>(),
+                          [n] __device__(T e) -> T {
+                            T integer_part;
+                            T const fractional_part = generic_modf(e, &integer_part);
+                            return integer_part + generic_round_half_even(fractional_part * n) / n;
+                          });
+      else  // decimal_places < 0
+        thrust::transform(rmm::exec_policy(stream)->on(stream),
+                          input.begin<T>(),
+                          input.end<T>(),
+                          out_view.begin<T>(),
+                          [n] __device__(T e) -> T { return generic_round_half_even(e / n) * n; });
+    }
     return result;
   }
 
