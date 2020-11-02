@@ -52,24 +52,46 @@ TYPED_TEST(RoundTestsIntegerTypes, SimpleFixedPointTest)
   // CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTest0)
+TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestHalfUp0)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
   auto const input    = fw_wrapper{1.4, 1.5, 1.6};
   auto const expected = fw_wrapper{1, 2, 2};
-  auto const result   = cudf::round(input, 0, cudf::rounding_method::HALF_UP);
+  auto const result   = cudf::round(input);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTest1)
+TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestHalfUp1)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
   auto const input    = fw_wrapper{1.24, 1.25, 1.26};
   auto const expected = fw_wrapper{1.2, 1.3, 1.3};
   auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_UP);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestHalfEven0)
+{
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
+
+  auto const input    = fw_wrapper{1.4, 1.5, 1.6, 2.4, 2.5, 2.6};
+  auto const expected = fw_wrapper{1, 2, 2, 2, 2, 3};
+  auto const result   = cudf::round(input, 0, cudf::rounding_method::HALF_EVEN);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestHalfEven1)
+{
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
+
+  auto const input    = fw_wrapper{1.24, 1.25, 1.26, 1.34, 1.35, 1.36};
+  auto const expected = fw_wrapper{1.2, 1.2, 1.3, 1.3, 1.4, 1.4};
+  auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_EVEN);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
