@@ -132,7 +132,7 @@ class ColumnBase(Column, Serializable):
         return cupy.asarray(self.data_array_view)
 
     def binary_operator(
-        self, binop: str, rhs: "ColumnBase", reflect=False
+        self, binop: str, rhs: Union["ColumnBase", ScalarObj], reflect=False
     ) -> "ColumnBase":
         raise NotImplementedError()
 
@@ -755,11 +755,8 @@ class ColumnBase(Column, Serializable):
         return ColumnBase._concat([self, as_column(other)])
 
     def quantile(
-        self,
-        q: Union[ScalarObj, List[ScalarObj]],
-        interpolation: str,
-        exact: bool,
-    ) -> Union["ColumnBase", List["ColumnBase"]]:
+        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+    ) -> "ColumnBase":
         raise TypeError(f"cannot perform quantile with type {self.dtype}")
 
     def median(self, skipna: bool = None) -> ScalarObj:
@@ -1842,7 +1839,9 @@ def as_column(
 
 
 def column_applymap(
-    udf: Callable, column: "ColumnBase", out_dtype: Dtype
+    udf: Callable[[ScalarObj], ScalarObj],
+    column: "ColumnBase",
+    out_dtype: Dtype,
 ) -> "ColumnBase":
     """Apply an element-wise function to transform the values in the Column.
 
