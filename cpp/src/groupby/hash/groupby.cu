@@ -94,32 +94,42 @@ bool constexpr is_hash_aggregation(aggregation::Kind t)
          (t == aggregation::ARGMIN) or (t == aggregation::ARGMAX) or (t == aggregation::MEAN);
 }
 
-template <typename Functor>
 class hash_compound_agg_finalizer final : public cudf::detail::aggregation_finalizer {
-  cudf::detail::result_cache& sparse_results;
-  cudf::detail::result_cache* dense_results;
   size_t i;
   column_view col;
-  Functor to_dense_agg_result;
+  cudf::detail::result_cache& sparse_results;
+  cudf::detail::result_cache* dense_results;
+  rmm::device_vector<size_type> const& gather_map;
+  size_type const map_size;
   rmm::mr::device_memory_resource* mr;
   cudaStream_t stream;
 
  public:
-  hash_compound_agg_finalizer(cudf::detail::result_cache& sparse_results,
-                              cudf::detail::result_cache* dense_results,
-                              size_t col_idx,
+  hash_compound_agg_finalizer(size_t col_idx,
                               column_view col,
-                              Functor f,
-                              rmm::mr::device_memory_resource* mr,
-                              cudaStream_t stream)
-    : sparse_results(sparse_results),
-      dense_results(dense_results),
-      i(col_idx),
+                              cudf::detail::result_cache& sparse_results,
+                              cudf::detail::result_cache* dense_results,
+                              rmm::device_vector<size_type> const& gather_map,
+                              size_type map_size,
+                              cudaStream_t stream,
+                              rmm::mr::device_memory_resource* mr)
+    : i(col_idx),
       col(col),
-      to_dense_agg_result(f),
-      mr(mr),
-      stream(stream)
+      sparse_results(sparse_results),
+      dense_results(dense_results),
+      gather_map(gather_map),
+      map_size(map_size),
+      stream(stream),
+      mr(mr)
   {
+  }
+
+  auto to_dense_agg_result(cudf::aggregation const& agg)
+  {
+    auto s                  = sparse_results.get_result(i, agg);
+    auto dense_result_table = cudf::detail::gather(
+      table_view({s}), gather_map.begin(), gather_map.begin() + map_size, false, mr, stream);
+    return std::move(dense_result_table->release()[0]);
   }
 
   // Enables conversion of ARGMIN/ARGMAX into MIN/MAX
@@ -249,16 +259,8 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
 
     // Given an aggregation, this will get the result from sparse_results and
     // convert and return dense, compacted result
-    auto to_dense_agg_result =
-      [&sparse_results, &gather_map, map_size, i, mr, stream](auto const& agg) {
-        auto s                  = sparse_results.get_result(i, agg);
-        auto dense_result_table = cudf::detail::gather(
-          table_view({s}), gather_map.begin(), gather_map.begin() + map_size, false, mr, stream);
-        return std::move(dense_result_table->release()[0]);
-      };
-
-    auto finalizer = hash_compound_agg_finalizer<decltype(to_dense_agg_result)>(
-      sparse_results, dense_results, i, col, to_dense_agg_result, mr, stream);
+    auto finalizer = hash_compound_agg_finalizer(
+      i, col, sparse_results, dense_results, gather_map, map_size, stream, mr);
 
     for (auto&& agg : agg_v) { agg->finalize(finalizer); }
   }
