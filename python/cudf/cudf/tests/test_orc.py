@@ -364,6 +364,15 @@ def test_orc_reader_decimal_type(datadir, orc_file):
     assert_eq(pdf, df)
 
 
+def test_orc_reader_boolean_type(datadir):
+    file_path = datadir / "TestOrcFile.boolean.orc"
+
+    pdf = pd.read_orc(file_path)
+    df = cudf.read_orc(file_path).to_pandas()
+
+    assert_eq(pdf, df)
+
+
 @pytest.mark.filterwarnings("ignore:Using CPU")
 def test_orc_reader_tzif_timestamps(datadir):
     # Contains timstamps in the range covered by the TZif file
