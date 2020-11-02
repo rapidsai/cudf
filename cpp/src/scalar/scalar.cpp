@@ -19,14 +19,16 @@
 #include <rmm/device_buffer.hpp>
 
 #include <string>
+#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
-std::string string_scalar::to_string(cudaStream_t stream) const
+std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
 {
   std::string result;
   result.resize(_data.size());
-  CUDA_TRY(cudaMemcpyAsync(&result[0], _data.data(), _data.size(), cudaMemcpyDeviceToHost, stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  CUDA_TRY(cudaMemcpyAsync(
+    &result[0], _data.data(), _data.size(), cudaMemcpyDeviceToHost, stream.value()));
+  stream.synchronize();
   return result;
 }
 

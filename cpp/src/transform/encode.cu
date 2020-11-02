@@ -53,7 +53,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
 
     auto num_rows = keys_table->num_rows();
     auto mask =
-      cudf::detail::bitmask_and(keys_table->view(), rmm::mr::get_current_device_resource(), stream);
+      cudf::detail::bitmask_and(keys_table->view(), stream, rmm::mr::get_current_device_resource());
     auto num_rows_with_nulls =
       cudf::count_unset_bits(reinterpret_cast<bitmask_type*>(mask.data()), 0, num_rows);
 

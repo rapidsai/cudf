@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
@@ -164,7 +165,7 @@ struct binary_op {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
+    auto new_mask = cudf::detail::bitmask_and(table_view({lhs, rhs}), stream, mr);
     auto out      = make_fixed_width_column(
       out_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
 

@@ -38,6 +38,7 @@
 #include <vector>
 #include "cudf/structs/structs_column_view.hpp"
 #include "cudf/types.hpp"
+#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 // Copy constructor
@@ -207,12 +208,13 @@ struct create_column_from_view {
       children.emplace_back(std::make_unique<column>(indices_view, stream, mr));
       children.emplace_back(std::make_unique<column>(dict_view.keys(), stream, mr));
     }
-    return std::make_unique<column>(view.type(),
-                                    view.size(),
-                                    rmm::device_buffer{0, stream, mr},
-                                    cudf::copy_bitmask(view, stream, mr),
-                                    view.null_count(),
-                                    std::move(children));
+    return std::make_unique<column>(
+      view.type(),
+      view.size(),
+      rmm::device_buffer{0, stream, mr},
+      cudf::detail::copy_bitmask(view, rmm::cuda_stream_view{stream}, mr),
+      view.null_count(),
+      std::move(children));
   }
 
   template <typename ColumnType, std::enable_if_t<cudf::is_fixed_width<ColumnType>()> * = nullptr>
@@ -231,7 +233,7 @@ struct create_column_from_view {
         view.size() * cudf::size_of(view.type()),
         stream,
         mr},
-      cudf::copy_bitmask(view, stream, mr),
+      cudf::detail::copy_bitmask(view, rmm::cuda_stream_view{stream}, mr),
       view.null_count(),
       std::move(children));
   }
@@ -265,12 +267,13 @@ struct create_column_from_view {
 
     auto num_rows = children.empty() ? 0 : children.front()->size();
 
-    return make_structs_column(num_rows,
-                               std::move(children),
-                               view.null_count(),
-                               cudf::copy_bitmask(view.null_mask(), begin, end, stream, mr),
-                               stream,
-                               mr);
+    return make_structs_column(
+      num_rows,
+      std::move(children),
+      view.null_count(),
+      cudf::detail::copy_bitmask(view.null_mask(), begin, end, rmm::cuda_stream_view{stream}, mr),
+      stream,
+      mr);
   }
 };
 }  // anonymous namespace

@@ -37,13 +37,13 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
@@ -52,6 +52,7 @@
 
 #include <thrust/find.h>
 #include <rmm/device_scalar.hpp>
+#include "rmm/cuda_stream_view.hpp"
 
 namespace {  // anonymous
 
@@ -317,7 +318,7 @@ struct replace_kernel_forwarder {
                                             ? cudf::mask_allocation_policy::ALWAYS
                                             : cudf::mask_allocation_policy::NEVER;
       return cudf::detail::allocate_like(
-        input_col, input_col.size(), mask_allocation_policy, mr, stream);
+        input_col, input_col.size(), mask_allocation_policy, stream, mr);
     }();
 
     auto output_view = output->mutable_view();
@@ -395,8 +396,8 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   auto device_sizes             = cudf::mutable_column_device_view::create(sizes_view);
   auto device_indices           = cudf::mutable_column_device_view::create(indices_view);
 
-  rmm::device_buffer valid_bits =
-    cudf::create_null_mask(input_col.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
+  rmm::device_buffer valid_bits = cudf::detail::create_null_mask(
+    input_col.size(), cudf::mask_state::UNINITIALIZED, rmm::cuda_stream_view{stream}, mr);
 
   // Call first pass kernel to get sizes in offsets
   cudf::detail::grid_1d grid{input_col.size(), BLOCK_SIZE, 1};

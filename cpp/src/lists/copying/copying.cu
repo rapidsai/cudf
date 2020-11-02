@@ -3,6 +3,7 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <iostream>
+#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace lists {
@@ -54,7 +55,8 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
           cudf::detail::slice(lists.child(), {start_offset, end_offset}, stream).front());
 
   // Compute the null mask of the result:
-  auto null_mask = cudf::copy_bitmask(lists.null_mask(), start, end, stream, mr);
+  auto null_mask =
+    cudf::detail::copy_bitmask(lists.null_mask(), start, end, rmm::cuda_stream_view{stream}, mr);
 
   return make_lists_column(lists_count,
                            std::move(offsets),

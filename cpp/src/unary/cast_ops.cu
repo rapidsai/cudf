@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/null_mask.hpp>
@@ -22,6 +23,7 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {
@@ -110,12 +112,13 @@ struct dispatch_unary_cast_to {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    auto size   = input.size();
-    auto output = std::make_unique<column>(type,
-                                           size,
-                                           rmm::device_buffer{size * cudf::size_of(type), 0, mr},
-                                           copy_bitmask(input, 0, mr),
-                                           input.null_count());
+    auto size = input.size();
+    auto output =
+      std::make_unique<column>(type,
+                               size,
+                               rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+                               detail::copy_bitmask(input, stream, mr),
+                               input.null_count());
 
     mutable_column_view output_mutable = *output;
 

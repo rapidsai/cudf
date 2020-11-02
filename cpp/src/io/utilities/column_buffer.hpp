@@ -22,6 +22,7 @@
 #pragma once
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
@@ -31,6 +32,7 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
+#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace io {
@@ -117,7 +119,10 @@ struct column_buffer {
 
       default: _data = create_data(type, size, stream, mr); break;
     }
-    if (is_nullable) { _null_mask = create_null_mask(size, mask_state::ALL_NULL, stream, mr); }
+    if (is_nullable) {
+      _null_mask = cudf::detail::create_null_mask(
+        size, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr);
+    }
   }
 
   auto data() { return _strings.size() ? _strings.data().get() : _data.data(); }

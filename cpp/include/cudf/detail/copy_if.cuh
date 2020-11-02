@@ -213,7 +213,7 @@ struct scatter_gather_functor {
     cudaStream_t stream                 = 0)
   {
     auto output_column = cudf::detail::allocate_like(
-      input, output_size, cudf::mask_allocation_policy::RETAIN, mr, stream);
+      input, output_size, cudf::mask_allocation_policy::RETAIN, stream, mr);
     auto output = output_column->mutable_view();
 
     bool has_valid = input.nullable();

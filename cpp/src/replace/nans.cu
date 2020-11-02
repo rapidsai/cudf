@@ -61,8 +61,8 @@ struct replace_nans_functor {
                             input_pair_iterator + size,
                             replacement_pair_iterator,
                             predicate,
-                            mr,
-                            stream);
+                            stream,
+                            mr);
       } else {
         auto replacement_pair_iterator = make_pair_iterator<T, false>(replacement);
         return copy_if_else(true,
@@ -70,8 +70,8 @@ struct replace_nans_functor {
                             input_pair_iterator + size,
                             replacement_pair_iterator,
                             predicate,
-                            mr,
-                            stream);
+                            stream,
+                            mr);
       }
     } else {
       auto input_pair_iterator = make_pair_iterator<T, false>(*input_device_view);
@@ -82,8 +82,8 @@ struct replace_nans_functor {
                             input_pair_iterator + size,
                             replacement_pair_iterator,
                             predicate,
-                            mr,
-                            stream);
+                            stream,
+                            mr);
       } else {
         auto replacement_pair_iterator = make_pair_iterator<T, false>(replacement);
         return copy_if_else(false,
@@ -91,8 +91,8 @@ struct replace_nans_functor {
                             input_pair_iterator + size,
                             replacement_pair_iterator,
                             predicate,
-                            mr,
-                            stream);
+                            stream,
+                            mr);
       }
     }
   }

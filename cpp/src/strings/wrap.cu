@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/case.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -103,7 +104,8 @@ std::unique_ptr<column> wrap(
   size_type null_count = strings.null_count();
 
   // copy null mask
-  rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
+  rmm::device_buffer null_mask =
+    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
 
   // build offsets column
   auto offsets_column = std::make_unique<column>(strings.offsets(), stream, mr);  // makes a copy

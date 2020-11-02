@@ -90,13 +90,13 @@ struct ColumnHandle {
   template <typename ColumnType>
   void operator()(mutable_column_device_view source_column,
                   int work_per_thread,
-                  cudaStream_t stream = 0)
+                  rmm::cuda_stream_view stream = rmm::cuda_stream_default)
   {
     cudf::detail::grid_1d grid_config{source_column.size(), block_size};
     int grid_size = grid_config.num_blocks;
     // Launch the kernel.
     host_dispatching_kernel<functor_type, ColumnType>
-      <<<grid_size, block_size, 0, stream>>>(source_column);
+      <<<grid_size, block_size, 0, stream.value()>>>(source_column);
   }
 };
 
@@ -144,14 +144,14 @@ void launch_kernel(mutable_table_view input, T** d_ptr, int work_per_thread)
     // std::vector<cudf::util::cuda::scoped_stream> v_stream(n_cols);
     for (int c = 0; c < n_cols; c++) {
       auto d_column = mutable_column_device_view::create(input.column(c));
-      cudf::type_dispatcher(
-        d_column->type(), ColumnHandle<functor_type>{}, *d_column, work_per_thread);
+      // cudf::type_dispatcher(
+      //  d_column->type(), ColumnHandle<functor_type>{}, *d_column, work_per_thread);
     }
   } else if (dispatching_type == DEVICE_DISPATCHING) {
     auto d_table_view = mutable_table_device_view::create(input);
-    auto f            = device_dispatching_kernel<functor_type>;
+    // auto f            = device_dispatching_kernel<functor_type>;
     // Launch the kernel
-    f<<<grid_size, block_size>>>(*d_table_view);
+    // f<<<grid_size, block_size>>>(*d_table_view);
   } else if (dispatching_type == NO_DISPATCHING) {
     auto f = no_dispatching_kernel<functor_type, T>;
     // Launch the kernel
@@ -160,7 +160,7 @@ void launch_kernel(mutable_table_view input, T** d_ptr, int work_per_thread)
 }
 
 template <class TypeParam, FunctorType functor_type, DispatchingType dispatching_type>
-void type_dispatcher_benchmark(benchmark::State& state)
+void type_dispatcher_benchmark(::benchmark::State& state)
 {
   const cudf::size_type source_size = static_cast<cudf::size_type>(state.range(1));
 

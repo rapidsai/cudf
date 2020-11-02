@@ -262,7 +262,7 @@ struct column_merger {
     // materialize_merged_bitmask_kernel<false, false>()
     // which won't be called anymore (because of the _condition_ below)
     //
-    cudf::set_null_mask(merged_view.null_mask(), 0, merged_view.size(), true, stream_);
+    cudf::detail::set_null_mask(merged_view.null_mask(), 0, merged_view.size(), true, stream_);
 
     // set the null count:
     //

@@ -16,8 +16,8 @@
 
 #pragma once
 
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
@@ -25,6 +25,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/distance.h>
 #include <rmm/device_scalar.hpp>
+#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace detail {
@@ -87,14 +88,14 @@ std::pair<rmm::device_buffer, size_type> valid_if(
   InputIterator begin,
   InputIterator end,
   Predicate p,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(begin <= end, "Invalid range.");
 
   size_type size = thrust::distance(begin, end);
 
-  auto null_mask = create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
+  auto null_mask = detail::create_null_mask(size, mask_state::UNINITIALIZED, stream, mr);
 
   size_type null_count{0};
   if (size > 0) {
@@ -103,7 +104,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
     constexpr size_type block_size{256};
     grid_1d grid{size, block_size};
 
-    valid_if_kernel<block_size><<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
+    valid_if_kernel<block_size><<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       static_cast<bitmask_type*>(null_mask.data()), begin, size, p, valid_count.data());
 
     null_count = size - valid_count.value(stream);

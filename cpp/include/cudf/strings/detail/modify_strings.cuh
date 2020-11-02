@@ -16,12 +16,14 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <strings/utilities.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace strings {
@@ -65,7 +67,8 @@ std::unique_ptr<column> modify_strings(strings_column_view const& strings,
   size_type null_count = strings.null_count();
 
   // copy null mask
-  rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
+  rmm::device_buffer null_mask =
+    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
   // get the lookup tables used for case conversion
 
   device_probe_functor d_probe_fctr{d_column, std::forward<Types>(args)...};

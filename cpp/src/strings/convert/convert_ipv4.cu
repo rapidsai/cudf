@@ -16,12 +16,15 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_ipv4.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <strings/utilities.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/count.h>
 #include <thrust/transform.h>
@@ -78,12 +81,13 @@ std::unique_ptr<column> ipv4_to_integers(
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
   // create output column copying the strings' null-mask
-  auto results   = make_numeric_column(data_type{type_id::INT64},
-                                     strings_count,
-                                     copy_bitmask(strings.parent(), stream, mr),
-                                     strings.null_count(),
-                                     stream,
-                                     mr);
+  auto results = make_numeric_column(
+    data_type{type_id::INT64},
+    strings_count,
+    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
+    strings.null_count(),
+    stream,
+    mr);
   auto d_results = results->mutable_view().data<int64_t>();
   // fill output column with ipv4 integers
   thrust::transform(rmm::exec_policy(stream)->on(stream),
@@ -168,7 +172,8 @@ std::unique_ptr<column> integers_to_ipv4(
   auto d_column = *column;
 
   // copy null mask
-  rmm::device_buffer null_mask = copy_bitmask(integers, stream, mr);
+  rmm::device_buffer null_mask =
+    cudf::detail::copy_bitmask(integers, rmm::cuda_stream_view{stream}, mr);
   // build offsets column
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<int32_t>(0), [d_column] __device__(size_type idx) {
@@ -212,12 +217,13 @@ std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
   // create output column
-  auto results   = make_numeric_column(data_type{type_id::BOOL8},
-                                     strings.size(),
-                                     copy_bitmask(strings.parent(), stream, mr),
-                                     strings.null_count(),
-                                     stream,
-                                     mr);
+  auto results = make_numeric_column(
+    data_type{type_id::BOOL8},
+    strings.size(),
+    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
+    strings.null_count(),
+    stream,
+    mr);
   auto d_results = results->mutable_view().data<bool>();
   thrust::transform(rmm::exec_policy(stream)->on(stream),
                     thrust::make_counting_iterator<size_type>(0),
