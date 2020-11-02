@@ -4863,9 +4863,7 @@ class StringColumn(column.ColumnBase):
     def normalize_binop_value(self, other):
         # fastpath: gpu scalar
         if isinstance(other, cudf.Scalar) and other.dtype == "object":
-            return libcudf.column.make_column_from_scalar(
-                other, size=len(self)
-            )
+            return column.as_column(other, length=len(self))
         if isinstance(other, column.Column):
             return other.astype(self.dtype)
         elif isinstance(other, str) or other is None:

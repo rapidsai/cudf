@@ -1818,6 +1818,10 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         data = as_column(
             np.asarray(arbitrary), dtype=dtype, nan_as_null=nan_as_null
         )
+    elif isinstance(arbitrary, cudf.Scalar):
+        data = libcudf.column.make_column_from_scalar(
+            arbitrary, length if length else 1
+        )
     elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
         cudf_dtype = arbitrary._data.dtype
 

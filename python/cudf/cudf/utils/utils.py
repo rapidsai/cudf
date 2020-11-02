@@ -10,7 +10,6 @@ from numba import njit
 import rmm
 
 import cudf
-from cudf._lib.column import make_column_from_scalar
 from cudf.core import column
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import to_cudf_compatible_scalar
@@ -363,9 +362,7 @@ def time_col_replace_nulls(input_col):
 
     null = column.column_empty_like(input_col, masked=True, newsize=1)
     out_col = cudf._lib.replace.replace(
-        input_col,
-        make_column_from_scalar(input_col.default_na_value(), 1),
-        null,
+        input_col, column.as_column(input_col.default_na_value()), null,
     )
     return out_col
 
