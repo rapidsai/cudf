@@ -44,7 +44,7 @@ void BM_csv_read_varying_input(benchmark::State& state)
   cuio_source_sink_pair source_sink(source_type);
   cudf_io::csv_writer_options options =
     cudf_io::csv_writer_options::builder(source_sink.make_sink_info(), view)
-      .include_header(false)
+      .include_header(true)
       .rows_per_chunk(1 << 30);
   cudf_io::write_csv(options);
 
@@ -112,7 +112,7 @@ void BM_csv_read_varying_options(benchmark::State& state)
   std::vector<char> csv_data;
   cudf_io::csv_writer_options options =
     cudf_io::csv_writer_options::builder(cudf_io::sink_info{&csv_data}, view)
-      .include_header(false)
+      .include_header(true)
       .rows_per_chunk(1 << 30);
   cudf_io::write_csv(options);
 
