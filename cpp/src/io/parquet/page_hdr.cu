@@ -339,11 +339,11 @@ extern "C" __global__ void __launch_bounds__(128)
   gpuParsePageHeader parse_page_header;
   __shared__ byte_stream_s bs_g[4];
 
-  int t                   = threadIdx.x & 0x1f;
+  int lane_id                   = threadIdx.x & 0x1f;
   int chunk               = (blockIdx.x << 2) + (threadIdx.x >> 5);
   byte_stream_s *const bs = &bs_g[threadIdx.x >> 5];
 
-  if (chunk < num_chunks and t == 0) bs->ck = chunks[chunk];
+  if (chunk < num_chunks and lane_id == 0) bs->ck = chunks[chunk];
   __syncthreads();
 
   if (chunk < num_chunks) {
@@ -354,7 +354,7 @@ extern "C" __global__ void __launch_bounds__(128)
     int32_t num_dict_pages = bs->ck.num_dict_pages;
     PageInfo *page_info;
 
-    if (!t) {
+    if (!lane_id) {
       bs->base = bs->cur      = bs->ck.compressed_data;
       bs->end                 = bs->base + bs->ck.compressed_size;
       bs->page.chunk_idx      = chunk;
@@ -374,7 +374,7 @@ extern "C" __global__ void __launch_bounds__(128)
     while (values_found < num_values && bs->cur < bs->end) {
       int index_out = -1;
 
-      if (t == 0) {
+      if (lane_id == 0) {
         // this computation is only valid for flat schemas. for nested schemas,
         // they will be recomputed in the preprocess step by examining repetition and
         // definition levels
@@ -407,11 +407,11 @@ extern "C" __global__ void __launch_bounds__(128)
         }
       }
       index_out = SHFL0(index_out);
-      if (index_out >= 0 && index_out < max_num_pages && t == 0) page_info[index_out] = bs->page;
+      if (index_out >= 0 && index_out < max_num_pages && lane_id == 0) page_info[index_out] = bs->page;
       num_values = SHFL0(num_values);
       SYNCWARP();
     }
-    if (t == 0) {
+    if (lane_id == 0) {
       chunks[chunk].num_data_pages = data_page_count;
       chunks[chunk].num_dict_pages = dictionary_page_count;
     }
@@ -435,14 +435,14 @@ extern "C" __global__ void __launch_bounds__(128)
 {
   __shared__ ColumnChunkDesc chunk_g[4];
 
-  int t                     = threadIdx.x & 0x1f;
+  int lane_id               = threadIdx.x & 0x1f;
   int chunk                 = (blockIdx.x << 2) + (threadIdx.x >> 5);
   ColumnChunkDesc *const ck = &chunk_g[threadIdx.x >> 5];
-  if (chunk < num_chunks and t == 0) *ck = chunks[chunk];
+  if (chunk < num_chunks and lane_id == 0) *ck = chunks[chunk];
   __syncthreads();
 
   if (chunk >= num_chunks) { return; }
-  if (!t && ck->num_dict_pages > 0 && ck->str_dict_index) {
+  if (!lane_id && ck->num_dict_pages > 0 && ck->str_dict_index) {
     // Data type to describe a string
     nvstrdesc_s *dict_index = ck->str_dict_index;
     const uint8_t *dict     = ck->page_info[0].page_data;

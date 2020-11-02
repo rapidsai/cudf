@@ -405,17 +405,17 @@ __global__ void __launch_bounds__(128) gpuInitFragmentStats(statistics_group *gr
 {
   __shared__ __align__(8) statistics_group group_g[4];
 
-  uint32_t t                = threadIdx.x & 0x1f;
+  uint32_t lane_id          = threadIdx.x & 0x1f;
   uint32_t frag_id          = blockIdx.y * 4 + (threadIdx.x >> 5);
   uint32_t column_id        = blockIdx.x;
   statistics_group *const g = &group_g[threadIdx.x >> 5];
-  if (!t && frag_id < num_fragments) {
+  if (!lane_id && frag_id < num_fragments) {
     g->col       = &col_desc[column_id];
     g->start_row = frag_id * fragment_size;
     g->num_rows  = fragments[column_id * num_fragments + frag_id].num_rows;
   }
   __syncthreads();
-  if (frag_id < num_fragments and t == 0) groups[column_id * num_fragments + frag_id] = *g;
+  if (frag_id < num_fragments and lane_id == 0) groups[column_id * num_fragments + frag_id] = *g;
 }
 
 // blockDim {128,1,1}
@@ -927,11 +927,12 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   if (t == 0) s->ck = chunks[s->page.chunk_id];
   __syncthreads();
 
-  if (t == 0) s->col = *s->ck.col_desc;
+  if (t == 0) {
+      s->col = *s->ck.col_desc;
+      s->cur = s->page.page_data + s->page.max_hdr_size;
+  }
   __syncthreads();
 
-  if (!t) { s->cur = s->page.page_data + s->page.max_hdr_size; }
-  __syncthreads();
   // Encode Repetition and Definition levels
   if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.level_bits != 0 &&
       s->col.nesting_levels == 0) {
@@ -1404,18 +1405,13 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
 
   uint32_t t = threadIdx.x;
 
-  if (t == 0) page_g = pages[start_page + blockIdx.x];
-  __syncthreads();
-
-  if (t == 0) ck_g = chunks[page_g.chunk_id];
-  __syncthreads();
-
-  if (t == 0) col_g = *ck_g.col_desc;
-  __syncthreads();
-
-  if (!t) {
+  if (t == 0) {
     uint8_t *hdr_start, *hdr_end;
     uint32_t compressed_page_size, uncompressed_page_size;
+
+    page_g = pages[start_page + blockIdx.x];
+    ck_g = chunks[page_g.chunk_id];
+    col_g = *ck_g.col_desc;
 
     if (chunk_stats && start_page + blockIdx.x == ck_g.first_page) {
       hdr_start = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;

@@ -34,9 +34,9 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
 
   compressed_stream_s *const s = &strm_g[threadIdx.x >> 5];
   int strm_id                  = blockIdx.x * 4 + (threadIdx.x >> 5);
-  int t                        = threadIdx.x & 0x1f;
+  int lane_id                  = threadIdx.x & 0x1f;
 
-  if (t == 0) { s->info = strm_info[strm_id]; }
+  if (lane_id == 0) { s->info = strm_info[strm_id]; }
 
   __syncthreads();
   if (strm_id < num_streams) {
@@ -48,7 +48,7 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
     uint32_t num_compressed_blocks   = 0;
     uint32_t num_uncompressed_blocks = 0;
     while (cur + 3 < end) {
-      uint32_t block_len       = SHFL0((t == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
+      uint32_t block_len       = SHFL0((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
       uint32_t is_uncompressed = block_len & 1;
       uint32_t uncompressed_size;
       gpu_inflate_input_s *init_ctl = nullptr;
@@ -72,8 +72,8 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
           // For short blocks, copy the uncompressed data to output
           if (uncompressed &&
               max_uncompressed_size + uncompressed_size <= s->info.max_uncompressed_size &&
-              t < uncompressed_size) {
-            uncompressed[max_uncompressed_size + t] = cur[t];
+              lane_id < uncompressed_size) {
+            uncompressed[max_uncompressed_size + lane_id] = cur[lane_id];
           }
         } else {
           init_ctl = s->info.copyctl;
@@ -89,19 +89,19 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
                      : nullptr;
         num_compressed_blocks++;
       }
-      if (!t && init_ctl) {
+      if (!lane_id && init_ctl) {
         s->ctl.srcDevice = const_cast<uint8_t *>(cur);
         s->ctl.srcSize   = block_len;
         s->ctl.dstDevice = uncompressed + max_uncompressed_size;
         s->ctl.dstSize   = uncompressed_size;
       }
       SYNCWARP();
-      if (init_ctl && t == 0) *init_ctl = s->ctl;
+      if (init_ctl && lane_id == 0) *init_ctl = s->ctl;
       cur += block_len;
       max_uncompressed_size += uncompressed_size;
     }
     SYNCWARP();
-    if (!t) {
+    if (!lane_id) {
       s->info.num_compressed_blocks   = num_compressed_blocks;
       s->info.num_uncompressed_blocks = num_uncompressed_blocks;
       s->info.max_uncompressed_size   = max_uncompressed_size;
@@ -109,7 +109,7 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
   }
 
   __syncthreads();
-  if (strm_id < num_streams && t == 0) strm_info[strm_id] = s->info;
+  if (strm_id < num_streams && lane_id == 0) strm_info[strm_id] = s->info;
 }
 
 // blockDim {128,1,1}
@@ -120,9 +120,9 @@ extern "C" __global__ void __launch_bounds__(128, 8)
 
   compressed_stream_s *const s = &strm_g[threadIdx.x >> 5];
   int strm_id                  = blockIdx.x * 4 + (threadIdx.x >> 5);
-  int t                        = threadIdx.x & 0x1f;
+  int lane_id                  = threadIdx.x & 0x1f;
 
-  if (strm_id < num_streams && t == 0) s->info = strm_info[strm_id];
+  if (strm_id < num_streams && lane_id == 0) s->info = strm_info[strm_id];
 
   __syncthreads();
   if (strm_id < num_streams &&
@@ -139,7 +139,7 @@ extern "C" __global__ void __launch_bounds__(128, 8)
     uint32_t max_compressed_blocks      = s->info.num_compressed_blocks;
 
     while (cur + 3 < end) {
-      uint32_t block_len       = SHFL0((t == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
+      uint32_t block_len       = SHFL0((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
       uint32_t is_uncompressed = block_len & 1;
       uint32_t uncompressed_size_est, uncompressed_size_actual;
       block_len >>= 1;
@@ -150,21 +150,21 @@ extern "C" __global__ void __launch_bounds__(128, 8)
         uncompressed_size_actual = block_len;
       } else {
         if (num_compressed_blocks > max_compressed_blocks) { break; }
-        if (SHFL0((t == 0) ? dec_out[num_compressed_blocks].status : 0) != 0) {
+        if (SHFL0((lane_id == 0) ? dec_out[num_compressed_blocks].status : 0) != 0) {
           // Decompression failed, not much point in doing anything else
           break;
         }
         uncompressed_size_est =
-          SHFL0((t == 0) ? *(const uint32_t *)&dec_in[num_compressed_blocks].dstSize : 0);
+          SHFL0((lane_id == 0) ? *(const uint32_t *)&dec_in[num_compressed_blocks].dstSize : 0);
         uncompressed_size_actual =
-          SHFL0((t == 0) ? *(const uint32_t *)&dec_out[num_compressed_blocks].bytes_written : 0);
+          SHFL0((lane_id == 0) ? *(const uint32_t *)&dec_out[num_compressed_blocks].bytes_written : 0);
       }
       // In practice, this should never happen with a well-behaved writer, as we would expect the
       // uncompressed size to always be equal to the compression block size except for the last
       // block
       if (uncompressed_actual < uncompressed_estimated) {
         // warp-level memmove
-        for (int i = t; i < (int)uncompressed_size_actual; i += 32) {
+        for (int i = lane_id; i < (int)uncompressed_size_actual; i += 32) {
           uncompressed_actual[i] = uncompressed_estimated[i];
         }
       }
@@ -174,7 +174,7 @@ extern "C" __global__ void __launch_bounds__(128, 8)
       uncompressed_actual += uncompressed_size_actual;
     }
     // Update info with actual uncompressed size
-    if (!t) {
+    if (!lane_id) {
       size_t total_uncompressed_size = uncompressed_actual - s->info.uncompressed_data;
       // Set uncompressed size to zero if there were any errors
       strm_info[strm_id].max_uncompressed_size =
