@@ -735,6 +735,7 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    * // Creates a non-nullable dictionary column of INT32 elements with 5 elements
    * std::vector<int32_t> elements{0, 2, 2, 6, 6};
    * dictionary_column_wrapper<int32_t> w(element.begin(), elements.end());
+   * // keys = {0, 2, 6}, indices = {0, 1, 1, 2, 2}
    * @endcode
    *
    * @note Similar to `std::vector`, this "range" constructor should be used
@@ -747,11 +748,8 @@ class dictionary_column_wrapper : public detail::column_wrapper {
   template <typename InputIterator>
   dictionary_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
   {
-    auto const size = cudf::distance(begin, end);
-    cudf::column elements{cudf::data_type{cudf::type_to_id<KeyElementTo>()},
-                          size,
-                          detail::make_elements<KeyElementTo, SourceElementT>(begin, end)};
-    wrapped = cudf::dictionary::encode(elements.view());
+    wrapped = cudf::dictionary::encode(
+      fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end));
   }
 
   /**
@@ -763,11 +761,12 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    *
    * Example:
    * @code{.cpp}
-   * // Creates a nullable dictionary column of INT32 elements with 5 elements:
-   * // {null, 2, null, 6, null}
-   * std::vector<int32_t> elements{0, 2, 2, 6, 6};
+   * // Creates a nullable dictionary column with 5 elements and a validity iterator.
+   * std::vector<int32_t> elements{0, 2, 0, 6, 0};
+   * // Validity iterator here sets even rows to null.
    * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;})
    * dictionary_column_wrapper<int32_t> w(elements, elements + 5, validity);
+   * // keys = {2, 6}, indices = {NULL, 0, NULL, 1, NULL}
    * @endcode
    *
    * @note Similar to `std::vector`, this "range" constructor should be used
@@ -782,13 +781,8 @@ class dictionary_column_wrapper : public detail::column_wrapper {
   dictionary_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator v)
     : column_wrapper{}
   {
-    auto const size = cudf::distance(begin, end);
-    cudf::column elements{cudf::data_type{cudf::type_to_id<KeyElementTo>()},
-                          size,
-                          detail::make_elements<KeyElementTo, SourceElementT>(begin, end),
-                          detail::make_null_mask(v, v + size),
-                          cudf::UNKNOWN_NULL_COUNT};
-    wrapped = cudf::dictionary::encode(elements.view());
+    wrapped = cudf::dictionary::encode(
+      fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end, v));
   }
 
   /**
@@ -797,8 +791,9 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    *
    * Example:
    * @code{.cpp}
-   * // Creates a non-nullable INT32 dictionary column with 4 elements: {1, 2, 3, 4}
-   * dictionary_column_wrapper<int32_t> w{{1, 2, 3, 4}};
+   * // Creates a non-nullable dictionary column with 4 elements.
+   * dictionary_column_wrapper<int32_t> w{{1, 2, 3, 1}};
+   * // keys = {1, 2, 3}, indices = {0, 1, 2, 0}
    * @endcode
    *
    * @param element_list The list of elements
@@ -819,8 +814,9 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    *
    * Example:
    * @code{.cpp}
-   * // Creates a nullable INT32 dictionary column with 4 elements: {1, NULL, 3, NULL}
-   * dictionary_column_wrapper<int32_t> w{ {1,2,3,4}, {1, 0, 1, 0}};
+   * // Creates a nullable dictionary column with 4 elements and validity initializer.
+   * dictionary_column_wrapper<int32_t> w{ {1, 0, 3, 0}, {1, 0, 1, 0}};
+   * // keys = {1, 3}, indices = {0, NULL, 1, NULL}
    * @endcode
    *
    * @param elements The list of elements
@@ -840,9 +836,11 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    *
    * Example:
    * @code{.cpp}
-   * // Creates a nullable INT32 dictionary column with 4 elements: {NULL, 1, NULL, 3}
+   * // Creates a nullable dictionary column with 6 elements and a validity iterator.
+   * // This validity iterator sets even rows to null.
    * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;})
-   * dictionary_column_wrapper<int32_t> w{ {1,2,3,4}, validity}
+   * dictionary_column_wrapper<int32_t> w{ {0, 4, 0, 4, 0, 5}, validity}
+   * // keys = {4, 5}, indices = {NULL, 0, NULL, 0, NULL, 1}
    * @endcode
    *
    * @tparam ValidityIterator Dereferencing a ValidityIterator must be convertible to `bool`
@@ -865,10 +863,10 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    *
    * Example:
    * @code{.cpp}
-   * // Creates a nullable column of INT32 dictionary elements with 5 elements:
-   * // {null, 2, null, 6, null}
+   * // Creates a nullable column of dictionary elements with 5 elements and validity initializer.
    * std::vector<int32_t> elements{0, 2, 2, 6, 6};
    * dictionary_width_column_wrapper<int32_t> w(elements, elements + 5, {0, 1, 0, 1, 0});
+   * // keys = {2, 6}, indices = {NULL, 0, NULL, 1, NULL}
    * @endcode
    *
    * @param begin The beginning of the sequence of elements
@@ -925,11 +923,7 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
   template <typename StringsIterator>
   dictionary_column_wrapper(StringsIterator begin, StringsIterator end) : column_wrapper{}
   {
-    std::vector<char> chars;
-    std::vector<int32_t> offsets;
-    auto all_valid           = make_counting_transform_iterator(0, [](auto i) { return true; });
-    std::tie(chars, offsets) = detail::make_chars_and_offsets(begin, end, all_valid);
-    wrapped = cudf::dictionary::encode(cudf::make_strings_column(chars, offsets)->view());
+    wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end));
   }
 
   /**
@@ -964,13 +958,7 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
   dictionary_column_wrapper(StringsIterator begin, StringsIterator end, ValidityIterator v)
     : column_wrapper{}
   {
-    size_type num_strings = std::distance(begin, end);
-    std::vector<char> chars;
-    std::vector<int32_t> offsets;
-    std::tie(chars, offsets) = detail::make_chars_and_offsets(begin, end, v);
-    wrapped                  = cudf::dictionary::encode(
-      cudf::make_strings_column(chars, offsets, detail::make_null_mask_vector(v, v + num_strings))
-        ->view());
+    wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end, v));
   }
 
   /**
