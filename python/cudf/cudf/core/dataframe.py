@@ -4790,6 +4790,19 @@ class DataFrame(Frame, Serializable):
         """
         Convert to a Pandas DataFrame.
 
+        Parameters
+        ----------
+        nullable : Boolean, Default False
+            If ``nullable`` is ``True``, the resulting columns
+            in the dataframe will be having a corresponding
+            nullable Pandas dtype. If ``nullable`` is ``False``,
+            the resulting columns will either convert null
+            values to ``np.nan`` or ``None`` depending on the dtype.
+
+        Returns
+        -------
+        out : Pandas DataFrame
+
         Examples
         --------
         >>> import cudf
@@ -4802,6 +4815,36 @@ class DataFrame(Frame, Serializable):
         2  2  0
         >>> type(pdf)
         <class 'pandas.core.frame.DataFrame'>
+
+        ``nullable`` parameter can be used to control
+        whether dtype can be Pandas Nullable or not:
+
+        >>> df = cudf.DataFrame({'a': [0, None, 2], 'b': [True, False, None]})
+        >>> df
+              a      b
+        0     0   True
+        1  <NA>  False
+        2     2   <NA>
+        >>> pdf = df.to_pandas(nullable=True)
+        >>> pdf
+              a      b
+        0     0   True
+        1  <NA>  False
+        2     2   <NA>
+        >>> pdf.dtypes
+        a      Int64
+        b    boolean
+        dtype: object
+        >>> pdf = df.to_pandas(nullable=False)
+        >>> pdf
+            a      b
+        0  0.0   True
+        1  NaN  False
+        2  2.0   None
+        >>> pdf.dtypes
+        a    float64
+        b     object
+        dtype: object
         """
 
         out_data = {}
