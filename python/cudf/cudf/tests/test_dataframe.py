@@ -7944,3 +7944,25 @@ def test_dataframe_pipe_error():
         lfunc_args_and_kwargs=([(custom_func, "columns")], {"columns": "d"}),
         rfunc_args_and_kwargs=([(custom_func, "columns")], {"columns": "d"}),
     )
+
+
+@pytest.mark.parametrize(
+    "op",
+    [
+        "count",
+        "cummin",
+        "cummax",
+        "cummax",
+        "cumprod",
+        "kurt",
+        "kurtosis",
+        "skew",
+    ],
+)
+def test_dataframe_axis1_unsupported_ops(op):
+    df = gd.DataFrame({"a": [1, 2, 3], "b": [8, 9, 10]})
+
+    with pytest.raises(
+        NotImplementedError, match="Only axis=0 is currently supported."
+    ):
+        getattr(df, op)(axis=1)
