@@ -32,8 +32,8 @@ std::unique_ptr<column> round(
   column_view const& input,
   int32_t decimal_places,
   rounding_method method,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace cudf

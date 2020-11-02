@@ -33,12 +33,9 @@ namespace cudf {
 enum class rounding_method : int32_t { HALF_UP };
 
 /**
- * @brief Rounds all the values in a column to the specified @p decimal_places
+ * @brief Rounds all the values in a column to the the nearest multiple of `10^decimal_places`.
  *
  * `cudf::round` currently supports HALF_UP rounding for integer and floating point numbers.
- * When @p decimal_places is positive, rounds to the corresponding number of decimal places.
- * When @p decimal_places is negative, rounds by removing @p decimal_places digits left of the
- * decimal point.
  *
  * Example:
  * ```
@@ -49,7 +46,7 @@ enum class rounding_method : int32_t { HALF_UP };
  * auto result3 = cudf::round(col, -1); // yields { 0,   20,   170,   1730 }
  * ```
  *
- * Info of HALF_UP rounding: https://en.wikipedia.org/wiki/Rounding#Round_half_up
+ * Info on HALF_UP rounding: https://en.wikipedia.org/wiki/Rounding#Round_half_up
  *
  * @param input          Column of values to be rounded
  * @param decimal_places Number of decimal places to round to

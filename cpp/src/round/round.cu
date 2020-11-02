@@ -71,8 +71,8 @@ struct round_fn {
     column_view const& input,
     int32_t decimal_places,
     cudf::rounding_method method,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream)
+    cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr)
   {
     auto result   = cudf::make_fixed_width_column(input.type(), input.size());
     auto out_view = result->mutable_view();
@@ -109,8 +109,8 @@ struct round_fn {
     column_view const& input,
     int32_t decimal_places,
     cudf::rounding_method method,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream)
+    cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr)
   {
     // only need to handle the case where decimal_places is < zero
     // integers by definition have no fractional part, so result of "rounding" is a no-op
@@ -139,15 +139,15 @@ struct round_fn {
 std::unique_ptr<column> round(column_view const& input,
                               int32_t decimal_places,
                               cudf::rounding_method method,
-                              rmm::mr::device_memory_resource* mr,
-                              cudaStream_t stream)
+                              cudaStream_t stream,
+                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(cudf::is_numeric(input.type()), "Only integral/floating point currently supported.");
 
   // TODO when fixed_point supported, have to adjust type
   if (input.size() == 0) return empty_like(input);
 
-  return type_dispatcher(input.type(), round_fn{}, input, decimal_places, method, mr, stream);
+  return type_dispatcher(input.type(), round_fn{}, input, decimal_places, method, stream, mr);
 }
 
 }  // namespace detail
@@ -158,7 +158,7 @@ std::unique_ptr<column> round(column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::round(input, decimal_places, method, mr);
+  return cudf::detail::round(input, decimal_places, method, 0, mr);
 }
 
 }  // namespace cudf
