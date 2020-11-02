@@ -75,3 +75,9 @@ class cuio_source_sink_pair {
   std::vector<char> buffer;
   std::string const file_name;
 };
+
+/**
+ * @brief Arranges columns such that total size of selected columns is half of the total table size.
+ */
+std::vector<cudf::type_id> opts_bm_data_types(std::vector<cudf::type_id> const& ids,
+                                              column_selection cs);

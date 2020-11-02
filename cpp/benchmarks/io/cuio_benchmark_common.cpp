@@ -58,3 +58,24 @@ cudf_io::sink_info cuio_source_sink_pair::make_sink_info()
     default: CUDF_FAIL("invalid output type");
   }
 }
+
+std::vector<cudf::type_id> opts_bm_data_types(std::vector<cudf::type_id> const& data_types,
+                                              column_selection cs)
+{
+  std::vector<cudf::type_id> out_dtypes;
+  out_dtypes.reserve(2 * data_types.size());
+  switch (cs) {
+    case column_selection::ALL:
+    case column_selection::HALF:
+      std::copy(data_types.begin(), data_types.end(), std::back_inserter(out_dtypes));
+      std::copy(data_types.begin(), data_types.end(), std::back_inserter(out_dtypes));
+      break;
+    case column_selection::ALTERNATE:
+      for (auto const& type : data_types) {
+        out_dtypes.push_back(type);
+        out_dtypes.push_back(type);
+      }
+      break;
+  }
+  return out_dtypes;
+}
