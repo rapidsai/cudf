@@ -92,6 +92,8 @@ public final class DType {
     }
 
     public int getNativeId() { return nativeId; }
+
+    public static boolean isDecimalType(DTypeEnum dt) { return DType.DECIMALS.contains(dt); }
   }
 
   final DTypeEnum typeId;
@@ -368,7 +370,7 @@ public final class DType {
    *       DType.DECIMAL32,
    *       DType.DECIMAL64
    */
-  public boolean isDecimalType() { return DECIMALS.contains(this.typeId); }
+  public boolean isDecimalType() { return DTypeEnum.isDecimalType(this.typeId); }
 
   /**
    * Returns true for duration types
@@ -434,7 +436,7 @@ public final class DType {
       DTypeEnum.UINT32,
       DTypeEnum.DURATION_DAYS,
       DTypeEnum.TIMESTAMP_DAYS,
-      // The unscaledValue of DECIMAL64 is of type INT32, which means it can be fetched by getInt.
+      // The unscaledValue of DECIMAL32 is of type INT32, which means it can be fetched by getInt.
       DTypeEnum.DECIMAL32
   );
 

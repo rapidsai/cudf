@@ -778,7 +778,7 @@ public class ColumnVectorTest extends CudfTestBase {
         }
 
         try (ColumnVector c = ColumnVector.fromScalar(s, 0)) {
-          if (type == DType.DTypeEnum.DECIMAL32 || type == DType.DTypeEnum.DECIMAL64) {
+          if (DType.DTypeEnum.isDecimalType(type)) {
             assertEquals(DType.create(type, mockScale), c.getType());
           } else {
             assertEquals(DType.create(type), c.getType());
@@ -806,7 +806,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void testFromScalar() {
     final int rowCount = 4;
     for (DType.DTypeEnum type : DType.DTypeEnum.values()) {
-      if(type == DType.DTypeEnum.DECIMAL32 || type == DType.DTypeEnum.DECIMAL64) {
+      if(DType.DTypeEnum.isDecimalType(type)) {
         continue;
       }
       Scalar s = null;
@@ -976,7 +976,7 @@ public class ColumnVectorTest extends CudfTestBase {
         continue;
       }
       DType dType;
-      if (type == DType.DTypeEnum.DECIMAL32 || type == DType.DTypeEnum.DECIMAL64) {
+      if (DType.DTypeEnum.isDecimalType(type)) {
         dType = DType.create(type, -8);
       } else {
         dType = DType.create(type);

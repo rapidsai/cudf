@@ -216,19 +216,11 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   }
 
   public static Scalar fromDecimal(int scale, int unscaledValue) {
-    if (-scale > DType.DECIMAL32_MAX_PRECISION) {
-      throw new IllegalArgumentException(
-          "Scale " + scale + " exceeds the max precision of DECIMAL32: " + DType.DECIMAL32_MAX_PRECISION);
-    }
     long handle = makeDecimal32Scalar(unscaledValue, scale, true);
     return new Scalar(DType.create(DType.DTypeEnum.DECIMAL32, scale), handle);
   }
 
   public static Scalar fromDecimal(int scale, long unscaledValue) {
-    if (-scale > DType.DECIMAL64_MAX_PRECISION) {
-      throw new IllegalArgumentException(
-          "Scale " + scale + " exceeds the max precision of DECIMAL64: " + DType.DECIMAL64_MAX_PRECISION);
-    }
     long handle = makeDecimal64Scalar(unscaledValue, scale, true);
     return new Scalar(DType.create(DType.DTypeEnum.DECIMAL64, scale), handle);
   }

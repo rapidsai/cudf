@@ -3799,9 +3799,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   /**
-   * Create a new vector from the given values.  This API supports inline nulls,
-   * but is much slower than building from primitive array of unscaledValue.
-   * Notice all input BigDecimals should share same scale.
+   * Create a new string vector from the given values.  This API
+   * supports inline nulls. This is really intended to be used only for testing as
+   * it is slow and memory intensive to translate between java strings and UTF8 strings.
    */
   public static ColumnVector fromStrings(String... values) {
     try (HostColumnVector host = HostColumnVector.fromStrings(values)) {

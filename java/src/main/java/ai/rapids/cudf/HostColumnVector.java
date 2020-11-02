@@ -451,10 +451,6 @@ public final class HostColumnVector extends HostColumnVectorCore {
    * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
    */
   public static HostColumnVector decimalFromInts(int scale, int... values) {
-    if (-scale > DType.DECIMAL32_MAX_PRECISION) {
-      throw new IllegalArgumentException(
-          "Scale " + scale + " exceeds the max precision of DECIMAL32: " + DType.DECIMAL32_MAX_PRECISION);
-    }
     return build(DType.create(DType.DTypeEnum.DECIMAL32, scale), values.length, (b) -> b.appendUnscaledDecimalArray(values));
   }
 
@@ -464,10 +460,6 @@ public final class HostColumnVector extends HostColumnVectorCore {
    * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
    */
   public static HostColumnVector decimalFromLongs(int scale, long... values) {
-    if (-scale > DType.DECIMAL64_MAX_PRECISION) {
-      throw new IllegalArgumentException(
-          "Scale " + scale + " exceeds the max precision of DECIMAL64: " + DType.DECIMAL64_MAX_PRECISION);
-    }
     return build(DType.create(DType.DTypeEnum.DECIMAL64, scale), values.length, (b) -> b.appendUnscaledDecimalArray(values));
   }
 
@@ -1266,8 +1258,11 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public final Builder appendUnscaledDecimal(int value) {
-      assert type.typeId == DType.DTypeEnum.DECIMAL32;
+      assert type.isDecimalType();
       assert currentIndex < rows;
+      if (type.typeId == DType.DTypeEnum.DECIMAL64) {
+        return appendUnscaledDecimal((long) value);
+      }
       data.setInt(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
       return this;
