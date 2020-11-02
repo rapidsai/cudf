@@ -63,6 +63,7 @@
 - PR #6603 Use correct stream in hash_join.
 - PR #6607 Fix integer overflow in ORC encoder
 - PR #6617 Fix JNI native dependency load order
+- PR #6621 Fix subword tokenizer metadata for token count equal to max_sequence_length
 - PR #6629 Fix JNI CMake
 - PR #6633 Fix Java HostColumnVector unnecessarily loading native dependencies
 
