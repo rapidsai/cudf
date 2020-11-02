@@ -230,10 +230,6 @@ static inline int CountLeadingZeros32(uint32_t value)
 #if defined(__clang__) || defined(__GNUC__)
   if (value == 0) return 32;
   return static_cast<int>(__builtin_clz(value));
-#elif defined(_MSC_VER)
-  unsigned long index;
-  return (_BitScanReverse(&index, static_cast<unsigned long>(value))) ? 31 - static_cast<int>(index)
-                                                                      : 32;
 #else
   int bitpos = 0;
   while (value != 0) {

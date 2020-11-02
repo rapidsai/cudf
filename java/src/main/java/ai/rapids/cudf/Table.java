@@ -470,6 +470,10 @@ public final class Table implements AutoCloseable {
 
   private static native long[] gather(long tableHandle, long gatherView, boolean checkBounds);
 
+  private static native long[] convertToRows(long nativeHandle);
+
+  private static native long[] convertFromRows(long nativeColumnView, int[] types, int[] scale);
+
   private static native long[] repeatStaticCount(long tableHandle, int count);
 
   private static native long[] repeatColumnCount(long tableHandle,
@@ -603,7 +607,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readParquet(ParquetOptions opts, File path) {
     return new Table(readParquet(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0, opts.timeUnit().nativeId));
+        path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId()));
   }
 
   /**
@@ -663,7 +667,7 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(readParquet(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len, opts.timeUnit().nativeId));
+        null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()));
   }
 
   /**
@@ -683,7 +687,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readORC(ORCOptions opts, File path) {
     return new Table(readORC(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes(), opts.timeUnit().nativeId));
+        path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId()));
   }
 
   /**
@@ -744,7 +748,7 @@ public final class Table implements AutoCloseable {
     assert offset >= 0 && offset < buffer.length;
     return new Table(readORC(opts.getIncludeColumnNames(),
         null, buffer.getAddress() + offset, len, opts.usingNumPyTypes(),
-        opts.timeUnit().nativeId));
+        opts.timeUnit().typeId.getNativeId()));
   }
 
   private static class ParquetTableWriter implements TableWriter {
@@ -1619,6 +1623,109 @@ public final class Table implements AutoCloseable {
     return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
   }
 
+  /**
+   * Convert this table of columns into a row major format that is useful for interacting with other
+   * systems that do row major processing of the data. Currently only fixed-width column types are
+   * supported.
+   * <p/>
+   * The output is one or more ColumnVectors that are lists of bytes. A ColumnVector that is a
+   * list of bytes can have at most 2GB of data stored in it. Multiple ColumnVectors are returned
+   * if not all of the data can fit in a single one.
+   * <p/>
+   * Each row in the returned ColumnVector array corresponds to a row in the input table. The rows
+   * will be in the same order as the input Table. The first ColumnVector in the array will hold
+   * the first N rows followed by the second ColumnVector and so on.  The following illustrates
+   * this and also shows some of the internal structure that will be explained later.
+   * <p/><pre>
+   * result[0]:
+   *  | row 0 | validity for row 0 | padding |
+   *  ...
+   *  | row N | validity for row N | padding |
+   *  result[1]:
+   *  |row N+1 | validity for row N+1 | padding |
+   *  ...
+   * </pre>
+   *
+   * The format of each row is similar in layout to a C struct where each column will have padding
+   * in front of it to align it properly. Each row has padding inserted at the end so the next row
+   * is aligned to a 64-bit boundary. This is so that the first column will always start at the
+   * beginning (first byte) of the list of bytes and each row has a consistent layout for fixed
+   * width types.
+   * <p/>
+   * Validity bytes are added to the end of the row. There will be one byte for each 8 columns in a
+   * row. Because the validity is byte aligned there is no padding between it and the last column
+   * in the row.
+   * <p/>
+   * For example a table consisting of the following columns A, B, C with the corresponding types
+   * <p/><pre>
+   *   | A - BOOL8 (8-bit) | B - INT16 (16-bit) | C - DURATION_DAYS (32-bit) |
+   * </pre>
+   * <p/>
+   *  Will have a layout that looks like
+   *  <p/><pre>
+   *  | A_0 | P | B_0 | B_1 | C_0 | C_1 | C_2 | C_3 | V0 | P | P | P | P | P | P | P |
+   * </pre>
+   * <p/>
+   * In this P corresponds to a byte of padding, [LETTER]_[NUMBER] represents the NUMBER
+   * byte of the corresponding LETTER column, and V[NUMBER] is a validity byte for the `NUMBER * 8`
+   * to `(NUMBER + 1) * 8` columns.
+   * <p/>
+   * The order of the columns will not be changed, but to reduce the total amount of padding it is
+   * recommended to order the columns in the following way.
+   * <p/>
+   * <ol>
+   *  <li>64-bit columns</li>
+   *  <li>32-bit columns</li>
+   *  <li>16-bit columns</li>
+   *  <li>8-bit columns</li>
+   * </ol>
+   * <p/>
+   * This way padding is only inserted at the end of a row to make the next column 64-bit aligned.
+   * So for the example above if the columns were ordered C, B, A the layout would be.
+   * <pre>
+   * | C_0 | C_1 | C_2 | C_3 | B_0 | B_1 | A_0 | V0 |
+   * </pre>
+   * This would have reduced the overall size of the data transferred by half.
+   * <p/>
+   * One of the main motivations for doing a row conversion on the GPU is to avoid cache problems
+   * when walking through columnar data on the CPU in a row wise manner. If you are not transferring
+   * very many columns it is likely to be more efficient to just pull back the columns and walk
+   * through them. This is especially true of a single column of fixed width data. The extra
+   * padding will slow down the transfer and looking at only a handful of buffers is not likely to
+   * cause cache issues.
+   * <p/>
+   * There are some limits on the size of a single row.  If the row is larger than 1KB this will
+   * throw an exception.
+   */
+  public ColumnVector[] convertToRows() {
+    long[] ptrs = convertToRows(nativeHandle);
+    ColumnVector[] ret = new ColumnVector[ptrs.length];
+    for (int i = 0; i < ptrs.length; i++) {
+      ret[i] = new ColumnVector(ptrs[i]);
+    }
+    return ret;
+  }
+
+  /**
+   * Convert a column of list of bytes that is formatted like the output from `convertToRows`
+   * and convert it back to a table.
+   * @param vec the row data to process.
+   * @param schema the types of each column.
+   * @return the parsed table.
+   */
+  public static Table convertFromRows(ColumnVector vec, DType ... schema) {
+    // TODO at some point we need a schema that support nesting so we can support nested types
+    // TODO we will need scale at some point very soon too
+    int[] types = new int[schema.length];
+    int[] scale = new int[schema.length];
+    for (int i = 0; i < schema.length; i++) {
+      types[i] = schema[i].typeId.nativeId;
+      scale[i] = schema[i].getScale();
+
+    }
+    return new Table(convertFromRows(vec.getNativeView(), types, scale));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // HELPER CLASSES
   /////////////////////////////////////////////////////////////////////////////
@@ -2333,7 +2440,7 @@ public final class Table implements AutoCloseable {
 
     private static ColumnVector from(DType type, Object dataArray) {
       ColumnVector ret = null;
-      switch (type) {
+      switch (type.typeId) {
         case STRING:
           ret = ColumnVector.fromStrings((String[]) dataArray);
           break;
