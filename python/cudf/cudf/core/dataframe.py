@@ -5467,6 +5467,9 @@ class DataFrame(Frame, Serializable):
         Single    5
         dtype: int64
         """
+        if axis not in (0, "index", None):
+            raise NotImplementedError("Only axis=0 is currently supported.")
+
         return self._apply_support_method(
             "count",
             axis=axis,
@@ -5768,6 +5771,9 @@ class DataFrame(Frame, Serializable):
         2  1  7
         3  1  7
         """
+        if axis not in (0, "index", None):
+            raise NotImplementedError("Only axis=0 is currently supported.")
+
         return self._apply_support_method(
             "cummin", axis=axis, skipna=skipna, *args, **kwargs
         )
@@ -5802,6 +5808,9 @@ class DataFrame(Frame, Serializable):
         2  3   9
         3  4  10
         """
+        if axis not in (0, "index", None):
+            raise NotImplementedError("Only axis=0 is currently supported.")
+
         return self._apply_support_method(
             "cummax", axis=axis, skipna=skipna, *args, **kwargs
         )
@@ -5837,6 +5846,9 @@ class DataFrame(Frame, Serializable):
         2   6  24
         3  10  34
         """
+        if axis not in (0, "index", None):
+            raise NotImplementedError("Only axis=0 is currently supported.")
+
         return self._apply_support_method(
             "cumsum", axis=axis, skipna=skipna, *args, **kwargs
         )
@@ -5871,6 +5883,9 @@ class DataFrame(Frame, Serializable):
         2   6   504
         3  24  5040
         """
+        if axis not in (0, "index", None):
+            raise NotImplementedError("Only axis=0 is currently supported.")
+
         return self._apply_support_method(
             "cumprod", axis=axis, skipna=skipna, *args, **kwargs
         )
@@ -6163,6 +6178,9 @@ class DataFrame(Frame, Serializable):
         b   -1.2
         dtype: float64
         """
+        if axis not in (0, "index", None):
+            raise NotImplementedError("Only axis=0 is currently supported.")
+
         if numeric_only not in (None, True):
             msg = "Kurtosis only supports int, float, and bool dtypes."
             raise NotImplementedError(msg)
@@ -6209,6 +6227,9 @@ class DataFrame(Frame, Serializable):
         b   -0.37037
         dtype: float64
         """
+        if axis not in (0, "index", None):
+            raise NotImplementedError("Only axis=0 is currently supported.")
+
         if numeric_only not in (None, True):
             msg = "Skew only supports int, float, and bool dtypes."
             raise NotImplementedError(msg)
@@ -6355,27 +6376,30 @@ class DataFrame(Frame, Serializable):
 
             level = kwargs.pop("level", None)
             if level not in (None,):
-                msg = "Row-wise operations currently do not "
-                "support `level`."
-                raise NotImplementedError(msg)
+                raise NotImplementedError(
+                    "Row-wise operations currently do not support `level`."
+                )
 
             numeric_only = kwargs.pop("numeric_only", None)
             if numeric_only not in (None, True):
-                msg = "Row-wise operations currently do not "
-                "support `numeric_only=False`."
-                raise NotImplementedError(msg)
+                raise NotImplementedError(
+                    "Row-wise operations currently do not "
+                    "support `numeric_only=False`."
+                )
 
             min_count = kwargs.pop("min_count", None)
             if min_count not in (None, 0):
-                msg = "Row-wise operations currently do not "
-                "support `min_count`."
-                raise NotImplementedError(msg)
+                raise NotImplementedError(
+                    "Row-wise operations currently do not "
+                    "support `min_count`."
+                )
 
             bool_only = kwargs.pop("bool_only", None)
             if bool_only not in (None, True):
-                msg = "Row-wise operations currently do not "
-                "support `bool_only`."
-                raise NotImplementedError(msg)
+                raise NotImplementedError(
+                    "Row-wise operations currently do not "
+                    "support `bool_only`."
+                )
 
             prepared, mask, common_dtype = self._prepare_for_rowwise_op(
                 method, skipna
