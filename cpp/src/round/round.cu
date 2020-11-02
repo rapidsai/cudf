@@ -120,13 +120,12 @@ struct round_fn {
 
     auto out_view = result->mutable_view();
     auto const n  = static_cast<T>(std::pow(10, -decimal_places));
-    auto const m  = n / 10;  // need 10 ^ (decimal_places - 1) to isolate rounding_digit
 
     thrust::transform(rmm::exec_policy(stream)->on(stream),
                       input.begin<T>(),
                       input.end<T>(),
                       out_view.begin<T>(),
-                      [n, m] __device__(T e) -> T {
+                      [n] __device__(T e) -> T {
                         auto const down = (e / n) * n;
                         auto const sign = is_negative(e) ? 1 : -1;
                         return down + sign * (generic_abs(e - down) >= n / 2 ? n : 0);
