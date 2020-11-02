@@ -169,20 +169,30 @@ RD_BENCHMARK_DEFINE_ALL_SOURCES(CSV_RD_BM_INPUTS_DEFINE, floats, type_group_id::
 RD_BENCHMARK_DEFINE_ALL_SOURCES(CSV_RD_BM_INPUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(CSV_RD_BM_INPUTS_DEFINE, string, cudf::type_id::STRING);
 
-#define CSV_RD_BM_OPTIONS_DEFINE(name)                                              \
-  BENCHMARK_DEFINE_F(CsvRead, name)                                                 \
-  (::benchmark::State & state) { BM_csv_read_varying_options(state); }              \
-  BENCHMARK_REGISTER_F(CsvRead, name)                                               \
-    ->Args({int32_t(column_selection::ALTERNATE), int32_t(row_selection::ALL), 1})  \
-    ->Args({int32_t(column_selection::HALF), int32_t(row_selection::ALL), 1})       \
-    ->Args({int32_t(column_selection::ALL), int32_t(row_selection::ALL), 1})        \
-    ->Args({int32_t(column_selection::ALL), int32_t(row_selection::BYTE_RANGE), 1}) \
-    ->Args({int32_t(column_selection::ALL), int32_t(row_selection::BYTE_RANGE), 8}) \
-    ->Args({int32_t(column_selection::ALL), int32_t(row_selection::NROWS), 1})      \
-    ->Args({int32_t(column_selection::ALL), int32_t(row_selection::NROWS), 8})      \
-    ->Args({int32_t(column_selection::ALL), int32_t(row_selection::SKIPFOOTER), 1}) \
-    ->Args({int32_t(column_selection::ALL), int32_t(row_selection::SKIPFOOTER), 8}) \
-    ->Unit(benchmark::kMillisecond)                                                 \
+#define CSV_RD_BM_COL_SELECTION_DEFINE(name)                           \
+  BENCHMARK_DEFINE_F(CsvRead, name)                                    \
+  (::benchmark::State & state) { BM_csv_read_varying_options(state); } \
+  BENCHMARK_REGISTER_F(CsvRead, name)                                  \
+    ->ArgsProduct({{int32_t(column_selection::ALL),                    \
+                    int32_t(column_selection::ALTERNATE),              \
+                    int32_t(column_selection::HALF)},                  \
+                   {int32_t(row_selection::ALL)},                      \
+                   {1}})                                               \
+    ->Unit(benchmark::kMillisecond)                                    \
     ->UseManualTime();
 
-CSV_RD_BM_OPTIONS_DEFINE(reader_options)
+CSV_RD_BM_COL_SELECTION_DEFINE(column_selection)
+
+#define CSV_RD_BM_ROW_SELECTION_DEFINE(name)                           \
+  BENCHMARK_DEFINE_F(CsvRead, name)                                    \
+  (::benchmark::State & state) { BM_csv_read_varying_options(state); } \
+  BENCHMARK_REGISTER_F(CsvRead, name)                                  \
+    ->ArgsProduct({{int32_t(column_selection::ALL)},                   \
+                   {int32_t(row_selection::BYTE_RANGE),                \
+                    int32_t(row_selection::NROWS),                     \
+                    int32_t(row_selection::SKIPFOOTER)},               \
+                   {1, 8}})                                            \
+    ->Unit(benchmark::kMillisecond)                                    \
+    ->UseManualTime();
+
+CSV_RD_BM_ROW_SELECTION_DEFINE(row_selection)
