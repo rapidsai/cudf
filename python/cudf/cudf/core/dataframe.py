@@ -400,7 +400,7 @@ class DataFrame(Frame, Serializable):
         self._index = as_index(index)
 
         # list-of-dicts case
-        if len(data) > 0 and np.all(isinstance(d, dict) for d in data):
+        if len(data) > 0 and isinstance(data[0], dict):
             data = DataFrame.from_pandas(pd.DataFrame(data))
             self._data = data._data
         else:
