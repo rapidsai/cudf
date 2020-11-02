@@ -705,8 +705,10 @@ class strings_column_wrapper : public detail::column_wrapper {
 /**
  * @brief `column_wrapper` derived class for wrapping dictionary columns.
  *
- * @tparam KeyElementTo Specify a fixed-type for the key values of the dictionary
- * @tparam SourceElementTo For converting fixed-width types to the KeyElementTo
+ * This class handles fixed-width type keys.
+ *
+ * @tparam KeyElementTo Specify a fixed-width type for the key values of the dictionary
+ * @tparam SourceElementTo For converting fixed-width values to the KeyElementTo
  */
 template <typename KeyElementTo, typename SourceElementT = KeyElementTo>
 class dictionary_column_wrapper : public detail::column_wrapper {
@@ -884,6 +886,8 @@ class dictionary_column_wrapper : public detail::column_wrapper {
 
 /**
  * @brief `column_wrapper` derived class for wrapping a dictionary column with string keys.
+ *
+ * This is a specialization of the `dictionary_column_wrapper` class for strings.
  */
 template <>
 class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
@@ -903,13 +907,14 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
    * `[begin,end)`.
    *
    * Values in the sequence `[begin,end)` will each be converted to
-   *`std::string` and a dictionary column will be created containing all of the strings.
+   *`std::string` and a dictionary column will be created by encoding the strings.
    *
    * Example:
    * @code{.cpp}
    * // Creates a non-nullable dictionary column with 7 string elements
    * std::vector<std::string> strings{"", "aaa", "bbb", "aaa", "bbb, "ccc", "bbb"};
    * dictionary_column_wrapper<std::string> d(strings.begin(), strings.end());
+   * // keys = {"","aaa","bbb","ccc"}, indices = {0, 1, 2, 1, 2, 3, 2}
    * @endcode
    *
    * @tparam StringsIterator A `std::string` must be constructible from
@@ -933,17 +938,18 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
    * as booleans to indicate the validity of each string.
    *
    * Values in the sequence `[begin,end)` will each be converted to
-   *`std::string` and a dictionary column will be created containing all of the strings.
+   * `std::string` and a dictionary column will be created by encoding the strings.
    *
    * If `v[i] == true`, string `i` is valid, else it is treated as null row.
    *
    * Example:
    * @code{.cpp}
-   * // Creates a nullable dictionary column with 7 string elements:
-   * // {NULL, "aaa", NULL, "aaa", NULL, "bbb", NULL}
+   * // Creates a nullable dictionary column with 7 strings elements and validity iterator.
    * std::vector<std::string> strings{"", "aaa", "", "aaa", "", "bbb", ""};
+   * // Validity iterator sets even rows to null.
    * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
    * dictionary_column_wrapper<std::string> d(strings.begin(), strings.end(), validity);
+   * // keys = {"aaa", "bbb"}, indices = {NULL, 0, NULL, 0, NULL, 1, NULL}
    * @endcode
    *
    * @tparam StringsIterator A `std::string` must be constructible from
@@ -972,8 +978,9 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
    *
    * Example:
    * @code{.cpp}
-   * // Creates a non-nullable dictionary column with 7 string elements:
+   * // Creates a non-nullable dictionary column with 7 string elements.
    * dictionary_column_wrapper<std::string> d({"", "bb", "a", "bb", "a", "ccc", "a"});
+   * // keys = {"","a","bb","ccc"}, indices = {0, 2, 1, 2, 1, 3, 1}
    * @endcode
    *
    * @param strings The list of strings
@@ -990,10 +997,11 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
    *
    * Example:
    * @code{.cpp}
-   * // Creates a nullable STRING column with 7 string elements:
-   * // {NULL, "bb", NULL, "bb, NULL, "a", NULL}
+   * // Creates a nullable dictionary column with 7 string elements and a validity iterator.
+   * // Validity iterator here sets even rows to null.
    * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
    * dictionary_column_wrapper<std::string> d({"", "bb", "", "bb", "", "a", ""}, validity);
+   * // keys = {"a", "bb"}, indices = {NULL, 1, NULL, 1, NULL, 0, NULL}
    * @endcode
    *
    * @tparam ValidityIterator Dereferencing a ValidityIterator must be convertible to `bool`
@@ -1012,10 +1020,10 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
    *
    * Example:
    * @code{.cpp}
-   * // Creates a nullable STRING column with 7 string elements:
-   * // {NULL, "a", NULL, "bb", NULL, "ccc", NULL}
+   * // Creates a nullable STRING column with 7 string elements and validity initializer.
    * dictionary_column_wrapper<std::string> ({"", "a", "", "bb", "", "ccc", ""},
    *                                         {0,  1,   0,  1,    0,  1,     0});
+   * // keys = {"a", "bb", "ccc"}, indices = {NULL, 0, NULL, 1, NULL, 2, NULL}
    * @endcode
    *
    * @param strings The list of strings
