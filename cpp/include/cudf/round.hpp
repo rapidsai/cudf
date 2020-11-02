@@ -30,7 +30,7 @@ namespace cudf {
 /**
  * @brief Different rounding methods for `cudf::round`
  */
-enum class rounding_method : int32_t { HALF_UP };
+enum class rounding_method : int32_t { HALF_UP, HALF_EVEN };
 
 /**
  * @brief Rounds all the values in a column to the the nearest multiple of `10^decimal_places`.
