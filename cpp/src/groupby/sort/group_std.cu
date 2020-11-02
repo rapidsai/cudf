@@ -106,7 +106,7 @@ struct var_functor {
                                                          stream,
                                                          mr);
 
-    auto values_view = column_device_view::create(values);
+    auto values_view = column_device_view::create(values, stream);
     auto d_values    = *values_view;
 
     auto d_group_labels = group_labels.data().get();
@@ -122,7 +122,7 @@ struct var_functor {
         auto values_iter = d_values.pair_begin<T, false>();
         reduce_by_key_fn(values_iter, group_labels, d_means, d_group_sizes, ddof, d_result, stream);
       }
-    } else {
+    } else {  // dictionary column type uses special pair iterator
       if (values.has_nulls()) {
         auto values_iter =
           cudf::dictionary::detail::make_dictionary_pair_iterator<T, true>(*values_view);
@@ -135,14 +135,12 @@ struct var_functor {
     }
 
     // set nulls
-    auto result_view = mutable_column_device_view::create(*result);
+    auto result_view = mutable_column_device_view::create(*result, stream);
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
                        thrust::make_counting_iterator(0),
                        group_sizes.size(),
-                       [d_result = *result_view,
-                        d_group_sizes /* = *group_size_view*/,
-                        ddof] __device__(size_type i) {
-                         size_type group_size = d_group_sizes[i];  //.element<size_type>(i);
+                       [d_result = *result_view, d_group_sizes, ddof] __device__(size_type i) {
+                         size_type group_size = d_group_sizes[i];
                          if (group_size == 0 or group_size - ddof <= 0)
                            d_result.set_null(i);
                          else
