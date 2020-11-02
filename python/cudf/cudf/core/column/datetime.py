@@ -152,7 +152,7 @@ class DatetimeColumn(column.ColumnBase):
 
             return as_scalar(other)
         else:
-            raise TypeError("cannot normalize {}".format(type(other)))
+            raise TypeError(f"cannot normalize {type(other)}")
 
     @property
     def as_numerical(self):
@@ -210,8 +210,8 @@ class DatetimeColumn(column.ColumnBase):
         if isinstance(q, Number):
             return pd.Timestamp(result, unit=self.time_unit)
 
-        result = result.binary_operator(
-            "mul", as_scalar(_numpy_to_pandas_conversion[self.time_unit])
+        result = result * as_scalar(
+            _numpy_to_pandas_conversion[self.time_unit]
         )
 
         return result.astype("datetime64[ns]")
