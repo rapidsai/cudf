@@ -56,7 +56,7 @@ bool __device__ is_negative(T value)
 template <typename T, typename std::enable_if_t<not std::is_signed<T>::value>* = nullptr>
 bool __device__ is_negative(T value)
 {
-  return true;
+  return false;
 }
 }  // anonymous namespace
 
@@ -127,7 +127,7 @@ struct round_fn {
                       input.end<T>(),
                       out_view.begin<T>(),
                       [n] __device__(T e) -> T {
-                        auto const down = (e / n) * n;
+                        auto const down = (e / n) * n;  // result from rounding down
                         auto const sign = is_negative(e) ? -1 : 1;
                         return down + sign * (generic_abs(e - down) >= n / 2 ? n : 0);
                       });
