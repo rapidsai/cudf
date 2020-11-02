@@ -13,12 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 
-#include "hash_join.cuh"
+#include <join/hash_join.cuh>
+
+#include <numeric>
 
 namespace cudf {
 namespace detail {
@@ -91,9 +92,9 @@ VectorPair concatenate_vector_pairs(VectorPair &a, VectorPair &b)
                "Mismatch between sizes of vectors in vector pair");
   CUDF_EXPECTS((b.first.size() == b.second.size()),
                "Mismatch between sizes of vectors in vector pair");
-  if (a.first.size() == 0) {
+  if (a.first.empty()) {
     return b;
-  } else if (b.first.size() == 0) {
+  } else if (b.first.empty()) {
     return a;
   }
   auto original_size = a.first.size();
@@ -215,13 +216,13 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type *)>> build_join_
                                           stream);
 
   row_hash hash_build{build_table};
-  rmm::device_scalar<int> failure(0, 0);
+  rmm::device_scalar<int> failure(0, stream);
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   detail::grid_1d config(build_table_num_rows, block_size);
-  build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, 0>>>(
+  build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
     *hash_table, hash_build, build_table_num_rows, failure.data());
   // Check error code from the kernel
-  if (failure.value() == 1) { CUDF_FAIL("Hash Table insert failure."); }
+  if (failure.value(stream) == 1) { CUDF_FAIL("Hash Table insert failure."); }
 
   return hash_table;
 }
@@ -272,7 +273,7 @@ std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> probe_jo
 
     constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
     detail::grid_1d config(probe_table.num_rows(), block_size);
-    write_index.set_value(0);
+    write_index.set_value(0, stream);
 
     row_hash hash_probe{probe_table};
     row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
@@ -289,7 +290,7 @@ std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> probe_jo
 
     CHECK_CUDA(stream);
 
-    join_size              = write_index.value();
+    join_size              = write_index.value(stream);
     current_estimated_size = estimated_size;
     estimated_size *= 2;
   } while ((current_estimated_size < join_size));
@@ -479,7 +480,8 @@ std::unique_ptr<cudf::table> combine_table_pair(std::unique_ptr<cudf::table> &&l
 hash_join::hash_join_impl::~hash_join_impl() = default;
 
 hash_join::hash_join_impl::hash_join_impl(cudf::table_view const &build,
-                                          std::vector<size_type> const &build_on)
+                                          std::vector<size_type> const &build_on,
+                                          cudaStream_t stream)
   : _build(build),
     _build_selected(build.select(build_on)),
     _build_on(build_on),
@@ -492,8 +494,8 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const &build,
 
   if (_build_on.empty() || 0 == build.num_rows()) { return; }
 
-  auto build_table = cudf::table_device_view::create(_build_selected);
-  _hash_table      = build_join_hash_table(*build_table, 0);
+  auto build_table = cudf::table_device_view::create(_build_selected, stream);
+  _hash_table      = build_join_hash_table(*build_table, stream);
 }
 
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>>
@@ -503,11 +505,12 @@ hash_join::hash_join_impl::inner_join(
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const &columns_in_common,
   common_columns_output_side common_columns_output_side,
   null_equality compare_nulls,
-  rmm::mr::device_memory_resource *mr) const
+  rmm::mr::device_memory_resource *mr,
+  cudaStream_t stream) const
 {
   CUDF_FUNC_RANGE();
   return compute_hash_join<cudf::detail::join_kind::INNER_JOIN>(
-    probe, probe_on, columns_in_common, common_columns_output_side, compare_nulls, mr);
+    probe, probe_on, columns_in_common, common_columns_output_side, compare_nulls, mr, stream);
 }
 
 std::unique_ptr<cudf::table> hash_join::hash_join_impl::left_join(
@@ -515,11 +518,18 @@ std::unique_ptr<cudf::table> hash_join::hash_join_impl::left_join(
   std::vector<size_type> const &probe_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const &columns_in_common,
   null_equality compare_nulls,
-  rmm::mr::device_memory_resource *mr) const
+  rmm::mr::device_memory_resource *mr,
+  cudaStream_t stream) const
 {
   CUDF_FUNC_RANGE();
-  auto probe_build_pair = compute_hash_join<cudf::detail::join_kind::LEFT_JOIN>(
-    probe, probe_on, columns_in_common, common_columns_output_side::PROBE, compare_nulls, mr);
+  auto probe_build_pair =
+    compute_hash_join<cudf::detail::join_kind::LEFT_JOIN>(probe,
+                                                          probe_on,
+                                                          columns_in_common,
+                                                          common_columns_output_side::PROBE,
+                                                          compare_nulls,
+                                                          mr,
+                                                          stream);
   return cudf::detail::combine_table_pair(std::move(probe_build_pair.first),
                                           std::move(probe_build_pair.second));
 }
@@ -529,11 +539,18 @@ std::unique_ptr<cudf::table> hash_join::hash_join_impl::full_join(
   std::vector<size_type> const &probe_on,
   std::vector<std::pair<cudf::size_type, cudf::size_type>> const &columns_in_common,
   null_equality compare_nulls,
-  rmm::mr::device_memory_resource *mr) const
+  rmm::mr::device_memory_resource *mr,
+  cudaStream_t stream) const
 {
   CUDF_FUNC_RANGE();
-  auto probe_build_pair = compute_hash_join<cudf::detail::join_kind::FULL_JOIN>(
-    probe, probe_on, columns_in_common, common_columns_output_side::PROBE, compare_nulls, mr);
+  auto probe_build_pair =
+    compute_hash_join<cudf::detail::join_kind::FULL_JOIN>(probe,
+                                                          probe_on,
+                                                          columns_in_common,
+                                                          common_columns_output_side::PROBE,
+                                                          compare_nulls,
+                                                          mr,
+                                                          stream);
   return cudf::detail::combine_table_pair(std::move(probe_build_pair.first),
                                           std::move(probe_build_pair.second));
 }

@@ -25,18 +25,58 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
  * This class will load the native dependencies.
  */
 public class NativeDepsLoader {
   private static final Logger log = LoggerFactory.getLogger(NativeDepsLoader.class);
-  private static final String[] loadOrder = new String[] {
-      "nvcomp",
-      "cudf",
-      "cudfjni"
+
+  /**
+   * Set this system property to true to prevent unpacked dependency files from
+   * being deleted immediately after they are loaded. The files will still be
+   * scheduled for deletion upon exit.
+   */
+  private static final Boolean preserveDepsAfterLoad = Boolean.getBoolean(
+      "ai.rapids.cudf.preserve-dependencies");
+
+  /**
+   * Defines the loading order for the dependencies. Dependencies are loaded in
+   * stages where all the dependencies in a stage are not interdependent and
+   * therefore can be loaded in parallel. All dependencies within an earlier
+   * stage are guaranteed to have finished loading before any dependencies in
+   * subsequent stages are loaded.
+   */
+  private static final String[][] loadOrder = new String[][]{
+      new String[]{
+          "nvcomp",
+          "cudf_base"
+      },
+      new String[]{
+          "cudf_ast",
+          "cudf_comms",
+          "cudf_hash",
+          "cudf_interop",
+          "cudf_io",
+          "cudf_join",
+          "cudf_merge",
+          "cudf_partitioning",
+          "cudf_reductions",
+          "cudf_replace",
+          "cudf_rolling"
+      },
+      new String[]{
+          "cudfjni"
+      }
   };
-  private static ClassLoader loader = NativeDepsLoader.class.getClassLoader();
+  private static final ClassLoader loader = NativeDepsLoader.class.getClassLoader();
+
   private static boolean loaded = false;
 
   /**
@@ -100,7 +140,79 @@ public class NativeDepsLoader {
     }
   }
 
+  /**
+   * Load native dependencies in stages, where the dependency libraries in each stage
+   * are loaded only after all libraries in earlier stages have completed loading.
+   * @param loadOrder array of stages with an array of dependency library names in each stage
+   * @throws IOException on any error trying to load the libraries
+   */
+  private static void loadNativeDeps(String[][] loadOrder) throws IOException {
+    String os = System.getProperty("os.name");
+    String arch = System.getProperty("os.arch");
+
+    ExecutorService executor = Executors.newCachedThreadPool();
+    List<List<Future<File>>> allFileFutures = new ArrayList<>();
+
+    // Start unpacking and creating the temporary files for each dependency.
+    // Unpacking a dependency does not depend on stage order.
+    for (String[] stageDependencies : loadOrder) {
+      List<Future<File>> stageFileFutures = new ArrayList<>();
+      allFileFutures.add(stageFileFutures);
+      for (String name : stageDependencies) {
+        stageFileFutures.add(executor.submit(() -> createFile(os, arch, name)));
+      }
+    }
+
+    List<Future<?>> loadCompletionFutures = new ArrayList<>();
+
+    // Proceed stage-by-stage waiting for the dependency file to have been
+    // produced then submit them to the thread pool to be loaded.
+    for (List<Future<File>> stageFileFutures : allFileFutures) {
+      // Submit all dependencies in the stage to be loaded in parallel
+      loadCompletionFutures.clear();
+      for (Future<File> fileFuture : stageFileFutures) {
+        loadCompletionFutures.add(executor.submit(() -> loadDep(fileFuture)));
+      }
+
+      // Wait for all dependencies in this stage to have been loaded
+      for (Future<?> loadCompletionFuture : loadCompletionFutures) {
+        try {
+          loadCompletionFuture.get();
+        } catch (ExecutionException | InterruptedException e) {
+          throw new IOException("Error loading dependencies", e);
+        }
+      }
+    }
+
+    executor.shutdownNow();
+  }
+
   private static void loadDep(String os, String arch, String baseName) throws IOException {
+    File path = createFile(os, arch, baseName);
+    loadDep(path);
+  }
+
+  /** Load a library at the specified path */
+  private static void loadDep(File path) {
+    System.load(path.getAbsolutePath());
+    if (!preserveDepsAfterLoad) {
+      path.delete();
+    }
+  }
+
+  /** Load a library, waiting for the specified future to produce the path before loading */
+  private static void loadDep(Future<File> fileFuture) {
+    File path;
+    try {
+      path = fileFuture.get();
+    } catch (ExecutionException | InterruptedException e) {
+      throw new RuntimeException("Error loading dependencies", e);
+    }
+    loadDep(path);
+  }
+
+  /** Extract the contents of a library resource into a temporary file */
+  private static File createFile(String os, String arch, String baseName) throws IOException {
     String path = arch + "/" + os + "/" + System.mapLibraryName(baseName);
     File loc;
     URL resource = loader.getResource(path);
@@ -110,10 +222,11 @@ public class NativeDepsLoader {
       if (!f.exists()) {
         throw new FileNotFoundException("Could not locate native dependency " + path);
       }
-      resource = f.toURL();
+      resource = f.toURI().toURL();
     }
     try (InputStream in = resource.openStream()) {
       loc = File.createTempFile(baseName, ".so");
+      loc.deleteOnExit();
       try (OutputStream out = new FileOutputStream(loc)) {
         byte[] buffer = new byte[1024 * 16];
         int read = 0;
@@ -122,9 +235,7 @@ public class NativeDepsLoader {
         }
       }
     }
-    loc.deleteOnExit();
-    System.load(loc.getAbsolutePath());
-    loc.delete();
+    return loc;
   }
 
   public static boolean libraryLoaded() {

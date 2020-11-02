@@ -227,7 +227,7 @@ struct column_copy_functor {
     dst += (split_info.data_buf_size + split_info.validity_buf_size);
 
     // no work to do
-    if (in.size() == 0) {
+    if (in.is_empty()) {
       out_cols.push_back(column_view{in.type(), 0, nullptr});
       return;
     }

@@ -1,4 +1,5 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+
 import itertools
 
 import numpy as np
@@ -9,7 +10,7 @@ from numpy.testing import assert_array_equal
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_110
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 _now = np.datetime64("now")
 _tomorrow = _now + np.timedelta64(1, "D")
@@ -439,6 +440,7 @@ def test_advanced_groupby_levels():
     assert_eq(pdh, gdh)
     pdg = pdf.groupby(["x", "y", "z"]).sum()
     gdg = gdf.groupby(["x", "y", "z"]).sum()
+    assert_eq(pdg, gdg)
     pdg = pdf.groupby(["z"]).sum()
     gdg = gdf.groupby(["z"]).sum()
     assert_eq(pdg, gdg)
@@ -467,14 +469,14 @@ def test_advanced_groupby_levels():
     assert_eq(pdh, gdh)
     pdg = pdf.groupby(["x", "y"]).sum()
     gdg = gdf.groupby(["x", "y"]).sum()
-    with pytest.raises(IndexError) as raises:
-        pdh = pdg.groupby(level=2).sum()
-    raises.match("Too many levels")
-    with pytest.raises(IndexError) as raises:
-        gdh = gdg.groupby(level=2).sum()
-    # we use a different error message
-    raises.match("Invalid level number")
-    assert_eq(pdh, gdh)
+
+    assert_exceptions_equal(
+        lfunc=pdg.groupby,
+        rfunc=gdg.groupby,
+        lfunc_args_and_kwargs=([], {"level": 2}),
+        rfunc_args_and_kwargs=([], {"level": 2}),
+        expected_error_message="Invalid level number",
+    )
 
 
 @pytest.mark.parametrize(
@@ -1049,13 +1051,7 @@ def test_raise_data_error():
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
     gdf = cudf.from_pandas(pdf)
 
-    try:
-        pdf.groupby("a").mean()
-    except Exception as e:
-        with pytest.raises(type(e), match=e.__str__()):
-            gdf.groupby("a").mean()
-    else:
-        raise AssertionError("Expected pandas groupby to fail")
+    assert_exceptions_equal(pdf.groupby("a").mean, gdf.groupby("a").mean)
 
 
 def test_drop_unsupported_multi_agg():
@@ -1265,3 +1261,13 @@ def test_groupby_list_columns_excluded():
         gdf.groupby("a").agg("mean"),
         check_dtype=False,
     )
+
+
+def test_groupby_pipe():
+    pdf = pd.DataFrame({"A": "a b a b".split(), "B": [1, 2, 3, 4]})
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pdf.groupby("A").pipe(lambda x: x.max() - x.min())
+    actual = gdf.groupby("A").pipe(lambda x: x.max() - x.min())
+
+    assert_eq(expected, actual)
