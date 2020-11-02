@@ -44,6 +44,7 @@
 - PR #6612 Update JNI to new RMM cuda_stream_view API
 - PR #6579 Update scatter APIs to use reference wrapper / const scalar
 - PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
+- PR #6622 Update `to_pandas` api docs
 - PR #6623 Add operator overloading to column and clean up error messages
 
 ## Bug Fixes
@@ -67,6 +68,7 @@
 - PR #6629 Fix JNI CMake
 - PR #6633 Fix Java HostColumnVector unnecessarily loading native dependencies
 - PR #6643 Fix csv writer handling embedded comma delimiter
+- PR #6640 Add error message for unsupported `axis` parameter in DataFrame APIs
 
 
 # cuDF 0.16.0 (21 Oct 2020)
