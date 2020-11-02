@@ -173,6 +173,8 @@ cdef class Scalar:
             self._is_host_value_current()
         ):
             self._host_value = self._get_device_value()
+        else:
+            raise ValueError("Invalid device scalar")
 
     cdef const scalar* get_raw_ptr(self):
         if not self._is_device_value_current():
