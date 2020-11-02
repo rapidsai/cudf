@@ -855,7 +855,7 @@ class Series(Frame, Serializable):
         """Always raise TypeError when converting a Series
         into a boolean.
         """
-        raise TypeError("can't compute boolean for {!r}".format(type(self)))
+        raise TypeError(f"can't compute boolean for {type(self)}")
 
     def values_to_string(self, nrows=None):
         """Returns a list of string for each element.
@@ -1962,7 +1962,7 @@ class Series(Frame, Serializable):
         """
         return self._column.to_gpu_array(fillna=fillna)
 
-    def to_pandas(self, index=True, **kwargs):
+    def to_pandas(self, index=True, nullable=False, **kwargs):
         """
         Convert to a Pandas Series.
 
@@ -1990,7 +1990,7 @@ class Series(Frame, Serializable):
 
         if index is True:
             index = self.index.to_pandas()
-        s = self._column.to_pandas(index=index)
+        s = self._column.to_pandas(index=index, nullable=nullable)
         s.name = self.name
         return s
 
@@ -5069,10 +5069,10 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     if a_col.null_count and b_col.null_count:
         a_nulls = a_col.isna()
         b_nulls = b_col.isna()
-        null_values = a_nulls.binary_operator("or", b_nulls)
+        null_values = a_nulls | b_nulls
 
         if equal_nan is True:
-            equal_nulls = a_nulls.binary_operator("and", b_nulls)
+            equal_nulls = a_nulls & b_nulls
 
         del a_nulls, b_nulls
     elif a_col.null_count:

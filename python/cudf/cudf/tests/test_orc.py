@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import os
 from io import BytesIO
@@ -362,3 +362,41 @@ def test_orc_reader_decimal_type(datadir, orc_file):
     df["col8"] = df["col8"].astype("str")
 
     assert_eq(pdf, df)
+
+
+def test_orc_reader_boolean_type(datadir):
+    file_path = datadir / "TestOrcFile.boolean.orc"
+
+    pdf = pd.read_orc(file_path)
+    df = cudf.read_orc(file_path).to_pandas()
+
+    assert_eq(pdf, df)
+
+
+@pytest.mark.filterwarnings("ignore:Using CPU")
+def test_orc_reader_tzif_timestamps(datadir):
+    # Contains timstamps in the range covered by the TZif file
+    # Other timedate tests only cover "future" times
+    path = datadir / "TestOrcFile.lima_timezone.orc"
+    try:
+        orcfile = pa.orc.ORCFile(path)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+
+    pdf = orcfile.read().to_pandas()
+    gdf = cudf.read_orc(path, engine="cudf").to_pandas()
+
+    assert_eq(pdf, gdf)
+
+
+def test_int_overflow(tmpdir):
+    file_path = tmpdir.join("gdf_overflow.orc")
+
+    # The number of rows and the large element trigger delta encoding
+    num_rows = 513
+    df = cudf.DataFrame({"a": [None] * num_rows}, dtype="int32")
+    df["a"][0] = 1024 * 1024 * 1024
+    df["a"][num_rows - 1] = 1
+    df.to_orc(file_path)
+
+    assert_eq(cudf.read_orc(file_path), df)

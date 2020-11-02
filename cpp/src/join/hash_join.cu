@@ -272,7 +272,7 @@ std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> probe_jo
 
     constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
     detail::grid_1d config(probe_table.num_rows(), block_size);
-    write_index.set_value(0);
+    write_index.set_value(0, stream);
 
     row_hash hash_probe{probe_table};
     row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
@@ -289,7 +289,7 @@ std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> probe_jo
 
     CHECK_CUDA(stream);
 
-    join_size              = write_index.value();
+    join_size              = write_index.value(stream);
     current_estimated_size = estimated_size;
     estimated_size *= 2;
   } while ((current_estimated_size < join_size));
