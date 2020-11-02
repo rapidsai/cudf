@@ -74,6 +74,17 @@ TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTest1)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestWithNulls)
+{
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
+
+  auto const input    = fw_wrapper{{1.24, 1.25, 1.26}, {1, 0, 1}};
+  auto const expected = fw_wrapper{{1.2, 1.3, 1.3}, {1, 0, 1}};
+  auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_UP);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestNeg1)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
