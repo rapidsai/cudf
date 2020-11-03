@@ -92,6 +92,15 @@ TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestHalfEven1)
   auto const input    = fw_wrapper{1.24, 1.25, 1.26, 1.34, 1.35, 1.36};
   auto const expected = fw_wrapper{1.2, 1.2, 1.3, 1.3, 1.4, 1.4};
   auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_EVEN);
+}
+
+TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestWithNulls)
+{
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
+
+  auto const input    = fw_wrapper{{1.24, 1.25, 1.26}, {1, 0, 1}};
+  auto const expected = fw_wrapper{{1.2, 1.3, 1.3}, {1, 0, 1}};
+  auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -218,8 +227,19 @@ TYPED_TEST(RoundTestsIntegerTypes, SimpleNegativeInteger)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
-  auto const input    = fw_wrapper{-12, -135, -1454, -1455, -1500};
-  auto const expected = fw_wrapper{0, -100, -1500, -1500, -1500};
+  auto const input    = fw_wrapper{-12, -135, -1454, -1455, -1500, -140, -150, -160};
+  auto const expected = fw_wrapper{0, -100, -1500, -1500, -1500, -100, -200, -200};
+  auto const result   = cudf::round(input, -2, cudf::rounding_method::HALF_UP);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(RoundTests, SimpleNegativeIntegerWithUnsignedNumbers)
+{
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<uint32_t>;
+
+  auto const input    = fw_wrapper{12, 135, 1454, 1455, 1500, 140, 150, 160};
+  auto const expected = fw_wrapper{0, 100, 1500, 1500, 1500, 100, 200, 200};
   auto const result   = cudf::round(input, -2, cudf::rounding_method::HALF_UP);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());

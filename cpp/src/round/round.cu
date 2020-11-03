@@ -27,8 +27,8 @@
 #include <type_traits>
 
 namespace cudf {
-
 namespace detail {
+namespace {  // anonymous
 
 float __device__ generic_round(float f) { return roundf(f); }
 double __device__ generic_round(double d) { return ::round(d); }
@@ -54,15 +54,16 @@ T __device__ generic_abs(T value)
 template <typename T, typename std::enable_if_t<std::is_signed<T>::value>* = nullptr>
 bool __device__ is_negative(T value)
 {
-  return value >= 0;
+  return value < 0;
 }
 
 // this is needed to suppress warning: pointless comparison of unsigned integer with zero
 template <typename T, typename std::enable_if_t<not std::is_signed<T>::value>* = nullptr>
 bool __device__ is_negative(T value)
 {
-  return true;
+  return false;
 }
+}  // anonymous namespace
 
 struct round_fn {
   template <typename T, typename... Args>
@@ -79,7 +80,13 @@ struct round_fn {
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr)
   {
-    auto result   = cudf::make_fixed_width_column(input.type(), input.size());
+    auto result = cudf::make_fixed_width_column(input.type(),  //
+                                                input.size(),
+                                                copy_bitmask(input, stream, mr),
+                                                input.null_count(),
+                                                stream,
+                                                mr);
+
     auto out_view = result->mutable_view();
     T const n     = std::pow(10, std::abs(decimal_places));
 
@@ -147,7 +154,12 @@ struct round_fn {
     // integers by definition have no fractional part, so result of "rounding" is a no-op
     if (decimal_places >= 0) return std::make_unique<cudf::column>(input, stream, mr);
 
-    auto result = cudf::make_fixed_width_column(input.type(), input.size());
+    auto result = cudf::make_fixed_width_column(input.type(),  //
+                                                input.size(),
+                                                copy_bitmask(input, stream, mr),
+                                                input.null_count(),
+                                                stream,
+                                                mr);
 
     auto out_view = result->mutable_view();
     auto const n  = static_cast<T>(std::pow(10, -decimal_places));
@@ -157,8 +169,8 @@ struct round_fn {
                       input.end<T>(),
                       out_view.begin<T>(),
                       [n] __device__(T e) -> T {
-                        auto const down = (e / n) * n;
-                        auto const sign = is_negative(e) ? 1 : -1;
+                        auto const down = (e / n) * n;  // result from rounding down
+                        auto const sign = is_negative(e) ? -1 : 1;
                         return down + sign * (generic_abs(e - down) >= n / 2 ? n : 0);
                       });
 
