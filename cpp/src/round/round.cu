@@ -52,16 +52,16 @@ T __device__ generic_abs(T value)
 }
 
 template <typename T, typename std::enable_if_t<std::is_signed<T>::value>* = nullptr>
-bool __device__ is_negative(T value)
+int16_t __device__ generate_sign(T value)
 {
-  return value < 0;
+  return value > 0 ? 1 : value < 0 ? -1 : 0;
 }
 
 // this is needed to suppress warning: pointless comparison of unsigned integer with zero
 template <typename T, typename std::enable_if_t<not std::is_signed<T>::value>* = nullptr>
-bool __device__ is_negative(T)
+int16_t __device__ generate_sign(T value)
 {
-  return false;
+  return value > 0 ? 1 : 0;
 }
 
 template <typename T>
@@ -113,7 +113,7 @@ struct half_up_negative {
   __device__ U operator()(U e)
   {
     auto const down = (e / n) * n;  // result from rounding down
-    auto const sign = is_negative(e) ? -1 : 1;
+    auto const sign = generate_sign(e);
     return down + sign * (generic_abs(e - down) >= n / 2 ? n : 0);
   }
 };
@@ -168,7 +168,7 @@ struct half_even_negative {
   {
     auto const down_over_n = e / n;            // use this to determine HALF_EVEN case
     auto const down        = down_over_n * n;  // result from rounding down
-    auto const sign        = is_negative(e) ? -1 : 1;
+    auto const sign        = generate_sign(e);
     auto const diff        = generic_abs(e - down);
     auto const adjustment  = (diff > n / 2) or (diff == n / 2 && down_over_n % 2 == 1) ? n : 0;
     return down + sign * adjustment;
