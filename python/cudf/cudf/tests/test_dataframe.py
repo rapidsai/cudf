@@ -7784,12 +7784,16 @@ def test_dataframe_error_equality(df1, df2, op):
         {"a": ["sum", "min"], "b": "min", "c": ["max"]},
     ],
 )
-#@pytest.mark.parametrize("axis",[0,1])
+
 def test_agg_for_dataframes(data, aggs):
     pdf = pd.DataFrame(data)
     gdf = gd.DataFrame(data)
 
-    expect = pdf.agg(aggs)
-    got = gdf.agg(aggs)
+    if aggs == {"a": np.sum, "b": np.min, "c": np.max}:
+        with pytest.raises(NotImplementedError):
+            got = gdf.agg(aggs)
+    else:
+        expect = pdf.agg(aggs)
+        got = gdf.agg(aggs)
 
-    assert_eq(expect, got, check_dtype=False)
+        assert_eq(expect, got, check_dtype=False)

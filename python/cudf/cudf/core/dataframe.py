@@ -3722,28 +3722,28 @@ class DataFrame(Frame, Serializable):
             keep_index=not ignore_index,
         )
 
-    def agg(self, aggs):
+    def agg(self, aggs, axis=None):
         """ 
         Aggregate using one or more operations over the specified axis.
 
         Parameters
         ----------
-        aggs : aggstion, str, list or dict
-            aggstion to use for aggregating data. Accepted combinations are:
-                string aggstion name (ex: "sum")
-                list of aggstions  (ex: ["sum", "min", "max"])
+        aggs : str, list or dict
+            Function to use for aggregating data. Accepted combinations are:
+                string name (ex: "sum")
+                list of functions  (ex: ["sum", "min", "max"])
                 dict of axis labels specified operations per column
-                aggstion(ex: np.sum): must either work when passed a DataFrame or passed to DataFrame.apply
+                function name: must pass to DataFrame or DataFrame.apply
 
         axis : {0 or ‘index’, 1 or ‘columns’}, default 0
-            If 0 or ‘index’: apply aggstion to each column
-            If 1 or ‘columns’: apply aggstion to each row.
+            If 0 or ‘index’: apply aggregation to each column
+            If 1 or ‘columns’: apply aggregation to each row.
         
         Returns 
         -------
-        scalar : when Series.agg is called with single aggstion
-        Series : when DataFrame.agg is called with a single aggstion
-        DataFrame : when DataFrame.agg is called with several aggstions
+        scalar : when Series.agg is called with single aggregation
+        Series : when DataFrame.agg is called with a single aggrgation
+        DataFrame : when DataFrame.agg is called with several aggregations
 
         Notes
         -----
@@ -3751,14 +3751,16 @@ class DataFrame(Frame, Serializable):
           * Not supporting: *args, **kwargs
 
         """
-        
+        if axis is not None:
+            raise NotImplementedError("axis not implemented yet")
+
         dtypes = [self[col].dtype for col in self._column_names]
         common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
         df_normalized = self.astype(common_dtype)
 
         if isinstance(aggs, list):
             result = cudf.DataFrame()
-            # TODO : Could allow simultaneous pass multi-aggregation functionality as a future optimization
+            # TODO : Allow simultaneous pass for multi-aggregation as a future optimization
             for agg in aggs:
                 result[agg] = getattr(df_normalized, agg)()
 
@@ -3771,38 +3773,45 @@ class DataFrame(Frame, Serializable):
 
         elif isinstance(aggs, dict):
             cols=aggs.keys()
-            idxs=set()
-            for val in aggs.values():
-                #print(idxs, val)
-                if isinstance(val, list):
-                    idxs.update(val)
-                elif isinstance(val, str):
-                    idxs.add(val)    
-            idxs = sorted(list(idxs))
-            for agg in idxs:
-                if agg is callable:
-                    raise NotImplementedError("callable parameter is not implemented yet")
-            result = cudf.DataFrame(index=idxs, columns=cols)
-            for key in aggs.keys():
-                col = df_normalized[key]
-                col_empty =  column_empty(len(idxs), dtype=col.dtype, masked=True)
-                ans = cudf.Series(data=col_empty, index=idxs)
-                if isinstance(aggs.get(key),list):
-                    # TODO : Could allow simultaneous pass multi-aggregation functionality as a future optimization
-                    for agg in aggs.get(key):
-                        #print(agg)
-                        ans[agg] = getattr(col, agg)()
-                elif isinstance(aggs.get(key),str):
-                    ans[aggs.get(key)] = getattr(col, agg)()
-                result[key] = ans
-            return result
-
+            if any([callable(val) for val in aggs.values()]):
+                raise NotImplementedError("callable parameter is not implemented yet")
+            elif any([isinstance(val, list) for val in aggs.values()]):
+                idxs=set()
+                for val in aggs.values():
+                    if isinstance(val, list):
+                        idxs.update(val)
+                    elif isinstance(val, str):
+                        idxs.add(val)    
+                idxs = sorted(list(idxs))
+                for agg in idxs:
+                    if agg is callable:
+                        raise NotImplementedError("callable parameter is not implemented yet")
+                result = cudf.DataFrame(index=idxs, columns=cols)
+                for key in aggs.keys():
+                    col = df_normalized[key]
+                    col_empty =  column_empty(len(idxs), dtype=col.dtype, masked=True)
+                    ans = cudf.Series(data=col_empty, index=idxs)
+                    if isinstance(aggs.get(key),list):
+                        # TODO : Allow simultaneous pass for multi-aggregation as a future optimization
+                        for agg in aggs.get(key):
+                            ans[agg] = getattr(col, agg)()
+                    elif isinstance(aggs.get(key),str):
+                        ans[aggs.get(key)] = getattr(col, agg)()
+                    result[key] = ans
+            elif all([isinstance(val, str) for val in aggs.values()]):
+                result = cudf.Series(index=cols)
+                for key, value in aggs.items():
+                    col = df_normalized[key]
+                    result[key]= getattr(col, value)()
+            
+            return result 
+                
         elif callable(aggs):
-            raise NotImplementedError(
-                "callable parameter is not implemented yet"
-            )
+            raise NotImplementedError("callable parameter is not implemented yet")
+
         else:
             raise ValueError("argument must be a string or list")
+
         return result.T.sort_index(axis=1, ascending=True)
 
     def nlargest(self, n, columns, keep="first"):
