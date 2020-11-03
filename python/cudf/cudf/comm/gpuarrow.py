@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 from collections import OrderedDict
 from collections.abc import Sequence
 
@@ -142,5 +142,5 @@ def arrow_to_pandas_dtype(pa_type):
     if pa.types.is_date64(pa_type):
         return np.dtype("datetime64[ms]")
     if pa.types.is_timestamp(pa_type):
-        return np.dtype("M8[{}]".format(pa_type.unit))
+        return np.dtype(f"M8[{pa_type.unit}]")
     return np.dtype(pa_type.to_pandas_dtype())

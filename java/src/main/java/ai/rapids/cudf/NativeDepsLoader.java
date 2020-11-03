@@ -56,11 +56,11 @@ public class NativeDepsLoader {
   private static final String[][] loadOrder = new String[][]{
       new String[]{
           "nvcomp",
-          "cudf_base",
-          "cudf_comms"
+          "cudf_base"
       },
       new String[]{
           "cudf_ast",
+          "cudf_comms",
           "cudf_hash",
           "cudf_interop",
           "cudf_io",
