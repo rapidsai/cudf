@@ -42,6 +42,7 @@
 - PR #6612 Update JNI to new RMM cuda_stream_view API
 - PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
 - PR #6623 Add operator overloading to column and clean up error messages
+- PR #6644 Cover different CSV reader/writer options in benchmarks
 
 ## Bug Fixes
 
