@@ -265,7 +265,7 @@ struct column_to_strings_fn {
     // where modify() = duplicate the double quotes, if any; add 2bl quotes prefix/suffix;
     //}
     //
-    string_scalar delimiter{std::string{options_.get_inter_column_delimiter()}};
+    string_scalar delimiter{std::string{options_.get_inter_column_delimiter()}, true, stream_};
     predicate_special_chars pred{delimiter.value(stream_)};
 
     return modify_strings<probe_special_chars, modify_special_chars>(column_v, mr_, stream_, pred);

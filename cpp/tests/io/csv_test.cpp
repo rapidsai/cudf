@@ -205,7 +205,6 @@ void check_string_column(cudf::column_view const& col_lhs,
                    }
                    return need_surround ? quotes + str_repl + quotes : str_row;
                  });
-  for (auto h : h_rhs) printf("%s\n", h.c_str());
   EXPECT_TRUE(std::equal(v_lhs.begin(), v_lhs.end(), h_rhs.begin()));
 }
 
