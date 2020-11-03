@@ -339,9 +339,9 @@ extern "C" __global__ void __launch_bounds__(128)
   gpuParsePageHeader parse_page_header;
   __shared__ byte_stream_s bs_g[4];
 
-  int lane_id             = threadIdx.x & 0x1f;
-  int chunk               = (blockIdx.x << 2) + (threadIdx.x >> 5);
-  byte_stream_s *const bs = &bs_g[threadIdx.x >> 5];
+  int lane_id             = threadIdx.x % 32;
+  int chunk               = (blockIdx.x * 4) + (threadIdx.x / 32);
+  byte_stream_s *const bs = &bs_g[threadIdx.x / 32];
 
   if (chunk < num_chunks and lane_id == 0) bs->ck = chunks[chunk];
   __syncthreads();
@@ -436,9 +436,9 @@ extern "C" __global__ void __launch_bounds__(128)
 {
   __shared__ ColumnChunkDesc chunk_g[4];
 
-  int lane_id               = threadIdx.x & 0x1f;
-  int chunk                 = (blockIdx.x << 2) + (threadIdx.x >> 5);
-  ColumnChunkDesc *const ck = &chunk_g[threadIdx.x >> 5];
+  int lane_id               = threadIdx.x % 32;
+  int chunk                 = (blockIdx.x * 4) + (threadIdx.x / 32);
+  ColumnChunkDesc *const ck = &chunk_g[threadIdx.x / 32];
   if (chunk < num_chunks and lane_id == 0) *ck = chunks[chunk];
   __syncthreads();
 

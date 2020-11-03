@@ -32,9 +32,9 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
 {
   __shared__ compressed_stream_s strm_g[4];
 
-  compressed_stream_s *const s = &strm_g[threadIdx.x >> 5];
-  int strm_id                  = blockIdx.x * 4 + (threadIdx.x >> 5);
-  int lane_id                  = threadIdx.x & 0x1f;
+  compressed_stream_s *const s = &strm_g[threadIdx.x / 32];
+  int strm_id                  = blockIdx.x * 4 + (threadIdx.x / 32);
+  int lane_id                  = threadIdx.x % 32;
 
   if (lane_id == 0) { s->info = strm_info[strm_id]; }
 
@@ -118,9 +118,9 @@ extern "C" __global__ void __launch_bounds__(128, 8)
 {
   __shared__ compressed_stream_s strm_g[4];
 
-  compressed_stream_s *const s = &strm_g[threadIdx.x >> 5];
-  int strm_id                  = blockIdx.x * 4 + (threadIdx.x >> 5);
-  int lane_id                  = threadIdx.x & 0x1f;
+  compressed_stream_s *const s = &strm_g[threadIdx.x / 32];
+  int strm_id                  = blockIdx.x * 4 + (threadIdx.x / 32);
+  int lane_id                  = threadIdx.x % 32;
 
   if (strm_id < num_streams && lane_id == 0) s->info = strm_info[strm_id];
 
@@ -412,8 +412,8 @@ extern "C" __global__ void __launch_bounds__(128, 8)
   if (t == 0) {
     s->chunk = chunks[chunk_id];
     if (strm_info) {
-      s->strm_info[0] = strm_info[s->chunk.strm_id[0]];
-      s->strm_info[1] = strm_info[s->chunk.strm_id[1]];
+      if (s->chunk.strm_len[0] > 0) s->strm_info[0] = strm_info[s->chunk.strm_id[0]];
+      if (s->chunk.strm_len[1] > 0) s->strm_info[1] = strm_info[s->chunk.strm_id[1]];
     }
 
     uint32_t rowgroups_in_chunk =
