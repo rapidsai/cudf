@@ -15,8 +15,6 @@
  */
 
 #include <cudf/dictionary/detail/search.hpp>
-//#include <cudf/dictionary/dictionary_column_view.hpp>
-//#include <cudf/dictionary/encode.hpp>
 #include <cudf/dictionary/search.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
