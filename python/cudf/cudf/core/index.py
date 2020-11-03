@@ -1486,22 +1486,20 @@ class RangeIndex(Index):
     """
 
     def __new__(
-        cls, start, stop=None, step=None, dtype=None, copy=False, name=None
+        cls, start, stop=None, step=1, dtype=None, copy=False, name=None
     ) -> "RangeIndex":
-
-        if step is not None:
-            raise NotImplementedError("step is not yet supported")
 
         out = Frame.__new__(cls)
         if isinstance(start, range):
             therange = start
             start = therange.start
             stop = therange.stop
+            step = therange.step
         if stop is None:
             start, stop = 0, start
         out._start = int(start)
         out._stop = int(stop)
-        out._cached_values = None
+        out._step = int(step)
         out._index = None
         out._name = name
 
@@ -1543,7 +1541,7 @@ class RangeIndex(Index):
     @cached_property
     def _values(self):
         if len(self) > 0:
-            return column.arange(self._start, self._stop, dtype=self.dtype)
+            return column.arange(self._start, self._stop, self._step, dtype=self.dtype)
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
 
@@ -1560,10 +1558,7 @@ class RangeIndex(Index):
             return False
         if not item % 1 == 0:
             return False
-        if self._start <= item < self._stop:
-            return True
-        else:
-            return False
+        return item in range(self._start, self._stop, self._step)
 
     def copy(self, name=None, deep=False, dtype=None, names=None):
         """
@@ -1591,13 +1586,13 @@ class RangeIndex(Index):
 
         name = self.name if name is None else name
 
-        _idx_new = RangeIndex(start=self._start, stop=self._stop, name=name)
+        _idx_new = RangeIndex(start=self._start, stop=self._stop, step=self._step, name=name)
 
         return _idx_new
 
     def __repr__(self):
         return (
-            f"{self.__class__.__name__}(start={self._start}, stop={self._stop}"
+            f"{self.__class__.__name__}(start={self._start}, stop={self._stop}, step={self._step}"
             + (
                 f", name={pd.io.formats.printing.default_pprint(self.name)}"
                 if self.name is not None
@@ -1607,25 +1602,18 @@ class RangeIndex(Index):
         )
 
     def __len__(self):
-        return max(0, self._stop - self._start)
+        return len(range(self._start, self._stop, self._step))
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            start, stop, step = index.indices(len(self))
-            sln = (stop - start) // step
-            sln = max(0, sln)
-            start += self._start
-            stop += self._start
-            if sln == 0:
-                return RangeIndex(0, stop=None, name=self.name)
-            elif step == 1:
-                return RangeIndex(start, stop=stop, name=self.name)
-            else:
-                return index_from_range(start, stop, step)
+            _st = self._step * index.step
+            _lo = self.__getitem__(index.start)
+            _hi = self.__getitem__(index.stop)
+            return RangeIndex(start=_lo, stop=_hi, step=_st)
 
         elif isinstance(index, Number):
+            index = self._start + index * self._step
             index = utils.normalize_index(index, len(self))
-            index += self._start
             return index
         else:
             if is_scalar(index):
@@ -1639,7 +1627,7 @@ class RangeIndex(Index):
 
     def equals(self, other):
         if isinstance(other, RangeIndex):
-            if (self._start, self._stop) == (other._start, other._stop):
+            if (self._start, self._stop, self._step) == (other._start, other._stop, other._step):
                 return True
         return super().equals(other)
 
@@ -1653,6 +1641,7 @@ class RangeIndex(Index):
         # during de-serialization
         header["index_column"]["start"] = self._start
         header["index_column"]["stop"] = self._stop
+        header["index_column"]["step"] = self._step
         frames = []
 
         header["name"] = pickle.dumps(self.name)
@@ -1667,7 +1656,8 @@ class RangeIndex(Index):
         name = pickle.loads(header["name"])
         start = h["start"]
         stop = h["stop"]
-        return RangeIndex(start=start, stop=stop, name=name)
+        step = h["step"]
+        return RangeIndex(start=start, stop=stop, step=step, name=name)
 
     @property
     def dtype(self):
@@ -1685,7 +1675,7 @@ class RangeIndex(Index):
 
     @property
     def size(self):
-        return max(0, self._stop - self._start)
+        return self.__len__()
 
     def find_label_range(self, first, last):
         """Find range that starts with `first` and ends with `last`,
@@ -1739,6 +1729,7 @@ class RangeIndex(Index):
         return pd.RangeIndex(
             start=self._start,
             stop=self._stop,
+            step=self._step,
             dtype=self.dtype,
             name=self.name,
         )
