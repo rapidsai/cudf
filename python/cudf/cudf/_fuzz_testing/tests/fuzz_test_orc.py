@@ -27,7 +27,7 @@ def orc_reader_test(input_tuple, skiprows, columns, num_rows):
     # https://github.com/rapidsai/cudf/issues/6563
     skiprows = 0
 
-    pdf, parquet_buffer = input_tuple
+    pdf, file_buffer = input_tuple
     expected_pdf = pdf[skiprows:]
     if num_rows is not None:
         expected_pdf = expected_pdf.head(num_rows)
@@ -37,9 +37,11 @@ def orc_reader_test(input_tuple, skiprows, columns, num_rows):
         expected_pdf = expected_pdf[columns]
 
     gdf = cudf.read_orc(
-        parquet_buffer, columns=columns, skiprows=skiprows, num_rows=num_rows
+        io.BytesIO(file_buffer),
+        columns=columns,
+        skiprows=skiprows,
+        num_rows=num_rows,
     )
-
     compare_dataframe(expected_pdf, gdf)
 
 
