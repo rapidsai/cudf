@@ -58,7 +58,6 @@ bool __device__ is_negative(T value)
 {
   return false;
 }
-}  // anonymous namespace
 
 struct round_fn {
   template <typename T, typename... Args>
@@ -146,6 +145,8 @@ struct round_fn {
     return result;
   }
 };
+
+}  // anonymous namespace
 
 std::unique_ptr<column> round(column_view const& input,
                               int32_t decimal_places,
