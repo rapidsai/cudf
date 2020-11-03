@@ -38,6 +38,7 @@
 - PR #6514 Initial work for decimal type in Java/JNI
 - PR #6608 Improve subword tokenizer docs
 - PR #6612 Update JNI to new RMM cuda_stream_view API
+- PR #6646 Replace `cudaStream_t` with `rmm::cuda_stream_view` (part 1)
 
 ## Bug Fixes
 
