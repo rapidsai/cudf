@@ -240,8 +240,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         empty_inner = False
         if join == "inner":
             # don't filter out empty df's
-            objs = old_objs
-            if any(obj.empty for obj in objs):
+            if any(obj.empty for obj in old_objs):
                 empty_inner = True
 
         objs, match_index = _align_objs(objs, how=join)
@@ -270,22 +269,14 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             df.columns = result_columns.unique()
         if empty_inner:
             if join == "inner":
-                df.index = cudf.RangeIndex(0)
+                result = cudf.DataFrame(columns=df.columns, 
+                index=cudf.RangeIndex(0))
+                return result.astype(df.dtypes)
             else:
                 df.reset_index(drop=True, inplace=True)
-            # #     return df
-            #     df.index = o.index
-            # if join is inner the index remains unchanged
-            # if not join=='inner':
-            #     df.reset_index(drop=True, inplace=True)
-            # join inner always produces sorted index
-            return df
-        # if ignore_index and not join == "inner":
-        #     df.index = cudf.RangeIndex(max(len(obj) for obj in objs))
-        #     return df
+                return df
         elif ignore_index:
             df.index = o.index
-            return df.sort_index()
         elif not match_index:
             return df.sort_index()
         else:
