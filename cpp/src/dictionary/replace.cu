@@ -173,7 +173,7 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
   // first add the replacment to the keys so only the indices need to be processed
   auto const default_mr = rmm::mr::get_current_device_resource();
   auto input_matched    = dictionary::detail::add_keys(
-    input, make_column_from_scalar(replacement, 1, default_mr, stream)->view(), mr, stream);
+    input, make_column_from_scalar(replacement, 1, stream, default_mr)->view(), mr, stream);
   auto const input_view   = dictionary_column_view(input_matched->view());
   auto const scalar_index = get_index(input_view, replacement, default_mr, stream);
 

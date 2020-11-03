@@ -323,7 +323,7 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
       if (key.is_valid()) {
         result = dictionary::detail::add_keys(
           matched_view,
-          make_column_from_scalar(key_replace, 1, rmm::mr::get_current_device_resource(), stream)
+          make_column_from_scalar(key_replace, 1, stream, rmm::mr::get_current_device_resource())
             ->view(),
           mr,
           stream);

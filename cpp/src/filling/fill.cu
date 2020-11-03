@@ -162,7 +162,7 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
 
   // add the scalar to get the output dictionary key-set
   auto scalar_column =
-    cudf::make_column_from_scalar(value, 1, rmm::mr::get_current_device_resource(), stream);
+    cudf::make_column_from_scalar(value, 1, stream, rmm::mr::get_current_device_resource());
   auto target_matched =
     cudf::dictionary::detail::add_keys(target, scalar_column->view(), mr, stream);
   cudf::column_view const target_indices =

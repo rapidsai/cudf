@@ -177,7 +177,7 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
   {
     auto dict_target = dictionary::detail::add_keys(
       dictionary_column_view(target),
-      make_column_from_scalar(source.get(), 1, rmm::mr::get_current_device_resource(), stream)
+      make_column_from_scalar(source.get(), 1, stream, rmm::mr::get_current_device_resource())
         ->view(),
       mr,
       stream);
