@@ -1244,11 +1244,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   static long binaryOp(ColumnVector lhs, ColumnVector rhs, BinaryOp op, DType outputType) {
-    return ColumnView.binaryOp(lhs, rhs, op, outputType);
+    return ColumnView.binaryOp(lhs.columnView, rhs.columnView, op, outputType);
   }
 
   static long binaryOp(ColumnVector lhs, Scalar rhs, BinaryOp op, DType outputType) {
-    return ColumnView.binaryOp(lhs, rhs, op, outputType);
+    return ColumnView.binaryOp(lhs.columnView, rhs, op, outputType);
   }
 
   /////////////////////////////////////////////////////////////////////////////

@@ -188,7 +188,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
         }
         HostMemoryBuffer hvalid = this.offHeap.valid;
         if (hvalid != null) {
-          long validLen = ColumnVector.getNativeValidPointerSize((int) rows);
+          long validLen = ColumnView.getNativeValidPointerSize((int) rows);
           valid = DeviceMemoryBuffer.allocate(validLen);
           valid.copyFromHostBuffer(hvalid, 0, validLen);
         }
@@ -794,10 +794,10 @@ public final class HostColumnVector extends HostColumnVectorCore {
       }
       if (hasNull || nullCount > 0) {
         if (valid == null) {
-          long targetValidSize = ColumnVector.getNativeValidPointerSize((int)estimatedRows);
+          long targetValidSize = ColumnView.getNativeValidPointerSize((int)estimatedRows);
           valid = HostMemoryBuffer.allocate(targetValidSize);
           valid.setMemory(0, targetValidSize, (byte) 0xFF);
-        } else if (valid.length < ColumnVector.getNativeValidPointerSize((int)rows)) {
+        } else if (valid.length < ColumnView.getNativeValidPointerSize((int)rows)) {
           long newValidLen = valid.length * 2;
           HostMemoryBuffer newValid = HostMemoryBuffer.allocate(newValidLen);
           newValid.setMemory(0, newValidLen, (byte) 0xFF);
@@ -1454,7 +1454,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     private void allocateBitmaskAndSetDefaultValues() {
-      long bitmaskSize = ColumnVector.getNativeValidPointerSize((int) rows);
+      long bitmaskSize = ColumnView.getNativeValidPointerSize((int) rows);
       valid = HostMemoryBuffer.allocate(bitmaskSize);
       valid.setMemory(0, bitmaskSize, (byte) 0xFF);
     }
