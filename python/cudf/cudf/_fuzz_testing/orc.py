@@ -50,7 +50,7 @@ class OrcReader(IOFuzz):
         else:
             dtypes_list = list(
                 cudf.utils.dtypes.ALL_TYPES
-                - {"category", "str"}
+                - {"category"}
                 # Following dtypes are not supported by orc
                 # https://orc.apache.org/specification/ORCv0/
                 - cudf.utils.dtypes.TIMEDELTA_TYPES
