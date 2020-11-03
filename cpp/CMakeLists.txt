@@ -588,6 +588,7 @@ set(
         "${CMAKE_SOURCE_DIR}/src/lists"
         "${CMAKE_SOURCE_DIR}/src/quantiles"
         "${CMAKE_SOURCE_DIR}/src/reshape"
+        "${CMAKE_SOURCE_DIR}/src/round"
         "${CMAKE_SOURCE_DIR}/src/scalar"
         "${CMAKE_SOURCE_DIR}/src/search"
         "${CMAKE_SOURCE_DIR}/src/sort"
