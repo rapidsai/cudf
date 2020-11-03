@@ -230,7 +230,7 @@ struct round_type_dispatcher {
   }
 };
 
-};  // anonymous namespace
+}  // anonymous namespace
 
 std::unique_ptr<column> round(column_view const& input,
                               int32_t decimal_places,
