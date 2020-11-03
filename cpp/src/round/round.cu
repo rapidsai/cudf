@@ -64,7 +64,142 @@ bool __device__ is_negative(T)
   return false;
 }
 
-struct round_fn {
+template <typename T>
+struct HalfUpZero {
+  T n;  // unused in the decimal_places = 0 case
+  template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
+  __device__ U operator()(U e)
+  {
+    return generic_round(e);
+  }
+
+  template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
+  __device__ U operator()(U e)
+  {
+    assert(false);  // Should never get here. Just for compilation
+    return U{};
+  }
+};
+
+template <typename T>
+struct HalfUpPositive {
+  T n;
+  template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
+  __device__ U operator()(U e)
+  {
+    T integer_part;
+    T const fractional_part = generic_modf(e, &integer_part);
+    return integer_part + generic_round(fractional_part * n) / n;
+  }
+
+  template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
+  __device__ U operator()(U e)
+  {
+    assert(false);  // Should never get here. Just for compilation
+    return U{};
+  }
+};
+
+template <typename T>
+struct HalfUpNegative {
+  T n;
+  template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
+  __device__ U operator()(U e)
+  {
+    return generic_round(e / n) * n;
+  }
+
+  template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
+  __device__ U operator()(U e)
+  {
+    auto const down = (e / n) * n;  // result from rounding down
+    auto const sign = is_negative(e) ? -1 : 1;
+    return down + sign * (generic_abs(e - down) >= n / 2 ? n : 0);
+  }
+};
+
+template <typename T>
+struct HalfEvenZero {
+  T n;  // unused in the decimal_places = 0 case
+  template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
+  __device__ U operator()(U e)
+  {
+    return generic_round_half_even(e);
+  }
+
+  template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
+  __device__ U operator()(U e)
+  {
+    assert(false);  // Should never get here. Just for compilation
+    return U{};
+  }
+};
+
+template <typename T>
+struct HalfEvenPositive {
+  T n;
+  template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
+  __device__ U operator()(U e)
+  {
+    T integer_part;
+    T const fractional_part = generic_modf(e, &integer_part);
+    return integer_part + generic_round_half_even(fractional_part * n) / n;
+  }
+
+  template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
+  __device__ U operator()(U e)
+  {
+    assert(false);  // Should never get here. Just for compilation
+    return U{};
+  }
+};
+
+template <typename T>
+struct HalfEvenNegative {
+  T n;
+  template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
+  __device__ U operator()(U e)
+  {
+    return generic_round_half_even(e / n) * n;
+  }
+
+  template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
+  __device__ U operator()(U e)
+  {
+    assert(false);  // TODO support
+    return U{};
+  }
+};
+
+template <typename T, typename RoundFunctor>
+std::unique_ptr<column> round_with(column_view const& input,
+                                   int32_t decimal_places,
+                                   cudaStream_t stream,
+                                   rmm::mr::device_memory_resource* mr)
+{
+  if (decimal_places >= 0 && std::is_integral<T>::value)
+    return std::make_unique<cudf::column>(input, stream, mr);
+
+  auto result = cudf::make_fixed_width_column(input.type(),  //
+                                              input.size(),
+                                              copy_bitmask(input, stream, mr),
+                                              input.null_count(),
+                                              stream,
+                                              mr);
+
+  auto out_view = result->mutable_view();
+  T const n     = std::pow(10, std::abs(decimal_places));
+
+  thrust::transform(rmm::exec_policy(stream)->on(stream),
+                    input.begin<T>(),
+                    input.end<T>(),
+                    out_view.begin<T>(),
+                    RoundFunctor{n});
+
+  return result;
+}
+
+struct round_type_dispatcher {
   template <typename T, typename... Args>
   std::enable_if_t<not cudf::is_numeric<T>(), std::unique_ptr<column>> operator()(Args&&... args)
   {
@@ -72,112 +207,30 @@ struct round_fn {
   }
 
   template <typename T>
-  std::enable_if_t<cudf::is_floating_point<T>(), std::unique_ptr<column>> operator()(
+  std::enable_if_t<cudf::is_numeric<T>(), std::unique_ptr<column>> operator()(
     column_view const& input,
     int32_t decimal_places,
     cudf::rounding_method method,
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr)
   {
-    auto result = cudf::make_fixed_width_column(input.type(),  //
-                                                input.size(),
-                                                copy_bitmask(input, stream, mr),
-                                                input.null_count(),
-                                                stream,
-                                                mr);
-
-    auto out_view = result->mutable_view();
-    T const n     = std::pow(10, std::abs(decimal_places));
-
-    if (method == rounding_method::HALF_UP) {
-      if (decimal_places == 0)
-        thrust::transform(rmm::exec_policy(stream)->on(stream),
-                          input.begin<T>(),
-                          input.end<T>(),
-                          out_view.begin<T>(),
-                          [] __device__(T e) -> T { return generic_round(e); });
-      else if (decimal_places > 0)
-        thrust::transform(rmm::exec_policy(stream)->on(stream),
-                          input.begin<T>(),
-                          input.end<T>(),
-                          out_view.begin<T>(),
-                          [n] __device__(T e) -> T {
-                            T integer_part;
-                            T const fractional_part = generic_modf(e, &integer_part);
-                            return integer_part + generic_round(fractional_part * n) / n;
-                          });
-      else  // decimal_places < 0
-        thrust::transform(rmm::exec_policy(stream)->on(stream),
-                          input.begin<T>(),
-                          input.end<T>(),
-                          out_view.begin<T>(),
-                          [n] __device__(T e) -> T { return generic_round(e / n) * n; });
-    } else {
-      CUDF_EXPECTS(method == rounding_method::HALF_EVEN, "Unexpected rounding method.");
-
-      if (decimal_places == 0)
-        thrust::transform(rmm::exec_policy(stream)->on(stream),
-                          input.begin<T>(),
-                          input.end<T>(),
-                          out_view.begin<T>(),
-                          [] __device__(T e) -> T { return generic_round_half_even(e); });
-      else if (decimal_places > 0)
-        thrust::transform(rmm::exec_policy(stream)->on(stream),
-                          input.begin<T>(),
-                          input.end<T>(),
-                          out_view.begin<T>(),
-                          [n] __device__(T e) -> T {
-                            T integer_part;
-                            T const fractional_part = generic_modf(e, &integer_part);
-                            return integer_part + generic_round_half_even(fractional_part * n) / n;
-                          });
-      else  // decimal_places < 0
-        thrust::transform(rmm::exec_policy(stream)->on(stream),
-                          input.begin<T>(),
-                          input.end<T>(),
-                          out_view.begin<T>(),
-                          [n] __device__(T e) -> T { return generic_round_half_even(e / n) * n; });
+    // clang-format off
+    switch (method) {
+      case cudf::rounding_method::HALF_UP:
+        if      (decimal_places == 0) return round_with<T, HalfUpZero    <T>>(input, decimal_places, stream, mr);
+        else if (decimal_places  > 0) return round_with<T, HalfUpPositive<T>>(input, decimal_places, stream, mr);
+        else                          return round_with<T, HalfUpNegative<T>>(input, decimal_places, stream, mr);
+      case cudf::rounding_method::HALF_EVEN:
+        if      (decimal_places == 0) return round_with<T, HalfEvenZero    <T>>(input, decimal_places, stream, mr);
+        else if (decimal_places >  0) return round_with<T, HalfEvenPositive<T>>(input, decimal_places, stream, mr);
+        else                          return round_with<T, HalfEvenNegative<T>>(input, decimal_places, stream, mr);
+      default: CUDF_FAIL("Undefined rounding method");
     }
-    return result;
-  }
-
-  template <typename T>
-  std::enable_if_t<std::is_integral<T>::value, std::unique_ptr<column>> operator()(
-    column_view const& input,
-    int32_t decimal_places,
-    cudf::rounding_method method,
-    cudaStream_t stream,
-    rmm::mr::device_memory_resource* mr)
-  {
-    // only need to handle the case where decimal_places is < zero
-    // integers by definition have no fractional part, so result of "rounding" is a no-op
-    if (decimal_places >= 0) return std::make_unique<cudf::column>(input, stream, mr);
-
-    auto result = cudf::make_fixed_width_column(input.type(),  //
-                                                input.size(),
-                                                copy_bitmask(input, stream, mr),
-                                                input.null_count(),
-                                                stream,
-                                                mr);
-
-    auto out_view = result->mutable_view();
-    auto const n  = static_cast<T>(std::pow(10, -decimal_places));
-
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
-                      input.begin<T>(),
-                      input.end<T>(),
-                      out_view.begin<T>(),
-                      [n] __device__(T e) -> T {
-                        auto const down = (e / n) * n;  // result from rounding down
-                        auto const sign = is_negative(e) ? -1 : 1;
-                        return down + sign * (generic_abs(e - down) >= n / 2 ? n : 0);
-                      });
-
-    return result;
+    // clang-format on
   }
 };
 
-}  // anonymous namespace
+};  // anonymous namespace
 
 std::unique_ptr<column> round(column_view const& input,
                               int32_t decimal_places,
@@ -190,7 +243,8 @@ std::unique_ptr<column> round(column_view const& input,
   // TODO when fixed_point supported, have to adjust type
   if (input.size() == 0) return empty_like(input);
 
-  return type_dispatcher(input.type(), round_fn{}, input, decimal_places, method, stream, mr);
+  return type_dispatcher(
+    input.type(), round_type_dispatcher{}, input, decimal_places, method, stream, mr);
 }
 
 }  // namespace detail
