@@ -74,6 +74,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/repeat.hpp
     - test -f $PREFIX/include/cudf/detail/replace.hpp
     - test -f $PREFIX/include/cudf/detail/reshape.hpp
+    - test -f $PREFIX/include/cudf/detail/round.hpp
     - test -f $PREFIX/include/cudf/detail/scatter.hpp
     - test -f $PREFIX/include/cudf/detail/search.hpp
     - test -f $PREFIX/include/cudf/detail/sequence.hpp
@@ -127,6 +128,7 @@ test:
     - test -f $PREFIX/include/cudf/replace.hpp
     - test -f $PREFIX/include/cudf/reshape.hpp
     - test -f $PREFIX/include/cudf/rolling.hpp
+    - test -f $PREFIX/include/cudf/round.hpp
     - test -f $PREFIX/include/cudf/scalar/scalar_factories.hpp
     - test -f $PREFIX/include/cudf/scalar/scalar.hpp
     - test -f $PREFIX/include/cudf/search.hpp
