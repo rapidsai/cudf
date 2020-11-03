@@ -528,7 +528,7 @@ void reader::impl::set_data_types(cudaStream_t stream)
         return type_id::TIMESTAMP_MILLISECONDS;
       } else if (cinfo.float_count > 0 || (int_count_total > 0 && cinfo.null_count > 0)) {
         return type_id::FLOAT64;
-      } else if (cinfo.big_int_count == 0) {
+      } else if (cinfo.big_int_count == 0 && int_count_total != 0) {
         return type_id::INT64;
       } else if (cinfo.big_int_count != 0 && cinfo.negative_small_int_count != 0) {
         return type_id::STRING;
