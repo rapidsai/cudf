@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #6460 Add is_timestamp format check API
+- PR #6562 Implement `cudf::round` floating point and integer types (`HALF_UP`)
 - PR #6528 Enable `fixed_point` binary operations
 - PR #6460 Add is_timestamp format check API
 - PR #6568 Add function to create hashed vocabulary file from raw vocabulary
