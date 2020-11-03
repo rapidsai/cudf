@@ -1606,14 +1606,17 @@ class RangeIndex(Index):
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            _st = self._step * index.step
-            _lo = self.__getitem__(index.start)
-            _hi = self.__getitem__(index.stop)
-            return RangeIndex(start=_lo, stop=_hi, step=_st)
+            st = self._step * index.step
+            ilo = utils.normalize_index(index.start, len(self), doraise=False)
+            ihi = utils.normalize_index(index.start, len(self), doraise=False)
+
+            lo = self._start + ilo * st
+            hi = self._start + ihi * st
+            return RangeIndex(start=lo, stop=hi, step=st)
 
         elif isinstance(index, Number):
-            index = self._start + index * self._step
             index = utils.normalize_index(index, len(self))
+            index = self._start + index * self._step
             return index
         else:
             if is_scalar(index):
@@ -1669,17 +1672,33 @@ class RangeIndex(Index):
     @property
     def is_contiguous(self):
         """
-        Returns if the index is contiguous. `True` incase of RangeIndex.
+        Returns if the index is contiguous.
         """
-        return True
+        return self._step == 1
 
     @property
     def size(self):
         return self.__len__()
 
-    def find_label_range(self, first, last):
-        """Find range that starts with `first` and ends with `last`,
-        inclusively.
+    def _pos_from_val(self, n):
+        i = (n - self._start) / self._step
+        if (not i % 1 == 0) or i < 0 or i >= len(self):
+            raise ValueError(f"{n} is not in the RangeIndex.")
+        return i
+
+    def find_label_range(self, first=None, last=None):
+        """Find subrange in the ``RangeIndex``, marked by their positions, that
+        starts with ``first`` and ends with ``last``.
+        The range returned is assumed to be monotonically increasing. In cases
+        where there is no such range that suffice the constraint, an exception
+        will be raised.
+
+        Parameters
+        ----------
+        first, last : int, optional, Default None
+            The "start" and "stop" values of the subrange. Must be valid values
+            in the ``RangeIndex``. If None, will use ``self._start`` for first,
+            ``self._stop`` for last.
 
         Returns
         -------
@@ -1687,24 +1706,19 @@ class RangeIndex(Index):
             The starting index and the ending index.
             The `last` value occurs at ``end - 1`` position.
         """
-        # clip first to range
-        if first is None or first < self._start:
-            begin = self._start
-        elif first < self._stop:
-            begin = first
-        else:
-            begin = self._stop
-        # clip last to range
-        if last is None:
-            end = self._stop
-        elif last < self._start:
-            end = begin
-        elif last < self._stop:
-            end = last + 1
-        else:
-            end = self._stop
-        # shift to index
-        return begin - self._start, end - self._start
+
+        first = self._start if first is None else first
+        last = self._stop if last is None else last
+
+        if not np.issubdtype(type(first), np.int):
+            raise ValueError(f"{first} should be an int.")
+        if not np.issubdtype(type(last), np.int):
+            raise ValueError(f"{last} should be an int.")
+        
+        begin = self._pos_from_val(first)
+        end = self._pos_from_val(last)
+
+        return begin, end + 1
 
     @copy_docstring(_to_frame)
     def to_frame(self, index=True, name=None):
@@ -1758,15 +1772,34 @@ class RangeIndex(Index):
         return self._start >= self._stop
 
     def get_slice_bound(self, label, side, kind):
+        """
+        Calculate slice bound that corresponds to given label.
+        Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
+        of given label.
+
+        Parameters
+        ----------
+        label : int
+            A valid value in the ``RangeIndex``
+        side : {'left', 'right'}
+        kind : Unused
+            To keep consistency with other index types.
+
+        Returns
+        -------
+        int
+            Index of label.
+        """
         if label < self._start:
             return 0
         elif label >= self._stop:
             return len(self)
         else:
+            pos = self._pos_from_val(label)
             if side == "left":
-                return label - self._start
+                return pos
             elif side == "right":
-                return (label - self._start) + 1
+                return pos + 1
 
     @property
     def __cuda_array_interface__(self):
