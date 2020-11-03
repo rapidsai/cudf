@@ -823,7 +823,7 @@ class Series(Frame, Serializable):
 
         Used for substituting each value in a Series with another value,
         that may be derived from a function, a ``dict`` or
-        a ``Series``.
+        a :class:`Series`.
 
         Parameters
         ----------
@@ -888,7 +888,7 @@ class Series(Frame, Serializable):
             result.index = self.index
         elif isinstance(arg, cudf.Series):
             if not arg.index.is_unique:
-                raise ValueError(
+                raise InvalidIndexError(
                     """Reindexing only valid with
                 uniquely valued Index objects
                 """

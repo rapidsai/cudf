@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from cudf import Series
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 
 def test_series_map_basic():
@@ -76,9 +76,10 @@ def test_series_map_callable_numeric_random_dtype_change():
 
 
 def test_series_map_non_unique_index():
-    # Test for changing the out_dtype using applymap
-
-    gd2 = cudf.Series([1, 2, 3, 4, np.nan])
-
-    with pytest.raises(ValueError):
-        assert gd2.map(cudf.Series(["a", "b", "c"], index=[1, 1, 2]))
+    # test for checking correct error is produced
+    assert_exceptions_equal(
+        lfunc=pd.Series,
+        rfunc=cudf.Series,
+        lfunc_args_and_kwargs=([1, 1, 2], {"objs": ["a", "b", "c"]}),
+        rfunc_args_and_kwargs=([1, 1, 2], {"objs": ["a", "b", "c"]}),
+    )
