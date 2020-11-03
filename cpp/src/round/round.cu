@@ -166,8 +166,12 @@ struct HalfEvenNegative {
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
   __device__ U operator()(U e)
   {
-    assert(false);  // TODO support
-    return U{};
+    auto const down_over_n = e / n;            // use this to determine HALF_EVEN case
+    auto const down        = down_over_n * n;  // result from rounding down
+    auto const sign        = is_negative(e) ? -1 : 1;
+    auto const diff        = generic_abs(e - down);
+    auto const adjustment  = (diff > n / 2) or (diff == n / 2 && down_over_n % 2 == 1) ? n : 0;
+    return down + sign * adjustment;
   }
 };
 
