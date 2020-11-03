@@ -33,6 +33,7 @@
 
 #include <memory>
 #include <utility>
+#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace groupby {
@@ -137,7 +138,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto grouped_keys = helper().sorted_keys(mr, 0);
+  auto grouped_keys = helper().sorted_keys(rmm::cuda_stream_default, mr);
 
   auto group_offsets = helper().group_offsets(0);
   std::vector<size_type> group_offsets_vector(group_offsets.size());

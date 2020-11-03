@@ -434,7 +434,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort
 
   auto results = detail::extract_results(requests, cache);
 
-  return std::make_pair(helper().unique_keys(mr, stream), std::move(results));
+  return std::make_pair(helper().unique_keys(stream, mr), std::move(results));
 }
 }  // namespace groupby
 }  // namespace cudf
