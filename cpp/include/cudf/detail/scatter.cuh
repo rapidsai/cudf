@@ -25,6 +25,7 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/strings/detail/scatter.cuh>
+#include <cudf/lists/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/traits.hpp>
 
@@ -115,6 +116,19 @@ struct column_scatterer_impl<string_view, MapIterator> {
     auto const begin         = source_vector.begin();
     auto const end           = begin + std::distance(scatter_map_begin, scatter_map_end);
     return strings::detail::scatter(begin, end, scatter_map_begin, target, mr, stream);
+  }
+};
+
+template <typename MapIterator>
+struct column_scatterer_impl<list_view, MapIterator> {
+  std::unique_ptr<column> operator()(column_view const& source,
+                                     MapIterator scatter_map_begin,
+                                     MapIterator scatter_map_end,
+                                     column_view const& target,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream) const
+  {
+    return cudf::lists::detail::scatter(source, scatter_map_begin, scatter_map_end, target, mr, stream);
   }
 };
 
