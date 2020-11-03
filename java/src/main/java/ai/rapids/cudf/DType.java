@@ -93,7 +93,7 @@ public final class DType {
 
     public int getNativeId() { return nativeId; }
 
-    public static boolean isDecimalType(DTypeEnum dt) { return DType.DECIMALS.contains(dt); }
+    public boolean isDecimalType() { return DType.DECIMALS.contains(this); }
   }
 
   final DTypeEnum typeId;
@@ -370,7 +370,7 @@ public final class DType {
    *       DType.DECIMAL32,
    *       DType.DECIMAL64
    */
-  public boolean isDecimalType() { return DTypeEnum.isDecimalType(this.typeId); }
+  public boolean isDecimalType() { return this.typeId.isDecimalType(); }
 
   /**
    * Returns true for duration types

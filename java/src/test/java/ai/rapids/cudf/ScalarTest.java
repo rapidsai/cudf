@@ -49,7 +49,7 @@ public class ScalarTest extends CudfTestBase {
   public void testNull() {
     for (DType.DTypeEnum dataType : DType.DTypeEnum.values()) {
       DType type;
-      if (DType.DTypeEnum.isDecimalType(dataType)) {
+      if (dataType.isDecimalType()) {
         type = DType.create(dataType, -3);
       } else {
         type = DType.create(dataType);

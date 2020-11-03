@@ -469,46 +469,28 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   /**
-   * Create a new decimal vector from double floats with scale and decimal type.
-   * All doubles will be rescaled according to [[scale]]. Then the integral part of rescaled double will be put to ColumnVector.
+   * Create a new decimal vector from double floats with specific DecimalType and RoundingMode.
+   * All doubles will be rescaled according to [[scale]] and cast an integral value.
    * If any overflow occurs in extracting integral part, an IllegalArgumentException will be thrown.
+   * This API is inefficient because of slow double -> decimal conversion, so it is mainly for testing.
    * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
    */
-  public static HostColumnVector decimalFromDoubles(DType.DTypeEnum type, int scale, double... values) {
-    long ratio = (long) Math.pow(10, Math.abs(scale));
-    Buffer buffer;
-    if (type == DType.DTypeEnum.DECIMAL32) {
-      buffer = IntBuffer.allocate(values.length);
-    } else {
-      buffer = LongBuffer.allocate(values.length);
-    }
-    for (double v : values) {
-      double scaledDouble;
-      if (scale > 0) {
-        scaledDouble = v / ratio;
-      } else {
-        scaledDouble = v * ratio;
+  public static HostColumnVector decimalFromDoubles(DType type, RoundingMode mode, double... values) {
+    assert type.isDecimalType();
+    if (type.typeId == DType.DTypeEnum.DECIMAL64) {
+      long[] data = new long[values.length];
+      for (int i = 0; i < values.length; i++) {
+        BigDecimal dec = BigDecimal.valueOf(values[i]).setScale(-type.getScale(), mode);
+        data[i] = dec.unscaledValue().longValueExact();
       }
-      if (type == DType.DTypeEnum.DECIMAL32) {
-        if (scaledDouble > 999999999 || scaledDouble < -99999999) {
-          throw new IllegalArgumentException(
-              "Value(" + v + ") with scale(" + scale + ") overflows the capacity of DTypeEnum.DECIMAL32");
-        }
-        ((IntBuffer)buffer).put((int) scaledDouble);
-      } else {
-        if (scaledDouble > Long.MAX_VALUE || scaledDouble < Long.MIN_VALUE) {
-          throw new IllegalArgumentException(
-              "Value(" + v + ") with scale(" + scale + ") overflows the capacity of DTypeEnum.DECIMAL64");
-        }
-        ((LongBuffer)buffer).put((long) scaledDouble);
-      }
-    }
-    if (type == DType.DTypeEnum.DECIMAL32) {
-      int[] unscaledValues = ((IntBuffer)buffer).array();
-      return build(DType.create(type, scale), values.length, (b) -> b.appendUnscaledDecimalArray(unscaledValues));
+      return build(type, values.length, (b) -> b.appendUnscaledDecimalArray(data));
     } else {
-      long[] unscaledValues = ((LongBuffer)buffer).array();
-      return build(DType.create(type, scale), values.length, (b) -> b.appendUnscaledDecimalArray(unscaledValues));
+      int[] data = new int[values.length];
+      for (int i = 0; i < values.length; i++) {
+        BigDecimal dec = BigDecimal.valueOf(values[i]).setScale(-type.getScale(), mode);
+        data[i] = dec.unscaledValue().intValueExact();
+      }
+      return build(type, values.length, (b) -> b.appendUnscaledDecimalArray(data));
     }
   }
 
@@ -1084,12 +1066,13 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public final ColumnBuilder append(BigDecimal value) {
       growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type.isDecimalType();
-      assert value.scale() == -type.getScale();
       assert currentIndex < rows;
+      // Rescale input decimal with UNNECESSARY policy, which accepts no precision loss.
+      BigInteger unscaledVal = value.setScale(-type.getScale(), RoundingMode.UNNECESSARY).unscaledValue();
       if (type.typeId == DType.DTypeEnum.DECIMAL32) {
-        data.setInt(currentIndex * type.getSizeInBytes(), value.unscaledValue().intValueExact());
+        data.setInt(currentIndex * type.getSizeInBytes(), unscaledVal.intValueExact());
       } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
-        data.setLong(currentIndex * type.getSizeInBytes(), value.unscaledValue().longValueExact());
+        data.setLong(currentIndex * type.getSizeInBytes(), unscaledVal.longValueExact());
       } else {
         throw new IllegalStateException(type + " is not a supported decimal type.");
       }
@@ -1321,11 +1304,11 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public final Builder appendUnscaledDecimal(int value) {
-      assert type.isDecimalType();
-      assert currentIndex < rows;
       if (type.typeId == DType.DTypeEnum.DECIMAL64) {
         return appendUnscaledDecimal((long) value);
       }
+      assert type.isDecimalType();
+      assert currentIndex < rows;
       data.setInt(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
       return this;

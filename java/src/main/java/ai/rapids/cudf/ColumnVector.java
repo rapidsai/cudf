@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -3799,13 +3800,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   /**
-   * Create a new decimal vector from double floats with scale and decimal type.
+   * Create a new decimal vector from double floats with specific DecimalType and RoundingMode.
    * All doubles will be rescaled according to [[scale]]. Then the integral part of rescaled double will be put to ColumnVector.
    * If any overflow occurs in extracting integral part, an IllegalArgumentException will be thrown.
    * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
    */
-  public static ColumnVector decimalFromDoubles(DType.DTypeEnum type, int scale, double... values) {
-    try (HostColumnVector host = HostColumnVector.decimalFromDoubles(type, scale, values)) {
+  public static ColumnVector decimalFromDoubles(DType type, RoundingMode mode, double... values) {
+    try (HostColumnVector host = HostColumnVector.decimalFromDoubles(type, mode, values)) {
       return host.copyToDevice();
     }
   }

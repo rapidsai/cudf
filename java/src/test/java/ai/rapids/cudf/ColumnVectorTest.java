@@ -22,10 +22,12 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static ai.rapids.cudf.QuantileMethod.HIGHER;
@@ -36,11 +38,7 @@ import static ai.rapids.cudf.QuantileMethod.NEAREST;
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 import static ai.rapids.cudf.TableTest.assertTablesAreEqual;
 import static ai.rapids.cudf.TableTest.assertStructColumnsAreEqual;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class ColumnVectorTest extends CudfTestBase {
@@ -704,6 +702,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testFromScalarZeroRows() {
+    // magic number to invoke factory method specialized for decimal types
     int mockScale = -8;
     for (DType.DTypeEnum type : DType.DTypeEnum.values()) {
       Scalar s = null;
@@ -778,7 +777,7 @@ public class ColumnVectorTest extends CudfTestBase {
         }
 
         try (ColumnVector c = ColumnVector.fromScalar(s, 0)) {
-          if (DType.DTypeEnum.isDecimalType(type)) {
+          if (type.isDecimalType()) {
             assertEquals(DType.create(type, mockScale), c.getType());
           } else {
             assertEquals(DType.create(type), c.getType());
@@ -806,7 +805,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void testFromScalar() {
     final int rowCount = 4;
     for (DType.DTypeEnum type : DType.DTypeEnum.values()) {
-      if(DType.DTypeEnum.isDecimalType(type)) {
+      if(type.isDecimalType()) {
         continue;
       }
       Scalar s = null;
@@ -976,7 +975,8 @@ public class ColumnVectorTest extends CudfTestBase {
         continue;
       }
       DType dType;
-      if (DType.DTypeEnum.isDecimalType(type)) {
+      if (type.isDecimalType()) {
+        // magic number to invoke factory method specialized for decimal types
         dType = DType.create(type, -8);
       } else {
         dType = DType.create(type);
@@ -3097,29 +3097,27 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testHcvOfDecimals() {
-    List<BigDecimal> val1 = Arrays.asList(BigDecimal.ONE, BigDecimal.TEN);
-    List<BigDecimal> val2 = Arrays.asList(BigDecimal.ZERO);
-    List<BigDecimal> val3 = null;
-    List<BigDecimal> val4 = Arrays.asList();
-    List<BigDecimal> val5 = Arrays.asList(BigDecimal.valueOf(123), BigDecimal.valueOf(100));
-    List<BigDecimal> val6 = Arrays.asList(BigDecimal.valueOf(100000), BigDecimal.valueOf(20000));
+    List<BigDecimal>[] data = new List[6];
+    data[0] = Arrays.asList(BigDecimal.ONE, BigDecimal.TEN);
+    data[1] = Arrays.asList(BigDecimal.ZERO);
+    data[2] = null;
+    data[3] = Arrays.asList();
+    data[4] = Arrays.asList(BigDecimal.valueOf(123), BigDecimal.valueOf(1, -2));
+    data[5] = Arrays.asList(BigDecimal.valueOf(100, -3), BigDecimal.valueOf(2, -4));
     try(ColumnVector expected = ColumnVector.fromLists(
         new HostColumnVector.ListType(true,
-            new HostColumnVector.BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, 0))),
-        val1, val2, val3, val4, val5, val6);
-        HostColumnVector hostColumnVector = expected.copyToHost()) {
-      List<String> ret1 = hostColumnVector.getList(0);
-      List<String> ret2 = hostColumnVector.getList(1);
-      List<String> ret3 = hostColumnVector.getList(2);
-      List<String> ret4 = hostColumnVector.getList(3);
-      List<String> ret5 = hostColumnVector.getList(4);
-      List<String> ret6 = hostColumnVector.getList(5);
-      assertEquals(val1, ret1, "Lists don't match");
-      assertEquals(val2, ret2, "Lists don't match");
-      assertEquals(val3, ret3, "Lists don't match");
-      assertEquals(val4, ret4, "Lists don't match");
-      assertEquals(val5, ret5, "Lists don't match");
-      assertEquals(val6, ret6, "Lists don't match");
+            new HostColumnVector.BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, 0))), data);
+        HostColumnVector hcv = expected.copyToHost()) {
+      for (int i = 0; i < data.length; i++) {
+        if (data[i] == null) {
+          assertNull(hcv.getList(i));
+          continue;
+        }
+        List<BigDecimal> exp = data[i].stream()
+            .map((dec -> (dec == null) ? null : dec.setScale(0, RoundingMode.UNNECESSARY)))
+            .collect(Collectors.toList());
+        assertEquals(exp, hcv.getList(i));
+      }
     }
   }
 
