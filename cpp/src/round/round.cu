@@ -218,7 +218,7 @@ struct round_type_dispatcher {
     switch (method) {
       case cudf::rounding_method::HALF_UP:
         if      (decimal_places == 0) return round_with<T, HalfUpZero    <T>>(input, decimal_places, stream, mr);
-        else if (decimal_places  > 0) return round_with<T, HalfUpPositive<T>>(input, decimal_places, stream, mr);
+        else if (decimal_places >  0) return round_with<T, HalfUpPositive<T>>(input, decimal_places, stream, mr);
         else                          return round_with<T, HalfUpNegative<T>>(input, decimal_places, stream, mr);
       case cudf::rounding_method::HALF_EVEN:
         if      (decimal_places == 0) return round_with<T, HalfEvenZero    <T>>(input, decimal_places, stream, mr);
