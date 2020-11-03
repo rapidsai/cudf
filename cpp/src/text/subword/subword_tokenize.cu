@@ -102,25 +102,19 @@ __global__ void kernel_compute_tensor_metadata(
 
   // write metadata
   if (token_idx == 0) {
-    auto const metadata_idx = absolute_row_id * 3;  // three metadata values per output row
-    metadata[metadata_idx]  = tensor_id;
-    if (row_within_tensor == 0)
-      metadata[metadata_idx + 1] = 0;
-    else
-      metadata[metadata_idx + 1] = (max_sequence_length - stride) / 2;
-    if (last_row_of_tensor) {
-      if (n_tokens_tensor < max_sequence_length)
-        metadata[metadata_idx + 2] = (n_tokens_tensor > 0) ? (n_tokens_tensor - 1) : 0;
-      else {
-        if (!do_truncate)
-          metadata[metadata_idx + 2] =
-            (max_sequence_length - stride) + (n_tokens_tensor - max_sequence_length) % stride - 1;
-        else
-          // truncate
-          metadata[metadata_idx + 2] = (max_sequence_length - 1);
-      }
-    } else
-      metadata[metadata_idx + 2] = max_sequence_length - (max_sequence_length - stride) / 2 - 1;
+    auto const metadata_idx    = absolute_row_id * 3;  // three metadata values per output row
+    metadata[metadata_idx]     = tensor_id;
+    metadata[metadata_idx + 1] = (row_within_tensor == 0) ? 0 : (max_sequence_length - stride) / 2;
+    metadata[metadata_idx + 2] = [&] {
+      if (!last_row_of_tensor) return max_sequence_length - (max_sequence_length - stride) / 2 - 1;
+      if (n_tokens_tensor <= max_sequence_length)  // we fit, all good
+        return (n_tokens_tensor > 0) ? (n_tokens_tensor - 1) : 0;
+      if (do_truncate) return (max_sequence_length - 1);
+
+      auto const final_row_value =
+        (max_sequence_length - stride) + (n_tokens_tensor - max_sequence_length) % stride;
+      return (final_row_value > 0) ? (final_row_value - 1) : 0;
+    }();
   }
 }
 

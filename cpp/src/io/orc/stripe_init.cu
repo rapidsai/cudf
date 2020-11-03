@@ -53,7 +53,7 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
       uint32_t block_len       = SHFL0((t == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
       uint32_t is_uncompressed = block_len & 1;
       uint32_t uncompressed_size;
-      gpu_inflate_input_s *init_ctl;
+      gpu_inflate_input_s *init_ctl = nullptr;
       block_len >>= 1;
       cur += 3;
       if (block_len > block_size || cur + block_len > end) {
@@ -72,7 +72,6 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
       if (is_uncompressed) {
         if (uncompressed_size <= 32) {
           // For short blocks, copy the uncompressed data to output
-          init_ctl = 0;
           if (uncompressed &&
               max_uncompressed_size + uncompressed_size <= s->info.max_uncompressed_size &&
               t < uncompressed_size) {
@@ -82,14 +81,14 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
           init_ctl = s->info.copyctl;
           init_ctl = (init_ctl && num_uncompressed_blocks < s->info.num_uncompressed_blocks)
                        ? &init_ctl[num_uncompressed_blocks]
-                       : 0;
+                       : nullptr;
           num_uncompressed_blocks++;
         }
       } else {
         init_ctl = s->info.decctl;
         init_ctl = (init_ctl && num_compressed_blocks < s->info.num_compressed_blocks)
                      ? &init_ctl[num_compressed_blocks]
-                     : 0;
+                     : nullptr;
         num_compressed_blocks++;
       }
       if (!t && init_ctl) {
@@ -303,9 +302,10 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s *s,
                   : STORE_INDEX2;
         break;
       case STORE_INDEX2:
-        if (ci_id < CI_PRESENT) s->row_index_entry[2][ci_id] = v;
-        // Boolean columns have an extra byte to indicate the position of the bit within the byte
-        // TODO: Currently assuming rowIndexStride is a multiple of 8 and ignoring this value
+        if (ci_id < CI_PRESENT) {
+          // Boolean columns have an extra byte to indicate the position of the bit within the byte
+          s->row_index_entry[2][ci_id] = (s->chunk.type_kind == BOOLEAN) ? (v << 3) + *cur : v;
+        }
         if (ci_id == CI_PRESENT || s->chunk.type_kind == BOOLEAN) cur++;
         if (cur >= start + pos_end) return length;
         state = STORE_INDEX0;

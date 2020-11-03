@@ -307,6 +307,60 @@ class GroupBy(Serializable):
 
         return out
 
+    def pipe(self, func, *args, **kwargs):
+        """
+        Apply a function `func` with arguments to this GroupBy
+        object and return the function’s result.
+
+        Parameters
+        ----------
+        func : function
+            Function to apply to this GroupBy object or,
+            alternatively, a ``(callable, data_keyword)`` tuple where
+            ``data_keyword`` is a string indicating the keyword of
+            ``callable`` that expects the GroupBy object.
+        args : iterable, optional
+            Positional arguments passed into ``func``.
+        kwargs : mapping, optional
+            A dictionary of keyword arguments passed into ``func``.
+
+        Returns
+        -------
+        object : the return type of ``func``.
+
+        See also
+        --------
+        cudf.core.series.Series.pipe
+            Apply a function with arguments to a series.
+
+        cudf.core.dataframe.DataFrame.pipe
+            Apply a function with arguments to a dataframe.
+
+        apply
+            Apply function to each group instead of to the full GroupBy object.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'A': ['a', 'b', 'a', 'b'], 'B': [1, 2, 3, 4]})
+        >>> df
+        A  B
+        0  a  1
+        1  b  2
+        2  a  3
+        3  b  4
+
+        To get the difference between each groups maximum and minimum value
+        in one pass, you can do
+
+        >>> df.groupby('A').pipe(lambda x: x.max() - x.min())
+        B
+        A
+        a  2
+        b  2
+        """
+        return cudf.core.common.pipe(self, func, *args, **kwargs)
+
     def apply(self, function):
         """Apply a python transformation function over the grouped chunk.
 
@@ -348,7 +402,7 @@ class GroupBy(Serializable):
           6    2    6   12
         """
         if not callable(function):
-            raise TypeError("type {!r} is not callable", type(function))
+            raise TypeError(f"type {type(function)} is not callable")
         _, offsets, _, grouped_values = self._grouped()
 
         ngroups = len(offsets) - 1
@@ -498,7 +552,7 @@ class GroupBy(Serializable):
 
         """
         if not callable(function):
-            raise TypeError("type {!r} is not callable", type(function))
+            raise TypeError(f"type {type(function)} is not callable")
 
         _, offsets, _, grouped_values = self._grouped()
         kwargs.update({"chunks": offsets})

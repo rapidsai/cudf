@@ -50,7 +50,7 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
                                                cudaStream_t stream)
 {
   CUDF_EXPECTS(!keys_column.has_nulls(), "keys column must not have nulls");
-  if (keys_column.size() == 0) return make_empty_column(data_type{type_id::DICTIONARY32});
+  if (keys_column.is_empty()) return make_empty_column(data_type{type_id::DICTIONARY32});
 
   auto keys_copy = std::make_unique<column>(keys_column, stream, mr);
   auto indices_copy =

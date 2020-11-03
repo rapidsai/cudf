@@ -2,10 +2,19 @@
 
 ## New Features
 
+- PR #6528 Enable `fixed_point` binary operations
 - PR #6460 Add is_timestamp format check API
+- PR #6568 Add function to create hashed vocabulary file from raw vocabulary
+- PR #6581 Add JNI API to check if PTDS is enabled
+- PR #6592 Add `cudf.to_numeric` function
+- PR #6598 Add strings::contains API with target column parameter
+- PR #6638 Add support for `pipe` API
 
 ## Improvements
 
+- PR #6430 Add struct type support to `to_arrow` and `from_arrow`
+- PR #6384 Add CSV fuzz tests with varying function parameters
+- PR #6385 Add JSON fuzz tests with varying function parameters
 - PR #6398 Remove function constructor macros in parquet reader
 - PR #6432 Add dictionary support to `cudf::upper_bound` and `cudf::lower_bound`
 - PR #6461 Replace index type-dispatch call with indexalator in cudf::scatter
@@ -13,11 +22,32 @@
 - PR #6457 Replace index type-dispatch call with indexalator in `cudf::gather`
 - PR #6413 Replace Python NVTX package with conda-forge source
 - PR #6442 Remove deprecated `DataFrame.from_gpu_matrix`, `DataFrame.to_gpu_matrix`, `DataFrame.add_column` APIs and method parameters
+- PR #6502 Add dictionary support to `cudf::merge`
 - PR #6471 Replace index type-dispatch call with indexalator in cudf::strings::substring
 - PR #6485 Add File IO to cuIO benchmarks
 - PR #6504 Update Java bindings version to 0.17-SNAPSHOT
+- PR #6489 Add `AVRO` fuzz tests with varying function parameters
+- PR #6540 Add dictionary support to `cudf::unary_operation`
+- PR #6537 Refactor ORC timezone
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
+- PR #6556 Add dictionary support to `cudf::inner_join`, `cudf::left_join` and `cudf::full_join`
+- PR #6557 Support nullable timestamp columns in time range window functions
+- PR #6566 Remove reinterpret_cast conversions between pointer types in ORC
+- PR #6544 Remove `fixed_point` precise round
+- PR #6552 Use `assert_exceptions_equal` to assert exceptions in pytests
 - PR #6555 Adapt JNI build to libcudf composition of multiple libraries
+- PR #6564 Load JNI library dependencies with a thread pool
+- PR #6578 Add in java column to row conversion
+- PR #6573 Create `cudf::detail::byte_cast` for `cudf::byte_cast`
+- PR #6597 Use thread-local to track CUDA device in JNI
+- PR #6599 Replace `size()==0` with `empty()`, `is_empty()`
+- PR #6514 Initial work for decimal type in Java/JNI
+- PR #6608 Improve subword tokenizer docs
+- PR #6612 Update JNI to new RMM cuda_stream_view API
+- PR #6579 Update scatter APIs to use reference wrapper / const scalar
+- PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
+- PR #6622 Update `to_pandas` api docs
+- PR #6623 Add operator overloading to column and clean up error messages
 
 ## Bug Fixes
 
@@ -27,9 +57,23 @@
 - PR #6517 Handle index equality in `Series` and `DataFrame` equality checks
 - PR #6519 Fix end-of-string marking boundary condition in subword-tokenizer
 - PR #6543 Handle `np.nan` values in `isna`/`isnull`/`notna`/`notnull`
+- PR #6549 Fix memory_usage calls for list columns
+- PR #6575 Fix JNI RMM initialize with no pool allocator limit
+- PR #6636 Fix orc boolean column corruption issue
+- PR #6582 Add missing `device_scalar` stream parameters
+- PR #6596 Fix memory usage calculation
+- PR #6595 Fix JNI build, broken by to_arrow() signature change
+- PR #6601 Fix timezone offset when reading ORC files
+- PR #6603 Use correct stream in hash_join.
+- PR #6607 Fix integer overflow in ORC encoder
+- PR #6617 Fix JNI native dependency load order
+- PR #6621 Fix subword tokenizer metadata for token count equal to max_sequence_length
+- PR #6629 Fix JNI CMake
+- PR #6633 Fix Java HostColumnVector unnecessarily loading native dependencies
+- PR #6640 Add error message for unsupported `axis` parameter in DataFrame APIs
 
 
-# cuDF 0.16.0 (Date TBD)
+# cuDF 0.16.0 (21 Oct 2020)
 
 ## New Features
 

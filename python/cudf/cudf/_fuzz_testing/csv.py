@@ -1,13 +1,19 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-
 import logging
 import random
 
+import numpy as np
+
 import cudf
 from cudf._fuzz_testing.io import IOFuzz
-from cudf._fuzz_testing.utils import _generate_rand_meta, pyarrow_to_pandas
+from cudf._fuzz_testing.utils import (
+    ALL_POSSIBLE_VALUES,
+    _generate_rand_meta,
+    pyarrow_to_pandas,
+)
 from cudf.tests import dataset_generator as dg
+from cudf.utils.dtypes import pandas_dtypes_to_cudf_dtypes
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
@@ -58,8 +64,63 @@ class CSVReader(IOFuzz):
         df = pyarrow_to_pandas(table)
 
         logging.info(f"Shape of DataFrame generated: {df.shape}")
-
+        self._current_buffer = df
         return df.to_csv()
+
+    def write_data(self, file_name):
+        if self._current_buffer is not None:
+            self._current_buffer.to_csv(file_name + "_crash.csv")
+
+    def set_rand_params(self, params):
+        params_dict = {}
+        for param, values in params.items():
+            if values == ALL_POSSIBLE_VALUES:
+                if param == "usecols":
+                    col_size = self._rand(len(self._df.columns))
+                    col_val = np.random.choice(
+                        [
+                            None,
+                            np.unique(
+                                np.random.choice(self._df.columns, col_size)
+                            ),
+                        ]
+                    )
+                    params_dict[param] = (
+                        col_val if col_val is None else list(col_val)
+                    )
+                elif param == "dtype":
+                    dtype_val = np.random.choice(
+                        [None, self._df.dtypes.to_dict()]
+                    )
+                    if dtype_val is not None:
+                        dtype_val = {
+                            col_name: "category"
+                            if cudf.utils.dtypes.is_categorical_dtype(dtype)
+                            else pandas_dtypes_to_cudf_dtypes[dtype]
+                            for col_name, dtype in dtype_val.items()
+                        }
+                    params_dict[param] = dtype_val
+                elif param == "header":
+                    header_val = np.random.choice(
+                        ["infer", np.random.randint(low=0, high=len(self._df))]
+                    )
+                    params_dict[param] = header_val
+                elif param == "skiprows":
+                    params_dict[param] = np.random.randint(
+                        low=0, high=len(self._df)
+                    )
+                elif param == "skipfooter":
+                    params_dict[param] = np.random.randint(
+                        low=0, high=len(self._df)
+                    )
+                elif param == "nrows":
+                    nrows_val = np.random.choice(
+                        [None, np.random.randint(low=0, high=len(self._df))]
+                    )
+                    params_dict[param] = nrows_val
+            else:
+                params_dict[param] = np.random.choice(values)
+        self._current_params["test_kwargs"] = self.process_kwargs(params_dict)
 
 
 class CSVWriter(IOFuzz):
@@ -100,9 +161,39 @@ class CSVWriter(IOFuzz):
             f"Generating DataFrame with rows: {num_rows} "
             f"and columns: {num_cols}"
         )
-        df = cudf.DataFrame.from_arrow(
-            dg.rand_dataframe(dtypes_meta, num_rows, seed)
-        )
-        logging.info(f"Shape of DataFrame generated: {df.shape}")
+        table = dg.rand_dataframe(dtypes_meta, num_rows, seed)
+        df = pyarrow_to_pandas(table)
 
+        logging.info(f"Shape of DataFrame generated: {df.shape}")
+        self._current_buffer = df
         return df
+
+    def write_data(self, file_name):
+        if self._current_buffer is not None:
+            self._current_buffer.to_csv(file_name + "_crash.csv")
+
+    def set_rand_params(self, params):
+        params_dict = {}
+        for param, values in params.items():
+            if values == ALL_POSSIBLE_VALUES:
+                if param == "columns":
+                    col_size = self._rand(len(self._current_buffer.columns))
+                    params_dict[param] = list(
+                        np.unique(
+                            np.random.choice(
+                                self._current_buffer.columns, col_size
+                            )
+                        )
+                    )
+                elif param == "chunksize":
+                    params_dict[param] = np.random.choice(
+                        [
+                            None,
+                            np.random.randint(
+                                low=1, high=max(1, len(self._current_buffer))
+                            ),
+                        ]
+                    )
+            else:
+                params_dict[param] = np.random.choice(values)
+        self._current_params["test_kwargs"] = self.process_kwargs(params_dict)
