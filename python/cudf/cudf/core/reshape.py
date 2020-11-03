@@ -182,7 +182,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         raise ValueError("No objects to concatenate")
 
     objs = [obj for obj in objs if obj is not None]
-
     # Return for single object
     if len(objs) == 1:
         if ignore_index:
@@ -237,14 +236,20 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
         old_objs = objs
         objs = [obj for obj in objs if obj.shape != (0, 0)]
+        if len(objs) == 0:
+            return cudf.DataFrame()
         empty_inner = False
+        empty_outer = False 
         if join == "inner":
             # don't filter out empty df's
             if any(obj.empty for obj in old_objs):
                 empty_inner = True
+        if join == "outer":
+            # don't filter out empty df's
+            if any(obj.empty for obj in old_objs):
+                empty_outer = True
 
         objs, match_index = _align_objs(objs, how=join)
-
         for idx, o in enumerate(objs):
             # if join is inner the index remains unchanged
             # and (not ignore_index or join=='inner')
@@ -264,20 +269,21 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             result_columns = result_columns.append(o.columns)
 
         if ignore_index:
+            #with ignore_index the column names change to numbers
+            #indexes mainly stay the same
             df.columns = pd.RangeIndex(len(result_columns.unique()))
+        if empty_inner:
+            #if join is inner and it containes an empty df we return an empty df
+                return df.head(0)
+        if ignore_index:
+            df.index = o.index
+            if sort:
+                return df.sort_index() 
+            else:
+                return df  
         else:
             df.columns = result_columns.unique()
-        if empty_inner:
-            if join == "inner":
-                result = cudf.DataFrame(columns=df.columns, 
-                index=cudf.RangeIndex(0))
-                return result.astype(df.dtypes)
-            else:
-                df.reset_index(drop=True, inplace=True)
-                return df
-        elif ignore_index:
-            df.index = o.index
-        elif not match_index:
+        if not match_index:
             return df.sort_index()
         else:
             return df
