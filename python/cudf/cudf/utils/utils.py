@@ -362,7 +362,16 @@ def time_col_replace_nulls(input_col):
 
     null = column.column_empty_like(input_col, masked=True, newsize=1)
     out_col = cudf._lib.replace.replace(
-        input_col, column.as_column(input_col.default_na_value()), null,
+        input_col,
+        column.as_column(
+            Buffer(
+                np.array(
+                    [input_col.default_na_value()], dtype=input_col.dtype
+                ).view("|u1")
+            ),
+            dtype=input_col.dtype,
+        ),
+        null,
     )
     return out_col
 

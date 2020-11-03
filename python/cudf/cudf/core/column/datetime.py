@@ -196,7 +196,7 @@ class DatetimeColumn(column.ColumnBase):
     def default_na_value(self):
         """Returns the default NA value for this column
         """
-        return cudf.Scalar("NaT", dtype=self.dtype)
+        return np.datetime64("nat", self.time_unit)
 
     def mean(self, skipna=None, dtype=np.float64):
         return pd.Timestamp(
