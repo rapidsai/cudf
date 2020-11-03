@@ -9,6 +9,7 @@
 - PR #6592 Add `cudf.to_numeric` function
 - PR #6598 Add strings::contains API with target column parameter
 - PR #6638 Add support for `pipe` API
+- PR #6619 Improve Dockerfile
 
 ## Improvements
 
