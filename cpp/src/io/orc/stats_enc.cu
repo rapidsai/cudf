@@ -48,12 +48,11 @@ __global__ void __launch_bounds__(init_threads_per_block)
   uint32_t t              = threadIdx.x;
   statistics_group *group = &group_g[threadIdx.y];
   if (chunk_id < num_rowgroups and t == 0) {
-      uint32_t num_rows = cols[col_id].num_rows;
-      group->col        = &cols[col_id];
-      group->start_row  = chunk_id * row_index_stride;
-      group->num_rows =
-        min(num_rows - min(chunk_id * row_index_stride, num_rows), row_index_stride);
-      groups[col_id * num_rowgroups + chunk_id] = *group;
+    uint32_t num_rows = cols[col_id].num_rows;
+    group->col        = &cols[col_id];
+    group->start_row  = chunk_id * row_index_stride;
+    group->num_rows = min(num_rows - min(chunk_id * row_index_stride, num_rows), row_index_stride);
+    groups[col_id * num_rowgroups + chunk_id] = *group;
   }
 }
 
@@ -242,14 +241,14 @@ __global__ void __launch_bounds__(encode_threads_per_block)
   uint32_t t             = threadIdx.x;
   uint32_t idx           = blockIdx.x * encode_chunks_per_block + threadIdx.y;
   stats_state_s *const s = &state_g[threadIdx.y];
-  
+
   // Encode and update actual bfr size
   if (idx < statistics_count && t == 0) {
-    s->chunk = chunks[idx];
-    s->group = groups[idx];
-    s->col  = *(s->group.col);
-    s->base = blob_bfr + s->group.start_chunk;
-    s->end  = blob_bfr + s->group.start_chunk + s->group.num_chunks;
+    s->chunk           = chunks[idx];
+    s->group           = groups[idx];
+    s->col             = *(s->group.col);
+    s->base            = blob_bfr + s->group.start_chunk;
+    s->end             = blob_bfr + s->group.start_chunk + s->group.num_chunks;
     uint8_t *cur       = pb_put_uint(s->base, 1, s->chunk.non_nulls);
     uint8_t *fld_start = cur;
     switch (s->col.stats_dtype) {

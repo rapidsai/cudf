@@ -921,15 +921,11 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   uint32_t dtype, dtype_len_in, dtype_len_out;
   int32_t dict_bits;
 
-  if (t == 0) s->page = pages[start_page + blockIdx.x];
-  __syncthreads();
-
-  if (t == 0) s->ck = chunks[s->page.chunk_id];
-  __syncthreads();
-
   if (t == 0) {
-      s->col = *s->ck.col_desc;
-      s->cur = s->page.page_data + s->page.max_hdr_size;
+    s->page = pages[start_page + blockIdx.x];
+    s->ck   = chunks[s->page.chunk_id];
+    s->col  = *s->ck.col_desc;
+    s->cur  = s->page.page_data + s->page.max_hdr_size;
   }
   __syncthreads();
 
@@ -1410,8 +1406,8 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
     uint32_t compressed_page_size, uncompressed_page_size;
 
     page_g = pages[start_page + blockIdx.x];
-    ck_g = chunks[page_g.chunk_id];
-    col_g = *ck_g.col_desc;
+    ck_g   = chunks[page_g.chunk_id];
+    col_g  = *ck_g.col_desc;
 
     if (chunk_stats && start_page + blockIdx.x == ck_g.first_page) {
       hdr_start = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;

@@ -48,7 +48,7 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
     uint32_t num_compressed_blocks   = 0;
     uint32_t num_uncompressed_blocks = 0;
     while (cur + 3 < end) {
-      uint32_t block_len       = SHFL0((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
+      uint32_t block_len = SHFL0((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
       uint32_t is_uncompressed = block_len & 1;
       uint32_t uncompressed_size;
       gpu_inflate_input_s *init_ctl = nullptr;
@@ -139,7 +139,7 @@ extern "C" __global__ void __launch_bounds__(128, 8)
     uint32_t max_compressed_blocks      = s->info.num_compressed_blocks;
 
     while (cur + 3 < end) {
-      uint32_t block_len       = SHFL0((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
+      uint32_t block_len = SHFL0((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
       uint32_t is_uncompressed = block_len & 1;
       uint32_t uncompressed_size_est, uncompressed_size_actual;
       block_len >>= 1;
@@ -156,8 +156,8 @@ extern "C" __global__ void __launch_bounds__(128, 8)
         }
         uncompressed_size_est =
           SHFL0((lane_id == 0) ? *(const uint32_t *)&dec_in[num_compressed_blocks].dstSize : 0);
-        uncompressed_size_actual =
-          SHFL0((lane_id == 0) ? *(const uint32_t *)&dec_out[num_compressed_blocks].bytes_written : 0);
+        uncompressed_size_actual = SHFL0(
+          (lane_id == 0) ? *(const uint32_t *)&dec_out[num_compressed_blocks].bytes_written : 0);
       }
       // In practice, this should never happen with a well-behaved writer, as we would expect the
       // uncompressed size to always be equal to the compression block size except for the last
@@ -409,14 +409,13 @@ extern "C" __global__ void __launch_bounds__(128, 8)
   uint32_t chunk_id         = blockIdx.y * num_columns + blockIdx.x;
   int t                     = threadIdx.x;
 
-  if (t == 0) s->chunk = chunks[chunk_id];
-
-  __syncthreads();
-  if (strm_info) {
-    if (t == 0) s->strm_info[0] = strm_info[s->chunk.strm_id[0]];
-    if (t == 64) s->strm_info[1] = strm_info[s->chunk.strm_id[1]];
-  }
   if (t == 0) {
+    s->chunk = chunks[chunk_id];
+    if (strm_info) {
+      s->strm_info[0] = strm_info[s->chunk.strm_id[0]];
+      s->strm_info[1] = strm_info[s->chunk.strm_id[1]];
+    }
+
     uint32_t rowgroups_in_chunk =
       (rowidx_stride > 0) ? (s->chunk.num_rows + rowidx_stride - 1) / rowidx_stride : 1;
     s->rowgroup_start = s->chunk.rowgroup_id;

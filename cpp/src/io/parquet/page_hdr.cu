@@ -339,7 +339,7 @@ extern "C" __global__ void __launch_bounds__(128)
   gpuParsePageHeader parse_page_header;
   __shared__ byte_stream_s bs_g[4];
 
-  int lane_id                   = threadIdx.x & 0x1f;
+  int lane_id             = threadIdx.x & 0x1f;
   int chunk               = (blockIdx.x << 2) + (threadIdx.x >> 5);
   byte_stream_s *const bs = &bs_g[threadIdx.x >> 5];
 
@@ -407,7 +407,8 @@ extern "C" __global__ void __launch_bounds__(128)
         }
       }
       index_out = SHFL0(index_out);
-      if (index_out >= 0 && index_out < max_num_pages && lane_id == 0) page_info[index_out] = bs->page;
+      if (index_out >= 0 && index_out < max_num_pages && lane_id == 0)
+        page_info[index_out] = bs->page;
       num_values = SHFL0(num_values);
       SYNCWARP();
     }

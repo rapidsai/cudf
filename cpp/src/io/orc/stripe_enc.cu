@@ -1071,11 +1071,12 @@ __global__ void __launch_bounds__(1024)
   uint32_t t = threadIdx.x;
   uint8_t *dst_ptr;
 
-  if (t == 0) ss = strm_desc[strm_id];
+  if (t == 0) {
+    ss  = strm_desc[strm_id];
+    ck0 = chunks[ss.first_chunk_id];
+  }
   __syncthreads();
-  ck0_id = ss.first_chunk_id;
-  if (t == 0) ck0 = chunks[ck0_id];
-  __syncthreads();
+  ck0_id  = ss.first_chunk_id;
   cid     = ss.stream_type;
   dst_ptr = ck0.streams[cid] + ck0.strm_len[cid];
   for (uint32_t g = 1; g < ss.num_chunks; g++) {
