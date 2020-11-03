@@ -59,7 +59,7 @@ bool __device__ is_negative(T value)
 
 // this is needed to suppress warning: pointless comparison of unsigned integer with zero
 template <typename T, typename std::enable_if_t<not std::is_signed<T>::value>* = nullptr>
-bool __device__ is_negative(T value)
+bool __device__ is_negative(T)
 {
   return false;
 }
