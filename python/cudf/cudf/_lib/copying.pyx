@@ -27,6 +27,9 @@ from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 cimport cudf._lib.cpp.copying as cpp_copying
 
+# workaround for https://github.com/cython/cython/issues/3885
+ctypedef const scalar constscalar
+
 
 def copy_column(Column input_column):
     """
@@ -198,13 +201,14 @@ def _scatter_table(Table source_table, Column scatter_map,
 def _scatter_scalar(scalars, Column scatter_map,
                     Table target_table, bool bounds_check=True):
 
-    cdef vector[unique_ptr[scalar]] source_scalars
+    cdef vector[reference_wrapper[constscalar]] source_scalars
     source_scalars.reserve(len(scalars))
     cdef bool c_bounds_check = bounds_check
     cdef Scalar slr
     for val, col in zip(scalars, target_table._columns):
         slr = as_scalar(val, col.dtype)
-        source_scalars.push_back(move(slr.c_value))
+        source_scalars.push_back(reference_wrapper[constscalar](
+            slr.c_value.get()[0]))
     cdef column_view scatter_map_view = scatter_map.view()
     cdef table_view target_table_view = target_table.data_view()
 
@@ -575,11 +579,11 @@ def _boolean_mask_scatter_table(Table input_table, Table target_table,
 def _boolean_mask_scatter_scalar(list input_scalars, Table target_table,
                                  Column boolean_mask):
 
-    cdef vector[reference_wrapper[scalar]] input_scalar_vector
+    cdef vector[reference_wrapper[constscalar]] input_scalar_vector
     input_scalar_vector.reserve(len(input_scalars))
     cdef Scalar scl
     for scl in input_scalars:
-        input_scalar_vector.push_back(reference_wrapper[scalar](
+        input_scalar_vector.push_back(reference_wrapper[constscalar](
             scl.c_value.get()[0]))
     cdef table_view target_table_view = target_table.view()
     cdef column_view boolean_mask_view = boolean_mask.view()

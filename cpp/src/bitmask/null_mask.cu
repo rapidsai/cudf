@@ -515,7 +515,7 @@ cudf::size_type count_set_bits(bitmask_type const *bitmask,
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       bitmask, start, stop - 1, non_zero_count.data());
 
-  return non_zero_count.value();
+  return non_zero_count.value(stream);
 }
 
 cudf::size_type count_unset_bits(bitmask_type const *bitmask,

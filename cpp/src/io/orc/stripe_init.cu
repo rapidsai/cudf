@@ -302,9 +302,10 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s *s,
                   : STORE_INDEX2;
         break;
       case STORE_INDEX2:
-        if (ci_id < CI_PRESENT) s->row_index_entry[2][ci_id] = v;
-        // Boolean columns have an extra byte to indicate the position of the bit within the byte
-        // TODO: Currently assuming rowIndexStride is a multiple of 8 and ignoring this value
+        if (ci_id < CI_PRESENT) {
+          // Boolean columns have an extra byte to indicate the position of the bit within the byte
+          s->row_index_entry[2][ci_id] = (s->chunk.type_kind == BOOLEAN) ? (v << 3) + *cur : v;
+        }
         if (ci_id == CI_PRESENT || s->chunk.type_kind == BOOLEAN) cur++;
         if (cur >= start + pos_end) return length;
         state = STORE_INDEX0;
