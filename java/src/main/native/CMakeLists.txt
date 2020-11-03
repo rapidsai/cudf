@@ -251,6 +251,15 @@ else()
 endif(JNI_FOUND)
 
 ###################################################################################################
+# - PTDS option -----------------------------------------------------------------------------------
+# Note: this needs to defined before adding nvcomp.
+option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
+if(PER_THREAD_DEFAULT_STREAM)
+    message(STATUS "Using per-thread default stream")
+    add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
+endif(PER_THREAD_DEFAULT_STREAM)
+
+###################################################################################################
 # - nvcomp ----------------------------------------------------------------------------------------
 
 include(ConfigureNvcomp)
@@ -317,12 +326,6 @@ if(USE_NVTX)
     target_link_libraries(cudfjni ${NVTX_LIBRARY})
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_NVTX")
 endif(USE_NVTX)
-
-option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
-if(PER_THREAD_DEFAULT_STREAM)
-    message(STATUS "Using per-thread default stream")
-    add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM)
-endif(PER_THREAD_DEFAULT_STREAM)
 
 ###################################################################################################
 # - rmm logging level -----------------------------------------------------------------------------
