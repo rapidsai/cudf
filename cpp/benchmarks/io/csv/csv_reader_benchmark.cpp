@@ -45,7 +45,7 @@ void BM_csv_read_varying_input(benchmark::State& state)
   cudf_io::csv_writer_options options =
     cudf_io::csv_writer_options::builder(source_sink.make_sink_info(), view)
       .include_header(true)
-      .rows_per_chunk(1 << 14);
+      .rows_per_chunk(1 << 14);  // TODO: remove once default is sensible
   cudf_io::write_csv(options);
 
   cudf_io::csv_reader_options const read_options =
@@ -59,19 +59,6 @@ void BM_csv_read_varying_input(benchmark::State& state)
   state.SetBytesProcessed(data_size * state.iterations());
 }
 
-std::vector<int> select_columns(column_selection cs, int num_cols)
-{
-  std::vector<int> col_idxs(num_cols / 2);
-  switch (cs) {
-    case column_selection::ALL: col_idxs.resize(num_cols);
-    case column_selection::HALF: std::iota(std::begin(col_idxs), std::end(col_idxs), 0); break;
-    case column_selection::ALTERNATE:
-      for (size_t i = 0; i < col_idxs.size(); ++i) col_idxs[i] = 2 * i;
-      break;
-  }
-  return col_idxs;
-}
-
 void BM_csv_read_varying_options(benchmark::State& state)
 {
   auto const col_sel    = static_cast<column_selection>(state.range(0));
@@ -79,23 +66,22 @@ void BM_csv_read_varying_options(benchmark::State& state)
   auto const num_chunks = state.range(2);
 
   auto const data_types =
-    opts_bm_data_types(get_type_or_group({int32_t(type_group_id::INTEGRAL),
-                                          int32_t(type_group_id::FLOATING_POINT),
-                                          int32_t(type_group_id::TIMESTAMP),
-                                          int32_t(cudf::type_id::STRING)}),
-                       col_sel);
+    dtypes_for_column_selection(get_type_or_group({int32_t(type_group_id::INTEGRAL),
+                                                   int32_t(type_group_id::FLOATING_POINT),
+                                                   int32_t(type_group_id::TIMESTAMP),
+                                                   int32_t(cudf::type_id::STRING)}),
+                                col_sel);
+  auto const cols_to_read = select_columns(col_sel, data_types.size());
 
-  auto const tbl  = create_random_table(data_types, num_cols, table_size_bytes{data_size});
+  auto const tbl  = create_random_table(data_types, data_types.size(), table_size_bytes{data_size});
   auto const view = tbl->view();
-
-  auto const cols_to_read = select_columns(col_sel, view.num_columns());
 
   std::vector<char> csv_data;
   cudf_io::csv_writer_options options =
     cudf_io::csv_writer_options::builder(cudf_io::sink_info{&csv_data}, view)
       .include_header(true)
       .line_terminator("\r\n")
-      .rows_per_chunk(1 << 14);
+      .rows_per_chunk(1 << 14);  // TODO: remove once default is sensible
   cudf_io::write_csv(options);
 
   cudf_io::csv_reader_options read_options =
@@ -132,7 +118,7 @@ void BM_csv_read_varying_options(benchmark::State& state)
           if (is_last_chunk) read_options.set_skipfooter(0);
       }
 
-      auto res = cudf_io::read_csv(read_options);
+      cudf_io::read_csv(read_options);
     }
   }
   auto const data_processed = data_size * cols_to_read.size() / view.num_columns();
@@ -157,7 +143,8 @@ BENCHMARK_DEFINE_F(CsvRead, column_selection)
 BENCHMARK_REGISTER_F(CsvRead, column_selection)
   ->ArgsProduct({{int32_t(column_selection::ALL),
                   int32_t(column_selection::ALTERNATE),
-                  int32_t(column_selection::HALF)},
+                  int32_t(column_selection::FIRST_HALF),
+                  int32_t(column_selection::SECOND_HALF)},
                  {int32_t(row_selection::ALL)},
                  {1}})
   ->Unit(benchmark::kMillisecond)

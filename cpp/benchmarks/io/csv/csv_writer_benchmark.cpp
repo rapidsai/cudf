@@ -47,7 +47,7 @@ void BM_csv_write_varying_input(benchmark::State& state)
     cudf_io::csv_writer_options options =
       cudf_io::csv_writer_options::builder(source_sink.make_sink_info(), view)
         .include_header(true)
-        .rows_per_chunk(1 << 30);
+        .rows_per_chunk(1 << 14);  // TODO: remove once default is sensible
     cudf_io::write_csv(options);
   }
 
@@ -59,14 +59,12 @@ void BM_csv_write_varying_options(benchmark::State& state)
   auto const na_per_len     = state.range(0);
   auto const rows_per_chunk = 1 << state.range(1);
 
-  auto const data_types =
-    opts_bm_data_types(get_type_or_group({int32_t(type_group_id::INTEGRAL),
-                                          int32_t(type_group_id::FLOATING_POINT),
-                                          int32_t(type_group_id::TIMESTAMP),
-                                          int32_t(cudf::type_id::STRING)}),
-                       column_selection::ALL);
+  auto const data_types = get_type_or_group({int32_t(type_group_id::INTEGRAL),
+                                             int32_t(type_group_id::FLOATING_POINT),
+                                             int32_t(type_group_id::TIMESTAMP),
+                                             int32_t(cudf::type_id::STRING)});
 
-  auto const tbl  = create_random_table(data_types, num_cols, table_size_bytes{data_size});
+  auto const tbl  = create_random_table(data_types, data_types.size(), table_size_bytes{data_size});
   auto const view = tbl->view();
 
   std::string const na_per(na_per_len, '#');
