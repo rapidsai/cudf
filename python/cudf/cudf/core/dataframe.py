@@ -689,11 +689,10 @@ class DataFrame(Frame, Serializable):
         if isinstance(arg, DataFrame):
             # not handling set_item where arg = df & value = df
             if isinstance(value, DataFrame):
-                msg = (
+                raise TypeError(
                     f"__setitem__ with arg = {type(value)} and "
                     f"value = {type(arg)} is not supported"
                 )
-                raise TypeError(msg)
             else:
                 for col_name in self._data:
                     scatter_map = arg[col_name]
@@ -782,13 +781,12 @@ class DataFrame(Frame, Serializable):
                     )
                 else:
                     for col in arg:
-                        # we will raise a key error if col not in dataframe
-                        # this behavior will make it
-                        # consistent to pandas >0.21.0
-                        if not is_scalar(value):
-                            self._data[col] = column.as_column(value)
+                        if is_scalar(value):
+                            self._data[col] = column.full(
+                                size=len(self), fill_value=value
+                            )
                         else:
-                            self._data[col][:] = value
+                            self._data[col] = column.as_column(value)
 
         else:
             raise TypeError(
