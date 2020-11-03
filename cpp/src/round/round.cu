@@ -65,7 +65,7 @@ bool __device__ is_negative(T)
 }
 
 template <typename T>
-struct HalfUpZero {
+struct half_up_zero {
   T n;  // unused in the decimal_places = 0 case
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
   __device__ U operator()(U e)
@@ -82,7 +82,7 @@ struct HalfUpZero {
 };
 
 template <typename T>
-struct HalfUpPositive {
+struct half_up_positive {
   T n;
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
   __device__ U operator()(U e)
@@ -101,7 +101,7 @@ struct HalfUpPositive {
 };
 
 template <typename T>
-struct HalfUpNegative {
+struct half_up_negative {
   T n;
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
   __device__ U operator()(U e)
@@ -119,7 +119,7 @@ struct HalfUpNegative {
 };
 
 template <typename T>
-struct HalfEvenZero {
+struct half_even_zero {
   T n;  // unused in the decimal_places = 0 case
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
   __device__ U operator()(U e)
@@ -136,7 +136,7 @@ struct HalfEvenZero {
 };
 
 template <typename T>
-struct HalfEvenPositive {
+struct half_even_positive {
   T n;
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
   __device__ U operator()(U e)
@@ -155,7 +155,7 @@ struct HalfEvenPositive {
 };
 
 template <typename T>
-struct HalfEvenNegative {
+struct half_even_negative {
   T n;
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
   __device__ U operator()(U e)
@@ -221,13 +221,13 @@ struct round_type_dispatcher {
     // clang-format off
     switch (method) {
       case cudf::rounding_method::HALF_UP:
-        if      (decimal_places == 0) return round_with<T, HalfUpZero    <T>>(input, decimal_places, stream, mr);
-        else if (decimal_places >  0) return round_with<T, HalfUpPositive<T>>(input, decimal_places, stream, mr);
-        else                          return round_with<T, HalfUpNegative<T>>(input, decimal_places, stream, mr);
+        if      (decimal_places == 0) return round_with<T, half_up_zero    <T>>(input, decimal_places, stream, mr);
+        else if (decimal_places >  0) return round_with<T, half_up_positive<T>>(input, decimal_places, stream, mr);
+        else                          return round_with<T, half_up_negative<T>>(input, decimal_places, stream, mr);
       case cudf::rounding_method::HALF_EVEN:
-        if      (decimal_places == 0) return round_with<T, HalfEvenZero    <T>>(input, decimal_places, stream, mr);
-        else if (decimal_places >  0) return round_with<T, HalfEvenPositive<T>>(input, decimal_places, stream, mr);
-        else                          return round_with<T, HalfEvenNegative<T>>(input, decimal_places, stream, mr);
+        if      (decimal_places == 0) return round_with<T, half_even_zero    <T>>(input, decimal_places, stream, mr);
+        else if (decimal_places >  0) return round_with<T, half_even_positive<T>>(input, decimal_places, stream, mr);
+        else                          return round_with<T, half_even_negative<T>>(input, decimal_places, stream, mr);
       default: CUDF_FAIL("Undefined rounding method");
     }
     // clang-format on
