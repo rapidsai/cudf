@@ -470,7 +470,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
 
   /**
    * Create a new decimal vector from double floats with specific DecimalType and RoundingMode.
-   * All doubles will be rescaled according to [[scale]] and cast an integral value.
+   * All doubles will be rescaled if necessary, according to scale of input DecimalType and RoundingMode.
    * If any overflow occurs in extracting integral part, an IllegalArgumentException will be thrown.
    * This API is inefficient because of slow double -> decimal conversion, so it is mainly for testing.
    * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.

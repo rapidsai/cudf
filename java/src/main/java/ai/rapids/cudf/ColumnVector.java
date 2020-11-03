@@ -3801,8 +3801,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   /**
    * Create a new decimal vector from double floats with specific DecimalType and RoundingMode.
-   * All doubles will be rescaled according to [[scale]]. Then the integral part of rescaled double will be put to ColumnVector.
+   * All doubles will be rescaled if necessary, according to scale of input DecimalType and RoundingMode.
    * If any overflow occurs in extracting integral part, an IllegalArgumentException will be thrown.
+   * This API is inefficient because of slow double -> decimal conversion, so it is mainly for testing.
    * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
    */
   public static ColumnVector decimalFromDoubles(DType type, RoundingMode mode, double... values) {
