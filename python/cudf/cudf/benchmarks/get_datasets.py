@@ -4,6 +4,7 @@ import getopt
 import sys
 import os
 import shutil
+import argparse
 from collections import namedtuple
 
 # Update url and dir where datasets needs to be copied
@@ -45,42 +46,44 @@ def fetch_datasets(urls, dirs):
 urls = []
 dirs = []
 
-options, remainder = getopt.getopt(
-    sys.argv[1:], "hu:d:", ["help", "url=", "dir="] + list(datasets.keys())
+parser = argparse.ArgumentParser(
+    description="""
+    Fetches datasets as per given option.
+    By default it will download all available datasets
+    """
 )
 
-for opt, arg in options:
-    if opt in ("-h", "--help"):
-        print(
-            "python cudf/benchmarks/get_datasets.py"
-            "--cuio_dataset | -u url -d path \n\n"
-            "Using this python script you can download existing set of "
-            "datasets, or \nprovide url of a new dataset and path where it"
-            "needs to be stored.\n\n"
-            "By default, all the available datasets will be downloaded.\n"
-            "Following sets of datasets are available for download: \n"
-            "         " + ",  ".join(list(datasets.keys())) + "\n\n"
-            "If a url is provided using -u/--url, then a path must also"
-            "be provided with option -d/--dir."
-        )
-        exit()
-    elif opt in ("-u", "--url"):
-        urls.append(arg)
-    elif opt in ("-d", "--dir"):
-        dirs.append(arg)
-    elif opt[2:] in datasets.keys():
-        urls.append(datasets[opt[2:]].url)
-        dirs.append(datasets[opt[2:]].dir)
+parser.add_argument("-u", nargs=1, help="url of a dataset")
+parser.add_argument(
+    "-d",
+    nargs=1,
+    help="path where downloaded dataset from given url will be unzipped"
+)
+parser.add_argument(
+    "--datasets",
+    nargs='+',
+    help="Currently supported datasets are: " + ", ".join(list(datasets.keys()))
+)
+args = parser.parse_args()
 
-if len(urls) > len(dirs):
-    raise ValueError("Missed providing path to store dataset from url")
-elif len(urls) < len(dirs):
-    raise ValueError("Missed providing url to fetch dataset to store in path")
+if (args.u is None and args.d is not None) or (args.u is not None and args.d is None):
+    raise ValueError("option -u and -d should be used together, can't use only one")
+
+if args.u and args.d:
+    urls.append(args.u[0])
+    dirs.append(args.d[0])
+
+if args.datasets:
+    for dataset in args.datasets:
+        urls.append(datasets[dataset].url)
+        dirs.append(datasets[dataset].dir)
+
+if len(dirs) != len(set(dirs)):
+    raise ValueError("Duplicate destination paths are provided")
 
 if len(urls) == 0:
     for _, val in datasets.items():
-        urls.append(val[0])
-        dirs.append(val[1])
+        urls.append(val.url)
+        dirs.append(val.dir)
 
-if len(urls) > 0:
-    fetch_datasets(urls, dirs)
+fetch_datasets(urls, dirs)
