@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import decimal
 import pickle
 
 import numpy as np
@@ -227,3 +228,15 @@ class DecimalDtype(ExtensionDtype):
     @property
     def scale(self):
         return self._typ.scale
+
+    @property
+    def type(self):
+        # might need to account for precision and scale here
+        return decimal.Decimal
+
+    def to_arrow(self):
+        return self._typ
+
+    @classmethod
+    def from_arrow(cls, typ):
+        return cls(type.precision, type.scale)
