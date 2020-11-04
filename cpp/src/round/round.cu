@@ -119,8 +119,7 @@ struct half_up_negative {
   __device__ U operator()(U e)
   {
     auto const down = (e / n) * n;  // result from rounding down
-    auto const sign = generate_sign(e);
-    return down + sign * (generic_abs(e - down) >= n / 2 ? n : 0);
+    return down + generate_sign(e) * (generic_abs(e - down) >= n / 2 ? n : 0);
   }
 };
 
@@ -174,10 +173,9 @@ struct half_even_negative {
   {
     auto const down_over_n = e / n;            // use this to determine HALF_EVEN case
     auto const down        = down_over_n * n;  // result from rounding down
-    auto const sign        = generate_sign(e);
     auto const diff        = generic_abs(e - down);
     auto const adjustment  = (diff > n / 2) or (diff == n / 2 && down_over_n % 2 == 1) ? n : 0;
-    return down + sign * adjustment;
+    return down + generate_sign(e) * adjustment;
   }
 };
 
