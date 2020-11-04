@@ -70,7 +70,7 @@ def test_df_slice_empty_index():
         df.index[1]
 
 
-def test_index_find_label_range():
+def test_index_find_label_range_genericindex():
     # Monotonic Index
     idx = Int64Index(np.asarray([4, 5, 6, 10]))
     assert idx.find_label_range(4, 6) == (0, 3)
@@ -91,6 +91,47 @@ def test_index_find_label_range():
         idx_nm.find_label_range(4, 11)
     raises.match("value not found")
 
+def test_index_find_label_range_rangeindex():
+    # step > 0
+    # 3, 8, 13, 18
+    ridx = RangeIndex(3, 20, 5)
+    assert ridx.find_label_range(3, 8) == (0, 2)
+    assert ridx.find_label_range(0, 7) == (0, 1)
+    assert ridx.find_label_range(3, 19) == (0, 4)
+    assert ridx.find_label_range(2, 21) == (0, 4)
+
+    # step < 0
+    # 20, 15, 10, 5
+    ridx = RangeIndex(20, 3, -5)
+    assert ridx.find_label_range(15, 10) == (1, 3)
+    assert ridx.find_label_range(10, 0) == (2, 4)
+    assert ridx.find_label_range(30, 13) == (0, 2)
+    assert ridx.find_label_range(30, 0) == (0, 4)
+
+    # Invalid label ranges
+    # 20, 15, 10, 5
+    ridx = RangeIndex(20, 3, -5)
+    with pytest.raises(ValueError, match="Unable to find subrange that meets constraint."):
+        ridx.find_label_range(5, 10)
+    with pytest.raises(ValueError, match="Unable to find subrange that meets constraint."):
+        ridx.find_label_range(1, 30)
+    
+def test_index_get_slice_bound_rangeindex():
+    # step > 0
+    # 3, 8, 13, 18
+    ridx = RangeIndex(3, 20, 5)
+    assert ridx.get_slice_bound(label=8, side="left") == 1
+    assert ridx.get_slice_bound(label=13, side="right") == 3
+
+    # step < 0
+    # 20, 15, 10, 5
+    ridx = RangeIndex(20, 3, -5)
+    assert ridx.get_slice_bound(label=10, side="left") == 2
+    assert ridx.get_slice_bound(label=5, side="right") == 4
+
+    # Expect raise when label is not in index
+    with pytest.raises(ValueError):
+        ridx.get_slice_bound(0)
 
 def test_index_comparision():
     start, stop = 10, 34
@@ -1666,3 +1707,84 @@ def test_index_equals_categories():
     expect = lhs.to_pandas().equals(rhs.to_pandas())
 
     assert_eq(expect, got)
+
+def test_index_rangeindex_pos_from_val():
+    # step > 0
+    ridx = RangeIndex(-13, 17, 4)
+    for i in range(len(ridx)):
+        assert i == ridx._pos_from_val(ridx[i])
+    
+    # step < 0
+    ridx = RangeIndex(17, -13, -4)
+    for i in range(len(ridx)):
+        assert i == ridx._pos_from_val(ridx[i])
+
+
+@pytest.mark.parametrize(
+    "rge",
+    [
+        (1, 10, 1),
+        (1, 10 ,3),
+        (10, -17, -1),
+        (10, -17, -3),
+    ],
+)
+def test_index_rangeindex_get_item_basic(rge):
+    pridx = pd.RangeIndex(*rge)
+    gridx = cudf.RangeIndex(*rge)
+
+    for i in range(len(pridx)):
+        assert pridx[i] == gridx[i]
+
+
+@pytest.mark.parametrize(
+    "rge",
+    [
+        (1, 10 ,3),
+        (10, 1, -3),
+    ],
+)
+def test_index_rangeindex_get_item_out_of_bounds(rge):
+    gridx = cudf.RangeIndex(*rge)
+    with pytest.raises(IndexError):
+        val = gridx[-1]
+    with pytest.raises(IndexError):
+        val = gridx[4]
+
+@pytest.mark.parametrize(
+    "rge",
+    [
+        (10, 1, 1),
+        (-17, 10, -3),
+    ],
+)
+def test_index_rangeindex_get_item_null_range(rge):
+    gridx = cudf.RangeIndex(*rge)
+
+    with pytest.raises(IndexError):
+        gridx[0]
+
+@pytest.mark.parametrize(
+    "rge",
+    [
+        (-17, 21, 2),
+        (21, -17, -3)
+    ]
+)
+@pytest.mark.parametrize(
+    "sl",
+    [
+        slice(1, 7, 1),
+        slice(1, 7, 2),
+        slice(-1, 7, 1),
+        slice(-1, 7, 2),
+        slice(-3, 7, 2),
+        slice(7, 1, -2),
+        slice(7, -3, -2),
+    ]
+)
+def test_index_rangeindex_get_item_slices(rge, sl):
+    pridx = pd.RangeIndex(*rge)
+    gridx = cudf.RangeIndex(*rge)
+
+    assert_eq(pridx[sl], gridx[sl])

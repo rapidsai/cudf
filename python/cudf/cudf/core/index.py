@@ -3,6 +3,7 @@ from __future__ import division, print_function
 
 import pickle
 from numbers import Number
+import math
 
 import cupy
 import numpy as np
@@ -1489,6 +1490,9 @@ class RangeIndex(Index):
         cls, start, stop=None, step=1, dtype=None, copy=False, name=None
     ) -> "RangeIndex":
 
+        if step == 0:
+            raise ValueError("Step must not be zero.")
+
         out = Frame.__new__(cls)
         if isinstance(start, range):
             therange = start
@@ -1606,9 +1610,13 @@ class RangeIndex(Index):
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            st = self._step * index.step
-            ilo = utils.normalize_index(index.start, len(self), doraise=False)
-            ihi = utils.normalize_index(index.start, len(self), doraise=False)
+            sl_start = 0 if index.start is None else index.start
+            sl_stop = len(self)-1 if index.stop is None else index.stop
+            sl_step = 1 if index.step is None else index.step
+
+            st = self._step * sl_step
+            ilo = utils.normalize_index(sl_start, len(self), doraise=False)
+            ihi = utils.normalize_index(sl_stop, len(self), doraise=False)
 
             lo = self._start + ilo * st
             hi = self._start + ihi * st
@@ -1680,7 +1688,9 @@ class RangeIndex(Index):
     def size(self):
         return self.__len__()
 
-    def _pos_from_val(self, n):
+    def _pos_from_val(self, n, error="raise"):
+        """Compute the position of value n, if 
+        """
         i = (n - self._start) / self._step
         if (not i % 1 == 0) or i < 0 or i >= len(self):
             raise ValueError(f"{n} is not in the RangeIndex.")
@@ -1688,7 +1698,8 @@ class RangeIndex(Index):
 
     def find_label_range(self, first=None, last=None):
         """Find subrange in the ``RangeIndex``, marked by their positions, that
-        starts with ``first`` and ends with ``last``.
+        starts greater or equal to ``first`` and ends less or equal to ``last``
+
         The range returned is assumed to be monotonically increasing. In cases
         where there is no such range that suffice the constraint, an exception
         will be raised.
@@ -1696,9 +1707,8 @@ class RangeIndex(Index):
         Parameters
         ----------
         first, last : int, optional, Default None
-            The "start" and "stop" values of the subrange. Must be valid values
-            in the ``RangeIndex``. If None, will use ``self._start`` for first,
-            ``self._stop`` for last.
+            The "start" and "stop" values of the subrange. If None, will use
+            ``self._start`` as first, ``self._stop`` as last.
 
         Returns
         -------
@@ -1715,10 +1725,16 @@ class RangeIndex(Index):
         if not np.issubdtype(type(last), np.int):
             raise ValueError(f"{last} should be an int.")
         
-        begin = self._pos_from_val(first)
-        end = self._pos_from_val(last)
+        begin = math.ceil((first - self._start) / self._step)
+        begin = min(max(len(self), begin), 0)
 
-        return begin, end + 1
+        end = math.ceil((last - self._stop) / self._step)
+        end = min(max(len(self), end), 0)
+
+        if begin >= end:
+            raise ValueError("Unable to find subrange that meets constraint.")
+        
+        return begin, end
 
     @copy_docstring(_to_frame)
     def to_frame(self, index=True, name=None):
