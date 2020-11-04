@@ -13,14 +13,14 @@ def get_dataset_dir():
     return option.dataset_dir
 
 
-@pytest.mark.parametrize("num_rows", [None, 100000, 200000])
+@pytest.mark.parametrize("skiprows", [None, 100000, 200000])
 @pytest.mark.parametrize("file_path", glob.glob(get_dataset_dir() + "avro_*"))
-def bench_avro(benchmark, file_path, use_buffer, num_rows):
+def bench_avro(benchmark, file_path, use_buffer, skiprows):
 
     if use_buffer == "True":
         with open(file_path, "rb") as f:
             file_path = io.BytesIO(f.read())
-    benchmark(cudf.read_avro, file_path, num_rows=num_rows)
+    benchmark(cudf.read_avro, file_path, skiprows=skiprows)
 
 
 def get_dtypes(file_path):
