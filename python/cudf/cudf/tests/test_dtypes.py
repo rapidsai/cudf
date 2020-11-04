@@ -6,7 +6,12 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core.dtypes import CategoricalDtype, ListDtype, StructDtype, DecimalDtype
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    ListDtype,
+    StructDtype,
+    DecimalDtype,
+)
 from cudf.tests.utils import assert_eq
 
 
@@ -128,6 +133,7 @@ def test_struct_dtype_fields(fields):
     fields = {"a": "int32", "b": StructDtype({"c": "int64", "d": "int32"})}
     dt = StructDtype(fields)
     assert_eq(dt.fields, fields)
+
 
 def test_decimal_dtype():
     dt = DecimalDtype(4, 2)
