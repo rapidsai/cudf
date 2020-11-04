@@ -52,6 +52,7 @@
 - PR #6622 Update `to_pandas` api docs
 - PR #6623 Add operator overloading to column and clean up error messages
 - PR #6651 Add cudf::dictionary::make_dictionary_pair_iterator
+- PR #6666 Add dictionary support to `cudf::reduce`
 
 ## Bug Fixes
 

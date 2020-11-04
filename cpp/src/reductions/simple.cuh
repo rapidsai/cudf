@@ -17,11 +17,11 @@
 #pragma once
 
 #include <cudf/detail/reduction.cuh>
-
+#include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/structs/struct_view.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include "cudf/structs/struct_view.hpp"
 
 namespace cudf {
 namespace reduction {
@@ -50,15 +50,29 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
   std::unique_ptr<scalar> result;
   Op simple_op{};
 
-  if (col.has_nulls()) {
-    auto it = thrust::make_transform_iterator(
-      dcol->pair_begin<ElementType, true>(),
-      simple_op.template get_null_replacing_element_transformer<ResultType>());
-    result = detail::reduce(it, col.size(), Op{}, mr, stream);
+  if (!cudf::is_dictionary(col.type())) {
+    if (col.has_nulls()) {
+      auto it = thrust::make_transform_iterator(
+        dcol->pair_begin<ElementType, true>(),
+        simple_op.template get_null_replacing_element_transformer<ResultType>());
+      result = detail::reduce(it, col.size(), Op{}, mr, stream);
+    } else {
+      auto it = thrust::make_transform_iterator(
+        dcol->begin<ElementType>(), simple_op.template get_element_transformer<ResultType>());
+      result = detail::reduce(it, col.size(), Op{}, mr, stream);
+    }
   } else {
-    auto it = thrust::make_transform_iterator(
-      dcol->begin<ElementType>(), simple_op.template get_element_transformer<ResultType>());
-    result = detail::reduce(it, col.size(), Op{}, mr, stream);
+    if (col.has_nulls()) {
+      auto it = thrust::make_transform_iterator(
+        cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType, true>(*dcol),
+        simple_op.template get_null_replacing_element_transformer<ResultType>());
+      result = detail::reduce(it, col.size(), Op{}, mr, stream);
+    } else {
+      auto it = thrust::make_transform_iterator(
+        cudf::dictionary::detail::make_dictionary_iterator<ElementType>(*dcol),
+        simple_op.template get_element_transformer<ResultType>());
+      result = detail::reduce(it, col.size(), Op{}, mr, stream);
+    }
   }
   // set scalar is valid
   result->set_valid((col.null_count() < col.size()), stream);

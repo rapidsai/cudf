@@ -14,22 +14,22 @@
  * limitations under the License.
  */
 
-#include <iostream>
-#include <vector>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/reduction.hpp>
+#include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <thrust/device_vector.h>
+#include <iostream>
+#include <vector>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
-#include "cudf/types.hpp"
 using aggregation = cudf::aggregation;
 
 template <typename T>
@@ -1106,6 +1106,139 @@ TYPED_TEST(ReductionTest, NthElement)
     this->reduction_test(
       col_nulls, T{}, false, cudf::make_nth_element_aggregation(n, cudf::null_policy::EXCLUDE));
   }
+}
+
+struct DictionaryStringReductionTest : public StringReductionTest {
+};
+
+std::vector<std::string> data_list[] = {
+  {"nine", "two", "five", "three", "five", "six", "two", "eight", "nine"},
+};
+INSTANTIATE_TEST_CASE_P(dictionary_cases,
+                        DictionaryStringReductionTest,
+                        testing::ValuesIn(data_list));
+TEST_P(DictionaryStringReductionTest, MinMax)
+{
+  std::vector<std::string> host_strings(GetParam());
+
+  cudf::test::strings_column_wrapper col_w(host_strings.begin(), host_strings.end());
+  auto col = cudf::dictionary::encode(col_w);
+
+  std::string expected_min_result = *(std::min_element(host_strings.begin(), host_strings.end()));
+  std::string expected_max_result = *(std::max_element(host_strings.begin(), host_strings.end()));
+
+  // MIN
+  this->reduction_test(col->view(),
+                       expected_min_result,
+                       true,
+                       cudf::make_min_aggregation(),
+                       cudf::column_view(col_w).type());
+  // MAX
+  this->reduction_test(col->view(),
+                       expected_max_result,
+                       true,
+                       cudf::make_max_aggregation(),
+                       cudf::column_view(col_w).type());
+}
+
+template <typename T>
+struct DictionaryReductionTest : public ReductionTest<T> {
+};
+
+TYPED_TEST_CASE(DictionaryReductionTest, cudf::test::Types<int32_t>);
+TYPED_TEST(DictionaryReductionTest, Sum)
+{
+  using T = TypeParam;
+  std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
+  std::vector<T> v = convert_values<T>(int_values);
+
+  cudf::test::fixed_width_column_wrapper<T> col_w(v.begin(), v.end());
+  auto col = cudf::dictionary::encode(col_w);
+
+  T expected_value = std::accumulate(v.begin(), v.end(), T{0});
+  this->reduction_test(col->view(),
+                       expected_value,
+                       this->ret_non_arithmetic,
+                       cudf::make_sum_aggregation(),
+                       cudf::column_view(col_w).type());
+
+  // test with nulls
+  std::vector<bool> validity({1, 1, 0, 0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<T> col_nulls_w(v.begin(), v.end(), validity.begin());
+  auto col_nulls = cudf::dictionary::encode(col_nulls_w);
+  expected_value = [v, validity] {
+    auto const r = replace_nulls(v, validity, T{0});
+    return std::accumulate(r.begin(), r.end(), T{0});
+  }();
+  this->reduction_test(col_nulls->view(),
+                       expected_value,
+                       this->ret_non_arithmetic,
+                       cudf::make_sum_aggregation(),
+                       cudf::column_view(col_nulls_w).type());
+}
+
+TYPED_TEST(DictionaryReductionTest, Product)
+{
+  using T = TypeParam;
+  std::vector<int> int_values({5, -1, 1, 0, 3, 2, 4});
+  std::vector<TypeParam> v = convert_values<TypeParam>(int_values);
+
+  auto calc_prod = [](std::vector<T> const &v) {
+    return std::accumulate(v.cbegin(), v.cend(), T{1}, [](T acc, T i) { return acc * i; });
+  };
+
+  // test without nulls
+  cudf::test::fixed_width_column_wrapper<T> col_w(v.begin(), v.end());
+  auto col = cudf::dictionary::encode(col_w);
+
+  this->reduction_test(col->view(),
+                       calc_prod(v),  // expected result
+                       this->ret_non_arithmetic,
+                       cudf::make_product_aggregation(),
+                       cudf::column_view(col_w).type());
+
+  // test with nulls
+  std::vector<bool> validity({1, 1, 0, 0, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<T> col_nulls_w(v.begin(), v.end(), validity.begin());
+  auto col_nulls = cudf::dictionary::encode(col_nulls_w);
+
+  this->reduction_test(col_nulls->view(),
+                       calc_prod(replace_nulls(v, validity, T{1})),  // expected
+                       this->ret_non_arithmetic,
+                       cudf::make_product_aggregation(),
+                       cudf::column_view(col_nulls_w).type());
+}
+
+TYPED_TEST(DictionaryReductionTest, SumOfSquare)
+{
+  using T = TypeParam;
+  std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2});
+  std::vector<T> v = convert_values<T>(int_values);
+
+  auto calc_reduction = [](std::vector<T> const &v) {
+    return std::accumulate(v.cbegin(), v.cend(), T{0}, [](T acc, T i) { return acc + i * i; });
+  };
+
+  // test without nulls
+  cudf::test::fixed_width_column_wrapper<T> col_w(v.begin(), v.end());
+  auto col = cudf::dictionary::encode(col_w);
+
+  this->reduction_test(col->view(),
+                       calc_reduction(v),
+                       this->ret_non_arithmetic,
+                       cudf::make_sum_of_squares_aggregation(),
+                       cudf::column_view(col_w).type());
+
+  // test with nulls
+  std::vector<bool> validity({1, 1, 0, 0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<T> col_nulls_w(v.begin(), v.end(), validity.begin());
+  auto col_nulls = cudf::dictionary::encode(col_nulls_w);
+
+  this->reduction_test(col_nulls->view(),
+                       calc_reduction(replace_nulls(v, validity, T{0})),  // expected
+                       this->ret_non_arithmetic,
+                       cudf::make_sum_of_squares_aggregation(),
+                       cudf::column_view(col_nulls_w).type());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
