@@ -7,29 +7,29 @@ import shutil
 datasets = {
     "cuio_dataset" : 
         [
-            "https://rapidsai-data.s3.us-east-2.amazonaws.com/cudf/benchmark/avro_json_datasets.zip",
-            "cudf/benchmarks/cuio_data/"
-        ]
+            "https://github.com/rapidsai/cudf/files/5424844/temp_bool_orc.zip",
+            "cudf/benchmarks/cuio_data1/"
+        ],
 }
 
 def delete_dir(path):
     if path == "/" or path == "~":
         raise ValueError("Trying to delete root/home directory")
 
-    shutil.rmtree(path, ignore_errors=False)
+    #shutil.rmtree(path, ignore_errors=False)
 
 def fetch_datasets(urls, dirs):
-    tmp_path = os.cwd() + "/tmp_benchmark/"
+    tmp_path = os.getcwd() + "/tmp_benchmark/"
     delete_dir(tmp_path)
     os.mkdir(tmp_path)
     for url, path in zip(urls, dirs):
-        path = os.cwd() + "/" + path
+        path = os.getcwd() + "/" + path
 
         delete_dir(path)
         os.mkdir(path)
 
-        os.system("wget " url " -P " tmp_path)
-        os.system("unzip " tmp_path "/" url.split('/')[-1] " -d " path)
+        os.system("wget " + url + " -P " + tmp_path)
+        os.system("unzip " + tmp_path + "/" + url.split('/')[-1] + " -d " + path)
 
     delete_dir(tmp_path)
 
@@ -41,14 +41,19 @@ options, remainder = getopt.getopt(sys.argv[1:], "hu:d", ["help", "url=", "dir="
 
 for opt, arg in options:
     if opt in ("-h", "--help"):
-        print("python cudf/benchmarks/get_datasets.py --cuio_dataset | -u url -d path \n"
-              "Using this python script you can download existing set of datasets, or provide url of\n"
-              "a new dataset and path where it needs to be stored.\n\n"
-              "By default, all the available datasets will be downloaded.\n"
-              "Following sets of datasets are available for download:\n"
-              "         " ", ".join(list(datasets.keys()))
-              "If a url is provided using -u/--url, then a path must also be provided with option -d/--dir.\n"
-             )
+        print("""
+              python cudf/benchmarks/get_datasets.py --cuio_dataset | -u url -d path
+              
+              Using this python script you can download existing set of datasets, or provide url of
+              a new dataset and path where it needs to be stored.
+
+              By default, all the available datasets will be downloaded.
+              Following sets of datasets are available for download: \n"""
+              "                " + ",  ".join(list(datasets.keys())) + "\n"
+              """
+              If a url is provided using -u/--url, then a path must also be provided with option -d/--dir.
+              """)
+        exit()
     elif opt in ("-u", "--url"):
         urls.append(arg)
     elif opt in ("-d", "--dir"):
@@ -67,6 +72,6 @@ if len(urls) == 0:
         urls.append(val[0])
         dirs.append(val[1])
 
-if len(url) > 0:
+if len(urls) > 0:
     fetch_datasets(urls, dirs)
 
