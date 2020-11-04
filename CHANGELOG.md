@@ -74,6 +74,7 @@
 - PR #6629 Fix JNI CMake
 - PR #6633 Fix Java HostColumnVector unnecessarily loading native dependencies
 - PR #6640 Add error message for unsupported `axis` parameter in DataFrame APIs
+- PR #6670 Fix a bug where PTX parser fails to correctly parse a python lambda generated UDF
 
 
 # cuDF 0.16.0 (21 Oct 2020)
