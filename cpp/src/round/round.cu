@@ -52,7 +52,7 @@ T __device__ generic_abs(T value)
 }
 
 template <typename T, typename std::enable_if_t<std::is_signed<T>::value>* = nullptr>
-int16_t __device__ generate_sign(T value)
+int16_t __device__ generic_sign(T value)
 {
   return value > 0 ? 1 : value < 0 ? -1 : 0;
 }
