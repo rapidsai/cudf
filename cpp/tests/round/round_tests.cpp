@@ -42,7 +42,7 @@ TYPED_TEST_CASE(RoundTestsIntegerTypes, IntegerTypes);
 TYPED_TEST_CASE(RoundTestsFixedPointTypes, cudf::test::FixedPointTypes);
 TYPED_TEST_CASE(RoundTestsFloatingPointTypes, cudf::test::FloatingPointTypes);
 
-TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTest)
+TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUp)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -101,7 +101,7 @@ TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestHalfEven1)
   auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_EVEN);
 }
 
-TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestWithNulls)
+TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestWithNullsHalfUp)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
@@ -112,7 +112,7 @@ TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestNeg1)
+TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestNegHalfUp1)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
@@ -123,7 +123,7 @@ TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestNeg1)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestHalfEvenNeg1)
+TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestNegHalfEven1)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
@@ -134,7 +134,7 @@ TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestHalfEvenNeg1)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestNeg2)
+TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestNegHalfUp2)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
@@ -145,7 +145,7 @@ TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestNeg2)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(RoundTestsFloatingPointTypes, LargeFloatingPoint)
+TYPED_TEST(RoundTestsFloatingPointTypes, LargeFloatingPointHalfUp)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
@@ -162,7 +162,7 @@ TYPED_TEST(RoundTestsFloatingPointTypes, LargeFloatingPoint)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(RoundTestsFloatingPointTypes, SameSignificatDigits)
+TYPED_TEST(RoundTestsFloatingPointTypes, SameSignificatDigitsHalfUp)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
@@ -197,7 +197,7 @@ TYPED_TEST(RoundTestsFloatingPointTypes, SameSignificatDigits)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected5, result5->view());
 }
 
-TEST_F(RoundTests, FloatMaxTest)
+TEST_F(RoundTests, FloatMaxTestHalfUp)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<float>;
 
@@ -208,7 +208,7 @@ TEST_F(RoundTests, FloatMaxTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TEST_F(RoundTests, DoubleMaxTest)
+TEST_F(RoundTests, DoubleMaxTestHalfUp)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<double>;
 
@@ -219,7 +219,7 @@ TEST_F(RoundTests, DoubleMaxTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TEST_F(RoundTests, AvoidOverFlowTest)
+TEST_F(RoundTests, AvoidOverFlowTestHalfUp)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<double>;
 
@@ -230,7 +230,7 @@ TEST_F(RoundTests, AvoidOverFlowTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(RoundTestsIntegerTypes, SimpleIntegerTestNeg2)
+TYPED_TEST(RoundTestsIntegerTypes, SimpleIntegerTestNegHalfUp2)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
@@ -252,7 +252,7 @@ TYPED_TEST(RoundTestsIntegerTypes, SimpleIntegerTestNegHalfEven)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(RoundTestsIntegerTypes, SimpleNegativeInteger)
+TYPED_TEST(RoundTestsIntegerTypes, SimpleNegativeIntegerHalfUp)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
@@ -263,7 +263,7 @@ TYPED_TEST(RoundTestsIntegerTypes, SimpleNegativeInteger)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TEST_F(RoundTests, SimpleNegativeIntegerWithUnsignedNumbers)
+TEST_F(RoundTests, SimpleNegativeIntegerWithUnsignedNumbersHalfUp)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<uint32_t>;
 
@@ -296,7 +296,7 @@ TEST_F(RoundTests, SimpleNegativeInt8HalfUp)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(RoundTestsIntegerTypes, SimplePositiveInteger)
+TYPED_TEST(RoundTestsIntegerTypes, SimplePositiveIntegerHalfUp)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
 
@@ -307,7 +307,7 @@ TYPED_TEST(RoundTestsIntegerTypes, SimplePositiveInteger)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TEST_F(RoundTests, Int64AtBoundary)
+TEST_F(RoundTests, Int64AtBoundaryHalfUp)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<int64_t>;
 
@@ -334,7 +334,7 @@ TEST_F(RoundTests, Int64AtBoundary)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected5, result5->view());
 }
 
-TEST_F(RoundTests, BoolTest)
+TEST_F(RoundTests, BoolTestHalfUp)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<bool>;
 
