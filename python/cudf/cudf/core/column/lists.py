@@ -1,5 +1,8 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import pyarrow as pa
+
+import cudf
 from cudf.core.column import ColumnBase
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.utils.dtypes import is_list_dtype
@@ -7,17 +10,10 @@ from cudf.utils.dtypes import is_list_dtype
 
 class ListColumn(ColumnBase):
     def __init__(
-        self,
-        data,
-        size,
-        dtype,
-        mask=None,
-        offset=0,
-        null_count=None,
-        children=(),
+        self, size, dtype, mask=None, offset=0, null_count=None, children=(),
     ):
         super().__init__(
-            data,
+            None,
             size,
             dtype,
             mask=mask,
@@ -25,6 +21,42 @@ class ListColumn(ColumnBase):
             null_count=null_count,
             children=children,
         )
+
+    def __sizeof__(self):
+        if self._cached_sizeof is None:
+            n = 0
+            if self.nullable:
+                n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
+                    self.size
+                )
+
+            child0_size = (self.size + 1) * self.base_children[
+                0
+            ].dtype.itemsize
+            current_base_child = self.base_children[1]
+            current_offset = self.offset
+            n += child0_size
+            while type(current_base_child) is ListColumn:
+                child0_size = (
+                    current_base_child.size + 1 - current_offset
+                ) * current_base_child.base_children[0].dtype.itemsize
+                current_offset = current_base_child.base_children[0][
+                    current_offset
+                ]
+                n += child0_size
+                current_base_child = current_base_child.base_children[1]
+
+            n += (
+                current_base_child.size - current_offset
+            ) * current_base_child.dtype.itemsize
+
+            if current_base_child.nullable:
+                n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
+                    current_base_child.size
+                )
+            self._cached_sizeof = n
+
+        return self._cached_sizeof
 
     @property
     def base_size(self):
@@ -47,6 +79,34 @@ class ListColumn(ColumnBase):
 
     def list(self, parent=None):
         return ListMethods(self, parent=parent)
+
+    def to_arrow(self):
+        offsets = self.offsets.to_arrow()
+        elements = (
+            pa.nulls(len(self.elements))
+            if len(self.elements) == self.elements.null_count
+            else self.elements.to_arrow()
+        )
+        pa_type = pa.list_(elements.type)
+
+        if self.nullable:
+            nbuf = self.mask.to_host_array().view("int8")
+            nbuf = pa.py_buffer(nbuf)
+            buffers = (nbuf, offsets.buffers()[1])
+        else:
+            buffers = offsets.buffers()
+        return pa.ListArray.from_buffers(
+            pa_type, len(self), buffers, children=[elements]
+        )
+
+    def set_base_data(self, value):
+        if value is not None:
+            raise RuntimeError(
+                "ListColumn's do not use data attribute of Column, use "
+                "`set_base_children` instead"
+            )
+        else:
+            super().set_base_data(value)
 
 
 class ListMethods(ColumnMethodsMixin):

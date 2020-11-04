@@ -87,13 +87,15 @@ struct column_scatterer_impl {
     auto result      = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
 
+    using Type = device_storage_type_t<Element>;
+
     // NOTE use source.begin + scatter rows rather than source.end in case the
     // scatter map is smaller than the number of source rows
     thrust::scatter(rmm::exec_policy(stream)->on(stream),
-                    source.begin<Element>(),
-                    source.begin<Element>() + std::distance(scatter_map_begin, scatter_map_end),
+                    source.begin<Type>(),
+                    source.begin<Type>() + cudf::distance(scatter_map_begin, scatter_map_end),
                     scatter_map_begin,
-                    result_view.begin<Element>());
+                    result_view.begin<Type>());
 
     return result;
   }
@@ -140,9 +142,9 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
-    if (target_in.size() == 0)  // empty begets empty
+    if (target_in.is_empty())  // empty begets empty
       return make_empty_column(data_type{type_id::DICTIONARY32});
-    if (source_in.size() == 0)  // no input, just make a copy
+    if (source_in.is_empty())  // no input, just make a copy
       return std::make_unique<column>(target_in, stream, mr);
 
     // check the keys match

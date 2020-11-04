@@ -100,7 +100,7 @@ std::unique_ptr<table> scatter(
  * @return Result of scattering values from source to target
  **/
 std::unique_ptr<table> scatter(
-  std::vector<std::unique_ptr<scalar>> const& source,
+  std::vector<std::reference_wrapper<const scalar>> const& source,
   column_view const& indices,
   table_view const& target,
   bool check_bounds                   = false,
@@ -131,7 +131,7 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& source,
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> boolean_mask_scatter(
-  std::vector<std::reference_wrapper<scalar>> const& source,
+  std::vector<std::reference_wrapper<const scalar>> const& source,
   table_view const& target,
   column_view const& boolean_mask,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),

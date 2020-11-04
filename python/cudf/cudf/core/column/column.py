@@ -29,12 +29,14 @@ from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
     NUMERIC_TYPES,
     check_cast_unsupported_dtype,
+    cudf_dtypes_to_pandas_dtypes,
     get_time_unit,
     is_categorical_dtype,
     is_list_dtype,
     is_numerical_dtype,
     is_scalar,
     is_string_dtype,
+    is_struct_dtype,
     min_signed_type,
     min_unsigned_type,
     np_to_pa_dtype,
@@ -122,11 +124,17 @@ class ColumnBase(Column, Serializable):
     def __len__(self):
         return self.size
 
-    def to_pandas(self, index=None, **kwargs):
-        if str(self.dtype) in NUMERIC_TYPES and self.null_count == 0:
-            pd_series = pd.Series(cupy.asnumpy(self.values))
+    def to_pandas(self, index=None, nullable=False, **kwargs):
+        if nullable and self.dtype in cudf_dtypes_to_pandas_dtypes:
+            pandas_nullable_dtype = cudf_dtypes_to_pandas_dtypes[self.dtype]
+            arrow_array = self.to_arrow()
+            pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)
+            pd_series = pd.Series(pandas_array, copy=False)
+        elif str(self.dtype) in NUMERIC_TYPES and self.null_count == 0:
+            pd_series = pd.Series(cupy.asnumpy(self.values), copy=False)
         else:
             pd_series = self.to_arrow().to_pandas(**kwargs)
+
         if index is not None:
             pd_series.index = index
         return pd_series
@@ -169,7 +177,7 @@ class ColumnBase(Column, Serializable):
         if check_dtypes:
             if self.dtype != other.dtype:
                 return False
-        return self.binary_operator("eq", other).min()
+        return (self == other).min()
 
     def all(self):
         return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
@@ -180,7 +188,7 @@ class ColumnBase(Column, Serializable):
     def __sizeof__(self):
         n = self.data.size
         if self.nullable:
-            n += self.mask.size
+            n += bitmask_allocation_size_bytes(self.size)
         return n
 
     @classmethod
@@ -258,8 +266,8 @@ class ColumnBase(Column, Serializable):
         newsize = sum(map(len, objs))
         if newsize > libcudf.MAX_COLUMN_SIZE:
             raise MemoryError(
-                "Result of concat cannot have "
-                "size > {}".format(libcudf.MAX_COLUMN_SIZE_STR)
+                f"Result of concat cannot have "
+                f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
             )
 
         # Filter out inputs that have 0 length
@@ -312,30 +320,14 @@ class ColumnBase(Column, Serializable):
             codes = self.codes.astype(signed_type)
             categories = self.categories
 
-            out_indices = libcudf.interop.to_arrow(
-                libcudf.table.Table(
-                    cudf.core.column_accessor.ColumnAccessor({"None": codes})
-                ),
-                ["None"],
-                keep_index=False,
-            )
-            out_dictionary = libcudf.interop.to_arrow(
-                libcudf.table.Table(
-                    cudf.core.column_accessor.ColumnAccessor(
-                        {"None": categories}
-                    )
-                ),
-                ["None"],
-                keep_index=False,
-            )
+            out_indices = codes.to_arrow()
+            out_dictionary = categories.to_arrow()
 
             return pa.DictionaryArray.from_arrays(
-                out_indices["None"].chunk(0),
-                out_dictionary["None"].chunk(0),
-                ordered=self.ordered,
+                out_indices, out_dictionary, ordered=self.ordered,
             )
 
-        elif isinstance(self, cudf.core.column.StringColumn) and (
+        if isinstance(self, cudf.core.column.StringColumn) and (
             self.null_count == len(self)
         ):
             return pa.NullArray.from_buffers(
@@ -346,7 +338,7 @@ class ColumnBase(Column, Serializable):
             libcudf.table.Table(
                 cudf.core.column_accessor.ColumnAccessor({"None": self})
             ),
-            ["None"],
+            [["None"]],
             keep_index=False,
         )["None"].chunk(0)
 
@@ -406,6 +398,8 @@ class ColumnBase(Column, Serializable):
                 size=codes.size,
                 ordered=array.type.ordered,
             )
+        elif isinstance(array.type, pa.StructType):
+            return cudf.core.column.StructColumn.from_arrow(array)
 
         return libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
@@ -765,7 +759,14 @@ class ColumnBase(Column, Serializable):
     def isnull(self):
         """Identify missing values in a Column.
         """
-        return libcudf.unary.is_null(self)
+        result = libcudf.unary.is_null(self)
+
+        if self.dtype.kind == "f":
+            # Need to consider `np.nan` values incase
+            # of a float column
+            result = result | libcudf.unary.is_nan(self)
+
+        return result
 
     def isna(self):
         """Identify missing values in a Column. Alias for isnull.
@@ -775,7 +776,14 @@ class ColumnBase(Column, Serializable):
     def notnull(self):
         """Identify non-missing values in a Column.
         """
-        return libcudf.unary.is_valid(self)
+        result = libcudf.unary.is_valid(self)
+
+        if self.dtype.kind == "f":
+            # Need to consider `np.nan` values incase
+            # of a float column
+            result = result & libcudf.unary.is_non_nan(self)
+
+        return result
 
     def notna(self):
         """Identify non-missing values in a Column. Alias for notnull.
@@ -1100,6 +1108,51 @@ class ColumnBase(Column, Serializable):
 
         return output
 
+    def __add__(self, other):
+        return self.binary_operator("add", other)
+
+    def __sub__(self, other):
+        return self.binary_operator("sub", other)
+
+    def __mul__(self, other):
+        return self.binary_operator("mul", other)
+
+    def __eq__(self, other):
+        return self.binary_operator("eq", other)
+
+    def __ne__(self, other):
+        return self.binary_operator("ne", other)
+
+    def __or__(self, other):
+        return self.binary_operator("or", other)
+
+    def __and__(self, other):
+        return self.binary_operator("and", other)
+
+    def __floordiv__(self, other):
+        return self.binary_operator("floordiv", other)
+
+    def __truediv__(self, other):
+        return self.binary_operator("truediv", other)
+
+    def __mod__(self, other):
+        return self.binary_operator("mod", other)
+
+    def __pow__(self, other):
+        return self.binary_operator("pow", other)
+
+    def __lt__(self, other):
+        return self.binary_operator("lt", other)
+
+    def __gt__(self, other):
+        return self.binary_operator("gt", other)
+
+    def __le__(self, other):
+        return self.binary_operator("le", other)
+
+    def __ge__(self, other):
+        return self.binary_operator("ge", other)
+
     def searchsorted(
         self, value, side="left", ascending=True, na_position="last"
     ):
@@ -1256,9 +1309,7 @@ class ColumnBase(Column, Serializable):
         if nrows * ncols == 0:
             return cudf.core.frame.Frame({})
 
-        scatter_map = column_indices.binary_operator(
-            "mul", np.int32(nrows)
-        ).binary_operator("add", row_indices)
+        scatter_map = (column_indices * np.int32(nrows)) + row_indices
         target = cudf.core.frame.Frame(
             {None: column_empty_like(self, masked=True, newsize=nrows * ncols)}
         )
@@ -1356,7 +1407,7 @@ def build_column(
     ----------
     data : Buffer
         The data buffer (can be None if constructing certain Column
-        types like StringColumn or CategoricalColumn)
+        types like StringColumn, ListColumn, or CategoricalColumn)
     dtype
         The dtype associated with the Column to construct
     mask : Buffer, optional
@@ -1410,11 +1461,19 @@ def build_column(
         )
     elif is_list_dtype(dtype):
         return cudf.core.column.ListColumn(
-            data=data,
             size=size,
             dtype=dtype,
             mask=mask,
             offset=offset,
+            null_count=null_count,
+            children=children,
+        )
+    elif is_struct_dtype(dtype):
+        return cudf.core.column.StructColumn(
+            data=data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
             null_count=null_count,
             children=children,
         )

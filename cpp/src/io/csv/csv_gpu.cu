@@ -186,8 +186,8 @@ __device__ __inline__ bool is_floatingpoint(
  * @param d_columnData The count for each column data type
  */
 __global__ void __launch_bounds__(csvparse_block_dim)
-  data_type_detection(ParseOptions const opts,
-                      device_span<char const> const csv_text,
+  data_type_detection(parse_options_view const opts,
+                      device_span<char const> csv_text,
                       device_span<column_parse::flags const> const column_flags,
                       device_span<uint64_t const> const row_offsets,
                       device_span<column_parse::stats> d_columnData)
@@ -222,10 +222,10 @@ __global__ void __launch_bounds__(csvparse_block_dim)
       long tempPos   = pos - 1;
       long field_len = pos - start;
 
-      if (field_len <= 0 || serializedTrieContains(opts.naValuesTrie, raw_csv + start, field_len)) {
+      if (field_len <= 0 || serialized_trie_contains(opts.trie_na, raw_csv + start, field_len)) {
         atomicAdd(&d_columnData[actual_col].countNULL, 1);
-      } else if (serializedTrieContains(opts.trueValuesTrie, raw_csv + start, field_len) ||
-                 serializedTrieContains(opts.falseValuesTrie, raw_csv + start, field_len)) {
+      } else if (serialized_trie_contains(opts.trie_true, raw_csv + start, field_len) ||
+                 serialized_trie_contains(opts.trie_false, raw_csv + start, field_len)) {
         atomicAdd(&d_columnData[actual_col].countBool, 1);
       } else if (cudf::io::gpu::is_infinity(raw_csv + start, raw_csv + tempPos)) {
         atomicAdd(&d_columnData[actual_col].countFloat, 1);
@@ -299,13 +299,17 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 }
 
 template <typename T, int base>
-__inline__ __device__ T decode_value(char const *begin, char const *end, ParseOptions const &opts)
+__inline__ __device__ T decode_value(char const *begin,
+                                     char const *end,
+                                     parse_options_view const &opts)
 {
   return cudf::io::gpu::parse_numeric<T, base>(begin, end, opts);
 }
 
 template <typename T>
-__inline__ __device__ T decode_value(char const *begin, char const *end, ParseOptions const &opts)
+__inline__ __device__ T decode_value(char const *begin,
+                                     char const *end,
+                                     parse_options_view const &opts)
 {
   return cudf::io::gpu::parse_numeric<T>(begin, end, opts);
 }
@@ -313,7 +317,7 @@ __inline__ __device__ T decode_value(char const *begin, char const *end, ParseOp
 template <>
 __inline__ __device__ cudf::timestamp_D decode_value(char const *begin,
                                                      char const *end,
-                                                     ParseOptions const &opts)
+                                                     parse_options_view const &opts)
 {
   return timestamp_D{cudf::duration_D{parseDateFormat(begin, end, opts.dayfirst)}};
 }
@@ -321,7 +325,7 @@ __inline__ __device__ cudf::timestamp_D decode_value(char const *begin,
 template <>
 __inline__ __device__ cudf::timestamp_s decode_value(char const *begin,
                                                      char const *end,
-                                                     ParseOptions const &opts)
+                                                     parse_options_view const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
   return timestamp_s{cudf::duration_s{milli / 1000}};
@@ -330,7 +334,7 @@ __inline__ __device__ cudf::timestamp_s decode_value(char const *begin,
 template <>
 __inline__ __device__ cudf::timestamp_ms decode_value(char const *begin,
                                                       char const *end,
-                                                      ParseOptions const &opts)
+                                                      parse_options_view const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
   return timestamp_ms{cudf::duration_ms{milli}};
@@ -339,7 +343,7 @@ __inline__ __device__ cudf::timestamp_ms decode_value(char const *begin,
 template <>
 __inline__ __device__ cudf::timestamp_us decode_value(char const *begin,
                                                       char const *end,
-                                                      ParseOptions const &opts)
+                                                      parse_options_view const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
   return timestamp_us{cudf::duration_us{milli * 1000}};
@@ -348,19 +352,19 @@ __inline__ __device__ cudf::timestamp_us decode_value(char const *begin,
 template <>
 __inline__ __device__ cudf::timestamp_ns decode_value(char const *begin,
                                                       char const *end,
-                                                      ParseOptions const &opts)
+                                                      parse_options_view const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
   return timestamp_ns{cudf::duration_ns{milli * 1000000}};
 }
 
 #ifndef DURATION_DECODE_VALUE
-#define DURATION_DECODE_VALUE(Type)                                 \
-  template <>                                                       \
-  __inline__ __device__ Type decode_value(                          \
-    const char *begin, const char *end, ParseOptions const &opts)   \
-  {                                                                 \
-    return Type{parseTimeDeltaFormat<Type>(begin, 0, end - begin)}; \
+#define DURATION_DECODE_VALUE(Type)                                     \
+  template <>                                                           \
+  __inline__ __device__ Type decode_value(                              \
+    const char *begin, const char *end, parse_options_view const &opts) \
+  {                                                                     \
+    return Type{parseTimeDeltaFormat<Type>(begin, 0, end - begin)};     \
   }
 #endif
 DURATION_DECODE_VALUE(duration_D)
@@ -374,7 +378,7 @@ DURATION_DECODE_VALUE(duration_ns)
 template <>
 __inline__ __device__ cudf::string_view decode_value(char const *begin,
                                                      char const *end,
-                                                     ParseOptions const &opts)
+                                                     parse_options_view const &opts)
 {
   return cudf::string_view{};
 }
@@ -383,7 +387,7 @@ __inline__ __device__ cudf::string_view decode_value(char const *begin,
 template <>
 __inline__ __device__ cudf::dictionary32 decode_value(char const *begin,
                                                       char const *end,
-                                                      ParseOptions const &opts)
+                                                      parse_options_view const &opts)
 {
   return cudf::dictionary32{};
 }
@@ -393,7 +397,7 @@ __inline__ __device__ cudf::dictionary32 decode_value(char const *begin,
 template <>
 __inline__ __device__ cudf::list_view decode_value(char const *begin,
                                                    char const *end,
-                                                   ParseOptions const &opts)
+                                                   parse_options_view const &opts)
 {
   return cudf::list_view{};
 }
@@ -403,7 +407,7 @@ __inline__ __device__ cudf::list_view decode_value(char const *begin,
 template <>
 __inline__ __device__ numeric::decimal32 decode_value(char const *begin,
                                                       char const *end,
-                                                      ParseOptions const &opts)
+                                                      parse_options_view const &opts)
 {
   return numeric::decimal32{};
 }
@@ -413,7 +417,7 @@ __inline__ __device__ numeric::decimal32 decode_value(char const *begin,
 template <>
 __inline__ __device__ numeric::decimal64 decode_value(char const *begin,
                                                       char const *end,
-                                                      ParseOptions const &opts)
+                                                      parse_options_view const &opts)
 {
   return numeric::decimal64{};
 }
@@ -423,7 +427,7 @@ __inline__ __device__ numeric::decimal64 decode_value(char const *begin,
 template <>
 __inline__ __device__ cudf::struct_view decode_value(char const *begin,
                                                      char const *end,
-                                                     ParseOptions const &opts)
+                                                     parse_options_view const &opts)
 {
   return cudf::struct_view{};
 }
@@ -446,16 +450,16 @@ struct decode_op {
                                                       size_t row,
                                                       char const *begin,
                                                       char const *end,
-                                                      ParseOptions const &opts,
+                                                      parse_options_view const &opts,
                                                       column_parse::flags flags)
   {
     static_cast<T *>(out_buffer)[row] = [&]() {
       // Check for user-specified true/false values first, where the output is
       // replaced with 1/0 respectively
       const size_t field_len = end - begin + 1;
-      if (serializedTrieContains(opts.trueValuesTrie, begin, field_len)) {
+      if (serialized_trie_contains(opts.trie_true, begin, field_len)) {
         return static_cast<T>(1);
-      } else if (serializedTrieContains(opts.falseValuesTrie, begin, field_len)) {
+      } else if (serialized_trie_contains(opts.trie_false, begin, field_len)) {
         return static_cast<T>(0);
       } else {
         if (flags & column_parse::as_hexadecimal) {
@@ -477,7 +481,7 @@ struct decode_op {
                                                       size_t row,
                                                       char const *begin,
                                                       char const *end,
-                                                      ParseOptions const &opts,
+                                                      parse_options_view const &opts,
                                                       column_parse::flags flags)
   {
     auto &value{static_cast<T *>(out_buffer)[row]};
@@ -485,9 +489,9 @@ struct decode_op {
     // Check for user-specified true/false values first, where the output is
     // replaced with 1/0 respectively
     const size_t field_len = end - begin + 1;
-    if (serializedTrieContains(opts.trueValuesTrie, begin, field_len)) {
+    if (serialized_trie_contains(opts.trie_true, begin, field_len)) {
       value = 1;
-    } else if (serializedTrieContains(opts.falseValuesTrie, begin, field_len)) {
+    } else if (serialized_trie_contains(opts.trie_false, begin, field_len)) {
       value = 0;
     } else {
       value = decode_value<T>(begin, end, opts);
@@ -504,7 +508,7 @@ struct decode_op {
                                                       size_t row,
                                                       char const *begin,
                                                       char const *end,
-                                                      ParseOptions const &opts,
+                                                      parse_options_view const &opts,
                                                       column_parse::flags flags)
   {
     auto &value{static_cast<T *>(out_buffer)[row]};
@@ -523,7 +527,7 @@ struct decode_op {
                                                       size_t row,
                                                       char const *begin,
                                                       char const *end,
-                                                      ParseOptions const &opts,
+                                                      parse_options_view const &opts,
                                                       column_parse::flags flags)
   {
     auto &value{static_cast<T *>(out_buffer)[row]};
@@ -550,7 +554,7 @@ struct decode_op {
  * @param[out] num_valid The numbers of valid fields in columns
  **/
 __global__ void __launch_bounds__(csvparse_block_dim)
-  convert_csv_to_cudf(cudf::io::ParseOptions options,
+  convert_csv_to_cudf(cudf::io::parse_options_view options,
                       device_span<char const> data,
                       device_span<column_parse::flags const> column_flags,
                       device_span<uint64_t const> row_offsets,
@@ -582,7 +586,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
     if (column_flags[col] & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas
-      const bool is_na = serializedTrieContains(options.naValuesTrie, raw_csv + start, pos - start);
+      const bool is_na = serialized_trie_contains(options.trie_na, raw_csv + start, pos - start);
 
       // Modify start & end to ignore whitespace and quotechars
       long tempPos = pos - 1;
@@ -710,6 +714,59 @@ inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
            : (ctxid == ROW_CTX_QUOTE) ? ctx_map.y : (ctxid == ROW_CTX_COMMENT) ? ctx_map.z : 0;
 }
 
+/**
+ * @brief Single pair-wise 512-wide row context merge transform
+ *
+ * Merge row context blocks and record the merge operation in a context
+ * tree so that the transform is reversible.
+ * The tree is organized such that the left and right children of node n
+ * are located at indices n*2 and n*2+1, the root node starting at index 1
+ *
+ * @tparam lanemask mask to specify source of packed row context
+ * @tparam tmask mask to specify principle thread for merging row context
+ * @tparam base start location for writing into packed row context tree
+ * @tparam level_scale level of the node in the tree
+ * @param ctxtree[out] packed row context tree
+ * @param ctxb[in] packed row context for the current character block
+ * @param t thread id (leaf node id)
+ *
+ */
+template <uint32_t lanemask, uint32_t tmask, uint32_t base, uint32_t level_scale>
+inline __device__ void ctx_merge(uint64_t *ctxtree, packed_rowctx_t *ctxb, uint32_t t)
+{
+  uint64_t tmp = SHFL_XOR(*ctxb, lanemask);
+  if (!(t & tmask)) {
+    *ctxb                              = merge_row_contexts(*ctxb, tmp);
+    ctxtree[base + (t >> level_scale)] = *ctxb;
+  }
+}
+
+/**
+ * @brief Single 512-wide row context inverse merge transform
+ *
+ * Walks the context tree starting from a root node
+ *
+ * @tparam rmask Mask to specify which threads write input row context
+ * @param[in] base Start read location of the merge transform tree
+ * @param[in] ctxtree Merge transform tree
+ * @param[in] ctx Input context
+ * @param[in] brow4 output row in block *4
+ * @param[in] t thread id (leaf node id)
+ */
+template <uint32_t rmask>
+inline __device__ void ctx_unmerge(
+  uint32_t base, uint64_t *ctxtree, uint32_t *ctx, uint32_t *brow4, uint32_t t)
+{
+  rowctx32_t ctxb_left, ctxb_right, ctxb_sum;
+  ctxb_sum   = get_row_context(ctxtree[base], *ctx);
+  ctxb_left  = get_row_context(ctxtree[(base)*2 + 0], *ctx);
+  ctxb_right = get_row_context(ctxtree[(base)*2 + 1], ctxb_left & 3);
+  if (t & (rmask)) {
+    *brow4 += (ctxb_sum & ~3) - (ctxb_right & ~3);
+    *ctx = ctxb_left & 3;
+  }
+}
+
 /*
  * @brief 512-wide row context merge transform
  *
@@ -735,32 +792,22 @@ static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
                                                      packed_rowctx_t ctxb,
                                                      uint32_t t)
 {
-  uint64_t tmp;
-
-#define CTX_MERGE(lanemask, tmask, base, level_scale)                       \
-  tmp = SHFL_XOR(ctxb, lanemask);                                           \
-  if (!(t & (tmask))) {                                                     \
-    ctxb                                   = merge_row_contexts(ctxb, tmp); \
-    ctxtree[(base) + (t >> (level_scale))] = ctxb;                          \
-  }
-
   ctxtree[512 + t] = ctxb;
-  CTX_MERGE(1, 0x1, 256, 1);
-  CTX_MERGE(2, 0x3, 128, 2);
-  CTX_MERGE(4, 0x7, 64, 3);
-  CTX_MERGE(8, 0xf, 32, 4);
+  ctx_merge<1, 0x1, 256, 1>(ctxtree, &ctxb, t);
+  ctx_merge<2, 0x3, 128, 2>(ctxtree, &ctxb, t);
+  ctx_merge<4, 0x7, 64, 3>(ctxtree, &ctxb, t);
+  ctx_merge<8, 0xf, 32, 4>(ctxtree, &ctxb, t);
   __syncthreads();
   if (t < 32) {
     ctxb = ctxtree[32 + t];
-    CTX_MERGE(1, 0x1, 16, 1);
-    CTX_MERGE(2, 0x3, 8, 2);
-    CTX_MERGE(4, 0x7, 4, 3);
-    CTX_MERGE(8, 0xf, 2, 4);
+    ctx_merge<1, 0x1, 16, 1>(ctxtree, &ctxb, t);
+    ctx_merge<2, 0x3, 8, 2>(ctxtree, &ctxb, t);
+    ctx_merge<4, 0x7, 4, 3>(ctxtree, &ctxb, t);
+    ctx_merge<8, 0xf, 2, 4>(ctxtree, &ctxb, t);
     // Final stage
-    tmp = SHFL_XOR(ctxb, 16);
+    uint64_t tmp = SHFL_XOR(ctxb, 16);
     if (t == 0) { ctxtree[1] = merge_row_contexts(ctxb, tmp); }
   }
-#undef CTX_MERGE
 }
 
 /*
@@ -780,27 +827,16 @@ static inline __device__ rowctx32_t rowctx_inverse_merge_transform(uint64_t ctxt
 {
   uint32_t ctx     = ctxtree[0] & 3;  // Starting input context
   rowctx32_t brow4 = 0;               // output row in block *4
-  rowctx32_t ctxb_left, ctxb_right, ctxb_sum;
 
-#define CTX_UNMERGE(rmask, base)                                      \
-  ctxb_sum   = get_row_context(ctxtree[base], ctx);                   \
-  ctxb_left  = get_row_context(ctxtree[(base)*2 + 0], ctx);           \
-  ctxb_right = get_row_context(ctxtree[(base)*2 + 1], ctxb_left & 3); \
-  if (t & (rmask)) {                                                  \
-    brow4 += (ctxb_sum & ~3) - (ctxb_right & ~3);                     \
-    ctx = ctxb_left & 3;                                              \
-  }
-
-  CTX_UNMERGE(256, 1);
-  CTX_UNMERGE(128, 2 + (t >> 8));
-  CTX_UNMERGE(64, 4 + (t >> 7));
-  CTX_UNMERGE(32, 8 + (t >> 6));
-  CTX_UNMERGE(16, 16 + (t >> 5));
-  CTX_UNMERGE(8, 32 + (t >> 4));
-  CTX_UNMERGE(4, 64 + (t >> 3));
-  CTX_UNMERGE(2, 128 + (t >> 2));
-  CTX_UNMERGE(1, 256 + (t >> 1));
-#undef CTX_UNMERGE
+  ctx_unmerge<256>(1, ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<128>(2 + (t >> 8), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<64>(4 + (t >> 7), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<32>(8 + (t >> 6), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<16>(16 + (t >> 5), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<8>(32 + (t >> 4), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<4>(64 + (t >> 3), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<2>(128 + (t >> 2), ctxtree, &ctx, &brow4, t);
+  ctx_unmerge<1>(256 + (t >> 1), ctxtree, &ctx, &brow4, t);
 
   return brow4 + ctx;
 }
@@ -966,7 +1002,7 @@ __global__ void __launch_bounds__(rowofs_block_dim)
   }
 }
 
-size_t __host__ count_blank_rows(const cudf::io::ParseOptions &opts,
+size_t __host__ count_blank_rows(const cudf::io::parse_options_view &opts,
                                  device_span<char const> const data,
                                  device_span<uint64_t const> const row_offsets,
                                  cudaStream_t stream)
@@ -984,7 +1020,7 @@ size_t __host__ count_blank_rows(const cudf::io::ParseOptions &opts,
     });
 }
 
-void __host__ remove_blank_rows(cudf::io::ParseOptions const &options,
+void __host__ remove_blank_rows(cudf::io::parse_options_view const &options,
                                 device_span<char const> const data,
                                 rmm::device_vector<uint64_t> &row_offsets,
                                 cudaStream_t stream)
@@ -1005,7 +1041,7 @@ void __host__ remove_blank_rows(cudf::io::ParseOptions const &options,
 }
 
 thrust::host_vector<column_parse::stats> detect_column_types(
-  cudf::io::ParseOptions const &options,
+  cudf::io::parse_options_view const &options,
   device_span<char const> const data,
   device_span<column_parse::flags const> const column_flags,
   device_span<uint64_t const> const row_starts,
@@ -1024,7 +1060,7 @@ thrust::host_vector<column_parse::stats> detect_column_types(
   return thrust::host_vector<column_parse::stats>(d_stats);
 }
 
-void __host__ decode_row_column_data(cudf::io::ParseOptions const &options,
+void __host__ decode_row_column_data(cudf::io::parse_options_view const &options,
                                      device_span<char const> const data,
                                      device_span<column_parse::flags const> const column_flags,
                                      device_span<uint64_t const> const row_offsets,
@@ -1042,7 +1078,7 @@ void __host__ decode_row_column_data(cudf::io::ParseOptions const &options,
     options, data, column_flags, row_offsets, dtypes, columns, valids);
 }
 
-uint32_t __host__ gather_row_offsets(const ParseOptions &options,
+uint32_t __host__ gather_row_offsets(const parse_options_view &options,
                                      uint64_t *row_ctx,
                                      device_span<uint64_t> const offsets_out,
                                      device_span<char const> const data,

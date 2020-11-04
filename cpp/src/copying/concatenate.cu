@@ -230,7 +230,7 @@ std::unique_ptr<column> fused_concatenate(std::vector<column_view> const& views,
   auto out_view   = out_col->mutable_view();
   auto d_out_view = mutable_column_device_view::create(out_view, stream);
 
-  rmm::device_scalar<size_type> d_valid_count(0);
+  rmm::device_scalar<size_type> d_valid_count(0, stream);
 
   // Launch kernel
   constexpr size_type block_size{256};
@@ -294,11 +294,13 @@ struct concatenate_dispatch {
     bool const has_nulls =
       std::any_of(views.cbegin(), views.cend(), [](auto const& col) { return col.has_nulls(); });
 
+    using Type = device_storage_type_t<T>;
+
     // Use a heuristic to guess when the fused kernel will be faster
     if (use_fused_kernel_heuristic(has_nulls, views.size())) {
-      return fused_concatenate<T>(views, has_nulls, mr, stream);
+      return fused_concatenate<Type>(views, has_nulls, mr, stream);
     } else {
-      return for_each_concatenate<T>(views, has_nulls, mr, stream);
+      return for_each_concatenate<Type>(views, has_nulls, mr, stream);
     }
   }
 };

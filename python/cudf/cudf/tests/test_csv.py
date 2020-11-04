@@ -1522,6 +1522,7 @@ def test_csv_writer_mixed_data(
     df = make_numpy_mixed_dataframe()
     df["Date"] = df["Date"].astype("datetime64")
     gdf = cudf.from_pandas(df)
+    gdf["Date"] = gdf["Date"].astype("datetime64[s]")
     df.to_csv(
         path_or_buf=pdf_df_fname,
         index=index,
@@ -1585,6 +1586,7 @@ def test_csv_writer_chunksize(chunksize, tmpdir):
     # Increase the df len as chunked logic only gets applied from chunksize >=8
     pdf = pd.concat([pdf] * 5)
     gdf = cudf.from_pandas(pdf)
+    gdf["Date"] = gdf["Date"].astype("datetime64[s]")
 
     pdf.to_csv(
         pdf_df_fname, date_format="%Y-%m-%dT%H:%M:%SZ", chunksize=chunksize,
