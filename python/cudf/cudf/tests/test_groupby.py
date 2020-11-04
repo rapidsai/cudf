@@ -657,6 +657,32 @@ def test_groupby_datetime_multi_agg_multi_groupby():
     assert_eq(pdg, gdg)
 
 
+@pytest.mark.parametrize(
+    "agg",
+    [
+        ["min", "max", "count", "mean"],
+        ["mean", "var", "std"],
+        ["count", "mean", "var", "std"],
+    ],
+)
+def test_groupby_multi_agg_hash_groupby(agg):
+    alphabets = "abcdefghijklmnopqrstuvwxyz"
+    prefixes = alphabets[:10]
+    coll_dict = dict()
+    for prefix in prefixes:
+        for this_name in alphabets:
+            coll_dict[prefix + this_name] = float
+    coll_dict["id"] = int
+    gdf = cudf.datasets.timeseries(
+        start="2000", end="2000-01-2", dtypes=coll_dict, freq="1s", seed=1,
+    ).reset_index(drop=True)
+    pdf = gdf.to_pandas()
+    check_dtype = False if "count" in agg else True
+    pdg = pdf.groupby("id").agg(agg)
+    gdg = gdf.groupby("id").agg(agg)
+    assert_eq(pdg, gdg, check_dtype=check_dtype)
+
+
 @pytest.mark.parametrize("agg", ["min", "max", "sum", "count", "mean"])
 def test_groupby_nulls_basic(agg):
     check_dtype = False if agg == "count" else True
