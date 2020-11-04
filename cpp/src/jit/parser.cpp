@@ -172,7 +172,8 @@ std::string ptx_parser::parse_instruction(const std::string& src)
         }
         constraint = register_type_to_contraint(register_type);
       } else if (piece.find("st.param") != std::string::npos) {
-        return "// Out port does not support return value!" +
+        return "asm volatile (\"" + output +
+               "/** *** Our port does not support return value! *** */" + "\");" +
                original_code;  // Our port does not support return value;
       } else if (piece[0] == '@') {
         output += " @" + remove_nonalphanumeric(piece.substr(1, piece.size() - 1));
