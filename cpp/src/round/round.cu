@@ -30,14 +30,14 @@ namespace cudf {
 namespace detail {
 namespace {  // anonymous
 
-float __device__ generic_round(float f) { return roundf(f); }
-double __device__ generic_round(double d) { return ::round(d); }
+inline float __device__ generic_round(float f) { return roundf(f); }
+inline double __device__ generic_round(double d) { return ::round(d); }
 
-float __device__ generic_round_half_even(float f) { return rintf(f); }
-double __device__ generic_round_half_even(double d) { return ::rint(d); }
+inline float __device__ generic_round_half_even(float f) { return rintf(f); }
+inline double __device__ generic_round_half_even(double d) { return rint(d); }
 
-float __device__ generic_modf(float a, float* b) { return modff(a, b); }
-double __device__ generic_modf(double a, double* b) { return modf(a, b); }
+inline float __device__ generic_modf(float a, float* b) { return modff(a, b); }
+inline double __device__ generic_modf(double a, double* b) { return modf(a, b); }
 
 template <typename T, typename std::enable_if_t<std::is_signed<T>::value>* = nullptr>
 T __device__ generic_abs(T value)

@@ -40,11 +40,20 @@ enum class rounding_method : int32_t { HALF_UP, HALF_EVEN };
  *
  * Example:
  * ```
- * column_view col; // contains { 1.729, 17.29, 172.9, 1729 };
+ * using namespace cudf;
  *
- * auto result1 = cudf::round(col);     // yields { 2,   17,   173,   1729 }
- * auto result2 = cudf::round(col, 1);  // yields { 1.7, 17.3, 172.9, 1729 }
- * auto result3 = cudf::round(col, -1); // yields { 0,   20,   170,   1730 }
+ * column_view a; // contains { 1.729, 17.29, 172.9, 1729 };
+ *
+ * auto result1 = round(a);     // { 2,   17,   173,   1729 }
+ * auto result2 = round(a, 1);  // { 1.7, 17.3, 172.9, 1729 }
+ * auto result3 = round(a, -1); // { 0,   20,   170,   1730 }
+ *
+ * column_view b; // contains { 1.5, 2.5, 1.35, 1.45, 15, 25 };
+ *
+ * auto result4 = round(b,  0, rounding_method::HALF_EVEN); // { 2,   2,   1,   1,   15, 25};
+ * auto result5 = round(b,  1, rounding_method::HALF_EVEN); // { 1.5, 2.5, 1.4, 1.4, 15, 25};
+ * auto result6 = round(b, -1, rounding_method::HALF_EVEN); // { 0,   0,   0,   0,   20, 20};
+ *
  * ```
  *
  * Info on HALF_UP   rounding: https://en.wikipedia.org/wiki/Rounding#Round_half_up
