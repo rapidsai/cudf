@@ -31,8 +31,8 @@
 #include <cudf_test/column_utilities.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace io {

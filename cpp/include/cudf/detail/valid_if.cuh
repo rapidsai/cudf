@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,10 +22,11 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_scalar.hpp>
+
 #include <thrust/device_vector.h>
 #include <thrust/distance.h>
-#include <rmm/device_scalar.hpp>
-#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace detail {

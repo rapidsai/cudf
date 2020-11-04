@@ -23,6 +23,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/translate.hpp>
+
 #include <strings/utilities.cuh>
 
 #include <thrust/find.h>

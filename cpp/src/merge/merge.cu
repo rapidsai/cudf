@@ -24,6 +24,7 @@
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
+
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/merge.h>

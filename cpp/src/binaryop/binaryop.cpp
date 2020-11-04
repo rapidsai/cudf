@@ -45,8 +45,9 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <string>
-#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 

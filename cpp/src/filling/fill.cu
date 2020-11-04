@@ -32,8 +32,6 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <cuda_runtime.h>
-
 #include <memory>
 
 namespace {

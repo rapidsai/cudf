@@ -21,6 +21,7 @@
 #include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {

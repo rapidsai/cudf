@@ -22,13 +22,13 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
 
 #include <memory>
 #include <utility>
 #include <vector>
-#include "rmm/cuda_stream_view.hpp"
 
 /**
  * @file

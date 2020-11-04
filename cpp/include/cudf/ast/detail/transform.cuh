@@ -25,9 +25,10 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <cstring>
 #include <numeric>
-#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 
