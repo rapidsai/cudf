@@ -179,12 +179,14 @@ struct half_even_negative {
   }
 };
 
-template <typename T, typename RoundFunctor>
+template <typename T, template <typename> typename RoundFunctor>
 std::unique_ptr<column> round_with(column_view const& input,
                                    int32_t decimal_places,
                                    cudaStream_t stream,
                                    rmm::mr::device_memory_resource* mr)
 {
+  using Functor = RoundFunctor<T>;
+
   if (decimal_places >= 0 && std::is_integral<T>::value)
     return std::make_unique<cudf::column>(input, stream, mr);
 
@@ -202,7 +204,7 @@ std::unique_ptr<column> round_with(column_view const& input,
                     input.begin<T>(),
                     input.end<T>(),
                     out_view.begin<T>(),
-                    RoundFunctor{n});
+                    Functor{n});
 
   return result;
 }
@@ -226,13 +228,13 @@ struct round_type_dispatcher {
     // clang-format off
     switch (method) {
       case cudf::rounding_method::HALF_UP:
-        if      (decimal_places == 0) return round_with<T, half_up_zero    <T>>(input, decimal_places, stream, mr);
-        else if (decimal_places >  0) return round_with<T, half_up_positive<T>>(input, decimal_places, stream, mr);
-        else                          return round_with<T, half_up_negative<T>>(input, decimal_places, stream, mr);
+        if      (decimal_places == 0) return round_with<T, half_up_zero    >(input, decimal_places, stream, mr);
+        else if (decimal_places >  0) return round_with<T, half_up_positive>(input, decimal_places, stream, mr);
+        else                          return round_with<T, half_up_negative>(input, decimal_places, stream, mr);
       case cudf::rounding_method::HALF_EVEN:
-        if      (decimal_places == 0) return round_with<T, half_even_zero    <T>>(input, decimal_places, stream, mr);
-        else if (decimal_places >  0) return round_with<T, half_even_positive<T>>(input, decimal_places, stream, mr);
-        else                          return round_with<T, half_even_negative<T>>(input, decimal_places, stream, mr);
+        if      (decimal_places == 0) return round_with<T, half_even_zero    >(input, decimal_places, stream, mr);
+        else if (decimal_places >  0) return round_with<T, half_even_positive>(input, decimal_places, stream, mr);
+        else                          return round_with<T, half_even_negative>(input, decimal_places, stream, mr);
       default: CUDF_FAIL("Undefined rounding method");
     }
     // clang-format on
