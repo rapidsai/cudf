@@ -888,7 +888,7 @@ class Series(Frame, Serializable):
             result.index = self.index
         elif isinstance(arg, cudf.Series):
             if not arg.index.is_unique:
-                raise InvalidIndexError(
+                raise ValueError(
                     """Reindexing only valid with
                 uniquely valued Index objects
                 """

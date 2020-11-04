@@ -80,6 +80,7 @@ def test_series_map_non_unique_index():
     assert_exceptions_equal(
         lfunc=pd.Series,
         rfunc=cudf.Series,
+        check_exception_type=False,
         lfunc_args_and_kwargs=([1, 1, 2], {"objs": ["a", "b", "c"]}),
         rfunc_args_and_kwargs=([1, 1, 2], {"objs": ["a", "b", "c"]}),
     )
