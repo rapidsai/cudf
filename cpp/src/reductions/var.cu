@@ -17,7 +17,8 @@
 // The translation unit for reduction `variance`
 
 #include <cudf/detail/reduction_functions.hpp>
-#include "compound.cuh"
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <reductions/compound.cuh>
 
 // @param[in] ddof Delta Degrees of Freedom used for `std`, `var`.
 //                 The divisor used in calculations is N - ddof, where N
@@ -32,7 +33,9 @@ std::unique_ptr<cudf::scalar> cudf::reduction::variance(column_view const& col,
   // TODO: add cuda version check when the fix is available
 #if !defined(__CUDACC_DEBUG__)
   using reducer = cudf::reduction::compound::element_type_dispatcher<cudf::reduction::op::variance>;
-  return cudf::type_dispatcher(col.type(), reducer(), col, output_dtype, ddof, mr, stream);
+  auto col_type =
+    cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
+  return cudf::type_dispatcher(col_type, reducer(), col, output_dtype, ddof, mr, stream);
 #else
   // workaround for bug 200529165 which causes compilation error only at device
   // debug build the bug will be fixed at cuda 10.2

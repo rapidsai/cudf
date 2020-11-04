@@ -16,7 +16,8 @@
 // The translation unit for reduction `mean`
 
 #include <cudf/detail/reduction_functions.hpp>
-#include "compound.cuh"
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <reductions/compound.cuh>
 
 std::unique_ptr<cudf::scalar> cudf::reduction::mean(column_view const& col,
                                                     cudf::data_type const output_dtype,
@@ -24,6 +25,8 @@ std::unique_ptr<cudf::scalar> cudf::reduction::mean(column_view const& col,
                                                     cudaStream_t stream)
 {
   using reducer = cudf::reduction::compound::element_type_dispatcher<cudf::reduction::op::mean>;
+  auto col_type =
+    cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
   return cudf::type_dispatcher(
-    col.type(), reducer(), col, output_dtype, /* ddof is not used for mean*/ 1, mr, stream);
+    col_type, reducer(), col, output_dtype, /* ddof is not used for mean*/ 1, mr, stream);
 }
