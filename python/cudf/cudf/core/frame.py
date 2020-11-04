@@ -711,9 +711,8 @@ class Frame(libcudf.table.Table):
             and (isinstance(other, float) and not np.isnan(other))
         ) and (self.dtype.type(other) != other):
             raise TypeError(
-                "Cannot safely cast non-equivalent {} to {}".format(
-                    type(other).__name__, self.dtype.name
-                )
+                f"Cannot safely cast non-equivalent "
+                f"{type(other).__name__} to {self.dtype.name}"
             )
 
         return (
@@ -780,9 +779,8 @@ class Frame(libcudf.table.Table):
                 return out
             else:
                 raise ValueError(
-                    "Inappropriate input {} and other {} combination".format(
-                        type(self), type(other)
-                    )
+                    f"Inappropriate input {type(self)} "
+                    f"and other {type(other)} combination"
                 )
 
     def where(self, cond, other=None, inplace=False):
@@ -1050,6 +1048,53 @@ class Frame(libcudf.table.Table):
                 result.append(self._empty_like(keep_index))
 
         return result
+
+    def pipe(self, func, *args, **kwargs):
+        """
+        Apply ``func(self, *args, **kwargs)``.
+
+        Parameters
+        ----------
+        func : function
+            Function to apply to the Series/DataFrame/Index.
+            ``args``, and ``kwargs`` are passed into ``func``.
+            Alternatively a ``(callable, data_keyword)`` tuple where
+            ``data_keyword`` is a string indicating the keyword of
+            ``callable`` that expects the Series/DataFrame/Index.
+        args : iterable, optional
+            Positional arguments passed into ``func``.
+        kwargs : mapping, optional
+            A dictionary of keyword arguments passed into ``func``.
+
+        Returns
+        -------
+        object : the return type of ``func``.
+
+        Examples
+        --------
+
+        Use ``.pipe`` when chaining together functions that expect
+        Series, DataFrames or GroupBy objects. Instead of writing
+
+        >>> func(g(h(df), arg1=a), arg2=b, arg3=c)
+
+        You can write
+
+        >>> (df.pipe(h)
+        ...    .pipe(g, arg1=a)
+        ...    .pipe(func, arg2=b, arg3=c)
+        ... )
+
+        If you have a function that takes the data as (say) the second
+        argument, pass a tuple indicating which keyword expects the
+        data. For example, suppose ``f`` takes its data as ``arg2``:
+
+        >>> (df.pipe(h)
+        ...    .pipe(g, arg1=a)
+        ...    .pipe((func, 'arg2'), arg1=a, arg3=c)
+        ...  )
+        """
+        return cudf.core.common.pipe(self, func, *args, **kwargs)
 
     @annotate("SCATTER_BY_MAP", color="green", domain="cudf_python")
     def scatter_by_map(
@@ -1354,7 +1399,7 @@ class Frame(libcudf.table.Table):
             subset = (subset,)
         diff = set(subset) - set(self._data)
         if len(diff) != 0:
-            raise KeyError("columns {!r} do not exist".format(diff))
+            raise KeyError(f"columns {diff} do not exist")
         subset_cols = [
             name for name, col in self._data.items() if name in subset
         ]
@@ -1490,7 +1535,9 @@ class Frame(libcudf.table.Table):
             raise KeyError(method)
         method_enum = libcudf.sort.RankMethod[method.upper()]
         if na_option not in {"keep", "top", "bottom"}:
-            raise KeyError(na_option)
+            raise ValueError(
+                "na_option must be one of 'keep', 'top', or 'bottom'"
+            )
 
         # TODO code for selecting numeric columns
         source = self
@@ -1997,7 +2044,7 @@ class Frame(libcudf.table.Table):
             subset = (subset,)
         diff = set(subset) - set(self._data)
         if len(diff) != 0:
-            raise KeyError("columns {!r} do not exist".format(diff))
+            raise KeyError(f"columns {diff} do not exist")
         subset_cols = [name for name in self._column_names if name in subset]
         if len(subset_cols) == 0:
             return self.copy(deep=True)
@@ -3031,9 +3078,7 @@ class Frame(libcudf.table.Table):
 
         # must actually support the requested merge type
         if how not in ["left", "inner", "outer", "leftanti", "leftsemi"]:
-            raise NotImplementedError(
-                "{!r} merge not supported yet".format(how)
-            )
+            raise NotImplementedError(f"{how} merge not supported yet")
 
         # Passing 'on' with 'left_on' or 'right_on' is potentially ambiguous
         if on:
@@ -3074,14 +3119,14 @@ class Frame(libcudf.table.Table):
             on_keys = [on] if not isinstance(on, list) else on
             for key in on_keys:
                 if not (key in lhs._data.keys() and key in rhs._data.keys()):
-                    raise KeyError("Key {} not in both operands".format(on))
+                    raise KeyError(f"Key {on} not in both operands")
         else:
             for key in left_on:
                 if key not in lhs._data.keys():
-                    raise KeyError('Key "{}" not in left operand'.format(key))
+                    raise KeyError(f'Key "{key}" not in left operand')
             for key in right_on:
                 if key not in rhs._data.keys():
-                    raise KeyError('Key "{}" not in right operand'.format(key))
+                    raise KeyError(f'Key "{key}" not in right operand')
 
     def _merge(
         self,
@@ -3247,19 +3292,16 @@ def _get_replacement_values(to_replace, replacement, col_name, column):
             # If both are non-scalar
             if len(to_replace) != len(replacement):
                 raise ValueError(
-                    "Replacement lists must be "
-                    "of same length."
-                    "Expected {}, got {}.".format(
-                        len(to_replace), len(replacement)
-                    )
+                    f"Replacement lists must be "
+                    f"of same length."
+                    f"Expected {len(to_replace)}, got {len(replacement)}."
                 )
     else:
         if not is_scalar(replacement):
             raise TypeError(
-                "Incompatible types '{}' and '{}' "
-                "for *to_replace* and *replacement*.".format(
-                    type(to_replace).__name__, type(replacement).__name__
-                )
+                f"Incompatible types '{type(to_replace).__name__}' "
+                f"and '{type(replacement).__name__}' "
+                f"for *to_replace* and *replacement*."
             )
         to_replace = [to_replace]
         replacement = [replacement]

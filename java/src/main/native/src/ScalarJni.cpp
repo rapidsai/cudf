@@ -15,9 +15,11 @@
  */
 
 #include <cudf/binaryop.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
 #include "cudf_jni_apis.hpp"
+#include "dtype_utils.hpp"
 
 extern "C" {
 
@@ -393,19 +395,51 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeTimestampTimeScalar(JNIEn
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDecimal32Scalar(JNIEnv *env, jclass,
+                                                                       jint value,
+                                                                       jint scale,
+                                                                       jboolean is_valid) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const value_ = static_cast<int32_t>(value);
+    auto const scale_ = numeric::scale_type{static_cast<int32_t>(scale)};
+    std::unique_ptr<cudf::scalar> s = cudf::make_fixed_point_scalar<numeric::decimal32>(value_, scale_);
+    s->set_valid(is_valid);
+    return reinterpret_cast<jlong>(s.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDecimal64Scalar(JNIEnv *env, jclass,
+                                                                       jlong value,
+                                                                       jint scale,
+                                                                       jboolean is_valid) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const value_ = static_cast<int64_t>(value);
+    auto const scale_ = numeric::scale_type{static_cast<int32_t>(scale)};
+    std::unique_ptr<cudf::scalar> s = cudf::make_fixed_point_scalar<numeric::decimal64>(value_, scale_);
+    s->set_valid(is_valid);
+    return reinterpret_cast<jlong>(s.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_binaryOpSV(JNIEnv *env, jclass, jlong lhs_ptr,
                                                               jlong rhs_view, jint int_op,
-                                                              jint out_dtype) {
+                                                              jint out_dtype, jint scale) {
   JNI_NULL_CHECK(env, lhs_ptr, "lhs is null", 0);
   JNI_NULL_CHECK(env, rhs_view, "rhs is null", 0);
   try {
     cudf::jni::auto_set_device(env);
     cudf::scalar *lhs = reinterpret_cast<cudf::scalar *>(lhs_ptr);
     auto rhs = reinterpret_cast<cudf::column_view *>(rhs_view);
+    cudf::data_type n_data_type = cudf::jni::make_data_type(out_dtype, scale);
 
     cudf::binary_operator op = static_cast<cudf::binary_operator>(int_op);
     std::unique_ptr<cudf::column> result = cudf::binary_operation(
-        *lhs, *rhs, op, cudf::data_type(static_cast<cudf::type_id>(out_dtype)));
+        *lhs, *rhs, op, n_data_type);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
