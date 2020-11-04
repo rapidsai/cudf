@@ -217,6 +217,7 @@ class StructDtype(ExtensionDtype):
 class DecimalDtype(ExtensionDtype):
 
     name = "decimal"
+    _metadata = ("precision", "scale")
 
     def __init__(self, precision, scale):
         self._typ = pa.decimal128(precision, scale)
@@ -239,4 +240,4 @@ class DecimalDtype(ExtensionDtype):
 
     @classmethod
     def from_arrow(cls, typ):
-        return cls(type.precision, type.scale)
+        return cls(typ.precision, typ.scale)
