@@ -9,8 +9,10 @@ from collections import namedtuple
 Dataset = namedtuple("Dataset", ["url", "dir"])
 datasets = {
     "cuio_dataset": Dataset(
-        "https://rapidsai-data.s3.us-east-2.amazonaws.com/cudf/benchmark/"
-        "avro_json_datasets.zip",
+        (
+            "https://rapidsai-data.s3.us-east-2.amazonaws.com/cudf/"
+            "benchmark/avro_json_datasets.zip"
+        ),
         "cudf/benchmarks/cuio_data/",
     ),
 }
@@ -24,7 +26,7 @@ def delete_dir(path):
 
 
 def fetch_datasets(urls, dirs):
-    tmp_path = os.path.join(os.getcwd() + "tmp_benchmark/")
+    tmp_path = os.path.join(os.getcwd(), "tmp_benchmark/")
     delete_dir(tmp_path)
     os.mkdir(tmp_path)
     for url, path in zip(urls, dirs):
