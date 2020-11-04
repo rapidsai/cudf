@@ -274,6 +274,28 @@ TEST_F(RoundTests, SimpleNegativeIntegerWithUnsignedNumbers)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TEST_F(RoundTests, SimpleNegativeInt8HalfEven)
+{
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<int8_t>;
+
+  auto const input    = fw_wrapper{12, 35, 36, 15, 16, 24, 25, 26};
+  auto const expected = fw_wrapper{10, 40, 40, 20, 20, 20, 20, 30};
+  auto const result   = cudf::round(input, -1, cudf::rounding_method::HALF_EVEN);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(RoundTests, SimpleNegativeInt8HalfUp)
+{
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<int8_t>;
+
+  auto const input    = fw_wrapper{12, 35, 36, 15, 16, 24, 25, 26};
+  auto const expected = fw_wrapper{10, 40, 40, 20, 20, 20, 30, 30};
+  auto const result   = cudf::round(input, -1, cudf::rounding_method::HALF_UP);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TYPED_TEST(RoundTestsIntegerTypes, SimplePositiveInteger)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
