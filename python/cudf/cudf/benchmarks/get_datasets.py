@@ -1,7 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-import getopt
-import sys
 import os
 import shutil
 import argparse
@@ -26,7 +24,7 @@ def delete_dir(path):
 
 
 def fetch_datasets(urls, dirs):
-    tmp_path = os.path.join(os.getcwd()+"tmp_benchmark/")
+    tmp_path = os.path.join(os.getcwd() + "tmp_benchmark/")
     delete_dir(tmp_path)
     os.mkdir(tmp_path)
     for url, path in zip(urls, dirs):
@@ -57,17 +55,22 @@ parser.add_argument("-u", nargs=1, help="url of a dataset")
 parser.add_argument(
     "-d",
     nargs=1,
-    help="path where downloaded dataset from given url will be unzipped"
+    help="path where downloaded dataset from given url will be unzipped",
 )
 parser.add_argument(
     "--datasets",
-    nargs='+',
-    help="Currently supported datasets are: " + ", ".join(list(datasets.keys()))
+    nargs="+",
+    help="Currently supported datasets are: "
+    + ", ".join(list(datasets.keys())),
 )
 args = parser.parse_args()
 
-if (args.u is None and args.d is not None) or (args.u is not None and args.d is None):
-    raise ValueError("option -u and -d should be used together, can't use only one")
+if (args.u is None and args.d is not None) or (
+    args.u is not None and args.d is None
+):
+    raise ValueError(
+        "option -u and -d should be used together, can't use only one"
+    )
 
 if args.u and args.d:
     urls.append(args.u[0])
