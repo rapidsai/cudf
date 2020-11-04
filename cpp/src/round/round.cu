@@ -59,7 +59,7 @@ int16_t __device__ generic_sign(T value)
 
 // this is needed to suppress warning: pointless comparison of unsigned integer with zero
 template <typename T, typename std::enable_if_t<not std::is_signed<T>::value>* = nullptr>
-int16_t __device__ generate_sign(T value)
+int16_t __device__ generic_sign(T value)
 {
   return 1;
 }
@@ -119,7 +119,7 @@ struct half_up_negative {
   __device__ U operator()(U e)
   {
     auto const down = (e / n) * n;  // result from rounding down
-    return down + generate_sign(e) * (generic_abs(e - down) >= n / 2 ? n : 0);
+    return down + generic_sign(e) * (generic_abs(e - down) >= n / 2 ? n : 0);
   }
 };
 
@@ -175,7 +175,7 @@ struct half_even_negative {
     auto const down        = down_over_n * n;  // result from rounding down
     auto const diff        = generic_abs(e - down);
     auto const adjustment  = (diff > n / 2) or (diff == n / 2 && down_over_n % 2 == 1) ? n : 0;
-    return down + generate_sign(e) * adjustment;
+    return down + generic_sign(e) * adjustment;
   }
 };
 
