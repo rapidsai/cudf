@@ -21,9 +21,6 @@ package ai.rapids.cudf;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
-import java.nio.Buffer;
-import java.nio.IntBuffer;
-import java.nio.LongBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -525,16 +522,24 @@ public final class HostColumnVector extends HostColumnVectorCore {
    * Create a new vector from the given values.  This API supports inline nulls,
    * but is much slower than building from primitive array of unscaledValues.
    * Notice:
-   *  1. All input BigDecimals should share same scale.
+   *  1. Input values will be rescaled with min scale (max scale in terms of java.math.BigDecimal),
+   *  which avoids potential precision loss due to rounding. But there exists risk of precision overflow.
    *  2. The scale will be zero if all input values are null.
    */
   public static HostColumnVector fromDecimals(BigDecimal... values) {
-    // Try to fetch the element with max precision. Fill with ZERO if inputs is empty.
-    BigDecimal maxPrecisionDec = Arrays.stream(values).filter(Objects::nonNull)
+    // 1. Fetch the element with max precision (maxDec). Fill with ZERO if inputs is empty.
+    // 2. Fetch the max scale. Fill with ZERO if inputs is empty.
+    // 3. Rescale the maxDec with the max scale, so to come out the max precision capacity we need.
+    BigDecimal maxDec = Arrays.stream(values).filter(Objects::nonNull)
         .max(Comparator.comparingInt(BigDecimal::precision))
         .orElse(BigDecimal.ZERO);
+    int maxScale = Arrays.stream(values)
+        .map(decimal -> (decimal == null) ? 0 : decimal.scale())
+        .max(Comparator.naturalOrder())
+        .orElse(0);
+    maxDec = maxDec.setScale(maxScale, RoundingMode.UNNECESSARY);
 
-    return build(DType.fromJavaBigDecimal(maxPrecisionDec), values.length, (b) -> b.appendBoxed(values));
+    return build(DType.fromJavaBigDecimal(maxDec), values.length, (b) -> b.appendBoxed(values));
   }
 
   /**
@@ -1276,22 +1281,30 @@ public final class HostColumnVector extends HostColumnVectorCore {
       return this;
     }
 
+    /**
+     * Append java.math.BigDecimal into HostColumnVector with UNNECESSARY RoundingMode.
+     * Input decimal should have a larger scale than column vector.Otherwise, an ArithmeticException will be thrown while rescaling.
+     * If unscaledValue after rescaling exceeds the max precision of rapids type,
+     * an ArithmeticException will be thrown while extracting integral.
+     *
+     * @param value BigDecimal value to be appended
+     */
     public final Builder append(BigDecimal value) {
-      return append(value, null);
+      return append(value, RoundingMode.UNNECESSARY);
     }
 
-    //
+    /**
+     * Append java.math.BigDecimal into HostColumnVector with user-defined RoundingMode.
+     * Input decimal will be rescaled according to scale of column type and RoundingMode before appended.
+     * If unscaledValue after rescaling exceeds the max precision of rapids type, an ArithmeticException will be thrown.
+     *
+     * @param value        BigDecimal value to be appended
+     * @param roundingMode rounding mode determines rescaling behavior
+     */
     public final Builder append(BigDecimal value, RoundingMode roundingMode) {
       assert type.isDecimalType();
       assert currentIndex < rows;
-      BigInteger unscaledValue;
-      // rescaled input decimal if RoundingMode set
-      if (roundingMode == null) {
-        assert -type.getScale() == value.scale();
-        unscaledValue = value.unscaledValue();
-      } else {
-        unscaledValue = value.setScale(-type.getScale(), roundingMode).unscaledValue();
-      }
+      BigInteger unscaledValue = value.setScale(-type.getScale(), roundingMode).unscaledValue();
       if (type.typeId == DType.DTypeEnum.DECIMAL32) {
         data.setInt(currentIndex * type.getSizeInBytes(), unscaledValue.intValueExact());
       } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
@@ -1304,10 +1317,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public final Builder appendUnscaledDecimal(int value) {
-      if (type.typeId == DType.DTypeEnum.DECIMAL64) {
-        return appendUnscaledDecimal((long) value);
-      }
-      assert type.isDecimalType();
+      assert type.typeId == DType.DTypeEnum.DECIMAL32;
       assert currentIndex < rows;
       data.setInt(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;

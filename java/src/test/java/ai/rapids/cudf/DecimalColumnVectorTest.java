@@ -54,15 +54,17 @@ public class DecimalColumnVectorTest extends CudfTestBase {
   @BeforeAll
   public static void setup() {
     for (int i = 0; i < decimal32Zoo.length; i++) {
-      unscaledDec32Zoo[i] = rdSeed.nextInt() / 10;
-      unscaledDec64Zoo[i] = rdSeed.nextLong() / 10;
+      unscaledDec32Zoo[i] = rdSeed.nextInt() / 100;
+      unscaledDec64Zoo[i] = rdSeed.nextLong() / 100;
       if (rdSeed.nextBoolean()) {
-        decimal32Zoo[i] = BigDecimal.valueOf(rdSeed.nextInt() / 10, dec32Scale);
+        // Create BigDecimal with slight variance on scale, in order to test building cv from inputs with different scales.
+        decimal32Zoo[i] = BigDecimal.valueOf(rdSeed.nextInt() / 100, dec32Scale - rdSeed.nextInt(2));
       } else {
         decimal32Zoo[i] = null;
       }
       if (rdSeed.nextBoolean()) {
-        decimal64Zoo[i] = BigDecimal.valueOf(rdSeed.nextLong() / 10, dec64Scale);
+        // Create BigDecimal with slight variance on scale, in order to test building cv from inputs with different scales.
+        decimal64Zoo[i] = BigDecimal.valueOf(rdSeed.nextLong() / 100, dec64Scale - rdSeed.nextInt(2));
       } else {
         decimal64Zoo[i] = null;
       }
@@ -126,19 +128,16 @@ public class DecimalColumnVectorTest extends CudfTestBase {
 
   @Test
   public void testOverrunningTheBuffer() {
-    try (Builder builder = HostColumnVector.builder(DType.create(DType.DTypeEnum.DECIMAL32, dec32Scale), 3)) {
+    try (Builder builder = HostColumnVector.builder(DType.create(DType.DTypeEnum.DECIMAL32, -dec32Scale), 3)) {
       assertThrows(AssertionError.class, () -> builder.appendBoxed(decimal32Zoo).build());
     }
-    try (Builder builder = HostColumnVector.builder(DType.create(DType.DTypeEnum.DECIMAL64, dec64Scale), 3)) {
+    try (Builder builder = HostColumnVector.builder(DType.create(DType.DTypeEnum.DECIMAL64, -dec64Scale), 3)) {
       assertThrows(AssertionError.class, () -> builder.appendUnscaledDecimalArray(unscaledDec64Zoo).build());
     }
   }
 
   @Test
   public void testDecimalValidation() {
-    // inconsistent scales
-    assertThrows(AssertionError.class,
-        () -> HostColumnVector.fromDecimals(BigDecimal.valueOf(12.3), BigDecimal.valueOf(1.23)));
     // precision overflow
     assertThrows(IllegalArgumentException.class, () -> HostColumnVector.fromDecimals(overflowDecimal64));
     assertThrows(IllegalArgumentException.class, () -> {
@@ -146,6 +145,14 @@ public class DecimalColumnVectorTest extends CudfTestBase {
     });
     assertThrows(IllegalArgumentException.class, () -> {
       ColumnVector.decimalFromLongs(-(DType.DECIMAL64_MAX_PRECISION + 1), unscaledDec64Zoo);
+    });
+    // precision overflow due to rescaling by min scale
+    assertThrows(IllegalArgumentException.class, () -> {
+      ColumnVector.fromDecimals(BigDecimal.valueOf(1.23e10), BigDecimal.valueOf(1.2e-7));
+    });
+    // exactly hit the MAX_PRECISION_DECIMAL64 after rescaling
+    assertDoesNotThrow(() -> {
+      ColumnVector.fromDecimals(BigDecimal.valueOf(1.23e10), BigDecimal.valueOf(1.2e-6));
     });
   }
 
@@ -181,9 +188,9 @@ public class DecimalColumnVectorTest extends CudfTestBase {
         for (int i = 0; i < decimalZoo.length; i++) {
           assertEquals(decimalZoo[i] == null, hcv.isNull(i));
           if (decimalZoo[i] != null) {
-            assertEquals(decimalZoo[i], hcv.getBigDecimal(i));
+            assertEquals(decimalZoo[i].floatValue(), hcv.getBigDecimal(i).floatValue());
             long backValue = isInt64 ? hcv.getLong(i) : hcv.getInt(i);
-            assertEquals(decimalZoo[i], BigDecimal.valueOf(backValue, scale));
+            assertEquals(decimalZoo[i].setScale(scale, RoundingMode.UNNECESSARY), BigDecimal.valueOf(backValue, scale));
           }
         }
       }
@@ -271,7 +278,7 @@ public class DecimalColumnVectorTest extends CudfTestBase {
                      if (rdSeed.nextBoolean()) {
                        b.appendNull();
                      } else {
-                       b.append(BigDecimal.valueOf(rdSeed.nextInt() / 10, -decType.getScale()));
+                       b.append(BigDecimal.valueOf(rdSeed.nextInt() / 100, -decType.getScale()));
                      }
                    }
                  });
@@ -283,8 +290,12 @@ public class DecimalColumnVectorTest extends CudfTestBase {
                   dst.appendNull();
                   gtBuilder.appendNull();
                 } else {
-                  BigDecimal a = BigDecimal.valueOf(rdSeed.nextInt() / 10, -decType.getScale());
-                  dst.appendUnscaledDecimal(a.unscaledValue().intValueExact());
+                  BigDecimal a = BigDecimal.valueOf(rdSeed.nextInt() / 100, -decType.getScale());
+                  if (decType.typeId == DType.DTypeEnum.DECIMAL32) {
+                    dst.appendUnscaledDecimal(a.unscaledValue().intValueExact());
+                  } else {
+                    dst.appendUnscaledDecimal(a.unscaledValue().longValueExact());
+                  }
                   gtBuilder.append(a);
                 }
               }
