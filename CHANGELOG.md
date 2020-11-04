@@ -32,6 +32,7 @@
 - PR #6540 Add dictionary support to `cudf::unary_operation`
 - PR #6537 Refactor ORC timezone
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
+- PR #6545 Pin cmake policies to cmake 3.17 version
 - PR #6556 Add dictionary support to `cudf::inner_join`, `cudf::left_join` and `cudf::full_join`
 - PR #6557 Support nullable timestamp columns in time range window functions
 - PR #6566 Remove reinterpret_cast conversions between pointer types in ORC
@@ -52,6 +53,7 @@
 - PR #6622 Update `to_pandas` api docs
 - PR #6623 Add operator overloading to column and clean up error messages
 - PR #6651 Add cudf::dictionary::make_dictionary_pair_iterator
+- PR #6635 Add cudf::test::dictionary_column_wrapper class
 
 ## Bug Fixes
 
@@ -209,6 +211,7 @@
 - PR #6438 Fetch nvcomp v1.1.0 for JNI build
 - PR #6379 Add list hashing functionality to MD5
 - PR #6498 Add helper method to ColumnBuilder with some nits
+- PR #6653 Replaced SHFL_XOR calls with cub::WarpReduce
 
 ## Bug Fixes
 
