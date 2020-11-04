@@ -299,6 +299,34 @@ auto create_hash_map(table_device_view const& d_keys,
                           stream);
 }
 
+// make table that will hold sparse results
+auto create_sparse_results_table(table_view const& flattened_values,
+                                 std::vector<aggregation::Kind> aggs,
+                                 cudaStream_t stream)
+{
+  std::vector<std::unique_ptr<column>> sparse_columns;
+  std::transform(
+    flattened_values.begin(),
+    flattened_values.end(),
+    aggs.begin(),
+    std::back_inserter(sparse_columns),
+    [stream](auto const& col, auto const& agg) {
+      bool nullable =
+        (agg == aggregation::COUNT_VALID or agg == aggregation::COUNT_ALL)
+          ? false
+          : (col.has_nulls() or agg == aggregation::VARIANCE or agg == aggregation::STD);
+      auto mask_flag = (nullable) ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
+
+      return make_fixed_width_column(
+        cudf::detail::target_type(col.type(), agg), col.size(), mask_flag, stream);
+    });
+
+  table sparse_table(std::move(sparse_columns));
+  mutable_table_view table_view = sparse_table.mutable_view();
+  cudf::detail::initialize_with_identity(table_view, aggs, stream);
+  return std::move(sparse_table);
+}
+
 /**
  * @brief Computes all aggregations from `requests` that require a single pass
  * over the data and stores the results in `sparse_results`
@@ -320,26 +348,7 @@ void compute_single_pass_aggs(table_view const& keys,
   std::tie(flattened_values, aggs, col_ids) = flatten_single_pass_aggs(requests);
 
   // make table that will hold sparse results
-  std::vector<std::unique_ptr<column>> sparse_columns;
-  std::transform(flattened_values.begin(),
-                 flattened_values.end(),
-                 aggs.begin(),
-                 std::back_inserter(sparse_columns),
-                 [stream](auto const& col, auto const& agg) {
-                   bool nullable =
-                     (agg == aggregation::COUNT_VALID or agg == aggregation::COUNT_ALL)
-                       ? false
-                       : col.has_nulls();
-                   auto mask_flag = (nullable) ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
-
-                   return make_fixed_width_column(
-                     cudf::detail::target_type(col.type(), agg), col.size(), mask_flag, stream);
-                 });
-
-  table sparse_table(std::move(sparse_columns));
-  mutable_table_view table_view = sparse_table.mutable_view();
-  cudf::detail::initialize_with_identity(table_view, aggs, stream);
-
+  table sparse_table = create_sparse_results_table(flattened_values, aggs, stream);
   // prepare to launch kernel to do the actual aggregation
   auto d_sparse_table = mutable_table_device_view::create(sparse_table);
   auto d_values       = table_device_view::create(flattened_values);
