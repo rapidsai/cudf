@@ -264,13 +264,14 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             result_columns = result_columns.append(o.columns)
 
         if ignore_index:
-            #with ignore_index the column names change to numbers
+            # with ignore_index the column names change to numbers
             df.columns = pd.RangeIndex(len(result_columns.unique()))
         if empty_inner:
-            #if join is inner and it containes an empty df we return an empty df
-                return df.head(0)
+            # if join is inner and it containes an empty df
+            # we return an empty df
+            return df.head(0)
         if ignore_index:
-            df.index = o.index 
+            df.index = o.index
         else:
             df.columns = result_columns.unique()
         if not match_index:
