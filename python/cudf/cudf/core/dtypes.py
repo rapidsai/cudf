@@ -211,3 +211,19 @@ class StructDtype(ExtensionDtype):
 
     def __repr__(self):
         return f"StructDtype({self.fields})"
+
+
+class DecimalDtype(ExtensionDtype):
+
+    name = "decimal"
+
+    def __init__(self, precision, scale):
+        self._typ = pa.decimal128(precision, scale)
+
+    @property
+    def precision(self):
+        return self._typ.precision
+
+    @property
+    def scale(self):
+        return self._typ.scale
