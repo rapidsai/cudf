@@ -52,6 +52,7 @@
 - PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
 - PR #6622 Update `to_pandas` api docs
 - PR #6623 Add operator overloading to column and clean up error messages
+- PR #6635 Add cudf::test::dictionary_column_wrapper class
 
 ## Bug Fixes
 
