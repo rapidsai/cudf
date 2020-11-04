@@ -29,6 +29,9 @@ namespace cudf {
 
 /**
  * @brief Different rounding methods for `cudf::round`
+ *
+ * Info on HALF_UP   rounding: https://en.wikipedia.org/wiki/Rounding#Round_half_up
+ * Info on HALF_EVEN rounding: https://en.wikipedia.org/wiki/Rounding#Round_half_to_even
  */
 enum class rounding_method : int32_t { HALF_UP, HALF_EVEN };
 
@@ -53,11 +56,7 @@ enum class rounding_method : int32_t { HALF_UP, HALF_EVEN };
  * auto result4 = round(b,  0, rounding_method::HALF_EVEN); // { 2,   2,   1,   1,   15, 25};
  * auto result5 = round(b,  1, rounding_method::HALF_EVEN); // { 1.5, 2.5, 1.4, 1.4, 15, 25};
  * auto result6 = round(b, -1, rounding_method::HALF_EVEN); // { 0,   0,   0,   0,   20, 20};
- *
  * ```
- *
- * Info on HALF_UP   rounding: https://en.wikipedia.org/wiki/Rounding#Round_half_up
- * Info on HALF_EVEN rounding: https://en.wikipedia.org/wiki/Rounding#Round_half_to_even
  *
  * @param input          Column of values to be rounded
  * @param decimal_places Number of decimal places to round to (default 0). If negative, this
