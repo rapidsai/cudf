@@ -5,7 +5,6 @@ import cudf
 import glob
 import io
 from conftest import option
-import numpy as np
 
 
 def get_dataset_dir():
@@ -26,23 +25,34 @@ def bench_avro(benchmark, file_path, use_buffer, num_rows):
 
 def get_dtypes(file_path):
     if "_unsigned_int_" in file_path:
-        return ["uint8", "uint16", "uint32", "uint64"]*16
-    elif "_int_" in  file_path:
-        return ["int8", "int16", "int32", "int64"]*16
+        return ["uint8", "uint16", "uint32", "uint64"] * 16
+    elif "_int_" in file_path:
+        return ["int8", "int16", "int32", "int64"] * 16
     elif "_float_" in file_path:
-        return ['float32', 'float64']*32
+        return ["float32", "float64"] * 32
     elif "_str_" in file_path:
-        return ["str"]*64
+        return ["str"] * 64
     elif "_datetime64_" in file_path:
-        return ["timestamp[s]", "timestamp[ms]", "timestamp[us]", "timestamp[ns]"]*16
+        return [
+            "timestamp[s]",
+            "timestamp[ms]",
+            "timestamp[us]",
+            "timestamp[ns]",
+        ] * 16
     elif "_timedelta64_" in file_path:
-        return ["timedelta64[s]", "timedelta64[ms]", "timedelta64[us]", "timedelta64[ns]"]*16
+        return [
+            "timedelta64[s]",
+            "timedelta64[ms]",
+            "timedelta64[us]",
+            "timedelta64[ns]",
+        ] * 16
     elif "_bool_" in file_path:
-        return ["bool"]*64
+        return ["bool"] * 64
     else:
         raise TypeError("Unsupported dtype file")
 
-@pytest.mark.parametrize("dtype", ['infer', 'provide'])
+
+@pytest.mark.parametrize("dtype", ["infer", "provide"])
 @pytest.mark.parametrize("file_path", glob.glob(get_dataset_dir() + "json_*"))
 def bench_json(benchmark, file_path, use_buffer, dtype):
     if "bz2" in file_path:
@@ -55,9 +65,9 @@ def bench_json(benchmark, file_path, use_buffer, dtype):
         raise TypeError("Unsupported compression type")
 
     if dtype == "infer":
-        dtype=True
+        dtype = True
     else:
-        dtype=get_dtypes(file_path)
+        dtype = get_dtypes(file_path)
 
     if use_buffer == "True":
         with open(file_path, "rb") as f:
@@ -70,5 +80,5 @@ def bench_json(benchmark, file_path, use_buffer, dtype):
         compression=compression,
         lines=True,
         orient="records",
-        dtype=dtype
+        dtype=dtype,
     )
