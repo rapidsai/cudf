@@ -61,7 +61,7 @@ int16_t __device__ generic_sign(T value)
 template <typename T, typename std::enable_if_t<not std::is_signed<T>::value>* = nullptr>
 int16_t __device__ generate_sign(T value)
 {
-  return value > 0 ? 1 : 0;
+  return 1;
 }
 
 template <typename T>
