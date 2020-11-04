@@ -802,11 +802,6 @@ def test_concat_join_no_overlapping_columns_many_and_empty(
     )
 
 
-# the folloing 3 cases require an index_reset of pandas
-# pandas returns an empty object index instead of a range index.
-# All are cases where there are no overlapping column names
-
-
 @pytest.mark.parametrize(
     "objs",
     [
@@ -979,8 +974,8 @@ def test_concat_join_series(ignore_index, sort, join, axis):
         ],
     ],
 )
-@pytest.mark.parametrize("ignore_index", [True])
-@pytest.mark.parametrize("sort", [True])
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
 @pytest.mark.parametrize("join", ["inner", "outer"])
 @pytest.mark.parametrize("axis", [0, 1])
 def test_concat_join_empty_dataframes(

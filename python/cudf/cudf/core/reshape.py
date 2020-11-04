@@ -239,15 +239,10 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         if len(objs) == 0:
             return cudf.DataFrame()
         empty_inner = False
-        empty_outer = False 
         if join == "inner":
             # don't filter out empty df's
             if any(obj.empty for obj in old_objs):
                 empty_inner = True
-        if join == "outer":
-            # don't filter out empty df's
-            if any(obj.empty for obj in old_objs):
-                empty_outer = True
 
         objs, match_index = _align_objs(objs, how=join)
         for idx, o in enumerate(objs):
@@ -270,23 +265,21 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
         if ignore_index:
             #with ignore_index the column names change to numbers
-            #indexes mainly stay the same
             df.columns = pd.RangeIndex(len(result_columns.unique()))
         if empty_inner:
             #if join is inner and it containes an empty df we return an empty df
                 return df.head(0)
         if ignore_index:
-            df.index = o.index
-            if sort:
-                return df.sort_index() 
-            else:
-                return df  
+            df.index = o.index 
         else:
             df.columns = result_columns.unique()
         if not match_index:
             return df.sort_index()
         else:
-            return df
+            if sort:
+                return df.sort_index()
+            else:
+                return df
 
     typ = list(typs)[0]
 
