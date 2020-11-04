@@ -305,4 +305,12 @@ TEST_F(RoundTests, Int64AtBoundary)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected5, result5->view());
 }
 
+TEST_F(RoundTests, BoolTest)
+{
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<bool>;
+
+  auto const input = fw_wrapper{0, 1, 0};
+  EXPECT_THROW(cudf::round(input, -2, cudf::rounding_method::HALF_UP), cudf::logic_error);
+}
+
 CUDF_TEST_PROGRAM_MAIN()

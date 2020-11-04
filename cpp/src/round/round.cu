@@ -65,6 +65,12 @@ int16_t __device__ generate_sign(T value)
 }
 
 template <typename T>
+constexpr inline auto is_supported_round_type()
+{
+  return cudf::is_numeric<T>() && not std::is_same<T, bool>::value;
+}
+
+template <typename T>
 struct half_up_zero {
   T n;  // unused in the decimal_places = 0 case
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
@@ -205,13 +211,14 @@ std::unique_ptr<column> round_with(column_view const& input,
 
 struct round_type_dispatcher {
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_numeric<T>(), std::unique_ptr<column>> operator()(Args&&... args)
+  std::enable_if_t<not is_supported_round_type<T>(), std::unique_ptr<column>> operator()(
+    Args&&... args)
   {
     CUDF_FAIL("Type not support for cudf::round");
   }
 
   template <typename T>
-  std::enable_if_t<cudf::is_numeric<T>(), std::unique_ptr<column>> operator()(
+  std::enable_if_t<is_supported_round_type<T>(), std::unique_ptr<column>> operator()(
     column_view const& input,
     int32_t decimal_places,
     cudf::rounding_method method,
