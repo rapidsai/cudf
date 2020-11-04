@@ -197,9 +197,9 @@ class TimeDeltaColumn(column.ColumnBase):
             lhs, rhs, out_dtype = self._binary_op_floordiv(rhs)
             op = "truediv"
         elif op == "add":
-            out_dtype = _timedelta_binary_op_add(lhs, rhs)
+            out_dtype = _timedelta_add_result_dtype(lhs, rhs)
         elif op == "sub":
-            out_dtype = _timedelta_binary_op_sub(lhs, rhs)
+            out_dtype = _timedelta_sub_result_dtype(lhs, rhs)
         else:
             raise TypeError(
                 f"Series of dtype {self.dtype} cannot perform "
@@ -552,7 +552,7 @@ def determine_out_dtype(lhs_dtype, rhs_dtype):
         raise TypeError(f"Cannot type-cast {lhs_dtype} and {rhs_dtype}")
 
 
-def _timedelta_binary_op_add(lhs, rhs):
+def _timedelta_add_result_dtype(lhs, rhs):
     if pd.api.types.is_timedelta64_dtype(rhs.dtype):
         out_dtype = determine_out_dtype(lhs.dtype, rhs.dtype)
     elif pd.api.types.is_datetime64_dtype(rhs.dtype):
@@ -571,7 +571,7 @@ def _timedelta_binary_op_add(lhs, rhs):
     return out_dtype
 
 
-def _timedelta_binary_op_sub(lhs, rhs):
+def _timedelta_sub_result_dtype(lhs, rhs):
     if pd.api.types.is_timedelta64_dtype(
         lhs.dtype
     ) and pd.api.types.is_timedelta64_dtype(rhs.dtype):

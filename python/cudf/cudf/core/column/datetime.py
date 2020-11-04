@@ -2,6 +2,7 @@
 import datetime as dt
 import re
 from numbers import Number
+from typing import Any, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -10,7 +11,9 @@ from nvtx import annotate
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.scalar import Scalar, as_scalar
-from cudf.core.column import column, string
+from cudf._typing import DatetimeLikeScalar, Dtype, DtypeObj, ScalarObj
+from cudf.core.buffer import Buffer
+from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import is_scalar
 
 # nanoseconds per time_unit
@@ -34,7 +37,13 @@ _dtype_to_format_conversion = {
 
 class DatetimeColumn(column.ColumnBase):
     def __init__(
-        self, data, dtype, mask=None, size=None, offset=0, null_count=None
+        self,
+        data: Buffer,
+        dtype: DtypeObj,
+        mask: Buffer = None,
+        size: int = None,
+        offset: int = 0,
+        null_count: int = None,
     ):
         """
         Parameters
@@ -66,52 +75,52 @@ class DatetimeColumn(column.ColumnBase):
 
         self._time_unit, _ = np.datetime_data(self.dtype)
 
-    def __contains__(self, item):
+    def __contains__(self, item: ScalarObj) -> bool:
         try:
-            item = np.datetime64(item, self._time_unit)
+            item_as_dt64 = np.datetime64(item, self._time_unit)
         except ValueError:
             # If item cannot be converted to datetime type
             # np.datetime64 raises ValueError, hence `item`
             # cannot exist in `self`.
             return False
-        return item.astype("int64") in self.as_numerical
+        return item_as_dt64.astype("int64") in self.as_numerical
 
     @property
-    def time_unit(self):
+    def time_unit(self) -> str:
         return self._time_unit
 
     @property
-    def year(self):
+    def year(self) -> "ColumnBase":
         return self.get_dt_field("year")
 
     @property
-    def month(self):
+    def month(self) -> "ColumnBase":
         return self.get_dt_field("month")
 
     @property
-    def day(self):
+    def day(self) -> "ColumnBase":
         return self.get_dt_field("day")
 
     @property
-    def hour(self):
+    def hour(self) -> "ColumnBase":
         return self.get_dt_field("hour")
 
     @property
-    def minute(self):
+    def minute(self) -> "ColumnBase":
         return self.get_dt_field("minute")
 
     @property
-    def second(self):
+    def second(self) -> "ColumnBase":
         return self.get_dt_field("second")
 
     @property
-    def weekday(self):
+    def weekday(self) -> "ColumnBase":
         return self.get_dt_field("weekday")
 
-    def get_dt_field(self, field):
+    def get_dt_field(self, field) -> "ColumnBase":
         return libcudf.datetime.extract_datetime_component(self, field)
 
-    def normalize_binop_value(self, other):
+    def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarObj:
         if isinstance(other, dt.datetime):
             other = np.datetime64(other)
         elif isinstance(other, dt.timedelta):
@@ -141,7 +150,7 @@ class DatetimeColumn(column.ColumnBase):
             raise TypeError("cannot normalize {}".format(type(other)))
 
     @property
-    def as_numerical(self):
+    def as_numerical(self) -> "ColumnBase":
         return column.build_column(
             data=self.base_data,
             dtype=np.int64,
@@ -150,22 +159,21 @@ class DatetimeColumn(column.ColumnBase):
             size=self.size,
         )
 
-    def as_datetime_column(self, dtype, **kwargs):
+    def as_datetime_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype=dtype)
 
-    def as_timedelta_column(self, dtype, **kwargs):
+    def as_timedelta_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
         raise TypeError(
             f"cannot astype a datetimelike from [{self.dtype}] to [{dtype}]"
         )
 
-    def as_numerical_column(self, dtype, **kwargs):
+    def as_numerical_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
         return self.as_numerical.astype(dtype)
 
-    def as_string_column(self, dtype, **kwargs):
-
+    def as_string_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
         if not kwargs.get("format"):
             fmt = _dtype_to_format_conversion.get(
                 self.dtype.name, "%Y-%m-%d %H:%M:%S"
@@ -178,18 +186,20 @@ class DatetimeColumn(column.ColumnBase):
         else:
             return column.column_empty(0, dtype="object", masked=False)
 
-    def default_na_value(self):
+    def default_na_value(self) -> DatetimeLikeScalar:
         """Returns the default NA value for this column
         """
         return np.datetime64("nat", self.time_unit)
 
-    def mean(self, skipna=None, dtype=np.float64):
+    def mean(self, skipna=None, dtype=np.float64) -> ScalarObj:
         return pd.Timestamp(
             self.as_numerical.mean(skipna=skipna, dtype=dtype),
             unit=self.time_unit,
         )
 
-    def quantile(self, q, interpolation, exact):
+    def quantile(
+        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+    ) -> "ColumnBase":
         result = self.as_numerical.quantile(
             q=q, interpolation=interpolation, exact=exact
         )
@@ -202,16 +212,18 @@ class DatetimeColumn(column.ColumnBase):
 
         return result.astype("datetime64[ns]")
 
-    def binary_operator(self, op, rhs, reflect=False):
+    def binary_operator(
+        self, op: str, rhs: Union["ColumnBase", Scalar], reflect: bool = False
+    ) -> "ColumnBase":
         lhs, rhs = self, rhs
         if op in ("eq", "ne", "lt", "gt", "le", "ge"):
             out_dtype = np.bool
         elif op == "add" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
-            out_dtype = cudf.core.column.timedelta._timedelta_binary_op_add(
+            out_dtype = cudf.core.column.timedelta._timedelta_add_result_dtype(
                 rhs, lhs
             )
         elif op == "sub" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
-            out_dtype = cudf.core.column.timedelta._timedelta_binary_op_sub(
+            out_dtype = cudf.core.column.timedelta._timedelta_sub_result_dtype(
                 rhs if reflect else lhs, lhs if reflect else rhs
             )
         elif op == "sub" and pd.api.types.is_datetime64_dtype(rhs.dtype):
@@ -228,13 +240,9 @@ class DatetimeColumn(column.ColumnBase):
                 f"Series of dtype {self.dtype} cannot perform "
                 f" the operation {op}"
             )
+        return binop(lhs, rhs, op=op, out_dtype=out_dtype, reflect=reflect)
 
-        if reflect:
-            lhs, rhs = rhs, lhs
-
-        return binop(lhs, rhs, op=op, out_dtype=out_dtype)
-
-    def fillna(self, fill_value):
+    def fillna(self, fill_value: Any) -> "ColumnBase":
         if is_scalar(fill_value):
             if not isinstance(fill_value, Scalar):
                 fill_value = np.datetime64(fill_value, self.time_unit)
@@ -259,7 +267,7 @@ class DatetimeColumn(column.ColumnBase):
             )
         return result
 
-    def find_first_value(self, value, closest=False):
+    def find_first_value(self, value: ScalarObj, closest: bool = False) -> int:
         """
         Returns offset of first value that matches
         """
@@ -267,7 +275,7 @@ class DatetimeColumn(column.ColumnBase):
         value = column.as_column(value, dtype=self.dtype).as_numerical[0]
         return self.as_numerical.find_first_value(value, closest=closest)
 
-    def find_last_value(self, value, closest=False):
+    def find_last_value(self, value: ScalarObj, closest: bool = False) -> int:
         """
         Returns offset of last value that matches
         """
@@ -276,10 +284,10 @@ class DatetimeColumn(column.ColumnBase):
         return self.as_numerical.find_last_value(value, closest=closest)
 
     @property
-    def is_unique(self):
+    def is_unique(self) -> bool:
         return self.as_numerical.is_unique
 
-    def can_cast_safely(self, to_dtype):
+    def can_cast_safely(self, to_dtype: Dtype) -> bool:
         if np.issubdtype(to_dtype, np.datetime64):
 
             to_res, _ = np.datetime_data(to_dtype)
@@ -312,16 +320,23 @@ class DatetimeColumn(column.ColumnBase):
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
-def binop(lhs, rhs, op, out_dtype):
+def binop(
+    lhs: Union["ColumnBase", ScalarObj],
+    rhs: Union["ColumnBase", ScalarObj],
+    op: str,
+    out_dtype: Dtype,
+    reflect: bool,
+) -> "ColumnBase":
+    if reflect:
+        lhs, rhs = rhs, lhs
     out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
     return out
 
 
-def infer_format(element, **kwargs):
+def infer_format(element: str, **kwargs) -> str:
     """
     Infers datetime format from a string, also takes cares for `ms` and `ns`
     """
-
     fmt = pd.core.tools.datetimes._guess_datetime_format(element, **kwargs)
 
     if fmt is not None:
@@ -354,7 +369,7 @@ def infer_format(element, **kwargs):
         # unsuppported timezone will let the code fail below
         # with a ValueError.
         second_part.remove("Z")
-        second_part = "".join(second_part[1:])
+        second_part = "".join(second_part[1:])  # type: ignore
 
         if len(second_part) > 1:
             # Only infer if second_part is not an empty string.
@@ -362,7 +377,7 @@ def infer_format(element, **kwargs):
                 second_part, **kwargs
             )
     else:
-        second_part = ""
+        second_part = ""  # type: ignore
 
     try:
         fmt = first_part + subsecond_fmt + second_part

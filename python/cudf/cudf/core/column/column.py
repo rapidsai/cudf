@@ -1371,6 +1371,7 @@ def build_column(
             children=children,
         )
     elif dtype.type is np.datetime64:
+        assert data is not None
         return cudf.core.column.DatetimeColumn(
             data=data,
             dtype=dtype,
