@@ -32,6 +32,7 @@
 - PR #6540 Add dictionary support to `cudf::unary_operation`
 - PR #6537 Refactor ORC timezone
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
+- PR #6545 Pin cmake policies to cmake 3.17 version
 - PR #6556 Add dictionary support to `cudf::inner_join`, `cudf::left_join` and `cudf::full_join`
 - PR #6557 Support nullable timestamp columns in time range window functions
 - PR #6566 Remove reinterpret_cast conversions between pointer types in ORC
@@ -209,6 +210,7 @@
 - PR #6379 Add list hashing functionality to MD5
 - PR #6498 Add helper method to ColumnBuilder with some nits
 - PR #6336 Add `join` functionality in cudf concat 
+- PR #6653 Replaced SHFL_XOR calls with cub::WarpReduce
 
 ## Bug Fixes
 
