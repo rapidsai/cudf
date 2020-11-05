@@ -250,33 +250,31 @@ class DatetimeColumn(column.ColumnBase):
         return binop(lhs, rhs, op=op, out_dtype=out_dtype)
 
     def _fillna_natwise(self):
-            # If the value we are filling is np.datetime64("NAT")
-            # we set the same mask as current column.
-            # However where there are "<NA>" in the
-            # columns, their corresponding locations
-            # in base_data will contain min(int64) values.
+        # If the value we are filling is np.datetime64("NAT")
+        # we set the same mask as current column.
+        # However where there are "<NA>" in the
+        # columns, their corresponding locations
+        # in base_data will contain min(int64) values.
         import pdb
-        pdb.set_trace()
-        temp_nat_value = cudf.Scalar(np.iinfo('int64').min, dtype=self.dtype)
-        #temp_nat_value._data._set_device_value(np.iinfo('int64').min, dtype=self.dtype)
-        temp_nat_value._data._sync()
-        result = libcudf.replace.replace_nulls(
-            self, temp_nat_value
-        )
-        return column.build_column(
-                data=result.base_data,
-                dtype=result.dtype,
-                mask=self.base_mask,
-                size=result.size,
-                offset=result.offset,
-                children=result.base_children,
-            )
 
+        pdb.set_trace()
+        temp_nat_value = cudf.Scalar(np.iinfo("int64").min, dtype=self.dtype)
+        # temp_nat_value._data._set_device_value(np.iinfo('int64').min, dtype=self.dtype)
+        temp_nat_value._data._sync()
+        result = libcudf.replace.replace_nulls(self, temp_nat_value)
+        return column.build_column(
+            data=result.base_data,
+            dtype=result.dtype,
+            mask=self.base_mask,
+            size=result.size,
+            offset=result.offset,
+            children=result.base_children,
+        )
 
     def fillna(self, fill_value):
         if is_scalar(fill_value):
             if not isinstance(fill_value, cudf.Scalar):
-                
+
                 fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)

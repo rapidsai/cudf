@@ -270,24 +270,22 @@ class TimeDeltaColumn(column.ColumnBase):
         return self._time_unit
 
     def _fillna_natwise(self):
-            # If the value we are filling is np.datetime64("NAT")
-            # we set the same mask as current column.
-            # However where there are "<NA>" in the
-            # columns, their corresponding locations
-            # in base_data will contain min(int64) values.
+        # If the value we are filling is np.datetime64("NAT")
+        # we set the same mask as current column.
+        # However where there are "<NA>" in the
+        # columns, their corresponding locations
+        # in base_data will contain min(int64) values.
         temp_nat_value = cudf.Scalar(0, dtype=self.dtype)
-        temp_nat_value._host_value = np.timedelta64('NaT', self._time_unit)        
-        result = libcudf.replace.replace_nulls(
-            self, temp_nat_value
-        )
+        temp_nat_value._host_value = np.timedelta64("NaT", self._time_unit)
+        result = libcudf.replace.replace_nulls(self, temp_nat_value)
         return column.build_column(
-                data=result.base_data,
-                dtype=result.dtype,
-                mask=self.base_mask,
-                size=result.size,
-                offset=result.offset,
-                children=result.base_children,
-            )
+            data=result.base_data,
+            dtype=result.dtype,
+            mask=self.base_mask,
+            size=result.size,
+            offset=result.offset,
+            children=result.base_children,
+        )
 
     def fillna(self, fill_value):
         col = self

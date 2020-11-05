@@ -428,7 +428,7 @@ class ColumnBase(Column, Serializable):
         output size could be smaller.
         """
         if fillna:
-            if self.dtype.char in 'mM':
+            if self.dtype.char in "mM":
 
                 return self._fillna_natwise().data_array_view
             return self.fillna(self.default_na_value()).data_array_view

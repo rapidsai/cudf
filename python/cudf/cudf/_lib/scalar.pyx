@@ -415,19 +415,12 @@ cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
 
 
 def as_scalar(val, dtype=None):
-    print('wa wa wi wa')
-    print(type(val))
-    print(val)
-
-
     if isinstance(val, DeviceScalar):
-        print('im a device scalar')
         if (dtype is None or dtype == val.dtype):
             return val
     if hasattr(val, '_data') and isinstance(val._data, DeviceScalar):
             return val._data
     else:
-        print('in the else')
         return DeviceScalar(value=val, dtype=dtype)
 
 

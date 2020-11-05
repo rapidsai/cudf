@@ -60,7 +60,7 @@ class Scalar(object):
     @property
     def value(self):
         return self._data.value
-    
+
     @property
     def dtype(self):
         return self._data.dtype
