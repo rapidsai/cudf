@@ -51,12 +51,9 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUp)
 
   auto const input    = fp_wrapper{{1140, 1150, 1160}, scale_type{-3}};
   auto const expected = fp_wrapper{{11, 12, 12}, scale_type{-1}};
+  auto const result   = cudf::round(input, 1, cudf::rounding_method::HALF_UP);
 
-  EXPECT_THROW(cudf::round(input, 1, cudf::rounding_method::HALF_UP), cudf::logic_error);
-
-  // enable in follow up PR
-  // auto const result   = cudf::round(col, 1, cudf::rounding_method::HALF_UP);
-  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
 TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestHalfUp0)
