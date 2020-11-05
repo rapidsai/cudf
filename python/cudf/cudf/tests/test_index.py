@@ -20,6 +20,8 @@ from cudf.core.index import (
     RangeIndex,
     as_index,
 )
+from cudf.utils.utils import pos_from_val
+
 from cudf.tests.utils import (
     FLOAT_TYPES,
     NUMERIC_TYPES,
@@ -92,6 +94,8 @@ def test_index_find_label_range_genericindex():
     raises.match("value not found")
 
 def test_index_find_label_range_rangeindex():
+    """Cudf specific
+    """
     # step > 0
     # 3, 8, 13, 18
     ridx = RangeIndex(3, 20, 5)
@@ -107,32 +111,7 @@ def test_index_find_label_range_rangeindex():
     assert ridx.find_label_range(10, 0) == (2, 4)
     assert ridx.find_label_range(30, 13) == (0, 2)
     assert ridx.find_label_range(30, 0) == (0, 4)
-
-    # Invalid label ranges
-    # 20, 15, 10, 5
-    ridx = RangeIndex(20, 3, -5)
-    with pytest.raises(ValueError, match="Unable to find subrange that meets constraint."):
-        ridx.find_label_range(5, 10)
-    with pytest.raises(ValueError, match="Unable to find subrange that meets constraint."):
-        ridx.find_label_range(1, 30)
     
-def test_index_get_slice_bound_rangeindex():
-    # step > 0
-    # 3, 8, 13, 18
-    ridx = RangeIndex(3, 20, 5)
-    assert ridx.get_slice_bound(label=8, side="left") == 1
-    assert ridx.get_slice_bound(label=13, side="right") == 3
-
-    # step < 0
-    # 20, 15, 10, 5
-    ridx = RangeIndex(20, 3, -5)
-    assert ridx.get_slice_bound(label=10, side="left") == 2
-    assert ridx.get_slice_bound(label=5, side="right") == 4
-
-    # Expect raise when label is not in index
-    with pytest.raises(ValueError):
-        ridx.get_slice_bound(0)
-
 def test_index_comparision():
     start, stop = 10, 34
     rg = RangeIndex(start, stop)
@@ -1712,12 +1691,8 @@ def test_index_rangeindex_pos_from_val():
     # step > 0
     ridx = RangeIndex(-13, 17, 4)
     for i in range(len(ridx)):
-        assert i == ridx._pos_from_val(ridx[i])
-    
-    # step < 0
-    ridx = RangeIndex(17, -13, -4)
-    for i in range(len(ridx)):
-        assert i == ridx._pos_from_val(ridx[i])
+        assert i == pos_from_val(ridx[i], ridx._start, ridx._step, len(ridx), side='left')
+        assert i+1 == pos_from_val(ridx[i], ridx._start, ridx._step, len(ridx), side='right')
 
 
 @pytest.mark.parametrize(
@@ -1733,7 +1708,7 @@ def test_index_rangeindex_get_item_basic(rge):
     pridx = pd.RangeIndex(*rge)
     gridx = cudf.RangeIndex(*rge)
 
-    for i in range(len(pridx)):
+    for i in range(-len(pridx), len(pridx)):
         assert pridx[i] == gridx[i]
 
 
@@ -1747,9 +1722,7 @@ def test_index_rangeindex_get_item_basic(rge):
 def test_index_rangeindex_get_item_out_of_bounds(rge):
     gridx = cudf.RangeIndex(*rge)
     with pytest.raises(IndexError):
-        val = gridx[-1]
-    with pytest.raises(IndexError):
-        val = gridx[4]
+        _ = gridx[4]
 
 @pytest.mark.parametrize(
     "rge",
@@ -1768,7 +1741,10 @@ def test_index_rangeindex_get_item_null_range(rge):
     "rge",
     [
         (-17, 21, 2),
-        (21, -17, -3)
+        (21, -17, -3),
+        (0, 0, 1),
+        (0, 1, -3),
+        (10, 0, 5)
     ]
 )
 @pytest.mark.parametrize(
@@ -1781,6 +1757,10 @@ def test_index_rangeindex_get_item_null_range(rge):
         slice(-3, 7, 2),
         slice(7, 1, -2),
         slice(7, -3, -2),
+        slice(None, None, 1),
+        slice(0, None, 2),
+        slice(0, None, 3),
+        slice(0, 0, 3),
     ]
 )
 def test_index_rangeindex_get_item_slices(rge, sl):

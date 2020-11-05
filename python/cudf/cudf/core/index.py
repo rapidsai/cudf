@@ -33,7 +33,10 @@ from cudf.utils.dtypes import (
     is_scalar,
     numeric_normalize_types,
 )
-from cudf.utils.utils import cached_property
+from cudf.utils.utils import (
+    cached_property,
+    pos_from_val
+)
 
 
 def _to_frame(this_index, index=True, name=None):
@@ -1610,17 +1613,20 @@ class RangeIndex(Index):
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            sl_start = 0 if index.start is None else index.start
-            sl_stop = len(self)-1 if index.stop is None else index.stop
-            sl_step = 1 if index.step is None else index.step
+            # sl_start = 0 if index.start is None else index.start
+            # sl_stop = len(self) if index.stop is None else index.stop
+            # sl_step = 1 if index.step is None else index.step
 
+            # if len(self) == 0:
+            sl_start, sl_stop, sl_step = index.indices(len(self))
+
+            # ilo = utils.normalize_index(sl_start, len(self))
+            # ihi = utils.normalize_index(sl_stop, len(self))
+
+            lo = self._start + sl_start * self._step
+            hi = self._start + sl_stop * self._step
             st = self._step * sl_step
-            ilo = utils.normalize_index(sl_start, len(self), doraise=False)
-            ihi = utils.normalize_index(sl_stop, len(self), doraise=False)
-
-            lo = self._start + ilo * st
-            hi = self._start + ihi * st
-            return RangeIndex(start=lo, stop=hi, step=st)
+            return RangeIndex(start=lo, stop=hi, step=st, name=self._name)
 
         elif isinstance(index, Number):
             index = utils.normalize_index(index, len(self))
@@ -1688,14 +1694,6 @@ class RangeIndex(Index):
     def size(self):
         return self.__len__()
 
-    def _pos_from_val(self, n, error="raise"):
-        """Compute the position of value n, if 
-        """
-        i = (n - self._start) / self._step
-        if (not i % 1 == 0) or i < 0 or i >= len(self):
-            raise ValueError(f"{n} is not in the RangeIndex.")
-        return i
-
     def find_label_range(self, first=None, last=None):
         """Find subrange in the ``RangeIndex``, marked by their positions, that
         starts greater or equal to ``first`` and ends less or equal to ``last``
@@ -1719,26 +1717,24 @@ class RangeIndex(Index):
 
         first = self._start if first is None else first
         last = self._stop if last is None else last
-
-        if not np.issubdtype(type(first), np.int):
-            raise ValueError(f"{first} should be an int.")
-        if not np.issubdtype(type(last), np.int):
-            raise ValueError(f"{last} should be an int.")
         
-        begin = math.ceil((first - self._start) / self._step)
-        begin = min(max(len(self), begin), 0)
+        if self._step < 0:
+            first = -first
+            last = -last
+            start = -self._start
+            step = -self._step
+        else:
+            start = self._start
+            step = self._step
 
-        end = math.ceil((last - self._stop) / self._step)
-        end = min(max(len(self), end), 0)
+        begin = pos_from_val(first, start, step, len(self), side='left')
+        end = pos_from_val(last, start, step, len(self), side='right')
 
-        if begin >= end:
-            raise ValueError("Unable to find subrange that meets constraint.")
-        
         return begin, end
 
     @copy_docstring(_to_frame)
     def to_frame(self, index=True, name=None):
-        return _to_frame(self, index, name)
+        return _to_frame(self, index, name) 
 
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
@@ -1787,7 +1783,7 @@ class RangeIndex(Index):
         """
         return self._start >= self._stop
 
-    def get_slice_bound(self, label, side, kind):
+    def get_slice_bound(self, label, side, kind=None):
         """
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
@@ -1806,16 +1802,19 @@ class RangeIndex(Index):
         int
             Index of label.
         """
-        if label < self._start:
-            return 0
-        elif label >= self._stop:
-            return len(self)
+        if side not in {'left', 'right'}:
+            raise ValueError(f"Unrecognized side parameter: {side}")
+
+        if self._step < 0:
+            label = -label
+            start = -self._start
+            step = -self._step
         else:
-            pos = self._pos_from_val(label)
-            if side == "left":
-                return pos
-            elif side == "right":
-                return pos + 1
+            start = self._start
+            step = self._step
+
+        pos = pos_from_val(label, start, step, len(self), side=side)
+        return pos
 
     @property
     def __cuda_array_interface__(self):

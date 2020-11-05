@@ -244,7 +244,7 @@ def test_get_slice_bound(testlist, side, kind):
 )
 @pytest.mark.parametrize("side", ["left", "right"])
 @pytest.mark.parametrize("kind", ["getitem", "loc"])
-def test_rangeindex_get_slice_bound(bounds, indices, side, kind):
+def test_rangeindex_get_slice_bound_basic(bounds, indices, side, kind):
     start, stop = bounds
     pd_index = pd.RangeIndex(start, stop)
     cudf_index = RangeIndex(start, stop)
@@ -252,6 +252,22 @@ def test_rangeindex_get_slice_bound(bounds, indices, side, kind):
         expect = pd_index.get_slice_bound(idx, side, kind)
         got = cudf_index.get_slice_bound(idx, side, kind)
         assert expect == got
+
+@pytest.mark.parametrize("bounds", [(3, 20, 5), (20, 3, -5), (20, 3, 5), (3, 20, -5), (0, 0, 2), (3, 3, 2)])
+@pytest.mark.parametrize(
+    "label",
+    [3, 8, 13, 18, 20, 15, 10, 5, -1, 0, 19, 21, 6, 11, 17],
+)
+@pytest.mark.parametrize("side", ["left", "right"])
+@pytest.mark.parametrize("kind", ["getitem", "loc"])
+def test_rangeindex_get_slice_bound_step(bounds, label, side, kind):
+    start, stop, step = bounds
+    pd_index = pd.RangeIndex(start, stop, step)
+    cudf_index = RangeIndex(start, stop, step)
+
+    expect = pd_index.get_slice_bound(label, side, kind)
+    got = cudf_index.get_slice_bound(label, side, kind)
+    assert expect == got
 
 
 @pytest.mark.parametrize("label", [1, 3, 5, 7, 9, 11])

@@ -394,3 +394,33 @@ def pa_mask_buffer_to_mask(mask_buf, size):
         dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
         return Buffer(dbuf)
     return Buffer(mask_buf)
+
+
+def pos_from_val(n, start, step, length, side='left'):
+    """Compute the position of a value in an integral arithmatic series.
+    Note it is assumed that step > 0
+    
+    Parameters
+    ----------
+    n : int
+        The value to find postion
+    start : int
+        Start of the series
+    step : int
+        Step of the series, assumed positive
+    length : int
+        Length of the series
+    side : {'left', 'right'}
+        If left, will return the position less or equal to the value. If right,
+        will return the position strictly larger than the value.
+
+    Returns
+    -------
+    int
+        Index of label.
+
+    """
+    x = 1 if side == 'left' else 0
+    i = (n - start - x) // step + 1
+    
+    return max(min(length, i), 0)
