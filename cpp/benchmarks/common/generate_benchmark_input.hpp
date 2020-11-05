@@ -182,7 +182,7 @@ struct distribution_params<T, typename std::enable_if_t<cudf::is_fixed_point<T>(
 /**
  * @brief Returns a vector of types, corresponding to the input type or a type group.
  *
- * If the input if a `cudf::type_id` enumerator, function simply returns a vector containing this
+ * If the input is a `cudf::type_id` enumerator, function simply returns a vector containing this
  * type. If the input value corresponds to a `type_group_id` enumerator, function returns a vector
  * containing all types in the input group.
  *
@@ -193,9 +193,9 @@ std::vector<cudf::type_id> get_type_or_group(int32_t id);
 /**
  * @brief Returns a vector of types, corresponding to the input types or type groups.
  *
- * If an input element if a `cudf::type_id` enumerator, function return value with just include this
- * type. If an input element corresponds to a `type_group_id` enumerator, function return value
- * includes all types coresponding to element.
+ * If an element of the input vector is a `cudf::type_id` enumerator, function return value simply
+ * includes this type. If an element of the input vector is a `type_group_id` enumerator, function
+ * return value includes all types coresponding to the group enumerator.
  *
  * @param ids Vector of integers equal to either a `cudf::type_id` enumerator or a `type_group_id`
  * enumerator.
