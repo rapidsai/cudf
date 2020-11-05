@@ -156,7 +156,7 @@ std::vector<std::unique_ptr<column>> match_dictionaries(std::vector<dictionary_c
 {
   std::vector<column_view> keys(input.size());
   std::transform(input.begin(), input.end(), keys.begin(), [](auto& col) { return col.keys(); });
-  auto new_keys  = cudf::detail::concatenate(keys, rmm::mr::get_current_device_resource(), stream);
+  auto new_keys  = cudf::detail::concatenate(keys, stream, rmm::mr::get_current_device_resource());
   auto keys_view = new_keys->view();
   std::vector<std::unique_ptr<column>> result(input.size());
   std::transform(input.begin(), input.end(), result.begin(), [keys_view, mr, stream](auto& col) {

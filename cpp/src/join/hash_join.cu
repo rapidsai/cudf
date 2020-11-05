@@ -425,7 +425,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
                                               rmm::mr::get_current_device_resource(),
                                               stream);
       common_table           = cudf::detail::concatenate(
-        {common_from_build->view(), common_from_probe->view()}, mr, stream);
+        {common_from_build->view(), common_from_probe->view()}, stream, mr);
     }
     joined_indices = concatenate_vector_pairs(complement_indices, joined_indices);
   } else {

@@ -380,7 +380,7 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
                                   concat_columns.end(),
                                   std::back_inserter(column_views),
                                   [](auto const& col) { return col->view(); });
-                   return cudf::detail::concatenate(column_views, mr, stream);
+                   return cudf::detail::concatenate(column_views, stream, mr);
                  });
 
   return std::make_unique<table>(std::move(columns));
