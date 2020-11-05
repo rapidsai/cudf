@@ -13,6 +13,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private final long rows;
   private Optional<Long> nullCount = Optional.empty();
 
+  public ColumnView(long viewHandle) {
+    this.viewHandle = viewHandle;
+    type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
+    rows = ColumnView.getNativeRowCount(viewHandle);
+  }
+
   public ColumnView(DType type, int rows, Optional<Long> nullCount,
                     DeviceMemoryBuffer data, DeviceMemoryBuffer valid, DeviceMemoryBuffer offsets,
                     long[] childColumnViewHandles) {
@@ -40,18 +46,64 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return viewHandle;
   }
 
-  public long getRowCount() {
-    return rows;
-  }
-
   public DType getType() {
     return type;
   }
 
-  public void close() {
-    deleteColumnView(viewHandle);
+  public ColumnView getChildColumnViewAccess(int childIndex) {
+    int numChildren = getNumChildren();
+    assert childIndex < numChildren : "children index should be less than " + numChildren;
+    if (!getType().isNestedType()) {
+      return null;
+    }
+    long childColumnView = ColumnView.getChildCvPointer(viewHandle, childIndex);
+    //this is returning a new ColumnView - must close this!
+    return new ColumnView(childColumnView);
   }
 
+  /**
+   * Gets the data buffer for the current column view (viewHandle).
+   * If the type is LIST it returns null.
+   * @return    If the type is LIST or data buffer is empty it returns null,
+   *            else return the data device buffer
+   */
+
+  public BaseDeviceMemoryBuffer getDataBuffer() {
+    return getDataBuffer(viewHandle);
+  }
+
+  public BaseDeviceMemoryBuffer getOffsetBuffer() {
+    return getOffsetsBuffer(viewHandle);
+  }
+
+  public BaseDeviceMemoryBuffer getValidityBuffer() {
+    return getValidityBuffer(viewHandle);
+  }
+
+  public long getNullCount() {
+    return getNativeNullCount(viewHandle);
+  }
+
+  @Deprecated
+  public long getNumRows() {
+    return ColumnView.getNativeRowCount(viewHandle);
+  }
+
+  public long getRowCount() {
+    return ColumnView.getNativeRowCount(viewHandle);
+  }
+
+  public int getNumChildren() {
+    if (!getType().isNestedType()) {
+      return 0;
+    }
+    return ColumnView.getNativeNumChildren(viewHandle);
+  }
+
+  @Override
+  public void close() {
+    ColumnView.deleteColumnView(viewHandle);
+  }
   /**
    * Used for string strip function.
    * Indicates characters to be stripped from the beginning, end, or both of each string.
