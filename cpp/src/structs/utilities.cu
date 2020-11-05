@@ -30,13 +30,6 @@ namespace detail {
 std::vector<std::vector<column_view>> extract_ordered_struct_children(
   std::vector<column_view> const& struct_cols)
 {
-  // all inputs must be structs
-  CUDF_EXPECTS(
-    std::all_of(struct_cols.begin(),
-                struct_cols.end(),
-                [](column_view const& col) { return col.type().id() == type_id::STRUCT; }),
-    "Encountered non-struct input to extract_ordered_struct_children");
-
   size_type num_children = struct_cols[0].num_children();
   size_type num_cols     = static_cast<size_type>(struct_cols.size());
 
