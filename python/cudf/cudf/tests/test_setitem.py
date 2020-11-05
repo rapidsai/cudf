@@ -1,5 +1,6 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -48,7 +49,18 @@ def test_dataframe_setitem_columns(df, arg, value):
 @pytest.mark.parametrize("df", [pd.DataFrame({"a": [1, 2, 3]})])
 @pytest.mark.parametrize("arg", [["b", "c"]])
 @pytest.mark.parametrize(
-    "value", [pd.DataFrame({"0": [-1, -2, -3], "1": [-0, -10, -1]})]
+    "value",
+    [
+        pd.DataFrame({"0": [-1, -2, -3], "1": [-0, -10, -1]}),
+        10,
+        20,
+        30,
+        "rapids",
+        "ai",
+        0.32234,
+        np.datetime64(1324232423423342, "ns"),
+        np.timedelta64(34234324234324234, "ns"),
+    ],
 )
 def test_dataframe_setitem_new_columns(df, arg, value):
     gdf = cudf.from_pandas(df)
@@ -60,16 +72,6 @@ def test_dataframe_setitem_new_columns(df, arg, value):
     df[arg] = value
     gdf[arg] = cudf_replace_value
     assert_eq(df, gdf, check_dtype=True)
-
-
-# we don't raise keyerror
-# pandas raises it
-# inconsistent with dataframe again
-@pytest.mark.xfail()
-def test_dataframe_setitem_scaler_keyerror():
-    df = cudf.DataFrame({"a": [1, 2, 3]})
-    with pytest.raises(KeyError):
-        df[["x"]] = 0
 
 
 # set_item_series inconsistency

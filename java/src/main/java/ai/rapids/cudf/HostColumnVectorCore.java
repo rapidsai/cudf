@@ -21,6 +21,7 @@ package ai.rapids.cudf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -308,7 +309,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * Get the starting element offset for the list or string at index
    */
-  long getStartListOffset(long index) {
+  public long getStartListOffset(long index) {
     assert type.equals(DType.STRING) || type.equals(DType.LIST): type +
       " is not a supported string or list type.";
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
@@ -326,7 +327,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * Get the ending element offset for the list or string at index.
    */
-  long getEndListOffset(long index) {
+  public long getEndListOffset(long index) {
     assert type.equals(DType.STRING) || type.equals(DType.LIST): type +
       " is not a supported string or list type.";
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
@@ -369,6 +370,23 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
     assert type.equals(DType.BOOL8) : type + " is not a supported boolean type.";
     assertsForGet(index);
     return offHeap.data.getBoolean(index * type.getSizeInBytes());
+  }
+
+  /**
+   * Get the BigDecimal value at index.
+   */
+  public final BigDecimal getBigDecimal(long index) {
+    assert type.isDecimalType() : type + " is not a supported decimal type.";
+    assertsForGet(index);
+    if (type.typeId == DType.DTypeEnum.DECIMAL32) {
+      int unscaledValue = offHeap.data.getInt(index * type.getSizeInBytes());
+      return BigDecimal.valueOf(unscaledValue, -type.getScale());
+    } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
+      long unscaledValue = offHeap.data.getLong(index * type.getSizeInBytes());
+      return BigDecimal.valueOf(unscaledValue, -type.getScale());
+    } else {
+      throw new IllegalStateException(type + " is not a supported decimal type.");
+    }
   }
 
   /**
@@ -518,6 +536,8 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
       case INT16: return offHeap.data.getShort(rowOffset);
       case BOOL8: return offHeap.data.getBoolean(rowOffset);
       case STRING: return getString(rowIndex);
+      case DECIMAL32: return BigDecimal.valueOf(offHeap.data.getInt(rowOffset), -type.getScale());
+      case DECIMAL64: return BigDecimal.valueOf(offHeap.data.getLong(rowOffset), -type.getScale());
       default: throw new UnsupportedOperationException("Do not support " + type);
     }
   }

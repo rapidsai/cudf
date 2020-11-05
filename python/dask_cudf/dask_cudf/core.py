@@ -18,10 +18,10 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
 from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 
+from dask_cudf import sorting
+
 import cudf
 from cudf import _lib as libcudf
-
-from dask_cudf import sorting
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
@@ -81,10 +81,9 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
         meta = dd.core.make_meta(meta)
         if not isinstance(meta, self._partition_type):
             raise TypeError(
-                "Expected meta to specify type {0}, got type "
-                "{1}".format(
-                    self._partition_type.__name__, type(meta).__name__
-                )
+                f"Expected meta to specify type "
+                f"{self._partition_type.__name__}, got type "
+                f"{type(meta).__name__}"
             )
         self._meta = meta
         self.divisions = tuple(divisions)
