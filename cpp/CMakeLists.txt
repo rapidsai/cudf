@@ -14,7 +14,7 @@
 # limitations under the License.
 #=============================================================================
 
-cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.14...3.17 FATAL_ERROR)
 
 project(CUDA_DATAFRAME VERSION 0.17.0 LANGUAGES C CXX CUDA)
 
@@ -588,6 +588,7 @@ set(
         "${CMAKE_SOURCE_DIR}/src/lists"
         "${CMAKE_SOURCE_DIR}/src/quantiles"
         "${CMAKE_SOURCE_DIR}/src/reshape"
+        "${CMAKE_SOURCE_DIR}/src/round"
         "${CMAKE_SOURCE_DIR}/src/scalar"
         "${CMAKE_SOURCE_DIR}/src/search"
         "${CMAKE_SOURCE_DIR}/src/sort"
