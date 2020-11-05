@@ -54,7 +54,9 @@ def test_series_map_callable_numeric_random(nelem):
 
     # Call applymap
     got = sr.map(lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x)))
-    expect = pdsr.map(lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x)))
+    expect = pdsr.map(
+        lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x))
+    )
 
     # Check
     (expect, got)
@@ -72,7 +74,7 @@ def test_series_map_callable_numeric_random_dtype_change():
     expect = pdsr.map(lambda x: float(x))
 
     # Check
-    assert_eq(expect,got)
+    assert_eq(expect, got)
 
 
 def test_series_map_non_unique_index():
