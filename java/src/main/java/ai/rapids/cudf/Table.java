@@ -257,6 +257,7 @@ public final class Table implements AutoCloseable {
                                                      String[] metadataValues,
                                                      int compression,
                                                      int statsFreq,
+                                                     boolean isInt96,
                                                      HostBufferConsumer consumer) throws CudfException;
 
   /**
@@ -773,6 +774,7 @@ public final class Table implements AutoCloseable {
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
+          options.isInt96(),
           consumer);
       this.consumer = consumer;
     }

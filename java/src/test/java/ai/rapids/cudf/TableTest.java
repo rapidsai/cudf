@@ -3443,6 +3443,24 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testParquetWriteToBufferChunkedInt96() {
+    try (Table table0 = getExpectedFileTable();
+         MyBufferConsumer consumer = new MyBufferConsumer()) {
+      ParquetWriterOptions options = ParquetWriterOptions.builder().withTimestampInt96(true).build();
+
+      try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
+        writer.write(table0);
+        writer.write(table0);
+        writer.write(table0);
+      }
+      try (Table table1 = Table.readParquet(ParquetOptions.DEFAULT, consumer.buffer, 0, consumer.offset);
+           Table concat = Table.concatenate(table0, table0, table0)) {
+        assertTablesAreEqual(concat, table1);
+      }
+    }
+  }
+
+  @Test
   void testParquetWriteToBufferChunked() {
     try (Table table0 = getExpectedFileTable();
          MyBufferConsumer consumer = new MyBufferConsumer()) {
