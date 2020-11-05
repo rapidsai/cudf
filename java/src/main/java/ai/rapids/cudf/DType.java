@@ -21,8 +21,8 @@ import java.util.Objects;
 
 public final class DType {
 
-  public static final int DECIMAL32_MAX_PRECISION = 9;
-  public static final int DECIMAL64_MAX_PRECISION = 18;
+  public static final int DECIMAL32_MAX_PRECISION = 10;
+  public static final int DECIMAL64_MAX_PRECISION = 19;
 
   /* enum representing various types. Whenever a new non-decimal type is added please make sure
   below sections are updated as well:
@@ -92,8 +92,6 @@ public final class DType {
     }
 
     public int getNativeId() { return nativeId; }
-
-    public boolean isDecimalType() { return DType.DECIMALS.contains(this); }
   }
 
   final DTypeEnum typeId;
@@ -233,7 +231,7 @@ public final class DType {
    * @return DType
    */
   public static DType create(DTypeEnum dt) {
-    if (DType.DECIMALS.contains(dt)) {
+    if (dt == DTypeEnum.DECIMAL32 || dt == DTypeEnum.DECIMAL64) {
       throw new IllegalArgumentException("Could not create a Decimal DType without scale");
     }
     return DType.fromNative(dt.nativeId, 0);
@@ -249,7 +247,7 @@ public final class DType {
    * @return DType
    */
   public static DType create(DTypeEnum dt, int scale) {
-    if (!DType.DECIMALS.contains(dt)) {
+    if (dt != DTypeEnum.DECIMAL32 && dt != DTypeEnum.DECIMAL64) {
       throw new IllegalArgumentException("Could not create a non-Decimal DType with scale");
     }
     return DType.fromNative(dt.nativeId, scale);
@@ -321,8 +319,7 @@ public final class DType {
    *       DType.INT32,
    *       DType.UINT32,
    *       DType.DURATION_DAYS,
-   *       DType.TIMESTAMP_DAYS,
-   *       DType.DECIMAL32
+   *       DType.TIMESTAMP_DAYS
    */
   public boolean isBackedByInt() {
     return INTS.contains(this.typeId);
@@ -340,8 +337,7 @@ public final class DType {
    *       DType.TIMESTAMP_SECONDS,
    *       DType.TIMESTAMP_MILLISECONDS,
    *       DType.TIMESTAMP_MICROSECONDS,
-   *       DType.TIMESTAMP_NANOSECONDS,
-   *       DType.DECIMAL64
+   *       DType.TIMESTAMP_NANOSECONDS
    */
   public boolean isBackedByLong() {
     return LONGS.contains(this.typeId);
@@ -370,7 +366,7 @@ public final class DType {
    *       DType.DECIMAL32,
    *       DType.DECIMAL64
    */
-  public boolean isDecimalType() { return this.typeId.isDecimalType(); }
+  public boolean isDecimalType() { return DECIMALS.contains(this.typeId); }
 
   /**
    * Returns true for duration types
@@ -426,18 +422,14 @@ public final class DType {
       DTypeEnum.TIMESTAMP_SECONDS,
       DTypeEnum.TIMESTAMP_MILLISECONDS,
       DTypeEnum.TIMESTAMP_MICROSECONDS,
-      DTypeEnum.TIMESTAMP_NANOSECONDS,
-      // The unscaledValue of DECIMAL64 is of type INT64, which means it can be fetched by getLong.
-      DTypeEnum.DECIMAL64
+      DTypeEnum.TIMESTAMP_NANOSECONDS
   );
 
   private static final EnumSet<DTypeEnum> INTS = EnumSet.of(
       DTypeEnum.INT32,
       DTypeEnum.UINT32,
       DTypeEnum.DURATION_DAYS,
-      DTypeEnum.TIMESTAMP_DAYS,
-      // The unscaledValue of DECIMAL32 is of type INT32, which means it can be fetched by getInt.
-      DTypeEnum.DECIMAL32
+      DTypeEnum.TIMESTAMP_DAYS
   );
 
   private static final EnumSet<DTypeEnum> SHORTS = EnumSet.of(
