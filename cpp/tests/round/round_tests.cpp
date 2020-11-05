@@ -42,6 +42,20 @@ TYPED_TEST_CASE(RoundTestsIntegerTypes, IntegerTypes);
 TYPED_TEST_CASE(RoundTestsFixedPointTypes, cudf::test::FixedPointTypes);
 TYPED_TEST_CASE(RoundTestsFloatingPointTypes, cudf::test::FloatingPointTypes);
 
+TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUpZero)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const input    = fp_wrapper{{1140, 1150, 1160}, scale_type{-2}};
+  auto const expected = fp_wrapper{{11, 12, 12}, scale_type{0}};
+  auto const result   = cudf::round(input);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUp)
 {
   using namespace numeric;
