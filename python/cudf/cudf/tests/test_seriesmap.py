@@ -59,7 +59,7 @@ def test_series_map_callable_numeric_random(nelem):
     )
 
     # Check
-    (expect, got)
+    assert_eq(expect, got, check_dtype=False)
 
 
 def test_series_map_callable_numeric_random_dtype_change():
