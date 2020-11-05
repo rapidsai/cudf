@@ -50,14 +50,14 @@ def test_series_map_callable_numeric_random(nelem):
     data = np.random.random(nelem) * 100
 
     sr = Series(data)
+    pdsr = pd.Series(data)
 
     # Call applymap
-    out = sr.map(lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x)))
+    got = sr.map(lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x)))
+    expect = pdsr.map(lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x)))
 
     # Check
-    expect = np.round(data)
-    got = out.to_array()
-    np.testing.assert_array_almost_equal(expect, got)
+    (expect, got)
 
 
 def test_series_map_callable_numeric_random_dtype_change():
@@ -66,13 +66,13 @@ def test_series_map_callable_numeric_random_dtype_change():
     data = list(range(10))
 
     sr = Series(data)
+    pdsr = pd.Series(data)
 
-    out = sr.map(lambda x: float(x))
+    got = sr.map(lambda x: float(x))
+    expect = pdsr.map(lambda x: float(x))
 
     # Check
-    expect = np.array(data, dtype=float)
-    got = out.to_array()
-    np.testing.assert_array_equal(expect, got)
+    assert_eq(expect,got)
 
 
 def test_series_map_non_unique_index():
