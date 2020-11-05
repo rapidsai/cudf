@@ -394,3 +394,6 @@ def pa_mask_buffer_to_mask(mask_buf, size):
         dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
         return Buffer(dbuf)
     return Buffer(mask_buf)
+
+def isnat(val):
+    return val in {'NaT', 'NAT'} or np.isnat(val)

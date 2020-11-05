@@ -256,7 +256,6 @@ class DatetimeColumn(column.ColumnBase):
         # columns, their corresponding locations
         # in base_data will contain min(int64) values.
         temp_nat_value = cudf.Scalar(np.iinfo("int64").min, dtype=self.dtype)
-        # temp_nat_value._data._set_device_value(np.iinfo('int64').min, dtype=self.dtype)
         temp_nat_value._data._sync()
         result = libcudf.replace.replace_nulls(self, temp_nat_value)
         return column.build_column(

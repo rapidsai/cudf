@@ -274,9 +274,8 @@ class TimeDeltaColumn(column.ColumnBase):
         # we set the same mask as current column.
         # However where there are "<NA>" in the
         # columns, their corresponding locations
-        # in base_data will contain min(int64) values.
-        temp_nat_value = cudf.Scalar(0, dtype=self.dtype)
-        temp_nat_value._host_value = np.timedelta64("NaT", self._time_unit)
+        temp_nat_value = cudf.Scalar(np.iinfo("int64").min, dtype=self.dtype)
+        temp_nat_value._data._sync()
         result = libcudf.replace.replace_nulls(self, temp_nat_value)
         return column.build_column(
             data=result.base_data,
