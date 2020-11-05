@@ -6,7 +6,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.cpp.column.column cimport column
 
 from libc.stdint cimport int32_t
@@ -24,7 +24,7 @@ from cudf._lib.cpp.strings.substring cimport (
 def slice_replace(Column source_strings,
                   size_type start,
                   size_type stop,
-                  Scalar repl):
+                  DeviceScalar repl):
     """
     Returns a Column by replacing specified section
     of each string with `repl`. Positions can be
@@ -51,7 +51,7 @@ def slice_replace(Column source_strings,
 
 def insert(Column source_strings,
            size_type start,
-           Scalar repl):
+           DeviceScalar repl):
     """
     Returns a Column by inserting a specified
     string `repl` at a specific position in all strings.
@@ -75,8 +75,8 @@ def insert(Column source_strings,
 
 
 def replace(Column source_strings,
-            Scalar target,
-            Scalar repl,
+            DeviceScalar target,
+            DeviceScalar repl,
             int32_t maxrepl):
     """
     Returns a Column after replacing occurrences of

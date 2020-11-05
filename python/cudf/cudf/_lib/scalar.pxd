@@ -6,7 +6,7 @@ from libcpp.memory cimport unique_ptr
 from cudf._lib.cpp.scalar.scalar cimport scalar
 
 
-cdef class Scalar:
+cdef class DeviceScalar:
     cdef unique_ptr[scalar] c_value
 
     cdef object _host_value
@@ -15,6 +15,6 @@ cdef class Scalar:
     cdef const scalar* get_raw_ptr(self)
 
     @staticmethod
-    cdef Scalar from_unique_ptr(unique_ptr[scalar] ptr)
+    cdef DeviceScalar from_unique_ptr(unique_ptr[scalar] ptr)
 
-    cpdef bool is_valid(Scalar s)
+    cpdef bool is_valid(DeviceScalar s)

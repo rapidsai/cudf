@@ -7,7 +7,7 @@ from libcpp.utility cimport move
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.cpp.column.column cimport column
 
 from cudf._lib.cpp.strings.char_types cimport (
@@ -19,7 +19,7 @@ from cudf._lib.cpp.strings.char_types cimport (
 )
 
 
-def filter_alphanum(Column source_strings, Scalar repl, bool keep=True):
+def filter_alphanum(Column source_strings, DeviceScalar repl, bool keep=True):
     """
     Returns a Column of strings keeping only alphanumeric character types.
     """

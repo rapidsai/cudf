@@ -4,7 +4,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.cpp.types cimport size_type
 from libcpp.vector cimport vector
 
@@ -20,7 +20,7 @@ from libcpp.string cimport string
 
 def replace_re(Column source_strings,
                object pattern,
-               Scalar repl,
+               DeviceScalar repl,
                size_type n):
     """
     Returns a Column after replacing occurrences regular

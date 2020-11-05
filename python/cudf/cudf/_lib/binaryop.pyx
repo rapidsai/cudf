@@ -11,7 +11,7 @@ from cudf._lib.binaryop cimport underlying_type_t_binary_operator
 from cudf._lib.column cimport Column
 from cudf._lib.replace import replace_nulls
 from cudf._lib.scalar import as_scalar
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.types import np_to_cudf_types
 from cudf._lib.types cimport underlying_type_t_type_id
 
@@ -115,7 +115,7 @@ cdef binaryop_v_v(Column lhs, Column rhs,
     return Column.from_unique_ptr(move(c_result))
 
 
-cdef binaryop_v_s(Column lhs, Scalar rhs,
+cdef binaryop_v_s(Column lhs, DeviceScalar rhs,
                   binary_operator c_op, data_type c_dtype):
     cdef column_view c_lhs = lhs.view()
     cdef const scalar* c_rhs = rhs.get_raw_ptr()
@@ -134,7 +134,7 @@ cdef binaryop_v_s(Column lhs, Scalar rhs,
 
     return Column.from_unique_ptr(move(c_result))
 
-cdef binaryop_s_v(Scalar lhs, Column rhs,
+cdef binaryop_s_v(DeviceScalar lhs, Column rhs,
                   binary_operator c_op, data_type c_dtype):
     cdef const scalar* c_lhs = lhs.get_raw_ptr()
     cdef column_view c_rhs = rhs.view()
@@ -156,10 +156,10 @@ cdef binaryop_s_v(Scalar lhs, Column rhs,
 
 def handle_null_for_string_column(Column input_col, op):
     if op in ('eq', 'lt', 'le', 'gt', 'ge'):
-        return replace_nulls(input_col, False)
+        return replace_nulls(input_col, DeviceScalar(False))
 
     elif op == 'ne':
-        return replace_nulls(input_col, True)
+        return replace_nulls(input_col, DeviceScalar(True))
 
     # Nothing needs to be done
     return input_col
@@ -183,7 +183,7 @@ def binaryop(lhs, rhs, op, dtype):
 
     cdef data_type c_dtype = data_type(tid)
 
-    if isinstance(lhs, Scalar) or np.isscalar(lhs) or lhs is None:
+    if isinstance(lhs, DeviceScalar) or np.isscalar(lhs) or lhs is None:
 
         is_string_col = is_string_dtype(rhs.dtype)
         s_lhs = as_scalar(lhs, dtype=rhs.dtype if lhs is None else None)
@@ -194,7 +194,7 @@ def binaryop(lhs, rhs, op, dtype):
             c_dtype
         )
 
-    elif isinstance(rhs, Scalar) or np.isscalar(rhs) or rhs is None:
+    elif isinstance(rhs, DeviceScalar) or np.isscalar(rhs) or rhs is None:
         is_string_col = is_string_dtype(lhs.dtype)
         s_rhs = as_scalar(rhs, dtype=lhs.dtype if rhs is None else None)
         result = binaryop_v_s(

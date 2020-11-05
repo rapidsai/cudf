@@ -11,7 +11,7 @@ from cudf._lib.table cimport Table
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from libcpp.string cimport string
 
 from cudf._lib.cpp.strings.split.partition cimport (
@@ -21,7 +21,7 @@ from cudf._lib.cpp.strings.split.partition cimport (
 
 
 def partition(Column source_strings,
-              Scalar delimiter):
+              DeviceScalar delimiter):
     """
     Returns a Table by splitting the `source_strings`
     column at the first occurrence of the specified `delimiter`.
@@ -45,7 +45,7 @@ def partition(Column source_strings,
 
 
 def rpartition(Column source_strings,
-               Scalar delimiter):
+               DeviceScalar delimiter):
     """
     Returns a Column by splitting the `source_strings`
     column at the last occurrence of the specified `delimiter`.

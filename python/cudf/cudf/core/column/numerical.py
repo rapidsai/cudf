@@ -9,7 +9,6 @@ from pandas.api.types import is_integer_dtype
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.quantiles import quantile as cpp_quantile
-from cudf._lib.scalar import Scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, build_column, column, string
 from cudf.utils import cudautils, utils
@@ -82,7 +81,7 @@ class NumericalColumn(column.ColumnBase):
         tmp = rhs
         if reflect:
             tmp = self
-        if isinstance(rhs, (NumericalColumn, Scalar)) or np.isscalar(rhs):
+        if isinstance(rhs, (NumericalColumn, cudf.Scalar)) or np.isscalar(rhs):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
                 if (tmp.dtype in int_dtypes) and (
@@ -430,7 +429,7 @@ class NumericalColumn(column.ColumnBase):
                     f"Cannot safely cast non-equivalent "
                     f"{type(fill_value).__name__} to {self.dtype.name}"
                 )
-            fill_value = fill_value_casted
+            fill_value = cudf.Scalar(fill_value_casted)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
             # cast safely to the same dtype as self

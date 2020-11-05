@@ -11,14 +11,14 @@ from cudf._lib.cpp.nvtext.ngrams_tokenize cimport (
     ngrams_tokenize as cpp_ngrams_tokenize
 )
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 
 
 def ngrams_tokenize(
     Column strings,
     int ngrams,
-    Scalar delimiter,
-    Scalar separator
+    DeviceScalar delimiter,
+    DeviceScalar separator
 ):
     cdef column_view c_strings = strings.view()
     cdef size_type c_ngrams = ngrams

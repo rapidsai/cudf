@@ -9,7 +9,7 @@ from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.scalar import Scalar, as_scalar
+from cudf._lib.scalar import as_scalar
 from cudf.core.column import column, string
 from cudf.utils.dtypes import is_scalar
 
@@ -249,26 +249,21 @@ class DatetimeColumn(column.ColumnBase):
 
         return binop(lhs, rhs, op=op, out_dtype=out_dtype)
 
-    def fillna(self, fill_value):
-        if is_scalar(fill_value):
-            if not isinstance(fill_value, Scalar):
-                fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
-        else:
-            fill_value = column.as_column(fill_value, nan_as_null=False)
-
-        result = libcudf.replace.replace_nulls(self, fill_value)
-        if (
-            isinstance(fill_value, cudf.Scalar)
-            and fill_value.dtype.type == np.datetime64
-            and np.isnat(fill_value.value)
-        ):
+    def _fillna_natwise(self):
             # If the value we are filling is np.datetime64("NAT")
             # we set the same mask as current column.
             # However where there are "<NA>" in the
             # columns, their corresponding locations
             # in base_data will contain min(int64) values.
-
-            return column.build_column(
+        import pdb
+        pdb.set_trace()
+        temp_nat_value = cudf.Scalar(np.iinfo('int64').min, dtype=self.dtype)
+        #temp_nat_value._data._set_device_value(np.iinfo('int64').min, dtype=self.dtype)
+        temp_nat_value._data._sync()
+        result = libcudf.replace.replace_nulls(
+            self, temp_nat_value
+        )
+        return column.build_column(
                 data=result.base_data,
                 dtype=result.dtype,
                 mask=self.base_mask,
@@ -276,6 +271,17 @@ class DatetimeColumn(column.ColumnBase):
                 offset=result.offset,
                 children=result.base_children,
             )
+
+
+    def fillna(self, fill_value):
+        if is_scalar(fill_value):
+            if not isinstance(fill_value, cudf.Scalar):
+                
+                fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
+        else:
+            fill_value = column.as_column(fill_value, nan_as_null=False)
+
+        result = libcudf.replace.replace_nulls(self, fill_value)
         return result
 
     def find_first_value(self, value, closest=False):
@@ -332,6 +338,10 @@ class DatetimeColumn(column.ColumnBase):
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
 def binop(lhs, rhs, op, out_dtype):
+    if isinstance(lhs, cudf.Scalar):
+        lhs = lhs._data
+    if isinstance(rhs, cudf.Scalar):
+        rhs = rhs._data
     out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
     return out
 

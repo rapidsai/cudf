@@ -9,7 +9,7 @@ from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.scalar import Scalar, as_scalar
+from cudf._lib.scalar import as_scalar
 from cudf.core.column import column, string
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
@@ -104,11 +104,9 @@ class TimeDeltaColumn(column.ColumnBase):
             common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
             lhs = lhs.astype(common_dtype).astype("float64")
 
-            if isinstance(rhs, Scalar):
+            if isinstance(rhs, cudf.Scalar):
                 if rhs.is_valid():
-                    if isinstance(rhs, Scalar):
-                        rhs = np.timedelta64(rhs.value)
-
+                    rhs = np.timedelta64(rhs.value)
                     rhs = rhs.astype(common_dtype).astype("float64")
                 else:
                     rhs = as_scalar(None, "float64")
@@ -271,27 +269,18 @@ class TimeDeltaColumn(column.ColumnBase):
     def time_unit(self):
         return self._time_unit
 
-    def fillna(self, fill_value):
-        col = self
-        if is_scalar(fill_value):
-            if isinstance(fill_value, np.timedelta64):
-                dtype = determine_out_dtype(self.dtype, fill_value.dtype)
-                fill_value = fill_value.astype(dtype)
-                col = col.astype(dtype)
-            elif not isinstance(fill_value, Scalar):
-                fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
-        else:
-            fill_value = column.as_column(fill_value, nan_as_null=False)
-
-        result = libcudf.replace.replace_nulls(col, fill_value)
-        if isinstance(fill_value, np.timedelta64) and np.isnat(fill_value):
-            # If the value we are filling is np.timedelta64("NAT")
+    def _fillna_natwise(self):
+            # If the value we are filling is np.datetime64("NAT")
             # we set the same mask as current column.
             # However where there are "<NA>" in the
             # columns, their corresponding locations
             # in base_data will contain min(int64) values.
-
-            return column.build_column(
+        temp_nat_value = cudf.Scalar(0, dtype=self.dtype)
+        temp_nat_value._host_value = np.timedelta64('NaT', self._time_unit)        
+        result = libcudf.replace.replace_nulls(
+            self, temp_nat_value
+        )
+        return column.build_column(
                 data=result.base_data,
                 dtype=result.dtype,
                 mask=self.base_mask,
@@ -299,6 +288,20 @@ class TimeDeltaColumn(column.ColumnBase):
                 offset=result.offset,
                 children=result.base_children,
             )
+
+    def fillna(self, fill_value):
+        col = self
+        if is_scalar(fill_value):
+            if isinstance(fill_value, np.timedelta64):
+                dtype = determine_out_dtype(self.dtype, fill_value.dtype)
+                fill_value = fill_value.astype(dtype)
+                col = col.astype(dtype)
+            if not isinstance(fill_value, cudf.Scalar):
+                fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
+        else:
+            fill_value = column.as_column(fill_value, nan_as_null=False)
+
+        result = libcudf.replace.replace_nulls(col, fill_value)
         return result
 
     def as_numerical_column(self, dtype, **kwargs):

@@ -7,7 +7,7 @@ from cudf.utils.dtypes import is_scalar
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_scalar
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.column.column cimport column
@@ -71,20 +71,21 @@ def replace_nulls_column(Column input_col, Column replacement_values):
     return Column.from_unique_ptr(move(c_result))
 
 
-def replace_nulls_scalar(Column input_col, Scalar replacement_value):
+def replace_nulls_scalar(Column input_col, DeviceScalar replacement_value):
     """
     Replaces null values in input_col with replacement_value
 
     Parameters
     ----------
     input_col : Column whose value will be updated
-    replacement_value : Scalar with value which will replace nulls
+    replacement_value : DeviceScalar with value which will replace nulls
     """
 
     cdef column_view input_col_view = input_col.view()
     cdef const scalar* replacement_value_scalar = replacement_value\
         .get_raw_ptr()
-
+    print('replacement value')
+    print(replacement_value)
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(cpp_replace_nulls(input_col_view,
@@ -108,8 +109,8 @@ def replace_nulls(Column input_col, object replacement, object dtype=None):
         return replace_nulls_column(input_col, replacement)
 
 
-def clamp(Column input_col, Scalar lo, Scalar lo_replace,
-          Scalar hi, Scalar hi_replace):
+def clamp(Column input_col, DeviceScalar lo, DeviceScalar lo_replace,
+          DeviceScalar hi, DeviceScalar hi_replace):
     """
     Clip the input_col such that values < lo will be replaced by lo_replace
     and > hi will be replaced by hi_replace
@@ -117,10 +118,10 @@ def clamp(Column input_col, Scalar lo, Scalar lo_replace,
     Parameters
     ----------
     input_col : Column whose value will be updated
-    lo : Scalar value for clipping lower values
-    lo_replace : Scalar value which will replace clipped with lo
-    hi : Scalar value for clipping upper values
-    lo_replace : Scalar value which will replace clipped with hi
+    lo : DeviceScalar value for clipping lower values
+    lo_replace : DeviceScalar value which will replace clipped with lo
+    hi : DeviceScalar value for clipping upper values
+    lo_replace : DeviceScalar value which will replace clipped with hi
     """
 
     cdef column_view input_col_view = input_col.view()
@@ -138,7 +139,7 @@ def clamp(Column input_col, Scalar lo, Scalar lo_replace,
     return Column.from_unique_ptr(move(c_result))
 
 
-def clamp(Column input_col, Scalar lo, Scalar hi):
+def clamp(Column input_col, DeviceScalar lo, DeviceScalar hi):
     """
     Clip the input_col such that values < lo will be replaced by lo
     and > hi will be replaced by hi
@@ -146,8 +147,8 @@ def clamp(Column input_col, Scalar lo, Scalar hi):
     Parameters
     ----------
     input_col : Column whose value will be updated
-    lo : Scalar value for clipping lower values
-    hi : Scalar value for clipping upper values
+    lo : DeviceScalar value for clipping lower values
+    hi : DeviceScalar value for clipping upper values
     """
 
     cdef column_view input_col_view = input_col.view()
@@ -167,8 +168,8 @@ def clip(Column input_col, object lo, object hi):
     and > hi will be replaced by hi
     """
 
-    lo_scalar = Scalar(lo, dtype=input_col.dtype if lo is None else None)
-    hi_scalar = Scalar(hi, dtype=input_col.dtype if hi is None else None)
+    lo_scalar = DeviceScalar(lo, dtype=input_col.dtype if lo is None else None)
+    hi_scalar = DeviceScalar(hi, dtype=input_col.dtype if hi is None else None)
 
     return clamp(input_col, lo_scalar, hi_scalar)
 

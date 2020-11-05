@@ -13,7 +13,7 @@ from pandas.core.dtypes.common import infer_dtype_from_object
 from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 import cudf
-from cudf._lib.scalar import Scalar, _is_null_host_scalar
+from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
 
 _NA_REP = "<NA>"
 _np_pa_dtypes = {
@@ -280,7 +280,8 @@ def cudf_dtype_from_pa_type(typ):
 def is_scalar(val):
     return (
         val is None
-        or isinstance(val, Scalar)
+        or isinstance(val, DeviceScalar)
+        or isinstance(val, cudf.Scalar)
         or isinstance(val, str)
         or isinstance(val, numbers.Number)
         or np.isscalar(val)

@@ -2,6 +2,7 @@
 import numpy as np
 
 from cudf import _lib as libcudf
+from cudf._lib.scalar import DeviceScalar
 from cudf.core.column.column import ColumnBase
 from cudf.core.index import Index
 from cudf.core.series import Series
@@ -11,7 +12,7 @@ from cudf.utils.dtypes import (
 )
 
 
-class Scalar(libcudf.scalar.Scalar):
+class Scalar(object):
     def __init__(self, value, dtype=None):
         """
         A GPU-backed scalar object with NumPy scalar like properties
@@ -51,7 +52,22 @@ class Scalar(libcudf.scalar.Scalar):
         dtype : np.dtype or string specifier
             The data type
         """
-        super().__init__(value, dtype=dtype)
+        if isinstance(value, DeviceScalar):
+            self._data = value
+        else:
+            self._data = DeviceScalar(value, dtype=dtype)
+
+    @property
+    def value(self):
+        return self._data.value
+    
+    @property
+    def dtype(self):
+        return self._data.dtype
+
+    @property
+    def is_valid(self):
+        return self._data.is_valid
 
     def __index__(self):
         if self.dtype.kind not in {"u", "i"}:

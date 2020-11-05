@@ -42,7 +42,7 @@ from cudf._lib.nvtext.tokenize import (
     detokenize as cpp_detokenize,
     tokenize as cpp_tokenize,
 )
-from cudf._lib.scalar import Scalar, as_scalar
+from cudf._lib.scalar import DeviceScalar, as_scalar
 from cudf._lib.strings.attributes import (
     code_points as cpp_code_points,
     count_bytes as cpp_count_bytes,
@@ -4477,7 +4477,7 @@ def _massage_string_arg(value, name, allow_col=False):
     if isinstance(value, str):
         return as_scalar(value, dtype="str")
 
-    if isinstance(value, Scalar) and is_string_dtype(value.dtype):
+    if isinstance(value, DeviceScalar) and is_string_dtype(value.dtype):
         return value
 
     allowed_types = ["Scalar"]

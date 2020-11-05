@@ -428,6 +428,9 @@ class ColumnBase(Column, Serializable):
         output size could be smaller.
         """
         if fillna:
+            if self.dtype.char in 'mM':
+
+                return self._fillna_natwise().data_array_view
             return self.fillna(self.default_na_value()).data_array_view
         else:
             return self.dropna().data_array_view
@@ -448,6 +451,7 @@ class ColumnBase(Column, Serializable):
         if ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
         """
+
         return self.to_gpu_array(fillna=fillna).copy_to_host()
 
     def _fill(self, fill_value, begin=0, end=-1, inplace=False):

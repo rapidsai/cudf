@@ -43,7 +43,7 @@ from cudf._lib.cpp.scalar.scalar cimport (
 )
 cimport cudf._lib.cpp.types as libcudf_types
 
-cdef class Scalar:
+cdef class DeviceScalar:
 
     def __init__(self, value, dtype=None):
         """
@@ -194,11 +194,11 @@ cdef class Scalar:
             return f"Scalar({self.value.__repr__()})"
 
     @staticmethod
-    cdef Scalar from_unique_ptr(unique_ptr[scalar] ptr):
+    cdef DeviceScalar from_unique_ptr(unique_ptr[scalar] ptr):
         """
         Construct a Scalar object from a unique_ptr<cudf::scalar>.
         """
-        cdef Scalar s = Scalar.__new__(Scalar)
+        cdef DeviceScalar s = DeviceScalar.__new__(DeviceScalar)
         s._host_value = None
         s.c_value = move(ptr)
 
@@ -415,13 +415,20 @@ cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
 
 
 def as_scalar(val, dtype=None):
-    if isinstance(val, Scalar):
+    print('wa wa wi wa')
+    print(type(val))
+    print(val)
+
+
+    if isinstance(val, DeviceScalar):
+        print('im a device scalar')
         if (dtype is None or dtype == val.dtype):
             return val
-        else:
-            return Scalar(val.value, dtype)
+    if hasattr(val, '_data') and isinstance(val._data, DeviceScalar):
+            return val._data
     else:
-        return Scalar(value=val, dtype=dtype)
+        print('in the else')
+        return DeviceScalar(value=val, dtype=dtype)
 
 
 def _is_null_host_scalar(slr):

@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf._lib.scalar import Scalar as libcudf_scalar
+from cudf._lib.scalar import DeviceScalar as libcudf_scalar
 from cudf import Scalar as pycudf_scalar
 from cudf.tests.utils import (
     ALL_TYPES,
