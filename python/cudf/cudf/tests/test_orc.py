@@ -192,6 +192,52 @@ def test_orc_reader_strings(datadir):
     assert_eq(expect, got, check_categorical=False)
 
 
+def test_orc_read_statistics(datadir):
+    # Read in file containing 2 columns ("int1" and "string1") and 3 stripes
+    # (sizes 5000, 5000 and 1000 respectively). Each stripe has the same value
+    # in every one of its rows. The values the stripes have are 1, 2, and 3 in
+    # "int1" and "one", "two", and "three" in "string1".
+    path = datadir / "TestOrcFile.testStripeLevelStats.orc"
+    try:
+        (
+            file_statistics,
+            stripes_statistics,
+        ) = cudf.io.orc.read_orc_statistics(path)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+
+    # Check numberOfValues
+    assert_eq(file_statistics["int1"]["number_of_values"], 11_000)
+    assert_eq(
+        file_statistics["int1"]["number_of_values"],
+        sum(
+            [
+                stripes_statistics[0]["int1"]["number_of_values"],
+                stripes_statistics[1]["int1"]["number_of_values"],
+                stripes_statistics[2]["int1"]["number_of_values"],
+            ]
+        ),
+    )
+    assert_eq(
+        stripes_statistics[1]["int1"]["number_of_values"],
+        stripes_statistics[1]["string1"]["number_of_values"],
+    )
+    assert_eq(stripes_statistics[2]["string1"]["number_of_values"], 1_000)
+
+    # Check other statistics
+    assert_eq(stripes_statistics[2]["string1"]["has_null"], False)
+    assert_eq(
+        file_statistics["int1"]["minimum"],
+        min(
+            stripes_statistics[0]["int1"]["minimum"],
+            stripes_statistics[1]["int1"]["minimum"],
+            stripes_statistics[2]["int1"]["minimum"],
+        ),
+    )
+    assert_eq(file_statistics["int1"]["minimum"], 1)
+    assert_eq(file_statistics["string1"]["minimum"], "one")
+
+
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 def test_orc_read_stripes(datadir, engine):
     path = datadir / "TestOrcFile.testDate1900.orc"
@@ -360,6 +406,15 @@ def test_orc_reader_decimal_type(datadir, orc_file):
     # Converting to strings since pandas keeps it in decimal
     pdf["col8"] = pdf["col8"].astype("str")
     df["col8"] = df["col8"].astype("str")
+
+    assert_eq(pdf, df)
+
+
+def test_orc_reader_boolean_type(datadir):
+    file_path = datadir / "TestOrcFile.boolean.orc"
+
+    pdf = pd.read_orc(file_path)
+    df = cudf.read_orc(file_path).to_pandas()
 
     assert_eq(pdf, df)
 
