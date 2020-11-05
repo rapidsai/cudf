@@ -343,8 +343,13 @@ std::unique_ptr<column> round(column_view const& input,
   CUDF_EXPECTS(cudf::is_numeric(input.type()) || cudf::is_fixed_point(input.type()),
                "Only integral/floating point/fixed point currently supported.");
 
-  // TODO when fixed_point supported, have to adjust type
-  if (input.size() == 0) return empty_like(input);
+  if (input.size() == 0) {
+    if (is_fixed_point(input.type())) {
+      auto const type = data_type{input.type().id(), numeric::scale_type{-decimal_places}};
+      return std::make_unique<cudf::column>(type, 0, rmm::device_buffer{});
+    }
+    return empty_like(input);
+  }
 
   return type_dispatcher(
     input.type(), round_type_dispatcher{}, input, decimal_places, method, stream, mr);
