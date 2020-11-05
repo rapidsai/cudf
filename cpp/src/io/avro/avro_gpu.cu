@@ -257,7 +257,7 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
 
   // Fetch schema into shared mem if possible
   if (schema_len <= MAX_SHARED_SCHEMA_LEN) {
-    cuda::memcpy_async(&g_shared_schema[0], schema_g, schema_len * sizeof(schemadesc_s), barrier);
+    cuda::memcpy_async(g_shared_schema, schema_g, schema_len * sizeof(schemadesc_s), barrier);
     barrier.arrive_and_wait();
     schema = g_shared_schema;
   } else {
