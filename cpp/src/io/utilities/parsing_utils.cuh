@@ -327,7 +327,7 @@ __device__ __inline__ cudf::size_type* infer_integral_field_counter(char const* 
   static constexpr char int64_min_abs[]  = "9223372036854775808";
   static constexpr char int64_max_abs[]  = "9223372036854775807";
 
-  int32_t digit_count = data_end - data_begin;
+  auto digit_count = data_end - data_begin;
 
   // Remove preceding zeros
   if (digit_count >= (sizeof(int64_max_abs) - 1)) {

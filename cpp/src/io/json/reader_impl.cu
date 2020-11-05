@@ -517,7 +517,7 @@ void reader::impl::set_data_types(cudaStream_t stream)
       stream);
 
     auto get_type_id = [&](auto const &cinfo) {
-      cudf::size_type int_count_total =
+      auto int_count_total =
         cinfo.big_int_count + cinfo.negative_small_int_count + cinfo.positive_small_int_count;
       if (cinfo.null_count == static_cast<int>(rec_starts_.size())) {
         // Entire column is NULL; allocate the smallest amount of memory
