@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import os
 from glob import glob
 from warnings import warn
@@ -30,7 +32,7 @@ def _internal_read_csv(path, chunksize="256 MiB", **kwargs):
     elif hasattr(path, "__fspath__"):
         filenames = sorted(glob(path.__fspath__()))
     else:
-        raise TypeError("Path type not understood:{}".format(type(path)))
+        raise TypeError(f"Path type not understood:{type(path)}")
 
     if not filenames:
         msg = f"A file in: {filenames} does not exist."
@@ -102,7 +104,7 @@ def read_csv_without_chunksize(path, **kwargs):
     elif hasattr(path, "__fspath__"):
         filenames = sorted(glob(path.__fspath__()))
     else:
-        raise TypeError("Path type not understood:{}".format(type(path)))
+        raise TypeError(f"Path type not understood:{type(path)}")
 
     name = "read-csv-" + tokenize(path, **kwargs)
 

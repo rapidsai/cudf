@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,40 +13,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "timezone.h"
+#include "timezone.cuh"
+
 #include <algorithm>
 #include <fstream>
 
 namespace cudf {
 namespace io {
-// NOTE: Assumes little-endian platform
-#ifdef _MSC_VER
-#define bswap_32(v) _byteswap_ulong(v)
-#define bswap_64(v) _byteswap_uint64(v)
-#else
-#define bswap_32(v) __builtin_bswap32(v)
-#define bswap_64(v) __builtin_bswap64(v)
-#endif
 
-#define TZIF_MAGIC (('T' << 0) | ('Z' << 8) | ('i' << 16) | ('f' << 24))
+constexpr uint32_t tzif_magic           = ('T' << 0) | ('Z' << 8) | ('i' << 16) | ('f' << 24);
+std::string const tzif_system_directory = "/usr/share/zoneinfo/";
 
-#define ORC_UTC_OFFSET 1420070400  // Seconds from Jan 1st, 1970 to Jan 1st, 2015
+// Seconds from Jan 1st, 1970 to Jan 1st, 2015
+constexpr int64_t orc_utc_offset = 1420070400;
 
 #pragma pack(push, 1)
 /**
  * @brief 32-bit TZif header
- **/
-struct tzif_hdr_s {
-  uint32_t magic;          // "TZif"
-  uint8_t version;         // 0:version1, '2':version2, '3':version3
-  uint8_t reserved15[15];  // unused, reserved for future use
-  uint32_t isutccnt;       // number of UTC/local indicators contained in the body
-  uint32_t isstdcnt;       // number of standard/wall indicators contained in the body
-  uint32_t leapcnt;        // number of leap second records contained in the body
-  uint32_t timecnt;        // number of transition times contained in the body
-  uint32_t typecnt;  // number of local time type Records contained in the body - MUST NOT be zero
-  uint32_t charcnt;  // total number of octets used by the set of time zone designations contained
-                     // in the body
+ */
+struct timezone_file_header {
+  uint32_t magic;          ///< "TZif"
+  uint8_t version;         ///< 0:version1, '2':version2, '3':version3
+  uint8_t reserved15[15];  ///< unused, reserved for future use
+  uint32_t isutccnt;       ///< number of UTC/local indicators contained in the body
+  uint32_t isstdcnt;       ///< number of standard/wall indicators contained in the body
+  uint32_t leapcnt;        ///< number of leap second records contained in the body
+  uint32_t timecnt;        ///< number of transition times contained in the body
+  uint32_t typecnt;  ///< number of local time type Records contained in the body - MUST NOT be zero
+  uint32_t charcnt;  ///< total number of octets used by the set of time zone designations contained
+                     ///< in the body
 };
 
 struct localtime_type_record_s {
@@ -56,435 +51,403 @@ struct localtime_type_record_s {
 };
 
 struct dst_transition_s {
-  int type;   // Transition type ('J','M' or day)
+  char type;  // Transition type ('J','M' or day)
   int month;  // Month of transition
   int week;   // Week of transition
   int day;    // Day of transition
-  int time;   // Time of day
+  int time;   // Time of day (seconds)
 };
 #pragma pack(pop)
 
-/**
- * @brief Parse a name from the posix TZ string
- *
- * @param[in] cur current position in TZ string
- * @param[in] end end of TZ string
- *
- * @return position after parsing the name
- **/
-static const uint8_t *posix_parse_name(const uint8_t *cur, const uint8_t *end)
-{
-  if (cur < end) {
-    int c = *cur;
-    if (c == '<') {
-      cur++;
-      while (cur < end) {
-        if (*cur++ == '>') { break; }
-      }
-    } else {
-      while ((c < '0' || c > '9') && (c != '-') && (c != '+') && (c != ',')) {
-        if (++cur >= end) { break; }
-        c = *cur;
+struct timezone_file {
+  timezone_file_header header;
+  bool is_header_from_64bit = false;
+
+  std::vector<int64_t> transition_times;
+  std::vector<uint8_t> ttime_idx;
+  std::vector<localtime_type_record_s> ttype;
+  std::vector<char> posix_tz_string;
+
+  auto timecnt() const { return header.timecnt; }
+  auto typecnt() const { return header.typecnt; }
+
+  // Based on https://tools.ietf.org/id/draft-murchison-tzdist-tzif-00.html
+  static constexpr auto leap_second_rec_size(bool is_64bit) noexcept
+  {
+    return (is_64bit ? sizeof(uint64_t) : sizeof(uint32_t)) + sizeof(uint32_t);
+  }
+  static constexpr auto file_content_size_32(timezone_file_header const &header) noexcept
+  {
+    return header.timecnt * sizeof(uint32_t) +                 // transition times
+           header.timecnt * sizeof(uint8_t) +                  // transition time index
+           header.typecnt * sizeof(localtime_type_record_s) +  // local time type records
+           header.charcnt * sizeof(uint8_t) +                  // time zone designations
+           header.leapcnt * leap_second_rec_size(false) +      // leap second records
+           header.isstdcnt * sizeof(uint8_t) +                 // standard/wall indicators
+           header.isutccnt * sizeof(uint8_t);                  // UTC/local indicators
+  }
+
+  /**
+   * @brief Used because little-endian platform in assumed.
+   */
+  void header_to_little_endian()
+  {
+    header.isutccnt = __builtin_bswap32(header.isutccnt);
+    header.isstdcnt = __builtin_bswap32(header.isstdcnt);
+    header.leapcnt  = __builtin_bswap32(header.leapcnt);
+    header.timecnt  = __builtin_bswap32(header.timecnt);
+    header.typecnt  = __builtin_bswap32(header.typecnt);
+    header.charcnt  = __builtin_bswap32(header.charcnt);
+  }
+
+  void read_header(std::ifstream &input_file, size_t file_size)
+  {
+    input_file.read(reinterpret_cast<char *>(&header), sizeof(header));
+    CUDF_EXPECTS(!input_file.fail() && header.magic == tzif_magic,
+                 "Error reading time zones file header.");
+    header_to_little_endian();
+
+    // Check for 64-bit header
+    if (header.version != 0) {
+      if (file_content_size_32(header) + sizeof(header) < file_size) {
+        // skip the 32-bit content
+        input_file.seekg(file_content_size_32(header), std::ios_base::cur);
+        // read the 64-bit header
+        input_file.read(reinterpret_cast<char *>(&header), sizeof(header));
+        header_to_little_endian();
+        is_header_from_64bit = true;
       }
     }
+    CUDF_EXPECTS(
+      header.typecnt > 0 && header.typecnt <= file_size / sizeof(localtime_type_record_s),
+      "Invalid number number of time types in timezone file.");
+    CUDF_EXPECTS(header.timecnt <= file_size,
+                 "Number of transition times is larger than the file size.");
   }
-  return cur;
-}
+
+  timezone_file(std::string const &timezone_name)
+  {
+    using std::ios_base;
+
+    // Open the input file
+    std::string const tz_filename = tzif_system_directory + timezone_name;
+    std::ifstream fin;
+    fin.open(tz_filename, ios_base::in | ios_base::binary | ios_base::ate);
+    CUDF_EXPECTS(fin, "Failed to open the timezone file.");
+    auto const file_size = fin.tellg();
+    fin.seekg(0);
+
+    read_header(fin, file_size);
+
+    // Read transition times (convert from 32-bit to 64-bit if necessary)
+    transition_times.resize(timecnt());
+    if (is_header_from_64bit) {
+      fin.read(reinterpret_cast<char *>(transition_times.data()),
+               transition_times.size() * sizeof(int64_t));
+      for (auto &tt : transition_times) { tt = __builtin_bswap64(tt); }
+    } else {
+      std::vector<int32_t> tt32(timecnt());
+      fin.read(reinterpret_cast<char *>(tt32.data()), tt32.size() * sizeof(int32_t));
+      std::transform(
+        tt32.cbegin(), tt32.cend(), std::back_inserter(transition_times), [](auto &tt) {
+          return __builtin_bswap32(tt);
+        });
+    }
+    ttime_idx.resize(timecnt());
+    fin.read(reinterpret_cast<char *>(ttime_idx.data()), timecnt() * sizeof(uint8_t));
+
+    // Read time types
+    ttype.resize(typecnt());
+    fin.read(reinterpret_cast<char *>(ttype.data()), typecnt() * sizeof(localtime_type_record_s));
+    CUDF_EXPECTS(!fin.fail(), "Failed to read time types from the time zone file.");
+    for (uint32_t i = 0; i < typecnt(); i++) {
+      ttype[i].utcoff = __builtin_bswap32(ttype[i].utcoff);
+    }
+
+    // Read posix TZ string
+    fin.seekg(header.charcnt + header.leapcnt * leap_second_rec_size(is_header_from_64bit) +
+                header.isstdcnt + header.isutccnt,
+              ios_base::cur);
+    auto const file_pos = fin.tellg();
+    if (file_size - file_pos > 1) {
+      posix_tz_string.resize(file_size - file_pos);
+      fin.read(posix_tz_string.data(), file_size - file_pos);
+    }
+  }
+};
 
 /**
- * @brief Parse a number from the posix TZ string
+ * @brief Posix TZ parser
+ */
+template <class Container>
+class posix_parser {
+ public:
+  posix_parser(Container const &tz_string) : cur{tz_string.begin()}, end{tz_string.end()} {}
+
+  /**
+   * @brief Advances the parser past a name from the posix TZ string.
+   */
+  void skip_name();
+
+  /**
+   * @brief Parses a number from the posix TZ string.
+   *
+   * @return Parsed number
+   */
+  int64_t parse_number();
+
+  /**
+   * @brief Parses a UTC offset from the posix TZ string.
+   *
+   * @return Parsed offset
+   */
+  int32_t parse_offset();
+
+  /**
+   * @brief Parses a DST transition time from the posix TZ string.
+   *
+   * @return Parsed transition time
+   */
+  dst_transition_s parse_transition();
+
+  /**
+   * @brief Returns the remaining number of characters in the input.
+   */
+  auto remaining_char_cnt() const { return end - cur; }
+
+  /**
+   * @brief Returns the next character in the input.
+   */
+  char next_character() const { return *cur; }
+
+ private:
+  typename Container::const_iterator cur;
+  typename Container::const_iterator const end;
+};
+
+/**
+ * @brief Skips the next name token.
  *
- * @param[in] cur current position in TZ string
- * @param[in] end end of TZ string
- * @param[out] pval pointer to result
- *
- * @return position after parsing the number
- **/
-static const uint8_t *posix_parse_number(const uint8_t *cur, const uint8_t *end, int64_t *pval)
+ * Name can be a string of letters, such as EST, or an arbitrary string surrounded by angle
+ * brackets, such as <UTC-05>
+ */
+template <class Container>
+void posix_parser<Container>::skip_name()
+{
+  cur = std::find_if(cur, end, [](auto c) {
+    return std::isdigit(c) || c == '-' || c == ',' || c == '+' || c == '<';
+  });
+
+  if (*cur == '<') cur = std::next(std::find(cur, end, '>'));
+}
+
+template <class Container>
+int64_t posix_parser<Container>::parse_number()
 {
   int64_t v = 0;
   while (cur < end) {
-    uint32_t c = *cur - '0';
-    if (c > 9u) { break; }
+    auto const c = *cur - '0';
+    if (c > 9 || c < 0) { break; }
     v = v * 10 + c;
-    cur++;
+    ++cur;
   }
-  *pval = v;
-  return cur;
+  return v;
 }
 
-/**
- * @brief Parse a UTC offset from the posix TZ string
- *
- * @param[in] cur current position in TZ string
- * @param[in] end end of TZ string
- * @param[out] putcoff pointer to UTC offset
- *
- * @return position after parsing the UTC offset
- **/
-static const uint8_t *posix_parse_offset(const uint8_t *cur, const uint8_t *end, int64_t *putcoff)
+template <class Container>
+int32_t posix_parser<Container>::parse_offset()
 {
-  int64_t v = 0;
-  if (cur < end) {
-    int64_t scale = 60 * 60;
-    int sign      = *cur;
-    cur += (sign == '-' || sign == '+');
-    cur = posix_parse_number(cur, end, &v);
-    v *= scale;
-    while (cur < end && scale > 1 && *cur == ':') {
-      int64_t v2;
-      cur = posix_parse_number(cur + 1, end, &v2);
-      scale /= 60;
-      v += v2 * scale;
-    }
-    if (sign == '-') { v = -v; }
+  CUDF_EXPECTS(cur < end, "Unexpected end of input stream");
+
+  auto const sign = *cur;
+  cur += (sign == '-' || sign == '+');
+
+  auto const hours   = parse_number();
+  auto scale         = 60 * 60;
+  auto total_seconds = hours * scale;
+
+  // Parse minutes and seconds, if present
+  while (cur < end && scale > 1 && *cur == ':') {
+    // Skip the ':' character
+    ++cur;
+    // Scale becomes 60, for minutes, and then 1, for seconds
+    scale /= 60;
+    total_seconds += parse_number() * scale;
   }
-  *putcoff = v;
-  return cur;
+
+  return (sign == '-') ? -total_seconds : total_seconds;
 }
 
-/**
- * @brief Parse a DST transition time from the posix TZ string
- *
- * @param[in] cur current position in TZ string
- * @param[in] end end of TZ string
- * @param[out] ptrans pointer to resulting transition
- *
- * @return position after parsing the transition
- **/
-static const uint8_t *posix_parse_transition(const uint8_t *cur,
-                                             const uint8_t *end,
-                                             dst_transition_s *ptrans)
+template <class Container>
+dst_transition_s posix_parser<Container>::parse_transition()
 {
-  int type  = 0;
-  int month = 0;
-  int week  = 0;
-  int day   = 0;
-  int time  = 2 * 60 * 60;
+  CUDF_EXPECTS(cur < end, "Unexpected end of input stream");
+
+  // Transition at 2AM by default
+  int32_t time = 2 * 60 * 60;
   if (cur + 2 <= end && *cur == ',') {
-    int64_t v;
-    type = cur[1];
+    char const type = cur[1];
+    int month       = 0;
+    int week        = 0;
+    int day         = 0;
     cur += (type == 'M' || type == 'J') ? 2 : 1;
     if (type == 'M') {
-      cur   = posix_parse_number(cur, end, &v);
-      month = (int)v;
+      month = parse_number();
       if (cur < end && *cur == '.') {
-        cur  = posix_parse_number(cur + 1, end, &v);
-        week = (int)v;
+        ++cur;
+        week = parse_number();
         if (cur < end && *cur == '.') {
-          cur = posix_parse_number(cur + 1, end, &v);
-          day = (int)v;
+          ++cur;
+          day = parse_number();
         }
       }
     } else {
-      cur = posix_parse_number(cur, end, &v);
-      day = (int)v;
+      day = parse_number();
     }
     if (cur < end && *cur == '/') {
-      cur  = posix_parse_offset(cur + 1, end, &v);
-      time = (int)v;
+      ++cur;
+      time = parse_offset();
     }
+    return {type, month, week, day, time};
   }
-  ptrans->type  = type;
-  ptrans->month = month;
-  ptrans->week  = week;
-  ptrans->day   = day;
-  ptrans->time  = time;
-  return cur;
+  return {0, 0, 0, 0, time};
 }
 
 /**
- * @brief Check if a year is a leap year
- *
- * @param[in] year year
- *
- * @return 1 if leap year, zero otherwise
- **/
-static int IsLeapYear(uint32_t year)
+ * @brief Checks if a given year is a leap year.
+ */
+static bool is_leap_year(uint32_t year)
 {
   return ((year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0)));
 }
 
 /**
- * @brief Return the number of days in a month
- *
- * @param[in] month month (1..12)
- * @param[in] is_leap 1 if leap year
- *
- * @return number of days in the month
- **/
-static int DaysInMonth(int month, int is_leap)
+ * @brief Returns the number of days in a month.
+ */
+static int days_in_month(int month, bool is_leap_year)
 {
-  return (month == 2) ? 28 + is_leap : (30 + ((0x55aa >> month) & 1));
+  CUDF_EXPECTS(month > 0 && month <= 12, "Invalid month");
+
+  if (month == 2) return 28 + is_leap_year;
+  return 30 + ((0b1010110101010 >> month) & 1);
 }
 
 /**
- * @brief Convert a daylight saving transition time to a number of seconds
+ * @brief Converts a daylight saving transition time to a number of seconds.
  *
- * @param[in] trans transition day information
- * @param[in] year year of transition
+ * @param trans transition day information
+ * @param year year of transition
  *
  * @return transition time in seconds from the beginning of the year
- **/
-static int64_t GetTransitionTime(const dst_transition_s *trans, int year)
+ */
+static int64_t get_transition_time(dst_transition_s const &trans, int year)
 {
-  int64_t t = trans->time;
-  int day   = trans->day;
+  auto day = trans.day;
 
-  if (trans->type == 'M') {
-    static uint8_t month_lut[12]  = {1, 4, 4, 0, 2, 5, 0, 3, 6, 1, 4, 6};
-    static uint8_t century_lut[4] = {6, 4, 2, 0};
-    int is_leap                   = IsLeapYear(year);
-    int month                     = std::min(std::max(trans->month, 1), 12);
-    int week                      = std::min(std::max(trans->week, 1), 52);
-    // Compute day of week
-    int adjustedMonth = (month + 9) % 12 + 1;
-    int adjustedYear  = year - (month <= 2);
-    int dayOfWeek     = ((26 * adjustedMonth - 2) / 10 + 1 + (adjustedYear % 100) +
-                     (adjustedYear % 100) / 4 + (adjustedYear / 400) - 2 * (adjustedYear / 100)) %
-                    7;
-    if (dayOfWeek < 0) { dayOfWeek += 7; }
-    day -= dayOfWeek;
-    if (day < 0) { day += 7; }
-    while (week > 1 && day + 7 < DaysInMonth(month, is_leap)) {
+  if (trans.type == 'M') {
+    auto const is_leap = is_leap_year(year);
+    auto const month   = std::min(std::max(trans.month, 1), 12);
+    auto week          = std::min(std::max(trans.week, 1), 52);
+
+    // Year-to-year day adjustment
+    auto const adjusted_month = (month + 9) % 12 + 1;
+    auto const adjusted_year  = year - (month <= 2);
+    auto day_of_week =
+      ((26 * adjusted_month - 2) / 10 + 1 + (adjusted_year % 100) + (adjusted_year % 100) / 4 +
+       (adjusted_year / 400) - 2 * (adjusted_year / 100)) %
+      7;
+    if (day_of_week < 0) { day_of_week += 7; }
+    day = (day - day_of_week + 7) % 7;
+
+    // Add weeks
+    while (week > 1 && day + 7 < days_in_month(month, is_leap)) {
       week--;
       day += 7;
     }
-    for (int m = 1; m < month; m++) { day += DaysInMonth(m, is_leap); }
-  } else if (trans->type == 'J') {
-    day += (day > 60 && IsLeapYear(year));
+    // Add months
+    for (int m = 1; m < month; m++) { day += days_in_month(m, is_leap); }
+  } else if (trans.type == 'J') {
+    // Account for 29th of February on leap years
+    day += (day > 31 + 29 && is_leap_year(year));
   }
-  return t + day * 24 * 60 * 60;
+
+  return trans.time + day * day_seconds;
 }
 
-/**
- * @brief Returns the gmt offset for a given date
- *
- * @param[in] table timezone conversion table
- * @param[in] ts ORC timestamp
- *
- * @return gmt offset
- **/
-static int64_t GetGmtOffset(const std::vector<int64_t> &table, int64_t ts)
+timezone_table build_timezone_transition_table(std::string const &timezone_name)
 {
-  uint32_t num_entries = (uint32_t)(table.size() >> 1);
-  uint32_t dst_cycle   = 0;
-  int64_t first_transition, last_transition;
-  uint32_t first, last;
-  if (num_entries > 800)  // 2 entries/year for 400 years
-  {
-    num_entries -= 800;
-    dst_cycle = 800;
-  }
-  first_transition = table[1];
-  last_transition  = table[(num_entries - 1) * 2 + 1];
-  if (ts <= first_transition) {
-    return table[0 * 2 + 2];
-  } else if (ts <= last_transition) {
-    first = 0;
-    last  = num_entries - 1;
-  } else if (!dst_cycle) {
-    return table[(num_entries - 1) * 2 + 2];
-  } else {
-    // Apply 400-year cycle rule
-    const int64_t k400Years = (365 * 400 + (100 - 3)) * 24 * 60 * 60ll;
-    ts %= k400Years;
-    if (ts < 0) { ts += k400Years; }
-    first = num_entries;
-    last  = num_entries + dst_cycle - 1;
-    if (ts < table[num_entries * 2 + 1]) { return table[last * 2 + 2]; }
-  }
-  // Binary search the table from first to last for ts
-  do {
-    uint32_t mid = first + ((last - first + 1) >> 1);
-    int64_t tmid = table[mid * 2 + 1];
-    if (tmid <= ts) {
-      first = mid;
-    } else {
-      if (mid == last) { break; }
-      last = mid;
-    }
-  } while (first < last);
-  return table[first * 2 + 2];
-}
-
-/**
- * @brief Creates a transition table to convert ORC timestamps to UTC
- *
- * @param[out] table output table (1st entry = gmtOffset, 2 int64_t per transition, last 800
- *transitions repeat forever with 400 year cycle)
- * @param[in] timezone_name standard timezone name (for example, "US/Pacific")
- *
- * @return true if successful, false if failed to find/parse the timezone information
- **/
-bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string &timezone_name)
-{
-  using std::ios_base;
-  std::string tz_filename("/usr/share/zoneinfo/");
-  std::ifstream fin;
-  std::vector<localtime_type_record_s> ttype;
-  std::vector<int64_t> transition_times;
-  std::vector<uint8_t> ttime_idx;
-  std::vector<uint8_t> posix_tz_string;
-  tzif_hdr_s tzh = {0};
-  bool hdr64     = false;
-  size_t earliest_std_idx;
-  int64_t future_dstoff, future_stdoff, future_time;
-
-  table.resize(0);
-  if (timezone_name == "UTC" || !timezone_name.length()) {
+  if (timezone_name == "UTC" || timezone_name.empty()) {
     // Return an empty table for UTC
-    return true;
+    return {};
   }
-  tz_filename += timezone_name;
-#ifdef _MSC_VER
-  for (size_t i = 0; i < tz_filename.length(); i++) {
-    if (tz_filename[i] == '/') { tz_filename[i] = '\\'; }
+
+  timezone_file const tzf(timezone_name);
+
+  std::vector<int64_t> ttimes(1);
+  std::vector<int32_t> offsets(1);
+  // One ancient rule entry, one per TZ file entry, 2 entries per year in the future cycle
+  ttimes.reserve(1 + tzf.timecnt() + cycle_entry_cnt);
+  offsets.reserve(1 + tzf.timecnt() + cycle_entry_cnt);
+  size_t earliest_std_idx = 0;
+  for (size_t t = 0; t < tzf.timecnt(); t++) {
+    auto const ttime = tzf.transition_times[t];
+    auto const idx   = tzf.ttime_idx[t];
+    CUDF_EXPECTS(idx < tzf.typecnt(), "Out-of-range type index");
+    auto const utcoff = tzf.ttype[idx].utcoff;
+    ttimes.push_back(ttime);
+    offsets.push_back(utcoff);
+    if (!earliest_std_idx && !tzf.ttype[idx].isdst) { earliest_std_idx = ttimes.size() - 1; }
   }
-#endif
-  fin.open(tz_filename, ios_base::in | ios_base::binary | ios_base::ate);
-  if (fin) {
-    size_t file_size           = fin.tellg(), file_pos;
-    dst_transition_s dst_start = {0}, dst_end = {0};
-    fin.seekg(0);
-    fin.read(reinterpret_cast<char *>(&tzh), sizeof(tzh));
-    if (fin.fail() || tzh.magic != TZIF_MAGIC) { return false; }
-    // Convert fields to little endian
-    tzh.isutccnt = bswap_32(tzh.isutccnt);
-    tzh.isstdcnt = bswap_32(tzh.isstdcnt);
-    tzh.leapcnt  = bswap_32(tzh.leapcnt);
-    tzh.timecnt  = bswap_32(tzh.timecnt);
-    tzh.typecnt  = bswap_32(tzh.typecnt);
-    tzh.charcnt  = bswap_32(tzh.charcnt);
-    // Check for 64-bit header
-    if (tzh.version != 0) {
-      size_t ofs64 = tzh.timecnt * 5 + tzh.typecnt * 6 + tzh.charcnt + tzh.leapcnt * 8 +
-                     tzh.isstdcnt + tzh.isutccnt;
-      if (ofs64 + sizeof(tzh) < file_size) {
-        fin.seekg(ofs64, ios_base::cur);
-        hdr64 = true;
-        if (fin.fail() || tzh.magic != TZIF_MAGIC) { return false; }
-        fin.read(reinterpret_cast<char *>(&tzh), sizeof(tzh));
-        // Convert fields to little endian
-        tzh.isutccnt = bswap_32(tzh.isutccnt);
-        tzh.isstdcnt = bswap_32(tzh.isstdcnt);
-        tzh.leapcnt  = bswap_32(tzh.leapcnt);
-        tzh.timecnt  = bswap_32(tzh.timecnt);
-        tzh.typecnt  = bswap_32(tzh.typecnt);
-        tzh.charcnt  = bswap_32(tzh.charcnt);
-      }
-    }
-    // Read transition times (convert from 32-bit to 64-bit if necessary)
-    if (tzh.timecnt > 0) {
-      if (tzh.timecnt > file_size) { return false; }
-      transition_times.resize(tzh.timecnt);
-      ttime_idx.resize(tzh.timecnt);
-      if (hdr64) {
-        int64_t *tt64 = transition_times.data();
-        fin.read(reinterpret_cast<char *>(tt64), tzh.timecnt * sizeof(int64_t));
-        for (uint32_t i = 0; i < tzh.timecnt; i++) { tt64[i] = bswap_64(tt64[i]); }
+  if (!earliest_std_idx) { earliest_std_idx = 1; }
+  ttimes[0]  = ttimes[earliest_std_idx];
+  offsets[0] = offsets[earliest_std_idx];
+
+  // Generate entries for times after the last transition
+  auto future_std_offset = offsets[tzf.timecnt()];
+  auto future_dst_offset = future_std_offset;
+  dst_transition_s dst_start{};
+  dst_transition_s dst_end{};
+  if (!tzf.posix_tz_string.empty()) {
+    posix_parser<decltype(tzf.posix_tz_string)> parser(tzf.posix_tz_string);
+    parser.skip_name();
+    future_std_offset = -parser.parse_offset();
+    if (parser.remaining_char_cnt() > 1) {
+      // Parse Daylight Saving Time information
+      parser.skip_name();
+      if (parser.remaining_char_cnt() > 0 && parser.next_character() != ',') {
+        future_dst_offset = -parser.parse_offset();
       } else {
-        int64_t *tt64 = transition_times.data();
-        int32_t *tt32 = reinterpret_cast<int32_t *>(tt64);
-        fin.read(reinterpret_cast<char *>(tt32), tzh.timecnt * sizeof(int32_t));
-        for (uint32_t i = tzh.timecnt; i > 0;) {
-          --i;
-          tt64[i] = (int32_t)bswap_32(tt32[i]);
-        }
+        future_dst_offset = future_std_offset + 60 * 60;
       }
-      fin.read(reinterpret_cast<char *>(ttime_idx.data()), tzh.timecnt * sizeof(uint8_t));
-    }
-    // Read time types
-    if (tzh.typecnt <= 0 || tzh.typecnt > file_size / sizeof(localtime_type_record_s)) {
-      return false;
+      dst_start = parser.parse_transition();
+      dst_end   = parser.parse_transition();
     } else {
-      ttype.resize(tzh.typecnt);
-      fin.read(reinterpret_cast<char *>(ttype.data()),
-               tzh.typecnt * sizeof(localtime_type_record_s));
-      if (fin.fail()) { return false; }
-      for (uint32_t i = 0; i < tzh.typecnt; i++) {
-        ttype[i].utcoff = (int32_t)bswap_32(ttype[i].utcoff);
-      }
+      future_dst_offset = future_std_offset;
     }
-    // Read posix TZ string
-    fin.seekg(tzh.charcnt + tzh.leapcnt * ((hdr64) ? 12 : 8) + tzh.isstdcnt + tzh.isutccnt,
-              ios_base::cur);
-    file_pos = fin.tellg();
-    if (file_pos + 1 < file_size) {
-      posix_tz_string.resize(file_size - file_pos);
-      fin.read(reinterpret_cast<char *>(posix_tz_string.data()), file_size - file_pos);
-    }
-    fin.close();
-    // Allocate transition table, add one entry for ancient rule, and 800 entries for future rules
-    // (2 transitions/year)
-    table.resize((1 + (size_t)tzh.timecnt + 400 * 2) * 2 + 1);
-    earliest_std_idx = 0;
-    for (size_t t = 0; t < tzh.timecnt; t++) {
-      int64_t ttime = transition_times[t];
-      int64_t utcoff;
-      uint32_t idx = ttime_idx[t];
-      if (idx >= tzh.typecnt) {
-        // Out-of-range type index
-        return false;
-      }
-      utcoff                 = ttype[idx].utcoff;
-      table[(1 + t) * 2 + 1] = ttime;
-      table[(1 + t) * 2 + 2] = utcoff;
-      if (!earliest_std_idx && !ttype[idx].isdst) { earliest_std_idx = 1 + t; }
-    }
-    if (!earliest_std_idx) { earliest_std_idx = 1; }
-    table[1] = table[earliest_std_idx * 2 + 1];
-    table[2] = table[earliest_std_idx * 2 + 2];
-    // Generate entries for times after the last transition
-    future_stdoff = table[(tzh.timecnt * 2) + 2];
-    future_dstoff = future_stdoff;
-    if (posix_tz_string.size() > 0) {
-      const uint8_t *cur = posix_tz_string.data();
-      const uint8_t *end = cur + posix_tz_string.size();
-      cur                = posix_parse_name(cur, end);
-      cur                = posix_parse_offset(cur, end, &future_stdoff);
-      future_stdoff      = -future_stdoff;
-      if (cur + 1 < end) {
-        // Parse Daylight Saving Time information
-        cur = posix_parse_name(cur, end);
-        if (cur < end && *cur != ',') {
-          cur           = posix_parse_offset(cur, end, &future_dstoff);
-          future_dstoff = -future_dstoff;
-        } else {
-          future_dstoff = future_stdoff + 60 * 60;
-        }
-        cur = posix_parse_transition(cur, end, &dst_start);
-        cur = posix_parse_transition(cur, end, &dst_end);
-      } else {
-        future_dstoff = future_stdoff;
-      }
-    }
-    // Add 2 entries per year for 400 years
-    future_time = 0;
-    for (size_t t = 0; t < 800; t += 2) {
-      uint32_t year          = 1970 + ((int)t >> 1);
-      int64_t dst_start_time = GetTransitionTime(&dst_start, year);
-      int64_t dst_end_time   = GetTransitionTime(&dst_end, year);
-      if (dst_start_time < dst_end_time) {
-        table[(1 + tzh.timecnt + t) * 2 + 1] = future_time + dst_start_time - future_stdoff;
-        table[(1 + tzh.timecnt + t) * 2 + 2] = future_dstoff;
-        table[(1 + tzh.timecnt + t) * 2 + 3] = future_time + dst_end_time - future_dstoff;
-        table[(1 + tzh.timecnt + t) * 2 + 4] = future_stdoff;
-      } else {
-        table[(1 + tzh.timecnt + t) * 2 + 1] = future_time + dst_end_time - future_dstoff;
-        table[(1 + tzh.timecnt + t) * 2 + 2] = future_stdoff;
-        table[(1 + tzh.timecnt + t) * 2 + 3] = future_time + dst_start_time - future_stdoff;
-        table[(1 + tzh.timecnt + t) * 2 + 4] = future_dstoff;
-      }
-      future_time += (365 + IsLeapYear(year)) * 24 * 60 * 60;
-    }
-    // Add gmt offset
-    table[0] = GetGmtOffset(table, ORC_UTC_OFFSET);
-  } else {
-    // printf("Failed to open \"%s\"\n", tz_filename.c_str());
-    return false;
   }
-  return true;
+
+  // Add entries to fill the transition cycle
+  int64_t year_timestamp = 0;
+  for (uint32_t year = 1970; year < 1970 + cycle_years; ++year) {
+    auto const dst_start_time = get_transition_time(dst_start, year);
+    auto const dst_end_time   = get_transition_time(dst_end, year);
+
+    // Two entries per year, since there are two transitions
+    ttimes.push_back(year_timestamp + dst_start_time - future_std_offset);
+    offsets.push_back(future_dst_offset);
+    ttimes.push_back(year_timestamp + dst_end_time - future_dst_offset);
+    offsets.push_back(future_std_offset);
+
+    // Swap the newly added transitions if in descending order
+    if (ttimes.rbegin()[1] > ttimes.rbegin()[0]) {
+      std::swap(ttimes.rbegin()[0], ttimes.rbegin()[1]);
+      std::swap(offsets.rbegin()[0], offsets.rbegin()[1]);
+    }
+
+    year_timestamp += (365 + is_leap_year(year)) * day_seconds;
+  }
+
+  return {get_gmt_offset(ttimes, offsets, orc_utc_offset), ttimes, offsets};
 }
 
 }  // namespace io

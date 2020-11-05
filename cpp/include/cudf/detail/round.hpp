@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,24 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #pragma once
 
-#include <stdint.h>
-#include <string>
-#include <vector>
+#include <cudf/round.hpp>
 
 namespace cudf {
-namespace io {
-/**
- * @brief Creates a transition table to convert ORC timestamps to UTC
- *
- * @param[out] table output table (1st entry = gmtOffset, 2 int64_t per transition, last 800
- *transitions repeat forever with 400 year cycle)
- * @param[in] timezone_name standard timezone name (for example, "US/Pacific")
- *
- * @return true if successful, false if failed to find/parse the timezone information
- **/
-bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string &timezone_name);
+//! Inner interfaces and implementations
+namespace detail {
 
-}  // namespace io
+/**
+ * @copydoc cudf::round(column_view const&, int32_t, rounding_method,
+ * rmm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> round(
+  column_view const& input,
+  int32_t decimal_places,
+  rounding_method method,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+}  // namespace detail
 }  // namespace cudf

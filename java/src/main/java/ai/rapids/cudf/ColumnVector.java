@@ -24,6 +24,8 @@ import ai.rapids.cudf.WindowOptions.FrameType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -93,7 +95,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
     @Override
     public DType getDataType() {
-      return DType.fromNative(getNativeTypeId(viewHandle));
+      return DType.fromNative(getNativeTypeId(viewHandle), getNativeTypeScale(viewHandle));
     }
 
     @Override
@@ -141,9 +143,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     assert nativePointer != 0;
     offHeap = new OffHeapState(nativePointer);
     MemoryCleaner.register(this, offHeap);
-    this.type = offHeap.getNativeType();
     this.rows = offHeap.getNativeRowCount();
-
+    this.type = offHeap.getNativeType();
     this.refCount = 0;
     incRefCountInternal(true);
   }
@@ -196,7 +197,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       childHandles[i] = nestedColumnVectors.get(i).getViewHandle();
     }
     offHeap = new OffHeapState(type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer,
-        toClose, childHandles);
+            toClose, childHandles);
     MemoryCleaner.register(this, offHeap);
     this.rows = rows;
     this.nullCount = nullCount;
@@ -221,6 +222,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     this.rows = offHeap.getNativeRowCount();
     // TODO we may want to ask for the null count anyways...
     this.nullCount = Optional.empty();
+
     this.refCount = 0;
     incRefCountInternal(true);
   }
@@ -1339,12 +1341,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   static long binaryOp(ColumnVector lhs, ColumnVector rhs, BinaryOp op, DType outputType) {
     return binaryOpVV(lhs.getNativeView(), rhs.getNativeView(),
-        op.nativeId, outputType.nativeId);
+        op.nativeId, outputType.typeId.getNativeId(), outputType.getScale());
   }
 
   static long binaryOp(ColumnVector lhs, Scalar rhs, BinaryOp op, DType outputType) {
     return binaryOpVS(lhs.getNativeView(), rhs.getScalarHandle(),
-        op.nativeId, outputType.nativeId);
+        op.nativeId, outputType.typeId.getNativeId(), outputType.getScale());
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1565,7 +1567,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   public Scalar reduce(Aggregation aggregation, DType outType) {
     long nativeId = aggregation.createNativeInstance();
     try {
-      return new Scalar(outType, reduce(getNativeView(), nativeId, outType.nativeId));
+      return new Scalar(outType, reduce(getNativeView(), nativeId, outType.typeId.getNativeId(), outType.getScale()));
     } finally {
       Aggregation.close(nativeId);
     }
@@ -1698,7 +1700,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       // Optimization
       return incRefCount();
     }
-    return new ColumnVector(castTo(getNativeView(), type.nativeId));
+    return new ColumnVector(castTo(getNativeView(), type.typeId.getNativeId(), type.getScale()));
   }
 
   /**
@@ -1981,8 +1983,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
                                   "is required for .to_timestamp() operation";
     assert format != null : "Format string may not be NULL";
     assert timestampType.isTimestamp() : "unsupported conversion to non-timestamp DType";
+      // Only nativeID is passed in the below function as timestamp type does not have `scale`.
     return new ColumnVector(stringTimestampToTimestamp(getNativeView(),
-        timestampType.nativeId, format));
+        timestampType.typeId.getNativeId(), format));
   }
 
   /**
@@ -1999,7 +2002,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * @return A new vector allocated on the GPU.
    */
   public ColumnVector asStrings() {
-    switch(type) {
+    switch(type.typeId) {
       case TIMESTAMP_SECONDS:
         return asStrings("%Y-%m-%d %H:%M:%S");
       case TIMESTAMP_DAYS:
@@ -2878,15 +2881,15 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   private static native long pad(long nativeHandle, int width, int side, String fillChar);
 
-  private static native long binaryOpVS(long lhs, long rhs, int op, int dtype);
+  private static native long binaryOpVS(long lhs, long rhs, int op, int dtype, int scale);
 
-  private static native long binaryOpVV(long lhs, long rhs, int op, int dtype);
+  private static native long binaryOpVV(long lhs, long rhs, int op, int dtype, int scale);
 
   private static native long byteCount(long viewHandle) throws CudfException;
 
   private static native long extractListElement(long nativeView, int index);
 
-  private static native long castTo(long nativeHandle, int type);
+  private static native long castTo(long nativeHandle, int type, int scale);
 
   private static native long byteListCast(long nativeHandle, boolean config);
 
@@ -2944,7 +2947,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   private static native long ifElseSS(long predVec, long trueScalar, long falseScalar) throws CudfException;
 
-  private static native long reduce(long viewHandle, long aggregation, int dtype) throws CudfException;
+  private static native long reduce(long viewHandle, long aggregation, int dtype, int scale) throws CudfException;
 
   private static native long isNullNative(long viewHandle);
 
@@ -3029,6 +3032,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   private static native int getNativeTypeId(long viewHandle) throws CudfException;
 
+  private static native int getNativeTypeScale(long viewHandle) throws CudfException;
+
   private static native int getNativeRowCount(long viewHandle) throws CudfException;
 
   private static native int getNativeNullCount(long viewHandle) throws CudfException;
@@ -3044,8 +3049,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   private static native long getNativeValidityAddress(long viewHandle) throws CudfException;
   private static native long getNativeValidityLength(long viewHandle) throws CudfException;
 
-  private static native long makeCudfColumnView(int type, long data, long dataSize, long offsets,
+  private static native long makeCudfColumnView(int type, int scale, long data, long dataSize, long offsets,
       long valid, int nullCount, int size, long[] childHandle);
+
 
   private static native long getChildCvPointer(long viewHandle, int childIndex) throws CudfException;
 
@@ -3076,7 +3082,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    */
   private static native long getNativeColumnView(long cudfColumnHandle) throws CudfException;
 
-  private static native long makeEmptyCudfColumn(int type);
+  private static native long makeEmptyCudfColumn(int type, int scale);
 
   private static DeviceMemoryBufferView getDataBuffer(long viewHandle) {
     long address = getNativeDataAddress(viewHandle);
@@ -3219,13 +3225,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
         toClose.addAll(buffers);
       }
       if (rows == 0) {
-        this.columnHandle = makeEmptyCudfColumn(type.nativeId);
+        this.columnHandle = makeEmptyCudfColumn(type.typeId.getNativeId(), type.getScale());
       } else {
         long cd = data == null ? 0 : data.address;
         long cdSize = data == null ? 0 : data.length;
         long od = offsets == null ? 0 : offsets.address;
         long vd = valid == null ? 0 : valid.address;
-        this.viewHandle = makeCudfColumnView(type.nativeId, cd, cdSize, od, vd, nc, rows, childColumnViewHandles) ;
+        this.viewHandle = makeCudfColumnView(type.typeId.getNativeId(), type.getScale(), cd, cdSize, od, vd, nc, rows, childColumnViewHandles) ;
       }
     }
 
@@ -3270,7 +3276,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     }
 
     public DType getNativeType() {
-      return DType.fromNative(getNativeTypeId(getViewHandle()));
+      return DType.fromNative(getNativeTypeId(getViewHandle()), getNativeTypeScale(getViewHandle()));
+    }
+
+    public int getNativeScale() {
+      return getNativeTypeScale(getViewHandle());
     }
 
     public BaseDeviceMemoryBuffer getData() {
@@ -3499,8 +3509,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       long offsetAddr = offsets == null ? 0 : offsets.address;
       long validAddr = valid == null ? 0 : valid.address;
       int nc = nullCount.orElse(OffHeapState.UNKNOWN_NULL_COUNT).intValue();
-      return makeCudfColumnView(dataType.nativeId, dataAddr, dataLen, offsetAddr, validAddr, nc,
-          (int)rows, childrenColViews);
+      return makeCudfColumnView(dataType.typeId.getNativeId(), dataType.getScale() , dataAddr, dataLen,
+          offsetAddr, validAddr, nc, (int)rows, childrenColViews);
     }
 
     private List<DeviceMemoryBuffer> getBuffersToClose() {
@@ -3534,7 +3544,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       DeviceMemoryBuffer valid = null;
       DeviceMemoryBuffer offsets = null;
       if (dataBuffer != null) {
-        long dataLen = rows * type.sizeInBytes;
+        long dataLen = rows * type.getSizeInBytes();
         if (type == DType.STRING) {
           // This needs a different type
           dataLen = getEndStringOffset(rows, rows - 1, offsetBuffer);
@@ -3768,6 +3778,41 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   /**
+   * Create a new decimal vector from unscaled values (int array) and scale.
+   * The created vector is of type DType.DECIMAL32, whose max precision is 9.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static ColumnVector decimalFromInts(int scale, int... values) {
+    try (HostColumnVector host = HostColumnVector.decimalFromInts(scale, values)) {
+      return host.copyToDevice();
+    }
+  }
+
+  /**
+   * Create a new decimal vector from unscaled values (long array) and scale.
+   * The created vector is of type DType.DECIMAL64, whose max precision is 18.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static ColumnVector decimalFromLongs(int scale, long... values) {
+    try (HostColumnVector host = HostColumnVector.decimalFromLongs(scale, values)) {
+      return host.copyToDevice();
+    }
+  }
+
+  /**
+   * Create a new decimal vector from double floats with specific DecimalType and RoundingMode.
+   * All doubles will be rescaled if necessary, according to scale of input DecimalType and RoundingMode.
+   * If any overflow occurs in extracting integral part, an IllegalArgumentException will be thrown.
+   * This API is inefficient because of slow double -> decimal conversion, so it is mainly for testing.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static ColumnVector decimalFromDoubles(DType type, RoundingMode mode, double... values) {
+    try (HostColumnVector host = HostColumnVector.decimalFromDoubles(type, mode, values)) {
+      return host.copyToDevice();
+    }
+  }
+
+  /**
    * Create a new string vector from the given values.  This API
    * supports inline nulls. This is really intended to be used only for testing as
    * it is slow and memory intensive to translate between java strings and UTF8 strings.
@@ -3775,6 +3820,19 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   public static ColumnVector fromStrings(String... values) {
     try (HostColumnVector host = HostColumnVector.fromStrings(values)) {
       return host.copyToDevice();
+    }
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than building from primitive array of unscaledValues.
+   * Notice:
+   *  1. All input BigDecimals should share same scale.
+   *  2. The scale will be zero if all input values are null.
+   */
+  public static ColumnVector fromDecimals(BigDecimal... values) {
+    try (HostColumnVector hcv = HostColumnVector.fromDecimals(values)) {
+      return hcv.copyToDevice();
     }
   }
 

@@ -117,7 +117,23 @@ class DatetimeColumn(column.ColumnBase):
     def weekday(self) -> "ColumnBase":
         return self.get_dt_field("weekday")
 
-    def get_dt_field(self, field) -> "ColumnBase":
+    def to_pandas(
+        self, index: cudf.Index = None, nullable: bool = False, **kwargs
+    ) -> cudf.Series:
+        # Workaround until following issue is fixed:
+        # https://issues.apache.org/jira/browse/ARROW-9772
+
+        # Pandas supports only `datetime64[ns]`, hence the cast.
+        pd_series = pd.Series(
+            self.astype("datetime64[ns]").to_array("NAT"), copy=False
+        )
+
+        if index is not None:
+            pd_series.index = index
+
+        return pd_series
+
+    def get_dt_field(self, field: str) -> "ColumnBase":
         return libcudf.datetime.extract_datetime_component(self, field)
 
     def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarObj:
@@ -147,7 +163,7 @@ class DatetimeColumn(column.ColumnBase):
 
             return as_scalar(other)
         else:
-            raise TypeError("cannot normalize {}".format(type(other)))
+            raise TypeError(f"cannot normalize {type(other)}")
 
     @property
     def as_numerical(self) -> "ColumnBase":
@@ -206,8 +222,8 @@ class DatetimeColumn(column.ColumnBase):
         if isinstance(q, Number):
             return pd.Timestamp(result, unit=self.time_unit)
 
-        result = result.binary_operator(
-            "mul", as_scalar(_numpy_to_pandas_conversion[self.time_unit])
+        result = result * as_scalar(
+            _numpy_to_pandas_conversion[self.time_unit]
         )
 
         return result.astype("datetime64[ns]")

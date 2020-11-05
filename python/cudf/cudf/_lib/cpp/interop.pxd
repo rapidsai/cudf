@@ -25,7 +25,13 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
 
     cdef unique_ptr[table] from_arrow(CTable input) except +
 
+    cdef cppclass column_metadata:
+        column_metadata() except +
+        column_metadata(string name_) except +
+        string name
+        vector[column_metadata] children_meta
+
     cdef shared_ptr[CTable] to_arrow(
         table_view input,
-        vector[string] column_names
+        vector[column_metadata] metadata,
     ) except +
