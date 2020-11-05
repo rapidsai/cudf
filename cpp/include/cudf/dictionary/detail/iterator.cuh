@@ -56,7 +56,7 @@ struct dictionary_access_fn {
 template <typename KeyType>
 auto make_dictionary_iterator(column_device_view const& dictionary_column)
 {
-  CUDF_EXPECTS(dictionary_column.type().id() == type_id::DICTIONARY32,
+  CUDF_EXPECTS(is_dictionary(dictionary_column.type()),
                "Dictionary iterator is only for dictionary columns");
   return thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
                                          dictionary_access_fn<KeyType>{dictionary_column});
@@ -66,7 +66,7 @@ auto make_dictionary_iterator(column_device_view const& dictionary_column)
  * @brief Accessor functor for returning a dictionary pair iterator.
  *
  * @tparam KeyType The type of the dictionary's key element.
- * @tparam has_nulls Set to true if `d_dictionary` has nulls.
+ * @tparam has_nulls Set to `true` if `d_dictionary` has nulls.
  *
  * @throw cudf::logic_error if `has_nulls==true` and `d_dictionary` is not nullable.
  */
@@ -100,7 +100,7 @@ struct dictionary_access_pair_fn {
  * @throw cudf::logic_error if `dictionary_column` is not a dictionary column.
  *
  * @tparam KeyType The type of the dictionary's key element.
- * @tparam has_nulls Set to true if the dictionary_column has nulls.
+ * @tparam has_nulls Set to `true` if the dictionary_column has nulls.
  *
  * @param dictionary_column The dictionary device view to iterate.
  * @return Pair iterator with `{value,valid}`
@@ -108,7 +108,7 @@ struct dictionary_access_pair_fn {
 template <typename KeyType, bool has_nulls>
 auto make_dictionary_pair_iterator(column_device_view const& dictionary_column)
 {
-  CUDF_EXPECTS(dictionary_column.type().id() == type_id::DICTIONARY32,
+  CUDF_EXPECTS(is_dictionary(dictionary_column.type()),
                "Dictionary iterator is only for dictionary columns");
   return thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0),
