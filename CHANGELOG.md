@@ -71,6 +71,7 @@
 - PR #6595 Fix JNI build, broken by to_arrow() signature change
 - PR #6601 Fix timezone offset when reading ORC files
 - PR #6603 Use correct stream in hash_join.
+- PR #6616 Block `fixed_point` `cudf::concatenate` with different scales
 - PR #6607 Fix integer overflow in ORC encoder
 - PR #6617 Fix JNI native dependency load order
 - PR #6621 Fix subword tokenizer metadata for token count equal to max_sequence_length
