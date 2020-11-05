@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #6116 Add `filters` parameter to Python `read_orc` function or filtering
+- PR #6679 Added Java bindings for writing parquet files with INT96 timestamps
 - PR #6460 Add is_timestamp format check API
 - PR #6647 Implement `cudf::round` floating point and integer types (`HALF_EVEN`)
 - PR #6562 Implement `cudf::round` floating point and integer types (`HALF_UP`)
