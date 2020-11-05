@@ -77,13 +77,13 @@ template <typename T>
 struct half_up_zero {
   T n;  // unused in the decimal_places = 0 case
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ T operator()(T e)
+  __device__ U operator()(U e)
   {
     return generic_round(e);
   }
 
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ T operator()(T e)
+  __device__ U operator()(U e)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
@@ -94,7 +94,7 @@ template <typename T>
 struct half_up_positive {
   T n;
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ T operator()(T e)
+  __device__ U operator()(U e)
   {
     T integer_part;
     T const fractional_part = generic_modf(e, &integer_part);
@@ -102,7 +102,7 @@ struct half_up_positive {
   }
 
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ T operator()(T e)
+  __device__ U operator()(U e)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
@@ -113,13 +113,13 @@ template <typename T>
 struct half_up_negative {
   T n;
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ T operator()(T e)
+  __device__ U operator()(U e)
   {
     return generic_round(e / n) * n;
   }
 
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ T operator()(T e)
+  __device__ U operator()(U e)
   {
     auto const down = (e / n) * n;  // result from rounding down
     return down + generic_sign(e) * (generic_abs(e - down) >= n / 2 ? n : 0);
@@ -130,13 +130,13 @@ template <typename T>
 struct half_even_zero {
   T n;  // unused in the decimal_places = 0 case
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ T operator()(T e)
+  __device__ U operator()(U e)
   {
     return generic_round_half_even(e);
   }
 
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ T operator()(T e)
+  __device__ U operator()(U e)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
@@ -147,7 +147,7 @@ template <typename T>
 struct half_even_positive {
   T n;
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ T operator()(T e)
+  __device__ U operator()(U e)
   {
     T integer_part;
     T const fractional_part = generic_modf(e, &integer_part);
@@ -155,7 +155,7 @@ struct half_even_positive {
   }
 
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ T operator()(T e)
+  __device__ U operator()(U e)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
@@ -166,13 +166,13 @@ template <typename T>
 struct half_even_negative {
   T n;
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ T operator()(T e)
+  __device__ U operator()(U e)
   {
     return generic_round_half_even(e / n) * n;
   }
 
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ T operator()(T e)
+  __device__ U operator()(U e)
   {
     auto const down_over_n = e / n;            // use this to determine HALF_EVEN case
     auto const down        = down_over_n * n;  // result from rounding down
