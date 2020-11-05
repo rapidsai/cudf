@@ -73,147 +73,106 @@ constexpr inline auto is_supported_round_type()
   return (cudf::is_numeric<T>() && not std::is_same<T, bool>::value) || cudf::is_fixed_point<T>();
 }
 
-// clang-format off
-template <typename T, typename DeviceType> struct half_up_negative;
-template <typename T, typename DeviceType> struct half_even_negative;
-// clang-format on
-
-template <typename T, typename DeviceType>
+template <typename T>
 struct half_up_zero {
-  DeviceType n;  // unused in the decimal_places = 0 case
+  T n;  // unused in the decimal_places = 0 case
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ DeviceType operator()(DeviceType e)
+  __device__ T operator()(T e)
   {
     return generic_round(e);
   }
 
-  template <typename U = T, typename std::enable_if_t<cudf::is_fixed_point<U>()>* = nullptr>
-  __device__ DeviceType operator()(DeviceType e)
-  {
-    return half_up_negative<DeviceType, DeviceType>{n}(e) / n;
-  }
-
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ DeviceType operator()(DeviceType e)
+  __device__ T operator()(T e)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
   }
 };
 
-template <typename T, typename DeviceType>
+template <typename T>
 struct half_up_positive {
-  DeviceType n;
+  T n;
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ DeviceType operator()(DeviceType e)
+  __device__ T operator()(T e)
   {
-    DeviceType integer_part;
-    DeviceType const fractional_part = generic_modf(e, &integer_part);
+    T integer_part;
+    T const fractional_part = generic_modf(e, &integer_part);
     return integer_part + generic_round(fractional_part * n) / n;
   }
 
-  template <typename U = T, typename std::enable_if_t<cudf::is_fixed_point<U>()>* = nullptr>
-  __device__ DeviceType operator()(DeviceType e)
-  {
-    return half_up_negative<DeviceType, DeviceType>{n}(e) / n;
-  }
-
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ DeviceType operator()(DeviceType e)
+  __device__ T operator()(T e)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
   }
 };
 
-template <typename T, typename DeviceType>
+template <typename T>
 struct half_up_negative {
-  DeviceType n;
+  T n;
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ DeviceType operator()(DeviceType e)
+  __device__ T operator()(T e)
   {
     return generic_round(e / n) * n;
   }
 
-  template <typename U = T, typename std::enable_if_t<cudf::is_fixed_point<U>()>* = nullptr>
-  __device__ DeviceType operator()(DeviceType e)
-  {
-    return half_up_negative<DeviceType, DeviceType>{n}(e) / n;
-  }
-
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ DeviceType operator()(DeviceType e)
+  __device__ T operator()(T e)
   {
     auto const down = (e / n) * n;  // result from rounding down
     return down + generic_sign(e) * (generic_abs(e - down) >= n / 2 ? n : 0);
   }
 };
 
-template <typename T, typename DeviceType>
+template <typename T>
 struct half_even_zero {
-  DeviceType n;  // unused in the decimal_places = 0 case
+  T n;  // unused in the decimal_places = 0 case
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ DeviceType operator()(DeviceType e)
+  __device__ T operator()(T e)
   {
     return generic_round_half_even(e);
   }
 
-  template <typename U = T, typename std::enable_if_t<cudf::is_fixed_point<U>()>* = nullptr>
-  __device__ DeviceType operator()(DeviceType e)
-  {
-    return half_even_negative<DeviceType, DeviceType>{n}(e) / n;
-  }
-
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ DeviceType operator()(DeviceType e)
+  __device__ T operator()(T e)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
   }
 };
 
-template <typename T, typename DeviceType>
+template <typename T>
 struct half_even_positive {
-  DeviceType n;
+  T n;
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ DeviceType operator()(DeviceType e)
+  __device__ T operator()(T e)
   {
-    DeviceType integer_part;
-    DeviceType const fractional_part = generic_modf(e, &integer_part);
+    T integer_part;
+    T const fractional_part = generic_modf(e, &integer_part);
     return integer_part + generic_round_half_even(fractional_part * n) / n;
   }
 
-  template <typename U = T, typename std::enable_if_t<cudf::is_fixed_point<U>()>* = nullptr>
-  __device__ DeviceType operator()(DeviceType e)
-  {
-    return half_even_negative<DeviceType, DeviceType>{n}(e) / n;
-  }
-
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ DeviceType operator()(DeviceType e)
+  __device__ T operator()(T e)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
   }
 };
 
-template <typename T, typename DeviceType>
+template <typename T>
 struct half_even_negative {
-  DeviceType n;
+  T n;
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ DeviceType operator()(DeviceType e)
+  __device__ T operator()(T e)
   {
     return generic_round_half_even(e / n) * n;
   }
 
-  template <typename U = T, typename std::enable_if_t<cudf::is_fixed_point<U>()>* = nullptr>
-  __device__ DeviceType operator()(DeviceType e)
-  {
-    return half_even_negative<DeviceType, DeviceType>{n}(e) / n;
-  }
-
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ DeviceType operator()(DeviceType e)
+  __device__ T operator()(T e)
   {
     auto const down_over_n = e / n;            // use this to determine HALF_EVEN case
     auto const down        = down_over_n * n;  // result from rounding down
@@ -223,8 +182,20 @@ struct half_even_negative {
   }
 };
 
+template <typename T>
+struct half_up_fixed_point {
+  T n;
+  __device__ T operator()(T e) { return half_up_negative<T>{n}(e) / n; }
+};
+
+template <typename T>
+struct half_even_fixed_point {
+  T n;
+  __device__ T operator()(T e) { return half_even_negative<T>{n}(e) / n; }
+};
+
 template <typename T,
-          template <typename, typename>
+          template <typename>
           typename RoundFunctor,
           typename std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
 std::unique_ptr<column> round_with(column_view const& input,
@@ -232,7 +203,7 @@ std::unique_ptr<column> round_with(column_view const& input,
                                    cudaStream_t stream,
                                    rmm::mr::device_memory_resource* mr)
 {
-  using Functor = RoundFunctor<T, T>;
+  using Functor = RoundFunctor<T>;
 
   if (decimal_places >= 0 && std::is_integral<T>::value)
     return std::make_unique<cudf::column>(input, stream, mr);
@@ -257,7 +228,7 @@ std::unique_ptr<column> round_with(column_view const& input,
 }
 
 template <typename T,
-          template <typename, typename>
+          template <typename>
           typename RoundFunctor,
           typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
 std::unique_ptr<column> round_with(column_view const& input,
@@ -266,8 +237,8 @@ std::unique_ptr<column> round_with(column_view const& input,
                                    rmm::mr::device_memory_resource* mr)
 {
   using namespace numeric;
-  using Type    = device_storage_type_t<T>;
-  using Functor = RoundFunctor<T, Type>;
+  using Type                   = device_storage_type_t<T>;
+  using FixedPointRoundFunctor = RoundFunctor<Type>;
 
   // if rounding to more precision that fixed_point is capable of, just need to rescale
   // note: decimal_places has the opposite sign of numeric::scale_type (therefore have to negate)
@@ -288,14 +259,13 @@ std::unique_ptr<column> round_with(column_view const& input,
                                               mr);
 
   auto out_view = result->mutable_view();
-  // Type const n = std::pow(10, -decimal_places - input.type().scale())
-  Type const n = std::pow(10, std::abs(decimal_places + input.type().scale()));
+  Type const n  = std::pow(10, std::abs(decimal_places + input.type().scale()));
 
   thrust::transform(rmm::exec_policy(stream)->on(stream),
                     input.begin<Type>(),
                     input.end<Type>(),
                     out_view.begin<Type>(),
-                    Functor{n});
+                    FixedPointRoundFunctor{n});
 
   return result;
 }
@@ -319,13 +289,15 @@ struct round_type_dispatcher {
     // clang-format off
     switch (method) {
       case cudf::rounding_method::HALF_UP:
-        if      (decimal_places == 0) return round_with<T, half_up_zero    >(input, decimal_places, stream, mr);
-        else if (decimal_places >  0) return round_with<T, half_up_positive>(input, decimal_places, stream, mr);
-        else                          return round_with<T, half_up_negative>(input, decimal_places, stream, mr);
+        if      (is_fixed_point<T>()) return round_with<T, half_up_fixed_point>(input, decimal_places, stream, mr);
+        else if (decimal_places == 0) return round_with<T, half_up_zero       >(input, decimal_places, stream, mr);
+        else if (decimal_places >  0) return round_with<T, half_up_positive   >(input, decimal_places, stream, mr);
+        else                          return round_with<T, half_up_negative   >(input, decimal_places, stream, mr);
       case cudf::rounding_method::HALF_EVEN:
-        if      (decimal_places == 0) return round_with<T, half_even_zero    >(input, decimal_places, stream, mr);
-        else if (decimal_places >  0) return round_with<T, half_even_positive>(input, decimal_places, stream, mr);
-        else                          return round_with<T, half_even_negative>(input, decimal_places, stream, mr);
+        if      (is_fixed_point<T>()) return round_with<T, half_even_fixed_point>(input, decimal_places, stream, mr);
+        else if (decimal_places == 0) return round_with<T, half_even_zero       >(input, decimal_places, stream, mr);
+        else if (decimal_places >  0) return round_with<T, half_even_positive   >(input, decimal_places, stream, mr);
+        else                          return round_with<T, half_even_negative   >(input, decimal_places, stream, mr);
       default: CUDF_FAIL("Undefined rounding method");
     }
     // clang-format on
