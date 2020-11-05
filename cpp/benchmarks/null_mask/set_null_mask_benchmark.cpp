@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
-#include "../fixture/benchmark_fixture.hpp"
-#include "../synchronization/synchronization.hpp"
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/null_mask.hpp>
+
+#include <benchmark/benchmark.h>
 
 class SetNullmask : public cudf::benchmark {
 };

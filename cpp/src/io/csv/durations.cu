@@ -20,6 +20,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/types.hpp>
+
 #include <strings/convert/utilities.cuh>
 #include <strings/utilities.cuh>
 

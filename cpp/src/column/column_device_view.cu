@@ -17,10 +17,11 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <numeric>
-#include "rmm/cuda_stream_view.hpp"
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
+
+#include <numeric>
 
 namespace cudf {
 // Trivially copy all members but the children

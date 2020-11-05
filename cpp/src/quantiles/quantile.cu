@@ -25,9 +25,10 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <memory>
 #include <vector>
-#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace detail {

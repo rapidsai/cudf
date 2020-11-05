@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #6460 Add is_timestamp format check API
+- PR #6562 Implement `cudf::round` floating point and integer types (`HALF_UP`)
 - PR #6528 Enable `fixed_point` binary operations
 - PR #6460 Add is_timestamp format check API
 - PR #6568 Add function to create hashed vocabulary file from raw vocabulary
@@ -30,6 +32,7 @@
 - PR #6540 Add dictionary support to `cudf::unary_operation`
 - PR #6537 Refactor ORC timezone
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
+- PR #6545 Pin cmake policies to cmake 3.17 version
 - PR #6556 Add dictionary support to `cudf::inner_join`, `cudf::left_join` and `cudf::full_join`
 - PR #6557 Support nullable timestamp columns in time range window functions
 - PR #6566 Remove reinterpret_cast conversions between pointer types in ORC
@@ -43,12 +46,15 @@
 - PR #6599 Replace `size()==0` with `empty()`, `is_empty()`
 - PR #6514 Initial work for decimal type in Java/JNI
 - PR #6608 Improve subword tokenizer docs
+- PR #6610 Add ability to set scalar values in `cudf.DataFrame`
 - PR #6612 Update JNI to new RMM cuda_stream_view API
 - PR #6646 Replace `cudaStream_t` with `rmm::cuda_stream_view` (part 1)
 - PR #6579 Update scatter APIs to use reference wrapper / const scalar
 - PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
 - PR #6622 Update `to_pandas` api docs
 - PR #6623 Add operator overloading to column and clean up error messages
+- PR #6635 Add cudf::test::dictionary_column_wrapper class
+- PR #6609 Support fixed-point decimal for HostColumnVector
 
 ## Bug Fixes
 
@@ -206,6 +212,7 @@
 - PR #6438 Fetch nvcomp v1.1.0 for JNI build
 - PR #6379 Add list hashing functionality to MD5
 - PR #6498 Add helper method to ColumnBuilder with some nits
+- PR #6653 Replaced SHFL_XOR calls with cub::WarpReduce
 
 ## Bug Fixes
 

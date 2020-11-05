@@ -34,8 +34,6 @@
 
 #include <thrust/iterator/constant_iterator.h>
 
-#include <cuda_runtime.h>
-
 #include <memory>
 
 namespace {

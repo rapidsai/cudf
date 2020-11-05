@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,26 @@
  * limitations under the License.
  */
 
-#include <cudf/scalar/scalar.hpp>
+#pragma once
 
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
-
-#include <string>
+#include <cudf/round.hpp>
 
 namespace cudf {
-std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
-{
-  std::string result;
-  result.resize(_data.size());
-  CUDA_TRY(cudaMemcpyAsync(
-    &result[0], _data.data(), _data.size(), cudaMemcpyDeviceToHost, stream.value()));
-  stream.synchronize();
-  return result;
-}
+//! Inner interfaces and implementations
+namespace detail {
 
+/**
+ * @copydoc cudf::round(column_view const&, int32_t, rounding_method,
+ * rmm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> round(
+  column_view const& input,
+  int32_t decimal_places,
+  rounding_method method,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+}  // namespace detail
 }  // namespace cudf

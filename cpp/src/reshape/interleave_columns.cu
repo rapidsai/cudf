@@ -19,6 +19,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+
 #include <strings/utilities.cuh>
 
 namespace cudf {

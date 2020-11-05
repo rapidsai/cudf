@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "binary_ops.hpp"
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -22,8 +24,6 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
-
-#include "binary_ops.hpp"
 
 namespace cudf {
 namespace binops {

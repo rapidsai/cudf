@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
@@ -39,7 +40,6 @@
 #include <algorithm>
 #include <numeric>
 #include <type_traits>
-#include "rmm/mr/device/device_memory_resource.hpp"
 
 namespace cudf {
 size_type state_null_count(mask_state state, size_type size)
