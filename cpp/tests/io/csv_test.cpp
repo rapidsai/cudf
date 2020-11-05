@@ -203,10 +203,8 @@ void check_string_column(cudf::column_view const& col_lhs,
                    } else {
                      str_repl = str_row;
                    }
-
                    return need_surround ? quotes + str_repl + quotes : str_row;
                  });
-
   EXPECT_TRUE(std::equal(v_lhs.begin(), v_lhs.end(), h_rhs.begin()));
 }
 
@@ -1427,6 +1425,27 @@ TEST_F(CsvReaderTest, StringsWithWriterSimple)
   const auto result_table = result.tbl->view();
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(input_table.column(0), result_table.column(0));
   check_string_column(input_table.column(1), result_table.column(1));
+}
+
+TEST_F(CsvReaderTest, StringsEmbeddedDelimiter)
+{
+  std::vector<std::string> names{"line", "verse"};
+
+  auto filepath = temp_env->get_temp_dir() + "StringsWithWriterSimple.csv";
+
+  auto int_column    = column_wrapper<int32_t>{10, 20, 30};
+  auto string_column = column_wrapper<cudf::string_view>{"abc def ghi", "jkl,mno,pq", "stu vwx y"};
+  cudf::table_view input_table(std::vector<cudf::column_view>{int_column, string_column});
+
+  write_csv_helper(filepath, input_table, true, names);
+
+  cudf_io::csv_reader_options in_opts =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
+      .names(names)
+      .dtypes({"int32", "str"});
+  auto result = cudf_io::read_csv(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, result.tbl->view());
 }
 
 TEST_F(CsvReaderTest, EmptyFileWithWriter)

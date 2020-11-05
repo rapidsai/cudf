@@ -149,9 +149,10 @@ TYPED_TEST(FixedPointScalarFactory, ValueProvided)
   auto const rep_value = static_cast<typename decimalXX::rep>(123);
   auto const s =
     cudf::make_fixed_point_scalar<decimalXX>(123, scale_type{-2}, this->stream(), this->mr());
-  auto const fp_s = static_cast<cudf::scalar_type_t<decimalXX>*>(s.get());
+  auto const fp_s           = static_cast<cudf::scalar_type_t<decimalXX>*>(s.get());
+  auto const expected_dtype = cudf::data_type{cudf::type_to_id<decimalXX>(), -2};
 
-  EXPECT_EQ(s->type(), cudf::data_type{cudf::type_to_id<decimalXX>()});
+  EXPECT_EQ(s->type(), expected_dtype);
   EXPECT_EQ(fp_s->value(), rep_value);
   EXPECT_TRUE(fp_s->is_valid());
   EXPECT_TRUE(s->is_valid());

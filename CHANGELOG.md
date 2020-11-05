@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #6460 Add is_timestamp format check API
+- PR #6647 Implement `cudf::round` floating point and integer types (`HALF_EVEN`)
 - PR #6562 Implement `cudf::round` floating point and integer types (`HALF_UP`)
 - PR #6528 Enable `fixed_point` binary operations
 - PR #6460 Add is_timestamp format check API
@@ -54,6 +55,7 @@
 - PR #6623 Add operator overloading to column and clean up error messages
 - PR #6651 Add cudf::dictionary::make_dictionary_pair_iterator
 - PR #6635 Add cudf::test::dictionary_column_wrapper class
+- PR #6609 Support fixed-point decimal for HostColumnVector
 
 ## Bug Fixes
 
@@ -70,11 +72,13 @@
 - PR #6595 Fix JNI build, broken by to_arrow() signature change
 - PR #6601 Fix timezone offset when reading ORC files
 - PR #6603 Use correct stream in hash_join.
+- PR #6616 Block `fixed_point` `cudf::concatenate` with different scales
 - PR #6607 Fix integer overflow in ORC encoder
 - PR #6617 Fix JNI native dependency load order
 - PR #6621 Fix subword tokenizer metadata for token count equal to max_sequence_length
 - PR #6629 Fix JNI CMake
 - PR #6633 Fix Java HostColumnVector unnecessarily loading native dependencies
+- PR #6643 Fix csv writer handling embedded comma delimiter
 - PR #6640 Add error message for unsupported `axis` parameter in DataFrame APIs
 
 
