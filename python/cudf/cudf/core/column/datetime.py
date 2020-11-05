@@ -255,9 +255,6 @@ class DatetimeColumn(column.ColumnBase):
         # However where there are "<NA>" in the
         # columns, their corresponding locations
         # in base_data will contain min(int64) values.
-        import pdb
-
-        pdb.set_trace()
         temp_nat_value = cudf.Scalar(np.iinfo("int64").min, dtype=self.dtype)
         # temp_nat_value._data._set_device_value(np.iinfo('int64').min, dtype=self.dtype)
         temp_nat_value._data._sync()

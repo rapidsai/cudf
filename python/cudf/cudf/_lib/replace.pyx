@@ -84,8 +84,7 @@ def replace_nulls_scalar(Column input_col, DeviceScalar replacement_value):
     cdef column_view input_col_view = input_col.view()
     cdef const scalar* replacement_value_scalar = replacement_value\
         .get_raw_ptr()
-    print('replacement value')
-    print(replacement_value)
+
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(cpp_replace_nulls(input_col_view,
