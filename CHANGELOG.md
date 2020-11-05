@@ -75,6 +75,7 @@
 - PR #6621 Fix subword tokenizer metadata for token count equal to max_sequence_length
 - PR #6629 Fix JNI CMake
 - PR #6633 Fix Java HostColumnVector unnecessarily loading native dependencies
+- PR #6643 Fix csv writer handling embedded comma delimiter
 - PR #6640 Add error message for unsupported `axis` parameter in DataFrame APIs
 
 
