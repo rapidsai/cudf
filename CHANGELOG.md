@@ -79,6 +79,7 @@
 - PR #6633 Fix Java HostColumnVector unnecessarily loading native dependencies
 - PR #6643 Fix csv writer handling embedded comma delimiter
 - PR #6640 Add error message for unsupported `axis` parameter in DataFrame APIs
+- PR #6686 Fix output size for orc read for skip_rows option
 
 
 # cuDF 0.16.0 (21 Oct 2020)
