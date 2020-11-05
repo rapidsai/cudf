@@ -267,8 +267,11 @@ std::unique_ptr<column> round_with(column_view const& input,
   using Type    = device_storage_type_t<T>;
   using Functor = RoundFunctor<T, Type>;
 
+  // if rounding to more precision that fixed_point is capable of, just need to rescale
+  // note: decimal_places has the opposite sign of numeric::scale_type (therefore have to negate)
   if (is_fixed_point(input.type()) && input.type().scale() > -decimal_places) {
-    auto const diff   = input.type().scale() + decimal_places;
+    // TODO replace this cudf::binary_operation with a cudf::cast or cudf::rescale when available
+    auto const diff   = input.type().scale() - (-decimal_places);
     auto const scalar = cudf::make_fixed_point_scalar<T>(std::pow(10, diff), scale_type{-diff});
     return cudf::binary_operation(input, *scalar, cudf::binary_operator::MUL, {}, mr);
   }
