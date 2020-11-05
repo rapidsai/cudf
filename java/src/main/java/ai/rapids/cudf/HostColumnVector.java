@@ -1070,7 +1070,6 @@ public final class HostColumnVector extends HostColumnVectorCore {
 
     public final ColumnBuilder append(BigDecimal value) {
       growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
-      assert type.isDecimalType();
       assert currentIndex < rows;
       // Rescale input decimal with UNNECESSARY policy, which accepts no precision loss.
       BigInteger unscaledVal = value.setScale(-type.getScale(), RoundingMode.UNNECESSARY).unscaledValue();
