@@ -138,7 +138,7 @@ struct half_up_negative {
   template <typename U = T, typename std::enable_if_t<cudf::is_fixed_point<U>()>* = nullptr>
   __device__ DeviceType operator()(DeviceType e)
   {
-    return e;  // TODO
+    return half_up_negative<DeviceType, DeviceType>{n}(e) / n;
   }
 
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
