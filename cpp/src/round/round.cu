@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/round.hpp>
 #include <cudf/round.hpp>
@@ -124,7 +125,7 @@ struct round_fn {
 
     auto result = cudf::make_fixed_width_column(input.type(),  //
                                                 input.size(),
-                                                copy_bitmask(input, stream, mr),
+                                                detail::copy_bitmask(input, stream, mr),
                                                 input.null_count(),
                                                 stream,
                                                 mr);
