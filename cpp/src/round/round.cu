@@ -14,12 +14,15 @@
  * limitations under the License.
  */
 
+#include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/round.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/round.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -67,109 +70,148 @@ int16_t __device__ generic_sign(T value)
 template <typename T>
 constexpr inline auto is_supported_round_type()
 {
-  return cudf::is_numeric<T>() && not std::is_same<T, bool>::value;
+  return (cudf::is_numeric<T>() && not std::is_same<T, bool>::value) || cudf::is_fixed_point<T>();
 }
 
-template <typename T>
+template <typename T, typename DeviceType>
 struct half_up_zero {
-  T n;  // unused in the decimal_places = 0 case
+  DeviceType n;  // unused in the decimal_places = 0 case
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ U operator()(U e)
+  __device__ DeviceType operator()(DeviceType e)
   {
     return generic_round(e);
   }
 
+  template <typename U = T, typename std::enable_if_t<cudf::is_fixed_point<U>()>* = nullptr>
+  __device__ DeviceType operator()(DeviceType e)
+  {
+    return e;  // TODO
+  }
+
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ U operator()(U e)
+  __device__ DeviceType operator()(DeviceType e)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
   }
 };
 
-template <typename T>
+template <typename T, typename DeviceType>
+struct half_up_negative;
+
+template <typename T, typename DeviceType>
 struct half_up_positive {
-  T n;
+  DeviceType n;
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ U operator()(U e)
+  __device__ DeviceType operator()(DeviceType e)
   {
-    T integer_part;
-    T const fractional_part = generic_modf(e, &integer_part);
+    DeviceType integer_part;
+    DeviceType const fractional_part = generic_modf(e, &integer_part);
     return integer_part + generic_round(fractional_part * n) / n;
   }
 
+  template <typename U = T, typename std::enable_if_t<cudf::is_fixed_point<U>()>* = nullptr>
+  __device__ DeviceType operator()(DeviceType e)
+  {
+    return half_up_negative<DeviceType, DeviceType>{n}(e) / n;
+  }
+
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ U operator()(U e)
+  __device__ DeviceType operator()(DeviceType e)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
   }
 };
 
-template <typename T>
+template <typename T, typename DeviceType>
 struct half_up_negative {
-  T n;
+  DeviceType n;
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ U operator()(U e)
+  __device__ DeviceType operator()(DeviceType e)
   {
     return generic_round(e / n) * n;
   }
 
+  template <typename U = T, typename std::enable_if_t<cudf::is_fixed_point<U>()>* = nullptr>
+  __device__ DeviceType operator()(DeviceType e)
+  {
+    return e;  // TODO
+  }
+
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ U operator()(U e)
+  __device__ DeviceType operator()(DeviceType e)
   {
     auto const down = (e / n) * n;  // result from rounding down
     return down + generic_sign(e) * (generic_abs(e - down) >= n / 2 ? n : 0);
   }
 };
 
-template <typename T>
+template <typename T, typename DeviceType>
 struct half_even_zero {
-  T n;  // unused in the decimal_places = 0 case
+  DeviceType n;  // unused in the decimal_places = 0 case
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ U operator()(U e)
+  __device__ DeviceType operator()(DeviceType e)
   {
     return generic_round_half_even(e);
   }
 
+  template <typename U = T, typename std::enable_if_t<cudf::is_fixed_point<U>()>* = nullptr>
+  __device__ DeviceType operator()(DeviceType e)
+  {
+    return e;  // TODO
+  }
+
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ U operator()(U e)
+  __device__ DeviceType operator()(DeviceType e)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
   }
 };
 
-template <typename T>
+template <typename T, typename DeviceType>
 struct half_even_positive {
-  T n;
+  DeviceType n;
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ U operator()(U e)
+  __device__ DeviceType operator()(DeviceType e)
   {
-    T integer_part;
-    T const fractional_part = generic_modf(e, &integer_part);
+    DeviceType integer_part;
+    DeviceType const fractional_part = generic_modf(e, &integer_part);
     return integer_part + generic_round_half_even(fractional_part * n) / n;
   }
 
+  template <typename U = T, typename std::enable_if_t<cudf::is_fixed_point<U>()>* = nullptr>
+  __device__ DeviceType operator()(DeviceType e)
+  {
+    return e;  // TODO
+  }
+
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ U operator()(U e)
+  __device__ DeviceType operator()(DeviceType e)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
   }
 };
 
-template <typename T>
+template <typename T, typename DeviceType>
 struct half_even_negative {
-  T n;
+  DeviceType n;
   template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ U operator()(U e)
+  __device__ DeviceType operator()(DeviceType e)
   {
     return generic_round_half_even(e / n) * n;
   }
 
+  template <typename U = T, typename std::enable_if_t<cudf::is_fixed_point<U>()>* = nullptr>
+  __device__ DeviceType operator()(DeviceType e)
+  {
+    return e;  // TODO
+  }
+
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ U operator()(U e)
+  __device__ DeviceType operator()(DeviceType e)
   {
     auto const down_over_n = e / n;            // use this to determine HALF_EVEN case
     auto const down        = down_over_n * n;  // result from rounding down
@@ -179,13 +221,16 @@ struct half_even_negative {
   }
 };
 
-template <typename T, template <typename> typename RoundFunctor>
+template <typename T,
+          template <typename, typename>
+          typename RoundFunctor,
+          typename std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
 std::unique_ptr<column> round_with(column_view const& input,
                                    int32_t decimal_places,
                                    cudaStream_t stream,
                                    rmm::mr::device_memory_resource* mr)
 {
-  using Functor = RoundFunctor<T>;
+  using Functor = RoundFunctor<T, T>;
 
   if (decimal_places >= 0 && std::is_integral<T>::value)
     return std::make_unique<cudf::column>(input, stream, mr);
@@ -204,6 +249,47 @@ std::unique_ptr<column> round_with(column_view const& input,
                     input.begin<T>(),
                     input.end<T>(),
                     out_view.begin<T>(),
+                    Functor{n});
+
+  return result;
+}
+
+template <typename T,
+          template <typename, typename>
+          typename RoundFunctor,
+          typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+std::unique_ptr<column> round_with(column_view const& input,
+                                   int32_t decimal_places,
+                                   cudaStream_t stream,
+                                   rmm::mr::device_memory_resource* mr)
+{
+  using namespace numeric;
+  using Type    = device_storage_type_t<T>;
+  using Functor = RoundFunctor<T, Type>;
+
+  if (is_fixed_point(input.type()) && input.type().scale() > -decimal_places) {
+    auto const diff   = input.type().scale() + decimal_places;
+    auto const scalar = cudf::make_fixed_point_scalar<T>(std::pow(10, diff), scale_type{-diff});
+    return cudf::binary_operation(input, *scalar, cudf::binary_operator::MUL, {}, mr);
+  }
+
+  auto const result_type = data_type{input.type().id(), scale_type{-decimal_places}};
+
+  auto result = cudf::make_fixed_width_column(result_type,  //
+                                              input.size(),
+                                              copy_bitmask(input, stream, mr),
+                                              input.null_count(),
+                                              stream,
+                                              mr);
+
+  auto out_view = result->mutable_view();
+  // Type const n = std::pow(10, -decimal_places - input.type().scale())
+  Type const n = std::pow(10, std::abs(decimal_places + input.type().scale()));
+
+  thrust::transform(rmm::exec_policy(stream)->on(stream),
+                    input.begin<Type>(),
+                    input.end<Type>(),
+                    out_view.begin<Type>(),
                     Functor{n});
 
   return result;
@@ -249,7 +335,8 @@ std::unique_ptr<column> round(column_view const& input,
                               cudaStream_t stream,
                               rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(cudf::is_numeric(input.type()), "Only integral/floating point currently supported.");
+  CUDF_EXPECTS(cudf::is_numeric(input.type()) || cudf::is_fixed_point(input.type()),
+               "Only integral/floating point/fixed point currently supported.");
 
   // TODO when fixed_point supported, have to adjust type
   if (input.size() == 0) return empty_like(input);
