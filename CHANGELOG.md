@@ -52,6 +52,8 @@
 - PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
 - PR #6622 Update `to_pandas` api docs
 - PR #6623 Add operator overloading to column and clean up error messages
+- PR #6635 Add cudf::test::dictionary_column_wrapper class
+- PR #6609 Support fixed-point decimal for HostColumnVector
 
 ## Bug Fixes
 
@@ -73,6 +75,7 @@
 - PR #6621 Fix subword tokenizer metadata for token count equal to max_sequence_length
 - PR #6629 Fix JNI CMake
 - PR #6633 Fix Java HostColumnVector unnecessarily loading native dependencies
+- PR #6643 Fix csv writer handling embedded comma delimiter
 - PR #6640 Add error message for unsupported `axis` parameter in DataFrame APIs
 
 
