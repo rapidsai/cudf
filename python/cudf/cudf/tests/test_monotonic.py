@@ -253,10 +253,13 @@ def test_rangeindex_get_slice_bound_basic(bounds, indices, side, kind):
         got = cudf_index.get_slice_bound(idx, side, kind)
         assert expect == got
 
-@pytest.mark.parametrize("bounds", [(3, 20, 5), (20, 3, -5), (20, 3, 5), (3, 20, -5), (0, 0, 2), (3, 3, 2)])
+
 @pytest.mark.parametrize(
-    "label",
-    [3, 8, 13, 18, 20, 15, 10, 5, -1, 0, 19, 21, 6, 11, 17],
+    "bounds",
+    [(3, 20, 5), (20, 3, -5), (20, 3, 5), (3, 20, -5), (0, 0, 2), (3, 3, 2)],
+)
+@pytest.mark.parametrize(
+    "label", [3, 8, 13, 18, 20, 15, 10, 5, -1, 0, 19, 21, 6, 11, 17],
 )
 @pytest.mark.parametrize("side", ["left", "right"])
 @pytest.mark.parametrize("kind", ["getitem", "loc"])

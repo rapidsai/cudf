@@ -93,6 +93,7 @@ def test_index_find_label_range_genericindex():
         idx_nm.find_label_range(4, 11)
     raises.match("value not found")
 
+
 def test_index_find_label_range_rangeindex():
     """Cudf specific
     """
@@ -111,7 +112,8 @@ def test_index_find_label_range_rangeindex():
     assert ridx.find_label_range(10, 0) == (2, 4)
     assert ridx.find_label_range(30, 13) == (0, 2)
     assert ridx.find_label_range(30, 0) == (0, 4)
-    
+
+
 def test_index_comparision():
     start, stop = 10, 34
     rg = RangeIndex(start, stop)
@@ -1687,22 +1689,21 @@ def test_index_equals_categories():
 
     assert_eq(expect, got)
 
+
 def test_index_rangeindex_pos_from_val():
     # step > 0
     ridx = RangeIndex(-13, 17, 4)
     for i in range(len(ridx)):
-        assert i == pos_from_val(ridx[i], ridx._start, ridx._step, len(ridx), side='left')
-        assert i+1 == pos_from_val(ridx[i], ridx._start, ridx._step, len(ridx), side='right')
+        assert i == pos_from_val(
+            ridx[i], ridx._start, ridx._step, len(ridx), side="left"
+        )
+        assert i + 1 == pos_from_val(
+            ridx[i], ridx._start, ridx._step, len(ridx), side="right"
+        )
 
 
 @pytest.mark.parametrize(
-    "rge",
-    [
-        (1, 10, 1),
-        (1, 10 ,3),
-        (10, -17, -1),
-        (10, -17, -3),
-    ],
+    "rge", [(1, 10, 1), (1, 10, 3), (10, -17, -1), (10, -17, -3)],
 )
 def test_index_rangeindex_get_item_basic(rge):
     pridx = pd.RangeIndex(*rge)
@@ -1713,23 +1714,16 @@ def test_index_rangeindex_get_item_basic(rge):
 
 
 @pytest.mark.parametrize(
-    "rge",
-    [
-        (1, 10 ,3),
-        (10, 1, -3),
-    ],
+    "rge", [(1, 10, 3), (10, 1, -3)],
 )
 def test_index_rangeindex_get_item_out_of_bounds(rge):
     gridx = cudf.RangeIndex(*rge)
     with pytest.raises(IndexError):
         _ = gridx[4]
 
+
 @pytest.mark.parametrize(
-    "rge",
-    [
-        (10, 1, 1),
-        (-17, 10, -3),
-    ],
+    "rge", [(10, 1, 1), (-17, 10, -3)],
 )
 def test_index_rangeindex_get_item_null_range(rge):
     gridx = cudf.RangeIndex(*rge)
@@ -1737,15 +1731,9 @@ def test_index_rangeindex_get_item_null_range(rge):
     with pytest.raises(IndexError):
         gridx[0]
 
+
 @pytest.mark.parametrize(
-    "rge",
-    [
-        (-17, 21, 2),
-        (21, -17, -3),
-        (0, 0, 1),
-        (0, 1, -3),
-        (10, 0, 5)
-    ]
+    "rge", [(-17, 21, 2), (21, -17, -3), (0, 0, 1), (0, 1, -3), (10, 0, 5)]
 )
 @pytest.mark.parametrize(
     "sl",
@@ -1761,7 +1749,7 @@ def test_index_rangeindex_get_item_null_range(rge):
         slice(0, None, 2),
         slice(0, None, 3),
         slice(0, 0, 3),
-    ]
+    ],
 )
 def test_index_rangeindex_get_item_slices(rge, sl):
     pridx = pd.RangeIndex(*rge)

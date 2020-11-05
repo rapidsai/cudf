@@ -396,10 +396,10 @@ def pa_mask_buffer_to_mask(mask_buf, size):
     return Buffer(mask_buf)
 
 
-def pos_from_val(n, start, step, length, side='left'):
+def pos_from_val(n, start, step, length, side="left"):
     """Compute the position of a value in an integral arithmatic series.
     Note it is assumed that step > 0
-    
+
     Parameters
     ----------
     n : int
@@ -420,7 +420,7 @@ def pos_from_val(n, start, step, length, side='left'):
         Index of label.
 
     """
-    x = 1 if side == 'left' else 0
+    x = 1 if side == "left" else 0
     i = (n - start - x) // step + 1
-    
+
     return max(min(length, i), 0)

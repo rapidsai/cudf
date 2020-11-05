@@ -3,7 +3,6 @@ from __future__ import division, print_function
 
 import pickle
 from numbers import Number
-import math
 
 import cupy
 import numpy as np
@@ -33,10 +32,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     numeric_normalize_types,
 )
-from cudf.utils.utils import (
-    cached_property,
-    pos_from_val
-)
+from cudf.utils.utils import cached_property, pos_from_val
 
 
 def _to_frame(this_index, index=True, name=None):
@@ -1548,7 +1544,9 @@ class RangeIndex(Index):
     @cached_property
     def _values(self):
         if len(self) > 0:
-            return column.arange(self._start, self._stop, self._step, dtype=self.dtype)
+            return column.arange(
+                self._start, self._stop, self._step, dtype=self.dtype
+            )
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
 
@@ -1593,13 +1591,16 @@ class RangeIndex(Index):
 
         name = self.name if name is None else name
 
-        _idx_new = RangeIndex(start=self._start, stop=self._stop, step=self._step, name=name)
+        _idx_new = RangeIndex(
+            start=self._start, stop=self._stop, step=self._step, name=name
+        )
 
         return _idx_new
 
     def __repr__(self):
         return (
-            f"{self.__class__.__name__}(start={self._start}, stop={self._stop}, step={self._step}"
+            f"{self.__class__.__name__}(start={self._start}, stop={self._stop}"
+            ", step={self._step}"
             + (
                 f", name={pd.io.formats.printing.default_pprint(self.name)}"
                 if self.name is not None
@@ -1644,7 +1645,11 @@ class RangeIndex(Index):
 
     def equals(self, other):
         if isinstance(other, RangeIndex):
-            if (self._start, self._stop, self._step) == (other._start, other._stop, other._step):
+            if (self._start, self._stop, self._step) == (
+                other._start,
+                other._stop,
+                other._step,
+            ):
                 return True
         return super().equals(other)
 
@@ -1717,7 +1722,7 @@ class RangeIndex(Index):
 
         first = self._start if first is None else first
         last = self._stop if last is None else last
-        
+
         if self._step < 0:
             first = -first
             last = -last
@@ -1727,14 +1732,14 @@ class RangeIndex(Index):
             start = self._start
             step = self._step
 
-        begin = pos_from_val(first, start, step, len(self), side='left')
-        end = pos_from_val(last, start, step, len(self), side='right')
+        begin = pos_from_val(first, start, step, len(self), side="left")
+        end = pos_from_val(last, start, step, len(self), side="right")
 
         return begin, end
 
     @copy_docstring(_to_frame)
     def to_frame(self, index=True, name=None):
-        return _to_frame(self, index, name) 
+        return _to_frame(self, index, name)
 
     def to_gpu_array(self, fillna=None):
         """Get a dense numba device array for the data.
@@ -1802,7 +1807,7 @@ class RangeIndex(Index):
         int
             Index of label.
         """
-        if side not in {'left', 'right'}:
+        if side not in {"left", "right"}:
             raise ValueError(f"Unrecognized side parameter: {side}")
 
         if self._step < 0:
