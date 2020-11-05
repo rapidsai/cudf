@@ -38,8 +38,9 @@ enum class rounding_method : int32_t { HALF_UP, HALF_EVEN };
 /**
  * @brief Rounds all the values in a column to the specified number of decimal places.
  *
- * `cudf::round` currently supports HALF_UP and HALF_EVEN rounding for integer and floating point
- * numbers.
+ * `cudf::round` currently supports HALF_UP and HALF_EVEN rounding for integer, floating point and
+ * `decimal32` and `decimal64` numbers. For `decimal32` and `decimal64` numbers, the
+ * `numeric::scale` is set the `-decimal_places` rounded to.
  *
  * Example:
  * ```
