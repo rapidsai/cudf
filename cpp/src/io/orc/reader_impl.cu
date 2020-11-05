@@ -777,7 +777,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             break;
           }
         }
-        out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
+        out_buffers.emplace_back(column_types[i], num_rows - skip_rows, is_nullable, stream, _mr);
       }
 
       decode_stream_data(chunks,
