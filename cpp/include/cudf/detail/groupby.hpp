@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <utility>
+#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace groupby {
@@ -41,7 +42,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   table_view const& keys,
   std::vector<aggregation_request> const& requests,
   null_policy include_null_keys,
-  cudaStream_t stream,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr);
 }  // namespace hash
 
