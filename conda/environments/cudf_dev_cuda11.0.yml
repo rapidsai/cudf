@@ -53,6 +53,7 @@ dependencies:
   - sphinx-copybutton
   - mimesis
   - packaging
+  - protobuf
   - nvtx>=0.2.1
   - pip:
       - git+https://github.com/dask/dask.git
