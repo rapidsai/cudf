@@ -800,8 +800,13 @@ parse_dates : list of int or names, default None
 comment : char, default None
     Character used as a comments indicator. If found at the beginning of a
     line, the line will be ignored altogether.
-na_values : list, default None
-    Values to consider as invalid
+na_values : scalar, str, or list-like, optional
+    Additional strings to recognize as nulls.
+    By default the following values are interpreted as
+    nulls: ‘’, ‘#N/A’, ‘#N/A N/A’, ‘#NA’, ‘-1.#IND’,
+    ‘-1.#QNAN’, ‘-NaN’, ‘-nan’, ‘1.#IND’, ‘1.#QNAN’,
+    ‘<NA>’, ‘N/A’, ‘NA’, ‘NULL’, ‘NaN’, ‘n/a’, ‘nan’,
+    ‘null’.
 keep_default_na : bool, default True
     Whether or not to include the default NA values when parsing the data.
 na_filter : bool, default True
