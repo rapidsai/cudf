@@ -1675,3 +1675,10 @@ def test_csv_write_chunksize_corner_case(tmpdir):
     got = cudf.read_csv(df_fname)
 
     assert_eq(df, got)
+
+
+def test_csv_write_no_caller_manipulation():
+    df = cudf.DataFrame({"a": [1, 2, 3]})
+    df_copy = df.copy(deep=True)
+    _ = df.to_csv(index=True)
+    assert_eq(df, df_copy)
