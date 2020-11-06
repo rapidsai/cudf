@@ -147,6 +147,7 @@ def to_csv(
                 header=header,
                 line_terminator=line_terminator,
                 rows_per_chunk=rows_per_chunk,
+                index=index,
                 is_index_name_none=is_index_name_none,
             )
     else:
@@ -158,6 +159,7 @@ def to_csv(
             header=header,
             line_terminator=line_terminator,
             rows_per_chunk=rows_per_chunk,
+            index=index,
             is_index_name_none=is_index_name_none,
         )
 

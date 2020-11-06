@@ -403,6 +403,7 @@ cpdef write_csv(
     bool header=True,
     str line_terminator="\n",
     int rows_per_chunk=8,
+    bool index=True,
     bool is_index_name_none=False,
 ):
     """
@@ -428,11 +429,18 @@ cpdef write_csv(
 
     if header is True and table._column_names is not None:
         metadata_.column_names.reserve(len(table._column_names))
-        for idx, col_name in enumerate(table._column_names):
-            if idx == 0 and is_index_name_none is True:
-                metadata_.column_names.push_back(''.encode())
-            else:
-                metadata_.column_names.push_back(str(col_name).encode())
+        if (
+            (index and len(table._column_names) == 1 and is_index_name_none) or
+            (not index and len(table._column_names) == 1 and
+                table._column_names[0] == '')
+        ):
+            metadata_.column_names.push_back('""'.encode())
+        else:
+            for idx, col_name in enumerate(table._column_names):
+                if idx == 0 and is_index_name_none is True:
+                    metadata_.column_names.push_back(''.encode())
+                else:
+                    metadata_.column_names.push_back(str(col_name).encode())
 
     cdef csv_writer_options options = move(
         csv_writer_options.builder(sink_info_c, input_table_view)
