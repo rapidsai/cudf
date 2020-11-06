@@ -42,8 +42,9 @@ struct ProtobufWriter::ProtobufFieldWriter {
     struct_size += p->put_uint(field * 8 + PB_TYPE_FIXEDLEN);
     auto lpos = p->m_buf->size();
     p->putb(0);
-    auto sz = std::accumulate(
-      value.begin(), value.end(), 0, [&](size_t sum, auto val) { return sum + p->put_uint(val); });
+    auto sz = std::accumulate(value.begin(), value.end(), 0, [p = this->p](size_t sum, auto val) {
+      return sum + p->put_uint(val);
+    });
 
     struct_size += sz + 1;
     for (; sz > 0x7f; sz >>= 7, struct_size++)
