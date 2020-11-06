@@ -469,7 +469,9 @@ def _copy_if_else_column_column(Column lhs, Column rhs, Column boolean_mask):
     return Column.from_unique_ptr(move(c_result))
 
 
-def _copy_if_else_scalar_column(DeviceScalar lhs, Column rhs, Column boolean_mask):
+def _copy_if_else_scalar_column(DeviceScalar lhs, 
+                                Column rhs,
+                                Column boolean_mask):
 
     cdef const scalar* lhs_scalar = lhs.get_raw_ptr()
     cdef column_view rhs_view = rhs.view()
@@ -489,7 +491,9 @@ def _copy_if_else_scalar_column(DeviceScalar lhs, Column rhs, Column boolean_mas
     return Column.from_unique_ptr(move(c_result))
 
 
-def _copy_if_else_column_scalar(Column lhs, DeviceScalar rhs, Column boolean_mask):
+def _copy_if_else_column_scalar(Column lhs, 
+                                DeviceScalar rhs, 
+                                Column boolean_mask):
 
     cdef column_view lhs_view = lhs.view()
     cdef const scalar* rhs_scalar = rhs.get_raw_ptr()
@@ -509,7 +513,9 @@ def _copy_if_else_column_scalar(Column lhs, DeviceScalar rhs, Column boolean_mas
     return Column.from_unique_ptr(move(c_result))
 
 
-def _copy_if_else_scalar_scalar(DeviceScalar lhs, DeviceScalar rhs, Column boolean_mask):
+def _copy_if_else_scalar_scalar(DeviceScalar lhs,
+                                DeviceScalar rhs,
+                                Column boolean_mask):
 
     cdef const scalar* lhs_scalar = lhs.get_raw_ptr()
     cdef const scalar* rhs_scalar = rhs.get_raw_ptr()

@@ -9,7 +9,7 @@ from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.scalar import as_scalar, DeviceScalar
+from cudf._lib.scalar import DeviceScalar, as_scalar
 from cudf.core.column import column, string
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
@@ -168,6 +168,7 @@ class TimeDeltaColumn(column.ColumnBase):
     def _binary_op_truediv(self, rhs):
         if isinstance(rhs, DeviceScalar):
             import pdb
+
             pdb.set_trace()
         lhs, rhs = self, rhs
         if pd.api.types.is_timedelta64_dtype(rhs.dtype):

@@ -419,7 +419,7 @@ def as_scalar(val, dtype=None):
         if (dtype is None or dtype == val.dtype):
             return val
     if hasattr(val, '_data') and isinstance(val._data, DeviceScalar):
-            return val._data
+        return val._data
     else:
         return DeviceScalar(value=val, dtype=dtype)
 
