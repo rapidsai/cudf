@@ -19,6 +19,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class Cuda {
+  // This needs to happen first before calling any native methods.
+  static {
+    NativeDepsLoader.loadNativeDeps();
+  }
+
   // Defined in driver_types.h in cuda library.
   static final int CPU_DEVICE_ID = -1;
   static final long CUDA_STREAM_DEFAULT = 0;
@@ -27,10 +32,6 @@ public class Cuda {
   private final static long DEFAULT_STREAM_ID = isPtdsEnabled() ? CUDA_STREAM_PER_THREAD : CUDA_STREAM_LEGACY;
   private static final Logger log = LoggerFactory.getLogger(Cuda.class);
   private static Boolean isCompat = null;
-
-  static {
-    NativeDepsLoader.loadNativeDeps();
-  }
 
   private static class StreamCleaner extends MemoryCleaner.Cleaner {
     private long stream;
