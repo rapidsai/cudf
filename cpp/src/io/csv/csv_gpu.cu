@@ -713,9 +713,10 @@ inline __device__ packed_rowctx_t pack_rowmaps(uint4 ctx_map)
  **/
 inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
 {
-  return (ctxid == ROW_CTX_NONE)
-           ? ctx_map.x
-           : (ctxid == ROW_CTX_QUOTE) ? ctx_map.y : (ctxid == ROW_CTX_COMMENT) ? ctx_map.z : 0;
+  return (ctxid == ROW_CTX_NONE)      ? ctx_map.x
+         : (ctxid == ROW_CTX_QUOTE)   ? ctx_map.y
+         : (ctxid == ROW_CTX_COMMENT) ? ctx_map.z
+                                      : 0;
 }
 
 /**

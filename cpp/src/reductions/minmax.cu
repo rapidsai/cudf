@@ -188,56 +188,56 @@ struct minmax_functor {
 };
 
 template <>
-std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax_functor::
-operator()<cudf::dictionary32>(const cudf::column_view &col,
-                               rmm::mr::device_memory_resource *mr,
-                               cudaStream_t stream)
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>>
+minmax_functor::operator()<cudf::dictionary32>(const cudf::column_view &col,
+                                               rmm::mr::device_memory_resource *mr,
+                                               cudaStream_t stream)
 {
   CUDF_FAIL("dictionary type not supported");
 }
 
 template <>
-std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax_functor::
-operator()<cudf::string_view>(const cudf::column_view &col,
-                              rmm::mr::device_memory_resource *mr,
-                              cudaStream_t stream)
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>>
+minmax_functor::operator()<cudf::string_view>(const cudf::column_view &col,
+                                              rmm::mr::device_memory_resource *mr,
+                                              cudaStream_t stream)
 {
   CUDF_FAIL("string type not supported");
 }
 
 template <>
-std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax_functor::
-operator()<cudf::list_view>(const cudf::column_view &col,
-                            rmm::mr::device_memory_resource *mr,
-                            cudaStream_t stream)
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>>
+minmax_functor::operator()<cudf::list_view>(const cudf::column_view &col,
+                                            rmm::mr::device_memory_resource *mr,
+                                            cudaStream_t stream)
 {
   CUDF_FAIL("list type not supported");
 }
 
 template <>
-std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax_functor::
-operator()<cudf::struct_view>(const cudf::column_view &col,
-                              rmm::mr::device_memory_resource *mr,
-                              cudaStream_t stream)
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>>
+minmax_functor::operator()<cudf::struct_view>(const cudf::column_view &col,
+                                              rmm::mr::device_memory_resource *mr,
+                                              cudaStream_t stream)
 {
   CUDF_FAIL("struct type not supported");
 }
 
 // unable to support fixed point due to DeviceMin/DeviceMax not supporting fixed point
 template <>
-std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax_functor::
-operator()<numeric::decimal32>(const cudf::column_view &col,
-                               rmm::mr::device_memory_resource *mr,
-                               cudaStream_t stream)
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>>
+minmax_functor::operator()<numeric::decimal32>(const cudf::column_view &col,
+                                               rmm::mr::device_memory_resource *mr,
+                                               cudaStream_t stream)
 {
   CUDF_FAIL("fixed-point type not supported");
 }
 
 template <>
-std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax_functor::
-operator()<numeric::decimal64>(const cudf::column_view &col,
-                               rmm::mr::device_memory_resource *mr,
-                               cudaStream_t stream)
+std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>>
+minmax_functor::operator()<numeric::decimal64>(const cudf::column_view &col,
+                                               rmm::mr::device_memory_resource *mr,
+                                               cudaStream_t stream)
 {
   CUDF_FAIL("fixed-point type not supported");
 }

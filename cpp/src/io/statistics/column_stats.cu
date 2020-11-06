@@ -158,8 +158,8 @@ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Stora
     uint32_t row              = r + s->group.start_row;
     const uint32_t *valid_map = s->col.valid_map_base;
     uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_rows)
-                          ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1
-                          : 0;
+                                  ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1
+                                  : 0;
     if (is_valid) {
       switch (dtype) {
         case dtype_int32:
@@ -243,8 +243,8 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
     uint32_t row              = r + s->group.start_row;
     const uint32_t *valid_map = s->col.valid_map_base;
     uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_rows)
-                          ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1
-                          : 0;
+                                  ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1
+                                  : 0;
     if (is_valid) {
       if (dtype == dtype_float64) {
         v = static_cast<const double *>(s->col.column_data_base)[row];
@@ -323,8 +323,8 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &s
     uint32_t row              = r + s->group.start_row;
     const uint32_t *valid_map = s->col.valid_map_base;
     uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_rows)
-                          ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1
-                          : 0;
+                                  ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1
+                                  : 0;
     if (is_valid) {
       const nvstrdesc_s *str_col = static_cast<const nvstrdesc_s *>(s->col.column_data_base);
       uint32_t len               = (uint32_t)str_col[row].count;

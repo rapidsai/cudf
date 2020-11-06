@@ -229,24 +229,22 @@ __global__ void __launch_bounds__(block_size, 1)
             val  = static_cast<const uint64_t *>(s->col.column_data_base)[row];
             hash = uint64_hash16(val);
           } else {
-            val = (dtype_len_in == 4)
-                    ? static_cast<const uint32_t *>(s->col.column_data_base)[row]
-                    : (dtype_len_in == 2)
-                        ? static_cast<const uint16_t *>(s->col.column_data_base)[row]
-                        : static_cast<const uint8_t *>(s->col.column_data_base)[row];
+            val  = (dtype_len_in == 4) ? static_cast<const uint32_t *>(s->col.column_data_base)[row]
+                   : (dtype_len_in == 2)
+                     ? static_cast<const uint16_t *>(s->col.column_data_base)[row]
+                     : static_cast<const uint8_t *>(s->col.column_data_base)[row];
             hash = uint32_hash16(val);
           }
           // Walk the list of rows with the same hash
           next_addr = &s->hashmap[hash];
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
-            uint64_t val2 =
-              (dtype_len_in == 8)
-                ? static_cast<const uint64_t *>(s->col.column_data_base)[next - 1]
-                : (dtype_len_in == 4)
-                    ? static_cast<const uint32_t *>(s->col.column_data_base)[next - 1]
-                    : (dtype_len_in == 2)
-                        ? static_cast<const uint16_t *>(s->col.column_data_base)[next - 1]
-                        : static_cast<const uint8_t *>(s->col.column_data_base)[next - 1];
+            uint64_t val2 = (dtype_len_in == 8)
+                              ? static_cast<const uint64_t *>(s->col.column_data_base)[next - 1]
+                            : (dtype_len_in == 4)
+                              ? static_cast<const uint32_t *>(s->col.column_data_base)[next - 1]
+                            : (dtype_len_in == 2)
+                              ? static_cast<const uint16_t *>(s->col.column_data_base)[next - 1]
+                              : static_cast<const uint8_t *>(s->col.column_data_base)[next - 1];
             if (val2 == val) {
               is_dupe = 1;
               break;

@@ -272,8 +272,8 @@ class parquet_column_view {
 
       _type_width = (is_fixed_width(_leaf_col.type())) ? cudf::size_of(_leaf_col.type()) : 0;
       _data       = (is_fixed_width(_leaf_col.type()))
-                ? _leaf_col.head<uint8_t>() + leaf_col_offset * _type_width
-                : nullptr;
+                      ? _leaf_col.head<uint8_t>() + leaf_col_offset * _type_width
+                      : nullptr;
 
       // Bring offset array to device
       column_view curr_col = col;

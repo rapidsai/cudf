@@ -64,9 +64,9 @@ void calculate_bandwidth(benchmark::State& state, cudf::size_type num_columns)
   cudf::size_type const column_size_out = fraction * column_size;
   int64_t const mask_size =
     sizeof(bool) * column_size + cudf::bitmask_allocation_size_bytes(column_size);
-  int64_t const validity_bytes_in = (fraction >= 1.0f / 32)
-                                      ? cudf::bitmask_allocation_size_bytes(column_size)
-                                      : 4 * column_size_out;
+  int64_t const validity_bytes_in  = (fraction >= 1.0f / 32)
+                                       ? cudf::bitmask_allocation_size_bytes(column_size)
+                                       : 4 * column_size_out;
   int64_t const validity_bytes_out = cudf::bitmask_allocation_size_bytes(column_size_out);
   int64_t const column_bytes_out   = sizeof(T) * column_size_out;
   int64_t const column_bytes_in    = column_bytes_out;  // we only read unmasked inputs

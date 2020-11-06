@@ -180,7 +180,7 @@ class avro_reader_options_builder {
   /**
    * @brief move avro_reader_options member once it's built.
    */
-  operator avro_reader_options &&() { return std::move(options); }
+  operator avro_reader_options&&() { return std::move(options); }
 
   /**
    * @brief move avro_reader_options member once it's built.

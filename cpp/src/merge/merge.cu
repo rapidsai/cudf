@@ -247,7 +247,7 @@ struct column_merger {
     auto merged_size = lsz + rcol.size();
     auto type        = lcol.type();
     auto merged_col  = lcol.has_nulls() ? cudf::allocate_like(lcol, merged_size)
-                                       : cudf::allocate_like(rcol, merged_size);
+                                        : cudf::allocate_like(rcol, merged_size);
 
     //"gather" data from lcol, rcol according to row_order_ "map"
     //(directly calling gather() won't work because

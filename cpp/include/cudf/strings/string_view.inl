@@ -95,8 +95,8 @@ __device__ inline size_type string_view::length() const
                                      auto width = bytes_in_utf8_byte(ch);
                                      return (width != 0) && (width != chwidth);
                                    })) == (bytes + size_bytes())
-                    ? chwidth
-                    : VARIABLE_CHAR_WIDTH;
+                          ? chwidth
+                          : VARIABLE_CHAR_WIDTH;
   }
   return _length;
 }

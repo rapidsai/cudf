@@ -25,7 +25,7 @@ namespace io {
 // encoding
 #define MAX_LITERAL_LENGTH 256
 
-#define MAX_COPY_LENGTH 64       // Syntax limit
+#define MAX_COPY_LENGTH 64  // Syntax limit
 #define MAX_COPY_DISTANCE 32768  // Matches encoder limit as described in snappy format description
 
 /**

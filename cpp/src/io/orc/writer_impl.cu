@@ -410,7 +410,7 @@ std::vector<Stream> writer::impl::gather_streams(orc_column_view *columns,
         data_stream_size = (columns[i].null_count() != 0)
                              ? div_rowgroups_by<int64_t>(512) * (512 * 4 + 2)
                              : INT64_C(-1);
-        encoding_kind = DIRECT;
+        encoding_kind    = DIRECT;
         break;
       case TypeKind::INT:
       case TypeKind::DATE:
@@ -422,7 +422,7 @@ std::vector<Stream> writer::impl::gather_streams(orc_column_view *columns,
         data_stream_size = (columns[i].null_count() != 0)
                              ? div_rowgroups_by<int64_t>(512) * (512 * 8 + 2)
                              : INT64_C(-1);
-        encoding_kind = DIRECT;
+        encoding_kind    = DIRECT;
         break;
       case TypeKind::LONG:
         data_stream_size = div_rowgroups_by<int64_t>(512) * (512 * 8 + 2);
@@ -567,7 +567,7 @@ rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
         ck->column_data_base = (ck->encoding_kind == DICTIONARY_V2)
                                  ? columns[i].host_stripe_dict(stripe_id)->dict_index
                                  : columns[i].data();
-        ck->dtype_len = 1;
+        ck->dtype_len        = 1;
       } else {
         ck->valid_map_base   = columns[i].nulls();
         ck->column_data_base = columns[i].data();
@@ -586,8 +586,8 @@ rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
               const int32_t dict_stride = columns[i].get_dict_stride();
               const auto stripe         = columns[i].host_stripe_dict(stripe_id);
               ck->strm_len[k]           = (k == gpu::CI_DICTIONARY)
-                                  ? stripe->dict_char_count
-                                  : (((stripe->num_strings + 0x1ff) >> 9) * (512 * 4 + 2));
+                                            ? stripe->dict_char_count
+                                            : (((stripe->num_strings + 0x1ff) >> 9) * (512 * 4 + 2));
               if (stripe_id == 0) {
                 ck->streams[k] = dst_base + strm_offsets[strm_id];
               } else {
@@ -602,8 +602,8 @@ rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
                      ck->encoding_kind == DIRECT_V2) {
             ck->strm_len[k] = columns[i].host_dict_chunk(j)->string_char_count;
             ck->streams[k]  = (j == 0)
-                               ? dst_base + strm_offsets[strm_id]
-                               : (ck[-num_columns].streams[k] + ck[-num_columns].strm_len[k]);
+                                ? dst_base + strm_offsets[strm_id]
+                                : (ck[-num_columns].streams[k] + ck[-num_columns].strm_len[k]);
           } else if (k == gpu::CI_DATA && streams[strm_id].length == 0 &&
                      (ck->type_kind == DOUBLE || ck->type_kind == FLOAT)) {
             // Pass-through

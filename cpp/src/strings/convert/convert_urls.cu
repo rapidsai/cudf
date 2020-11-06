@@ -188,11 +188,11 @@ struct url_decoder_fn {
   __device__ size_type operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) return 0;
-    string_view d_str = d_strings.element<string_view>(idx);
-    char* out_ptr = d_chars ? out_ptr = d_chars + d_offsets[idx] : nullptr;
-    size_type nbytes                  = 0;
-    const char* in_ptr                = d_str.data();
-    const char* end                   = in_ptr + d_str.size_bytes();
+    string_view d_str  = d_strings.element<string_view>(idx);
+    char* out_ptr      = d_chars ? out_ptr = d_chars + d_offsets[idx] : nullptr;
+    size_type nbytes   = 0;
+    const char* in_ptr = d_str.data();
+    const char* end    = in_ptr + d_str.size_bytes();
     while (in_ptr < end)  // walk through each byte
     {
       char ch = *in_ptr++;

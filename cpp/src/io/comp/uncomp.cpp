@@ -27,10 +27,10 @@ using cudf::detail::host_span;
 
 namespace cudf {
 namespace io {
-#define GZ_FLG_FTEXT 0x01     // ASCII text hint
-#define GZ_FLG_FHCRC 0x02     // Header CRC present
-#define GZ_FLG_FEXTRA 0x04    // Extra fields present
-#define GZ_FLG_FNAME 0x08     // Original file name present
+#define GZ_FLG_FTEXT 0x01  // ASCII text hint
+#define GZ_FLG_FHCRC 0x02  // Header CRC present
+#define GZ_FLG_FEXTRA 0x04  // Extra fields present
+#define GZ_FLG_FNAME 0x08  // Original file name present
 #define GZ_FLG_FCOMMENT 0x10  // Comment present
 
 #pragma pack(push, 1)

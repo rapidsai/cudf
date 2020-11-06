@@ -425,8 +425,8 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                          string_view d_str = d_column.is_null(ridx)
                                                ? col_rep.value()
                                                : d_column.element<string_view>(ridx);
-                         d_buffer       = detail::copy_string(d_buffer, d_str);
-                         colval_written = true;
+                         d_buffer          = detail::copy_string(d_buffer, d_str);
+                         colval_written    = true;
                        }
                      });
 

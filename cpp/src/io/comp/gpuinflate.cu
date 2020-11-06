@@ -50,11 +50,11 @@ namespace cudf {
 namespace io {
 #define NUMTHREADS 128  // Threads per block
 
-#define MAXBITS 15                        // maximum bits in a code
-#define MAXLCODES 286                     // maximum number of literal/length codes
-#define MAXDCODES 30                      // maximum number of distance codes
+#define MAXBITS 15  // maximum bits in a code
+#define MAXLCODES 286  // maximum number of literal/length codes
+#define MAXDCODES 30  // maximum number of distance codes
 #define MAXCODES (MAXLCODES + MAXDCODES)  // maximum codes lengths to read
-#define FIXLCODES 288                     // number of fixed literal/length codes
+#define FIXLCODES 288  // number of fixed literal/length codes
 
 #define LOG2LENLUT 10
 #define LOG2DISTLUT 8
@@ -966,10 +966,10 @@ __device__ void prefetch_warp(volatile inflate_state_s *s, int t)
  * @brief GZIP header flags
  * See https://tools.ietf.org/html/rfc1952
  **/
-#define GZ_FLG_FTEXT 0x01     // ASCII text hint
-#define GZ_FLG_FHCRC 0x02     // Header CRC present
-#define GZ_FLG_FEXTRA 0x04    // Extra fields present
-#define GZ_FLG_FNAME 0x08     // Original file name present
+#define GZ_FLG_FTEXT 0x01  // ASCII text hint
+#define GZ_FLG_FHCRC 0x02  // Header CRC present
+#define GZ_FLG_FEXTRA 0x04  // Extra fields present
+#define GZ_FLG_FNAME 0x08  // Original file name present
 #define GZ_FLG_FCOMMENT 0x10  // Comment present
 
 /**

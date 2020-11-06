@@ -1725,7 +1725,7 @@ struct chunk_row_output_iter {
   void operator++ __host__ __device__() { p++; }
 
   reference operator[] __device__(int i) { return p[i].chunk_row; }
-  reference operator*__device__() { return p->chunk_row; }
+  reference operator* __device__() { return p->chunk_row; }
   void operator= __device__(value_type v) { p->chunk_row = v; }
 };
 
@@ -1751,7 +1751,7 @@ struct start_offset_output_iterator {
   void operator++ __host__ __device__() { cur_index++; }
 
   reference operator[] __device__(int i) { return dereference(cur_index + i); }
-  reference operator*__device__() { return dereference(cur_index); }
+  reference operator* __device__() { return dereference(cur_index); }
 
  private:
   reference __device__ dereference(int index)

@@ -509,7 +509,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
           uint32_t bw, pw = 1, pll, pgw = 1, bv_scale = (is_signed) ? 0 : 1;
           vmax = (is_signed) ? ((vmin < 0) ? -vmin : vmin) * 2 : vmin;
           bw   = (sizeof(T) > 4) ? (8 - min(CountLeadingBytes64(vmax << bv_scale), 7))
-                               : (4 - min(CountLeadingBytes32(vmax << bv_scale), 3));
+                                 : (4 - min(CountLeadingBytes32(vmax << bv_scale), 3));
 #if ZERO_PLL_WAR
           // Insert a dummy zero patch
           pll                                                    = 1;

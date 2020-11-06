@@ -103,7 +103,7 @@ struct genericAtomicOperationImpl<T, Op, 2> {
 
       T_int new_value = (is_32_align) ? (old & 0xffff0000) | updating_value
                                       : (old & 0xffff) | (T_int(updating_value) << 16);
-      old = atomicCAS(address_uint32, assumed, new_value);
+      old             = atomicCAS(address_uint32, assumed, new_value);
     } while (assumed != old);
 
     return (is_32_align) ? T(old & 0xffff) : T(old >> 16);

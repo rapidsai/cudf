@@ -65,10 +65,9 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
       // TBD: For some codecs like snappy, it wouldn't be too difficult to get the actual
       // uncompressed size and avoid waste due to block size alignment For now, rely on the max
       // compression ratio to limit waste for the most extreme cases (small single-block streams)
-      uncompressed_size =
-        (is_uncompressed)
-          ? block_len
-          : (block_len < (block_size >> log2maxcr)) ? block_len << log2maxcr : block_size;
+      uncompressed_size = (is_uncompressed)                         ? block_len
+                          : (block_len < (block_size >> log2maxcr)) ? block_len << log2maxcr
+                                                                    : block_size;
       if (is_uncompressed) {
         if (uncompressed_size <= 32) {
           // For short blocks, copy the uncompressed data to output
@@ -276,9 +275,9 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s *s,
         }
         break;
       case STORE_INDEX0:
-        ci_id = (idx_id == (strm_idx_id & 0xff))
-                  ? CI_DATA
-                  : (idx_id == ((strm_idx_id >> 8) & 0xff)) ? CI_DATA2 : CI_PRESENT;
+        ci_id = (idx_id == (strm_idx_id & 0xff))          ? CI_DATA
+                : (idx_id == ((strm_idx_id >> 8) & 0xff)) ? CI_DATA2
+                                                          : CI_PRESENT;
         idx_id++;
         if (s->is_compressed) {
           if (ci_id < CI_PRESENT) s->row_index_entry[0][ci_id] = v;

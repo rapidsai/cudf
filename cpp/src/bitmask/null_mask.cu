@@ -184,7 +184,7 @@ __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
     if (num_slack_bits > 0) {
       bitmask_type word = bitmask[word_index];
       auto slack_mask   = (first) ? set_least_significant_bits(num_slack_bits)
-                                : set_most_significant_bits(num_slack_bits);
+                                  : set_most_significant_bits(num_slack_bits);
 
       thread_count -= __popc(word & slack_mask);
     }

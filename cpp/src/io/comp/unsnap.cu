@@ -313,10 +313,10 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
           uint32_t blen = 0;
           int32_t ofs   = 0;
           if (t < batch_len) {
-            blen = (b0 & 1) ? ((b0 >> 2) & 7) + 4 : ((b0 >> 2) + 1);
-            ofs  = (b0 & 1) ? ((b0 & 0xe0) << 3) | READ_BYTE(cur_t + 1)
-                           : (b0 & 2) ? READ_BYTE(cur_t + 1) | (READ_BYTE(cur_t + 2) << 8)
-                                      : -(int32_t)(cur_t + 1);
+            blen        = (b0 & 1) ? ((b0 >> 2) & 7) + 4 : ((b0 >> 2) + 1);
+            ofs         = (b0 & 1)   ? ((b0 & 0xe0) << 3) | READ_BYTE(cur_t + 1)
+                          : (b0 & 2) ? READ_BYTE(cur_t + 1) | (READ_BYTE(cur_t + 2) << 8)
+                                     : -(int32_t)(cur_t + 1);
             b[t].len    = blen;
             b[t].offset = ofs;
             ofs += blen;  // for correct out-of-range detection below
@@ -359,10 +359,10 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
             uint32_t blen = 0;
             int32_t ofs   = 0;
             if (t < batch_add) {
-              blen = (b0 & 1) ? ((b0 >> 2) & 7) + 4 : ((b0 >> 2) + 1);
-              ofs  = (b0 & 1) ? ((b0 & 0xe0) << 3) | READ_BYTE(cur_t + 1)
-                             : (b0 & 2) ? READ_BYTE(cur_t + 1) | (READ_BYTE(cur_t + 2) << 8)
-                                        : -(int32_t)(cur_t + 1);
+              blen                    = (b0 & 1) ? ((b0 >> 2) & 7) + 4 : ((b0 >> 2) + 1);
+              ofs                     = (b0 & 1) ? ((b0 & 0xe0) << 3) | READ_BYTE(cur_t + 1)
+                                        : (b0 & 2) ? READ_BYTE(cur_t + 1) | (READ_BYTE(cur_t + 2) << 8)
+                                                   : -(int32_t)(cur_t + 1);
               b[batch_len + t].len    = blen;
               b[batch_len + t].offset = ofs;
               ofs += blen;  // for correct out-of-range detection below

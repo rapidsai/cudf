@@ -188,9 +188,9 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     const uint32_t *valid = s->col.valid_map_base;
     uint32_t val_idx      = start_value_idx + i + t;
     uint32_t is_valid     = (i + t < nvals && val_idx < s->col.num_values)
-                          ? (valid) ? (valid[val_idx >> 5] >> (val_idx & 0x1f)) & 1 : 1
-                          : 0;
-    uint32_t valid_warp = BALLOT(is_valid);
+                              ? (valid) ? (valid[val_idx >> 5] >> (val_idx & 0x1f)) & 1 : 1
+                              : 0;
+    uint32_t valid_warp   = BALLOT(is_valid);
     uint32_t len, nz_pos, hash;
     if (is_valid) {
       len = dtype_len;
@@ -206,11 +206,9 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
           hash = uint64_init_hash(static_cast<const uint64_t *>(s->col.column_data_base)[val_idx]);
         } else {
           hash = uint32_init_hash(
-            (dtype_len_in == 4)
-              ? static_cast<const uint32_t *>(s->col.column_data_base)[val_idx]
-              : (dtype_len_in == 2)
-                  ? static_cast<const uint16_t *>(s->col.column_data_base)[val_idx]
-                  : static_cast<const uint8_t *>(s->col.column_data_base)[val_idx]);
+            (dtype_len_in == 4)   ? static_cast<const uint32_t *>(s->col.column_data_base)[val_idx]
+            : (dtype_len_in == 2) ? static_cast<const uint16_t *>(s->col.column_data_base)[val_idx]
+                                  : static_cast<const uint8_t *>(s->col.column_data_base)[val_idx]);
         }
       }
     } else {
@@ -534,9 +532,9 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
         fragment_data_size = frag_g.fragment_data_size;
       }
       // TODO (dm): this convoluted logic to limit page size needs refactoring
-      max_page_size = (values_in_page * 2 >= ck_g.num_values)
-                        ? 256 * 1024
-                        : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024 : 512 * 1024;
+      max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
+                      : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024
+                                                                : 512 * 1024;
       if (num_rows >= ck_g.num_rows ||
           (values_in_page > 0 &&
            (page_size + fragment_data_size > max_page_size ||
