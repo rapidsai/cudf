@@ -110,7 +110,6 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
                     base_offsets.data(),
                     [src_offsets, src_size, shift] __device__(int32_t index) {
                       // if this is an invalid index, this will be a NULL list
-                      // return 0;
                       if (NullifyOutOfBounds && ((index < 0) || (index >= src_size))) { return 0; }
                       return src_offsets[index] - shift;
                     });
