@@ -812,7 +812,7 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
     desc->num_values     = col.data_count();
     desc->num_rows       = col.row_count();
     desc->physical_type  = static_cast<uint8_t>(col.physical_type());
-    desc->converted_type = col.converted_type();
+    desc->converted_type = static_cast<uint8_t>(col.converted_type());
   }
 
   // Init page fragments
