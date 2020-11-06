@@ -83,6 +83,7 @@
 - PR #6643 Fix csv writer handling embedded comma delimiter
 - PR #6640 Add error message for unsupported `axis` parameter in DataFrame APIs
 - PR #6687 Fix issue where index name of caller object is being modified in csv writer
+- PR #6696 Fix release_assert.
 
 
 # cuDF 0.16.0 (21 Oct 2020)
