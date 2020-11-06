@@ -79,9 +79,13 @@ def test_series_map_callable_numeric_random_dtype_change():
 
 def test_series_map_non_unique_index():
     # test for checking correct error is produced
+
+    gd2 = cudf.Series([1, 2, 3, 4, np.nan])
+    pd2 = pd.Series([1, 2, 3, 4, np.nan])
+
     assert_exceptions_equal(
-        lfunc=pd.Series.map,
-        rfunc=cudf.Series.map,
+        lfunc=pd2.map,
+        rfunc=gd2.map,
         check_exception_type=False,
         lfunc_args_and_kwargs=([1, 1, 2], {"objs": ["a", "b", "c"]}),
         rfunc_args_and_kwargs=([1, 1, 2], {"objs": ["a", "b", "c"]}),
