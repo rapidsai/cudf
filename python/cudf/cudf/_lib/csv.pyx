@@ -127,6 +127,7 @@ cdef csv_reader_options make_csv_reader_options(
     if compression is None:
         c_compression = compression_type.NONE
     else:
+        compression = str(compression)
         compression = Compression[compression.upper()]
         c_compression = <compression_type> (
             <underlying_type_t_compression> compression

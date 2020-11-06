@@ -647,6 +647,7 @@ def test_csv_reader_buffer_strings():
         (".beez", "bz2", "bz2"),
         (".gz", "gzip", "infer"),
         (".bz2", "bz2", "infer"),
+        (".beez", "bz2", np.str_("bz2")),
         (".data", None, "infer"),
         (".txt", None, None),
         ("", None, None),
