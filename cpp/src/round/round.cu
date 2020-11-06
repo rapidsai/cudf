@@ -208,12 +208,8 @@ std::unique_ptr<column> round_with(column_view const& input,
   if (decimal_places >= 0 && std::is_integral<T>::value)
     return std::make_unique<cudf::column>(input, stream, mr);
 
-  auto result = cudf::make_fixed_width_column(input.type(),  //
-                                              input.size(),
-                                              copy_bitmask(input, stream, mr),
-                                              input.null_count(),
-                                              stream,
-                                              mr);
+  auto result = cudf::make_fixed_width_column(
+    input.type(), input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);
 
   auto out_view = result->mutable_view();
   T const n     = std::pow(10, std::abs(decimal_places));
