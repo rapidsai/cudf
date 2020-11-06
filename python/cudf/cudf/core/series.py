@@ -869,7 +869,8 @@ class Series(Frame, Serializable):
         4       NaN
         dtype: int64
 
-        Please note map currently only supports fixed-width numeric types.
+        Please note map currently only supports fixed-width numeric
+        type functions.
         """
         if isinstance(arg, dict):
             lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
