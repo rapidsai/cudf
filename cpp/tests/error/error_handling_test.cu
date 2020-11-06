@@ -99,12 +99,12 @@ TEST(ReleaseAssertDeathTest, release_assert_false)
     // This error invalidates the current device context, so we need to kill
     // the current process. Running with EXPECT_DEATH spawns a new process for
     // each attempted kernel launch
-    ASSERT_EQ(cudaErrorAssert, cudaDeviceSynchronize());
-
+    if (cudaErrorAssert == cudaDeviceSynchronize()) { 
     std::abort();
+    }
   };
 
-  EXPECT_DEATH(call_kernel(), "");
+  EXPECT_DEATH(call_kernel(), "this kernel should die");
 }
 
 TEST(ReleaseAssert, release_assert_true)
