@@ -589,6 +589,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   : _mr(mr),
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
+    int96_timestamps(options.is_enabled_int96_timestamps()),
     out_sink_(std::move(sink))
 {
 }
@@ -601,10 +602,10 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
   bool int96_timestamps,
   cudaStream_t stream)
 {
-  pq_chunked_state state{metadata, SingleWriteMode::YES, stream};
+  pq_chunked_state state{metadata, SingleWriteMode::YES, int96_timestamps, stream};
 
   write_chunked_begin(state);
-  write_chunk(table, state, int96_timestamps);
+  write_chunk(table, state);
   return write_chunked_end(state, return_filemetadata, column_chunks_file_path);
 }
 
@@ -617,9 +618,7 @@ void writer::impl::write_chunked_begin(pq_chunked_state &state)
   state.current_chunk_offset = sizeof(file_header_s);
 }
 
-void writer::impl::write_chunk(table_view const &table,
-                               pq_chunked_state &state,
-                               bool int96_timestamps)
+void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
 {
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
@@ -636,7 +635,7 @@ void writer::impl::write_chunk(table_view const &table,
 
     num_rows = std::max<uint32_t>(num_rows, col.size());
     parquet_columns.emplace_back(
-      current_id, col, state.user_metadata, int96_timestamps, state.stream);
+      current_id, col, state.user_metadata, state.int96_timestamps, state.stream);
   }
 
   if (state.user_metadata_with_nullability.column_nullable.size() > 0) {
@@ -707,9 +706,11 @@ void writer::impl::write_chunk(table_view const &table,
         list_schema[nesting_depth * 2].name = "element";
         list_schema[nesting_depth * 2].repetition_type =
           col.leaf_col().nullable() ? OPTIONAL : REQUIRED;
-        list_schema[nesting_depth * 2].type           = col.physical_type();
-        list_schema[nesting_depth * 2].converted_type = col.converted_type();
-        list_schema[nesting_depth * 2].num_children   = 0;
+        auto const &physical_type           = col.physical_type();
+        list_schema[nesting_depth * 2].type = physical_type;
+        list_schema[nesting_depth * 2].converted_type =
+          physical_type == parquet::Type::INT96 ? ConvertedType::UNKNOWN : col.converted_type();
+        list_schema[nesting_depth * 2].num_children = 0;
 
         std::vector<std::string> path_in_schema;
         std::transform(
@@ -808,12 +809,10 @@ void writer::impl::write_chunk(table_view const &table,
     } else {
       desc->level_bits = (state.md.schema[1 + i].repetition_type == OPTIONAL) ? 1 : 0;
     }
-    desc->num_values          = col.data_count();
-    desc->num_rows            = col.row_count();
-    auto const &physical_type = col.physical_type();
-    desc->physical_type       = static_cast<uint8_t>(physical_type);
-    desc->converted_type =
-      static_cast<uint8_t>(physical_type == INT96 ? ConvertedType::UNKNOWN : col.converted_type());
+    desc->num_values     = col.data_count();
+    desc->num_rows       = col.row_count();
+    desc->physical_type  = static_cast<uint8_t>(col.physical_type());
+    desc->converted_type = col.converted_type();
   }
 
   // Init page fragments
@@ -1190,9 +1189,9 @@ void writer::write_chunked_begin(pq_chunked_state &state)
 }
 
 // Forward to implementation
-void writer::write_chunk(table_view const &table, pq_chunked_state &state, bool int96_timestamps)
+void writer::write_chunk(table_view const &table, pq_chunked_state &state)
 {
-  _impl->write_chunk(table, state, int96_timestamps);
+  _impl->write_chunk(table, state);
 }
 
 // Forward to implementation

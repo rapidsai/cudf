@@ -102,12 +102,8 @@ class writer::impl {
    * @param[in] table The table information to be written
    * @param[in] pq_chunked_state Internal state maintained between chunks.
    * boundaries.
-   * @param[in] int96_timestamps Set to true if timestamps should be written as
-   * int96 types instead of int64 types. Even though int96 is deprecated and is
-   * not an internal type for cudf, it needs to be written for backwards
-   * compatability reasons.
    */
-  void write_chunk(table_view const& table, pq_chunked_state& state, bool int96_timestamps);
+  void write_chunk(table_view const& table, pq_chunked_state& state);
 
   /**
    * @brief Finishes the chunked/streamed write process.
@@ -235,6 +231,7 @@ class writer::impl {
   size_t target_page_size_           = DEFAULT_TARGET_PAGE_SIZE;
   Compression compression_           = Compression::UNCOMPRESSED;
   statistics_freq stats_granularity_ = statistics_freq::STATISTICS_NONE;
+  bool int96_timestamps              = false;
 
   std::vector<uint8_t> buffer_;
   std::unique_ptr<data_sink> out_sink_;

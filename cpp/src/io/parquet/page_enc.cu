@@ -17,6 +17,7 @@
 #include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
 
+#include <chrono>
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <thrust/gather.h>
@@ -948,16 +949,17 @@ static __device__ void PlainBoolEncode(page_enc_state_s *s,
  * @return std::pair<uint64_t,uint32_t> where the uint64 is the number of ticks on the last day
  * since midnight and the uint32 indicates the number of days from Julian epoch.
  */
-static __device__ std::pair<int64_t, int32_t> convert_64bit_timestamp_to_int96(
-  int64_t timestamp, uint8_t converted_type)
+static __device__ std::pair<simt::std::chrono::nanoseconds, simt::std::chrono::days>
+convert_nanoseconds(simt::std::chrono::sys_time<simt::std::chrono::nanoseconds> const ns)
 {
   constexpr int64_t JulianEpochOffsetDays = INT64_C(2440588);
-  constexpr int64_t MicroSecondsPerDay    = INT64_C(86400000000);
-  constexpr int64_t MilliSecondsPerDay    = INT64_C(86400000);
 
-  auto divisor = converted_type == TIMESTAMP_MILLIS ? MilliSecondsPerDay : MicroSecondsPerDay;
-  uint32_t julian_days   = static_cast<uint32_t>((timestamp / divisor) + JulianEpochOffsetDays);
-  int64_t last_day_ticks = timestamp % divisor;
+  using namespace simt::std::chrono;
+  auto const nanosecond_ticks = ns.time_since_epoch();
+  auto const gregorian_days   = floor<days>(nanosecond_ticks);
+  auto const julian_days      = gregorian_days + days{JulianEpochOffsetDays};
+
+  auto const last_day_ticks = nanosecond_ticks - duration_cast<nanoseconds>(gregorian_days);
   return {last_day_ticks, julian_days};
 }
 
@@ -1216,10 +1218,23 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
                 v *= ts_scale;
               }
             }
-            std::pair<int64_t, uint32_t> ret =
-              convert_64bit_timestamp_to_int96(v, s->col.converted_type);
+
+            auto const ret = convert_nanoseconds([&]() {
+              using namespace simt::std::chrono;
+
+              switch (s->col.converted_type) {
+                case TIMESTAMP_MILLIS: {
+                  return sys_time<nanoseconds>{milliseconds{v}};
+                } break;
+                case TIMESTAMP_MICROS: {
+                  return sys_time<nanoseconds>{microseconds{v}};
+                } break;
+              }
+              return sys_time<nanoseconds>{microseconds{0}};
+            }());
+
             // the 12 bytes of fixed length data.
-            v             = ret.first;
+            v             = ret.first.count();
             dst[pos + 0]  = v;
             dst[pos + 1]  = v >> 8;
             dst[pos + 2]  = v >> 16;
@@ -1228,7 +1243,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
             dst[pos + 5]  = v >> 40;
             dst[pos + 6]  = v >> 48;
             dst[pos + 7]  = v >> 56;
-            uint32_t w    = ret.second;
+            uint32_t w    = ret.second.count();
             dst[pos + 8]  = w;
             dst[pos + 9]  = w >> 8;
             dst[pos + 10] = w >> 16;

@@ -303,7 +303,8 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
   CUDF_FUNC_RANGE();
   parquet_writer_options options = parquet_writer_options::builder()
                                      .compression(op.get_compression())
-                                     .stats_level(op.get_stats_level());
+                                     .stats_level(op.get_stats_level())
+                                     .int96_timestamps(op.is_enabled_int96_timestamps());
 
   auto state = std::make_shared<pq_chunked_state>();
   state->wp  = make_writer<detail_parquet::writer>(op.get_sink(), options, mr);
@@ -314,7 +315,8 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
     state->user_metadata_with_nullability = *op.get_nullable_metadata();
     state->user_metadata                  = &state->user_metadata_with_nullability;
   }
-  state->stream = 0;
+  state->int96_timestamps = op.is_enabled_int96_timestamps();
+  state->stream           = 0;
   state->wp->write_chunked_begin(*state);
   return state;
 }
@@ -323,12 +325,10 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
  * @copydoc cudf::io::write_parquet_chunked
  *
  **/
-void write_parquet_chunked(table_view const& table,
-                           std::shared_ptr<pq_chunked_state> state,
-                           bool int96_timestamps)
+void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_state> state)
 {
   CUDF_FUNC_RANGE();
-  state->wp->write_chunk(table, *state, int96_timestamps);
+  state->wp->write_chunk(table, *state);
 }
 
 /**

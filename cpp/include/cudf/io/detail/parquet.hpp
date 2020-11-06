@@ -105,6 +105,7 @@ class writer {
    * @param metadata Table metadata and column names
    * @param return_filemetadata If true, return the raw file metadata
    * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
+   * @param int96_timestamps If true, write timestamps as INT96 values
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   std::unique_ptr<std::vector<uint8_t>> write(table_view const& table,
@@ -127,7 +128,7 @@ class writer {
    * @param[in] table The table information to be written
    * @param[in] pq_chunked_state Internal state maintained between chunks.
    */
-  void write_chunk(table_view const& table, struct pq_chunked_state& state, bool int96_timestamps);
+  void write_chunk(table_view const& table, struct pq_chunked_state& state);
 
   /**
    * @brief Finishes the chunked/streamed write process.
