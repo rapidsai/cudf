@@ -54,12 +54,15 @@
 - PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
 - PR #6622 Update `to_pandas` api docs
 - PR #6623 Add operator overloading to column and clean up error messages
+- PR #6644 Cover different CSV reader/writer options in benchmarks
 - PR #6651 Add cudf::dictionary::make_dictionary_pair_iterator
 - PR #6635 Add cudf::test::dictionary_column_wrapper class
+- PR #6673 Parameterize avro and json benchmark
 - PR #6609 Support fixed-point decimal for HostColumnVector
 
 ## Bug Fixes
 
+- PR #6446 Fix integer parsing in CSV and JSON for values outside of int64 range
 - PR #6506 Fix DateTime type value truncation while writing to csv
 - PR #6509 Disable JITIFY log printing
 - PR #6517 Handle index equality in `Series` and `DataFrame` equality checks
