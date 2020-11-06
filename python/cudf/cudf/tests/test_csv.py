@@ -522,7 +522,7 @@ def test_csv_reader_NaN_values():
     default_na_cells = (
         "#N/A\n#N/A N/A\n#NA\n-1.#IND\n"
         "-1.#QNAN\n-NaN\n-nan\n1.#IND\n"
-        "1.#QNAN\nN/A\nNA\nNULL\n"
+        "1.#QNAN\nN/A\n<NA>\nNA\nNULL\n"
         "NaN\nn/a\nnan\nnull\n"
     )
     custom_na_cells = "NV_NAN\nNotANumber\n"
@@ -541,6 +541,15 @@ def test_csv_reader_NaN_values():
         names=names,
         dtype=dtypes,
         na_values=custom_na_values,
+    )
+    assert all(np.isnan(all_nan.to_pandas()["float32"]))
+
+    # custom NA values
+    all_nan = read_csv(
+        StringIO(empty_cells + default_na_cells + "_NAA_\n"),
+        names=names,
+        dtype=dtypes,
+        na_values="_NAA_",
     )
     assert all(np.isnan(all_nan.to_pandas()["float32"]))
 
