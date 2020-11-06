@@ -1614,15 +1614,7 @@ class RangeIndex(Index):
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            # sl_start = 0 if index.start is None else index.start
-            # sl_stop = len(self) if index.stop is None else index.stop
-            # sl_step = 1 if index.step is None else index.step
-
-            # if len(self) == 0:
             sl_start, sl_stop, sl_step = index.indices(len(self))
-
-            # ilo = utils.normalize_index(sl_start, len(self))
-            # ihi = utils.normalize_index(sl_stop, len(self))
 
             lo = self._start + sl_start * self._step
             hi = self._start + sl_stop * self._step
