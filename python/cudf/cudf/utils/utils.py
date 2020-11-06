@@ -396,4 +396,7 @@ def pa_mask_buffer_to_mask(mask_buf, size):
     return Buffer(mask_buf)
 
 def isnat(val):
-    return val in {'NaT', 'NAT'} or np.isnat(val)
+    if not isinstance(val, (np.datetime64, np.timedelta64)):
+        return False
+    else:
+        return val in {'NaT', 'NAT'} or np.isnat(val)

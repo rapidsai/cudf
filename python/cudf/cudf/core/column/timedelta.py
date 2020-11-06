@@ -9,7 +9,7 @@ from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.scalar import as_scalar
+from cudf._lib.scalar import as_scalar, DeviceScalar
 from cudf.core.column import column, string
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
@@ -104,7 +104,7 @@ class TimeDeltaColumn(column.ColumnBase):
             common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
             lhs = lhs.astype(common_dtype).astype("float64")
 
-            if isinstance(rhs, cudf.Scalar):
+            if isinstance(rhs, (cudf.Scalar, DeviceScalar)):
                 if rhs.is_valid():
                     rhs = np.timedelta64(rhs.value)
                     rhs = rhs.astype(common_dtype).astype("float64")
@@ -171,9 +171,9 @@ class TimeDeltaColumn(column.ColumnBase):
             common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
             lhs = lhs.astype(common_dtype).astype("float64")
 
-            if isinstance(rhs, Scalar):
+            if isinstance(rhs, (cudf.Scalar, DeviceScalar)):
                 if rhs.is_valid():
-                    if isinstance(rhs, Scalar):
+                    if isinstance(rhs, (cudf.Scalar, DeviceScalar)):
                         rhs = np.timedelta64(rhs.value)
 
                     rhs = rhs.astype(common_dtype).astype("float64")
@@ -287,6 +287,9 @@ class TimeDeltaColumn(column.ColumnBase):
         )
 
     def fillna(self, fill_value):
+
+        if cudf.utils.utils.isnat(fill_value):
+            return self._fillna_natwise()
         col = self
         if is_scalar(fill_value):
             if isinstance(fill_value, np.timedelta64):
@@ -294,7 +297,7 @@ class TimeDeltaColumn(column.ColumnBase):
                 fill_value = fill_value.astype(dtype)
                 col = col.astype(dtype)
             if not isinstance(fill_value, cudf.Scalar):
-                fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
+                fill_value = cudf.Scalar(fill_value, dtype=dtype)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
 

@@ -169,6 +169,12 @@ def binaryop(lhs, rhs, op, dtype):
     """
     Dispatches a binary op call to the appropriate libcudf function:
     """
+    from cudf import Scalar
+
+    if isinstance(lhs, Scalar):
+        lhs = lhs._data
+    if isinstance(rhs, Scalar):
+        rhs = rhs._data
     op = BinaryOperation[op.upper()]
     cdef binary_operator c_op = <binary_operator> (
         <underlying_type_t_binary_operator> op
