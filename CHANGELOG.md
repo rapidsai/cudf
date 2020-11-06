@@ -57,6 +57,7 @@
 - PR #6644 Cover different CSV reader/writer options in benchmarks
 - PR #6651 Add cudf::dictionary::make_dictionary_pair_iterator
 - PR #6635 Add cudf::test::dictionary_column_wrapper class
+- PR #6673 Parameterize avro and json benchmark
 - PR #6609 Support fixed-point decimal for HostColumnVector
 
 ## Bug Fixes
