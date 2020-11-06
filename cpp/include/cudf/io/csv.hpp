@@ -126,6 +126,7 @@ class csv_reader_options {
                                       "-nan",
                                       "1.#IND",
                                       "1.#QNAN",
+                                      "<NA>",
                                       "N/A",
                                       "NA",
                                       "NULL",
