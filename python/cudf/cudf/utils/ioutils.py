@@ -252,6 +252,31 @@ cudf.io.orc.read_orc
 """
 doc_read_orc_metadata = docfmt_partial(docstring=_docstring_read_orc_metadata)
 
+
+_docstring_read_orc_statistics = """
+Read an ORC file's file-level and stripe-level statistics
+
+Parameters
+----------
+filepath_or_buffer : str, path object, bytes, or file-like object
+    Either a path to a file (a `str`, `pathlib.Path`, or
+    `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
+    Python bytes of raw binary data, or any object with a `read()` method
+    (such as builtin `open()` file handler function or `BytesIO`).
+
+Returns
+-------
+Statistics for each column of given file
+Statistics for each column for each stripe of given file
+
+See Also
+--------
+cudf.io.orc.read_orc
+"""
+doc_read_orc_statistics = docfmt_partial(
+    docstring=_docstring_read_orc_statistics
+)
+
 _docstring_read_orc = """
 Load an ORC dataset into a DataFrame
 
