@@ -114,8 +114,8 @@ std::unique_ptr<column> remove_keys_fn(
                                             indices_view,
                                             cudf::detail::out_of_bounds_policy::NULLIFY,
                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                            mr,
-                                            stream)
+                                            stream,
+                                            mr)
                          ->release();
   std::unique_ptr<column> indices_column(std::move(table_indices.front()));
 

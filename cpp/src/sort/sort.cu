@@ -49,8 +49,8 @@ std::unique_ptr<table> sort_by_key(table_view const& values,
                         sorted_order->view(),
                         detail::out_of_bounds_policy::NULLIFY,
                         detail::negative_index_policy::NOT_ALLOWED,
-                        mr,
-                        stream);
+                        stream,
+                        mr);
 }
 
 }  // namespace detail

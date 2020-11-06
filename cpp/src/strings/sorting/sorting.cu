@@ -67,8 +67,8 @@ std::unique_ptr<cudf::column> sort(strings_column_view strings,
                                            indices_view,
                                            cudf::detail::out_of_bounds_policy::NULLIFY,
                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                           mr,
-                                           stream)
+                                           stream,
+                                           mr)
                         ->release();
   return std::move(table_sorted.front());
 }

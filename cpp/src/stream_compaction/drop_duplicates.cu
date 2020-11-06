@@ -213,8 +213,8 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
                         unique_indices_view,
                         detail::out_of_bounds_policy::NULLIFY,
                         detail::negative_index_policy::NOT_ALLOWED,
-                        mr,
-                        stream);
+                        stream,
+                        mr);
 }
 
 /**

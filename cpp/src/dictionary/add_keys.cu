@@ -92,8 +92,8 @@ std::unique_ptr<column> add_keys(
                                             indices_view,
                                             cudf::detail::out_of_bounds_policy::IGNORE,
                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                            mr,
-                                            stream)
+                                            stream,
+                                            mr)
                          ->release();
   // The output of lower_bound is INT32 but we need to convert to unsigned indices.
   auto const indices_type = get_indices_type_for_size(keys_column->size());

@@ -104,7 +104,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
                        });
   }
   auto output_table = cudf::detail::gather(
-    table_view{{values}}, nth_index.begin(), nth_index.end(), true, mr, stream);
+    table_view{{values}}, nth_index.begin(), nth_index.end(), true, stream, mr);
   if (!output_table->get_column(0).has_nulls()) output_table->get_column(0).set_null_mask({}, 0);
   return std::make_unique<column>(std::move(output_table->get_column(0)));
 }

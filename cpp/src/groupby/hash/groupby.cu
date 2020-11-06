@@ -150,7 +150,7 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
       [&sparse_results, &gather_map, map_size, i, mr, stream](auto const& agg) {
         auto s                  = sparse_results.get_result(i, agg);
         auto dense_result_table = cudf::detail::gather(
-          table_view({s}), gather_map.begin(), gather_map.begin() + map_size, false, mr, stream);
+          table_view({s}), gather_map.begin(), gather_map.begin() + map_size, false, stream, mr);
         return std::move(dense_result_table->release()[0]);
       };
 
@@ -173,8 +173,8 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
                              arg_result->nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
                                                     : cudf::detail::out_of_bounds_policy::NULLIFY,
                              cudf::detail::negative_index_policy::NOT_ALLOWED,
-                             mr,
-                             stream);
+                             stream,
+                             mr);
       return std::move(transformed_result->release()[0]);
     };
 
@@ -396,7 +396,7 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
   sparse_to_dense_results(requests, sparse_results, cache, gather_map, map_size, stream, mr);
 
   return cudf::detail::gather(
-    keys, gather_map.begin(), gather_map.begin() + map_size, false, mr, stream);
+    keys, gather_map.begin(), gather_map.begin() + map_size, false, stream, mr);
 }
 
 }  // namespace

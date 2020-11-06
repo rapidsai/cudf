@@ -269,7 +269,7 @@ struct scatter_gather_functor {
                     filter);
 
     auto output_table = cudf::detail::gather(
-      cudf::table_view{{input}}, indices.begin(), indices.end(), false, mr, stream.value());
+      cudf::table_view{{input}}, indices.begin(), indices.end(), false, stream, mr);
 
     // There will be only one column
     return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));

@@ -283,7 +283,7 @@ std::unique_ptr<table> scatter(
   auto gather_map = scatter_to_gather(
     updated_scatter_map_begin, updated_scatter_map_end, target.num_rows(), stream);
 
-  gather_bitmask(source, gather_map.begin(), result, gather_bitmask_op::PASSTHROUGH, mr, stream);
+  gather_bitmask(source, gather_map.begin(), result, gather_bitmask_op::PASSTHROUGH, stream, mr);
 
   return std::make_unique<table>(std::move(result));
 }

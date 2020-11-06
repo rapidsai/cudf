@@ -596,7 +596,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
       // Handle bitmask using gather to take advantage of ballot_sync
       detail::gather_bitmask(
-        input, gather_map.begin(), output_cols, detail::gather_bitmask_op::DONT_CHECK, mr, stream);
+        input, gather_map.begin(), output_cols, detail::gather_bitmask_op::DONT_CHECK, stream, mr);
     }
 
     auto output{std::make_unique<table>(std::move(output_cols))};

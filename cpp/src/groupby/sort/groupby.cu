@@ -204,8 +204,8 @@ void store_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
                              argmin_result.nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
                                                       : cudf::detail::out_of_bounds_policy::NULLIFY,
                              cudf::detail::negative_index_policy::NOT_ALLOWED,
-                             mr,
-                             stream);
+                             stream,
+                             mr);
       return std::move(transformed_result->release()[0]);
     }
   }();
@@ -241,8 +241,8 @@ void store_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
                              argmax_result.nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
                                                       : cudf::detail::out_of_bounds_policy::NULLIFY,
                              cudf::detail::negative_index_policy::NOT_ALLOWED,
-                             mr,
-                             stream);
+                             stream,
+                             mr);
       return std::move(transformed_result->release()[0]);
     }
   }();

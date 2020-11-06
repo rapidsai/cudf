@@ -78,8 +78,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
                                       gather_map_column,
                                       cudf::detail::out_of_bounds_policy::FAIL,
                                       cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                      mr,
-                                      stream);
+                                      stream,
+                                      mr);
   }
 
   auto indices_column =

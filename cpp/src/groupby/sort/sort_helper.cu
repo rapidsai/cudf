@@ -279,8 +279,8 @@ sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
                                                   gather_map,
                                                   cudf::detail::out_of_bounds_policy::NULLIFY,
                                                   cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                                  mr,
-                                                  stream.value());
+                                                  stream,
+                                                  mr);
 
   return std::move(sorted_values_table->release()[0]);
 }
@@ -294,8 +294,8 @@ sort_groupby_helper::column_ptr sort_groupby_helper::grouped_values(
                                                    gather_map,
                                                    cudf::detail::out_of_bounds_policy::NULLIFY,
                                                    cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                                   mr,
-                                                   stream.value());
+                                                   stream,
+                                                   mr);
 
   return std::move(grouped_values_table->release()[0]);
 }
@@ -309,7 +309,7 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view st
     group_offsets().begin(), [idx_data] __device__(size_type i) { return idx_data[i]; });
 
   return cudf::detail::gather(
-    _keys, gather_map_it, gather_map_it + num_groups(), false, mr, stream.value());
+    _keys, gather_map_it, gather_map_it + num_groups(), false, stream, mr);
 }
 
 std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::cuda_stream_view stream,
@@ -319,8 +319,8 @@ std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::cuda_stream_view st
                               key_sort_order(),
                               cudf::detail::out_of_bounds_policy::NULLIFY,
                               cudf::detail::negative_index_policy::NOT_ALLOWED,
-                              mr,
-                              stream.value());
+                              stream,
+                              mr);
 }
 
 }  // namespace sort
