@@ -47,7 +47,6 @@ struct dispatch_scalar_index {
     CUDF_FAIL("indices must be an integral type");
   }
 };
-}  // namespace
 
 /**
  * @brief Find index of a given key within a dictionary's keys column.
@@ -67,7 +66,6 @@ struct find_index_fn {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
-    if (input.is_empty()) return std::make_unique<numeric_scalar<uint32_t>>(0, false, stream, mr);
     if (!key.is_valid())
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
     CUDF_EXPECTS(input.keys().type() == key.type(),
@@ -120,14 +118,6 @@ struct find_index_fn {
   }
 };
 
-std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
-                                  scalar const& key,
-                                  rmm::mr::device_memory_resource* mr,
-                                  cudaStream_t stream)
-{
-  return type_dispatcher(dictionary.keys().type(), find_index_fn(), dictionary, key, mr, stream);
-}
-
 struct find_insert_index_fn {
   template <typename Element,
             std::enable_if_t<not std::is_same<Element, dictionary32>::value and
@@ -138,7 +128,6 @@ struct find_insert_index_fn {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
-    if (input.is_empty()) return std::make_unique<numeric_scalar<uint32_t>>(0, false, stream, mr);
     if (!key.is_valid())
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
     CUDF_EXPECTS(input.keys().type() == key.type(),
@@ -173,11 +162,25 @@ struct find_insert_index_fn {
   }
 };
 
+}  // namespace
+
+std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
+                                  scalar const& key,
+                                  rmm::mr::device_memory_resource* mr,
+                                  cudaStream_t stream)
+{
+  if (dictionary.is_empty())
+    return std::make_unique<numeric_scalar<uint32_t>>(0, false, stream, mr);
+  return type_dispatcher(dictionary.keys().type(), find_index_fn(), dictionary, key, mr, stream);
+}
+
 std::unique_ptr<scalar> get_insert_index(dictionary_column_view const& dictionary,
                                          scalar const& key,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream)
 {
+  if (dictionary.is_empty())
+    return std::make_unique<numeric_scalar<uint32_t>>(0, false, stream, mr);
   return type_dispatcher(
     dictionary.keys().type(), find_insert_index_fn(), dictionary, key, mr, stream);
 }

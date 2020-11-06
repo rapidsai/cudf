@@ -225,23 +225,20 @@ class posix_parser {
   typename Container::const_iterator const end;
 };
 
+/**
+ * @brief Skips the next name token.
+ *
+ * Name can be a string of letters, such as EST, or an arbitrary string surrounded by angle
+ * brackets, such as <UTC-05>
+ */
 template <class Container>
 void posix_parser<Container>::skip_name()
 {
-  CUDF_EXPECTS(cur < end, "Unexpected end of input stream");
+  cur = std::find_if(cur, end, [](auto c) {
+    return std::isdigit(c) || c == '-' || c == ',' || c == '+' || c == '<';
+  });
 
-  auto c = *cur;
-  if (c == '<') {
-    ++cur;
-    while (cur < end) {
-      if (*cur++ == '>') { break; }
-    }
-  } else {
-    while ((c < '0' || c > '9') && (c != '-') && (c != '+') && (c != ',')) {
-      if (++cur >= end) { break; }
-      c = *cur;
-    }
-  }
+  if (*cur == '<') cur = std::next(std::find(cur, end, '>'));
 }
 
 template <class Container>
@@ -286,6 +283,8 @@ dst_transition_s posix_parser<Container>::parse_transition()
 {
   CUDF_EXPECTS(cur < end, "Unexpected end of input stream");
 
+  // Transition at 2AM by default
+  int32_t time = 2 * 60 * 60;
   if (cur + 2 <= end && *cur == ',') {
     char const type = cur[1];
     int month       = 0;
@@ -305,15 +304,13 @@ dst_transition_s posix_parser<Container>::parse_transition()
     } else {
       day = parse_number();
     }
-    // Transition at 2AM by default
-    int32_t time = 2 * 60 * 60;
     if (cur < end && *cur == '/') {
       ++cur;
       time = parse_offset();
     }
     return {type, month, week, day, time};
   }
-  return {};
+  return {0, 0, 0, 0, time};
 }
 
 /**
@@ -431,15 +428,15 @@ timezone_table build_timezone_transition_table(std::string const &timezone_name)
 
   // Add entries to fill the transition cycle
   int64_t year_timestamp = 0;
-  for (uint32_t year = 1970; year < 1970 + cycle_entry_cnt; ++year) {
+  for (uint32_t year = 1970; year < 1970 + cycle_years; ++year) {
     auto const dst_start_time = get_transition_time(dst_start, year);
     auto const dst_end_time   = get_transition_time(dst_end, year);
 
     // Two entries per year, since there are two transitions
-    ttimes.push_back(year_timestamp + dst_end_time - future_dst_offset);
-    offsets.push_back(future_std_offset);
     ttimes.push_back(year_timestamp + dst_start_time - future_std_offset);
     offsets.push_back(future_dst_offset);
+    ttimes.push_back(year_timestamp + dst_end_time - future_dst_offset);
+    offsets.push_back(future_std_offset);
 
     // Swap the newly added transitions if in descending order
     if (ttimes.rbegin()[1] > ttimes.rbegin()[0]) {

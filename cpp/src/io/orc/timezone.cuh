@@ -37,10 +37,12 @@ struct timezone_table_view {
 };
 
 static constexpr int64_t day_seconds = 24 * 60 * 60;
+// Cycle in which the time offsets repeat
+static constexpr uint32_t cycle_years = 400;
 // Number of seconds in 400 years
 static constexpr int64_t cycle_seconds = (365 * 400 + (100 - 3)) * day_seconds;
 // Two entries per year, over the length of the cycle
-static constexpr uint32_t cycle_entry_cnt = 2 * 400;
+static constexpr uint32_t cycle_entry_cnt = 2 * cycle_years;
 
 /**
  * @brief Returns the GMT offset for a given date and given timezone table.
