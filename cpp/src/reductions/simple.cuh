@@ -41,7 +41,7 @@ namespace simple {
  * ----------------------------------------------------------------------------**/
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> simple_reduction(column_view const& col,
-                                         data_type const output_dtype,
+                                         data_type const output_dtype,  // TODO: this is not used
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream)
 {
@@ -50,35 +50,67 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
   std::unique_ptr<scalar> result;
   Op simple_op{};
 
-  if (!cudf::is_dictionary(col.type())) {
-    if (col.has_nulls()) {
-      auto it = thrust::make_transform_iterator(
-        dcol->pair_begin<ElementType, true>(),
-        simple_op.template get_null_replacing_element_transformer<ResultType>());
-      result = detail::reduce(it, col.size(), Op{}, mr, stream);
-    } else {
-      auto it = thrust::make_transform_iterator(
-        dcol->begin<ElementType>(), simple_op.template get_element_transformer<ResultType>());
-      result = detail::reduce(it, col.size(), Op{}, mr, stream);
-    }
+  // if (!cudf::is_dictionary(col.type())) {
+  if (col.has_nulls()) {
+    auto it = thrust::make_transform_iterator(
+      dcol->pair_begin<ElementType, true>(),
+      simple_op.template get_null_replacing_element_transformer<ResultType>());
+    result = detail::reduce(it, col.size(), simple_op, mr, stream);
   } else {
-    if (col.has_nulls()) {
-      auto it = thrust::make_transform_iterator(
-        cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType, true>(*dcol),
-        simple_op.template get_null_replacing_element_transformer<ResultType>());
-      result = detail::reduce(it, col.size(), Op{}, mr, stream);
-    } else {
-      auto it = thrust::make_transform_iterator(
-        cudf::dictionary::detail::make_dictionary_iterator<ElementType>(*dcol),
-        simple_op.template get_element_transformer<ResultType>());
-      result = detail::reduce(it, col.size(), Op{}, mr, stream);
-    }
+    auto it = thrust::make_transform_iterator(
+      dcol->begin<ElementType>(), simple_op.template get_element_transformer<ResultType>());
+    result = detail::reduce(it, col.size(), simple_op, mr, stream);
   }
+  // THIS APPROACH WILL DOUBLE THE COMPILE TIME
+  //} else {
+  //  if (col.has_nulls()) {
+  //    auto it = thrust::make_transform_iterator(
+  //      cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType, true>(*dcol),
+  //      simple_op.template get_null_replacing_element_transformer<ResultType>());
+  //    result = detail::reduce(it, col.size(), simple_op, mr, stream);
+  //  } else {
+  //    auto it = thrust::make_transform_iterator(
+  //      cudf::dictionary::detail::make_dictionary_iterator<ElementType>(*dcol),
+  //      simple_op.template get_element_transformer<ResultType>());
+  //    result = detail::reduce(it, col.size(), simple_op, mr, stream);
+  //  }
+  //}
+
   // set scalar is valid
   result->set_valid((col.null_count() < col.size()), stream);
   return result;
 };
 
+// TODO: Can this be combined/refactored with the above?
+template <typename ElementType, typename ResultType, typename Op>
+std::unique_ptr<scalar> dictionary_reduction(column_view const& col,
+                                             // data_type const output_dtype,
+                                             rmm::mr::device_memory_resource* mr,
+                                             cudaStream_t stream)
+{
+  // reduction by iterator
+  auto dcol = cudf::column_device_view::create(col, stream);
+  std::unique_ptr<scalar> result;
+  Op simple_op{};
+
+  if (col.has_nulls()) {
+    auto it = thrust::make_transform_iterator(
+      cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType, true>(*dcol),
+      simple_op.template get_null_replacing_element_transformer<ResultType>());
+    result = detail::reduce(it, col.size(), Op{}, mr, stream);
+  } else {
+    auto it = thrust::make_transform_iterator(
+      cudf::dictionary::detail::make_dictionary_iterator<ElementType>(*dcol),
+      simple_op.template get_element_transformer<ResultType>());
+    result = detail::reduce(it, col.size(), Op{}, mr, stream);
+  }
+
+  // set scalar is valid
+  result->set_valid((col.null_count() < col.size()), stream);
+  return result;
+};
+
+// TODO: Commandeer this
 // @brief result type dispatcher for simple reduction (a.k.a. sum, prod, min...)
 template <typename ElementType, typename Op>
 struct result_type_dispatcher {
@@ -121,6 +153,7 @@ struct result_type_dispatcher {
   }
 };
 
+// TODO: Should be able to remove this
 // @brief input column element for simple reduction (a.k.a. sum, prod, min...)
 template <typename Op>
 struct element_type_dispatcher {
