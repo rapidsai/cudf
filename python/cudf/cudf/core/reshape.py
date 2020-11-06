@@ -4,6 +4,7 @@ import itertools
 import numpy as np
 import pandas as pd
 import cudf
+from collections import OrderedDict
 
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -43,8 +44,62 @@ def _align_objs(objs, how="outer"):
                 .index
             )
             index.name = name
-
+            # breakpoint()
         return [obj.reindex(index) for obj in objs], False
+
+
+def _concat_objs(objs, how="outer"):
+    """Align a set of Series or Dataframe objects.
+
+    Parameters
+    ----------
+    objs : list of DataFrame, Series, or Index
+    how : How to handle indexes on other axis (or axes),
+    similar to join in concat
+    Returns
+    -------
+    A bool for if indexes have matched and a set of
+    reindexed and aligned objects ready for concatenation
+    """
+    # Check if multiindex then check if indexes match. GenericIndex
+    # returns ndarray tuple of bools requiring additional filter.
+    # Then check for duplicate index value.
+    i_objs = iter(objs)
+    first = next(i_objs)
+    match_index = all(first.index.equals(rest.index) for rest in i_objs)
+
+    if match_index:
+        return objs, True
+    else:
+        if not all(o.index.is_unique for o in objs):
+            raise ValueError("cannot reindex from a duplicate axis")
+
+        index = objs[0].index
+        if how == 'outer':
+            for obj in objs[1:]:
+                lhs = cudf.DataFrame({"x": index, "orig_order": arange(len(index))})
+                rhs = cudf.DataFrame(
+                {
+                    "x": obj.index,
+                    "s": obj,
+                    "bool": full(len(obj), True, dtype=self.dtype),
+                }
+                )
+                name = index.name
+                index = (
+                    cudf.DataFrame(index=obj.index)
+                    .join(cudf.DataFrame(index=index), how=how)
+                    .index
+                )
+                    
+            
+        if how == 'inner':
+            for other in indexes[1:]:
+                name = index.name
+                new_index = index.intersection(other)
+                new_index.name = name
+        breakpoint()
+        return [obj.reindex(new_index) for obj in objs], False
 
 
 def _normalize_series_and_dataframe(objs, axis):
@@ -244,11 +299,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             if any(obj.empty for obj in old_objs):
                 empty_inner = True
 
-        objs, match_index = _align_objs(objs, how=join)
+        objs, match_index = _concat_objs(objs, how=join)
+
         for idx, o in enumerate(objs):
             # if join is inner the index remains unchanged
             # and (not ignore_index or join=='inner')
-            if idx == 0 and not ignore_index:
+            if idx == 0:
                 df.index = o.index
             for col in o._data.names:
                 if col in df._data:
@@ -262,7 +318,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         result_columns = objs[0].columns
         for o in objs[1:]:
             result_columns = result_columns.append(o.columns)
-
         if ignore_index:
             # with ignore_index the column names change to numbers
             df.columns = pd.RangeIndex(len(result_columns.unique()))
@@ -270,17 +325,16 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             # if join is inner and it containes an empty df
             # we return an empty df
             return df.head(0)
-        if ignore_index:
-            df.index = o.index
-        else:
+        # if ignore_index:
+        #     df.index = o.index
+        if not ignore_index:
             df.columns = result_columns.unique()
-        if not match_index:
+        if not match_index and sort !=False:
+            return df.sort_index()
+        if sort or join=='inner':
             return df.sort_index()
         else:
-            if sort:
-                return df.sort_index()
-            else:
-                return df
+            return df
 
     typ = list(typs)[0]
 
