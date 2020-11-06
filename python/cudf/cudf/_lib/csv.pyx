@@ -429,7 +429,7 @@ cpdef write_csv(
     if header is True and table._column_names is not None:
         metadata_.column_names.reserve(len(table._column_names))
         for idx, col_name in enumerate(table._column_names):
-            if idx == 0 and is_index_name_none:
+            if idx == 0 and is_index_name_none is True:
                 metadata_.column_names.push_back(''.encode())
             else:
                 metadata_.column_names.push_back(str(col_name).encode())
