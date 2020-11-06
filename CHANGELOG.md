@@ -56,7 +56,6 @@
 - PR #6623 Add operator overloading to column and clean up error messages
 - PR #6651 Add cudf::dictionary::make_dictionary_pair_iterator
 - PR #6635 Add cudf::test::dictionary_column_wrapper class
-- PR #6651 Add cudf::dictionary::make_dictionary_pair_iterator
 - PR #6676 Add dictionary support to `cudf::quantile`
 - PR #6609 Support fixed-point decimal for HostColumnVector
 
