@@ -100,7 +100,7 @@ TEST(ReleaseAssertDeathTest, release_assert_false)
     // the current process. Running with EXPECT_DEATH spawns a new process for
     // each attempted kernel launch
     if (cudaErrorAssert == cudaDeviceSynchronize()) { 
-    std::abort();
+        std::abort();
     }
   };
 
