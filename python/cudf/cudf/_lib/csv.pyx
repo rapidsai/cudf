@@ -318,7 +318,7 @@ def read_csv(
     int skipfooter=0,
     int skiprows=0,
     bool dayfirst=False,
-    str compression="infer",
+    object compression="infer",
     object thousands=None,
     str decimal=".",
     object true_values=None,
