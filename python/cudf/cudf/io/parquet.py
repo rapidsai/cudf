@@ -5,8 +5,7 @@ from collections import defaultdict
 from uuid import uuid4
 
 from fsspec.core import get_fs_token_paths
-from pyarrow import parquet as pq
-from pyarrow import dataset as ds
+from pyarrow import dataset as ds, parquet as pq
 
 import cudf
 from cudf._lib import parquet as libparquet
@@ -305,7 +304,7 @@ def to_parquet(
                     path=file_obj,
                     index=index,
                     compression=compression,
-                    statistics=statistics,
+                    statistics=str(statistics),
                     metadata_file_path=metadata_file_path,
                 )
         else:
@@ -314,7 +313,7 @@ def to_parquet(
                 path=path_or_buf,
                 index=index,
                 compression=compression,
-                statistics=statistics,
+                statistics=str(statistics),
                 metadata_file_path=metadata_file_path,
             )
 
