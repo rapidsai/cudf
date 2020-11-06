@@ -84,4 +84,33 @@ TEST(StreamCheck, CatchFailedKernel)
   CUDA_TRY(cudaStreamDestroy(stream));
 }
 
+__global__ void assert_false_kernel() { release_assert(false && "this kernel should die"); }
+
+__global__ void assert_true_kernel() { release_assert(true && "this kernel should live"); }
+
+TEST(ReleaseAssertDeathTest, release_assert_false)
+{
+  testing::FLAGS_gtest_death_test_style = "threadsafe";
+
+  auto call_kernel = []() {
+    assert_false_kernel<<<1, 1>>>();
+
+    // Kernel should fail with `cudaErrorAssert` on an unsupported gdf_dtype
+    // This error invalidates the current device context, so we need to kill
+    // the current process. Running with EXPECT_DEATH spawns a new process for
+    // each attempted kernel launch
+    ASSERT_EQ(cudaErrorAssert, cudaDeviceSynchronize());
+
+    std::abort();
+  };
+
+  EXPECT_DEATH(call_kernel(), "");
+}
+
+TEST(ReleaseAssert, release_assert_true)
+{
+  assert_true_kernel<<<1, 1>>>();
+  ASSERT_EQ(cudaSuccess, cudaDeviceSynchronize());
+}
+
 CUDF_TEST_PROGRAM_MAIN()
