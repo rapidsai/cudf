@@ -941,13 +941,12 @@ static __device__ void PlainBoolEncode(page_enc_state_s *s,
 }
 
 /**
- * @brief Converts a 64-bit timestamp into an int96 timstamp that is returned as an int64 and
- * uint32. Does not deal with time zones.
+ * @brief Converts a sys_time<nanoseconds> into a pair with nanoseconds since midnight and number of
+ * Julian days. Does not deal with time zones. Used by INT96 code.
  *
- * @param timestamp uint64 timestamp to convert
- * @param converted_type logical data type of the timestamp(TIMESTAMP_MILLIS or TIMESTAMP_MICROS)
- * @return std::pair<uint64_t,uint32_t> where the uint64 is the number of ticks on the last day
- * since midnight and the uint32 indicates the number of days from Julian epoch.
+ * @param ns number of nanoseconds since epoch
+ * @return std::pair<nanoseconds,days> where nanoseconds is the number of nanoseconds
+ * elapsed in the day and days is the number of days from Julian epoch.
  */
 static __device__ std::pair<simt::std::chrono::nanoseconds, simt::std::chrono::days>
 convert_nanoseconds(simt::std::chrono::sys_time<simt::std::chrono::nanoseconds> const ns)
