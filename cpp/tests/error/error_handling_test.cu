@@ -113,4 +113,11 @@ TEST(ReleaseAssert, release_assert_true)
   ASSERT_EQ(cudaSuccess, cudaDeviceSynchronize());
 }
 
-CUDF_TEST_PROGRAM_MAIN()
+// These tests don't use CUDF_TEST_PROGRAM_MAIN because :
+// 1.) They don't need the RMM Pool 
+// 2.) The RMM Pool interferes with the death test
+int main(int argc, char** argv)
+{
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}
