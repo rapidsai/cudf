@@ -21,11 +21,17 @@ import org.slf4j.LoggerFactory;
 public class Cuda {
   // Defined in driver_types.h in cuda library.
   static final int CPU_DEVICE_ID = -1;
+  static final long CUDA_STREAM_LEGACY = 1;
+  static final long CUDA_STREAM_PER_THREAD = 2;
   private static final Logger log = LoggerFactory.getLogger(Cuda.class);
   private static Boolean isCompat = null;
 
   static {
     NativeDepsLoader.loadNativeDeps();
+  }
+
+  private static long defaultStream() {
+    return isPtdsEnabled() ? CUDA_STREAM_PER_THREAD : CUDA_STREAM_LEGACY;
   }
 
   private static class StreamCleaner extends MemoryCleaner.Cleaner {
@@ -39,9 +45,9 @@ public class Cuda {
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       long origAddress = stream;
-      if (stream != 0) {
+      if (stream != defaultStream()) {
         destroyStream(stream);
-        stream = 0;
+        stream = defaultStream();
         neededCleanup = true;
       }
       if (neededCleanup && logErrorIfNotClean) {
@@ -53,7 +59,7 @@ public class Cuda {
 
     @Override
     public boolean isClean() {
-      return stream == 0;
+      return stream == defaultStream();
     }
   }
 
@@ -89,7 +95,7 @@ public class Cuda {
     }
 
     public long getStream() {
-      return cleaner == null ? 0 : cleaner.stream;
+      return cleaner == null ? defaultStream() : cleaner.stream;
     }
 
     /**
@@ -206,7 +212,7 @@ public class Cuda {
     }
 
     /**
-     * Captures the contents of stream 0 at the time of this call.
+     * Captures the contents of the default stream at the time of this call.
      */
     public void record() {
       record(DEFAULT_STREAM);
