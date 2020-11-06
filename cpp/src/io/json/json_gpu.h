@@ -72,13 +72,14 @@ void convert_json_to_columns(parse_options_view const &options,
  *
  * @returns The count for each column data type
  */
-std::vector<cudf::io::json::column_info> detect_data_types(parse_options_view const &options,
-                                                           device_span<char const> data,
-                                                           device_span<uint64_t const> row_offsets,
-                                                           bool do_set_null_count,
-                                                           int num_columns,
-                                                           col_map_type *col_map,
-                                                           cudaStream_t stream = 0);
+std::vector<cudf::io::column_type_histogram> detect_data_types(
+  parse_options_view const &options,
+  device_span<char const> data,
+  device_span<uint64_t const> row_offsets,
+  bool do_set_null_count,
+  int num_columns,
+  col_map_type *col_map,
+  cudaStream_t stream = 0);
 
 /**
  * @brief Collects information about JSON object keys in the file.
