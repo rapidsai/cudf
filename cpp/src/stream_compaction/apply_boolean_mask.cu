@@ -74,9 +74,9 @@ std::unique_ptr<table> apply_boolean_mask(table_view const& input,
   auto device_boolean_mask = cudf::column_device_view::create(boolean_mask, stream);
 
   if (boolean_mask.has_nulls()) {
-    return detail::copy_if(input, boolean_mask_filter<true>{*device_boolean_mask}, mr, stream);
+    return detail::copy_if(input, boolean_mask_filter<true>{*device_boolean_mask}, stream, mr);
   } else {
-    return detail::copy_if(input, boolean_mask_filter<false>{*device_boolean_mask}, mr, stream);
+    return detail::copy_if(input, boolean_mask_filter<false>{*device_boolean_mask}, stream, mr);
   }
 }
 

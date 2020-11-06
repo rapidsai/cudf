@@ -85,7 +85,7 @@ std::unique_ptr<column> remove_keys_fn(
     // copy the non-removed keys ( keys_to_keep_fn(idx)==true )
     auto table_keys =
       cudf::detail::copy_if(
-        table_view{{keys_view, keys_positions->view()}}, keys_to_keep_fn, mr, stream)
+        table_view{{keys_view, keys_positions->view()}}, keys_to_keep_fn, stream, mr)
         ->release();
     auto const filtered_view = table_keys[1]->view();
     auto filtered_itr = cudf::detail::indexalator_factory::make_input_iterator(filtered_view);
