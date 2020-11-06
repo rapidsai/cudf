@@ -54,8 +54,10 @@
 - PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
 - PR #6622 Update `to_pandas` api docs
 - PR #6623 Add operator overloading to column and clean up error messages
+- PR #6644 Cover different CSV reader/writer options in benchmarks
 - PR #6651 Add cudf::dictionary::make_dictionary_pair_iterator
 - PR #6635 Add cudf::test::dictionary_column_wrapper class
+- PR #6673 Parameterize avro and json benchmark
 - PR #6609 Support fixed-point decimal for HostColumnVector
 
 ## Bug Fixes
@@ -84,6 +86,7 @@
 - PR #6640 Add error message for unsupported `axis` parameter in DataFrame APIs
 - PR #6687 Fix issue where index name of caller object is being modified in csv writer
 - PR #6696 Fix release_assert.
+- PR #6693 Fix issue related to `na_values` input in `read_csv`
 
 
 # cuDF 0.16.0 (21 Oct 2020)
