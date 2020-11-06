@@ -13,10 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-// The translation unit for reduction `max`
 
 #include <cudf/detail/reduction_functions.hpp>
-#include "simple.cuh"
 
 std::unique_ptr<cudf::scalar> cudf::reduction::all(column_view const& col,
                                                    cudf::data_type const output_dtype,
