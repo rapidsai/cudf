@@ -403,13 +403,14 @@ cpdef write_csv(
     bool header=True,
     str line_terminator="\n",
     int rows_per_chunk=8,
+    bool is_index_name_none=False,
 ):
     """
     Cython function to call into libcudf API, see `write_csv`.
 
     See Also
     --------
-    cudf.io.csv.write_csv
+    cudf.io.csv.to_csv
     """
 
     # Index already been reset and added as main column, so just data_view
@@ -427,8 +428,11 @@ cpdef write_csv(
 
     if header is True and table._column_names is not None:
         metadata_.column_names.reserve(len(table._column_names))
-        for col_name in table._column_names:
-            metadata_.column_names.push_back(str(col_name).encode())
+        for idx, col_name in enumerate(table._column_names):
+            if idx == 0 and is_index_name_none:
+                metadata_.column_names.push_back(''.encode())
+            else:
+                metadata_.column_names.push_back(str(col_name).encode())
 
     cdef csv_writer_options options = move(
         csv_writer_options.builder(sink_info_c, input_table_view)

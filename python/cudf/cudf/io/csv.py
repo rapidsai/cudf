@@ -1,5 +1,6 @@
 # Copyright (c) 2018-20, NVIDIA CORPORATION.
 from io import BytesIO, StringIO
+
 from nvtx import annotate
 
 from cudf import _lib as libcudf
@@ -111,16 +112,17 @@ def to_csv(
     path_or_buf = ioutils.get_writer_filepath_or_buffer(
         path_or_data=path_or_buf, mode="w", **kwargs
     )
-
+    is_index_name_none = False
     if index:
         from cudf import MultiIndex
 
         if not isinstance(df.index, MultiIndex):
-            if df.index.name is None:
-                df.index.name = ""
+            is_index_name_none = df.index.name is None
             if columns is not None:
                 columns = columns.copy()
-                columns.insert(0, df.index.name)
+                columns.insert(
+                    0, "index" if is_index_name_none else df.index.name
+                )
         df = df.reset_index()
 
     if columns is not None:
@@ -144,6 +146,7 @@ def to_csv(
                 header=header,
                 line_terminator=line_terminator,
                 rows_per_chunk=rows_per_chunk,
+                is_index_name_none=is_index_name_none,
             )
     else:
         libcudf.csv.write_csv(
@@ -154,6 +157,7 @@ def to_csv(
             header=header,
             line_terminator=line_terminator,
             rows_per_chunk=rows_per_chunk,
+            is_index_name_none=is_index_name_none,
         )
 
     if return_as_string:
