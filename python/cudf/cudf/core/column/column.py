@@ -430,8 +430,6 @@ class ColumnBase(Column, Serializable):
         output size could be smaller.
         """
         if fillna:
-            if self.dtype.char in "mM" and isnat(fillna):
-                return self._fillna_natwise().data_array_view
             return self.fillna(self.default_na_value()).data_array_view
         else:
             return self.dropna().data_array_view

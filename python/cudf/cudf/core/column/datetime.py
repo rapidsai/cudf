@@ -138,10 +138,10 @@ class DatetimeColumn(column.ColumnBase):
             other = other.to_timedelta64()
         if isinstance(other, np.datetime64):
             if np.isnat(other):
-                return as_scalar(val=None, dtype=self.dtype)
+                return cudf.Scalar(None, dtype=self.dtype)
 
             other = other.astype(self.dtype)
-            return as_scalar(other)
+            return cudf.Scalar(other)
         elif isinstance(other, np.timedelta64):
             other_time_unit = cudf.utils.dtypes.get_time_unit(other)
 
@@ -149,9 +149,9 @@ class DatetimeColumn(column.ColumnBase):
                 other = other.astype("timedelta64[s]")
 
             if np.isnat(other):
-                return as_scalar(val=None, dtype=other.dtype)
+                return cudf.Scalar(None, dtype=other.dtype)
 
-            return as_scalar(other)
+            return cudf.Scalar(other)
         else:
             raise TypeError(f"cannot normalize {type(other)}")
 
@@ -272,7 +272,6 @@ class DatetimeColumn(column.ColumnBase):
             return self._fillna_natwise()
         if is_scalar(fill_value):
             if not isinstance(fill_value, cudf.Scalar):
-
                 fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)

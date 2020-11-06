@@ -166,6 +166,9 @@ class TimeDeltaColumn(column.ColumnBase):
             )
 
     def _binary_op_truediv(self, rhs):
+        if isinstance(rhs, DeviceScalar):
+            import pdb
+            pdb.set_trace()
         lhs, rhs = self, rhs
         if pd.api.types.is_timedelta64_dtype(rhs.dtype):
             common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
@@ -173,10 +176,7 @@ class TimeDeltaColumn(column.ColumnBase):
 
             if isinstance(rhs, (cudf.Scalar, DeviceScalar)):
                 if rhs.is_valid():
-                    if isinstance(rhs, (cudf.Scalar, DeviceScalar)):
-                        rhs = np.timedelta64(rhs.value)
-
-                    rhs = rhs.astype(common_dtype).astype("float64")
+                    rhs = rhs.value.astype(common_dtype).astype("float64")
                 else:
                     rhs = as_scalar(None, "float64")
             else:
@@ -236,16 +236,16 @@ class TimeDeltaColumn(column.ColumnBase):
         if isinstance(other, np.timedelta64):
             other_time_unit = cudf.utils.dtypes.get_time_unit(other)
             if np.isnat(other):
-                return as_scalar(val=None, dtype=self.dtype)
+                return cudf.Scalar(None, dtype=self.dtype)
 
             if other_time_unit not in ("s", "ms", "ns", "us"):
                 other = other.astype("timedelta64[s]")
             else:
                 common_dtype = determine_out_dtype(self.dtype, other.dtype)
                 other = other.astype(common_dtype)
-            return as_scalar(other)
+            return cudf.Scalar(other)
         elif np.isscalar(other):
-            return as_scalar(other)
+            return cudf.Scalar(other)
         else:
             raise TypeError(f"cannot normalize {type(other)}")
 
@@ -287,7 +287,6 @@ class TimeDeltaColumn(column.ColumnBase):
         )
 
     def fillna(self, fill_value):
-
         if cudf.utils.utils.isnat(fill_value):
             return self._fillna_natwise()
         col = self
