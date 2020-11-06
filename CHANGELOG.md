@@ -61,6 +61,7 @@
 
 ## Bug Fixes
 
+- PR #6446 Fix integer parsing in CSV and JSON for values outside of int64 range
 - PR #6506 Fix DateTime type value truncation while writing to csv
 - PR #6509 Disable JITIFY log printing
 - PR #6517 Handle index equality in `Series` and `DataFrame` equality checks
