@@ -43,7 +43,9 @@ public class Cuda {
     protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       long origAddress = stream;
-      if (stream != CUDA_STREAM_DEFAULT && stream != CUDA_STREAM_LEGACY && stream != CUDA_STREAM_PER_THREAD) {
+      if (stream != CUDA_STREAM_DEFAULT &&
+          stream != CUDA_STREAM_LEGACY &&
+          stream != CUDA_STREAM_PER_THREAD) {
         destroyStream(stream);
         stream = 0;
         neededCleanup = true;
