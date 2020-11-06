@@ -268,6 +268,8 @@ class DatetimeColumn(column.ColumnBase):
         )
 
     def fillna(self, fill_value):
+        if cudf.utils.utils.isnat(fill_value):
+            return self._fillna_natwise()
         if is_scalar(fill_value):
             if not isinstance(fill_value, cudf.Scalar):
 
