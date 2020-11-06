@@ -53,6 +53,7 @@
 - PR #6622 Update `to_pandas` api docs
 - PR #6623 Add operator overloading to column and clean up error messages
 - PR #6635 Add cudf::test::dictionary_column_wrapper class
+- PR #6702 Fix orc read corruption on boolean column
 
 ## Bug Fixes
 
