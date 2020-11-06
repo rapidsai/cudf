@@ -1635,7 +1635,7 @@ __global__ void __launch_bounds__(block_size)
         if (num_rowgroups > 0) {
           uint32_t run_pos = s->top.data.index.run_pos[CI_DATA];
           if (run_pos) {
-            vals_skipped = min(numvals, run_pos);
+            vals_skipped = run_pos;
             numvals -= vals_skipped;
             __syncthreads();
             if (t == 0) { s->top.data.index.run_pos[CI_DATA] = 0; }

@@ -364,8 +364,15 @@ def test_orc_reader_decimal_type(datadir, orc_file):
     assert_eq(pdf, df)
 
 
-def test_orc_reader_boolean_type(datadir):
-    file_path = datadir / "TestOrcFile.boolean.orc"
+@pytest.mark.parametrize(
+    "orc_file",
+    [
+        "TestOrcFile.boolean_corruption_0.orc",
+        "TestOrcFile.boolean_corruption_1.orc",
+    ],
+)
+def test_orc_reader_boolean_type(datadir, orc_file):
+    file_path = datadir / orc_file
 
     pdf = pd.read_orc(file_path)
     df = cudf.read_orc(file_path).to_pandas()
