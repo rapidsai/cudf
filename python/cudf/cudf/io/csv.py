@@ -1,5 +1,6 @@
 # Copyright (c) 2018-20, NVIDIA CORPORATION.
 from io import BytesIO, StringIO
+
 from nvtx import annotate
 
 from cudf import _lib as libcudf
@@ -117,6 +118,7 @@ def to_csv(
 
         if not isinstance(df.index, MultiIndex):
             if df.index.name is None:
+                df = df.copy(deep=False)
                 df.index.name = ""
             if columns is not None:
                 columns = columns.copy()
