@@ -890,7 +890,7 @@ class Series(Frame, Serializable):
             if not arg.index.is_unique:
                 raise ValueError(
                     "Reindexing only valid with"
-                " uniquely valued Index objects"
+                    " uniquely valued Index objects"
                 )
             lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
             rhs = cudf.DataFrame(
