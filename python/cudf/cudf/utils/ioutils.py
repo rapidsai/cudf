@@ -803,10 +803,10 @@ comment : char, default None
 na_values : scalar, str, or list-like, optional
     Additional strings to recognize as nulls.
     By default the following values are interpreted as
-    nulls: ‘’, ‘#N/A’, ‘#N/A N/A’, ‘#NA’, ‘-1.#IND’,
-    ‘-1.#QNAN’, ‘-NaN’, ‘-nan’, ‘1.#IND’, ‘1.#QNAN’,
-    ‘<NA>’, ‘N/A’, ‘NA’, ‘NULL’, ‘NaN’, ‘n/a’, ‘nan’,
-    ‘null’.
+    nulls: '', '#N/A', '#N/A N/A', '#NA', '-1.#IND',
+    '-1.#QNAN', '-NaN', '-nan', '1.#IND', '1.#QNAN',
+    '<NA>', 'N/A', 'NA', 'NULL', 'NaN', 'n/a', 'nan',
+    'null'.
 keep_default_na : bool, default True
     Whether or not to include the default NA values when parsing the data.
 na_filter : bool, default True
