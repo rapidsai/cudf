@@ -8,7 +8,7 @@ import pickle
 import sys
 import warnings
 from collections import OrderedDict, defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, Sequence, Iterable
 
 import cupy
 import numpy as np
@@ -865,11 +865,11 @@ class DataFrame(Frame, Serializable):
         """
         return len(self.index)
 
-    def __array_uaggs__(self, uaggs, method, *inputs, **kwargs):
+    def __array_aggs__(self, aggs, method, *inputs, **kwargs):
         import cudf
 
-        if method == "__call__" and hasattr(cudf, uaggs.__name__):
-            aggs = getattr(cudf, uaggs.__name__)
+        if method == "__call__" and hasattr(cudf, aggs.__name__):
+            aggs = getattr(cudf, aggs.__name__)
             return aggs(self)
         else:
             return NotImplemented
@@ -3733,31 +3733,31 @@ class DataFrame(Frame, Serializable):
                 dict of axis labels specified operations per column
                 function name: must pass to DataFrame or DataFrame.apply
 
-        axis : {0 or ‘index’, 1 or ‘columns’}, default 0
-            If 0 or ‘index’: apply aggregation to each column
-            If 1 or ‘columns’: apply aggregation to each row.
+        axis : not yet supported 
         
         Returns 
         -------
-        scalar : when Series.agg is called with single aggregation
-        Series : when DataFrame.agg is called with a single aggrgation
-        DataFrame : when DataFrame.agg is called with several aggregations
+        Aggregation Result : scalar, ``Series`` or ``DataFrame``
+            When Series.agg is called with single aggregation, a scalar is returned. 
+            When DataFrame.agg is called with a single aggrgation, a ``Series`` is returned
+            When DataFrame.agg is called with several aggregations, a ``DataFrame`` is returned
 
         Notes
         -----
         Difference from pandas:
-          * Not supporting: *args, **kwargs
+          * Not supporting: axis, *args, **kwargs
 
         """
-        if axis is not None:
+        if axis is 0 or axis is not None:
             raise NotImplementedError("axis not implemented yet")
 
         dtypes = [self[col].dtype for col in self._column_names]
         common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
         df_normalized = self.astype(common_dtype)
 
-        if isinstance(aggs, list):
-            result = cudf.DataFrame()
+        excluded_types = (str, dict)
+        if isinstance(aggs, Iterable) and not isinstance(aggs, excluded_types):
+            result = cudf.DataFrame() 
             # TODO : Allow simultaneous pass for multi-aggregation as a future optimization
             for agg in aggs:
                 result[agg] = getattr(df_normalized, agg)()
@@ -3773,7 +3773,7 @@ class DataFrame(Frame, Serializable):
             cols=aggs.keys()
             if any([callable(val) for val in aggs.values()]):
                 raise NotImplementedError("callable parameter is not implemented yet")
-            elif any([isinstance(val, list) for val in aggs.values()]):
+            elif any([isinstance(val, Iterable) and not isinstance(val, str) for val in aggs.values()]):
                 idxs=set()
                 for val in aggs.values():
                     if isinstance(val, list):
@@ -3801,14 +3801,15 @@ class DataFrame(Frame, Serializable):
                 for key, value in aggs.items():
                     col = df_normalized[key]
                     result[key]= getattr(col, value)()
-            
+            else: raise ValueError("values of dict must be a string or list")
+
             return result 
                 
         elif callable(aggs):
             raise NotImplementedError("callable parameter is not implemented yet")
 
         else:
-            raise ValueError("argument must be a string or list")
+            raise ValueError("argument must be a string, list or dict")
 
         return result.T.sort_index(axis=1, ascending=True)
 

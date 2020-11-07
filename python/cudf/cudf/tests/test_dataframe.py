@@ -7993,6 +7993,7 @@ def test_dataframe_axis1_unsupported_ops(op):
         {"a": "sum", "b": "min", "c": "max"},
         {"a": np.sum, "b": np.min, "c": np.max},
         {"a": ["sum", "min"], "b": "min", "c": ["max"]},
+        "asdf",
     ],
 )
 
@@ -8003,8 +8004,13 @@ def test_agg_for_dataframes(data, aggs):
     if aggs == {"a": np.sum, "b": np.min, "c": np.max}:
         with pytest.raises(NotImplementedError):
             got = gdf.agg(aggs)
+    elif aggs =='asdf':
+        with pytest.raises(
+            AttributeError, match=f"'{type(gdf).__name__}' object has no attribute '{aggs}'"
+        ):
+            got = gdf.agg(aggs)
     else:
-        expect = pdf.agg(aggs)
-        got = gdf.agg(aggs)
+            expect = pdf.agg(aggs)
+            got = gdf.agg(aggs)
 
-        assert_eq(expect, got, check_dtype=False)
+            assert_eq(expect, got, check_dtype=False)
