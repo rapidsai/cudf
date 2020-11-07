@@ -431,9 +431,9 @@ cpdef write_csv(
     cdef unique_ptr[data_sink] data_sink_c
     cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
 
-    if header is True and len(all_cols) > 0:
-        metadata_.column_names.reserve(len(all_cols))
-        if len(all_cols) == 1:
+    if header is True and len(all_names) > 0:
+        metadata_.column_names.reserve(len(all_names))
+        if len(all_names) == 1:
             if all_names[0] in (None, ''):
                 metadata_.column_names.push_back('""'.encode())
             else:
