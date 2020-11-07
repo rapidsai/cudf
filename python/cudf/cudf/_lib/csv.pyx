@@ -412,14 +412,9 @@ cpdef write_csv(
     --------
     cudf.io.csv.to_csv
     """
-    all_cols = table._columns
-    all_names = table._column_names
 
-    if index is True:
-        all_cols = table._index._data.columns + all_cols
-        all_names = table._index.names + all_names
-
-    cdef table_view input_table_view = make_table_view(all_cols)
+    cdef table_view input_table_view = \
+        table.view() if index is True else table.data_view()
     cdef bool include_header_c = header
     cdef char delim_c = ord(sep)
     cdef string line_term_c = line_terminator.encode()
@@ -431,19 +426,28 @@ cpdef write_csv(
     cdef unique_ptr[data_sink] data_sink_c
     cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
 
-    if header is True and len(all_names) > 0:
-        metadata_.column_names.reserve(len(all_names))
-        if len(all_names) == 1:
-            if all_names[0] in (None, ''):
-                metadata_.column_names.push_back('""'.encode())
-            else:
-                metadata_.column_names.push_back(str(all_names[0]).encode())
-        else:
-            for idx, col_name in enumerate(all_names):
-                if col_name is None:
-                    metadata_.column_names.push_back(''.encode())
+    if header is True:
+        all_names = table._column_names
+        if index is True:
+            all_names = table._index.names + all_names
+
+        if len(all_names) > 0:
+            metadata_.column_names.reserve(len(all_names))
+            if len(all_names) == 1:
+                if all_names[0] in (None, ''):
+                    metadata_.column_names.push_back('""'.encode())
                 else:
-                    metadata_.column_names.push_back(str(col_name).encode())
+                    metadata_.column_names.push_back(
+                        str(all_names[0]).encode()
+                    )
+            else:
+                for idx, col_name in enumerate(all_names):
+                    if col_name is None:
+                        metadata_.column_names.push_back(''.encode())
+                    else:
+                        metadata_.column_names.push_back(
+                            str(col_name).encode()
+                        )
 
     cdef csv_writer_options options = move(
         csv_writer_options.builder(sink_info_c, input_table_view)
