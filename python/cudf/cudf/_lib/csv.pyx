@@ -38,7 +38,7 @@ from cudf._lib.cpp.io.types cimport (
     table_with_metadata
 )
 from cudf._lib.io.utils cimport make_source_info, make_sink_info
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, make_table_view
 from cudf._lib.cpp.table.table_view cimport table_view
 
 ctypedef int32_t underlying_type_t_compression
@@ -404,7 +404,6 @@ cpdef write_csv(
     str line_terminator="\n",
     int rows_per_chunk=8,
     bool index=True,
-    bool is_index_name_none=False,
 ):
     """
     Cython function to call into libcudf API, see `write_csv`.
@@ -413,9 +412,14 @@ cpdef write_csv(
     --------
     cudf.io.csv.to_csv
     """
+    all_cols = table._columns
+    all_names = table._column_names
 
-    # Index already been reset and added as main column, so just data_view
-    cdef table_view input_table_view = table.data_view()
+    if index is True:
+        all_cols = table._index._data.columns + all_cols
+        all_names = table._index.names + all_names
+
+    cdef table_view input_table_view = make_table_view(all_cols)
     cdef bool include_header_c = header
     cdef char delim_c = ord(sep)
     cdef string line_term_c = line_terminator.encode()
@@ -427,17 +431,16 @@ cpdef write_csv(
     cdef unique_ptr[data_sink] data_sink_c
     cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
 
-    if header is True and table._column_names is not None:
-        metadata_.column_names.reserve(len(table._column_names))
-        if (
-            (index and len(table._column_names) == 1 and is_index_name_none) or
-            (not index and len(table._column_names) == 1 and
-                table._column_names[0] == '')
-        ):
-            metadata_.column_names.push_back('""'.encode())
+    if header is True and len(all_cols) > 0:
+        metadata_.column_names.reserve(len(all_cols))
+        if len(all_cols) == 1:
+            if all_names[0] in (None, ''):
+                metadata_.column_names.push_back('""'.encode())
+            else:
+                metadata_.column_names.push_back(str(all_names[0]).encode())
         else:
-            for idx, col_name in enumerate(table._column_names):
-                if idx == 0 and is_index_name_none is True:
+            for idx, col_name in enumerate(all_names):
+                if col_name is None:
                     metadata_.column_names.push_back(''.encode())
                 else:
                     metadata_.column_names.push_back(str(col_name).encode())

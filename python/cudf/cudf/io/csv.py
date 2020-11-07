@@ -118,18 +118,6 @@ def to_csv(
     path_or_buf = ioutils.get_writer_filepath_or_buffer(
         path_or_data=path_or_buf, mode="w", **kwargs
     )
-    is_index_name_none = False
-    if index:
-        from cudf import MultiIndex
-
-        if not isinstance(df.index, MultiIndex):
-            is_index_name_none = df.index.name is None
-            if columns is not None:
-                columns = columns.copy()
-                columns.insert(
-                    0, "index" if is_index_name_none else df.index.name
-                )
-        df = df.reset_index()
 
     if columns is not None:
         try:
@@ -153,7 +141,6 @@ def to_csv(
                 line_terminator=line_terminator,
                 rows_per_chunk=rows_per_chunk,
                 index=index,
-                is_index_name_none=is_index_name_none,
             )
     else:
         libcudf.csv.write_csv(
@@ -165,7 +152,6 @@ def to_csv(
             line_terminator=line_terminator,
             rows_per_chunk=rows_per_chunk,
             index=index,
-            is_index_name_none=is_index_name_none,
         )
 
     if return_as_string:
