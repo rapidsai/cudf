@@ -28,6 +28,7 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/table/table.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
 
 template <typename T>
@@ -766,27 +767,64 @@ template <typename T>
 struct FixedPointTestBothReps : public cudf::test::BaseFixture {
 };
 
-template <typename T>
-using wrapper = cudf::test::fixed_width_column_wrapper<T>;
+struct FixedPointTest : public cudf::test::BaseFixture {
+};
+
 TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTestBothReps, FixedPointConcatentate)
 {
   using namespace numeric;
-  using decimalXX = TypeParam;
+  using decimalXX  = TypeParam;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<decimalXX>;
 
-  auto vec = std::vector<decimalXX>(1000);
-  std::iota(std::begin(vec), std::end(vec), decimalXX{});
+  auto begin = cudf::test::make_counting_transform_iterator(0, [](auto i) { return decimalXX{i}; });
+  auto const vec = std::vector<decimalXX>(begin, begin + 1000);
 
-  auto const a = wrapper<decimalXX>(vec.begin(), /***/ vec.begin() + 300);
-  auto const b = wrapper<decimalXX>(vec.begin() + 300, vec.begin() + 700);
-  auto const c = wrapper<decimalXX>(vec.begin() + 700, vec.end());
+  auto const a = fw_wrapper(vec.begin(), /***/ vec.begin() + 300);
+  auto const b = fw_wrapper(vec.begin() + 300, vec.begin() + 700);
+  auto const c = fw_wrapper(vec.begin() + 700, vec.end());
 
-  auto const fixed_point_columns = std::vector<cudf::column_view>{a, b, c};
-  auto const results             = cudf::concatenate(fixed_point_columns);
-  auto const expected            = wrapper<decimalXX>(vec.begin(), vec.end());
+  auto const columns  = std::vector<cudf::column_view>{a, b, c};
+  auto const results  = cudf::concatenate(columns);
+  auto const expected = fw_wrapper(vec.begin(), vec.end());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(FixedPointTest, FixedPointConcatentate)
+{
+  using namespace numeric;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<int32_t>;
+
+  auto begin     = thrust::make_counting_iterator(0);
+  auto const vec = std::vector<int32_t>(begin, begin + 1000);
+
+  auto const a = fp_wrapper(vec.begin(), /***/ vec.begin() + 300, scale_type{-2});
+  auto const b = fp_wrapper(vec.begin() + 300, vec.begin() + 700, scale_type{-2});
+  auto const c = fp_wrapper(vec.begin() + 700, vec.end(), /*****/ scale_type{-2});
+
+  auto const columns  = std::vector<cudf::column_view>{a, b, c};
+  auto const results  = cudf::concatenate(columns);
+  auto const expected = fp_wrapper(vec.begin(), vec.end(), scale_type{-2});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(FixedPointTest, FixedPointScaleMismatch)
+{
+  using namespace numeric;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<int32_t>;
+
+  auto begin     = thrust::make_counting_iterator(0);
+  auto const vec = std::vector<int32_t>(begin, begin + 1000);
+
+  auto const a = fp_wrapper(vec.begin(), /***/ vec.begin() + 300, scale_type{-1});
+  auto const b = fp_wrapper(vec.begin() + 300, vec.begin() + 700, scale_type{-2});
+  auto const c = fp_wrapper(vec.begin() + 700, vec.end(), /*****/ scale_type{-3});
+
+  auto const columns = std::vector<cudf::column_view>{a, b, c};
+  EXPECT_THROW(cudf::concatenate(columns), cudf::logic_error);
 }
 
 struct DictionaryConcatTest : public cudf::test::BaseFixture {

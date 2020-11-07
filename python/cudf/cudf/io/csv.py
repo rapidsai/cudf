@@ -1,9 +1,11 @@
 # Copyright (c) 2018-20, NVIDIA CORPORATION.
 from io import BytesIO, StringIO
+
 from nvtx import annotate
 
 from cudf import _lib as libcudf
 from cudf.utils import ioutils
+from cudf.utils.dtypes import is_scalar
 
 
 @annotate("READ_CSV", color="purple", domain="cudf_python")
@@ -51,6 +53,10 @@ def read_csv(
         iotypes=(BytesIO, StringIO),
         **kwargs,
     )
+
+    if na_values is not None and is_scalar(na_values):
+        na_values = [na_values]
+
     return libcudf.csv.read_csv(
         filepath_or_buffer,
         lineterminator=lineterminator,
@@ -117,6 +123,7 @@ def to_csv(
 
         if not isinstance(df.index, MultiIndex):
             if df.index.name is None:
+                df = df.copy(deep=False)
                 df.index.name = ""
             if columns is not None:
                 columns = columns.copy()
