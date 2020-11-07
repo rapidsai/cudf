@@ -16,6 +16,7 @@
 
 #include <benchmarks/io/cuio_benchmark_common.hpp>
 
+#include <numeric>
 #include <string>
 
 #include <unistd.h>
@@ -57,4 +58,44 @@ cudf_io::sink_info cuio_source_sink_pair::make_sink_info()
     case io_type::HOST_BUFFER: return cudf_io::sink_info(&buffer);
     default: CUDF_FAIL("invalid output type");
   }
+}
+
+std::vector<cudf::type_id> dtypes_for_column_selection(std::vector<cudf::type_id> const& data_types,
+                                                       column_selection cs)
+{
+  std::vector<cudf::type_id> out_dtypes;
+  out_dtypes.reserve(2 * data_types.size());
+  switch (cs) {
+    case column_selection::ALL:
+    case column_selection::FIRST_HALF:
+    case column_selection::SECOND_HALF:
+      std::copy(data_types.begin(), data_types.end(), std::back_inserter(out_dtypes));
+      std::copy(data_types.begin(), data_types.end(), std::back_inserter(out_dtypes));
+      break;
+    case column_selection::ALTERNATE:
+      for (auto const& type : data_types) {
+        out_dtypes.push_back(type);
+        out_dtypes.push_back(type);
+      }
+      break;
+  }
+  return out_dtypes;
+}
+
+std::vector<int> select_columns(column_selection cs, int num_cols)
+{
+  std::vector<int> col_idxs(num_cols / 2);
+  switch (cs) {
+    case column_selection::ALL: col_idxs.resize(num_cols);
+    case column_selection::FIRST_HALF:
+    case column_selection::SECOND_HALF:
+      std::iota(std::begin(col_idxs),
+                std::end(col_idxs),
+                (cs == column_selection::SECOND_HALF) ? num_cols / 2 : 0);
+      break;
+    case column_selection::ALTERNATE:
+      for (size_t i = 0; i < col_idxs.size(); ++i) col_idxs[i] = 2 * i;
+      break;
+  }
+  return col_idxs;
 }
