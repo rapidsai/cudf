@@ -95,7 +95,7 @@ class reader::impl {
    */
   void decode_data(const rmm::device_buffer &block_data,
                    const std::vector<std::pair<uint32_t, uint32_t>> &dict,
-                   hostdevice_vector<uint8_t> &global_dictionary,
+                   hostdevice_vector<gpu::nvstrdesc_s> &global_dictionary,
                    size_t total_dictionary_entries,
                    size_t num_rows,
                    std::vector<std::pair<int, std::string>> columns,
