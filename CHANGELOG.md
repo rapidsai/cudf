@@ -85,6 +85,7 @@
 - PR #6643 Fix csv writer handling embedded comma delimiter
 - PR #6640 Add error message for unsupported `axis` parameter in DataFrame APIs
 - PR #6687 Fix issue where index name of caller object is being modified in csv writer
+- PR #6692 Fix handling of empty column name in csv writer
 - PR #6693 Fix issue related to `na_values` input in `read_csv`
 
 
