@@ -411,27 +411,25 @@ table_with_metadata reader::impl::read(avro_reader_options const &options, cudaS
       if (total_dictionary_entries > 0) {
         size_t dict_pos = 0;
         for (size_t i = 0; i < column_types.size(); ++i) {
-          auto col_idx     = selected_columns[i].first;
-          auto &col_schema = _metadata->schema[_metadata->columns[col_idx].schema_data_idx];
-          auto index =
-            &(reinterpret_cast<gpu::nvstrdesc_s *>(global_dictionary.host_ptr()))[dict[i].first];
+          auto const col_idx     = selected_columns[i].first;
+          auto const &col_schema = _metadata->schema[_metadata->columns[col_idx].schema_data_idx];
+          auto col_dict_entries  = &(global_dictionary[dict[i].first]);
           for (size_t j = 0; j < dict[i].second; j++) {
-            size_t len     = col_schema.symbols[j].length();
-            char *ptr      = reinterpret_cast<char *>(global_dictionary.device_ptr() + dict_pos);
-            index[j].ptr   = ptr;
-            index[j].count = len;
-            CUDA_TRY(cudaMemcpyAsync(g_dictionary_data.data().get() + dict_pos,
-                                     col_schema.symbols[j].c_str(),
-                                     len,
-                                     cudaMemcpyHostToDevice,
-                                     stream));
+            auto const &symbols = col_schema.symbols[j];
+
+            auto const len            = symbols.length();
+            auto data_dst             = g_dictionary_data.data().get() + dict_pos;
+            col_dict_entries[j].ptr   = data_dst;
+            col_dict_entries[j].count = len;
+
+            CUDA_TRY(cudaMemcpyAsync(data_dst, symbols.c_str(), len, cudaMemcpyDefault, stream));
             dict_pos += len;
           }
         }
         CUDA_TRY(cudaMemcpyAsync(global_dictionary.device_ptr(),
                                  global_dictionary.host_ptr(),
                                  global_dictionary.memory_size(),
-                                 cudaMemcpyHostToDevice,
+                                 cudaMemcpyDefault,
                                  stream));
       }
 
