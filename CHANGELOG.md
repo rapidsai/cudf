@@ -34,6 +34,7 @@
 - PR #6540 Add dictionary support to `cudf::unary_operation`
 - PR #6537 Refactor ORC timezone
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
+- PR #6690 Explicitly set legacy or per-thread default stream in JNI
 - PR #6545 Pin cmake policies to cmake 3.17 version
 - PR #6556 Add dictionary support to `cudf::inner_join`, `cudf::left_join` and `cudf::full_join`
 - PR #6557 Support nullable timestamp columns in time range window functions
