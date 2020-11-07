@@ -1579,20 +1579,24 @@ __global__ void __launch_bounds__(block_size)
           s->top.data.max_vals       = min(s->top.data.max_vals, blockDim.x);
         }
         __syncthreads();
-        n = numvals - ((s->top.data.max_vals + 7) >> 3);
-        if (t < n) {
-          secondary_val = s->vals.u8[((s->top.data.max_vals + 7) >> 3) + t];
-          if (t == 0) { s->top.data.buffered_count = n; }
-        }
-        numvals = numvals << 3u;
         if (s->top.data.max_vals >= s->top.data.index.run_pos[CI_DATA]) {
-          numvals = min(numvals, s->top.data.max_vals);
+          n = numvals - ((s->top.data.max_vals + 7) >> 3);
+          if (t < n) {
+            secondary_val = s->vals.u8[((s->top.data.max_vals + 7) >> 3) + t];
+            if (t == 0) { s->top.data.buffered_count = n; }
+          }
+
+          numvals = min(numvals << 3u, s->top.data.max_vals);
         } else {
           // If it comes here, then it means that s->top.data.max_vals is last set of values.
           // And as numvals is considered to be min(`max_vals+s->top.data.index.run_pos[CI_DATA]`,
           // blockDim.x*2) we have to return numvals >= s->top.data.index.run_pos[CI_DATA].
-          numvals =
-            ((numvals - s->top.data.index.run_pos[CI_DATA]) > blockDim.x ? blockDim.x : numvals);
+          n = numvals - blockDim.x >> 3;
+          if (t < n) {
+            secondary_val = s->vals.u8[(blockDim.x >> 3) + t];
+            if (t == 0) { s->top.data.buffered_count = n; }
+          }
+          numvals = blockDim.x;
         }
       } else if (s->chunk.type_kind == LONG || s->chunk.type_kind == TIMESTAMP ||
                  s->chunk.type_kind == DECIMAL) {
