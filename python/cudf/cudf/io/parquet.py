@@ -304,7 +304,7 @@ def to_parquet(
                     path=file_obj,
                     index=index,
                     compression=compression,
-                    statistics=str(statistics),
+                    statistics=statistics,
                     metadata_file_path=metadata_file_path,
                 )
         else:
@@ -313,7 +313,7 @@ def to_parquet(
                 path=path_or_buf,
                 index=index,
                 compression=compression,
-                statistics=str(statistics),
+                statistics=statistics,
                 metadata_file_path=metadata_file_path,
             )
 

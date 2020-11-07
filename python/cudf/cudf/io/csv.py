@@ -59,14 +59,14 @@ def read_csv(
 
     return libcudf.csv.read_csv(
         filepath_or_buffer,
-        lineterminator=str(lineterminator),
-        quotechar=str(quotechar),
+        lineterminator=lineterminator,
+        quotechar=quotechar,
         quoting=quoting,
         doublequote=doublequote,
         header=header,
         mangle_dupe_cols=mangle_dupe_cols,
         usecols=usecols,
-        sep=str(sep),
+        sep=sep,
         delimiter=delimiter,
         delim_whitespace=delim_whitespace,
         skipinitialspace=skipinitialspace,
@@ -77,7 +77,7 @@ def read_csv(
         dayfirst=dayfirst,
         compression=compression,
         thousands=thousands,
-        decimal=str(decimal),
+        decimal=decimal,
         true_values=true_values,
         false_values=false_values,
         nrows=nrows,
@@ -146,20 +146,20 @@ def to_csv(
             libcudf.csv.write_csv(
                 df,
                 path_or_buf=file_obj,
-                sep=str(sep),
-                na_rep=str(na_rep),
+                sep=sep,
+                na_rep=na_rep,
                 header=header,
-                line_terminator=str(line_terminator),
+                line_terminator=line_terminator,
                 rows_per_chunk=rows_per_chunk,
             )
     else:
         libcudf.csv.write_csv(
             df,
             path_or_buf=path_or_buf,
-            sep=str(sep),
-            na_rep=str(na_rep),
+            sep=sep,
+            na_rep=na_rep,
             header=header,
-            line_terminator=str(line_terminator),
+            line_terminator=line_terminator,
             rows_per_chunk=rows_per_chunk,
         )
 

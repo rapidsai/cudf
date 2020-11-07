@@ -268,9 +268,9 @@ cdef csv_reader_options make_csv_reader_options(
 
 def validate_args(
     object delimiter,
-    str sep,
+    object sep,
     bool delim_whitespace,
-    str decimal,
+    object decimal,
     object thousands,
     object nrows,
     int skipfooter,
@@ -303,14 +303,14 @@ def validate_args(
 
 def read_csv(
     object datasource,
-    str lineterminator="\n",
-    str quotechar='"',
+    object lineterminator="\n",
+    object quotechar='"',
     int quoting=0,
     bool doublequote=True,
     object header="infer",
     bool mangle_dupe_cols=True,
     object usecols=None,
-    str sep=",",
+    object sep=",",
     object delimiter=None,
     bool delim_whitespace=False,
     bool skipinitialspace=False,
@@ -321,7 +321,7 @@ def read_csv(
     bool dayfirst=False,
     object compression="infer",
     object thousands=None,
-    str decimal=".",
+    object decimal=".",
     object true_values=None,
     object false_values=None,
     object nrows=None,
@@ -399,10 +399,10 @@ def read_csv(
 cpdef write_csv(
     Table table,
     object path_or_buf=None,
-    str sep=",",
-    str na_rep="",
+    object sep=",",
+    object na_rep="",
     bool header=True,
-    str line_terminator="\n",
+    object line_terminator="\n",
     int rows_per_chunk=8,
 ):
     """
