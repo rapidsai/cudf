@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cstdint>
+#include <io/utilities/column_type_histogram.hpp>
 
 class SerialTrieNode;
 
@@ -37,20 +38,6 @@ enum : uint8_t {
 };
 using flags = uint8_t;
 
-/**
- * @brief Per-column histogram struct containing detected occurrences of each dtype
- */
-struct stats {
-  uint32_t countFloat;
-  uint32_t countDateAndTime;
-  uint32_t countString;
-  uint32_t countBool;
-  uint32_t countInt8;
-  uint32_t countInt16;
-  uint32_t countInt32;
-  uint32_t countInt64;
-  uint32_t countNULL;
-};
 }  // namespace column_parse
 
 }  // namespace csv

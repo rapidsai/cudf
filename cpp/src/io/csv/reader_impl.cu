@@ -545,28 +545,34 @@ std::vector<data_type> reader::impl::gather_column_types(cudaStream_t stream)
       CUDA_TRY(cudaStreamSynchronize(stream));
 
       for (int col = 0; col < num_active_cols_; col++) {
-        unsigned long long countInt = column_stats[col].countInt8 + column_stats[col].countInt16 +
-                                      column_stats[col].countInt32 + column_stats[col].countInt64;
+        unsigned long long int_count_total = column_stats[col].big_int_count +
+                                             column_stats[col].negative_small_int_count +
+                                             column_stats[col].positive_small_int_count;
 
-        if (column_stats[col].countNULL == num_records_) {
+        if (column_stats[col].null_count == num_records_) {
           // Entire column is NULL; allocate the smallest amount of memory
           dtypes.emplace_back(cudf::type_id::INT8);
-        } else if (column_stats[col].countString > 0L) {
+        } else if (column_stats[col].string_count > 0L) {
           dtypes.emplace_back(cudf::type_id::STRING);
-        } else if (column_stats[col].countDateAndTime > 0L) {
+        } else if (column_stats[col].datetime_count > 0L) {
           dtypes.emplace_back(cudf::type_id::TIMESTAMP_NANOSECONDS);
-        } else if (column_stats[col].countBool > 0L) {
+        } else if (column_stats[col].bool_count > 0L) {
           dtypes.emplace_back(cudf::type_id::BOOL8);
-        } else if (column_stats[col].countFloat > 0L ||
-                   (column_stats[col].countFloat == 0L && countInt > 0L &&
-                    column_stats[col].countNULL > 0L)) {
+        } else if (column_stats[col].float_count > 0L ||
+                   (column_stats[col].float_count == 0L && int_count_total > 0L &&
+                    column_stats[col].null_count > 0L)) {
           // The second condition has been added to conform to
           // PANDAS which states that a column of integers with
           // a single NULL record need to be treated as floats.
           dtypes.emplace_back(cudf::type_id::FLOAT64);
-        } else {
-          // All other integers are stored as 64-bit to conform to PANDAS
+        } else if (column_stats[col].big_int_count == 0) {
           dtypes.emplace_back(cudf::type_id::INT64);
+        } else if (column_stats[col].big_int_count != 0 &&
+                   column_stats[col].negative_small_int_count != 0) {
+          dtypes.emplace_back(cudf::type_id::STRING);
+        } else {
+          // Integers are stored as 64-bit to conform to PANDAS
+          dtypes.emplace_back(cudf::type_id::UINT64);
         }
       }
     }
