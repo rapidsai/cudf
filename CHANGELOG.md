@@ -89,6 +89,7 @@
 - PR #6687 Fix issue where index name of caller object is being modified in csv writer
 - PR #6692 Fix handling of empty column name in csv writer
 - PR #6693 Fix issue related to `na_values` input in `read_csv`
+- PR #6704 Fix leak warnings in JNI unit tests
 
 
 # cuDF 0.16.0 (21 Oct 2020)
