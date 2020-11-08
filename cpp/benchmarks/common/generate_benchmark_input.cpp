@@ -633,3 +633,13 @@ std::vector<cudf::type_id> get_type_or_group(int32_t id)
   }
   return types;
 }
+
+std::vector<cudf::type_id> get_type_or_group(std::vector<int32_t> const& ids)
+{
+  std::vector<cudf::type_id> all_type_ids;
+  for (auto& id : ids) {
+    auto const type_ids = get_type_or_group(id);
+    all_type_ids.insert(std::end(all_type_ids), std::cbegin(type_ids), std::cend(type_ids));
+  }
+  return all_type_ids;
+}
