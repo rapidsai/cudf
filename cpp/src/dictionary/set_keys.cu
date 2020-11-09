@@ -113,8 +113,8 @@ std::unique_ptr<column> set_keys(
                                                   std::vector<size_type>{0},
                                                   duplicate_keep_option::KEEP_FIRST,
                                                   null_equality::EQUAL,
-                                                  mr,
-                                                  stream)
+                                                  stream,
+                                                  mr)
                       ->release();
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
 

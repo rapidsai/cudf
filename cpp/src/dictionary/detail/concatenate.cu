@@ -213,8 +213,8 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
                                                   std::vector<size_type>{0},
                                                   duplicate_keep_option::KEEP_FIRST,
                                                   null_equality::EQUAL,
-                                                  mr,
-                                                  stream.value())
+                                                  stream,
+                                                  mr)
                       ->release();
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
 

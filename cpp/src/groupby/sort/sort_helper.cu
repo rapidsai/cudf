@@ -132,8 +132,8 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
       _keys,
       {},
       std::vector<null_order>(_keys.num_columns(), null_order::AFTER),
-      rmm::mr::get_current_device_resource(),
-      stream.value());
+      stream,
+      rmm::mr::get_current_device_resource());
   } else {  // Pandas style
     // Temporarily prepend the keys table with a column that indicates the
     // presence of a null value within a row. This allows moving all rows that
@@ -145,8 +145,8 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
       augmented_keys,
       {},
       std::vector<null_order>(_keys.num_columns() + 1, null_order::AFTER),
-      rmm::mr::get_current_device_resource(),
-      stream.value());
+      stream,
+      rmm::mr::get_current_device_resource());
 
     // All rows with one or more null values are at the end of the resulting sorted order.
   }
@@ -269,8 +269,8 @@ sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
     cudf::detail::stable_sorted_order(table_view({unsorted_keys_labels(), values}),
                                       {},
                                       std::vector<null_order>(2, null_order::AFTER),
-                                      mr,
-                                      stream.value());
+                                      stream,
+                                      mr);
 
   // Zero-copy slice this sort order so that its new size is num_keys()
   column_view gather_map = cudf::detail::slice(values_sort_order->view(), 0, num_keys(stream));

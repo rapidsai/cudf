@@ -67,7 +67,7 @@ struct reduce_dispatch_functor {
       } break;
       case aggregation::MEDIAN: {
         auto sorted_indices =
-          detail::sorted_order(table_view{{col}}, {}, {null_order::AFTER}, mr, stream.value());
+          detail::sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, mr);
         auto valid_sorted_indices = split(*sorted_indices, {col.size() - col.null_count()})[0];
         auto col_ptr              = detail::quantile(
           col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, stream, mr);
@@ -78,7 +78,7 @@ struct reduce_dispatch_functor {
         CUDF_EXPECTS(quantile_agg->_quantiles.size() == 1,
                      "Reduction quantile accepts only one quantile value");
         auto sorted_indices =
-          detail::sorted_order(table_view{{col}}, {}, {null_order::AFTER}, mr, stream.value());
+          detail::sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, mr);
         auto valid_sorted_indices = split(*sorted_indices, {col.size() - col.null_count()})[0];
         auto col_ptr              = detail::quantile(col,
                                         quantile_agg->_quantiles,

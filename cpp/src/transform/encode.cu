@@ -43,7 +43,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
   // - resulting column elements are sorted ascending
   // - nulls are sorted to the beginning
   auto keys_table = cudf::detail::drop_duplicates(
-    input_table, drop_keys, duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL, mr, stream);
+    input_table, drop_keys, duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL, stream, mr);
 
   if (cudf::has_nulls(keys_table->view())) {
     // Rows with nulls appear at the top of `keys_table`, but we want them to appear at

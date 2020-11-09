@@ -21,6 +21,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include "rmm/cuda_stream_view.hpp"
 
 namespace {
 // Returns true if the mask is true for index i in at least keep_threshold
@@ -61,8 +62,8 @@ namespace detail {
 std::unique_ptr<table> drop_nulls(table_view const& input,
                                   std::vector<size_type> const& keys,
                                   cudf::size_type keep_threshold,
-                                  rmm::mr::device_memory_resource* mr,
-                                  cudaStream_t stream)
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   auto keys_view = input.select(keys);
   if (keys_view.num_columns() == 0 || keys_view.num_rows() == 0 || not cudf::has_nulls(keys_view)) {
@@ -86,7 +87,7 @@ std::unique_ptr<table> drop_nulls(table_view const& input,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::drop_nulls(input, keys, keep_threshold, mr);
+  return cudf::detail::drop_nulls(input, keys, keep_threshold, rmm::cuda_stream_default, mr);
 }
 /*
  * Filters a table to remove null elements.
@@ -96,7 +97,7 @@ std::unique_ptr<table> drop_nulls(table_view const& input,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::drop_nulls(input, keys, keys.size(), mr);
+  return cudf::detail::drop_nulls(input, keys, keys.size(), rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

@@ -65,8 +65,8 @@ std::unique_ptr<column> add_keys(
                                                   std::vector<size_type>{0},  // only one key column
                                                   duplicate_keep_option::KEEP_FIRST,
                                                   null_equality::EQUAL,
-                                                  mr,
-                                                  stream)
+                                                  stream,
+                                                  mr)
                       ->release();
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
   // create a map for the indices
