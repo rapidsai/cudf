@@ -286,6 +286,90 @@ __inline__ __device__ T parse_numeric(const char* begin,
   return value * sign;
 }
 
+/**
+ * @brief Lexicographically compare digits in input against string
+ * representing an integer
+ *
+ * @param raw_data The pointer to beginning of character string
+ * @param golden The pointer to beginning of character string representing
+ * the value to be compared against
+ * @return bool True if integer represented by character string is less
+ * than or equal to golden data
+ */
+template <int N>
+__device__ __inline__ bool less_equal_than(const char* data, const char (&golden)[N])
+{
+  auto mismatch_pair = thrust::mismatch(thrust::seq, data, data + N - 1, golden);
+  if (mismatch_pair.first != data + N - 1) {
+    return *mismatch_pair.first <= *mismatch_pair.second;
+  } else {
+    // Exact match
+    return true;
+  }
+}
+
+/**
+ * @brief Determine which counter to increment when a sequence of digits
+ * and a parity sign is encountered.
+ *
+ * @param raw_data The pointer to beginning of character string
+ * @param digit_count Total number of digits
+ * @param stats Reference to structure with counters
+ * @return Pointer to appropriate counter that belong to
+ * the interpreted data type
+ */
+__device__ __inline__ cudf::size_type* infer_integral_field_counter(char const* data_begin,
+                                                                    char const* data_end,
+                                                                    bool is_negative,
+                                                                    column_type_histogram& stats)
+{
+  static constexpr char uint64_max_abs[] = "18446744073709551615";
+  static constexpr char int64_min_abs[]  = "9223372036854775808";
+  static constexpr char int64_max_abs[]  = "9223372036854775807";
+
+  auto digit_count = data_end - data_begin;
+
+  // Remove preceding zeros
+  if (digit_count >= (sizeof(int64_max_abs) - 1)) {
+    // Trim zeros at the beginning of raw_data
+    while (*data_begin == '0' && (data_begin < data_end)) { data_begin++; }
+  }
+  digit_count = data_end - data_begin;
+
+  // After trimming the number of digits could be less than maximum
+  // int64 digit count
+  if (digit_count < (sizeof(int64_max_abs) - 1)) {  // CASE 0 : Accept validity
+    // If the length of the string representing the integer is smaller
+    // than string length of Int64Max then count this as an integer
+    // representable by int64
+    // If digit_count is 0 then ignore - sign, i.e. -000..00 should
+    // be treated as a positive small integer
+    return is_negative && (digit_count != 0) ? &stats.negative_small_int_count
+                                             : &stats.positive_small_int_count;
+  } else if (digit_count > (sizeof(uint64_max_abs) - 1)) {  // CASE 1 : Reject validity
+    // If the length of the string representing the integer is greater
+    // than string length of UInt64Max then count this as a string
+    // since it cannot be represented as an int64 or uint64
+    return &stats.string_count;
+  } else if (digit_count == (sizeof(uint64_max_abs) - 1) && is_negative) {
+    // A negative integer of length UInt64Max digit count cannot be represented
+    // as a 64 bit integer
+    return &stats.string_count;
+  }
+
+  if (digit_count == (sizeof(int64_max_abs) - 1) && is_negative) {
+    return less_equal_than(data_begin, int64_min_abs) ? &stats.negative_small_int_count
+                                                      : &stats.string_count;
+  } else if (digit_count == (sizeof(int64_max_abs) - 1) && !is_negative) {
+    return less_equal_than(data_begin, int64_max_abs) ? &stats.positive_small_int_count
+                                                      : &stats.big_int_count;
+  } else if (digit_count == (sizeof(uint64_max_abs) - 1)) {
+    return less_equal_than(data_begin, uint64_max_abs) ? &stats.big_int_count : &stats.string_count;
+  }
+
+  return &stats.string_count;
+}
+
 }  // namespace gpu
 
 /**
