@@ -348,6 +348,8 @@ static inline __device__ void StoreBitsBigEndian(
  * @param[in] numvals max number of values to encode
  * @param[in] flush encode all remaining values if nonzero
  * @param[in] t thread id
+ * @param[in] temp_storage_full shared memory storage to performance warp reduce
+ * @param[in] temp_storage_half shared memory storage to performance half warp reduce
  *
  * @return number of input values encoded
  *

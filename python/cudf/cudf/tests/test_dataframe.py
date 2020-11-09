@@ -7966,3 +7966,13 @@ def test_dataframe_axis1_unsupported_ops(op):
         NotImplementedError, match="Only axis=0 is currently supported."
     ):
         getattr(df, op)(axis=1)
+
+
+def test_dataframe_from_pandas_duplicate_columns():
+    pdf = pd.DataFrame(columns=["a", "b", "c", "a"])
+    pdf["a"] = [1, 2, 3]
+
+    with pytest.raises(
+        ValueError, match="Duplicate column names are not allowed"
+    ):
+        gd.from_pandas(pdf)

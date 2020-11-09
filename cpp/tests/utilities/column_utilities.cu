@@ -48,10 +48,21 @@ namespace {
 
 template <bool check_exact_equality>
 struct column_property_comparator {
+  bool types_equivalent(cudf::data_type const& lhs, cudf::data_type const& rhs)
+  {
+    return is_fixed_point(lhs) ? lhs.id() == rhs.id() : lhs == rhs;
+  }
+
   void compare_common(cudf::column_view const& lhs, cudf::column_view const& rhs)
   {
-    EXPECT_EQ(lhs.type(), rhs.type());
+    if (check_exact_equality) {
+      EXPECT_EQ(lhs.type(), rhs.type());
+    } else {
+      EXPECT_TRUE(types_equivalent(lhs.type(), rhs.type()));
+    }
+
     EXPECT_EQ(lhs.size(), rhs.size());
+
     if (lhs.size() > 0 && check_exact_equality) { EXPECT_EQ(lhs.nullable(), rhs.nullable()); }
 
     // equivalent, but not exactly equal columns can have a different number of children if their
