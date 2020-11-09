@@ -137,27 +137,6 @@ struct is_numeric_impl {
 };
 
 /**
- * @brief Indicates whether the type `T` is a unsigned numeric type.
- *
- * @tparam T  The type to verify
- * @return true `T` is unsigned numeric
- * @return false  `T` is signed numeric
- **/
-template <typename T>
-constexpr inline bool is_unsigned()
-{
-  return std::is_unsigned<T>::value;
-}
-
-struct is_unsigned_impl {
-  template <typename T>
-  bool operator()()
-  {
-    return is_unsigned<T>();
-  }
-};
-
-/**
  * @brief Indicates whether `type` is a numeric `data_type`.
  *
  * "Numeric" types are fundamental integral/floating point types such as `INT*`
@@ -214,6 +193,26 @@ constexpr inline bool is_index_type(data_type type)
   return cudf::type_dispatcher(type, is_index_type_impl{});
 }
 
+/**
+ * @brief Indicates whether the type `T` is a unsigned numeric type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is unsigned numeric
+ * @return false  `T` is signed numeric
+ **/
+template <typename T>
+constexpr inline bool is_unsigned()
+{
+  return std::is_unsigned<T>::value;
+}
+
+struct is_unsigned_impl {
+  template <typename T>
+  bool operator()()
+  {
+    return is_unsigned<T>();
+  }
+};
 /**
  * @brief Indicates whether `type` is a unsigned numeric `data_type`.
  *
@@ -435,6 +434,38 @@ constexpr inline bool is_chrono(data_type type)
   return cudf::type_dispatcher(type, is_chrono_impl{});
 }
 
+/**
+ * @brief Indicates whether the type `T` is a dictionary type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is a dictionary-type
+ * @return false  `T` is not dictionary-type
+ **/
+template <typename T>
+constexpr inline bool is_dictionary()
+{
+  return std::is_same<dictionary32, T>::value;
+}
+
+struct is_dictionary_impl {
+  template <typename T>
+  bool operator()()
+  {
+    return is_dictionary<T>();
+  }
+};
+
+/**
+ * @brief Indicates whether `type` is a dictionary `data_type`.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is a dictionary type
+ * @return false `type` is not a dictionary type
+ **/
+constexpr inline bool is_dictionary(data_type type)
+{
+  return cudf::type_dispatcher(type, is_dictionary_impl{});
+}
 /**
  * @brief Indicates whether elements of type `T` are fixed-width.
  *
