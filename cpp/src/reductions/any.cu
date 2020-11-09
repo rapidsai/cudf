@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,15 +15,18 @@
  */
 // The translation unit for reduction `max`
 
-#include <cudf/detail/reduction_functions.hpp>
 #include "simple.cuh"
+
+#include <cudf/detail/reduction_functions.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 std::unique_ptr<cudf::scalar> cudf::reduction::any(column_view const& col,
                                                    cudf::data_type const output_dtype,
-                                                   rmm::mr::device_memory_resource* mr,
-                                                   cudaStream_t stream)
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
                "any() operation can be applied with output type `bool8` only");
-  return cudf::reduction::max(col, cudf::data_type(cudf::type_id::BOOL8), mr, stream);
+  return cudf::reduction::max(col, cudf::data_type(cudf::type_id::BOOL8), stream, mr);
 }

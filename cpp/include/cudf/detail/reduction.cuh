@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include <thrust/iterator/iterator_traits.h>
 #include <cub/device/device_reduce.cuh>
 #include "reduction_operators.cuh"
+#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace reduction {
@@ -49,8 +50,8 @@ template <typename Op,
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> sop,
-                               rmm::mr::device_memory_resource* mr,
-                               cudaStream_t stream)
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   auto binary_op      = sop.get_binary_op();
   OutputType identity = sop.template get_identity<OutputType>();
@@ -66,7 +67,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             num_items,
                             binary_op,
                             identity,
-                            stream);
+                            stream.value());
   d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
 
   // Run reduction
@@ -77,7 +78,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             num_items,
                             binary_op,
                             identity,
-                            stream);
+                            stream.value());
 
   // only for string_view, data is copied
   auto s = new cudf::scalar_type_t<OutputType>(std::move(dev_result), true, stream, mr);
@@ -92,8 +93,8 @@ template <typename Op,
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> sop,
-                               rmm::mr::device_memory_resource* mr,
-                               cudaStream_t stream)
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   auto binary_op      = sop.get_binary_op();
   OutputType identity = sop.template get_identity<OutputType>();
@@ -109,7 +110,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             num_items,
                             binary_op,
                             identity,
-                            stream);
+                            stream.value());
   d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
 
   // Run reduction
@@ -120,7 +121,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             num_items,
                             binary_op,
                             identity,
-                            stream);
+                            stream.value());
 
   using ScalarType = cudf::scalar_type_t<OutputType>;
   auto s = new ScalarType(dev_result, true, stream, mr);  // only for string_view, data is copied
@@ -135,8 +136,8 @@ template <typename Op,
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> sop,
-                               rmm::mr::device_memory_resource* mr,
-                               cudaStream_t stream)
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FAIL("dictionary type not supported");
 }
@@ -169,8 +170,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                                op::compound_op<Op> cop,
                                cudf::size_type valid_count,
                                cudf::size_type ddof,
-                               rmm::mr::device_memory_resource* mr,
-                               cudaStream_t stream)
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   auto binary_op            = cop.get_binary_op();
   IntermediateType identity = cop.template get_identity<IntermediateType>();
@@ -186,7 +187,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             num_items,
                             binary_op,
                             identity,
-                            stream);
+                            stream.value());
   d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
 
   // Run reduction
@@ -197,12 +198,12 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             num_items,
                             binary_op,
                             identity,
-                            stream);
+                            stream.value());
 
   // compute the result value from intermediate value in device
   using ScalarType = cudf::scalar_type_t<OutputType>;
   auto result      = new ScalarType(OutputType{0}, true, stream, mr);
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      intermediate_result.data(),
                      1,
                      [dres = result->data(), cop, valid_count, ddof] __device__(auto i) {
