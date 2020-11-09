@@ -95,7 +95,7 @@ TEST(ReleaseAssertDeathTest, release_assert_false)
   auto call_kernel = []() {
     assert_false_kernel<<<1, 1>>>();
 
-    // Kernel should fail with `cudaErrorAssert` 
+    // Kernel should fail with `cudaErrorAssert`
     // This error invalidates the current device context, so we need to kill
     // the current process. Running with EXPECT_DEATH spawns a new process for
     // each attempted kernel launch
