@@ -832,4 +832,19 @@ TYPED_TEST(FixedPointTests, CastFromDouble)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TYPED_TEST(FixedPointTests, CastFromInt)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<int32_t>;
+
+  auto const input    = fw_wrapper{1729, 172, 17, 1};
+  auto const expected = fp_wrapper{{17, 1, 0, 0}, scale_type{2}};
+  auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(2));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 CUDF_TEST_PROGRAM_MAIN()
