@@ -80,13 +80,18 @@ def test_series_map_callable_numeric_random_dtype_change():
 def test_series_map_non_unique_index():
     # test for checking correct error is produced
 
-    gd2 = cudf.Series([1, 2, 3, 4, np.nan])
-    pd2 = pd.Series([1, 2, 3, 4, np.nan])
+    gd1 = cudf.Series([1, 2, 3, 4, np.nan])
+    pd1 = pd.Series([1, 2, 3, 4, np.nan])
+
+    gd_map_series = cudf.Series(["a", "b", "c"], index=[1, 1, 2])
+    pd_map_series = pd.Series(["a", "b", "c"], index=[1, 1, 2])
 
     assert_exceptions_equal(
-        lfunc=pd2.map,
-        rfunc=gd2.map,
+        lfunc=pd1.map,
+        rfunc=gd1.map,
         check_exception_type=False,
-        lfunc_args_and_kwargs=([1, 1, 2], {"objs": ["a", "b", "c"]}),
-        rfunc_args_and_kwargs=([1, 1, 2], {"objs": ["a", "b", "c"]}),
+        lfunc_args_and_kwargs=([pd_map_series],),
+        rfunc_args_and_kwargs=([gd_map_series],),
+        expected_error_message="Reindexing only valid with uniquely"
+        " valued Index objects",
     )
