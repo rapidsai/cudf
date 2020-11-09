@@ -338,15 +338,15 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
 
   // get the indexes for lo_replace and for hi_replace
   auto lo_replace_index = dictionary::detail::get_index(
-    matched_view, lo_replace, rmm::mr::get_current_device_resource(), stream);
+    matched_view, lo_replace, stream, rmm::mr::get_current_device_resource());
   auto hi_replace_index = dictionary::detail::get_index(
-    matched_view, hi_replace, rmm::mr::get_current_device_resource(), stream);
+    matched_view, hi_replace, stream, rmm::mr::get_current_device_resource());
 
   // get the closest indexes for lo and for hi
   auto lo_index = dictionary::detail::get_insert_index(
-    matched_view, lo, rmm::mr::get_current_device_resource(), stream);
+    matched_view, lo, stream, rmm::mr::get_current_device_resource());
   auto hi_index = dictionary::detail::get_insert_index(
-    matched_view, hi, rmm::mr::get_current_device_resource(), stream);
+    matched_view, hi, stream, rmm::mr::get_current_device_resource());
 
   // call clamp with the scalar indexes and the matched indices
   auto matched_indices = matched_view.get_indices_annotated();

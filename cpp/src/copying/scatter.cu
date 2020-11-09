@@ -185,7 +185,7 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
       stream.value());
     auto dict_view    = dictionary_column_view(dict_target->view());
     auto scalar_index = dictionary::detail::get_index(
-      dict_view, source.get(), rmm::mr::get_current_device_resource(), stream.value());
+      dict_view, source.get(), stream, rmm::mr::get_current_device_resource());
     auto scalar_iter = thrust::make_permutation_iterator(
       indexalator_factory::make_input_iterator(*scalar_index), thrust::make_constant_iterator(0));
     auto new_indices = std::make_unique<column>(dict_view.get_indices_annotated(), stream, mr);

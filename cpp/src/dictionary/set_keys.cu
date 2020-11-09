@@ -119,7 +119,7 @@ std::unique_ptr<column> set_keys(
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
 
   // compute the new nulls
-  auto matches   = cudf::detail::contains(keys, keys_column->view(), mr, stream);
+  auto matches   = cudf::detail::contains(keys, keys_column->view(), stream, mr);
   auto d_matches = matches->view().data<bool>();
   auto indices_itr =
     cudf::detail::indexalator_factory::make_input_iterator(dictionary_column.indices());

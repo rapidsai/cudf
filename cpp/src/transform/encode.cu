@@ -87,8 +87,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
                               input_table,
                               std::vector<order>(input_table.num_columns(), order::ASCENDING),
                               std::vector<null_order>(input_table.num_columns(), null_order::AFTER),
-                              mr,
-                              stream);
+                              stream,
+                              mr);
 
   return std::make_pair(std::move(keys_table), std::move(indices_column));
 }

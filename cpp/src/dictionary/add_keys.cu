@@ -76,8 +76,8 @@ std::unique_ptr<column> add_keys(
     table_view{{old_keys}},
     std::vector<order>{order::ASCENDING},
     std::vector<null_order>{null_order::AFTER},  // should be no nulls here
-    mr,
-    stream);
+    stream,
+    mr);
   // now create the indices column -- map old values to the new ones
   // gather([4,0,3,1,2,2,2,4,0],[0,1,2,3,5]) = [5,0,3,1,2,2,2,5,0]
   column_view indices_view(dictionary_column.indices().type(),

@@ -153,7 +153,7 @@ std::unique_ptr<column> remove_keys(
   CUDF_EXPECTS(keys_view.type() == keys_to_remove.type(), "keys types must match");
 
   // locate keys to remove by searching the keys column
-  auto const matches = cudf::detail::contains(keys_view, keys_to_remove, mr, stream);
+  auto const matches = cudf::detail::contains(keys_view, keys_to_remove, stream, mr);
   auto d_matches     = matches->view().data<bool>();
   // call common utility method to keep the keys not matched to keys_to_remove
   auto key_matcher = [d_matches] __device__(size_type idx) { return !d_matches[idx]; };
@@ -177,7 +177,7 @@ std::unique_ptr<column> remove_unused_keys(
       rmm::exec_policy(stream)->on(stream), keys_positions.begin(), keys_positions.end());
     // wrap the indices for comparison in contains()
     column_view keys_positions_view(data_type{type_id::UINT32}, keys_size, keys_positions.data());
-    return cudf::detail::contains(keys_positions_view, indices_view, mr, stream);
+    return cudf::detail::contains(keys_positions_view, indices_view, stream, mr);
   }();
   auto d_matches = matches->view().data<bool>();
 
