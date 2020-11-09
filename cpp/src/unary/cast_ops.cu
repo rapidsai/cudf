@@ -122,40 +122,23 @@ struct fixed_point_unary_cast {
   }
 };
 
-// template <typename From, typename To>
-// constexpr inline auto is_supported_cast()
-// {
-//   return
-//     // Enable
-//     ((is_fixed_width<To>() && not is_fixed_point<To>()) ||  //
-//      (is_fixed_point<From>() && is_floating_point<To>())) &&
-//     // Disable
-//     not(is_timestamp<From>() && is_numeric<To>()) &&  //
-//     not(is_timestamp<To>() && is_numeric<From>()) &&
-//     not(is_fixed_point<To>() && is_fixed_point<From>());
-// }
-
-// clang-format off
 template <typename From, typename To>
 constexpr inline auto is_supported_non_fixed_point_cast()
 {
-  // Disallow conversions between timestamps and numeric
-  return (cudf::is_numeric  <From>() && cudf::is_numeric  <To>()) ||
-         (cudf::is_timestamp<From>() && cudf::is_timestamp<To>()) ||
-         (cudf::is_duration <From>() && cudf::is_duration <To>()) ||
-         (cudf::is_numeric  <From>() && cudf::is_duration <To>()) ||
-         (cudf::is_timestamp<From>() && cudf::is_duration <To>()) ||
-         (cudf::is_duration <From>() && cudf::is_numeric  <To>()) ||
-         (cudf::is_duration <From>() && cudf::is_timestamp<To>());
+  return cudf::is_fixed_width<To>() &&
+         // Disallow fixed_point here (requires different special)
+         !(cudf::is_fixed_point<From>() || cudf::is_fixed_point<To>()) &&
+         // Disallow conversions between timestamps and numeric
+         !(cudf::is_timestamp<From>() && is_numeric<To>()) &&
+         !(cudf::is_timestamp<To>() && is_numeric<From>());
 }
 
 template <typename From, typename To>
 constexpr inline auto is_supported_fixed_point_cast()
 {
-  return (cudf::is_fixed_point<From>() && cudf::is_numeric    <To>()) ||
-         (cudf::is_numeric    <From>() && cudf::is_fixed_point<To>());
+  return (cudf::is_fixed_point<From>() && cudf::is_numeric<To>()) ||
+         (cudf::is_numeric<From>() && cudf::is_fixed_point<To>());
 }
-// clang-format on
 
 template <typename From, typename To>
 constexpr inline auto is_supported_cast()
