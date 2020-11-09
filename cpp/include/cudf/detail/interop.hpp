@@ -21,6 +21,8 @@
 #include <cudf/utilities/error.hpp>
 #include <string>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace detail {
 
@@ -31,8 +33,8 @@ namespace detail {
  */
 std::unique_ptr<table> from_dlpack(
   DLManagedTensor const* managed_tensor,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc cudf::to_dlpack
@@ -41,8 +43,8 @@ std::unique_ptr<table> from_dlpack(
  */
 DLManagedTensor* to_dlpack(
   table_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 // Creating arrow as per given type_id and buffer arguments
 template <typename... Ts>
@@ -101,8 +103,8 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type);
  **/
 std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        std::vector<column_metadata> const& metadata = {},
-                                       arrow::MemoryPool* ar_mr = arrow::default_memory_pool(),
-                                       cudaStream_t stream      = 0);
+                                       rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+                                       arrow::MemoryPool* ar_mr     = arrow::default_memory_pool());
 
 /**
  * @copydoc cudf::arrow_to_cudf
@@ -111,8 +113,8 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
  **/
 std::unique_ptr<table> from_arrow(
   arrow::Table const& input_table,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace cudf

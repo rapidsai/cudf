@@ -21,6 +21,7 @@
 #include <dlpack/dlpack.h>
 
 #include <algorithm>
+#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace {
@@ -113,8 +114,8 @@ struct dltensor_context {
 
 namespace detail {
 std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
-                                   rmm::mr::device_memory_resource* mr,
-                                   cudaStream_t stream)
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(nullptr != managed_tensor, "managed_tensor is null");
   auto const& tensor = managed_tensor->dl_tensor;
@@ -171,7 +172,7 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
                              reinterpret_cast<void*>(tensor_data),
                              bytes,
                              cudaMemcpyDefault,
-                             stream));
+                             stream.value()));
 
     tensor_data += col_stride;
   }
@@ -180,8 +181,8 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
 }
 
 DLManagedTensor* to_dlpack(table_view const& input,
-                           rmm::mr::device_memory_resource* mr,
-                           cudaStream_t stream)
+                           rmm::cuda_stream_view stream,
+                           rmm::mr::device_memory_resource* mr)
 {
   auto const num_rows = input.num_rows();
   auto const num_cols = input.num_columns();
@@ -241,7 +242,7 @@ DLManagedTensor* to_dlpack(table_view const& input,
                              get_column_data(col),
                              stride_bytes,
                              cudaMemcpyDefault,
-                             stream));
+                             stream.value()));
     tensor_data += stride_bytes;
   }
 
@@ -256,12 +257,12 @@ DLManagedTensor* to_dlpack(table_view const& input,
 std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
                                    rmm::mr::device_memory_resource* mr)
 {
-  return detail::from_dlpack(managed_tensor, mr);
+  return detail::from_dlpack(managed_tensor, rmm::cuda_stream_default, mr);
 }
 
 DLManagedTensor* to_dlpack(table_view const& input, rmm::mr::device_memory_resource* mr)
 {
-  return detail::to_dlpack(input, mr);
+  return detail::to_dlpack(input, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf
