@@ -83,6 +83,7 @@
 - PR #6640 Add error message for unsupported `axis` parameter in DataFrame APIs
 - PR #6710 Fix an out-of-bounds indexing error in gather() for lists
 
+
 # cuDF 0.16.0 (21 Oct 2020)
 
 ## New Features
