@@ -38,7 +38,7 @@ from cudf._lib.cpp.io.types cimport (
     table_with_metadata
 )
 from cudf._lib.io.utils cimport make_source_info, make_sink_info
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, make_table_view
 from cudf._lib.cpp.table.table_view cimport table_view
 
 ctypedef int32_t underlying_type_t_compression
@@ -404,17 +404,18 @@ cpdef write_csv(
     bool header=True,
     object line_terminator="\n",
     int rows_per_chunk=8,
+    bool index=True,
 ):
     """
     Cython function to call into libcudf API, see `write_csv`.
 
     See Also
     --------
-    cudf.io.csv.write_csv
+    cudf.io.csv.to_csv
     """
 
-    # Index already been reset and added as main column, so just data_view
-    cdef table_view input_table_view = table.data_view()
+    cdef table_view input_table_view = \
+        table.view() if index is True else table.data_view()
     cdef bool include_header_c = header
     cdef char delim_c = ord(sep)
     cdef string line_term_c = line_terminator.encode()
@@ -426,10 +427,28 @@ cpdef write_csv(
     cdef unique_ptr[data_sink] data_sink_c
     cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
 
-    if header is True and table._column_names is not None:
-        metadata_.column_names.reserve(len(table._column_names))
-        for col_name in table._column_names:
-            metadata_.column_names.push_back(str(col_name).encode())
+    if header is True:
+        all_names = table._column_names
+        if index is True:
+            all_names = table._index.names + all_names
+
+        if len(all_names) > 0:
+            metadata_.column_names.reserve(len(all_names))
+            if len(all_names) == 1:
+                if all_names[0] in (None, ''):
+                    metadata_.column_names.push_back('""'.encode())
+                else:
+                    metadata_.column_names.push_back(
+                        str(all_names[0]).encode()
+                    )
+            else:
+                for idx, col_name in enumerate(all_names):
+                    if col_name is None:
+                        metadata_.column_names.push_back(''.encode())
+                    else:
+                        metadata_.column_names.push_back(
+                            str(col_name).encode()
+                        )
 
     cdef csv_writer_options options = move(
         csv_writer_options.builder(sink_info_c, input_table_view)
