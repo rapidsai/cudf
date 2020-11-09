@@ -1478,11 +1478,11 @@ class RangeIndex(Index):
     Examples
     --------
     >>> import cudf
-    >>> cudf.RangeIndex(0, 10, name="a")
-    RangeIndex(start=0, stop=10, name='a')
+    >>> cudf.RangeIndex(0, 10, 1, name="a")
+    RangeIndex(start=0, stop=10, step=1, name='a')
 
-    >>> cudf.RangeIndex(range(1, 10), name="a")
-    RangeIndex(start=1, stop=10, name='a')
+    >>> cudf.RangeIndex(range(1, 10, 1), name="a")
+    RangeIndex(start=1, stop=10, step=1, name='a')
     """
 
     def __new__(
@@ -1600,7 +1600,7 @@ class RangeIndex(Index):
     def __repr__(self):
         return (
             f"{self.__class__.__name__}(start={self._start}, stop={self._stop}"
-            ", step={self._step}"
+            f", step={self._step}"
             + (
                 f", name={pd.io.formats.printing.default_pprint(self.name)}"
                 if self.name is not None
@@ -1770,7 +1770,7 @@ class RangeIndex(Index):
         Return if the index is monotonic increasing
         (only equal or increasing) values.
         """
-        return self._start <= self._stop
+        return self._step > 0 or len(self) <= 1
 
     @property
     def is_monotonic_decreasing(self):
@@ -1778,7 +1778,7 @@ class RangeIndex(Index):
         Return if the index is monotonic decreasing
         (only equal or decreasing) values.
         """
-        return self._start >= self._stop
+        return self._step < 0 or len(self) <= 1
 
     def get_slice_bound(self, label, side, kind=None):
         """
@@ -2738,8 +2738,7 @@ def as_index(arbitrary, **kwargs):
     elif isinstance(arbitrary, cudf.DataFrame):
         return cudf.MultiIndex(source_data=arbitrary)
     elif isinstance(arbitrary, range):
-        if arbitrary.step == 1:
-            return RangeIndex(arbitrary.start, arbitrary.stop, **kwargs)
+        return RangeIndex(arbitrary, **kwargs)
     return as_index(
         column.as_column(arbitrary, dtype=kwargs.get("dtype", None)), **kwargs
     )
