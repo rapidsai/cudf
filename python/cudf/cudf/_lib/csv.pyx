@@ -6,6 +6,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp.utility cimport move
 
+import pandas as pd
 import cudf
 import pandas as pd
 import numpy as np
@@ -129,6 +130,7 @@ cdef csv_reader_options make_csv_reader_options(
     if compression is None:
         c_compression = compression_type.NONE
     else:
+        compression = str(compression)
         compression = Compression[compression.upper()]
         c_compression = <compression_type> (
             <underlying_type_t_compression> compression
@@ -284,9 +286,9 @@ cdef csv_reader_options make_csv_reader_options(
 
 def validate_args(
     object delimiter,
-    str sep,
+    object sep,
     bool delim_whitespace,
-    str decimal,
+    object decimal,
     object thousands,
     object nrows,
     int skipfooter,
@@ -319,14 +321,14 @@ def validate_args(
 
 def read_csv(
     object datasource,
-    str lineterminator="\n",
-    str quotechar='"',
+    object lineterminator="\n",
+    object quotechar='"',
     int quoting=0,
     bool doublequote=True,
     object header="infer",
     bool mangle_dupe_cols=True,
     object usecols=None,
-    str sep=",",
+    object sep=",",
     object delimiter=None,
     bool delim_whitespace=False,
     bool skipinitialspace=False,
@@ -335,9 +337,9 @@ def read_csv(
     int skipfooter=0,
     int skiprows=0,
     bool dayfirst=False,
-    str compression="infer",
+    object compression="infer",
     object thousands=None,
-    str decimal=".",
+    object decimal=".",
     object true_values=None,
     object false_values=None,
     object nrows=None,
@@ -415,10 +417,10 @@ def read_csv(
 cpdef write_csv(
     Table table,
     object path_or_buf=None,
-    str sep=",",
-    str na_rep="",
+    object sep=",",
+    object na_rep="",
     bool header=True,
-    str line_terminator="\n",
+    object line_terminator="\n",
     int rows_per_chunk=8,
     bool index=True,
 ):
@@ -444,7 +446,7 @@ cpdef write_csv(
     cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
 
     if header is True:
-        all_names = table._column_names
+        all_names = columns_apply_na_rep(table._column_names, na_rep)
         if index is True:
             all_names = table._index.names + all_names
 
@@ -501,3 +503,11 @@ def _get_cudf_compatible_str_from_dtype(dtype):
         return str(pd_dtype)
     else:
         raise ValueError(f"dtype not understood: {dtype}")
+
+
+def columns_apply_na_rep(column_names, na_rep):
+    return tuple(
+        na_rep if pd.isnull(col_name)
+        else col_name
+        for col_name in column_names
+    )
