@@ -427,7 +427,11 @@ cpdef write_csv(
     cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
 
     if header is True:
-        all_names = table._column_names
+        all_names = tuple(
+            table.columns.to_native_types(
+                na_rep=na_rep,
+            )
+        )
         if index is True:
             all_names = table._index.names + all_names
 
