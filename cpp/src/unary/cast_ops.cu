@@ -99,10 +99,10 @@ template <typename _FixedPointT, typename _TargetT>
 struct fixed_point_unary_cast {
   numeric::scale_type scale;
   using DeviceT = device_storage_type_t<_FixedPointT>;
-  template <typename FixedPointT                                             = _FixedPointT,
-            typename TargetT                                                 = _TargetT,
+  template <typename FixedPointT                                      = _FixedPointT,
+            typename TargetT                                          = _TargetT,
             typename std::enable_if_t<(cudf::is_fixed_point<_FixedPointT>() &&
-                                       cudf::is_floating_point<TargetT>())>* = nullptr>
+                                       cudf::is_numeric<TargetT>())>* = nullptr>
   CUDA_DEVICE_CALLABLE TargetT operator()(DeviceT const element)
   {
     auto const fp = FixedPointT{numeric::scaled_integer<DeviceT>{element, scale}};
@@ -141,7 +141,7 @@ template <typename From, typename To>
 constexpr inline auto is_supported_fixed_point_cast()
 {
   // TODO add more
-  return (cudf::is_fixed_point<From>() && cudf::is_floating_point<To>());
+  return (cudf::is_fixed_point<From>() && cudf::is_numeric<To>());
 }
 // clang-format on
 
@@ -218,7 +218,7 @@ struct dispatch_unary_cast_to {
     if (!cudf::is_fixed_width<TargetT>())
       CUDF_FAIL("Column type must be numeric or chrono or decimal32/64");
     else if (cudf::is_fixed_point<SourceT>())
-      CUDF_FAIL("Currently only decimal32/64 to floating point is supported");
+      CUDF_FAIL("Currently only decimal32/64 to floating point/integral is supported");
     else if (cudf::is_timestamp<SourceT>() && is_numeric<TargetT>())
       CUDF_FAIL("Timestamps can be created only from duration");
     else
