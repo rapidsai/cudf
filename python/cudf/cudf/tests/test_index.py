@@ -1690,7 +1690,7 @@ def test_index_equals_categories():
     assert_eq(expect, got)
 
 
-def test_index_rangeindex_pos_from_val():
+def test_index_rangeindex_search_range():
     # step > 0
     ridx = RangeIndex(-13, 17, 4)
     for i in range(len(ridx)):
