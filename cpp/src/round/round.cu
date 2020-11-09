@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
+#include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/round.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/round.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -68,7 +71,7 @@ int16_t __device__ generic_sign(T value)
 template <typename T>
 constexpr inline auto is_supported_round_type()
 {
-  return cudf::is_numeric<T>() && not std::is_same<T, bool>::value;
+  return (cudf::is_numeric<T>() && not std::is_same<T, bool>::value) || cudf::is_fixed_point<T>();
 }
 
 template <typename T>
@@ -180,7 +183,22 @@ struct half_even_negative {
   }
 };
 
-template <typename T, template <typename> typename RoundFunctor>
+template <typename T>
+struct half_up_fixed_point {
+  T n;
+  __device__ T operator()(T e) { return half_up_negative<T>{n}(e) / n; }
+};
+
+template <typename T>
+struct half_even_fixed_point {
+  T n;
+  __device__ T operator()(T e) { return half_even_negative<T>{n}(e) / n; }
+};
+
+template <typename T,
+          template <typename>
+          typename RoundFunctor,
+          typename std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
 std::unique_ptr<column> round_with(column_view const& input,
                                    int32_t decimal_places,
                                    cudaStream_t stream,
@@ -191,12 +209,8 @@ std::unique_ptr<column> round_with(column_view const& input,
   if (decimal_places >= 0 && std::is_integral<T>::value)
     return std::make_unique<cudf::column>(input, stream, mr);
 
-  auto result = cudf::make_fixed_width_column(input.type(),  //
-                                              input.size(),
-                                              copy_bitmask(input, stream, mr),
-                                              input.null_count(),
-                                              stream,
-                                              mr);
+  auto result = cudf::make_fixed_width_column(
+    input.type(), input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);
 
   auto out_view = result->mutable_view();
   T const n     = std::pow(10, std::abs(decimal_places));
@@ -206,6 +220,45 @@ std::unique_ptr<column> round_with(column_view const& input,
                     input.end<T>(),
                     out_view.begin<T>(),
                     Functor{n});
+
+  return result;
+}
+
+template <typename T,
+          template <typename>
+          typename RoundFunctor,
+          typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+std::unique_ptr<column> round_with(column_view const& input,
+                                   int32_t decimal_places,
+                                   cudaStream_t stream,
+                                   rmm::mr::device_memory_resource* mr)
+{
+  using namespace numeric;
+  using Type                   = device_storage_type_t<T>;
+  using FixedPointRoundFunctor = RoundFunctor<Type>;
+
+  // if rounding to more precision than fixed_point is capable of, just need to rescale
+  // note: decimal_places has the opposite sign of numeric::scale_type (therefore have to negate)
+  if (input.type().scale() > -decimal_places) {
+    // TODO replace this cudf::binary_operation with a cudf::cast or cudf::rescale when available
+    auto const diff   = input.type().scale() - (-decimal_places);
+    auto const scalar = cudf::make_fixed_point_scalar<T>(std::pow(10, diff), scale_type{-diff});
+    return cudf::binary_operation(input, *scalar, cudf::binary_operator::MUL, {}, mr);
+  }
+
+  auto const result_type = data_type{input.type().id(), scale_type{-decimal_places}};
+
+  auto result = cudf::make_fixed_width_column(
+    result_type, input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);
+
+  auto out_view = result->mutable_view();
+  Type const n  = std::pow(10, std::abs(decimal_places + input.type().scale()));
+
+  thrust::transform(rmm::exec_policy(stream)->on(stream),
+                    input.begin<Type>(),
+                    input.end<Type>(),
+                    out_view.begin<Type>(),
+                    FixedPointRoundFunctor{n});
 
   return result;
 }
@@ -229,13 +282,15 @@ struct round_type_dispatcher {
     // clang-format off
     switch (method) {
       case cudf::rounding_method::HALF_UP:
-        if      (decimal_places == 0) return round_with<T, half_up_zero    >(input, decimal_places, stream, mr);
-        else if (decimal_places >  0) return round_with<T, half_up_positive>(input, decimal_places, stream, mr);
-        else                          return round_with<T, half_up_negative>(input, decimal_places, stream, mr);
+        if      (is_fixed_point<T>()) return round_with<T, half_up_fixed_point>(input, decimal_places, stream, mr);
+        else if (decimal_places == 0) return round_with<T, half_up_zero       >(input, decimal_places, stream, mr);
+        else if (decimal_places >  0) return round_with<T, half_up_positive   >(input, decimal_places, stream, mr);
+        else                          return round_with<T, half_up_negative   >(input, decimal_places, stream, mr);
       case cudf::rounding_method::HALF_EVEN:
-        if      (decimal_places == 0) return round_with<T, half_even_zero    >(input, decimal_places, stream, mr);
-        else if (decimal_places >  0) return round_with<T, half_even_positive>(input, decimal_places, stream, mr);
-        else                          return round_with<T, half_even_negative>(input, decimal_places, stream, mr);
+        if      (is_fixed_point<T>()) return round_with<T, half_even_fixed_point>(input, decimal_places, stream, mr);
+        else if (decimal_places == 0) return round_with<T, half_even_zero       >(input, decimal_places, stream, mr);
+        else if (decimal_places >  0) return round_with<T, half_even_positive   >(input, decimal_places, stream, mr);
+        else                          return round_with<T, half_even_negative   >(input, decimal_places, stream, mr);
       default: CUDF_FAIL("Undefined rounding method");
     }
     // clang-format on
@@ -250,10 +305,16 @@ std::unique_ptr<column> round(column_view const& input,
                               cudaStream_t stream,
                               rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(cudf::is_numeric(input.type()), "Only integral/floating point currently supported.");
+  CUDF_EXPECTS(cudf::is_numeric(input.type()) || cudf::is_fixed_point(input.type()),
+               "Only integral/floating point/fixed point currently supported.");
 
-  // TODO when fixed_point supported, have to adjust type
-  if (input.size() == 0) return empty_like(input);
+  if (input.is_empty()) {
+    if (is_fixed_point(input.type())) {
+      auto const type = data_type{input.type().id(), numeric::scale_type{-decimal_places}};
+      return std::make_unique<cudf::column>(type, 0, rmm::device_buffer{});
+    }
+    return empty_like(input);
+  }
 
   return type_dispatcher(
     input.type(), round_type_dispatcher{}, input, decimal_places, method, stream, mr);
