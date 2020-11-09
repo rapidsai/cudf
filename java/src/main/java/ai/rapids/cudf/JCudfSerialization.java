@@ -391,7 +391,6 @@ public class JCudfSerialization {
         int numChildren = column.getNumChildren();
         childProviders = new ColumnBufferProvider[numChildren];
         for (int i = 0; i < numChildren; i++) {
-          // TODO: Is close parameter correct here?
           childProviders[i] = new ColumnProvider(column.getChildColumnViewAccess(i), false);
         }
       } else {
@@ -502,7 +501,7 @@ public class JCudfSerialization {
     public long getOffset(long index) {
       assert getType().hasOffsets();
       assert (index >= 0 && index <= getRowCount()) : "index is out of range 0 <= " + index + " <= " + getRowCount();
-      return buffer.getInt(offsets.offsets + (index * 4));
+      return buffer.getInt(offsets.offsets + (index * Integer.BYTES));
     }
 
     @Override
@@ -718,7 +717,7 @@ public class JCudfSerialization {
     if (type.hasOffsets()) {
       if (numRows > 0) {
         // Add in size of offsets vector
-        totalDataSize += padFor64byteAlignment((numRows + 1) * 4);
+        totalDataSize += padFor64byteAlignment((numRows + 1) * Integer.BYTES);
         if (type == DType.STRING) {
           totalDataSize += padFor64byteAlignment(getRawStringDataLength(column, rowOffset, numRows));
         }
@@ -809,10 +808,10 @@ public class JCudfSerialization {
     DType dtype = column.getType();
     if (dtype.hasOffsets()) {
       if (rowCount > 0) {
-        long offsetsLen = (rowCount + 1) * 4;
+        long offsetsLen = (rowCount + 1) * Integer.BYTES;
         offsets = bufferOffset;
         int startOffset = buffer.getInt(bufferOffset);
-        int endOffset = buffer.getInt(bufferOffset + (rowCount * 4));
+        int endOffset = buffer.getInt(bufferOffset + (rowCount * Integer.BYTES));
         bufferOffset += padFor64byteAlignment(offsetsLen);
         if (dtype == DType.STRING) {
           dataLen = endOffset - startOffset;
@@ -1046,7 +1045,7 @@ public class JCudfSerialization {
     DType dtype = firstProvider.getType();
     if (dtype.hasOffsets()) {
       if (rowCount > 0) {
-        totalSize += padFor64byteAlignment((rowCount + 1) * 4);
+        totalSize += padFor64byteAlignment((rowCount + 1) * Integer.BYTES);
         if (dtype == DType.STRING) {
           long stringDataLen = 0;
           for (ColumnBufferProvider provider : providers) {
@@ -1327,8 +1326,8 @@ public class JCudfSerialization {
       // Don't copy anything, there are no rows
       return 0;
     }
-    long bytesToCopy = (numRows + 1) * 4;
-    long srcOffset = rowOffset * 4;
+    long bytesToCopy = (numRows + 1) * Integer.BYTES;
+    long srcOffset = rowOffset * Integer.BYTES;
     if (rowOffset == 0) {
       return copySlicedAndPad(out, column, BufferType.OFFSET, srcOffset, bytesToCopy);
     }
@@ -1340,11 +1339,11 @@ public class JCudfSerialization {
     ByteBuffer bb = buff.asByteBuffer(startOffset, (int)bytesToCopy);
     int start = bb.getInt();
     out.writeIntNativeOrder(0);
-    long total = 4;
+    long total = Integer.BYTES;
     for (int i = 1; i < (numRows + 1); i++) {
       int offset = bb.getInt();
       out.writeIntNativeOrder(offset - start);
-      total += 4;
+      total += Integer.BYTES;
     }
     assert total == bytesToCopy;
     long ret = padFor64byteAlignment(out, total);
@@ -1362,19 +1361,19 @@ public class JCudfSerialization {
         long currentOffset = provider.getBufferStartOffset(BufferType.OFFSET);
         if (totalCopied == 0) {
           // first chunk of offsets can be copied verbatim
-          totalCopied = (rowCount + 1) * 4;
+          totalCopied = (rowCount + 1) * Integer.BYTES;
           out.copyDataFrom(offsetsBuffer, currentOffset, totalCopied);
-          offsetToAdd = offsetsBuffer.getInt(currentOffset + (rowCount * 4));
+          offsetToAdd = offsetsBuffer.getInt(currentOffset + (rowCount * Integer.BYTES));
         } else {
           int localOffset = 0;
           // first row's offset has already been written when processing the previous table
           for (int row = 1; row < rowCount + 1; row++) {
-            localOffset = offsetsBuffer.getInt(currentOffset + (row * 4));
+            localOffset = offsetsBuffer.getInt(currentOffset + (row * Integer.BYTES));
             out.writeIntNativeOrder(localOffset + offsetToAdd);
           }
           // last local offset of this chunk is the length of data referenced by offsets
           offsetToAdd += localOffset;
-          totalCopied += rowCount * 4;
+          totalCopied += rowCount * Integer.BYTES;
         }
       }
     }
