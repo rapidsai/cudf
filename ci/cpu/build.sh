@@ -55,24 +55,33 @@ conda config --set ssl_verify False
 # BUILD - Conda package builds
 ################################################################################
 
-gpuci_logger "Build conda pkg for libcudf"
-gpuci_conda_retry build conda/recipes/libcudf
+if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
+  CONDA_BUILD_ARGS=""
+else
+  CONDA_BUILD_ARGS="--dirty --no-remove-work-dir"
+fi
 
-gpuci_logger "Build conda pkg for libcudf_kafka"
-gpuci_conda_retry build conda/recipes/libcudf_kafka
+if [ "$BUILD_LIBCUDF" == '1' ]; then
+  gpuci_logger "Build conda pkg for libcudf"
+  gpuci_conda_retry build conda/recipes/libcudf $CONDA_BUILD_ARGS
 
-gpuci_logger "Build conda pkg for cudf"
-gpuci_conda_retry build conda/recipes/cudf --python=$PYTHON
+  gpuci_logger "Build conda pkg for libcudf_kafka"
+  gpuci_conda_retry build conda/recipes/libcudf_kafka $CONDA_BUILD_ARGS
+fi
 
-gpuci_logger "Build conda pkg for dask-cudf"
-gpuci_conda_retry build conda/recipes/dask-cudf --python=$PYTHON
+if [ "$BUILD_CUDF" == '1' ]; then
+  gpuci_logger "Build conda pkg for cudf"
+  gpuci_conda_retry build conda/recipes/cudf --python=$PYTHON $CONDA_BUILD_ARGS
 
-gpuci_logger "Build conda pkg for cudf_kafka"
-gpuci_conda_retry build conda/recipes/cudf_kafka --python=$PYTHON
+  gpuci_logger "Build conda pkg for dask-cudf"
+  gpuci_conda_retry build conda/recipes/dask-cudf --python=$PYTHON $CONDA_BUILD_ARGS
 
-gpuci_logger "Build conda pkg for custreamz"
-gpuci_conda_retry build conda/recipes/custreamz --python=$PYTHON
+  gpuci_logger "Build conda pkg for cudf_kafka"
+  gpuci_conda_retry build conda/recipes/cudf_kafka --python=$PYTHON $CONDA_BUILD_ARGS
 
+  gpuci_logger "Build conda pkg for custreamz"
+  gpuci_conda_retry build conda/recipes/custreamz --python=$PYTHON $CONDA_BUILD_ARGS
+fi
 ################################################################################
 # UPLOAD - Conda packages
 ################################################################################
