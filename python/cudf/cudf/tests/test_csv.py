@@ -647,6 +647,7 @@ def test_csv_reader_buffer_strings():
         (".beez", "bz2", "bz2"),
         (".gz", "gzip", "infer"),
         (".bz2", "bz2", "infer"),
+        (".beez", "bz2", np.str_("bz2")),
         (".data", None, "infer"),
         (".txt", None, None),
         ("", None, None),
@@ -1491,7 +1492,7 @@ def test_csv_writer_datetime_data(tmpdir):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("sep", [",", "|", " ", ";"])
+@pytest.mark.parametrize("sep", [",", "|", " ", ";", np.str_(",")])
 @pytest.mark.parametrize(
     "columns",
     [
@@ -1521,7 +1522,9 @@ def test_csv_writer_datetime_data(tmpdir):
 @pytest.mark.parametrize(
     "index", [True, False, np.bool_(True), np.bool_(False)]
 )
-@pytest.mark.parametrize("line_terminator", ["\r", "\n", "NEWLINE", "<<<<<"])
+@pytest.mark.parametrize(
+    "line_terminator", ["\r", "\n", "NEWLINE", "<<<<<", np.str_("\n\r")]
+)
 def test_csv_writer_mixed_data(
     sep, columns, header, index, line_terminator, tmpdir
 ):
@@ -1691,3 +1694,52 @@ def test_csv_write_no_caller_manipulation():
     df_copy = df.copy(deep=True)
     _ = df.to_csv(index=True)
     assert_eq(df, df_copy)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        cudf.DataFrame({"a": [1, 2, 3], "": [10, 20, 40]}),
+        cudf.DataFrame({"": [10, 20, 40], "a": [1, 2, 3]}),
+        cudf.DataFrame(
+            {"a": [1, 2, 3], "": [10, 20, 40]},
+            index=cudf.Index(["a", "z", "v"], name="custom name"),
+        ),
+    ],
+)
+@pytest.mark.parametrize("index", [True, False])
+@pytest.mark.parametrize("columns", [["a"], [""], None])
+def test_csv_write_empty_column_name(df, index, columns):
+    pdf = df.to_pandas()
+    expected = pdf.to_csv(index=index, columns=columns)
+    actual = df.to_csv(index=index, columns=columns)
+
+    assert expected == actual
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        cudf.DataFrame(),
+        cudf.DataFrame(index=cudf.Index([], name="index name")),
+    ],
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        True,
+        pytest.param(
+            False,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/6691"
+            ),
+        ),
+    ],
+)
+def test_csv_write_empty_dataframe(df, index):
+    pdf = df.to_pandas()
+
+    expected = pdf.to_csv(index=index)
+    actual = df.to_csv(index=index)
+
+    assert expected == actual
