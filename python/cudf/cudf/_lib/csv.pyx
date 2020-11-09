@@ -6,6 +6,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp.utility cimport move
 
+import pandas as pd
 import cudf
 
 from cudf._lib.cpp.types cimport size_type
@@ -427,11 +428,7 @@ cpdef write_csv(
     cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
 
     if header is True:
-        all_names = tuple(
-            table.columns.to_native_types(
-                na_rep=na_rep,
-            )
-        )
+        all_names = columns_apply_na_rep(table._column_names, na_rep)
         if index is True:
             all_names = table._index.names + all_names
 
@@ -468,3 +465,11 @@ cpdef write_csv(
 
     with nogil:
         cpp_write_csv(options)
+
+
+def columns_apply_na_rep(column_names, na_rep):
+    return tuple(
+        na_rep if pd.isnull(col_name)
+        else col_name
+        for col_name in column_names
+    )
