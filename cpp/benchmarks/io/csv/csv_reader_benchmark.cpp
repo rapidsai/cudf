@@ -33,7 +33,7 @@ namespace cudf_io = cudf::io;
 class CsvRead : public cudf::benchmark {
 };
 
-void CSV_read(benchmark::State& state)
+void BM_csv_read_varying_input(benchmark::State& state)
 {
   auto const data_types     = get_type_or_group(state.range(0));
   io_type const source_type = static_cast<io_type>(state.range(1));
@@ -44,11 +44,11 @@ void CSV_read(benchmark::State& state)
   cuio_source_sink_pair source_sink(source_type);
   cudf_io::csv_writer_options options =
     cudf_io::csv_writer_options::builder(source_sink.make_sink_info(), view)
-      .include_header(false)
-      .rows_per_chunk(1 << 30);
+      .include_header(true)
+      .rows_per_chunk(1 << 14);  // TODO: remove once default is sensible
   cudf_io::write_csv(options);
 
-  cudf_io::csv_reader_options read_options =
+  cudf_io::csv_reader_options const read_options =
     cudf_io::csv_reader_options::builder(source_sink.make_source_info());
 
   for (auto _ : state) {
@@ -59,16 +59,104 @@ void CSV_read(benchmark::State& state)
   state.SetBytesProcessed(data_size * state.iterations());
 }
 
-// TODO: vary reader options instead of data profile here
-#define CSV_RD_BENCHMARK_DEFINE(name, type_or_group, src_type) \
-  BENCHMARK_DEFINE_F(CsvRead, name)                            \
-  (::benchmark::State & state) { CSV_read(state); }            \
-  BENCHMARK_REGISTER_F(CsvRead, name)                          \
-    ->Args({int32_t(type_or_group), src_type})                 \
-    ->Unit(benchmark::kMillisecond)                            \
+void BM_csv_read_varying_options(benchmark::State& state)
+{
+  auto const col_sel    = static_cast<column_selection>(state.range(0));
+  auto const row_sel    = static_cast<row_selection>(state.range(1));
+  auto const num_chunks = state.range(2);
+
+  auto const data_types =
+    dtypes_for_column_selection(get_type_or_group({int32_t(type_group_id::INTEGRAL),
+                                                   int32_t(type_group_id::FLOATING_POINT),
+                                                   int32_t(type_group_id::TIMESTAMP),
+                                                   int32_t(cudf::type_id::STRING)}),
+                                col_sel);
+  auto const cols_to_read = select_columns(col_sel, data_types.size());
+
+  auto const tbl  = create_random_table(data_types, data_types.size(), table_size_bytes{data_size});
+  auto const view = tbl->view();
+
+  std::vector<char> csv_data;
+  cudf_io::csv_writer_options options =
+    cudf_io::csv_writer_options::builder(cudf_io::sink_info{&csv_data}, view)
+      .include_header(true)
+      .line_terminator("\r\n")
+      .rows_per_chunk(1 << 14);  // TODO: remove once default is sensible
+  cudf_io::write_csv(options);
+
+  cudf_io::csv_reader_options read_options =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{csv_data.data(), csv_data.size()})
+      .use_cols_indexes(cols_to_read)
+      .thousands('\'')
+      .windowslinetermination(true)
+      .comment('#')
+      .prefix("BM_");
+
+  size_t const chunk_size             = csv_data.size() / num_chunks;
+  cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
+  for (auto _ : state) {
+    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
+    for (int32_t chunk = 0; chunk < num_chunks; ++chunk) {
+      // only read the header in the first chunk
+      read_options.set_header(chunk == 0 ? 0 : -1);
+
+      auto const is_last_chunk = chunk == (num_chunks - 1);
+      switch (row_sel) {
+        case row_selection::BYTE_RANGE:
+          read_options.set_byte_range_offset(chunk * chunk_size);
+          read_options.set_byte_range_size(chunk_size);
+          if (is_last_chunk) read_options.set_byte_range_size(0);
+          break;
+        case row_selection::NROWS:
+          read_options.set_skiprows(chunk * chunk_row_cnt);
+          read_options.set_nrows(chunk_row_cnt);
+          if (is_last_chunk) read_options.set_nrows(-1);
+          break;
+        case row_selection::SKIPFOOTER:
+          read_options.set_skiprows(chunk * chunk_row_cnt);
+          read_options.set_skipfooter(view.num_rows() - (chunk + 1) * chunk_row_cnt);
+          if (is_last_chunk) read_options.set_skipfooter(0);
+      }
+
+      cudf_io::read_csv(read_options);
+    }
+  }
+  auto const data_processed = data_size * cols_to_read.size() / view.num_columns();
+  state.SetBytesProcessed(data_processed * state.iterations());
+}
+
+#define CSV_RD_BM_INPUTS_DEFINE(name, type_or_group, src_type)       \
+  BENCHMARK_DEFINE_F(CsvRead, name)                                  \
+  (::benchmark::State & state) { BM_csv_read_varying_input(state); } \
+  BENCHMARK_REGISTER_F(CsvRead, name)                                \
+    ->Args({int32_t(type_or_group), src_type})                       \
+    ->Unit(benchmark::kMillisecond)                                  \
     ->UseManualTime();
 
-RD_BENCHMARK_DEFINE_ALL_SOURCES(CSV_RD_BENCHMARK_DEFINE, integral, type_group_id::INTEGRAL);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(CSV_RD_BENCHMARK_DEFINE, floats, type_group_id::FLOATING_POINT);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(CSV_RD_BENCHMARK_DEFINE, timestamps, type_group_id::TIMESTAMP);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(CSV_RD_BENCHMARK_DEFINE, string, cudf::type_id::STRING);
+RD_BENCHMARK_DEFINE_ALL_SOURCES(CSV_RD_BM_INPUTS_DEFINE, integral, type_group_id::INTEGRAL);
+RD_BENCHMARK_DEFINE_ALL_SOURCES(CSV_RD_BM_INPUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
+RD_BENCHMARK_DEFINE_ALL_SOURCES(CSV_RD_BM_INPUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
+RD_BENCHMARK_DEFINE_ALL_SOURCES(CSV_RD_BM_INPUTS_DEFINE, string, cudf::type_id::STRING);
+
+BENCHMARK_DEFINE_F(CsvRead, column_selection)
+(::benchmark::State& state) { BM_csv_read_varying_options(state); }
+BENCHMARK_REGISTER_F(CsvRead, column_selection)
+  ->ArgsProduct({{int32_t(column_selection::ALL),
+                  int32_t(column_selection::ALTERNATE),
+                  int32_t(column_selection::FIRST_HALF),
+                  int32_t(column_selection::SECOND_HALF)},
+                 {int32_t(row_selection::ALL)},
+                 {1}})
+  ->Unit(benchmark::kMillisecond)
+  ->UseManualTime();
+
+BENCHMARK_DEFINE_F(CsvRead, row_selection)
+(::benchmark::State& state) { BM_csv_read_varying_options(state); }
+BENCHMARK_REGISTER_F(CsvRead, row_selection)
+  ->ArgsProduct({{int32_t(column_selection::ALL)},
+                 {int32_t(row_selection::BYTE_RANGE),
+                  int32_t(row_selection::NROWS),
+                  int32_t(row_selection::SKIPFOOTER)},
+                 {1, 8}})
+  ->Unit(benchmark::kMillisecond)
+  ->UseManualTime();
