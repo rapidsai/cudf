@@ -486,12 +486,11 @@ cpdef write_csv(
 
 
 def _get_cudf_compatible_str_from_dtype(dtype):
-    print(dtype, type(dtype))
     if (
-        dtype in cudf.utils.dtypes.ALL_TYPES or
+        str(dtype) in cudf.utils.dtypes.ALL_TYPES or
         str(dtype) in {"hex", "hex32", "hex64", "date", "date32"}
     ):
-        return dtype
+        return str(dtype)
     pd_dtype = pd.core.dtypes.common.pandas_dtype(dtype)
     if pd_dtype in cudf.utils.dtypes.pandas_dtypes_to_cudf_dtypes:
         return str(cudf.utils.dtypes.pandas_dtypes_to_cudf_dtypes[pd_dtype])
