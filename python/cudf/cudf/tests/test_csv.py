@@ -647,6 +647,7 @@ def test_csv_reader_buffer_strings():
         (".beez", "bz2", "bz2"),
         (".gz", "gzip", "infer"),
         (".bz2", "bz2", "infer"),
+        (".beez", "bz2", np.str_("bz2")),
         (".data", None, "infer"),
         (".txt", None, None),
         ("", None, None),
@@ -1491,7 +1492,7 @@ def test_csv_writer_datetime_data(tmpdir):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("sep", [",", "|", " ", ";"])
+@pytest.mark.parametrize("sep", [",", "|", " ", ";", np.str_(",")])
 @pytest.mark.parametrize(
     "columns",
     [
@@ -1521,7 +1522,9 @@ def test_csv_writer_datetime_data(tmpdir):
 @pytest.mark.parametrize(
     "index", [True, False, np.bool_(True), np.bool_(False)]
 )
-@pytest.mark.parametrize("line_terminator", ["\r", "\n", "NEWLINE", "<<<<<"])
+@pytest.mark.parametrize(
+    "line_terminator", ["\r", "\n", "NEWLINE", "<<<<<", np.str_("\n\r")]
+)
 def test_csv_writer_mixed_data(
     sep, columns, header, index, line_terminator, tmpdir
 ):
