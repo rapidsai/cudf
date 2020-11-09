@@ -203,7 +203,7 @@ void remove_blank_rows(const cudf::io::parse_options_view &options,
  *
  * @return stats Histogram of each dtypes' occurrence for each column
  **/
-thrust::host_vector<column_parse::stats> detect_column_types(
+thrust::host_vector<column_type_histogram> detect_column_types(
   cudf::io::parse_options_view const &options,
   device_span<char const> data,
   device_span<column_parse::flags const> column_flags,
