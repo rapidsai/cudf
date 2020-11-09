@@ -27,6 +27,8 @@
 #include <climits>
 #include <vector>
 
+#include <cudf/fixed_point/fixed_point.hpp>  // TODO fix
+
 template <typename T>
 cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type start,
                                                                cudf::size_type size,
@@ -771,6 +773,33 @@ TYPED_TEST(IsNotNAN, NonFloatingColumn)
   cudf::test::fixed_width_column_wrapper<int64_t> col{{1, 2, 5, 3, 5, 6, 7}, {1, 0, 1, 1, 0, 1, 1}};
 
   EXPECT_THROW(std::unique_ptr<cudf::column> got = cudf::is_not_nan(col), cudf::logic_error);
+}
+
+template <typename T>
+inline auto make_fixed_point_data_type(int32_t scale)
+{
+  return cudf::data_type{cudf::type_to_id<T>(), scale};
+}
+
+template <typename T>
+struct FixedPointTests : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(FixedPointTests, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTests, CastToDouble)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<double>;
+
+  auto const input    = fp_wrapper{{1729, 17290, 172900, 1729000}, scale_type{-3}};
+  auto const expected = fw_wrapper{1.729, 17.29, 172.9, 1729.0};
+  auto const result   = cudf::cast(input, make_data_type<double>());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
