@@ -231,8 +231,8 @@ column_view sort_groupby_helper::unsorted_keys_labels(rmm::cuda_stream_view stre
                           scatter_map,
                           table_view({temp_labels->view()}),
                           false,
-                          rmm::mr::get_current_device_resource(),
-                          stream.value());
+                          stream,
+                          rmm::mr::get_current_device_resource());
 
   _unsorted_keys_labels = std::move(t_unsorted_keys_labels->release()[0]);
 

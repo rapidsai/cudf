@@ -602,13 +602,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
       row_output_locations, num_rows, num_partitions, scanned_block_partition_sizes_ptr);
 
     // Use the resulting scatter map to materialize the output
-    auto output = detail::scatter(input,
-                                  row_partition_numbers.begin(),
-                                  row_partition_numbers.end(),
-                                  input,
-                                  false,
-                                  mr,
-                                  stream.value());
+    auto output = detail::scatter(
+      input, row_partition_numbers.begin(), row_partition_numbers.end(), input, false, stream, mr);
 
     return std::make_pair(std::move(output), std::move(partition_offsets));
   }
