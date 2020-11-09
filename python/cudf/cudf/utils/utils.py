@@ -401,7 +401,7 @@ def pos_from_val(n, start, step, length, side="left"):
     arithmatic series. The value does not need to present in the series. Given
     parameter ``side``, the value at returned position will either be less or
     equal, or greater to ``n``.
-    
+
     Parameters
     ----------
     n : int
