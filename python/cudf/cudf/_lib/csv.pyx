@@ -7,6 +7,8 @@ from libcpp.vector cimport vector
 from libcpp.utility cimport move
 
 import cudf
+import pandas as pd
+import numpy as np
 
 from cudf._lib.cpp.types cimport size_type
 
@@ -233,14 +235,29 @@ cdef csv_reader_options make_csv_reader_options(
             c_dtypes.reserve(len(dtype))
             for k, v in dtype.items():
                 c_dtypes.push_back(
-                    str(str(k)+":"+str(v)).encode()
+                    str(
+                        str(k)+":"+
+                        _get_cudf_compatible_str_from_dtype(v)
+                    ).encode()
                 )
+        elif (
+            cudf.utils.dtypes.is_scalar(dtype) or
+            isinstance(dtype, (np.dtype, pd.core.dtypes.dtypes.ExtensionDtype))
+        ):
+            c_dtypes.reserve(1)
+            c_dtypes.push_back(
+                _get_cudf_compatible_str_from_dtype(dtype).encode()
+            )
         elif isinstance(dtype, abc.Iterable):
             c_dtypes.reserve(len(dtype))
             for col_dtype in dtype:
-                c_dtypes.push_back(str(col_dtype).encode())
+                c_dtypes.push_back(
+                    _get_cudf_compatible_str_from_dtype(col_dtype).encode()
+                )
         else:
-            c_dtypes.push_back(str(dtype).encode())
+            raise ValueError(
+                "dtype should be a scalar/str/list-like/dict-like"
+            )
 
         csv_reader_options_c.set_dtypes(c_dtypes)
 
@@ -464,3 +481,23 @@ cpdef write_csv(
 
     with nogil:
         cpp_write_csv(options)
+
+
+def _get_cudf_compatible_str_from_dtype(dtype):
+    print(dtype, type(dtype))
+    if (
+        dtype in cudf.utils.dtypes.ALL_TYPES or
+        str(dtype) in {"hex", "hex32", "hex64", "date", "date32"}
+    ):
+        return dtype
+    pd_dtype = pd.core.dtypes.common.pandas_dtype(dtype)
+    if pd_dtype in cudf.utils.dtypes.pandas_dtypes_to_cudf_dtypes:
+        return str(cudf.utils.dtypes.pandas_dtypes_to_cudf_dtypes[pd_dtype])
+    elif (
+        pd_dtype in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes or
+        str(pd_dtype) in cudf.utils.dtypes.ALL_TYPES or
+        cudf.utils.dtypes.is_categorical_dtype(pd_dtype)
+    ):
+        return str(pd_dtype)
+    else:
+        raise ValueError(f"dtype not understood: {dtype}")
