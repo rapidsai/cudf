@@ -398,7 +398,7 @@ def pa_mask_buffer_to_mask(mask_buf, size):
 
 def search_range(n, start, step, length, side="left"):
     """Search the position to insert a value in a monotonically increasing
-    integral arithmatic series so that it will not change the order of the
+    integral arithmatic series so that it will not change the sortedness of the
     series.
 
     When ``side`` is set to 'left', the insertion point ``i`` will hold the
