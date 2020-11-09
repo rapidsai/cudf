@@ -45,7 +45,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
   CUDF_EXPECTS(input_column.type().id() != type_id::DICTIONARY32,
                "cannot encode a dictionary from a dictionary");
 
-  auto codified       = cudf::detail::encode(cudf::table_view({input_column}), mr, stream);
+  auto codified       = cudf::detail::encode(cudf::table_view({input_column}), stream, mr);
   auto keys_table     = std::move(codified.first);
   auto indices_column = std::move(codified.second);
   auto keys_column    = std::move(keys_table->release().front());

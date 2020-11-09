@@ -26,6 +26,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <numeric>
@@ -34,7 +35,7 @@ namespace cudf {
 namespace detail {
 
 std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
-  table_view const& input_table, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  table_view const& input_table, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
   std::vector<size_type> drop_keys(input_table.num_columns());
   std::iota(drop_keys.begin(), drop_keys.end(), 0);
@@ -59,7 +60,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
 
     rmm::device_vector<cudf::size_type> gather_map(num_rows);
     auto execpol = rmm::exec_policy(stream);
-    thrust::transform(execpol->on(stream),
+    thrust::transform(execpol->on(stream.value()),
                       thrust::make_counting_iterator<cudf::size_type>(0),
                       thrust::make_counting_iterator<cudf::size_type>(num_rows),
                       gather_map.begin(),
@@ -98,7 +99,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   cudf::table_view const& input, rmm::mr::device_memory_resource* mr)
 {
-  return detail::encode(input, mr, 0);
+  return detail::encode(input, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf
