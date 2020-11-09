@@ -16,7 +16,6 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/reduction_functions.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -39,7 +38,29 @@ struct max_fn_dispatcher {
   }
 
  public:
-  template <typename ElementType, std::enable_if_t<is_supported_v<ElementType>()>* = nullptr>
+  template <
+    typename ElementType,
+    std::enable_if_t<is_supported_v<ElementType>() and cudf::is_numeric<ElementType>()>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& col,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
+    if (cudf::is_dictionary(col.type())) {
+      auto indices = cudf::dictionary_column_view(col).get_indices_annotated();
+      auto key_index_scalar =
+        cudf::reduction::simple::simple_reduction<ElementType, ElementType, Op>(
+          indices, indices.type(), mr, stream);
+      auto key_index = static_cast<numeric_scalar<ElementType>*>(key_index_scalar.get());
+      return cudf::detail::get_element(
+        cudf::dictionary_column_view(col).keys(), key_index->value(stream), stream, mr);
+    }
+    return cudf::reduction::simple::simple_reduction<ElementType, ElementType, Op>(
+      col, cudf::data_type{cudf::type_to_id<ElementType>()}, mr, stream);
+  }
+
+  template <
+    typename ElementType,
+    std::enable_if_t<is_supported_v<ElementType>() and !cudf::is_numeric<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
@@ -68,33 +89,12 @@ std::unique_ptr<cudf::scalar> max(column_view const& col,
   using reducer = max_fn_dispatcher<cudf::reduction::op::max>;
 
   auto col_type =
-    cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
+    cudf::is_dictionary(col.type()) ? dictionary_column_view(col).indices().type() : col.type();
   // return cudf::type_dispatcher(col_type, reducer(), col, output_dtype, mr, stream);
 
-  std::unique_ptr<cudf::scalar> result;
-  if (!cudf::is_dictionary(col.type())) {
-    result = cudf::type_dispatcher(col_type, reducer(), col, mr, stream);
-  } else {
-    cudf::reduction::op::max simple_op{};
-    // TODO: Need pair a indexalator
-    // if (col.has_nulls()) {
-    //  auto it = thrust::make_transform_iterator(
-    //    cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType, true>(*dcol),
-    //    simple_op.template get_null_replacing_element_transformer<ResultType>());
-    //  result = detail::reduce(it, col.size(), Op{}, mr, stream);
-    //} else {
-    auto dict_col = cudf::dictionary_column_view(col);
-    auto indices  = dict_col.get_indices_annotated();
-    auto it       =  // thrust::make_transform_iterator(
-      cudf::detail::indexalator_factory::make_input_iterator(indices);  //,
-    // simple_op.get_element_transformer<size_type>());
-    result         = cudf::reduction::detail::reduce(it, col.size(), simple_op, mr, stream);
-    auto key_index = static_cast<numeric_scalar<size_type>*>(result.get());
-    result = cudf::detail::get_element(dict_col.keys(), key_index->value(stream), stream, mr);
-    //}
-  }
+  auto result = cudf::type_dispatcher(col_type, reducer(), col, mr, stream);
 
-  if (output_dtype == col_type) return result;
+  if (output_dtype == result->type() || !result->is_valid(stream)) return result;
 
   // if the output_dtype does not match, do extra work to cast it here
   auto input = cudf::make_column_from_scalar(*result, 1, mr, stream);
