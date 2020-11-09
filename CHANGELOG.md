@@ -88,9 +88,11 @@
 - PR #6633 Fix Java HostColumnVector unnecessarily loading native dependencies
 - PR #6643 Fix csv writer handling embedded comma delimiter
 - PR #6640 Add error message for unsupported `axis` parameter in DataFrame APIs
+- PR #6670 Fix a bug where PTX parser fails to correctly parse a python lambda generated UDF
 - PR #6687 Fix issue where index name of caller object is being modified in csv writer
 - PR #6692 Fix handling of empty column name in csv writer
 - PR #6693 Fix issue related to `na_values` input in `read_csv`
+- PR #6704 Fix leak warnings in JNI unit tests
 
 
 # cuDF 0.16.0 (21 Oct 2020)
