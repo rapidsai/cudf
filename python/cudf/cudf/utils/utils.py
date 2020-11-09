@@ -426,7 +426,7 @@ def search_range(n, start, step, length, side="left"):
     Returns
     -------
     int
-        Insersion position of n.
+        Insertion position of n.
 
     Examples
     -------
