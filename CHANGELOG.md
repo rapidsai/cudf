@@ -63,6 +63,7 @@
 - PR #6673 Parameterize avro and json benchmark
 - PR #6609 Support fixed-point decimal for HostColumnVector
 - PR #6712 Remove reinterpret_cast conversions between pointer types in Avro
+- PR #6709 Raise informative error while converting a pandas dataframe with duplicate columns
 
 ## Bug Fixes
 
@@ -92,6 +93,7 @@
 - PR #6687 Fix issue where index name of caller object is being modified in csv writer
 - PR #6692 Fix handling of empty column name in csv writer
 - PR #6693 Fix issue related to `na_values` input in `read_csv`
+- PR #6701 Fix issue when `numpy.str_` is given as input to string parameters in io APIs
 - PR #6704 Fix leak warnings in JNI unit tests
 
 
