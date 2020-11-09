@@ -5,7 +5,6 @@ import warnings
 from numbers import Number
 from types import SimpleNamespace
 
-from cudf.utils.utils import isnat
 
 import cupy
 import numpy as np

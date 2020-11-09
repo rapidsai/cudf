@@ -13,7 +13,6 @@ from cudf.tests import utils as utils
 from cudf.tests.utils import assert_eq, assert_exceptions_equal
 from cudf.utils import dtypes as dtypeutils
 
-from cudf._lib.scalar import DeviceScalar
 
 _TIMEDELTA_DATA = [
     [1000000, 200000, 3000000],

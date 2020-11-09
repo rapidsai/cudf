@@ -469,7 +469,7 @@ def _copy_if_else_column_column(Column lhs, Column rhs, Column boolean_mask):
     return Column.from_unique_ptr(move(c_result))
 
 
-def _copy_if_else_scalar_column(DeviceScalar lhs, 
+def _copy_if_else_scalar_column(DeviceScalar lhs,
                                 Column rhs,
                                 Column boolean_mask):
 
@@ -491,8 +491,8 @@ def _copy_if_else_scalar_column(DeviceScalar lhs,
     return Column.from_unique_ptr(move(c_result))
 
 
-def _copy_if_else_column_scalar(Column lhs, 
-                                DeviceScalar rhs, 
+def _copy_if_else_column_scalar(Column lhs,
+                                DeviceScalar rhs,
                                 Column boolean_mask):
 
     cdef column_view lhs_view = lhs.view()

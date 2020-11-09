@@ -1,7 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import numpy as np
 
-from cudf import _lib as libcudf
 from cudf._lib.scalar import DeviceScalar
 from cudf.core.column.column import ColumnBase
 from cudf.core.index import Index
