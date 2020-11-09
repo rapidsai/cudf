@@ -397,9 +397,11 @@ def pa_mask_buffer_to_mask(mask_buf, size):
 
 
 def pos_from_val(n, start, step, length, side="left"):
-    """Compute the position of a value in an integral arithmatic series.
-    Note it is assumed that step > 0
-
+    """Compute the position of a value in an monotonically increasing integral
+    arithmatic series. The value does not need to present in the series. Given
+    parameter ``side``, the value at returned position will either be less or
+    equal, or greater to ``n``.
+    
     Parameters
     ----------
     n : int
@@ -418,7 +420,6 @@ def pos_from_val(n, start, step, length, side="left"):
     -------
     int
         Index of label.
-
     """
     x = 1 if side == "left" else 0
     i = (n - start - x) // step + 1
