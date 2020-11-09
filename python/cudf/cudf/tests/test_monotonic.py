@@ -22,7 +22,9 @@ from cudf.tests.utils import assert_eq
 @pytest.mark.parametrize("testrange", [(10, 20, 1), (0, -10, -1), (5, 5, 1)])
 def test_range_index(testrange):
 
-    index = RangeIndex(start=testrange[0], stop=testrange[1], step=testrange[2])
+    index = RangeIndex(
+        start=testrange[0], stop=testrange[1], step=testrange[2]
+    )
     index_pd = pd.RangeIndex(
         start=testrange[0], stop=testrange[1], step=testrange[2]
     )
