@@ -29,6 +29,9 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
+
+using cudf::detail::device_span;
 
 namespace cudf {
 namespace io {
@@ -239,8 +242,7 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_
 
 void reader::impl::decode_data(const rmm::device_buffer &block_data,
                                const std::vector<std::pair<uint32_t, uint32_t>> &dict,
-                               hostdevice_vector<gpu::nvstrdesc_s> &global_dictionary,
-                               size_t total_dictionary_entries,
+                               device_span<gpu::nvstrdesc_s> global_dictionary,
                                size_t num_rows,
                                std::vector<std::pair<int, std::string>> selection,
                                std::vector<column_buffer> &out_buffers,
@@ -311,17 +313,16 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
                            cudaMemcpyHostToDevice,
                            stream));
 
-  CUDA_TRY(gpu::DecodeAvroColumnData(static_cast<block_desc_s *>(block_list.data()),
-                                     schema_desc.device_ptr(),
-                                     global_dictionary.device_ptr(),
-                                     static_cast<const uint8_t *>(block_data.data()),
-                                     static_cast<uint32_t>(_metadata->block_list.size()),
-                                     static_cast<uint32_t>(schema_desc.size()),
-                                     static_cast<uint32_t>(total_dictionary_entries),
-                                     _metadata->num_rows,
-                                     _metadata->skip_rows,
-                                     min_row_data_size,
-                                     stream));
+  gpu::DecodeAvroColumnData(static_cast<block_desc_s *>(block_list.data()),
+                            schema_desc.device_ptr(),
+                            global_dictionary,
+                            static_cast<const uint8_t *>(block_data.data()),
+                            static_cast<uint32_t>(_metadata->block_list.size()),
+                            static_cast<uint32_t>(schema_desc.size()),
+                            _metadata->num_rows,
+                            _metadata->skip_rows,
+                            min_row_data_size,
+                            stream);
 
   // Copy valid bits that are shared between columns
   for (size_t i = 0; i < out_buffers.size(); i++) {
@@ -406,8 +407,8 @@ table_with_metadata reader::impl::read(avro_reader_options const &options, cudaS
         for (const auto &sym : col_schema.symbols) { dictionary_data_size += sym.length(); }
       }
 
-      hostdevice_vector<gpu::nvstrdesc_s> global_dictionary(total_dictionary_entries);
-      rmm::device_vector<char> g_dictionary_data(dictionary_data_size);
+      hostdevice_vector<gpu::nvstrdesc_s> global_dictionary(total_dictionary_entries, stream);
+      rmm::device_uvector<char> g_dictionary_data(dictionary_data_size, stream);
       if (total_dictionary_entries > 0) {
         size_t dict_pos = 0;
         for (size_t i = 0; i < column_types.size(); ++i) {
@@ -417,8 +418,8 @@ table_with_metadata reader::impl::read(avro_reader_options const &options, cudaS
           for (size_t j = 0; j < dict[i].second; j++) {
             auto const &symbols = col_schema.symbols[j];
 
+            auto const data_dst       = g_dictionary_data.data() + dict_pos;
             auto const len            = symbols.length();
-            auto data_dst             = g_dictionary_data.data().get() + dict_pos;
             col_dict_entries[j].ptr   = data_dst;
             col_dict_entries[j].count = len;
 
@@ -426,11 +427,7 @@ table_with_metadata reader::impl::read(avro_reader_options const &options, cudaS
             dict_pos += len;
           }
         }
-        CUDA_TRY(cudaMemcpyAsync(global_dictionary.device_ptr(),
-                                 global_dictionary.host_ptr(),
-                                 global_dictionary.memory_size(),
-                                 cudaMemcpyDefault,
-                                 stream));
+        global_dictionary.host_to_device(stream);
       }
 
       std::vector<column_buffer> out_buffers;
@@ -442,8 +439,7 @@ table_with_metadata reader::impl::read(avro_reader_options const &options, cudaS
 
       decode_data(block_data,
                   dict,
-                  global_dictionary,
-                  total_dictionary_entries,
+                  {global_dictionary.device_ptr(), global_dictionary.size()},
                   num_rows,
                   selected_columns,
                   out_buffers,
