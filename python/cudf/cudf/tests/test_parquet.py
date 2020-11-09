@@ -1589,9 +1589,9 @@ def normalized_equals(value1, value2):
     if isinstance(value2, pd.Timestamp):
         value2 = value2.to_pydatetime()
     if isinstance(value1, datetime.datetime):
-        value1.replace(tzinfo=None)
+        value1 = value1.replace(tzinfo=None)
     if isinstance(value2, datetime.datetime):
-        value2.replace(tzinfo=None)
+        value2 = value2.replace(tzinfo=None)
 
     # if one is datetime then both values are datetimes now
     if isinstance(value1, datetime.datetime):
@@ -1610,7 +1610,7 @@ def test_parquet_writer_statistics(tmpdir, pdf):
         pdf = pdf.drop(columns=["col_category", "col_bool"])
 
     gdf = cudf.from_pandas(pdf)
-    gdf.to_parquet(file_path)
+    gdf.to_parquet(file_path, index=False)
 
     # Read back from pyarrow
     pq_file = pq.ParquetFile(file_path)
