@@ -105,7 +105,7 @@ def pdf(request):
 
     # Cast all the column dtypes to objects, rename them, and then cast to
     # appropriate types
-    test_pdf = test_pdf.astype("object").rename(renamer, axis=1).astype(typer)
+    test_pdf = test_pdf.rename(renamer, axis=1).astype(typer)
 
     # Create non-numeric categorical data otherwise parquet may typecast it
     data = [ascii_letters[np.random.randint(0, 52)] for i in range(nrows)]
@@ -1182,7 +1182,9 @@ def test_parquet_writer_cpu_pyarrow(tmpdir, pdf, gdf):
 
     # Pandas uses a datetime64[ns] while we use a datetime64[ms]
     expect_idx = expect.schema.get_field_index("col_datetime64[ms]")
-    expect_field = clone_field(expect, "col_datetime64[ms]", pa.date64())
+    expect_field = clone_field(
+        expect, "col_datetime64[ms]", pa.timestamp("ms")
+    )
     expect = expect.set_column(
         expect_idx,
         expect_field,
@@ -1191,7 +1193,7 @@ def test_parquet_writer_cpu_pyarrow(tmpdir, pdf, gdf):
     expect = expect.replace_schema_metadata()
 
     got_idx = got.schema.get_field_index("col_datetime64[ms]")
-    got_field = clone_field(got, "col_datetime64[ms]", pa.date64())
+    got_field = clone_field(got, "col_datetime64[ms]", pa.timestamp("ms"))
     got = got.set_column(
         got_idx, got_field, got.column(got_idx).cast(got_field.type)
     )
