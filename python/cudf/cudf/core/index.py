@@ -32,7 +32,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     numeric_normalize_types,
 )
-from cudf.utils.utils import cached_property, pos_from_val
+from cudf.utils.utils import cached_property, search_range
 
 
 def _to_frame(this_index, index=True, name=None):
@@ -1724,8 +1724,8 @@ class RangeIndex(Index):
             start = self._start
             step = self._step
 
-        begin = pos_from_val(first, start, step, len(self), side="left")
-        end = pos_from_val(last, start, step, len(self), side="right")
+        begin = search_range(first, start, step, len(self), side="left")
+        end = search_range(last, start, step, len(self), side="right")
 
         return begin, end
 
@@ -1810,7 +1810,7 @@ class RangeIndex(Index):
             start = self._start
             step = self._step
 
-        pos = pos_from_val(label, start, step, len(self), side=side)
+        pos = search_range(label, start, step, len(self), side=side)
         return pos
 
     @property

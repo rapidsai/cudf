@@ -20,7 +20,7 @@ from cudf.core.index import (
     RangeIndex,
     as_index,
 )
-from cudf.utils.utils import pos_from_val
+from cudf.utils.utils import search_range
 
 from cudf.tests.utils import (
     FLOAT_TYPES,
@@ -1694,10 +1694,10 @@ def test_index_rangeindex_pos_from_val():
     # step > 0
     ridx = RangeIndex(-13, 17, 4)
     for i in range(len(ridx)):
-        assert i == pos_from_val(
+        assert i == search_range(
             ridx[i], ridx._start, ridx._step, len(ridx), side="left"
         )
-        assert i + 1 == pos_from_val(
+        assert i + 1 == search_range(
             ridx[i], ridx._start, ridx._step, len(ridx), side="right"
         )
 

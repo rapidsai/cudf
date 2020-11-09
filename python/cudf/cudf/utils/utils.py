@@ -396,30 +396,46 @@ def pa_mask_buffer_to_mask(mask_buf, size):
     return Buffer(mask_buf)
 
 
-def pos_from_val(n, start, step, length, side="left"):
-    """Compute the position of a value in an monotonically increasing integral
-    arithmatic series. The value does not need to present in the series. Given
-    parameter ``side``, the value at returned position will either be less or
-    equal, or greater to ``n``.
+def search_range(n, start, step, length, side="left"):
+    """Search the position to insert a value in a monotonically increasing
+    integral arithmatic series so that it will not change the order of the
+    series. 
+
+    When ``side`` is set to 'left', the insertion point ``i`` will hold the
+    following invariant:
+    `all(x < n for x in range_left) and all(x >= n for x in range_right)`
+    where ``range_left`` and ``range_right`` refers to the range to the left
+    and right of position ``i``, respectively.
+
+    When ``side`` is set to 'right', the insertion point ``i `` will hold the
+    following invariant:
+    `all(x <= n for x in range_left) and all(x > n for x in range_right)`
 
     Parameters
     ----------
     n : int
-        The value to find postion
+        The value to insert
     start : int
-        Start of the series
+        Start value of the series
     step : int
-        Step of the series, assumed positive
+        Step value of the series, assumed positive
     length : int
         Length of the series
     side : {'left', 'right'}
-        If left, will return the position less or equal to the value. If right,
-        will return the position strictly larger than the value.
+        See description for usage.
 
     Returns
     -------
     int
-        Index of label.
+        Insersion position of n.
+
+    Examples
+    -------
+    For series: 1 4 7
+    >>> search_range(n=4, start=1, step=3, length=3, side="left")
+    1
+    >>> search_range(n=4, start=1, step=3, length=3, side="right")
+    2
     """
     x = 1 if side == "left" else 0
     i = (n - start - x) // step + 1
