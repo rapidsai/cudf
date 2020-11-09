@@ -60,7 +60,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
 
   // the encode() returns INT32 for indices
   if (indices_column->type().id() != indices_type.id())
-    indices_column = cudf::detail::cast(indices_column->view(), indices_type, mr, stream);
+    indices_column = cudf::detail::cast(indices_column->view(), indices_type, stream, mr);
 
   // create column with keys_column and indices_column
   return make_dictionary_column(

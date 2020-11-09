@@ -109,8 +109,8 @@ struct dispatch_unary_cast_to {
                               !(cudf::is_timestamp<SourceT>() && is_numeric<TargetT>()) &&
                               !(cudf::is_timestamp<TargetT>() && is_numeric<SourceT>())>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     auto size = input.size();
     auto output =
@@ -122,7 +122,7 @@ struct dispatch_unary_cast_to {
 
     mutable_column_view output_mutable = *output;
 
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
+    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                       input.begin<SourceT>(),
                       input.end<SourceT>(),
                       output_mutable.begin<TargetT>(),
@@ -137,8 +137,8 @@ struct dispatch_unary_cast_to {
                               (cudf::is_timestamp<SourceT>() && is_numeric<TargetT>()) ||
                               (cudf::is_timestamp<TargetT>() && is_numeric<SourceT>())>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     if (!cudf::is_fixed_width<TargetT>())
       CUDF_FAIL("Column type must be numeric or chrono");
@@ -160,24 +160,24 @@ struct dispatch_unary_cast_from {
     typename T,
     typename std::enable_if_t<cudf::is_fixed_width<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
-    return type_dispatcher(type, dispatch_unary_cast_to<T>{input}, type, mr, stream);
+    return type_dispatcher(type, dispatch_unary_cast_to<T>{input}, type, stream, mr);
   }
 
   template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     CUDF_FAIL("Fixed point unary ops not supported yet");
   }
 
   template <typename T, typename std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     CUDF_FAIL("Column type must be numeric or chrono");
   }
@@ -185,12 +185,12 @@ struct dispatch_unary_cast_from {
 
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
-                             rmm::mr::device_memory_resource* mr,
-                             cudaStream_t stream)
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(is_fixed_width(type), "Unary cast type must be fixed-width.");
 
-  return type_dispatcher(input.type(), detail::dispatch_unary_cast_from{input}, type, mr, stream);
+  return type_dispatcher(input.type(), detail::dispatch_unary_cast_from{input}, type, stream, mr);
 }
 
 }  // namespace detail
@@ -200,7 +200,7 @@ std::unique_ptr<column> cast(column_view const& input,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::cast(input, type, mr);
+  return detail::cast(input, type, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

@@ -20,6 +20,7 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 std::unique_ptr<column> is_null(cudf::column_view const& input, rmm::mr::device_memory_resource* mr)
@@ -32,6 +33,7 @@ std::unique_ptr<column> is_null(cudf::column_view const& input, rmm::mr::device_
                          thrust::make_counting_iterator(input.size()),
                          input.size(),
                          predicate,
+                         rmm::cuda_stream_default,
                          mr);
 }
 
@@ -46,6 +48,7 @@ std::unique_ptr<column> is_valid(cudf::column_view const& input,
                          thrust::make_counting_iterator(input.size()),
                          input.size(),
                          predicate,
+                         rmm::cuda_stream_default,
                          mr);
 }
 

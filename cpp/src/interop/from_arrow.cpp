@@ -256,8 +256,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::dictionary32>(
   // If index type is not of type uint32_t, then cast it to uint32_t
   auto const dict_indices_type = data_type{type_id::UINT32};
   if (indices_column->type().id() != dict_indices_type.id())
-    indices_column =
-      cudf::detail::cast(indices_column->view(), dict_indices_type, mr, stream.value());
+    indices_column = cudf::detail::cast(indices_column->view(), dict_indices_type, stream, mr);
 
   // Child columns shouldn't have masks and we need the mask in main column
   auto column_contents = indices_column->release();

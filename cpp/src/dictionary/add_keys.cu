@@ -111,7 +111,7 @@ std::unique_ptr<column> add_keys(
     }
     // otherwise we need to convert the gather result
     column_view cast_view(gather_result.type(), indices_size, gather_result.head(), nullptr, 0);
-    return cudf::detail::cast(cast_view, indices_type, mr, stream);
+    return cudf::detail::cast(cast_view, indices_type, stream, mr);
   }();
 
   // create new dictionary column with keys_column and indices_column
