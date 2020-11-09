@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/unary.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -94,24 +95,77 @@ struct unary_cast {
   }
 };
 
+template <typename _FixedPointT, typename _TargetT>
+struct fixed_point_unary_cast {
+  numeric::scale_type scale;
+  using DeviceT = device_storage_type_t<_FixedPointT>;
+  template <typename FixedPointT                                             = _FixedPointT,
+            typename TargetT                                                 = _TargetT,
+            typename std::enable_if_t<(cudf::is_fixed_point<_FixedPointT>() &&
+                                       cudf::is_floating_point<TargetT>())>* = nullptr>
+  CUDA_DEVICE_CALLABLE TargetT operator()(DeviceT const element)
+  {
+    auto const fp = FixedPointT{numeric::scaled_integer<DeviceT>{element, scale}};
+    return static_cast<TargetT>(fp);
+  }
+};
+
+// template <typename From, typename To>
+// constexpr inline auto is_supported_cast()
+// {
+//   return
+//     // Enable
+//     ((is_fixed_width<To>() && not is_fixed_point<To>()) ||  //
+//      (is_fixed_point<From>() && is_floating_point<To>())) &&
+//     // Disable
+//     not(is_timestamp<From>() && is_numeric<To>()) &&  //
+//     not(is_timestamp<To>() && is_numeric<From>()) &&
+//     not(is_fixed_point<To>() && is_fixed_point<From>());
+// }
+
+// clang-format off
+template <typename From, typename To>
+constexpr inline auto is_supported_non_fixed_point_cast()
+{
+  // Disallow conversions between timestamps and numeric
+  return (cudf::is_numeric    <From>() && cudf::is_numeric       <To>()) ||
+         (cudf::is_timestamp  <From>() && cudf::is_timestamp     <To>()) ||
+         (cudf::is_duration   <From>() && cudf::is_duration      <To>()) ||
+         (cudf::is_numeric    <From>() && cudf::is_duration      <To>()) ||
+         (cudf::is_timestamp  <From>() && cudf::is_duration      <To>()) ||
+         (cudf::is_duration   <From>() && cudf::is_numeric       <To>()) ||
+         (cudf::is_duration   <From>() && cudf::is_timestamp     <To>());
+}
+
+template <typename From, typename To>
+constexpr inline auto is_supported_fixed_point_cast()
+{
+  // TODO add more
+  return (cudf::is_fixed_point<From>() && cudf::is_floating_point<To>());
+}
+// clang-format on
+
+template <typename From, typename To>
+constexpr inline auto is_supported_cast()
+{
+  return is_supported_non_fixed_point_cast<From, To>() || is_supported_fixed_point_cast<From, To>();
+}
+
 template <typename SourceT>
 struct dispatch_unary_cast_to {
   column_view input;
 
   dispatch_unary_cast_to(column_view inp) : input(inp) {}
 
-  // Disallow conversions between timestamps and numeric
   template <
     typename TargetT,
-    typename std::enable_if_t<cudf::is_fixed_width<TargetT>() && !cudf::is_fixed_point<TargetT>() &&
-                              !(cudf::is_timestamp<SourceT>() && is_numeric<TargetT>()) &&
-                              !(cudf::is_timestamp<TargetT>() && is_numeric<SourceT>())>* = nullptr>
+    typename std::enable_if_t<is_supported_non_fixed_point_cast<SourceT, TargetT>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    auto size   = input.size();
-    auto output = std::make_unique<column>(type,
+    auto const size = input.size();
+    auto output     = std::make_unique<column>(type,
                                            size,
                                            rmm::device_buffer{size * cudf::size_of(type), 0, mr},
                                            copy_bitmask(input, 0, mr),
@@ -128,19 +182,43 @@ struct dispatch_unary_cast_to {
     return output;
   }
 
-  template <
-    typename TargetT,
-    typename std::enable_if_t<!cudf::is_fixed_width<TargetT>() || cudf::is_fixed_point<TargetT>() ||
-                              (cudf::is_timestamp<SourceT>() && is_numeric<TargetT>()) ||
-                              (cudf::is_timestamp<TargetT>() && is_numeric<SourceT>())>* = nullptr>
+  template <typename TargetT,
+            typename std::enable_if_t<is_supported_fixed_point_cast<SourceT, TargetT>()>* = nullptr>
+  std::unique_ptr<column> operator()(data_type type,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
+    auto const size = input.size();
+    auto output     = std::make_unique<column>(type,
+                                           size,
+                                           rmm::device_buffer{size * cudf::size_of(type), 0, mr},
+                                           copy_bitmask(input, 0, mr),
+                                           input.null_count());
+
+    mutable_column_view output_mutable = *output;
+
+    using Type       = device_storage_type_t<SourceT>;
+    auto const scale = numeric::scale_type{input.type().scale()};
+
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+                      input.begin<Type>(),
+                      input.end<Type>(),
+                      output_mutable.begin<TargetT>(),
+                      fixed_point_unary_cast<SourceT, TargetT>{scale});
+
+    return output;
+  }
+
+  template <typename TargetT,
+            typename std::enable_if_t<not is_supported_cast<SourceT, TargetT>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
     if (!cudf::is_fixed_width<TargetT>())
-      CUDF_FAIL("Column type must be numeric or chrono");
-    else if (cudf::is_fixed_point<TargetT>())
-      CUDF_FAIL("Fixed point unary ops currently not supported");
+      CUDF_FAIL("Column type must be numeric or chrono or decimal32/64");
+    else if (cudf::is_fixed_point<SourceT>())
+      CUDF_FAIL("Currently only decimal32/64 to floating point is supported");
     else if (cudf::is_timestamp<SourceT>() && is_numeric<TargetT>())
       CUDF_FAIL("Timestamps can be created only from duration");
     else
@@ -153,9 +231,7 @@ struct dispatch_unary_cast_from {
 
   dispatch_unary_cast_from(column_view inp) : input(inp) {}
 
-  template <
-    typename T,
-    typename std::enable_if_t<cudf::is_fixed_width<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T, typename std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
@@ -163,20 +239,12 @@ struct dispatch_unary_cast_from {
     return type_dispatcher(type, dispatch_unary_cast_to<T>{input}, type, mr, stream);
   }
 
-  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
-  std::unique_ptr<column> operator()(data_type type,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
-  {
-    CUDF_FAIL("Fixed point unary ops not supported yet");
-  }
-
   template <typename T, typename std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    CUDF_FAIL("Column type must be numeric or chrono");
+    CUDF_FAIL("Column type must be numeric or chrono or decimal32/64");
   }
 };
 
