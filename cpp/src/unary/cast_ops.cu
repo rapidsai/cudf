@@ -126,7 +126,7 @@ template <typename From, typename To>
 constexpr inline auto is_supported_non_fixed_point_cast()
 {
   return cudf::is_fixed_width<To>() &&
-         // Disallow fixed_point here (requires different special)
+         // Disallow fixed_point here (requires different specialization)
          !(cudf::is_fixed_point<From>() || cudf::is_fixed_point<To>()) &&
          // Disallow conversions between timestamps and numeric
          !(cudf::is_timestamp<From>() && is_numeric<To>()) &&

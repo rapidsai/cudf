@@ -14,20 +14,19 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/unary.hpp>
-#include <cudf/utilities/bit.hpp>
-#include <cudf/wrappers/timestamps.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/unary.hpp>
+#include <cudf/utilities/bit.hpp>
+#include <cudf/wrappers/timestamps.hpp>
+
 #include <climits>
 #include <vector>
-
-#include <cudf/fixed_point/fixed_point.hpp>  // TODO fix
 
 template <typename T>
 cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type start,
