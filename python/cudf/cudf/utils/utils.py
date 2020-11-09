@@ -407,8 +407,7 @@ def search_range(n, start, step, length, side="left"):
     where ``range_left`` and ``range_right`` refers to the range to the left
     and right of position ``i``, respectively.
 
-    When ``side`` is set to 'right', the insertion point ``i `` will hold the
-    following invariant:
+    When ``side`` is set to 'right', ``i`` will hold the following invariant:
     `all(x <= n for x in range_left) and all(x > n for x in range_right)`
 
     Parameters
