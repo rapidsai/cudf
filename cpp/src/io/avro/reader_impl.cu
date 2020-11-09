@@ -407,27 +407,39 @@ table_with_metadata reader::impl::read(avro_reader_options const &options, cudaS
         for (const auto &sym : col_schema.symbols) { dictionary_data_size += sym.length(); }
       }
 
-      hostdevice_vector<gpu::nvstrdesc_s> global_dictionary(total_dictionary_entries, stream);
-      rmm::device_uvector<char> g_dictionary_data(dictionary_data_size, stream);
+      rmm::device_uvector<gpu::nvstrdesc_s> d_global_dict(total_dictionary_entries, stream);
+      rmm::device_uvector<char> d_global_dict_data(dictionary_data_size, stream);
       if (total_dictionary_entries > 0) {
+        std::vector<gpu::nvstrdesc_s> h_global_dict(total_dictionary_entries);
+        std::vector<char> h_global_dict_data(dictionary_data_size);
         size_t dict_pos = 0;
         for (size_t i = 0; i < column_types.size(); ++i) {
           auto const col_idx     = selected_columns[i].first;
           auto const &col_schema = _metadata->schema[_metadata->columns[col_idx].schema_data_idx];
-          auto col_dict_entries  = &(global_dictionary[dict[i].first]);
+          auto const col_dict_entries = &(h_global_dict[dict[i].first]);
           for (size_t j = 0; j < dict[i].second; j++) {
             auto const &symbols = col_schema.symbols[j];
 
-            auto const data_dst       = g_dictionary_data.data() + dict_pos;
+            auto const data_dst       = h_global_dict_data.data() + dict_pos;
             auto const len            = symbols.length();
             col_dict_entries[j].ptr   = data_dst;
             col_dict_entries[j].count = len;
 
-            CUDA_TRY(cudaMemcpyAsync(data_dst, symbols.c_str(), len, cudaMemcpyDefault, stream));
+            std::copy(symbols.c_str(), symbols.c_str() + len, data_dst);
             dict_pos += len;
           }
         }
-        global_dictionary.host_to_device(stream);
+        CUDA_TRY(cudaMemcpyAsync(d_global_dict.data(),
+                                 h_global_dict.data(),
+                                 h_global_dict.size() * sizeof(gpu::nvstrdesc_s),
+                                 cudaMemcpyDefault,
+                                 stream));
+        CUDA_TRY(cudaMemcpyAsync(d_global_dict_data.data(),
+                                 h_global_dict_data.data(),
+                                 h_global_dict_data.size() * sizeof(char),
+                                 cudaMemcpyDefault,
+                                 stream));
+        CUDA_TRY(cudaStreamSynchronize(stream));
       }
 
       std::vector<column_buffer> out_buffers;
@@ -437,13 +449,7 @@ table_with_metadata reader::impl::read(avro_reader_options const &options, cudaS
         out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
       }
 
-      decode_data(block_data,
-                  dict,
-                  {global_dictionary.device_ptr(), global_dictionary.size()},
-                  num_rows,
-                  selected_columns,
-                  out_buffers,
-                  stream);
+      decode_data(block_data, dict, d_global_dict, num_rows, selected_columns, out_buffers, stream);
 
       for (size_t i = 0; i < column_types.size(); ++i) {
         out_columns.emplace_back(make_column(out_buffers[i], stream, _mr));
