@@ -249,6 +249,12 @@ DLManagedTensor* to_dlpack(table_view const& input,
   // Defer ownership of managed tensor to caller
   managed_tensor->deleter     = dltensor_context::deleter;
   managed_tensor->manager_ctx = context.release();
+
+  // synchronize the stream because after the return the data may be accessed from the host before
+  // the above `cudaMemcpyAsync` calls have completed their copies (especially if pinned host
+  // memory is used).
+  stream.synchronize();
+
   return managed_tensor.release();
 }
 
