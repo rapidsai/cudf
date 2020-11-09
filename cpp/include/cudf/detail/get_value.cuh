@@ -47,6 +47,7 @@ T get_value(column_view const& col_view, size_type element_index, cudaStream_t s
   T result;
   CUDA_TRY(cudaMemcpyAsync(
     &result, col_view.data<T>() + element_index, sizeof(T), cudaMemcpyDeviceToHost, stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
   return result;
 }
 
