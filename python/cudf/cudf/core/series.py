@@ -870,6 +870,8 @@ class Series(Frame, Serializable):
         4     <NA>
         dtype: int64
 
+        Notes
+        -----
         Please note map currently only supports fixed-width numeric
         type functions.
         """
