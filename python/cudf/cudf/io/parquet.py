@@ -5,8 +5,7 @@ from collections import defaultdict
 from uuid import uuid4
 
 from fsspec.core import get_fs_token_paths
-from pyarrow import parquet as pq
-from pyarrow import dataset as ds
+from pyarrow import dataset as ds, parquet as pq
 
 import cudf
 from cudf._lib import parquet as libparquet
