@@ -24,8 +24,7 @@ namespace structs {
 namespace detail {
 
 /**
- * @brief Returns a single column by concatenating the given vector of
- * structs columns.
+ * @brief Returns a single column by concatenating the given vector of structs columns.
  *
  * @code{.pseudo}
  * s1 = [ col0 : {0, 1}
@@ -44,9 +43,9 @@ namespace detail {
  * @endcode
  *
  * @param columns Vector of structs columns to concatenate.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column with concatenated results.
+ * @param stream  CUDA stream used for device memory operations and kernel launches.
+ * @param mr      Device memory resource used to allocate the returned column's device memory.
+ * @return        New column with concatenated results.
  */
 std::unique_ptr<column> concatenate(
   std::vector<column_view> const& columns,

@@ -30,8 +30,8 @@ namespace detail {
 std::vector<std::vector<column_view>> extract_ordered_struct_children(
   std::vector<column_view> const& struct_cols)
 {
-  size_type num_children = struct_cols[0].num_children();
-  size_type num_cols     = static_cast<size_type>(struct_cols.size());
+  auto const num_children = struct_cols[0].num_children();
+  auto const num_cols     = static_cast<size_type>(struct_cols.size());
 
   std::vector<std::vector<column_view>> result;
   result.reserve(num_children);

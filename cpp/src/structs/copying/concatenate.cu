@@ -54,7 +54,7 @@ std::unique_ptr<column> concatenate(
                    return cudf::detail::concatenate(cols, mr, stream);
                  });
 
-  size_type total_length = children[0]->size();
+  size_type const total_length = children[0]->size();
 
   // if any of the input columns have nulls, construct the output mask
   bool const has_nulls =
