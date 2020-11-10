@@ -123,8 +123,12 @@ cdef class DeviceScalar:
         The NumPy dtype corresponding to the data type of the underlying
         device scalar.
         """
-        cdef libcudf_types.data_type cdtype = self.get_raw_ptr()[0].type()
-        return cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]
+        cdef libcudf_types.data_type cdtype
+        if self._is_host_value_current():
+            return self._host_dtype
+        else:
+            cdtype = self.get_raw_ptr()[0].type()
+            return cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]
 
     @property
     def value(self):
