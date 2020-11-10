@@ -6,13 +6,13 @@ from glob import glob
 from io import BytesIO
 from string import ascii_letters
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
 from packaging import version
 from pyarrow import parquet as pq
-import cupy
 
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
@@ -121,7 +121,7 @@ def gdf(pdf):
     return cudf.DataFrame.from_pandas(pdf)
 
 
-@pytest.fixture(params=["snappy", "gzip", "brotli", None])
+@pytest.fixture(params=["snappy", "gzip", "brotli", None, np.str_("snappy")])
 def parquet_file(request, tmp_path_factory, pdf):
     fname = tmp_path_factory.mktemp("parquet") / "test.parquet"
     pdf.to_parquet(fname, engine="pyarrow", compression=request.param)
