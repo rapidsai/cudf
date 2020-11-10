@@ -28,12 +28,11 @@
  * Relies on the `__PRETTY_FUNCTION__` macro which is specific to GCC and Clang.
  *
  **/
-#if defined(__CUDACC_ARCH__) && (defined(__clang__) || defined(__GNUC__))
+#if defined(__CUDA_ARCH__) && (defined(__clang__) || defined(__GNUC__))
 #define __ASSERT_STR_HELPER(x) #x
 #define release_assert(e)     \
   ((e) ? static_cast<void>(0) \
-       : __assertfail(        \
-           __ASSERT_STR_HELPER(e), __FILE__, __LINE__, __PRETTY_FUNCTION__, sizeof(char)))
+       : __assert_fail(__ASSERT_STR_HELPER(e), __FILE__, __LINE__, __PRETTY_FUNCTION__))
 #else
 #define release_assert(e) (static_cast<void>(0))
 #endif
