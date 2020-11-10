@@ -62,6 +62,7 @@
 - PR #6635 Add cudf::test::dictionary_column_wrapper class
 - PR #6673 Parameterize avro and json benchmark
 - PR #6609 Support fixed-point decimal for HostColumnVector
+- PR #6705 Add nested type support to Java table serialization
 - PR #6709 Raise informative error while converting a pandas dataframe with duplicate columns
 
 ## Bug Fixes
@@ -96,6 +97,7 @@
 - PR #6701 Fix issue when `numpy.str_` is given as input to string parameters in io APIs
 - PR #6704 Fix leak warnings in JNI unit tests
 - PR #6708 Apply `na_rep` to column names in csv writer
+- PR #6722 Fix index=False bug in dask_cudf.read_parquet
 - PR #6632 Fix DataFrame initialization from list of dicts
 
 

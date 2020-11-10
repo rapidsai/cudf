@@ -3038,7 +3038,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   private static native int getNativeNullCount(long viewHandle) throws CudfException;
 
-  private static native void deleteColumnView(long viewHandle) throws CudfException;
+  static native void deleteColumnView(long viewHandle) throws CudfException;
 
   private static native long getNativeDataAddress(long viewHandle) throws CudfException;
   private static native long getNativeDataLength(long viewHandle) throws CudfException;
@@ -3049,7 +3049,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   private static native long getNativeValidityAddress(long viewHandle) throws CudfException;
   private static native long getNativeValidityLength(long viewHandle) throws CudfException;
 
-  private static native long makeCudfColumnView(int type, int scale, long data, long dataSize, long offsets,
+  static native long makeCudfColumnView(int type, int scale, long data, long dataSize, long offsets,
       long valid, int nullCount, int size, long[] childHandle);
 
 
@@ -3224,7 +3224,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       if (buffers != null) {
         toClose.addAll(buffers);
       }
-      if (rows == 0) {
+      if (rows == 0 && !type.isNestedType()) {
         this.columnHandle = makeEmptyCudfColumn(type.typeId.getNativeId(), type.getScale());
       } else {
         long cd = data == null ? 0 : data.address;
@@ -3620,6 +3620,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    */
   public static ColumnVector fromStructs(HostColumnVector.DataType dataType,
                                          List<HostColumnVector.StructData> lists) {
+    try (HostColumnVector host = HostColumnVector.fromStructs(dataType, lists)) {
+      return host.copyToDevice();
+    }
+  }
+
+  /**
+   * This method is evolving, unstable and currently test only.
+   * Please use with caution and expect it to change in the future.
+   */
+  public static ColumnVector fromStructs(HostColumnVector.DataType dataType,
+                                         HostColumnVector.StructData... lists) {
     try (HostColumnVector host = HostColumnVector.fromStructs(dataType, lists)) {
       return host.copyToDevice();
     }
