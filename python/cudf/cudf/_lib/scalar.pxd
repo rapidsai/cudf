@@ -12,7 +12,7 @@ cdef class DeviceScalar:
     cdef object _host_value
     cdef object _host_dtype
 
-    cdef const scalar* get_raw_ptr(self)
+    cdef const scalar* get_raw_ptr(self) except *
 
     @staticmethod
     cdef DeviceScalar from_unique_ptr(unique_ptr[scalar] ptr)

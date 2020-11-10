@@ -158,7 +158,7 @@ cdef class DeviceScalar:
         else:
             raise ValueError("Invalid device scalar")
 
-    cdef const scalar* get_raw_ptr(self):
+    cdef const scalar* get_raw_ptr(self) except *:
         if not self._is_device_value_current():
             self._set_device_value(self._host_value, self._host_dtype)
         return self.c_value.get()
