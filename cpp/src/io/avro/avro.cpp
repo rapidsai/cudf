@@ -44,8 +44,10 @@ int64_t container::get_encoded()
 template <>
 std::string container::get_encoded()
 {
-  auto len     = get_encoded<uint64_t>();
-  len          = ((len & 1) || (m_cur >= m_end)) ? 0 : std::min(len >> 1, (size_t)(m_end - m_cur));
+  auto const len = [&] { 
+    auto const len = get_encoded<uint64_t>();
+    return (len & 1) || (m_cur >= m_end) ? 0 : std::min(len >> 1, static_cast<size_t>(m_end - m_cur));
+  } ();
   auto const s = reinterpret_cast<char const *>(m_cur);
   m_cur += len;
   return std::string(s, len);
