@@ -83,11 +83,33 @@ std::vector<std::string> get_col_names_to_read(std::vector<char> const& orc_data
   return col_names_to_read;
 }
 
+std::vector<cudf::size_type> get_chunk_stripes(size_t table_size, int num_chunks, int chunk)
+{
+  auto const num_stripes = table_size / (64 << 20);
+  CUDF_EXPECTS(num_stripes >= num_chunks,
+               "Number of chunks cannot be greater than the number of stripes in the file");
+  std::vector<cudf::size_type> cs;
+  for (auto i = num_stripes * chunk / num_chunks; i < num_stripes * (chunk + 1) / num_chunks; ++i) {
+    cs.push_back(i);
+  }
+  // Add a stripe to the last read because we are rounding down `num_stripes`
+  if (chunk == num_chunks - 1) cs.push_back(num_stripes);
+
+  return cs;
+}
+
 void BM_orc_read_varying_options(benchmark::State& state)
 {
-  auto const col_sel    = static_cast<column_selection>(state.range(0));
-  auto const row_sel    = static_cast<row_selection>(state.range(1));
-  auto const num_chunks = state.range(2);
+  auto state_idx        = 0;
+  auto const col_sel    = static_cast<column_selection>(state.range(state_idx++));
+  auto const row_sel    = static_cast<row_selection>(state.range(state_idx++));
+  auto const num_chunks = state.range(state_idx++);
+
+  auto const flags         = state.range(state_idx++);
+  auto const use_index     = (flags & 1) != 0;
+  auto const use_np_dtypes = (flags & 2) != 0;
+  auto const dec_as_float  = (flags & 4) != 0;
+  auto const ts_type       = cudf::data_type{static_cast<cudf::type_id>(state.range(state_idx++))};
 
   auto const data_types =
     dtypes_for_column_selection(get_type_or_group({int32_t(type_group_id::INTEGRAL_SIGNED),
@@ -95,7 +117,6 @@ void BM_orc_read_varying_options(benchmark::State& state)
                                                    int32_t(type_group_id::TIMESTAMP),
                                                    int32_t(cudf::type_id::STRING)}),
                                 col_sel);
-
   auto const tbl =
     create_random_table(data_types, data_types.size() * 2, table_size_bytes{data_size});
   auto const view = tbl->view();
@@ -108,7 +129,11 @@ void BM_orc_read_varying_options(benchmark::State& state)
   auto const cols_to_read = get_col_names_to_read(orc_data, col_sel);
   cudf_io::orc_reader_options read_options =
     cudf_io::orc_reader_options::builder(cudf_io::source_info{orc_data.data(), orc_data.size()})
-      .columns(cols_to_read);
+      .columns(cols_to_read)
+      .use_index(use_index)
+      .use_np_dtypes(use_np_dtypes)
+      .timestamp_type(ts_type)
+      .decimals_as_float64(dec_as_float);
 
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
   for (auto _ : state) {
@@ -116,7 +141,9 @@ void BM_orc_read_varying_options(benchmark::State& state)
     for (int32_t chunk = 0; chunk < num_chunks; ++chunk) {
       auto const is_last_chunk = chunk == (num_chunks - 1);
       switch (row_sel) {
-        case row_selection::STRIPES: read_options.set_stripes({chunk}); break;
+        case row_selection::STRIPES:
+          read_options.set_stripes(get_chunk_stripes(data_size, num_chunks, chunk));
+          break;
         case row_selection::NROWS:
           read_options.set_skip_rows(chunk * chunk_row_cnt);
           read_options.set_num_rows(chunk_row_cnt);
@@ -124,7 +151,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
           break;
       }
 
-      std::cout << cudf_io::read_orc(read_options).tbl->num_rows() << ' ';
+      cudf_io::read_orc(read_options);
     }
   }
   auto const data_processed = data_size * cols_to_read.size() / view.num_columns();
@@ -152,7 +179,9 @@ BENCHMARK_REGISTER_F(OrcRead, column_selection)
                   int32_t(column_selection::FIRST_HALF),
                   int32_t(column_selection::SECOND_HALF)},
                  {int32_t(row_selection::ALL)},
-                 {1}})
+                 {1},
+                 {0b111},
+                 {int32_t(cudf::type_id::EMPTY)}})
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();
 
@@ -161,6 +190,19 @@ BENCHMARK_DEFINE_F(OrcRead, row_selection)
 BENCHMARK_REGISTER_F(OrcRead, row_selection)
   ->ArgsProduct({{int32_t(column_selection::ALL)},
                  {int32_t(row_selection::STRIPES), int32_t(row_selection::NROWS)},
-                 {1, 8}})
+                 {1, 8},
+                 {0b111},
+                 {int32_t(cudf::type_id::EMPTY)}})
+  ->Unit(benchmark::kMillisecond)
+  ->UseManualTime();
+
+BENCHMARK_DEFINE_F(OrcRead, misc_options)
+(::benchmark::State& state) { BM_orc_read_varying_options(state); }
+BENCHMARK_REGISTER_F(OrcRead, misc_options)
+  ->ArgsProduct({{int32_t(column_selection::ALL)},
+                 {int32_t(row_selection::NROWS)},
+                 {1},
+                 {0b111, 0b110, 0b101, 0b011},  // `true` is default for each boolean parameter here
+                 {int32_t(cudf::type_id::EMPTY), int32_t(cudf::type_id::TIMESTAMP_NANOSECONDS)}})
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();
