@@ -57,8 +57,10 @@ conda config --set ssl_verify False
 
 if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
   CONDA_BUILD_ARGS=""
+  CONDA_CHANNEL=""
 else
   CONDA_BUILD_ARGS="--dirty --no-remove-work-dir"
+  CONDA_CHANNEL="-c $WORKSPACE/ci/artifacts/cudf/cpu/conda-bld/"
 fi
 
 if [ "$BUILD_LIBCUDF" == '1' ]; then
@@ -71,16 +73,16 @@ fi
 
 if [ "$BUILD_CUDF" == '1' ]; then
   gpuci_logger "Build conda pkg for cudf"
-  gpuci_conda_retry build conda/recipes/cudf --python=$PYTHON $CONDA_BUILD_ARGS
+  gpuci_conda_retry build conda/recipes/cudf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
 
   gpuci_logger "Build conda pkg for dask-cudf"
-  gpuci_conda_retry build conda/recipes/dask-cudf --python=$PYTHON $CONDA_BUILD_ARGS
+  gpuci_conda_retry build conda/recipes/dask-cudf --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
 
   gpuci_logger "Build conda pkg for cudf_kafka"
-  gpuci_conda_retry build conda/recipes/cudf_kafka --python=$PYTHON $CONDA_BUILD_ARGS
+  gpuci_conda_retry build conda/recipes/cudf_kafka --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
 
   gpuci_logger "Build conda pkg for custreamz"
-  gpuci_conda_retry build conda/recipes/custreamz --python=$PYTHON $CONDA_BUILD_ARGS
+  gpuci_conda_retry build conda/recipes/custreamz --python=$PYTHON $CONDA_BUILD_ARGS $CONDA_CHANNEL
 fi
 ################################################################################
 # UPLOAD - Conda packages
