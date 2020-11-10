@@ -854,7 +854,8 @@ def test_concat_join_no_overlapping_columns_many_and_empty2(
     assert_eq(
         expected,
         actual,
-        check_index_type=False if len(expected) == 0 else True,
+        check_index_type=False 
+        #if len(expected) == 0 else True,
     )
 
 
@@ -998,4 +999,5 @@ def test_concat_join_empty_dataframes(
                 expected[key] = expected[key].fillna("-1")
                 actual[key] = col.astype("str").fillna("-1")
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
-    assert_eq(expected, actual, check_index_type=False if gdf.empty else True)
+    assert_eq(expected, actual, check_index_type=False)
+    #if gdf.empty else True)

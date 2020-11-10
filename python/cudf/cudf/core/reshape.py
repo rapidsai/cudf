@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import cudf
 from collections import OrderedDict
+from cudf.core.column import arange, full
 
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -40,11 +41,10 @@ def _align_objs(objs, how="outer"):
             name = index.name
             index = (
                 cudf.DataFrame(index=obj.index)
-                .join(cudf.DataFrame(index=index), how=how)
+                .join(cudf.DataFrame(index=index), how='outer')
                 .index
             )
             index.name = name
-            # breakpoint()
         return [obj.reindex(index) for obj in objs], False
 
 
@@ -75,31 +75,51 @@ def _concat_objs(objs, how="outer"):
             raise ValueError("cannot reindex from a duplicate axis")
 
         index = objs[0].index
-        if how == 'outer':
+        if isinstance(index, cudf.MultiIndex):
             for obj in objs[1:]:
-                lhs = cudf.DataFrame({"x": index, "orig_order": arange(len(index))})
-                rhs = cudf.DataFrame(
-                {
-                    "x": obj.index,
-                    "s": obj,
-                    "bool": full(len(obj), True, dtype=self.dtype),
-                }
-                )
                 name = index.name
                 index = (
                     cudf.DataFrame(index=obj.index)
                     .join(cudf.DataFrame(index=index), how=how)
                     .index
                 )
+                index.name = name
+            return [obj.reindex(index) for obj in objs], False
+
+        name = index.name
+        # breakpoint()
+        lhs = cudf.DataFrame({"x": index, "orig_order": arange(len(index))})
+        rhs = cudf.DataFrame(
+            {
+                "x": objs[1].index,
+                "s": arange(len(objs[1].index)),
+                "bool": full(len(objs[1]), True, dtype=objs[1].dtypes),
+            }
+            )
+        res = lhs.merge(rhs, on="x", how=how).sort_values(by="orig_order")
+        for obj in objs[2:]:
+            res["orig_order"] = arange(len(res))
+            rhs = cudf.DataFrame(
+            {
+                "x": obj.index,
+                "s": arange(len(obj.index)),
+                "bool": full(len(obj), True, dtype=obj.dtypes),
+            }
+            )
+            res = res.merge(rhs, on="x", how=how).sort_values(by="orig_order")
+
+        index = res["x"]
+        index.name = name
+        return [obj.reindex(index) for obj in objs], False
                     
             
-        if how == 'inner':
-            for other in indexes[1:]:
-                name = index.name
-                new_index = index.intersection(other)
-                new_index.name = name
-        breakpoint()
-        return [obj.reindex(new_index) for obj in objs], False
+        # if how == 'inner':
+        #     for other in indexes[1:]:
+        #         name = index.name
+        #         new_index = index.intersection(other)
+        #         new_index.name = name
+       
+        # return [obj.reindex(new_index) for obj in objs], False
 
 
 def _normalize_series_and_dataframe(objs, axis):
@@ -300,6 +320,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 empty_inner = True
 
         objs, match_index = _concat_objs(objs, how=join)
+        # breakpoint()
 
         for idx, o in enumerate(objs):
             # if join is inner the index remains unchanged
