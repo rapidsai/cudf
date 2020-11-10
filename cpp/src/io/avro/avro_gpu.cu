@@ -13,8 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cooperative_groups.h>
-#include <cuda/barrier>
 #include <io/utilities/block_utils.cuh>
 #include "avro_gpu.h"
 
