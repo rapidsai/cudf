@@ -849,8 +849,8 @@ class Series(Frame, Serializable):
         dtype: object
 
         ``map`` accepts a ``dict`` or a ``Series``. Values that are not found
-        in the ``dict`` are converted to ``NaN``, default values in dicts are  
-        currently not supported. :
+        in the ``dict`` are converted to ``NaN``, default values in dicts are
+        currently not supported.:
 
         >>> s.map({'cat': 'kitten', 'dog': 'puppy'})
         0   kitten
@@ -873,10 +873,9 @@ class Series(Frame, Serializable):
         type functions.
         """
         if isinstance(arg, dict):
-            if hasattr(arg, '__missing__'):
+            if hasattr(arg, "__missing__"):
                 raise NotImplementedError(
-                    "default values in dicts are" 
-                    " currently not supported."
+                    "default values in dicts are" " currently not supported."
                 )
             lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
             rhs = cudf.DataFrame(
