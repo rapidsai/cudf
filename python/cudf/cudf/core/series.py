@@ -844,7 +844,7 @@ class Series(Frame, Serializable):
         >>> s
         0      cat
         1      dog
-        2      NaN
+        2     <NA>
         3   rabbit
         dtype: object
 
