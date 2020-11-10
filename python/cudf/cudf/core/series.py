@@ -855,8 +855,8 @@ class Series(Frame, Serializable):
         >>> s.map({'cat': 'kitten', 'dog': 'puppy'})
         0   kitten
         1    puppy
-        2      NaN
-        3      NaN
+        2     <NA>
+        3     <NA>
         dtype: object
 
         It also accepts numeric functions:
