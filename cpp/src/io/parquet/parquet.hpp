@@ -415,6 +415,11 @@ class CompactProtocolReader {
   bool read(FileMetaData *f);
   bool read(SchemaElement *s);
   bool read(LogicalType *l);
+  bool read(DecimalType *d);
+  bool read(TimeType *t);
+  bool read(TimeUnit *u);
+  bool read(TimestampType *t);
+  bool read(IntType *t);
   bool read(RowGroup *r);
   bool read(ColumnChunk *c);
   bool read(ColumnChunkMetaData *c);
@@ -442,6 +447,8 @@ class CompactProtocolReader {
   const uint8_t *m_cur  = nullptr;
   const uint8_t *m_end  = nullptr;
 
+  friend class ParquetFieldBool;
+  friend class ParquetFieldInt8;
   friend class ParquetFieldInt32;
   friend class ParquetFieldInt64;
   template <typename T>
@@ -449,12 +456,56 @@ class CompactProtocolReader {
   friend class ParquetFieldString;
   template <typename T>
   friend class ParquetFieldStructFunctor;
+  template <typename T, bool>
+  friend class ParquetFieldUnionFunctor;
   template <typename T>
   friend class ParquetFieldEnum;
   template <typename T>
   friend class ParquetFieldEnumListFunctor;
   friend class ParquetFieldStringList;
   friend class ParquetFieldStructBlob;
+};
+
+/**
+ * @brief Functor to set value to bool read from CompactProtocolReader
+ *
+ * @return True if field type is not bool
+ */
+class ParquetFieldBool {
+  int field_val;
+  bool &val;
+
+ public:
+  ParquetFieldBool(int f, bool &v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    return (field_type != ST_FLD_TRUE && field_type != ST_FLD_FALSE) ||
+           !(val = (field_type == ST_FLD_TRUE), true);
+  }
+
+  int field() { return field_val; }
+};
+
+/**
+ * @brief Functor to set value to 8 bit integer read from CompactProtocolReader
+ *
+ * @return True if field type is not int8
+ */
+class ParquetFieldInt8 {
+  int field_val;
+  int8_t &val;
+
+ public:
+  ParquetFieldInt8(int f, int8_t &v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    val = cpr->getb();
+    return (field_type != ST_FLD_BYTE);
+  }
+
+  int field() { return field_val; }
 };
 
 /**
@@ -596,31 +647,49 @@ ParquetFieldStructFunctor<T> ParquetFieldStruct(int f, T &v)
 }
 
 /**
- * @brief Functor to read an empty structure from CompactProtocolReader
+ * @brief Functor to read a union member from CompactProtocolReader
  *
  * @return True if field types mismatch or if the process of reading a
- * struct fails
+ * union member fails
  */
-template <typename T>
-class ParquetFieldEmptyStructFunctor {
+template <typename T, bool is_empty = false>
+class ParquetFieldUnionFunctor {
   int field_val;
+  bool &is_set;
   T &val;
 
  public:
-  ParquetFieldEmptyStructFunctor(int f, T &v) : field_val(f), val(v) {}
+  ParquetFieldUnionFunctor(int f, bool &b, T &v) : field_val(f), is_set(b), val(v) {}
 
   inline bool operator()(CompactProtocolReader *cpr, int field_type)
   {
-    return (field_type != ST_FLD_STRUCT || !(val = true));
+    return (field_type != ST_FLD_STRUCT || !(is_set = true, cpr->read(&val)));
   }
 
   int field() { return field_val; }
 };
 
 template <typename T>
-ParquetFieldEmptyStructFunctor<T> ParquetFieldEmptyStruct(int f, T &v)
+struct ParquetFieldUnionFunctor<T, true> {
+  int field_val;
+  bool &is_set;
+  T &val;
+
+ public:
+  ParquetFieldUnionFunctor(int f, bool &b, T &v) : field_val(f), is_set(b), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    return (field_type != ST_FLD_STRUCT || !(is_set = true, true));
+  }
+
+  int field() { return field_val; }
+};
+
+template <typename T>
+ParquetFieldUnionFunctor<T, std::is_empty<T>::value> ParquetFieldUnion(int f, bool &b, T &v)
 {
-  return ParquetFieldEmptyStructFunctor<T>(f, v);
+  return ParquetFieldUnionFunctor<T, std::is_empty<T>::value>(f, b, v);
 }
 
 /**
