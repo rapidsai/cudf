@@ -940,6 +940,13 @@ static __device__ void PlainBoolEncode(page_enc_state_s *s,
   }
 }
 
+constexpr auto julian_calendar_epoch_diff()
+{
+  using namespace simt::std::chrono;
+  using namespace simt::std::chrono_literals;
+  return sys_days{January / 1 / 1970} - (sys_days{November / 24 / -4713} + 12h);
+}
+
 /**
  * @brief Converts a sys_time<nanoseconds> into a pair with nanoseconds since midnight and number of
  * Julian days. Does not deal with time zones. Used by INT96 code.
@@ -951,12 +958,10 @@ static __device__ void PlainBoolEncode(page_enc_state_s *s,
 static __device__ std::pair<simt::std::chrono::nanoseconds, simt::std::chrono::days>
 convert_nanoseconds(simt::std::chrono::sys_time<simt::std::chrono::nanoseconds> const ns)
 {
-  constexpr int64_t JulianEpochOffsetDays = INT64_C(2440588);
-
   using namespace simt::std::chrono;
   auto const nanosecond_ticks = ns.time_since_epoch();
   auto const gregorian_days   = floor<days>(nanosecond_ticks);
-  auto const julian_days      = gregorian_days + days{JulianEpochOffsetDays};
+  auto const julian_days      = gregorian_days + ceil<days>(julian_calendar_epoch_diff());
 
   auto const last_day_ticks = nanosecond_ticks - duration_cast<nanoseconds>(gregorian_days);
   return {last_day_ticks, julian_days};
