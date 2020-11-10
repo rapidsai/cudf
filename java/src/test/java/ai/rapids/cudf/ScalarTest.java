@@ -21,7 +21,6 @@ package ai.rapids.cudf;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.math.MathContext;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -50,7 +49,7 @@ public class ScalarTest extends CudfTestBase {
   public void testNull() {
     for (DType.DTypeEnum dataType : DType.DTypeEnum.values()) {
       DType type;
-      if (dataType == DType.DTypeEnum.DECIMAL32 || dataType == DType.DTypeEnum.DECIMAL64) {
+      if (dataType.isDecimalType()) {
         type = DType.create(dataType, -3);
       } else {
         type = DType.create(dataType);
@@ -134,12 +133,20 @@ public class ScalarTest extends CudfTestBase {
         BigDecimal.valueOf(12345678, 2),
         BigDecimal.valueOf(1234567890123L, 6),
     };
-    for (BigDecimal bigDec: bigDecimals) {
-      try (Scalar s = Scalar.fromBigDecimal(bigDec)) {
-        assertEquals(DType.fromJavaBigDecimal(bigDec), s.getType());
+    for (BigDecimal dec: bigDecimals) {
+      try (Scalar s = Scalar.fromDecimal(dec)) {
+        assertEquals(DType.fromJavaBigDecimal(dec), s.getType());
         assertTrue(s.isValid());
-        assertEquals(bigDec.unscaledValue().longValueExact(), s.getLong());
-        assertEquals(bigDec, s.getBigDecimal());
+        assertEquals(dec.unscaledValue().longValueExact(), s.getLong());
+        assertEquals(dec, s.getBigDecimal());
+      }
+      try (Scalar s = Scalar.fromDecimal(-dec.scale(), dec.unscaledValue().intValueExact())) {
+        assertEquals(dec, s.getBigDecimal());
+      } catch (java.lang.ArithmeticException ex) {
+        try (Scalar s = Scalar.fromDecimal(-dec.scale(), dec.unscaledValue().longValueExact())) {
+          assertEquals(dec, s.getBigDecimal());
+          assertTrue(s.getType().isBackedByLong());
+        }
       }
     }
   }
