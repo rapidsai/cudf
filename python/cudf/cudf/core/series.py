@@ -875,7 +875,7 @@ class Series(Frame, Serializable):
         if isinstance(arg, dict):
             if hasattr(arg, "__missing__"):
                 raise NotImplementedError(
-                    "default values in dicts are" " currently not supported."
+                    "default values in dicts are currently not supported."
                 )
             lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
             rhs = cudf.DataFrame(
