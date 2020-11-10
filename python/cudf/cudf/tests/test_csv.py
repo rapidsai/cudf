@@ -1743,3 +1743,39 @@ def test_csv_write_empty_dataframe(df, index):
     actual = df.to_csv(index=index)
 
     assert expected == actual
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(
+            {
+                "a": [1, 2, 3, None],
+                "": ["a", "v", None, None],
+                None: [12, 12, 32, 44],
+            }
+        ),
+        pd.DataFrame(
+            {
+                np.nan: [1, 2, 3, None],
+                "": ["a", "v", None, None],
+                None: [12, 12, 32, 44],
+            }
+        ),
+        pd.DataFrame({"": [1, None, 3, 4]}),
+        pd.DataFrame({None: [1, None, 3, 4]}),
+        pd.DataFrame(columns=[None, "", "a", "b"]),
+        pd.DataFrame(columns=[None]),
+        pd.DataFrame(columns=[""]),
+    ],
+)
+@pytest.mark.parametrize(
+    "na_rep", ["", "_NA_", "---", "_____CUSTOM_NA_REP______"]
+)
+def test_csv_write_dataframe_na_rep(df, na_rep):
+    gdf = cudf.from_pandas(df)
+
+    expected = df.to_csv(na_rep=na_rep)
+    actual = gdf.to_csv(na_rep=na_rep)
+
+    assert expected == actual
