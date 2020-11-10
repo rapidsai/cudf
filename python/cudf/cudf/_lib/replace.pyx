@@ -3,7 +3,7 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf.utils.utils import is_any_scalar
+from cudf.utils.dtypes import is_scalar
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_device_scalar
@@ -99,7 +99,7 @@ def replace_nulls(Column input_col, object replacement, object dtype=None):
     of replacement
     """
 
-    if is_any_scalar(replacement):
+    if is_scalar(replacement):
         return replace_nulls_scalar(
             input_col,
             as_device_scalar(replacement, dtype=dtype)

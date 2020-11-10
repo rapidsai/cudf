@@ -23,8 +23,7 @@ from cudf._lib.cpp.types cimport (
     type_id,
 )
 
-from cudf.utils.dtypes import is_string_dtype
-from cudf.utils.utils import is_any_scalar
+from cudf.utils.dtypes import is_string_dtype, is_scalar
 
 from cudf._lib.cpp.binaryop cimport binary_operator
 cimport cudf._lib.cpp.binaryop as cpp_binaryop
@@ -185,7 +184,7 @@ def binaryop(lhs, rhs, op, dtype):
 
     cdef data_type c_dtype = data_type(tid)
 
-    if is_any_scalar(lhs) or lhs is None:
+    if is_scalar(lhs) or lhs is None:
         is_string_col = is_string_dtype(rhs.dtype)
         s_lhs = as_device_scalar(lhs, dtype=rhs.dtype if lhs is None else None)
         result = binaryop_s_v(
@@ -195,7 +194,7 @@ def binaryop(lhs, rhs, op, dtype):
             c_dtype
         )
 
-    elif is_any_scalar(rhs) or rhs is None:
+    elif is_scalar(rhs) or rhs is None:
         is_string_col = is_string_dtype(lhs.dtype)
         s_rhs = as_device_scalar(rhs, dtype=lhs.dtype if rhs is None else None)
         result = binaryop_v_s(
