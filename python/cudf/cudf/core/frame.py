@@ -3,6 +3,7 @@ import copy
 import functools
 import warnings
 from collections import OrderedDict, abc as abc
+import operator
 
 import cupy
 import numpy as np
@@ -206,8 +207,9 @@ class Frame(libcudf.table.Table):
 
     @classmethod
     @annotate("CONCAT", color="orange", domain="cudf_python")
-    def _concat(cls, objs, axis=0, ignore_index=False, sort=False):
-
+    def _concat(
+        cls, objs, axis=0, join="outer", ignore_index=False, sort=False
+    ):
         # shallow-copy the input DFs in case the same DF instance
         # is concatenated with itself
 
@@ -235,9 +237,50 @@ class Frame(libcudf.table.Table):
                     result_index_length += len(obj)
                     empty_has_index = empty_has_index or len(obj) > 0
 
-        # Get a list of the unique table column names
-        names = [name for f in objs for name in f._column_names]
-        names = OrderedDict.fromkeys(names).keys()
+        if join == "inner":
+            all_columns_list = [obj._column_names for obj in objs]
+            # get column names present in ALL objs
+            intersecting_columns = functools.reduce(
+                np.intersect1d, all_columns_list
+            )
+            # get column names not present in all objs
+            non_intersecting_columns = (
+                functools.reduce(operator.or_, (obj.columns for obj in objs))
+                ^ intersecting_columns
+            )
+            names = OrderedDict.fromkeys(intersecting_columns).keys()
+
+            if axis == 0:
+                if ignore_index and (
+                    num_empty_input_frames > 0
+                    or len(intersecting_columns) == 0
+                ):
+                    # When ignore_index is True and if there is
+                    # at least 1 empty dataframe and no
+                    # intersecting columns are present, an empty dataframe
+                    # needs to be returned just with an Index.
+                    empty_has_index = True
+                    num_empty_input_frames = len(objs)
+                    result_index_length = sum(len(obj) for obj in objs)
+
+                objs = [obj.copy(deep=False) for obj in objs]
+                # remove columns not present in all objs
+                for obj in objs:
+                    obj.drop(
+                        columns=non_intersecting_columns,
+                        inplace=True,
+                        errors="ignore",
+                    )
+        elif join == "outer":
+            # Get a list of the unique table column names
+            names = [name for f in objs for name in f._column_names]
+            names = OrderedDict.fromkeys(names).keys()
+
+        else:
+            raise ValueError(
+                "Only can inner (intersect) or outer (union) when joining"
+                "the other axis"
+            )
 
         try:
             if sort:
@@ -253,7 +296,6 @@ class Frame(libcudf.table.Table):
         # If any of the input frames have a non-empty index, include these
         # columns in the list of columns to concatenate, even if the input
         # frames are empty and `ignore_index=True`.
-
         columns = [
             (
                 []
@@ -320,7 +362,6 @@ class Frame(libcudf.table.Table):
         # to the result frame.
         if empty_has_index and num_empty_input_frames == len(objs):
             out._index = cudf.RangeIndex(result_index_length)
-
         # Reassign the categories for any categorical table cols
         _reassign_categories(
             categories, out._data, indices[first_data_column_position:]
@@ -345,7 +386,6 @@ class Frame(libcudf.table.Table):
             out.columns = objs[0].columns
         else:
             out.columns = names
-
         if not ignore_index:
             out._index.name = objs[0]._index.name
             out._index.names = objs[0]._index.names
