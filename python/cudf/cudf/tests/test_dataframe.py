@@ -7900,7 +7900,6 @@ def test_dataframe_to_pandas_nullable_dtypes(df, expected_pdf):
         [{"a": 1, "b": 2}, {"b": 5, "c": 6}],
         [{}, {"a": 1, "b": 5, "c": 6}],
         [{"a": 1, "b": 2, "c": 3}, {"a": 4.5, "b": 5.5, "c": 6.5}],
-        [{"a": 1, "b": 2, "c": 3}, {"a": 4.5, "b": 5.5, "c": 6.5}],
     ],
 )
 def test_dataframe_init_from_list_of_dicts(data):
