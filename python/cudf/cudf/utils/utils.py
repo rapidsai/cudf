@@ -401,3 +401,6 @@ def isnat(val):
         return False
     else:
         return val in {"NaT", "NAT"} or np.isnat(val)
+
+def is_any_scalar(val):
+    return isinstance(val, (cudf.Scalar, cudf._lib.scalar.DeviceScalar)) or np.isscalar(val)

@@ -12,7 +12,7 @@ from cudf._lib.cpp.strings.substring cimport (
     slice_strings as cpp_slice_strings
 )
 
-from cudf._lib.scalar import as_scalar
+from cudf._lib.scalar import as_device_scalar
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.cpp.scalar.scalar cimport numeric_scalar
 
@@ -30,9 +30,9 @@ def slice_strings(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef DeviceScalar start_scalar = as_scalar(start, np.int32)
-    cdef DeviceScalar end_scalar = as_scalar(end, np.int32)
-    cdef DeviceScalar step_scalar = as_scalar(step, np.int32)
+    cdef DeviceScalar start_scalar = as_device_scalar(start, np.int32)
+    cdef DeviceScalar end_scalar = as_device_scalar(end, np.int32)
+    cdef DeviceScalar step_scalar = as_device_scalar(step, np.int32)
 
     cdef numeric_scalar[size_type]* start_numeric_scalar = \
         <numeric_scalar[size_type]*>(
@@ -91,9 +91,9 @@ def get(Column source_strings,
     else:
         next_index = index + 1
         step = 1
-    cdef DeviceScalar start_scalar = as_scalar(index, np.int32)
-    cdef DeviceScalar end_scalar = as_scalar(next_index, np.int32)
-    cdef DeviceScalar step_scalar = as_scalar(step, np.int32)
+    cdef DeviceScalar start_scalar = as_device_scalar(index, np.int32)
+    cdef DeviceScalar end_scalar = as_device_scalar(next_index, np.int32)
+    cdef DeviceScalar step_scalar = as_device_scalar(step, np.int32)
 
     cdef numeric_scalar[size_type]* start_numeric_scalar = \
         <numeric_scalar[size_type]*>(

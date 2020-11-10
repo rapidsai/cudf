@@ -20,7 +20,7 @@ from cudf._lib.null_mask import (
     bitmask_allocation_size_bytes,
     create_null_mask,
 )
-from cudf._lib.scalar import as_scalar
+from cudf._lib.scalar import as_device_scalar
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
@@ -459,7 +459,7 @@ class ColumnBase(Column, Serializable):
         if is_categorical_dtype(self.dtype):
             return self._fill_categorical(fill_value, begin, end, inplace)
 
-        fill_scalar = as_scalar(fill_value, self.dtype)
+        fill_scalar = as_device_scalar(fill_value, self.dtype)
 
         if not inplace:
             return libcudf.filling.fill(self, begin, end, fill_scalar)
@@ -480,7 +480,7 @@ class ColumnBase(Column, Serializable):
 
     def _fill_categorical(self, fill_value, begin, end, inplace):
         fill_code = self._encode(fill_value)
-        fill_scalar = as_scalar(fill_code, self.codes.dtype)
+        fill_scalar = as_device_scalar(fill_code, self.codes.dtype)
 
         result = self if inplace else self.copy()
 
@@ -2070,7 +2070,7 @@ def arange(start, stop=None, step=1, dtype=None):
     size = int(np.ceil((stop - start) / step))
 
     return libcudf.filling.sequence(
-        size, as_scalar(start, dtype=dtype), as_scalar(step, dtype=dtype)
+        size, as_device_scalar(start, dtype=dtype), as_device_scalar(step, dtype=dtype)
     )
 
 
@@ -2107,5 +2107,5 @@ def full(size, fill_value, dtype=None):
     """
 
     return libcudf.column.make_column_from_scalar(
-        as_scalar(fill_value, dtype), size
+        as_device_scalar(fill_value, dtype), size
     )

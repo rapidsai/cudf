@@ -10,7 +10,7 @@ from libcpp.utility cimport move
 from cudf._lib.binaryop cimport underlying_type_t_binary_operator
 from cudf._lib.column cimport Column
 from cudf._lib.replace import replace_nulls
-from cudf._lib.scalar import as_scalar
+from cudf._lib.scalar import as_device_scalar
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.types import np_to_cudf_types
 from cudf._lib.types cimport underlying_type_t_type_id
@@ -24,6 +24,7 @@ from cudf._lib.cpp.types cimport (
 )
 
 from cudf.utils.dtypes import is_string_dtype
+from cudf.utils.utils import is_any_scalar
 
 from cudf._lib.cpp.binaryop cimport binary_operator
 cimport cudf._lib.cpp.binaryop as cpp_binaryop
@@ -169,12 +170,7 @@ def binaryop(lhs, rhs, op, dtype):
     """
     Dispatches a binary op call to the appropriate libcudf function:
     """
-    from cudf import Scalar
 
-    if isinstance(lhs, Scalar):
-        lhs = lhs._data
-    if isinstance(rhs, Scalar):
-        rhs = rhs._data
     op = BinaryOperation[op.upper()]
     cdef binary_operator c_op = <binary_operator> (
         <underlying_type_t_binary_operator> op
@@ -189,10 +185,9 @@ def binaryop(lhs, rhs, op, dtype):
 
     cdef data_type c_dtype = data_type(tid)
 
-    if isinstance(lhs, DeviceScalar) or np.isscalar(lhs) or lhs is None:
-
+    if is_any_scalar(lhs) or lhs is None:
         is_string_col = is_string_dtype(rhs.dtype)
-        s_lhs = as_scalar(lhs, dtype=rhs.dtype if lhs is None else None)
+        s_lhs = as_device_scalar(lhs, dtype=rhs.dtype if lhs is None else None)
         result = binaryop_s_v(
             s_lhs,
             rhs,
@@ -200,9 +195,9 @@ def binaryop(lhs, rhs, op, dtype):
             c_dtype
         )
 
-    elif isinstance(rhs, DeviceScalar) or np.isscalar(rhs) or rhs is None:
+    elif is_any_scalar(rhs) or rhs is None:
         is_string_col = is_string_dtype(lhs.dtype)
-        s_rhs = as_scalar(rhs, dtype=lhs.dtype if rhs is None else None)
+        s_rhs = as_device_scalar(rhs, dtype=lhs.dtype if rhs is None else None)
         result = binaryop_v_s(
             lhs,
             s_rhs,

@@ -9,7 +9,7 @@ from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.scalar import DeviceScalar, as_scalar
+from cudf._lib.scalar import DeviceScalar, as_device_scalar
 from cudf.core.column import column, string
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
@@ -109,7 +109,7 @@ class TimeDeltaColumn(column.ColumnBase):
                     rhs = np.timedelta64(rhs.value)
                     rhs = rhs.astype(common_dtype).astype("float64")
                 else:
-                    rhs = as_scalar(None, "float64")
+                    rhs = as_device_scalar(None, "float64")
             else:
                 rhs = rhs.astype(common_dtype).astype("float64")
 
@@ -179,7 +179,7 @@ class TimeDeltaColumn(column.ColumnBase):
                 if rhs.is_valid():
                     rhs = rhs.value.astype(common_dtype).astype("float64")
                 else:
-                    rhs = as_scalar(None, "float64")
+                    rhs = as_device_scalar(None, "float64")
             else:
                 rhs = rhs.astype(common_dtype).astype("float64")
 
@@ -400,61 +400,61 @@ class TimeDeltaColumn(column.ColumnBase):
         return cudf.DataFrame(
             data={
                 "days": self
-                // as_scalar(
+                // as_device_scalar(
                     np.timedelta64(_numpy_to_pandas_conversion["D"], "ns")
                 ),
                 "hours": (
                     self
-                    % as_scalar(
+                    % as_device_scalar(
                         np.timedelta64(_numpy_to_pandas_conversion["D"], "ns")
                     )
                 )
-                // as_scalar(
+                // as_device_scalar(
                     np.timedelta64(_numpy_to_pandas_conversion["h"], "ns")
                 ),
                 "minutes": (
                     self
-                    % as_scalar(
+                    % as_device_scalar(
                         np.timedelta64(_numpy_to_pandas_conversion["h"], "ns")
                     )
                 )
-                // as_scalar(
+                // as_device_scalar(
                     np.timedelta64(_numpy_to_pandas_conversion["m"], "ns")
                 ),
                 "seconds": (
                     self
-                    % as_scalar(
+                    % as_device_scalar(
                         np.timedelta64(_numpy_to_pandas_conversion["m"], "ns")
                     )
                 )
-                // as_scalar(
+                // as_device_scalar(
                     np.timedelta64(_numpy_to_pandas_conversion["s"], "ns")
                 ),
                 "milliseconds": (
                     self
-                    % as_scalar(
+                    % as_device_scalar(
                         np.timedelta64(_numpy_to_pandas_conversion["s"], "ns")
                     )
                 )
-                // as_scalar(
+                // as_device_scalar(
                     np.timedelta64(_numpy_to_pandas_conversion["ms"], "ns")
                 ),
                 "microseconds": (
                     self
-                    % as_scalar(
+                    % as_device_scalar(
                         np.timedelta64(_numpy_to_pandas_conversion["ms"], "ns")
                     )
                 )
-                // as_scalar(
+                // as_device_scalar(
                     np.timedelta64(_numpy_to_pandas_conversion["us"], "ns")
                 ),
                 "nanoseconds": (
                     self
-                    % as_scalar(
+                    % as_device_scalar(
                         np.timedelta64(_numpy_to_pandas_conversion["us"], "ns")
                     )
                 )
-                // as_scalar(
+                // as_device_scalar(
                     np.timedelta64(_numpy_to_pandas_conversion["ns"], "ns")
                 ),
             },
@@ -470,7 +470,7 @@ class TimeDeltaColumn(column.ColumnBase):
         -------
         NumericalColumn
         """
-        return self // as_scalar(
+        return self // as_device_scalar(
             np.timedelta64(_numpy_to_pandas_conversion["D"], "ns")
         )
 
@@ -490,8 +490,8 @@ class TimeDeltaColumn(column.ColumnBase):
 
         return (
             self
-            % as_scalar(np.timedelta64(_numpy_to_pandas_conversion["D"], "ns"))
-        ) // as_scalar(np.timedelta64(_numpy_to_pandas_conversion["s"], "ns"))
+            % as_device_scalar(np.timedelta64(_numpy_to_pandas_conversion["D"], "ns"))
+        ) // as_device_scalar(np.timedelta64(_numpy_to_pandas_conversion["s"], "ns"))
 
     @property
     def microseconds(self):
@@ -509,7 +509,7 @@ class TimeDeltaColumn(column.ColumnBase):
 
         return (
             self % np.timedelta64(_numpy_to_pandas_conversion["s"], "ns")
-        ) // as_scalar(np.timedelta64(_numpy_to_pandas_conversion["us"], "ns"))
+        ) // as_device_scalar(np.timedelta64(_numpy_to_pandas_conversion["us"], "ns"))
 
     @property
     def nanoseconds(self):
@@ -528,10 +528,10 @@ class TimeDeltaColumn(column.ColumnBase):
 
         return (
             self
-            % as_scalar(
+            % as_device_scalar(
                 np.timedelta64(_numpy_to_pandas_conversion["us"], "ns")
             )
-        ) // as_scalar(np.timedelta64(_numpy_to_pandas_conversion["ns"], "ns"))
+        ) // as_device_scalar(np.timedelta64(_numpy_to_pandas_conversion["ns"], "ns"))
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")

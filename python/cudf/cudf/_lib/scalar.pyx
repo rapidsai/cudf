@@ -414,14 +414,19 @@ cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
         raise ValueError("Could not convert cudf::scalar to numpy scalar")
 
 
-def as_scalar(val, dtype=None):
-    if isinstance(val, DeviceScalar):
-        if (dtype is None or dtype == val.dtype):
-            return val
-    if hasattr(val, '_data') and isinstance(val._data, DeviceScalar):
-        return val._data
+def as_device_scalar(val, dtype=None):
+    if dtype:
+        if isinstance(val, (cudf.Scalar, DeviceScalar)):
+            raise TypeError("Can't update dtype of existing GPU scalar")
+        else:
+            return DeviceScalar(value=val, dtype=dtype)
     else:
-        return DeviceScalar(value=val, dtype=dtype)
+        if isinstance(val, DeviceScalar):
+            return val
+        if isinstance(val, cudf.Scalar):
+            return val._data
+        else:
+            return DeviceScalar(val)
 
 
 def _is_null_host_scalar(slr):

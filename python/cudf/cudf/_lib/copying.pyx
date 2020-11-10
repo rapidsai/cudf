@@ -9,7 +9,7 @@ from libcpp.utility cimport move
 from libc.stdint cimport int32_t, int64_t
 
 from cudf._lib.column cimport Column
-from cudf._lib.scalar import as_scalar
+from cudf._lib.scalar import as_device_scalar
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.table cimport Table
 
@@ -204,7 +204,7 @@ def _scatter_scalar(scalars, Column scatter_map,
     cdef bool c_bounds_check = bounds_check
     cdef DeviceScalar slr
     for val, col in zip(scalars, target_table._columns):
-        slr = as_scalar(val, col.dtype)
+        slr = as_device_scalar(val, col.dtype)
         source_scalars.push_back(reference_wrapper[constscalar](
             slr.get_raw_ptr()[0]))
     cdef column_view scatter_map_view = scatter_map.view()
@@ -542,17 +542,17 @@ def copy_if_else(object lhs, object rhs, Column boolean_mask):
             return _copy_if_else_column_column(lhs, rhs, boolean_mask)
         else:
             return _copy_if_else_column_scalar(
-                lhs, as_scalar(rhs, lhs.dtype), boolean_mask)
+                lhs, as_device_scalar(rhs, lhs.dtype), boolean_mask)
     else:
         if isinstance(rhs, Column):
             return _copy_if_else_scalar_column(
-                as_scalar(lhs, rhs.dtype), rhs, boolean_mask)
+                as_device_scalar(lhs, rhs.dtype), rhs, boolean_mask)
         else:
             if lhs is None and rhs is None:
                 return lhs
 
             return _copy_if_else_scalar_scalar(
-                as_scalar(lhs), as_scalar(rhs), boolean_mask)
+                as_device_scalar(lhs), as_device_scalar(rhs), boolean_mask)
 
 
 def _boolean_mask_scatter_table(Table input_table, Table target_table,
@@ -620,7 +620,7 @@ def boolean_mask_scatter(object input, Table target_table,
             boolean_mask
         )
     else:
-        scalar_list = [as_scalar(i) for i in input]
+        scalar_list = [as_device_scalar(i) for i in input]
         return _boolean_mask_scatter_scalar(
             scalar_list,
             target_table,
@@ -635,7 +635,7 @@ def shift(Column input, int offset, object fill_value=None):
     if isinstance(fill_value, DeviceScalar):
         fill = fill_value
     else:
-        fill = as_scalar(fill_value, input.dtype)
+        fill = as_device_scalar(fill_value, input.dtype)
 
     cdef column_view c_input = input.view()
     cdef int32_t c_offset = offset

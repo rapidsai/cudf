@@ -9,7 +9,7 @@ from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.scalar import as_scalar
+from cudf._lib.scalar import as_device_scalar
 from cudf.core.column import column, string
 from cudf.utils.dtypes import is_scalar
 
@@ -211,7 +211,7 @@ class DatetimeColumn(column.ColumnBase):
         if isinstance(q, Number):
             return pd.Timestamp(result, unit=self.time_unit)
 
-        result = result * as_scalar(
+        result = result * as_device_scalar(
             _numpy_to_pandas_conversion[self.time_unit]
         )
 
