@@ -3283,8 +3283,9 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
         if not isinstance(sub, str):
-            msg = "expected a string object, not {0}"
-            raise TypeError(msg.format(type(sub).__name__))
+            raise TypeError(
+                f"expected a string object, not {type(sub).__name__}"
+            )
 
         if end is None:
             end = -1
@@ -3339,8 +3340,9 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
         if not isinstance(sub, str):
-            msg = "expected a string object, not {0}"
-            raise TypeError(msg.format(type(sub).__name__))
+            raise TypeError(
+                f"expected a string object, not {type(sub).__name__}"
+            )
 
         if end is None:
             end = -1
@@ -3391,8 +3393,9 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
         if not isinstance(sub, str):
-            msg = "expected a string object, not {0}"
-            raise TypeError(msg.format(type(sub).__name__))
+            raise TypeError(
+                f"expected a string object, not {type(sub).__name__}"
+            )
 
         if end is None:
             end = -1
@@ -3448,8 +3451,9 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
         if not isinstance(sub, str):
-            msg = "expected a string object, not {0}"
-            raise TypeError(msg.format(type(sub).__name__))
+            raise TypeError(
+                f"expected a string object, not {type(sub).__name__}"
+            )
 
         if end is None:
             end = -1
@@ -4488,9 +4492,8 @@ def _massage_string_arg(value, name, allow_col=False):
         allowed_types.append("Column")
 
     raise ValueError(
-        "Expected {} for {} but got {}".format(
-            _expected_types_format(allowed_types), name, type(value)
-        )
+        f"Expected {_expected_types_format(allowed_types)} "
+        f"for {name} but got {type(value)}"
     )
 
 
@@ -4684,16 +4687,16 @@ class StringColumn(column.ColumnBase):
                         kwargs.update(format=fmt)
 
             # Check for None strings
-            if len(self) > 0 and self.binary_operator("eq", "None").any():
+            if len(self) > 0 and (self == "None").any():
                 raise ValueError("Could not convert `None` value to datetime")
 
-            boolean_match = self.binary_operator("eq", "NaT")
+            boolean_match = self == "NaT"
         elif out_dtype.type is np.timedelta64:
             if "format" not in kwargs:
                 if len(self) > 0:
                     kwargs.update(format="%D days %H:%M:%S")
 
-            boolean_match = self.binary_operator("eq", "NaT")
+            boolean_match = self == "NaT"
         elif out_dtype.kind in {"i", "u"}:
             if not cpp_is_integer(self).all():
                 raise ValueError(
@@ -4866,7 +4869,7 @@ class StringColumn(column.ColumnBase):
             )
             return col
         else:
-            raise TypeError("cannot broadcast {}".format(type(other)))
+            raise TypeError(f"cannot broadcast {type(other)}")
 
     def default_na_value(self):
         return None
@@ -4880,8 +4883,10 @@ class StringColumn(column.ColumnBase):
                 return lhs.str().cat(others=rhs)
             elif op in ("eq", "ne", "gt", "lt", "ge", "le"):
                 return _string_column_binop(self, rhs, op=op, out_dtype="bool")
-        msg = "{!r} operator not supported between {} and {}"
-        raise TypeError(msg.format(op, type(self), type(rhs)))
+
+        raise TypeError(
+            f"{op} operator not supported between {type(self)} and {type(rhs)}"
+        )
 
     @property
     def is_unique(self):

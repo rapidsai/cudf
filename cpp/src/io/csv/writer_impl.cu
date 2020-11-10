@@ -70,10 +70,7 @@ using namespace cudf::strings;
 //{"\"", "\n", <delimiter>}
 //
 struct predicate_special_chars {
-  explicit predicate_special_chars(string_scalar const& delimiter, cudaStream_t stream = 0)
-    : delimiter_(delimiter.value(stream))
-  {
-  }
+  explicit predicate_special_chars(string_view const& delimiter) : delimiter_(delimiter) {}
 
   __device__ bool operator()(string_view const& str_view) const
   {
@@ -92,7 +89,7 @@ struct predicate_special_chars {
   }
 
  private:
-  string_view delimiter_;
+  string_view const delimiter_;
 };
 
 struct probe_special_chars {
@@ -123,7 +120,7 @@ struct probe_special_chars {
 
  private:
   column_device_view const d_column_;
-  predicate_special_chars predicate_;
+  predicate_special_chars const predicate_;
 };
 
 struct modify_special_chars {
@@ -181,7 +178,7 @@ struct modify_special_chars {
       // copy the source string unmodified:
       //(pass-through)
       //
-      memcpy(get_output_ptr(idx), d_str.data(), str_size_bytes);
+      memcpy(d_buffer, d_str.data(), str_size_bytes);
     }
     return 0;
   }
@@ -195,7 +192,7 @@ struct modify_special_chars {
   column_device_view const d_column_;
   int32_t const* d_offsets_;
   char* d_chars_;
-  predicate_special_chars predicate_;
+  predicate_special_chars const predicate_;
 };
 
 struct column_to_strings_fn {
@@ -268,8 +265,8 @@ struct column_to_strings_fn {
     // where modify() = duplicate the double quotes, if any; add 2bl quotes prefix/suffix;
     //}
     //
-    std::string delimiter{options_.get_inter_column_delimiter()};
-    predicate_special_chars pred{delimiter, stream_};
+    string_scalar delimiter{std::string{options_.get_inter_column_delimiter()}, true, stream_};
+    predicate_special_chars pred{delimiter.value(stream_)};
 
     return modify_strings<probe_special_chars, modify_special_chars>(column_v, mr_, stream_, pred);
   }

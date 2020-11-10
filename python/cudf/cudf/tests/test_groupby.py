@@ -1261,3 +1261,13 @@ def test_groupby_list_columns_excluded():
         gdf.groupby("a").agg("mean"),
         check_dtype=False,
     )
+
+
+def test_groupby_pipe():
+    pdf = pd.DataFrame({"A": "a b a b".split(), "B": [1, 2, 3, 4]})
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pdf.groupby("A").pipe(lambda x: x.max() - x.min())
+    actual = gdf.groupby("A").pipe(lambda x: x.max() - x.min())
+
+    assert_eq(expected, actual)
