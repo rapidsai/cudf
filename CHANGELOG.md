@@ -95,6 +95,7 @@
 - PR #6701 Fix issue when `numpy.str_` is given as input to string parameters in io APIs
 - PR #6704 Fix leak warnings in JNI unit tests
 - PR #6708 Apply `na_rep` to column names in csv writer
+- PR #6720 Fix implementation of `dtype` parameter in `cudf.read_csv`
 
 
 # cuDF 0.16.0 (21 Oct 2020)
