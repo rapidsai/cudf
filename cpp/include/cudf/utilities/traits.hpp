@@ -213,7 +213,6 @@ struct is_unsigned_impl {
     return is_unsigned<T>();
   }
 };
-
 /**
  * @brief Indicates whether `type` is a unsigned numeric `data_type`.
  *
@@ -467,7 +466,6 @@ constexpr inline bool is_dictionary(data_type type)
 {
   return cudf::type_dispatcher(type, is_dictionary_impl{});
 }
-
 /**
  * @brief Indicates whether elements of type `T` are fixed-width.
  *

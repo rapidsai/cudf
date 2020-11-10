@@ -69,6 +69,14 @@ def test_roundtrip_from_dask(tmpdir, stats):
     dd.assert_eq(ddf[["y"]], ddf2, check_divisions=stats)
 
 
+def test_roundtrip_from_dask_index_false(tmpdir):
+    tmpdir = str(tmpdir)
+    ddf.to_parquet(tmpdir, engine="pyarrow")
+
+    ddf2 = dask_cudf.read_parquet(tmpdir, index=False)
+    dd.assert_eq(ddf.reset_index(drop=False), ddf2)
+
+
 @pytest.mark.parametrize("write_meta", [True, False])
 def test_roundtrip_from_dask_cudf(tmpdir, write_meta):
     tmpdir = str(tmpdir)
