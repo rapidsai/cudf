@@ -1,11 +1,12 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-import pyarrow as pa
 import pickle
+
+import pyarrow as pa
 
 import cudf
 from cudf.core.buffer import Buffer
-from cudf.core.column import column, ColumnBase
+from cudf.core.column import ColumnBase, column
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.utils.dtypes import is_list_dtype
 
@@ -148,7 +149,7 @@ class ListColumn(ColumnBase):
         f = 0
         for h in header["subheaders"]:
             fcount = h["frame_count"]
-            child_frames = frames[f:f+fcount]
+            child_frames = frames[f : f + fcount]
             column_type = pickle.loads(h["type-serialized"])
             children.append(column_type.deserialize(h, child_frames))
             f += fcount
