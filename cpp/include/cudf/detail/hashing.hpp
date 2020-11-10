@@ -16,20 +16,10 @@
 #pragma once
 
 #include <cudf/hashing.hpp>
+#include <cudf/types.hpp>
 
 namespace cudf {
 namespace detail {
-/**
- * @copydoc cudf::hash_partition
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
- */
-std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
-  table_view const& input,
-  std::vector<size_type> const& columns_to_hash,
-  int num_partitions,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
 
 /**
  * @copydoc cudf::hash

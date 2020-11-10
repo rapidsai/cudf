@@ -88,7 +88,9 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
   int num_partitions,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  hash_id hash_function               = hash_id::HASH_MURMUR3,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
 
 /**
  * @brief Round-robin partition.

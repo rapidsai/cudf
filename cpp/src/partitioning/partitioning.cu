@@ -26,6 +26,8 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 
+#include <utility>
+
 namespace cudf {
 namespace {
 // Launch configuration for optimized hash partition
@@ -446,7 +448,7 @@ struct copy_block_partitions_dispatcher {
 };
 
 // NOTE hash_has_nulls must be true if table_to_hash has nulls
-template <bool hash_has_nulls>
+template <template <typename> class hash_function, bool hash_has_nulls>
 std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   table_view const& input,
   table_view const& table_to_hash,
@@ -484,7 +486,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   auto row_partition_offset = rmm::device_vector<size_type>(num_rows);
 
   auto const device_input = table_device_view::create(table_to_hash, stream);
-  auto const hasher       = row_hasher<MurmurHash3_32, hash_has_nulls>(*device_input);
+  auto const hasher       = row_hasher<hash_function, hash_has_nulls>(*device_input);
 
   // If the number of partitions is a power of two, we can compute the partition
   // number of each row more efficiently with bitwise operations
@@ -723,6 +725,7 @@ struct dispatch_map_type {
 
 namespace detail {
 namespace local {
+template <template <typename> class hash_function>
 std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
@@ -738,9 +741,11 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   }
 
   if (has_nulls(table_to_hash)) {
-    return hash_partition_table<true>(input, table_to_hash, num_partitions, mr, stream);
+    return hash_partition_table<hash_function, true>(
+      input, table_to_hash, num_partitions, mr, stream);
   } else {
-    return hash_partition_table<false>(input, table_to_hash, num_partitions, mr, stream);
+    return hash_partition_table<hash_function, false>(
+      input, table_to_hash, num_partitions, mr, stream);
   }
 }
 }  // namespace local
@@ -770,10 +775,23 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
   int num_partitions,
-  rmm::mr::device_memory_resource* mr)
+  hash_id hash_function,
+  rmm::mr::device_memory_resource* mr,
+  cudaStream_t stream)
 {
   CUDF_FUNC_RANGE();
-  return detail::local::hash_partition(input, columns_to_hash, num_partitions, mr);
+
+  switch (hash_function) {
+    case (hash_id::HASH_IDENTITY):
+      return detail::local::hash_partition<IdentityHash>(
+        input, columns_to_hash, num_partitions, mr, stream);
+    case (hash_id::HASH_MURMUR3):
+      return detail::local::hash_partition<MurmurHash3_32>(
+        input, columns_to_hash, num_partitions, mr, stream);
+    default:
+      assert(false && "Unsupported hash function in hash_partition");
+      return std::make_pair(nullptr, std::vector<size_type>());
+  }
 }
 
 // Partition based on an explicit partition map
