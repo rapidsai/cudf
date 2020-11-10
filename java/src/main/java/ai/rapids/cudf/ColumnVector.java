@@ -901,7 +901,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * @return - new ColumnVector
    */
   public static ColumnVector fromScalar(Scalar scalar, int rows) {
-
     long columnHandle = fromScalar(scalar.getScalarHandle(), rows);
     return new ColumnVector(columnHandle);
   }
