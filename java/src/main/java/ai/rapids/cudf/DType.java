@@ -395,6 +395,13 @@ public final class DType {
     return TIMESTAMPS.contains(this.typeId);
   }
 
+  /**
+   * Returns true if the type uses a vector of offsets
+   */
+  public boolean hasOffsets() {
+    return OFFSETS_TYPE.contains(this.typeId);
+  }
+
   private static final EnumSet<DTypeEnum> TIMESTAMPS = EnumSet.of(
       DTypeEnum.TIMESTAMP_DAYS,
       DTypeEnum.TIMESTAMP_SECONDS,
@@ -459,5 +466,10 @@ public final class DType {
   private static final EnumSet<DTypeEnum> NESTED_TYPE = EnumSet.of(
       DTypeEnum.LIST,
       DTypeEnum.STRUCT
+  );
+
+  private static final EnumSet<DTypeEnum> OFFSETS_TYPE = EnumSet.of(
+      DTypeEnum.STRING,
+      DTypeEnum.LIST
   );
 }
