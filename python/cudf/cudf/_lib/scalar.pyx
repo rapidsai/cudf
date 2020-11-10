@@ -414,5 +414,21 @@ def as_device_scalar(val, dtype=None):
 def _is_null_host_scalar(slr):
     if slr is None or slr is cudf.NA:
         return True
+    elif isinstance(slr, (np.datetime64, np.timedelta64)) and np.isnat(slr):
+        return True
     else:
         return False
+
+def _create_dummy_nat_scalar(dtype):
+    cdef DeviceScalar result = DeviceScalar.__new__(DeviceScalar)
+
+    dtype = np.dtype(dtype)
+    if dtype.char in 'mM':
+        nat = dtype.type('NaT').astype(dtype)
+        if dtype.type == np.datetime64:
+            _set_datetime64_from_np_scalar(result.c_value, nat, dtype, True)
+        elif dtype.type == np.timedelta64:
+            _set_timedelta64_from_np_scalar(result.c_value, nat, dtype, True)
+        return result
+    else:
+        raise TypeError('NAT only valid for datetime and timedelta')
