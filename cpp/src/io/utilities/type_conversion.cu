@@ -28,6 +28,7 @@ namespace io {
  **/
 data_type convert_string_to_dtype(const std::string& dtype_in)
 {
+  // TODO: This function should be cleanup to take only libcudf type instances.
   std::string dtype = dtype_in;
   // first, convert to all lower-case
   std::transform(dtype_in.begin(), dtype_in.end(), dtype.begin(), [](unsigned char ch) {
