@@ -45,7 +45,7 @@ cimport cudf._lib.cpp.types as libcudf_types
 
 cdef class DeviceScalar:
 
-    def __init__(self, value, dtype=None):
+    def __init__(self, value, dtype):
         """
         cudf.Scalar: Type representing a scalar value on the device
 
@@ -59,24 +59,6 @@ cdef class DeviceScalar:
         dtype : dtype
             A NumPy dtype.
         """
-        value = cudf.utils.dtypes.to_cudf_compatible_scalar(value, dtype=dtype)
-        valid = not _is_null_host_scalar(value)
-
-        if dtype is None:
-            if not valid:
-                raise TypeError(
-                    "dtype required when constructing a null scalar"
-                )
-            if isinstance(value, (np.datetime64, np.timedelta64)):
-                if np.isnat(value) and np.datetime_data(
-                    value.dtype
-                )[0] == 'generic':
-                    raise TypeError("Need a dtype to build a NaT Scalar")
-                else:
-                    dtype = value.dtype
-            else:
-                dtype = value.dtype
-        dtype = np.dtype(dtype)
 
         # Caching Mechanism
         self._initialize_cache(value, dtype)

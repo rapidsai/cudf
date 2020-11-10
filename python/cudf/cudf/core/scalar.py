@@ -1,7 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import numpy as np
 
-from cudf._lib.scalar import DeviceScalar
+from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
 from cudf.core.column.column import ColumnBase
 from cudf.core.index import Index
 from cudf.core.series import Series
@@ -54,6 +54,25 @@ class Scalar(object):
         if isinstance(value, DeviceScalar):
             self._data = value
         else:
+            value = to_cudf_compatible_scalar(value, dtype=dtype)
+            valid = not _is_null_host_scalar(value)
+
+            if dtype is None:
+                if not valid:
+                    raise TypeError(
+                        "dtype required when constructing a null scalar"
+                    )
+                if isinstance(value, (np.datetime64, np.timedelta64)):
+                    if np.isnat(value) and np.datetime_data(
+                        value.dtype
+                    )[0] == 'generic':
+                        raise TypeError("Need a dtype to build a NaT Scalar")
+                    else:
+                        dtype = value.dtype
+                else:
+                    dtype = value.dtype
+            dtype = np.dtype(dtype)
+
             self._data = DeviceScalar(value, dtype=dtype)
 
     @property

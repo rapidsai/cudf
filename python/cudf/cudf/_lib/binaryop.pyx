@@ -156,10 +156,10 @@ cdef binaryop_s_v(DeviceScalar lhs, Column rhs,
 
 def handle_null_for_string_column(Column input_col, op):
     if op in ('eq', 'lt', 'le', 'gt', 'ge'):
-        return replace_nulls(input_col, DeviceScalar(False))
+        return replace_nulls(input_col, DeviceScalar(False, 'bool'))
 
     elif op == 'ne':
-        return replace_nulls(input_col, DeviceScalar(True))
+        return replace_nulls(input_col, DeviceScalar(True, 'bool'))
 
     # Nothing needs to be done
     return input_col
