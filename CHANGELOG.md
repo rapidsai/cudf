@@ -83,7 +83,6 @@
 - PR #6616 Block `fixed_point` `cudf::concatenate` with different scales
 - PR #6607 Fix integer overflow in ORC encoder
 - PR #6617 Fix JNI native dependency load order
-- PR #6632 Fix DataFrame initialization from list of dicts
 - PR #6621 Fix subword tokenizer metadata for token count equal to max_sequence_length
 - PR #6629 Fix JNI CMake
 - PR #6633 Fix Java HostColumnVector unnecessarily loading native dependencies
@@ -97,6 +96,7 @@
 - PR #6701 Fix issue when `numpy.str_` is given as input to string parameters in io APIs
 - PR #6704 Fix leak warnings in JNI unit tests
 - PR #6708 Apply `na_rep` to column names in csv writer
+- PR #6632 Fix DataFrame initialization from list of dicts
 
 
 # cuDF 0.16.0 (21 Oct 2020)
