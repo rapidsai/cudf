@@ -136,7 +136,8 @@ constexpr inline auto is_supported_non_fixed_point_cast()
 template <typename From, typename To>
 constexpr inline auto is_supported_fixed_point_cast()
 {
-  return (cudf::is_fixed_point<From>() && cudf::is_numeric<To>()) ||
+  return (cudf::is_fixed_point<From>() && cudf::is_fixed_point<To>()) ||
+         (cudf::is_fixed_point<From>() && cudf::is_numeric<To>()) ||
          (cudf::is_numeric<From>() && cudf::is_fixed_point<To>());
 }
 
@@ -245,7 +246,7 @@ struct dispatch_unary_cast_to {
     if (!cudf::is_fixed_width<TargetT>())
       CUDF_FAIL("Column type must be numeric or chrono or decimal32/64");
     else if (cudf::is_fixed_point<SourceT>())
-      CUDF_FAIL("Currently only decimal32/64 to floating point/integral is supported");
+      CUDF_FAIL("Currently only decimal32/64 to floating point/integral/decimal32/64 is supported");
     else if (cudf::is_timestamp<SourceT>() && is_numeric<TargetT>())
       CUDF_FAIL("Timestamps can be created only from duration");
     else
