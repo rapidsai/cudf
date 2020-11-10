@@ -8,7 +8,6 @@ from libcpp.utility cimport move
 
 import pandas as pd
 import cudf
-import pandas as pd
 import numpy as np
 
 from cudf._lib.cpp.types cimport size_type
