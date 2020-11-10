@@ -2,11 +2,19 @@
 
 ## New Features
 
+- PR #6460 Add is_timestamp format check API
+- PR #6647 Implement `cudf::round` floating point and integer types (`HALF_EVEN`)
+- PR #6562 Implement `cudf::round` floating point and integer types (`HALF_UP`)
+- PR #6685 Implement `cudf::round` `decimal32` & `decimal64` (`HALF_UP` and `HALF_EVEN`)
 - PR #6528 Enable `fixed_point` binary operations
 - PR #6460 Add is_timestamp format check API
 - PR #6568 Add function to create hashed vocabulary file from raw vocabulary
+- PR #6142 Add Python `read_orc_statistics` function for reading file- and stripe-level statistics
 - PR #6581 Add JNI API to check if PTDS is enabled
+- PR #6592 Add `cudf.to_numeric` function
 - PR #6598 Add strings::contains API with target column parameter
+- PR #6638 Add support for `pipe` API
+- PR #6675 Add DecimalDtype to cuDF
 
 ## Improvements
 
@@ -24,9 +32,13 @@
 - PR #6471 Replace index type-dispatch call with indexalator in cudf::strings::substring
 - PR #6485 Add File IO to cuIO benchmarks
 - PR #6504 Update Java bindings version to 0.17-SNAPSHOT
+- PR #6489 Add `AVRO` fuzz tests with varying function parameters
 - PR #6540 Add dictionary support to `cudf::unary_operation`
 - PR #6537 Refactor ORC timezone
 - PR #6527 Refactor DeviceColumnViewAccess to avoid JNI returning an array
+- PR #6690 Explicitly set legacy or per-thread default stream in JNI
+- PR #6545 Pin cmake policies to cmake 3.17 version
+- PR #6556 Add dictionary support to `cudf::inner_join`, `cudf::left_join` and `cudf::full_join`
 - PR #6557 Support nullable timestamp columns in time range window functions
 - PR #6566 Remove reinterpret_cast conversions between pointer types in ORC
 - PR #6544 Remove `fixed_point` precise round
@@ -39,11 +51,22 @@
 - PR #6599 Replace `size()==0` with `empty()`, `is_empty()`
 - PR #6514 Initial work for decimal type in Java/JNI
 - PR #6608 Improve subword tokenizer docs
+- PR #6610 Add ability to set scalar values in `cudf.DataFrame`
 - PR #6612 Update JNI to new RMM cuda_stream_view API
+- PR #6579 Update scatter APIs to use reference wrapper / const scalar
 - PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
+- PR #6622 Update `to_pandas` api docs
+- PR #6623 Add operator overloading to column and clean up error messages
+- PR #6644 Cover different CSV reader/writer options in benchmarks
+- PR #6651 Add cudf::dictionary::make_dictionary_pair_iterator
+- PR #6635 Add cudf::test::dictionary_column_wrapper class
+- PR #6673 Parameterize avro and json benchmark
+- PR #6609 Support fixed-point decimal for HostColumnVector
+- PR #6709 Raise informative error while converting a pandas dataframe with duplicate columns
 
 ## Bug Fixes
 
+- PR #6446 Fix integer parsing in CSV and JSON for values outside of int64 range
 - PR #6506 Fix DateTime type value truncation while writing to csv
 - PR #6509 Disable JITIFY log printing
 - PR #6517 Handle index equality in `Series` and `DataFrame` equality checks
@@ -51,12 +74,28 @@
 - PR #6543 Handle `np.nan` values in `isna`/`isnull`/`notna`/`notnull`
 - PR #6549 Fix memory_usage calls for list columns
 - PR #6575 Fix JNI RMM initialize with no pool allocator limit
+- PR #6636 Fix orc boolean column corruption issue
 - PR #6582 Add missing `device_scalar` stream parameters
 - PR #6596 Fix memory usage calculation
 - PR #6595 Fix JNI build, broken by to_arrow() signature change
+- PR #6601 Fix timezone offset when reading ORC files
 - PR #6603 Use correct stream in hash_join.
+- PR #6616 Block `fixed_point` `cudf::concatenate` with different scales
 - PR #6607 Fix integer overflow in ORC encoder
 - PR #6617 Fix JNI native dependency load order
+- PR #6621 Fix subword tokenizer metadata for token count equal to max_sequence_length
+- PR #6629 Fix JNI CMake
+- PR #6633 Fix Java HostColumnVector unnecessarily loading native dependencies
+- PR #6643 Fix csv writer handling embedded comma delimiter
+- PR #6640 Add error message for unsupported `axis` parameter in DataFrame APIs
+- PR #6710 Fix an out-of-bounds indexing error in gather() for lists
+- PR #6670 Fix a bug where PTX parser fails to correctly parse a python lambda generated UDF
+- PR #6687 Fix issue where index name of caller object is being modified in csv writer
+- PR #6692 Fix handling of empty column name in csv writer
+- PR #6693 Fix issue related to `na_values` input in `read_csv`
+- PR #6701 Fix issue when `numpy.str_` is given as input to string parameters in io APIs
+- PR #6704 Fix leak warnings in JNI unit tests
+- PR #6708 Apply `na_rep` to column names in csv writer
 
 
 # cuDF 0.16.0 (21 Oct 2020)
@@ -193,6 +232,7 @@
 - PR #6438 Fetch nvcomp v1.1.0 for JNI build
 - PR #6379 Add list hashing functionality to MD5
 - PR #6498 Add helper method to ColumnBuilder with some nits
+- PR #6653 Replaced SHFL_XOR calls with cub::WarpReduce
 
 ## Bug Fixes
 

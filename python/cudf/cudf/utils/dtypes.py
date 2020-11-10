@@ -1,3 +1,5 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import datetime as dt
 import numbers
 from collections import namedtuple
@@ -141,6 +143,7 @@ def is_numerical_dtype(obj):
         np.issubdtype(obj, np.bool_)
         or np.issubdtype(obj, np.floating)
         or np.issubdtype(obj, np.signedinteger)
+        or np.issubdtype(obj, np.unsignedinteger)
     )
 
 
@@ -154,6 +157,14 @@ def is_datetime_dtype(obj):
     if not hasattr(obj, "str"):
         return False
     return "M8" in obj.str
+
+
+def is_timedelta_dtype(obj):
+    if obj is None:
+        return False
+    if not hasattr(obj, "str"):
+        return False
+    return "m8" in obj.str
 
 
 def is_categorical_dtype(obj):
@@ -490,7 +501,7 @@ def check_cast_unsupported_dtype(dtype):
         return np.dtype("float32")
 
     raise NotImplementedError(
-        "Cannot cast {0} dtype, as it is not supported by CuDF.".format(dtype)
+        f"Cannot cast {dtype} dtype, as it is not supported by CuDF."
     )
 
 

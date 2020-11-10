@@ -74,6 +74,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/repeat.hpp
     - test -f $PREFIX/include/cudf/detail/replace.hpp
     - test -f $PREFIX/include/cudf/detail/reshape.hpp
+    - test -f $PREFIX/include/cudf/detail/round.hpp
     - test -f $PREFIX/include/cudf/detail/scatter.hpp
     - test -f $PREFIX/include/cudf/detail/search.hpp
     - test -f $PREFIX/include/cudf/detail/sequence.hpp
@@ -101,9 +102,10 @@ test:
     - test -f $PREFIX/include/cudf/hashing.hpp
     - test -f $PREFIX/include/cudf/interop.hpp
     - test -f $PREFIX/include/cudf/io/avro.hpp
-    - test -f $PREFIX/include/cudf/io/csv.hpp
     - test -f $PREFIX/include/cudf/io/data_sink.hpp
     - test -f $PREFIX/include/cudf/io/datasource.hpp
+    - test -f $PREFIX/include/cudf/io/orc_metadata.hpp
+    - test -f $PREFIX/include/cudf/io/csv.hpp
     - test -f $PREFIX/include/cudf/io/detail/avro.hpp
     - test -f $PREFIX/include/cudf/io/detail/csv.hpp
     - test -f $PREFIX/include/cudf/io/detail/json.hpp
@@ -127,6 +129,7 @@ test:
     - test -f $PREFIX/include/cudf/replace.hpp
     - test -f $PREFIX/include/cudf/reshape.hpp
     - test -f $PREFIX/include/cudf/rolling.hpp
+    - test -f $PREFIX/include/cudf/round.hpp
     - test -f $PREFIX/include/cudf/scalar/scalar_factories.hpp
     - test -f $PREFIX/include/cudf/scalar/scalar.hpp
     - test -f $PREFIX/include/cudf/search.hpp
