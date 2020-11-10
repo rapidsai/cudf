@@ -860,6 +860,7 @@ class Series(Frame, Serializable):
         dtype: object
 
         It also accepts numeric functions:
+
         >>> s = cudf.Series([1, 2, 3, 4, np.nan])
         >>> s.map(lambda x: x ** 2)
         0       1
