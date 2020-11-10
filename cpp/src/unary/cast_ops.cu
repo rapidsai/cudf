@@ -160,11 +160,12 @@ struct dispatch_unary_cast_to {
                                      cudaStream_t stream)
   {
     auto const size = input.size();
-    auto output     = std::make_unique<column>(type,
-                                           size,
-                                           rmm::device_buffer{size * cudf::size_of(type), 0, mr},
-                                           copy_bitmask(input, 0, mr),
-                                           input.null_count());
+    auto output =
+      std::make_unique<column>(type,
+                               size,
+                               rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+                               copy_bitmask(input, stream, mr),
+                               input.null_count());
 
     mutable_column_view output_mutable = *output;
 
@@ -185,11 +186,12 @@ struct dispatch_unary_cast_to {
                                      cudaStream_t stream)
   {
     auto const size = input.size();
-    auto output     = std::make_unique<column>(type,
-                                           size,
-                                           rmm::device_buffer{size * cudf::size_of(type), 0, mr},
-                                           copy_bitmask(input, 0, mr),
-                                           input.null_count());
+    auto output =
+      std::make_unique<column>(type,
+                               size,
+                               rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+                               copy_bitmask(input, stream, mr),
+                               input.null_count());
 
     mutable_column_view output_mutable = *output;
 
@@ -213,11 +215,12 @@ struct dispatch_unary_cast_to {
                                      cudaStream_t stream)
   {
     auto const size = input.size();
-    auto output     = std::make_unique<column>(type,
-                                           size,
-                                           rmm::device_buffer{size * cudf::size_of(type), 0, mr},
-                                           copy_bitmask(input, 0, mr),
-                                           input.null_count());
+    auto output =
+      std::make_unique<column>(type,
+                               size,
+                               rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+                               copy_bitmask(input, stream, mr),
+                               input.null_count());
 
     mutable_column_view output_mutable = *output;
 
