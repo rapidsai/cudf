@@ -242,11 +242,6 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
 {
   __shared__ __align__(8) schemadesc_s g_shared_schema[MAX_SHARED_SCHEMA_LEN];
   __shared__ __align__(8) block_desc_s blk_g[NWARPS];
-  auto group = cooperative_groups::this_thread_block();
-
-  __shared__ cuda::barrier<cuda::thread_scope::thread_scope_block> barrier;
-  if (group.thread_rank() == 0) { init(&barrier, group.size()); }
-  group.sync();
 
   schemadesc_s *schema;
   block_desc_s *const blk = &blk_g[threadIdx.y];
@@ -257,8 +252,10 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
 
   // Fetch schema into shared mem if possible
   if (schema_len <= MAX_SHARED_SCHEMA_LEN) {
-    cuda::memcpy_async(g_shared_schema, schema_g, schema_len * sizeof(schemadesc_s), barrier);
-    barrier.arrive_and_wait();
+    for (int i = threadIdx.y * 32 + threadIdx.x; i < schema_len; i += NWARPS * 32) {
+      g_shared_schema[i] = schema_g[i];
+    }
+    __syncthreads();
     schema = g_shared_schema;
   } else {
     schema = schema_g;
