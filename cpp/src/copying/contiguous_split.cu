@@ -263,47 +263,51 @@ size_type compute_offset_stack_size(InputIter begin, InputIter end, int offset_d
  * compute_offset_stack_size in the case of nested types.
  */
 struct compute_offset_stack_size_functor {
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
-  size_type operator()(column_view const& col, int offset_depth)
-  {
-    //     # of list columns above us    # offsets + validity
-    return ((offset_depth) * (1 + (col.nullable() ? 1 : 0))) +
-           //     # + local offsets             # chars column
-           ((offset_depth + 1) * (1));
-  }
-
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::list_view>::value>* = nullptr>
-  size_type operator()(column_view const& col, int offset_depth)
-  {
-    //     # of list columns above us    # offsets + validity
-    //       and ourself
-    return ((offset_depth) * (1 + (col.nullable() ? 1 : 0))) +
-           //     add children
-           compute_offset_stack_size(col.child_begin() + 1, col.child_end(), offset_depth + 1);
-  }
-
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::struct_view>::value>* = nullptr>
-  size_type operator()(column_view const& col, int offset_depth)
-  {
-    //     # of list columns above us    # validity
-    return ((offset_depth) * (col.nullable() ? 1 : 0)) +
-           //     add children
-           compute_offset_stack_size(col.child_begin(), col.child_end(), offset_depth);
-  }
-
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::dictionary32>::value>* = nullptr>
-  size_type operator()(column_view const& col, int offset_depth)
-  {
-    CUDF_FAIL("Unsupported type");
-  }
-
-  template <typename T, std::enable_if_t<!cudf::is_compound<T>()>* = nullptr>
+  template <typename T>
   size_type operator()(column_view const& col, int offset_depth)
   {
     //     # of list columns above us   # of buffers coming from this column
     return offset_depth * (1 + (col.nullable() ? 1 : 0));
   }
 };
+
+template <>
+size_type compute_offset_stack_size_functor::operator()<cudf::string_view>(column_view const& col,
+                                                                           int offset_depth)
+{
+  //     # of list columns above us    # offsets + validity
+  return ((offset_depth) * (1 + (col.nullable() ? 1 : 0))) +
+         //     # + local offsets             # chars column
+         ((offset_depth + 1) * (1));
+}
+
+template <>
+size_type compute_offset_stack_size_functor::operator()<cudf::list_view>(column_view const& col,
+                                                                         int offset_depth)
+{
+  //     # of list columns above us    # offsets + validity
+  //       and ourself
+  return ((offset_depth) * (1 + (col.nullable() ? 1 : 0))) +
+         //     add children
+         compute_offset_stack_size(col.child_begin() + 1, col.child_end(), offset_depth + 1);
+}
+
+template <>
+size_type compute_offset_stack_size_functor::operator()<cudf::struct_view>(column_view const& col,
+                                                                           int offset_depth)
+{
+  //     # of list columns above us    # validity
+  return ((offset_depth) * (col.nullable() ? 1 : 0)) +
+         //     add children
+         compute_offset_stack_size(col.child_begin(), col.child_end(), offset_depth);
+}
+
+template <>
+size_type compute_offset_stack_size_functor::operator()<cudf::dictionary32>(column_view const& col,
+                                                                            int offset_depth)
+{
+  CUDF_FAIL("Unsupported type");
+}
 
 template <typename InputIter>
 size_type compute_offset_stack_size(InputIter begin, InputIter end, int offset_depth)
@@ -343,48 +347,7 @@ size_type setup_src_buf_data(InputIter begin,
  * of nested types.
  */
 struct setup_src_buf_data_functor {
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
-  size_type operator()(column_view const& col, size_type buf_index, uint8_t** out_buf)
-  {
-    strings_column_view scv(col);
-    if (col.nullable()) {
-      out_buf[buf_index++] = reinterpret_cast<uint8_t*>(const_cast<bitmask_type*>(col.null_mask()));
-    }
-    out_buf[buf_index++] =
-      reinterpret_cast<uint8_t*>(const_cast<size_type*>(scv.offsets().begin<size_type>()));
-    out_buf[buf_index++] =
-      reinterpret_cast<uint8_t*>(const_cast<int8_t*>(scv.chars().begin<int8_t>()));
-    return buf_index;
-  }
-
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::list_view>::value>* = nullptr>
-  size_type operator()(column_view const& col, size_type buf_index, uint8_t** out_buf)
-  {
-    lists_column_view lcv(col);
-    if (col.nullable()) {
-      out_buf[buf_index++] = reinterpret_cast<uint8_t*>(const_cast<bitmask_type*>(col.null_mask()));
-    }
-    out_buf[buf_index++] =
-      reinterpret_cast<uint8_t*>(const_cast<size_type*>(lcv.offsets().begin<size_type>()));
-    return setup_src_buf_data(col.child_begin() + 1, col.child_end(), buf_index, out_buf);
-  }
-
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::struct_view>::value>* = nullptr>
-  size_type operator()(column_view const& col, size_type buf_index, uint8_t** out_buf)
-  {
-    if (col.nullable()) {
-      out_buf[buf_index++] = reinterpret_cast<uint8_t*>(const_cast<bitmask_type*>(col.null_mask()));
-    }
-    return setup_src_buf_data(col.child_begin(), col.child_end(), buf_index, out_buf);
-  }
-
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::dictionary32>::value>* = nullptr>
-  size_type operator()(column_view const& col, size_type buf_index, uint8_t** out_buf)
-  {
-    CUDF_FAIL("Unsupported type");
-  }
-
-  template <typename T, std::enable_if_t<!cudf::is_compound<T>()>* = nullptr>
+  template <typename T>
   size_type operator()(column_view const& col, size_type buf_index, uint8_t** out_buf)
   {
     if (col.nullable()) {
@@ -394,6 +357,55 @@ struct setup_src_buf_data_functor {
     return buf_index;
   }
 };
+
+template <>
+size_type setup_src_buf_data_functor::operator()<cudf::string_view>(column_view const& col,
+                                                                    size_type buf_index,
+                                                                    uint8_t** out_buf)
+{
+  strings_column_view scv(col);
+  if (col.nullable()) {
+    out_buf[buf_index++] = reinterpret_cast<uint8_t*>(const_cast<bitmask_type*>(col.null_mask()));
+  }
+  out_buf[buf_index++] =
+    reinterpret_cast<uint8_t*>(const_cast<size_type*>(scv.offsets().begin<size_type>()));
+  out_buf[buf_index++] =
+    reinterpret_cast<uint8_t*>(const_cast<int8_t*>(scv.chars().begin<int8_t>()));
+  return buf_index;
+}
+
+template <>
+size_type setup_src_buf_data_functor::operator()<cudf::list_view>(column_view const& col,
+                                                                  size_type buf_index,
+                                                                  uint8_t** out_buf)
+{
+  lists_column_view lcv(col);
+  if (col.nullable()) {
+    out_buf[buf_index++] = reinterpret_cast<uint8_t*>(const_cast<bitmask_type*>(col.null_mask()));
+  }
+  out_buf[buf_index++] =
+    reinterpret_cast<uint8_t*>(const_cast<size_type*>(lcv.offsets().begin<size_type>()));
+  return setup_src_buf_data(col.child_begin() + 1, col.child_end(), buf_index, out_buf);
+}
+
+template <>
+size_type setup_src_buf_data_functor::operator()<cudf::struct_view>(column_view const& col,
+                                                                    size_type buf_index,
+                                                                    uint8_t** out_buf)
+{
+  if (col.nullable()) {
+    out_buf[buf_index++] = reinterpret_cast<uint8_t*>(const_cast<bitmask_type*>(col.null_mask()));
+  }
+  return setup_src_buf_data(col.child_begin(), col.child_end(), buf_index, out_buf);
+}
+
+template <>
+size_type setup_src_buf_data_functor::operator()<cudf::dictionary32>(column_view const& col,
+                                                                     size_type buf_index,
+                                                                     uint8_t** out_buf)
+{
+  CUDF_FAIL("Unsupported type");
+}
 
 template <typename InputIter>
 size_type setup_src_buf_data(InputIter begin, InputIter end, size_type buf_index, uint8_t** out_buf)
@@ -506,100 +518,16 @@ src_buf_output setup_source_buf_info(InputIter begin,
  * recursively call setup_source_buf_info in the case of nested types.
  */
 struct buf_info_functor {
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
+  template <typename T>
   src_buf_output operator()(column_view const& col,
                             src_buf_info* head,
                             src_buf_output output,
                             int parent_offset_index,
                             int offset_depth)
   {
-    strings_column_view scv(col);
-
-    output = maybe_add_null_buffer(col, output, parent_offset_index, offset_depth);
-
-    auto offset_col = output.first;
-
-    output.first->type             = type_id::INT32;  // offsets
-    output.first->offsets          = scv.offsets().begin<int>();
-    output.first->offset_stack_pos = output.second;
-    output.second += offset_depth;
-    output.first->parent_offsets_index = parent_offset_index;
-    output.first->is_validity          = false;
-    output.first++;
-
-    // local offsets apply to the chars
-    offset_depth++;
-    parent_offset_index = offset_col - head;
-
-    output.first->type             = type_id::INT8;  // chars
-    output.first->offsets          = nullptr;
-    output.first->offset_stack_pos = output.second;
-    output.second += offset_depth;
-    output.first->parent_offsets_index = parent_offset_index;
-    output.first->is_validity          = false;
-    output.first++;
-
-    return output;
-  }
-
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::list_view>::value>* = nullptr>
-  src_buf_output operator()(column_view const& col,
-                            src_buf_info* head,
-                            src_buf_output output,
-                            int parent_offset_index,
-                            int offset_depth)
-  {
-    lists_column_view lcv(col);
-
-    output = maybe_add_null_buffer(col, output, parent_offset_index, offset_depth);
-
-    auto offset_col = output.first;
-
-    output.first->type             = type_id::INT32;  // offsets
-    output.first->offsets          = lcv.offsets().begin<int>();
-    output.first->offset_stack_pos = output.second;
-    output.second += offset_depth;
-    output.first->parent_offsets_index = parent_offset_index;
-    output.first->is_validity          = false;
-    output.first++;
-
-    // local offsets apply to the remaining children
-    offset_depth++;
-    parent_offset_index = offset_col - head;
-    return setup_source_buf_info(
-      col.child_begin() + 1, col.child_end(), head, output, parent_offset_index, offset_depth);
-  }
-
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::struct_view>::value>* = nullptr>
-  src_buf_output operator()(column_view const& col,
-                            src_buf_info* head,
-                            src_buf_output output,
-                            int parent_offset_index,
-                            int offset_depth)
-  {
-    output = maybe_add_null_buffer(col, output, parent_offset_index, offset_depth);
-    return setup_source_buf_info(
-      col.child_begin(), col.child_end(), head, output, parent_offset_index, offset_depth);
-  }
-
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::dictionary32>::value>* = nullptr>
-  src_buf_output operator()(column_view const& col,
-                            src_buf_info* head,
-                            src_buf_output output,
-                            int parent_offset_index,
-                            int offset_depth)
-  {
-    CUDF_FAIL("Unsupported type");
-  }
-
-  template <typename T, std::enable_if_t<!cudf::is_compound<T>()>* = nullptr>
-  src_buf_output operator()(column_view const& col,
-                            src_buf_info* head,
-                            src_buf_output output,
-                            int parent_offset_index,
-                            int offset_depth)
-  {
-    output = maybe_add_null_buffer(col, output, parent_offset_index, offset_depth);
+    if (col.nullable()) {
+      output = add_null_buffer(col, output, parent_offset_index, offset_depth);
+    }
 
     output.first->type             = col.type().id();
     output.first->offsets          = nullptr;
@@ -613,12 +541,11 @@ struct buf_info_functor {
   }
 
  private:
-  src_buf_output maybe_add_null_buffer(column_view const& col,
-                                       src_buf_output output,
-                                       int parent_offset_index,
-                                       int offset_depth)
+  src_buf_output add_null_buffer(column_view const& col,
+                                 src_buf_output output,
+                                 int parent_offset_index,
+                                 int offset_depth)
   {
-    if (!col.nullable()) { return output; }
     output.first->type             = type_id::INT32;
     output.first->offsets          = nullptr;
     output.first->offset_stack_pos = output.second;
@@ -630,6 +557,91 @@ struct buf_info_functor {
     return output;
   }
 };
+
+template <>
+src_buf_output buf_info_functor::operator()<cudf::string_view>(column_view const& col,
+                                                               src_buf_info* head,
+                                                               src_buf_output output,
+                                                               int parent_offset_index,
+                                                               int offset_depth)
+{
+  strings_column_view scv(col);
+
+  if (col.nullable()) { output = add_null_buffer(col, output, parent_offset_index, offset_depth); }
+
+  auto offset_col                = output.first;
+  output.first->type             = type_id::INT32;  // offsets
+  output.first->offsets          = scv.offsets().begin<cudf::id_to_type<type_id::INT32>>();
+  output.first->offset_stack_pos = output.second;
+  output.second += offset_depth;
+  output.first->parent_offsets_index = parent_offset_index;
+  output.first->is_validity          = false;
+  output.first++;
+
+  // local offsets apply to the chars
+  offset_depth++;
+  parent_offset_index = offset_col - head;
+
+  output.first->type             = type_id::INT8;  // chars
+  output.first->offsets          = nullptr;
+  output.first->offset_stack_pos = output.second;
+  output.second += offset_depth;
+  output.first->parent_offsets_index = parent_offset_index;
+  output.first->is_validity          = false;
+  output.first++;
+
+  return output;
+}
+
+template <>
+src_buf_output buf_info_functor::operator()<cudf::list_view>(column_view const& col,
+                                                             src_buf_info* head,
+                                                             src_buf_output output,
+                                                             int parent_offset_index,
+                                                             int offset_depth)
+{
+  lists_column_view lcv(col);
+
+  if (col.nullable()) { output = add_null_buffer(col, output, parent_offset_index, offset_depth); }
+
+  auto offset_col = output.first;
+
+  output.first->type             = type_id::INT32;  // offsets
+  output.first->offsets          = lcv.offsets().begin<cudf::id_to_type<type_id::INT32>>();
+  output.first->offset_stack_pos = output.second;
+  output.second += offset_depth;
+  output.first->parent_offsets_index = parent_offset_index;
+  output.first->is_validity          = false;
+  output.first++;
+
+  // local offsets apply to the remaining children
+  offset_depth++;
+  parent_offset_index = offset_col - head;
+  return setup_source_buf_info(
+    col.child_begin() + 1, col.child_end(), head, output, parent_offset_index, offset_depth);
+}
+
+template <>
+src_buf_output buf_info_functor::operator()<cudf::struct_view>(column_view const& col,
+                                                               src_buf_info* head,
+                                                               src_buf_output output,
+                                                               int parent_offset_index,
+                                                               int offset_depth)
+{
+  if (col.nullable()) { output = add_null_buffer(col, output, parent_offset_index, offset_depth); }
+  return setup_source_buf_info(
+    col.child_begin(), col.child_end(), head, output, parent_offset_index, offset_depth);
+}
+
+template <>
+src_buf_output buf_info_functor::operator()<cudf::dictionary32>(column_view const& col,
+                                                                src_buf_info* head,
+                                                                src_buf_output output,
+                                                                int parent_offset_index,
+                                                                int offset_depth)
+{
+  CUDF_FAIL("Unsupported type");
+}
 
 template <typename InputIter>
 src_buf_output setup_source_buf_info(InputIter begin,
@@ -876,6 +888,29 @@ struct size_of_helper {
   }
 };
 
+struct pointer_and_size {
+  template <typename T>
+  pointer_and_size(T** t, size_t s) : p{reinterpret_cast<char**>(t)}, sz{s}
+  {
+  }
+  char** p;
+  size_t sz;
+};
+
+size_t alias_pointers(void* destination, std::vector<pointer_and_size> const& v)
+{
+  size_t bytes_needed = 0;
+  // scan the allocation sizes
+  for (size_t i = 0; i < v.size(); ++i) {
+    // set the pointer if it's available
+    if (destination != nullptr) { *(v[i].p) = static_cast<char*>(destination) + bytes_needed; }
+
+    // sizes are pre-aligned
+    bytes_needed += v[i].sz;
+  }
+  return bytes_needed;
+}
+
 };  // anonymous namespace
 
 namespace detail {
@@ -889,6 +924,16 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
   if (splits.size() > 0) {
     CUDF_EXPECTS(splits.back() <= input.column(0).size(),
                  "splits can't exceed size of input columns");
+  }
+  {
+    size_type begin = 0;
+    for (size_t i = 0; i < splits.size(); i++) {
+      size_type end = splits[i];
+      CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
+      CUDF_EXPECTS(end >= begin, "End index cannot be smaller than the starting index.");
+      CUDF_EXPECTS(end <= input.column(0).size(), "Slice range out of bounds.");
+      begin = end;
+    }
   }
 
   size_t num_partitions = splits.size() + 1;
@@ -914,7 +959,6 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
   size_type num_src_bufs = count_src_bufs(input.begin(), input.end());
   size_t num_bufs        = num_src_bufs * num_partitions;
 
-  // compute total size of host-side temp data
   size_t indices_size =
     cudf::util::round_up_safe((num_partitions + 1) * sizeof(size_type), split_align);
   size_t src_buf_info_size =
@@ -924,66 +968,73 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
     cudf::util::round_up_safe(num_bufs * sizeof(dst_buf_info), split_align);
   size_t src_bufs_size = cudf::util::round_up_safe(num_src_bufs * sizeof(uint8_t*), split_align);
   size_t dst_bufs_size = cudf::util::round_up_safe(num_partitions * sizeof(uint8_t*), split_align);
-  size_t total_temp_size = indices_size + src_buf_info_size + buf_sizes_size + dst_buf_info_size +
-                           src_bufs_size + dst_bufs_size;
 
-  // clang-format off
+  size_type* h_indices{nullptr};
+  src_buf_info* h_src_buf_info{nullptr};
+  size_t* h_buf_sizes{nullptr};
+  dst_buf_info* h_dst_buf_info{nullptr};
+  uint8_t** h_src_bufs{nullptr};
+  uint8_t** h_dst_bufs{nullptr};
+
+  // compute total size of host-side temp data
+  size_t host_bytes_needed = alias_pointers(nullptr,
+                                            {{&h_indices, indices_size},
+                                             {&h_src_buf_info, src_buf_info_size},
+                                             {&h_buf_sizes, buf_sizes_size},
+                                             {&h_dst_buf_info, dst_buf_info_size},
+                                             {&h_src_bufs, src_bufs_size},
+                                             {&h_dst_bufs, dst_bufs_size}});
+
   // allocate host
-  std::vector<uint8_t> host_buf(total_temp_size);
-  // distribute  
-  uint8_t* cur_h_buf   = host_buf.data();
-  size_type* h_indices = reinterpret_cast<size_type*>(cur_h_buf);             cur_h_buf += indices_size;
-  src_buf_info* h_src_buf_info = reinterpret_cast<src_buf_info*>(cur_h_buf);  cur_h_buf += src_buf_info_size;
-  size_t* h_buf_sizes = reinterpret_cast<size_t*>(cur_h_buf);                 cur_h_buf += buf_sizes_size;
-  dst_buf_info* h_dst_buf_info = reinterpret_cast<dst_buf_info*>(cur_h_buf);  cur_h_buf += dst_buf_info_size;
-  uint8_t** h_src_bufs = reinterpret_cast<uint8_t**>(cur_h_buf);              cur_h_buf += src_bufs_size;
-  uint8_t** h_dst_bufs = reinterpret_cast<uint8_t**>(cur_h_buf);
+  std::vector<uint8_t> host_buf(host_bytes_needed);
+
+  // distribute host pointers
+  alias_pointers(host_buf.data(),
+                 {{&h_indices, indices_size},
+                  {&h_src_buf_info, src_buf_info_size},
+                  {&h_buf_sizes, buf_sizes_size},
+                  {&h_dst_buf_info, dst_buf_info_size},
+                  {&h_src_bufs, src_bufs_size},
+                  {&h_dst_bufs, dst_bufs_size}});
 
   // compute stack space needed for nested list offset calculation (needed on gpu only)
   int offset_stack_partition_size = compute_offset_stack_size(input.begin(), input.end());
-  int offset_stack_size           = offset_stack_partition_size * num_partitions * 4;
+  size_t offset_stack_size = offset_stack_partition_size * num_partitions * sizeof(size_type);
 
   // allocate device
-  size_t total_device_temp_size = total_temp_size + offset_stack_size;
-  rmm::device_buffer device_buf{total_device_temp_size, stream, mr};
+  size_t device_bytes_needed = host_bytes_needed + offset_stack_size;
+  rmm::device_buffer device_buf{device_bytes_needed, stream, mr};
+
+  size_type* d_indices{nullptr};
+  src_buf_info* d_src_buf_info{nullptr};
+  size_t* d_buf_sizes{nullptr};
+  dst_buf_info* d_dst_buf_info{nullptr};
+  uint8_t** d_src_bufs{nullptr};
+  uint8_t** d_dst_bufs{nullptr};
+  size_type* d_offset_stack{nullptr};
+
   // distribute
-  uint8_t* cur_d_buf   = reinterpret_cast<uint8_t*>(device_buf.data());
-  size_type* d_indices = reinterpret_cast<size_type*>(cur_d_buf);             cur_d_buf += indices_size;
-  src_buf_info* d_src_buf_info = reinterpret_cast<src_buf_info*>(cur_d_buf);  cur_d_buf += src_buf_info_size;
-  size_t* d_buf_sizes = reinterpret_cast<size_t*>(cur_d_buf);                 cur_d_buf += buf_sizes_size;
-  dst_buf_info* d_dst_buf_info = reinterpret_cast<dst_buf_info*>(cur_d_buf);  cur_d_buf += dst_buf_info_size;
-  uint8_t** d_src_bufs = reinterpret_cast<uint8_t**>(cur_d_buf);              cur_d_buf += src_bufs_size;
-  uint8_t** d_dst_bufs = reinterpret_cast<uint8_t**>(cur_d_buf);              cur_d_buf += dst_bufs_size;
-  size_type* d_offset_stack = reinterpret_cast<size_type*>(cur_d_buf);
-  // clang-format on
+  alias_pointers(device_buf.data(),
+                 {{&d_indices, indices_size},
+                  {&d_src_buf_info, src_buf_info_size},
+                  {&d_buf_sizes, buf_sizes_size},
+                  {&d_dst_buf_info, dst_buf_info_size},
+                  {&d_src_bufs, src_bufs_size},
+                  {&d_dst_bufs, dst_bufs_size},
+                  {&d_offset_stack, offset_stack_size}});
 
   // compute splits -> indices.
-  {
-    size_type* indices = h_indices;
-    *indices           = 0;
-    indices++;
-    std::for_each(splits.begin(), splits.end(), [&indices](auto split) {
-      *indices = split;
-      indices++;
-    });
-    *indices = input.column(0).size();
-
-    for (size_t i = 0; i < splits.size(); i++) {
-      auto begin = h_indices[i];
-      auto end   = h_indices[i + 1];
-      CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
-      CUDF_EXPECTS(end >= begin, "End index cannot be smaller than the starting index.");
-      CUDF_EXPECTS(end <= input.column(0).size(), "Slice range out of bounds.");
-    }
-  }
+  h_indices[0]              = 0;
+  h_indices[num_partitions] = input.column(0).size();
+  std::copy(splits.begin(), splits.end(), std::next(h_indices));
 
   // setup source buf info
   setup_source_buf_info(input.begin(), input.end(), h_src_buf_info, {h_src_buf_info, 0});
 
   // HtoD indices and source buf info to device
-  cudaMemcpyAsync(
-    d_indices, h_indices, indices_size + src_buf_info_size, cudaMemcpyHostToDevice, stream);
-  cudaStreamSynchronize(stream);
+  CUDA_TRY(cudaMemcpyAsync(
+    d_indices, h_indices, indices_size + src_buf_info_size, cudaMemcpyHostToDevice, stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
 
   // compute sizes of each column in each partition, including alignment.
   thrust::transform(
@@ -1045,9 +1096,9 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
     });
 
   // DtoH buf sizes and dest buf info back to the host
-  cudaMemcpyAsync(
-    h_buf_sizes, d_buf_sizes, buf_sizes_size + dst_buf_info_size, cudaMemcpyDeviceToHost, stream);
-  cudaStreamSynchronize(stream);
+  CUDA_TRY(cudaMemcpyAsync(
+    h_buf_sizes, d_buf_sizes, buf_sizes_size + dst_buf_info_size, cudaMemcpyDeviceToHost, stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
 
   // compute total size of each partition
   {
@@ -1080,9 +1131,9 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
   }
 
   // DtoH buf sizes and col info back to the host
-  cudaMemcpyAsync(
-    h_buf_sizes, d_buf_sizes, buf_sizes_size + dst_buf_info_size, cudaMemcpyDeviceToHost, stream);
-  cudaStreamSynchronize(stream);
+  CUDA_TRY(cudaMemcpyAsync(
+    h_buf_sizes, d_buf_sizes, buf_sizes_size + dst_buf_info_size, cudaMemcpyDeviceToHost, stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
 
   // allocate output partition buffers
   std::vector<rmm::device_buffer> out_buffers;
@@ -1098,18 +1149,13 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
   setup_src_buf_data(input.begin(), input.end(), 0, h_src_bufs);
 
   // setup dst buffers
-  {
-    size_type out_index = 0;
-    std::for_each(
-      out_buffers.begin(), out_buffers.end(), [&out_index, &h_dst_bufs](rmm::device_buffer& buf) {
-        h_dst_bufs[out_index++] = reinterpret_cast<uint8_t*>(buf.data());
-      });
-  }
+  std::transform(out_buffers.begin(), out_buffers.end(), h_dst_bufs, [](auto& buf) {
+    return static_cast<uint8_t*>(buf.data());
+  });
 
   // HtoD src and dest buffers
-  cudaMemcpyAsync(
-    d_src_bufs, h_src_bufs, src_bufs_size + dst_bufs_size, cudaMemcpyHostToDevice, stream);
-  cudaStreamSynchronize(stream);
+  CUDA_TRY(cudaMemcpyAsync(
+    d_src_bufs, h_src_bufs, src_bufs_size + dst_bufs_size, cudaMemcpyHostToDevice, stream));
 
   // copy.  1 block per buffer
   {
@@ -1117,9 +1163,6 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
     constexpr int block_size = 512;
     copy_partition<<<num_bufs, block_size, 0, stream>>>(
       num_src_bufs, num_partitions, d_src_bufs, d_dst_bufs, d_dst_buf_info);
-
-    // TODO : put this after the column building step below to overlap work
-    CUDA_TRY(cudaStreamSynchronize(stream));
   }
 
   // build the output.
@@ -1136,7 +1179,11 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
     cols.clear();
   }
 
-  return std::move(result);
+  // overlap the actual copy with the work of constructing the output columns. this can be a
+  // non-trivial savings because of the sheer number of output views.
+  CUDA_TRY(cudaStreamSynchronize(stream));
+
+  return result;
 }
 
 };  // namespace detail

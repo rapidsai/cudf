@@ -30,7 +30,7 @@ namespace cudf {
  * @{
  */
 
-class structs_column_view : public column_view {
+class structs_column_view : private column_view {
  public:
   // Foundation members:
   structs_column_view(structs_column_view const&) = default;
@@ -46,6 +46,7 @@ class structs_column_view : public column_view {
   using column_view::has_nulls;
   using column_view::null_count;
   using column_view::null_mask;
+  using column_view::num_children;
   using column_view::offset;
   using column_view::size;
 
