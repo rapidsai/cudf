@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
 from itertools import product
 from math import floor
