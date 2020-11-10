@@ -872,5 +872,80 @@ struct mutable_value_accessor {
   __device__ T& operator()(cudf::size_type i) { return col.element<T>(i); }
 };
 
+/**
+ * @brief Returns the aligned address for holding array of type T in pre-allocated memory
+ * @param destination pointer to pre-allocated contiguous storage to store type T.
+ * @return Pointer of type T, aligned to alignment of type T.
+ */
+template <typename T>
+T* align_ptr_for_type(void* destination)
+{
+  constexpr std::size_t bytes_needed{sizeof(T)};
+  constexpr std::size_t alignment{alignof(T)};
+
+  // pad the allocation for aligning the first pointer
+  auto padded_bytes_needed = bytes_needed + (alignment - 1);
+  // std::align captures last argument by reference and modifies it, but we don't want it modified
+  return reinterpret_cast<T*>(
+    std::align(alignment, bytes_needed, destination, padded_bytes_needed));
+}
+
+/**
+ * @brief Helper function for use by column_device_view and mutable_column_device_view constructors
+ * to build device_views from views.
+ *
+ * It is used to build the array of child columns in device memory. Since child columns can
+ * also have child columns, this uses recursion to build up the flat device buffer to contain
+ * all the children and set the member pointers appropriately.
+ *
+ * This is accomplished by laying out all the children and grand-children into a flat host
+ * buffer first but also keep a running device pointer to but used when setting the
+ * d_children array result.
+ *
+ * This function is provided both the host pointer in which to insert its children (and
+ * by recursion its grand-children) and the device pointer to be used when calculating
+ * ultimate device pointer for the d_children member.
+ *
+ * @tparam ColumnView is either column_view or mutable_column_view
+ * @tparam ColumnDeviceView is either column_device_view or mutable_column_device_view
+ *
+ * @param child_begin Iterator pointing to begin of child columns to make into a device view
+ * @param child_begin Iterator pointing to end   of child columns to make into a device view
+ * @param h_ptr The host memory where to place any child data
+ * @param d_ptr The device pointer for calculating the d_children member of any child data
+ * @return The device pointer to be used for the d_children member of the given column
+ */
+template <typename ColumnDeviceView, typename ColumnViewIterator>
+ColumnDeviceView* child_columns_to_device_array(ColumnViewIterator child_begin,
+                                                ColumnViewIterator child_end,
+                                                void* h_ptr,
+                                                void* d_ptr)
+{
+  ColumnDeviceView* d_children = nullptr;
+  auto num_children            = std::distance(child_begin, child_end);
+  if (num_children > 0) {
+    // The beginning of the memory must be the fixed-sized ColumnDeviceView
+    // struct objects in order for d_children to be used as an array.
+    auto h_column = detail::align_ptr_for_type<ColumnDeviceView>(h_ptr);
+    auto d_column = detail::align_ptr_for_type<ColumnDeviceView>(d_ptr);
+
+    // Any child data is assigned past the end of this array: h_end and d_end.
+    auto h_end = reinterpret_cast<int8_t*>(h_column + num_children);
+    auto d_end = reinterpret_cast<int8_t*>(d_column + num_children);
+    d_children = d_column;  // set children pointer for return
+    for (auto itr = child_begin; itr != child_end; ++itr) {
+      // inplace-new each child into host memory
+      auto col = *itr;
+      new (h_column) ColumnDeviceView(col, h_end, d_end);
+      h_column++;  // advance to next child
+      // update the pointers for holding this child column's child data
+      auto col_child_data_size = ColumnDeviceView::extent(col) - sizeof(ColumnDeviceView);
+      h_end += col_child_data_size;
+      d_end += col_child_data_size;
+    }
+  }
+  return d_children;
+}
+
 }  // namespace detail
 }  // namespace cudf

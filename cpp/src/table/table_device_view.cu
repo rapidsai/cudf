@@ -37,9 +37,8 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
   // objects and copied into device memory for the table_device_view's
   // _columns member.
   if (source_view.num_columns() > 0) {
-    _descendant_storage =
+    std::tie(_descendant_storage, _columns) =
       contiguous_copy_column_device_views<ColumnDeviceView, HostTableView>(source_view, stream);
-    _columns = reinterpret_cast<ColumnDeviceView*>(_descendant_storage->data());
   }
 }
 

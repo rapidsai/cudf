@@ -68,9 +68,10 @@ auto create_strings_device_views(std::vector<column_view> const& views, cudaStre
   cudf::thread_range r1{"device_view_owners"};
   cudf::thread_range r2{"create_contiguous_device_views"};
   // Assemble contiguous array of device views
-  auto device_view_owners = std::unique_ptr<rmm::device_buffer>(
-    contiguous_copy_column_device_views<column_device_view>(views, stream));
-  auto device_views_ptr = reinterpret_cast<column_device_view*>(device_view_owners->data());
+  rmm::device_buffer* device_view_owners;
+  column_device_view* device_views_ptr;
+  std::tie(device_view_owners, device_views_ptr) =
+    contiguous_copy_column_device_views<column_device_view>(views, stream);
 
   cudf::thread_range r3{"input_offsets"};
   // Compute the partition offsets and size of offset column
@@ -105,7 +106,7 @@ auto create_strings_device_views(std::vector<column_view> const& views, cudaStre
   auto const output_chars_size = d_partition_offsets.back();
 
   cudf::thread_range r5{"return_statement"};
-  return std::make_tuple(std::move(device_view_owners),
+  return std::make_tuple(std::unique_ptr<rmm::device_buffer>(device_view_owners),
                          device_views_ptr,
                          std::move(d_input_offsets),
                          std::move(d_partition_offsets),
