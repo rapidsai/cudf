@@ -117,7 +117,7 @@ class ListColumn(ColumnBase):
         header["type-serialized"] = pickle.dumps(type(self))
         header["dtype"] = pickle.dumps(self.dtype)
         header["null_count"] = self.null_count
-        header["size"] = pickle.dumps(self.size)
+        header["size"] = self.size
 
         frames = []
         sub_headers = []
@@ -160,7 +160,7 @@ class ListColumn(ColumnBase):
             dtype=pickle.loads(header["dtype"]),
             mask=mask,
             children=tuple(children),
-            size=pickle.loads(header["size"]),
+            size=header["size"],
         )
 
 
