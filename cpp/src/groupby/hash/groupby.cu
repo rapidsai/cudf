@@ -134,7 +134,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
     auto s                  = sparse_results.get_result(i, agg);
     auto dense_result_table = cudf::detail::gather(
       table_view({s}), gather_map.begin(), gather_map.begin() + map_size, false, mr, stream);
-    return std::move(dense_result_table->release()[0]);
+    return dense_result_table->release()[0];
   }
 
   // Enables conversion of ARGMIN/ARGMAX into MIN/MAX
@@ -159,7 +159,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
                            cudf::detail::negative_index_policy::NOT_ALLOWED,
                            mr,
                            stream);
-    return std::move(transformed_result->release()[0]);
+    return transformed_result->release()[0];
   };
 
   // Declare overloads for each kind of aggregation to dispatch
@@ -375,7 +375,7 @@ auto create_sparse_results_table(table_view const& flattened_values,
   table sparse_table(std::move(sparse_columns));
   mutable_table_view table_view = sparse_table.mutable_view();
   cudf::detail::initialize_with_identity(table_view, aggs, stream);
-  return std::move(sparse_table);
+  return sparse_table;
 }
 
 /**
