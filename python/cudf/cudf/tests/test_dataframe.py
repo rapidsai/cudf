@@ -7908,6 +7908,7 @@ def test_dataframe_init_from_list_of_dicts(data):
 
     assert_eq(expect, got)
 
+
 def test_dataframe_pipe():
     pdf = pd.DataFrame()
     gdf = gd.DataFrame()
