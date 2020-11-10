@@ -883,16 +883,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   @Override
   public ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType) {
-    if (rhs instanceof ColumnVector) {
-      ColumnView cvRhs = (ColumnView) rhs;
-      assert rows == cvRhs.getRowCount();
-      return new ColumnVector(binaryOp(this, cvRhs, op, outType));
-    } else if (rhs instanceof Scalar) {
-      Scalar sRhs = (Scalar) rhs;
-      return new ColumnVector(binaryOp(this, sRhs, op, outType));
+    if (rhs instanceof ColumnView) {
+      assert rows == ((ColumnView) rhs).getRowCount();
+      return new ColumnVector(binaryOp(this, (ColumnView) rhs, op, outType));
     } else {
-      throw new IllegalArgumentException(rhs.getClass() + " is not supported as a binary op" +
-          " with ColumnVector");
+      return new ColumnVector(binaryOp(this, (Scalar) rhs, op, outType));
     }
   }
 
@@ -2532,6 +2527,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long clamper(long nativeView, long loScalarHandle, long loScalarReplaceHandle,
                                      long hiScalarHandle, long hiScalarReplaceHandle);
 
+  protected native long title(long handle);
   /**
    * Native method to normalize the various bitwise representations of NAN and zero.
    *

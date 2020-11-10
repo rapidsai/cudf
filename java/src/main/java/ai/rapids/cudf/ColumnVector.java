@@ -61,6 +61,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert nativePointer != 0;
     offHeap = new OffHeapState(nativePointer);
     MemoryCleaner.register(this, offHeap);
+    columnView = new ColumnView(offHeap.viewHandle);
     this.rows = offHeap.getNativeRowCount();
     this.type = offHeap.getNativeType();
     this.refCount = 0;
@@ -163,10 +164,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector toTitle() {
     assert type == DType.STRING;
-    return new ColumnVector(title(getNativeView()));
+    return new ColumnVector(columnView.title(getNativeView()));
   }
-
-  private native long title(long handle);
 
   /**
    * This is a really ugly API, but it is possible that the lifecycle of a column of
@@ -1163,7 +1162,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   @Override
   public ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType) {
-    return columnView.binaryOp(op, rhs, outType);
+    if (rhs instanceof ColumnVector) {
+      return columnView.binaryOp(op, ((ColumnVector) rhs).columnView, outType);
+    } else {
+      return columnView.binaryOp(op, rhs, outType);
+    }
   }
 
   static long binaryOp(ColumnVector lhs, ColumnVector rhs, BinaryOp op, DType outputType) {
@@ -1685,7 +1688,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asTimestampMicroseconds() {
-    return asTimestampMicroseconds();
+    return columnView.asTimestampMicroseconds();
   }
 
   /**
@@ -1704,7 +1707,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asTimestampMilliseconds() {
-   return asTimestampMicroseconds();
+   return columnView.asTimestampMilliseconds();
   }
 
   /**
