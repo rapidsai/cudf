@@ -98,6 +98,7 @@
 - PR #6701 Fix issue when `numpy.str_` is given as input to string parameters in io APIs
 - PR #6704 Fix leak warnings in JNI unit tests
 - PR #6708 Apply `na_rep` to column names in csv writer
+- PR #6721 Add missing serialization methods for ListColumn
 - PR #6722 Fix index=False bug in dask_cudf.read_parquet
 
 
