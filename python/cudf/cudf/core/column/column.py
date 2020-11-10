@@ -10,6 +10,7 @@ from typing import (
     Dict,
     List,
     Mapping,
+    Optional,
     Sequence,
     Tuple,
     Union,
@@ -141,7 +142,7 @@ class ColumnBase(Column, Serializable):
         return cupy.asarray(self.data_array_view)
 
     def binary_operator(
-        self, binop: str, rhs: Union["ColumnBase", ScalarObj], reflect=False
+        self, binop: str, rhs, reflect: bool = False
     ) -> "ColumnBase":
         raise NotImplementedError()
 
@@ -444,7 +445,7 @@ class ColumnBase(Column, Serializable):
         begin: int,
         end: int,
         inplace: bool = False,
-    ) -> "ColumnBase":
+    ) -> Optional["ColumnBase"]:
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
@@ -930,8 +931,8 @@ class ColumnBase(Column, Serializable):
             raise ValueError(f"Invalid value for side: {side}")
 
     def sort_by_values(
-        self, ascending: bool = True, na_position: str = "last"
-    ) -> Tuple["ColumnBase", "ColumnBase"]:
+        self: "ColumnBase", ascending: bool = True, na_position: str = "last"
+    ) -> Tuple["ColumnBase", "cudf.core.column.NumericalColumn"]:
         col_inds = self.as_frame()._get_sorted_inds(ascending, na_position)
         col_keys = self.take(col_inds)
         return col_keys, col_inds
@@ -1007,16 +1008,24 @@ class ColumnBase(Column, Serializable):
             ordered=ordered,
         )
 
-    def as_numerical_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
+    def as_numerical_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.NumericalColumn":
         raise NotImplementedError
 
-    def as_datetime_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
+    def as_datetime_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.DatetimeColumn":
         raise NotImplementedError
 
-    def as_timedelta_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
+    def as_timedelta_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.TimeDeltaColumn":
         raise NotImplementedError
 
-    def as_string_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
+    def as_string_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.StringColumn":
         raise NotImplementedError
 
     def apply_boolean_mask(self, mask: "Buffer") -> "ColumnBase":
@@ -1383,7 +1392,7 @@ def build_column(
     mask: Buffer = None,
     offset: int = 0,
     null_count: int = None,
-    children: Tuple[Column, ...] = (),
+    children: Tuple[ColumnBase, ...] = (),
 ) -> "ColumnBase":
     """
     Build a Column of the appropriate type from the given parameters
@@ -1483,7 +1492,7 @@ def build_categorical_column(
     offset: int = 0,
     null_count: int = None,
     ordered: bool = None,
-) -> "ColumnBase":
+) -> "cudf.core.column.CategoricalColumn":
     """
     Build a CategoricalColumn
 
@@ -1518,7 +1527,7 @@ def build_categorical_column(
         null_count=null_count,
         children=(codes,),
     )
-    return result
+    return cast("cudf.core.column.CategoricalColumn", result)
 
 
 def as_column(

@@ -216,8 +216,7 @@ class StringMethods(ColumnMethodsMixin):
             raise AttributeError(
                 "Can only use .str accessor with string values"
             )
-        self._column = column
-        self._parent = parent
+        super().__init__(column=column, parent=parent)
 
     def htoi(self):
         """
@@ -2055,9 +2054,9 @@ class StringMethods(ColumnMethodsMixin):
         result_table = cpp_split(self._column, as_scalar(pat, "str"), n)
         if len(result_table._data) == 1:
             if result_table._data[0].null_count == len(self._parent):
-                result_table = []
+                result_table = cudf.core.frame.Frame({})
             if self._column.null_count == len(self._column):
-                result_table = [self._column.copy()]
+                result_table = cudf.core.frame.Frame({0: self._column.copy()})
 
         return self._return_or_inplace(result_table, **kwargs,)
 

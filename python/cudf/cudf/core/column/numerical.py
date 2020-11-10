@@ -1,7 +1,7 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 from numbers import Number
-from typing import Any, Callable, Sequence, Union
+from typing import Any, Callable, Sequence, Union, cast
 
 import numpy as np
 from nvtx import annotate
@@ -153,36 +153,47 @@ class NumericalColumn(ColumnBase):
 
         return libcudf.string_casting.int2ip(self)
 
-    def as_string_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
-
+    def as_string_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.StringColumn":
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
                 np.dtype(self.dtype)
             ](self, **kwargs)
         else:
-            return as_column([], dtype="object")
+            return cast(
+                "cudf.core.column.StringColumn", as_column([], dtype="object")
+            )
 
-    def as_datetime_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
-
-        return build_column(
-            data=self.astype("int64").base_data,
-            dtype=dtype,
-            mask=self.base_mask,
-            offset=self.offset,
-            size=self.size,
+    def as_datetime_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.DatetimeColumn":
+        return cast(
+            "cudf.core.column.DatetimeColumn",
+            build_column(
+                data=self.astype("int64").base_data,
+                dtype=dtype,
+                mask=self.base_mask,
+                offset=self.offset,
+                size=self.size,
+            ),
         )
 
-    def as_timedelta_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
-
-        return build_column(
-            data=self.astype("int64").base_data,
-            dtype=dtype,
-            mask=self.base_mask,
-            offset=self.offset,
-            size=self.size,
+    def as_timedelta_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.TimeDeltaColumn":
+        return cast(
+            "cudf.core.column.TimeDeltaColumn",
+            build_column(
+                data=self.astype("int64").base_data,
+                dtype=dtype,
+                mask=self.base_mask,
+                offset=self.offset,
+                size=self.size,
+            ),
         )
 
-    def as_numerical_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
+    def as_numerical_column(self, dtype: Dtype, **kwargs) -> "NumericalColumn":
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self

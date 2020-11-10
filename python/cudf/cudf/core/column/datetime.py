@@ -2,7 +2,7 @@
 import datetime as dt
 import re
 from numbers import Number
-from typing import Any, Sequence, Union
+from typing import Any, Sequence, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -118,8 +118,8 @@ class DatetimeColumn(column.ColumnBase):
         return self.get_dt_field("weekday")
 
     def to_pandas(
-        self, index: cudf.Index = None, nullable: bool = False, **kwargs
-    ) -> cudf.Series:
+        self, index: "cudf.Index" = None, nullable: bool = False, **kwargs
+    ) -> "cudf.Series":
         # Workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
 
@@ -166,30 +166,41 @@ class DatetimeColumn(column.ColumnBase):
             raise TypeError(f"cannot normalize {type(other)}")
 
     @property
-    def as_numerical(self) -> "ColumnBase":
-        return column.build_column(
-            data=self.base_data,
-            dtype=np.int64,
-            mask=self.base_mask,
-            offset=self.offset,
-            size=self.size,
+    def as_numerical(self) -> "cudf.core.column.NumericalColumn":
+        return cast(
+            "cudf.core.column.NumericalColumn",
+            column.build_column(
+                data=self.base_data,
+                dtype=np.int64,
+                mask=self.base_mask,
+                offset=self.offset,
+                size=self.size,
+            ),
         )
 
-    def as_datetime_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
+    def as_datetime_column(self, dtype: Dtype, **kwargs) -> "DatetimeColumn":
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype=dtype)
 
-    def as_timedelta_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
+    def as_timedelta_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.TimeDeltaColumn":
         raise TypeError(
             f"cannot astype a datetimelike from [{self.dtype}] to [{dtype}]"
         )
 
-    def as_numerical_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
-        return self.as_numerical.astype(dtype)
+    def as_numerical_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.NumericalColumn":
+        return cast(
+            "cudf.core.column.NumericalColumn", self.as_numerical.astype(dtype)
+        )
 
-    def as_string_column(self, dtype: Dtype, **kwargs) -> "ColumnBase":
+    def as_string_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.StringColumn":
         if not kwargs.get("format"):
             fmt = _dtype_to_format_conversion.get(
                 self.dtype.name, "%Y-%m-%d %H:%M:%S"
@@ -200,7 +211,10 @@ class DatetimeColumn(column.ColumnBase):
                 np.dtype(self.dtype)
             ](self, **kwargs)
         else:
-            return column.column_empty(0, dtype="object", masked=False)
+            return cast(
+                "cudf.core.column.StringColumn",
+                column.column_empty(0, dtype="object", masked=False),
+            )
 
     def default_na_value(self) -> DatetimeLikeScalar:
         """Returns the default NA value for this column

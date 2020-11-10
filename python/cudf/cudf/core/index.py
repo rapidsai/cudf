@@ -1455,6 +1455,10 @@ class Index(Frame, Serializable):
 
     _accessors = set()  # type: Set[Any]
 
+    @property
+    def _constructor_expanddim(self):
+        return cudf.MultiIndex
+
 
 class RangeIndex(Index):
     """
@@ -2639,10 +2643,6 @@ class StringIndex(GenericIndex):
     @property
     def str(self):
         return StringMethods(column=self._values, parent=self)
-
-    @property
-    def _constructor_expanddim(self):
-        return cudf.MultiIndex
 
     def _clean_nulls_from_index(self):
         """

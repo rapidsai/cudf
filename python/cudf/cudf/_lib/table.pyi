@@ -1,7 +1,12 @@
 from typing import List, Any
 
+from cudf.core.column_accessor import ColumnAccessor
 
 class Table(object):
+
+    _data: ColumnAccessor
+    _index: "Table"
+    
     def __init__(self, data: object = None, index: object = None) -> None: ...
 
     @property

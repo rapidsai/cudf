@@ -1,9 +1,11 @@
-from typing import Tuple, Union
+from typing import Tuple, Union, TypeVar, Optional
 
 from cudf._typing import DtypeObj, Dtype, ScalarObj
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase
 
+
+T = TypeVar("T")
 
 class Column:
     _data: Union[Buffer, None]
@@ -13,8 +15,8 @@ class Column:
     _dtype: DtypeObj
     _offset: int
     _null_count: int
-    _children: Tuple["Column", ...]
-    _base_children: Tuple["Column", ...]
+    _children: Tuple["ColumnBase", ...]
+    _base_children: Tuple["ColumnBase", ...]
 
     def __init__(
         self,
@@ -24,7 +26,7 @@ class Column:
         mask: Buffer = None,
         offset: int = None,
         null_count: int = None,
-        children: Tuple["Column", ...] = (),
+        children: Tuple["ColumnBase", ...] = (),
     ) -> None:
         ...
 
@@ -86,7 +88,7 @@ class Column:
     def set_base_mask(self, value: Union[Buffer, None]) -> None:
         ...
 
-    def set_mask(self, value: Union[Buffer, None]) -> "ColumnBase":
+    def set_mask(self: T, value: Union[Buffer, None]) -> T:
         ...
 
     @property
@@ -108,7 +110,7 @@ class Column:
     def set_base_children(self, value: Tuple["ColumnBase", ...]) -> None:
         ...
 
-    def _mimic_inplace(self, other_col, inplace=False):
+    def _mimic_inplace(self, other_col: "ColumnBase", inplace=False) -> Optional["ColumnBase"]:
         ...
 
     @staticmethod

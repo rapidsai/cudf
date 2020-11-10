@@ -119,8 +119,7 @@ class ListMethods(ColumnMethodsMixin):
             raise AttributeError(
                 "Can only use .list accessor with a 'list' dtype"
             )
-        self._column = column
-        self._parent = parent
+        super().__init__(column=column, parent=parent)
 
     @property
     def leaves(self):
