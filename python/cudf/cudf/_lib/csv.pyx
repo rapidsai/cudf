@@ -244,7 +244,9 @@ cdef csv_reader_options make_csv_reader_options(
                 )
         elif (
             cudf.utils.dtypes.is_scalar(dtype) or
-            isinstance(dtype, (np.dtype, pd.core.dtypes.dtypes.ExtensionDtype))
+            isinstance(dtype, (
+                np.dtype, pd.core.dtypes.dtypes.ExtensionDtype, type
+            ))
         ):
             c_dtypes.reserve(1)
             c_dtypes.push_back(
@@ -488,12 +490,19 @@ cpdef write_csv(
 def _get_cudf_compatible_str_from_dtype(dtype):
     if (
         str(dtype) in cudf.utils.dtypes.ALL_TYPES or
-        str(dtype) in {"hex", "hex32", "hex64", "date", "date32"}
+        str(dtype) in {
+            "hex", "hex32", "hex64", "date", "date32", "timestamp",
+            "timestamp[us]", "timestamp[s]", "timestamp[ms]", "timestamp[ns]",
+            "date64"
+        }
     ):
         return str(dtype)
     pd_dtype = pd.core.dtypes.common.pandas_dtype(dtype)
+
     if pd_dtype in cudf.utils.dtypes.pandas_dtypes_to_cudf_dtypes:
         return str(cudf.utils.dtypes.pandas_dtypes_to_cudf_dtypes[pd_dtype])
+    elif isinstance(pd_dtype, np.dtype) and pd_dtype.kind in ("O", "U"):
+        return "str"
     elif (
         pd_dtype in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes or
         str(pd_dtype) in cudf.utils.dtypes.ALL_TYPES or

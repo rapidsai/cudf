@@ -1779,3 +1779,59 @@ def test_csv_write_dataframe_na_rep(df, na_rep):
     actual = gdf.to_csv(na_rep=na_rep)
 
     assert expected == actual
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "int",
+        "str",
+        "float",
+        np.int32,
+        np.dtype("float32"),
+        {"a": "int32", "b": "float64", "c": "uint8"},
+        int,
+        str,
+        object,
+    ],
+)
+def test_csv_reader_dtypes(dtype):
+    buf = "a,b,c\n1,10,111\n2,11,112\n3,12,113\n4,13,114\n"
+
+    expected = pd.read_csv(StringIO(buf), dtype=dtype)
+    actual = cudf.read_csv(StringIO(buf), dtype=dtype)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "dtype", ["Int64", "UInt32", {"a": "UInt64", "b": "float64", "c": "Int32"}]
+)
+def test_csv_reader_nullable_dtypes(dtype):
+    buf = "a,b,c\n1,10,111\n2,11,112\n3,12,113\n4,13,114\n"
+
+    expected = pd.read_csv(StringIO(buf), dtype=dtype)
+    actual = cudf.read_csv(StringIO(buf), dtype=dtype)
+
+    assert_eq(expected, actual.to_pandas(nullable=True))
+
+
+@pytest.mark.parametrize("dtype", cudf.utils.dtypes.TIMEDELTA_TYPES)
+def test_csv_reader_timedetla_dtypes(dtype):
+    buf = "a,b,c\n1,10,111\n2,11,112\n3,12,113\n43432423,13342,13243214\n"
+
+    expected = pd.read_csv(StringIO(buf)).astype(dtype)
+    actual = cudf.read_csv(StringIO(buf), dtype=dtype)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/6719")
+@pytest.mark.parametrize("dtype", cudf.utils.dtypes.DATETIME_TYPES)
+def test_csv_reader_datetime_dtypes(dtype):
+    buf = "a,b,c\n1,10,111\n2,11,112\n3,12,113\n43432423,13342,13243214\n"
+
+    expected = pd.read_csv(StringIO(buf)).astype(dtype)
+    actual = cudf.read_csv(StringIO(buf), dtype=dtype)
+
+    assert_eq(expected, actual)
