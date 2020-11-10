@@ -116,6 +116,7 @@ void BM_csv_read_varying_options(benchmark::State& state)
           read_options.set_skiprows(chunk * chunk_row_cnt);
           read_options.set_skipfooter(view.num_rows() - (chunk + 1) * chunk_row_cnt);
           if (is_last_chunk) read_options.set_skipfooter(0);
+        default: CUDF_FAIL("Unsupported row selection method");
       }
 
       cudf_io::read_csv(read_options);

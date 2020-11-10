@@ -82,7 +82,7 @@ enum class column_selection { ALL, ALTERNATE, FIRST_HALF, SECOND_HALF };
  *
  * Not all strategies are applicable to all readers.
  */
-enum class row_selection { ALL, BYTE_RANGE, NROWS, SKIPFOOTER };
+enum class row_selection { ALL, BYTE_RANGE, NROWS, SKIPFOOTER, STRIPES, ROW_GROUPS };
 
 /**
  * @brief Modify data types such that total selected columns size is a fix fraction of the total
