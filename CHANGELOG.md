@@ -98,6 +98,7 @@
 - PR #6704 Fix leak warnings in JNI unit tests
 - PR #6708 Apply `na_rep` to column names in csv writer
 - PR #6722 Fix index=False bug in dask_cudf.read_parquet
+- PR #6728 Fix cudf python docs and associated build warnings
 
 
 # cuDF 0.16.0 (21 Oct 2020)
