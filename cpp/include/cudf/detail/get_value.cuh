@@ -26,7 +26,8 @@ namespace detail {
 /**
  * @brief Return a fixed-width value from column.
  *
- * This will retrieve the specified value from device memory.
+ * This will retrieve the specified value from device memory. This function
+ * synchronizes the stream.
  *
  * @throw cudf::logic_error if `col_view` is not a fixed-width column
  * @throw cudf::logic_error if `element_index < 0 or >= col_view.size()`
