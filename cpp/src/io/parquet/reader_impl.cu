@@ -146,10 +146,9 @@ type_id to_type_id(SchemaElement const &schema,
 
     // maps are just List<Struct<>>.
     case parquet::MAP:
-    case parquet::LIST:
-      return type_id::LIST;
-      // case parquet::NA: return type_id::EMPTY; //TODO(kn): enable after Null/Empty column support
-
+    case parquet::LIST: return type_id::LIST;
+    case parquet::NA: return type_id::STRING;
+    // return type_id::EMPTY; //TODO(kn): enable after Null/Empty column support
     default: break;
   }
 

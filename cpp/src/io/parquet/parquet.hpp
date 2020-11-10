@@ -409,7 +409,6 @@ class CompactProtocolReader {
     return sz;
   }
   bool skip_struct_field(int t, int depth = 0);
-  bool skip_struct_field2(int t, int depth = 0);
 
  public:
   // Generate Thrift structure parsing routines
@@ -612,7 +611,7 @@ class ParquetFieldEmptyStructFunctor {
 
   inline bool operator()(CompactProtocolReader *cpr, int field_type)
   {
-    return (field_type != ST_FLD_STRUCT || (val = true));
+    return (field_type != ST_FLD_STRUCT || !(val = true));
   }
 
   int field() { return field_val; }
