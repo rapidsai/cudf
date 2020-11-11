@@ -85,7 +85,7 @@ class Scalar(object):
 
     @property
     def dtype(self):
-        if not self._is_host_value_current:)
+        if not self._is_host_value_current:
             self._host_value = self._device_value.value
             self._host_dtype = self._host_value.dtype
         return self._host_dtype
