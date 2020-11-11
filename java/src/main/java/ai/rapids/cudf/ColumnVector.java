@@ -1852,6 +1852,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     return castTo(DType.FLOAT64);
   }
 
+  public ColumnVector isTimestamp(String format) {
+    return new ColumnVector(isTimestamp(getNativeView(), format));
+  }
+
   /**
    * Cast to TIMESTAMP_DAYS - ColumnVector
    * This method takes the value provided by the ColumnVector and casts to TIMESTAMP_DAYS
@@ -2888,6 +2892,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   private static native long byteCount(long viewHandle) throws CudfException;
 
   private static native long extractListElement(long nativeView, int index);
+
+  private static native long isTimestamp(long nativeView, String format);
 
   private static native long castTo(long nativeHandle, int type, int scale);
 
