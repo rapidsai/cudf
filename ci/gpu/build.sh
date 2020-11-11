@@ -145,7 +145,7 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
 else
     #Project Flash
     export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"
-    export LD_LIBRARY_PATH="$LIB_BUILD_DIR:$CONDA_PREFIX:$LD_LIBRARY_PATH"
+    export LD_LIBRARY_PATH="$LIB_BUILD_DIR:$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
     
     if hasArg --skip-tests; then
         gpuci_logger "Skipping Tests"
