@@ -83,7 +83,7 @@
 - PR #6643 Fix csv writer handling embedded comma delimiter
 - PR #6640 Add error message for unsupported `axis` parameter in DataFrame APIs
 - PR #6687 Fix issue where index name of caller object is being modified in csv writer
-- PR #6734 Fix hash join where row hash values would end up equal to the reserved empty key value
+- PR #6735 Fix hash join where row hash values would end up equal to the reserved empty key value
 
 
 # cuDF 0.16.0 (21 Oct 2020)
