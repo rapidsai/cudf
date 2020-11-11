@@ -106,7 +106,7 @@ class TimeDeltaColumn(column.ColumnBase):
             lhs = lhs.astype(common_dtype).astype("float64")
 
             if isinstance(rhs, (cudf.Scalar, DeviceScalar)):
-                if rhs.is_valid():
+                if rhs.is_valid:
                     rhs = np.timedelta64(rhs.value)
                     rhs = rhs.astype(common_dtype).astype("float64")
                 else:
@@ -167,17 +167,13 @@ class TimeDeltaColumn(column.ColumnBase):
             )
 
     def _binary_op_truediv(self, rhs):
-        if isinstance(rhs, DeviceScalar):
-            import pdb
-
-            pdb.set_trace()
         lhs, rhs = self, rhs
         if pd.api.types.is_timedelta64_dtype(rhs.dtype):
             common_dtype = determine_out_dtype(self.dtype, rhs.dtype)
             lhs = lhs.astype(common_dtype).astype("float64")
 
             if isinstance(rhs, (cudf.Scalar, DeviceScalar)):
-                if rhs.is_valid():
+                if rhs.is_valid:
                     rhs = rhs.value.astype(common_dtype).astype("float64")
                 else:
                     rhs = as_device_scalar(None, "float64")

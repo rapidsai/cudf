@@ -317,10 +317,6 @@ class DatetimeColumn(column.ColumnBase):
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
 def binop(lhs, rhs, op, out_dtype):
-    if isinstance(lhs, cudf.Scalar):
-        lhs = lhs._data
-    if isinstance(rhs, cudf.Scalar):
-        rhs = rhs._data
     out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
     return out
 

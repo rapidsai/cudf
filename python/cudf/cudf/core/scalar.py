@@ -12,6 +12,11 @@ from cudf.utils.dtypes import (
 
 
 class Scalar(object):
+
+    _host_value = None
+    _host_dtype = None
+    _device_value = None
+
     def __init__(self, value, dtype=None):
         """
         A GPU-backed scalar object with NumPy scalar like properties
@@ -54,33 +59,85 @@ class Scalar(object):
         if isinstance(value, DeviceScalar):
             self._data = value
         else:
-            value = to_cudf_compatible_scalar(value, dtype=dtype)
-            valid = not _is_null_host_scalar(value)
+            self._host_value, self._host_dtype = self._preprocess_host_value(value, dtype)
 
-            if dtype is None:
-                if not valid:
-                    raise TypeError(
-                        "dtype required when constructing a null scalar"
-                    )
-                else:
-                    dtype = value.dtype
-            dtype = np.dtype(dtype)
+    
+    @property
+    def _is_host_value_current(self):
+        return self._host_value is not None
 
-            # temporary
-            dtype = np.dtype('object') if dtype.char == 'U' else dtype
-            self._data = DeviceScalar(value, dtype=dtype)
+    @property
+    def _is_device_value_current(self):
+        return self._device_value is not None
+
+    @property
+    def get_device_value(self):
+        if self._device_value is None:
+            self._device_value = DeviceScalar(self._host_value, self._host_dtype)
+        return self._device_value
 
     @property
     def value(self):
-        return self._data.value
+        if not self._is_host_value_current:
+            self._host_value = self._device_value.value
+            self._host_dtype = self._host_value.dtype
+        return self._host_value
 
     @property
     def dtype(self):
-        return self._data.dtype
+        if not self._is_host_value_current:)
+            self._host_value = self._device_value.value
+            self._host_dtype = self._host_value.dtype
+        return self._host_dtype
 
     @property
     def is_valid(self):
-        return self._data.is_valid
+        if not self._is_host_value_current:
+            self._host_value = self._device_value.value
+            self._host_dtype = self._host_value.dtype
+        return not _is_null_host_scalar(self._host_value)
+
+    def _preprocess_host_value(self, value, dtype):
+        value = to_cudf_compatible_scalar(value, dtype=dtype)
+        valid = not _is_null_host_scalar(value)
+
+        if dtype is None:
+            if not valid:
+                raise TypeError(
+                    "dtype required when constructing a null scalar"
+                )
+            else:
+                dtype = value.dtype
+        dtype = np.dtype(dtype)
+
+        # temporary
+        dtype = np.dtype('object') if dtype.char == 'U' else dtype
+
+        if not valid:
+            value = NA
+
+        return value, dtype
+
+    def _sync(self):
+        """
+        If the cache is not synched, copy either the device or host value
+        to the host or device respectively. If cache is valid, do nothing
+        """
+        if self._is_host_value_current and self._is_device_value_current:
+            return
+        elif (
+            self._is_host_value_current and not
+            self._is_device_value_current
+        ):
+            self._device_value = DeviceScalar(self._host_value, self._host_dtype)
+        elif (
+            self._is_device_value_current and not
+            self._is_host_value_current
+        ):
+            self._host_value = self._get_device_value()
+            self._host_dtype = self._host_value.dtype
+        else:
+            raise ValueError("Invalid cudf.Scalar")
 
     def __index__(self):
         if self.dtype.kind not in {"u", "i"}:
@@ -212,8 +269,8 @@ class Scalar(object):
             return NotImplemented
         other = to_cudf_compatible_scalar(other)
         out_dtype = self._binop_result_dtype_or_error(other, op)
-        valid = self.is_valid() and (
-            isinstance(other, np.generic) or other.is_valid()
+        valid = self.is_valid and (
+            isinstance(other, np.generic) or other.is_valid
         )
         if not valid:
             return Scalar(None, dtype=out_dtype)

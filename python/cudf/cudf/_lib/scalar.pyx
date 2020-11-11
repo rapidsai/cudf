@@ -61,7 +61,7 @@ cdef class DeviceScalar:
         """
 
         # Caching Mechanism
-        self._initialize_cache(value, dtype)
+        self._set_device_value(value, dtype)
 
     def _initialize_cache(self, value, dtype):
         if _is_null_host_scalar(value):
@@ -123,44 +123,15 @@ cdef class DeviceScalar:
         The NumPy dtype corresponding to the data type of the underlying
         device scalar.
         """
-        cdef libcudf_types.data_type cdtype
-        if self._is_host_value_current():
-            return self._host_dtype
-        else:
-            cdtype = self.get_raw_ptr()[0].type()
-            return cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]
+        cdef libcudf_types.data_type cdtype = self.get_raw_ptr()[0].type()
+        return cudf_to_np_types[<underlying_type_t_type_id>(cdtype.id())]
 
     @property
     def value(self):
         """
         Returns a host copy of the underlying device scalar.
         """
-        if self._is_host_value_current():
-            return self._host_value
-        else:
-            result = self._get_device_value()
-            self._host_value = result
-            return result
-
-    def _sync(self):
-        """
-        If the cache is not synched, copy either the device or host value
-        to the host or device respectively. If cache is valid, do nothing
-        """
-        if self._is_host_value_current() and self._is_device_value_current():
-            return
-        elif (
-            self._is_host_value_current() and not
-            self._is_device_value_current()
-        ):
-            self._set_device_value(self._host_value, self._host_dtype)
-        elif (
-            self._is_device_value_current() and not
-            self._is_host_value_current()
-        ):
-            self._host_value = self._get_device_value()
-        else:
-            raise ValueError("Invalid device scalar")
+        return self._get_device_value()
 
     cdef const scalar* get_raw_ptr(self) except *:
         if not self._is_device_value_current():
@@ -185,7 +156,6 @@ cdef class DeviceScalar:
         Construct a Scalar object from a unique_ptr<cudf::scalar>.
         """
         cdef DeviceScalar s = DeviceScalar.__new__(DeviceScalar)
-        s._host_value = None
         s.c_value = move(ptr)
 
         return s
@@ -405,14 +375,14 @@ def as_device_scalar(val, dtype=None):
         if isinstance(val, (cudf.Scalar, DeviceScalar)):
             raise TypeError("Can't update dtype of existing GPU scalar")
         else:
-            return cudf.Scalar(value=val, dtype=dtype)._data
+            return cudf.Scalar(value=val, dtype=dtype).get_device_value
     else:
         if isinstance(val, DeviceScalar):
             return val
         if isinstance(val, cudf.Scalar):
-            return val._data
+            return val.get_device_value
         else:
-            return cudf.Scalar(val)._data
+            return cudf.Scalar(val).get_device_value
 
 
 def _is_null_host_scalar(slr):

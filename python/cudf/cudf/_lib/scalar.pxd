@@ -9,9 +9,6 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 cdef class DeviceScalar:
     cdef unique_ptr[scalar] c_value
 
-    cdef object _host_value
-    cdef object _host_dtype
-
     cdef const scalar* get_raw_ptr(self) except *
 
     @staticmethod
