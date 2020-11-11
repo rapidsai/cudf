@@ -25,6 +25,7 @@ import ai.rapids.cudf.HostColumnVector.StructData;
 import ai.rapids.cudf.HostColumnVector.StructType;
 
 import java.io.File;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -2468,6 +2469,14 @@ public final class Table implements AutoCloseable {
       return this;
     }
 
+    public TestBuilder column(BigDecimal[]... values) {
+      // Adding as decimal32 type for both decimal32 and decimal64 to the list.
+      // Correct ColumnVector is created in `fromDecimals` method.
+      types.add(new ListType(true, new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, 0))));
+      typeErasedData.add(values);
+      return this;
+    }
+
     public TestBuilder column(StructType dataType, StructData... values) {
       types.add(dataType);
       typeErasedData.add(values);
@@ -2551,6 +2560,10 @@ public final class Table implements AutoCloseable {
           break;
         case FLOAT64:
           ret = ColumnVector.fromBoxedDoubles((Double[]) dataArray);
+          break;
+        case DECIMAL32:
+        case DECIMAL64:
+          ret = ColumnVector.fromDecimals((BigDecimal[]) dataArray);
           break;
         default:
           throw new IllegalArgumentException(type + " is not supported yet");

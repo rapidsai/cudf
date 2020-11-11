@@ -76,6 +76,25 @@ public interface BinaryOperable {
     if (a == DType.BOOL8 || b == DType.BOOL8) {
       return DType.BOOL8;
     }
+    if (a.isDecimalType() && b.isDecimalType()) {
+      // Here scale is created with value 0 as `scale` is required to create DType of
+      // decimal type. Dtype is discarded for binary operations for decimal types in cudf as a new
+      // DType is created for output type with new scale. New scale for output depends upon operator.
+      int scale = 0;
+      if (a.typeId == DType.DTypeEnum.DECIMAL32) {
+        if (b.typeId == DType.DTypeEnum.DECIMAL32) {
+          return DType.create(DType.DTypeEnum.DECIMAL32, scale);
+        } else {
+          throw new IllegalArgumentException("Both columns must be of the same fixed_point type");
+        }
+      } else if (a.typeId == DType.DTypeEnum.DECIMAL64) {
+        if (b.typeId == DType.DTypeEnum.DECIMAL64) {
+          return DType.create(DType.DTypeEnum.DECIMAL64, scale);
+        } else {
+          throw new IllegalArgumentException("Both columns must be of the same fixed_point type");
+        }
+      }
+    }
     throw new IllegalArgumentException("Unsupported types " + a + " and " + b);
   }
 

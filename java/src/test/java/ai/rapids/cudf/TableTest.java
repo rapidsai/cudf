@@ -223,6 +223,11 @@ public class TableTest extends CudfTestBase {
             assertArrayEquals(expected.getUTF8(expectedRow), cv.getUTF8(tableRow),
                 "Column " + colName + " Row " + tableRow);
             break;
+          case DECIMAL32:
+          case DECIMAL64:
+            assertEquals(expected.getBigDecimal(expectedRow), cv.getBigDecimal(tableRow),
+                "Column " + colName + " Row " + tableRow);
+            break;
           case LIST:
             HostMemoryBuffer expectedOffsets = expected.getOffsets();
             HostMemoryBuffer cvOffsets = cv.getOffsets();
