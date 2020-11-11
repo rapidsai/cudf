@@ -137,8 +137,9 @@ def gather(Table source_table, Column gather_map, bool keep_index=True):
     if len(gather_map) > 0:
         gm_min, gm_max = minmax(gather_map)
         if gm_min < -len(source_table) or gm_max >= len(source_table):
-            raise IndexError(f"Gather map index with min {gm_min}, max {gm_max} is"
-            f" out of bound in table with length {len(source_table)}.")
+            raise IndexError(f"Gather map index with min {gm_min}, max"
+                             f" {gm_max} is out of bound in table with"
+                             f" length {len(source_table)}.")
 
     cdef unique_ptr[table] c_result
     cdef table_view source_table_view
@@ -147,7 +148,9 @@ def gather(Table source_table, Column gather_map, bool keep_index=True):
     else:
         source_table_view = source_table.data_view()
     cdef column_view gather_map_view = gather_map.view()
-    cdef cpp_copying.out_of_bounds_policy policy = cpp_copying.out_of_bounds_policy.DONT_CHECK
+    cdef cpp_copying.out_of_bounds_policy policy = (cpp_copying
+                                                    .out_of_bounds_policy
+                                                    .DONT_CHECK)
 
     with nogil:
         c_result = move(
