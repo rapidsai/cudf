@@ -522,7 +522,7 @@ def test_csv_reader_NaN_values():
     default_na_cells = (
         "#N/A\n#N/A N/A\n#NA\n-1.#IND\n"
         "-1.#QNAN\n-NaN\n-nan\n1.#IND\n"
-        "1.#QNAN\nN/A\nNA\nNULL\n"
+        "1.#QNAN\nN/A\n<NA>\nNA\nNULL\n"
         "NaN\nn/a\nnan\nnull\n"
     )
     custom_na_cells = "NV_NAN\nNotANumber\n"
@@ -541,6 +541,15 @@ def test_csv_reader_NaN_values():
         names=names,
         dtype=dtypes,
         na_values=custom_na_values,
+    )
+    assert all(np.isnan(all_nan.to_pandas()["float32"]))
+
+    # custom NA values
+    all_nan = read_csv(
+        StringIO(empty_cells + default_na_cells + "_NAA_\n"),
+        names=names,
+        dtype=dtypes,
+        na_values="_NAA_",
     )
     assert all(np.isnan(all_nan.to_pandas()["float32"]))
 
@@ -638,6 +647,7 @@ def test_csv_reader_buffer_strings():
         (".beez", "bz2", "bz2"),
         (".gz", "gzip", "infer"),
         (".bz2", "bz2", "infer"),
+        (".beez", "bz2", np.str_("bz2")),
         (".data", None, "infer"),
         (".txt", None, None),
         ("", None, None),
@@ -1482,7 +1492,7 @@ def test_csv_writer_datetime_data(tmpdir):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("sep", [",", "|", " ", ";"])
+@pytest.mark.parametrize("sep", [",", "|", " ", ";", np.str_(",")])
 @pytest.mark.parametrize(
     "columns",
     [
@@ -1512,7 +1522,9 @@ def test_csv_writer_datetime_data(tmpdir):
 @pytest.mark.parametrize(
     "index", [True, False, np.bool_(True), np.bool_(False)]
 )
-@pytest.mark.parametrize("line_terminator", ["\r", "\n", "NEWLINE", "<<<<<"])
+@pytest.mark.parametrize(
+    "line_terminator", ["\r", "\n", "NEWLINE", "<<<<<", np.str_("\n\r")]
+)
 def test_csv_writer_mixed_data(
     sep, columns, header, index, line_terminator, tmpdir
 ):
@@ -1682,3 +1694,88 @@ def test_csv_write_no_caller_manipulation():
     df_copy = df.copy(deep=True)
     _ = df.to_csv(index=True)
     assert_eq(df, df_copy)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        cudf.DataFrame({"a": [1, 2, 3], "": [10, 20, 40]}),
+        cudf.DataFrame({"": [10, 20, 40], "a": [1, 2, 3]}),
+        cudf.DataFrame(
+            {"a": [1, 2, 3], "": [10, 20, 40]},
+            index=cudf.Index(["a", "z", "v"], name="custom name"),
+        ),
+    ],
+)
+@pytest.mark.parametrize("index", [True, False])
+@pytest.mark.parametrize("columns", [["a"], [""], None])
+def test_csv_write_empty_column_name(df, index, columns):
+    pdf = df.to_pandas()
+    expected = pdf.to_csv(index=index, columns=columns)
+    actual = df.to_csv(index=index, columns=columns)
+
+    assert expected == actual
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        cudf.DataFrame(),
+        cudf.DataFrame(index=cudf.Index([], name="index name")),
+    ],
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        True,
+        pytest.param(
+            False,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/6691"
+            ),
+        ),
+    ],
+)
+def test_csv_write_empty_dataframe(df, index):
+    pdf = df.to_pandas()
+
+    expected = pdf.to_csv(index=index)
+    actual = df.to_csv(index=index)
+
+    assert expected == actual
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(
+            {
+                "a": [1, 2, 3, None],
+                "": ["a", "v", None, None],
+                None: [12, 12, 32, 44],
+            }
+        ),
+        pd.DataFrame(
+            {
+                np.nan: [1, 2, 3, None],
+                "": ["a", "v", None, None],
+                None: [12, 12, 32, 44],
+            }
+        ),
+        pd.DataFrame({"": [1, None, 3, 4]}),
+        pd.DataFrame({None: [1, None, 3, 4]}),
+        pd.DataFrame(columns=[None, "", "a", "b"]),
+        pd.DataFrame(columns=[None]),
+        pd.DataFrame(columns=[""]),
+    ],
+)
+@pytest.mark.parametrize(
+    "na_rep", ["", "_NA_", "---", "_____CUSTOM_NA_REP______"]
+)
+def test_csv_write_dataframe_na_rep(df, na_rep):
+    gdf = cudf.from_pandas(df)
+
+    expected = df.to_csv(na_rep=na_rep)
+    actual = gdf.to_csv(na_rep=na_rep)
+
+    assert expected == actual
