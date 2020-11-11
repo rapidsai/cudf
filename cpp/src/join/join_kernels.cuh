@@ -70,7 +70,11 @@ __global__ void build_hash_table(multimap_type multi_map,
 
   while (i < build_table_num_rows) {
     // Compute the hash value of this row
-    const hash_value_type row_hash_value{hash_build(i)};
+    auto const row_hash_value = [&]() {
+      auto const h = hash_build(i);
+      // Remap hash values equal to the empty sentinel value.
+      return (h == multi_map.get_unused_key()) ? (h - 1) : h;
+    }();
 
     // Insert the (row hash value, row index) into the map
     // using the row hash value to determine the location in the
@@ -126,14 +130,14 @@ __global__ void compute_join_output_size(multimap_type multi_map,
 
   for (cudf::size_type probe_row_index = start_idx; probe_row_index < probe_table_num_rows;
        probe_row_index += stride) {
-    auto found = end;
-
     // Search the hash map for the hash value of the probe row using the row's
     // hash value to determine the location where to search for the row in the hash map
-    hash_value_type probe_row_hash_value{0};
-    // Search the hash map for the hash value of the probe row
-    probe_row_hash_value = hash_probe(probe_row_index);
-    found                = multi_map.find(probe_row_hash_value, true, probe_row_hash_value);
+    auto const probe_row_hash_value = [&]() {
+      auto const h = hash_probe(probe_row_index);
+      // Remap hash values equal to the empty sentinel value.
+      return (h == unused_key) ? (h - 1) : h;
+    }();
+    auto found = multi_map.find(probe_row_hash_value, true, probe_row_hash_value);
 
     // for left-joins we always need to add an output
     bool running     = (JoinKind == join_kind::LEFT_JOIN) || (end != found);
@@ -316,16 +320,16 @@ __global__ void probe_hash_table(multimap_type multi_map,
   if (probe_row_index < probe_table_num_rows) {
     const auto unused_key = multi_map.get_unused_key();
     const auto end        = multi_map.end();
-    auto found            = end;
 
     // Search the hash map for the hash value of the probe row using the row's
     // hash value to determine the location where to search for the row in the hash map
+    auto const probe_row_hash_value = [&]() {
+      auto const h = hash_probe(probe_row_index);
+      // Remap hash values equal to the empty sentinel value.
+      return (h == unused_key) ? (h - 1) : h;
+    }();
 
-    // Only probe the hash table if the probe row is valid
-    hash_value_type probe_row_hash_value{0};
-    // Search the hash map for the hash value of the probe row
-    probe_row_hash_value = hash_probe(probe_row_index);
-    found                = multi_map.find(probe_row_hash_value, true, probe_row_hash_value);
+    auto found = multi_map.find(probe_row_hash_value, true, probe_row_hash_value);
 
     bool running = (JoinKind == join_kind::LEFT_JOIN) ||
                    (end != found);  // for left-joins we always need to add an output
