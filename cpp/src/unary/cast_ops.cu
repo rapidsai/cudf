@@ -157,8 +157,8 @@ struct dispatch_unary_cast_to {
     typename TargetT,
     typename std::enable_if_t<is_supported_non_fixed_point_cast<SourceT, TargetT>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
-                                     cudaStream_t stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
   {
     auto const size = input.size();
     auto output =
@@ -183,8 +183,8 @@ struct dispatch_unary_cast_to {
             typename std::enable_if_t<cudf::is_fixed_point<SourceT>() &&
                                       cudf::is_numeric<TargetT>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
-                                     cudaStream_t stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
   {
     auto const size = input.size();
     auto output =
@@ -212,8 +212,8 @@ struct dispatch_unary_cast_to {
             typename std::enable_if_t<cudf::is_numeric<SourceT>() &&
                                       cudf::is_fixed_point<TargetT>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
-                                     cudaStream_t stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
   {
     auto const size = input.size();
     auto output =
@@ -240,8 +240,8 @@ struct dispatch_unary_cast_to {
   template <typename TargetT,
             typename std::enable_if_t<not is_supported_cast<SourceT, TargetT>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
-                                     cudaStream_t stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
   {
     if (!cudf::is_fixed_width<TargetT>())
       CUDF_FAIL("Column type must be numeric or chrono or decimal32/64");
@@ -261,16 +261,16 @@ struct dispatch_unary_cast_from {
 
   template <typename T, typename std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
-                                     cudaStream_t stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
   {
-    return type_dispatcher(type, dispatch_unary_cast_to<T>{input}, type, stream, mr);
+    return type_dispatcher(type, dispatch_unary_cast_to<T>{input}, type, mr, stream);
   }
 
   template <typename T, typename std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
-                                     cudaStream_t stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
   {
     CUDF_FAIL("Column type must be numeric or chrono or decimal32/64");
   }
@@ -278,12 +278,12 @@ struct dispatch_unary_cast_from {
 
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
-                             cudaStream_t stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::mr::device_memory_resource* mr,
+                             cudaStream_t stream)
 {
   CUDF_EXPECTS(is_fixed_width(type), "Unary cast type must be fixed-width.");
 
-  return type_dispatcher(input.type(), detail::dispatch_unary_cast_from{input}, type, stream, mr);
+  return type_dispatcher(input.type(), detail::dispatch_unary_cast_from{input}, type, mr, stream);
 }
 
 }  // namespace detail
