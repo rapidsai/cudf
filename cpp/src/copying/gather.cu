@@ -71,13 +71,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
   auto index_policy = is_unsigned(gather_map.type()) ? detail::negative_index_policy::NOT_ALLOWED
                                                      : detail::negative_index_policy::ALLOWED;
 
-  return detail::gather(
-    source_table,
-    gather_map,
-    policy,
-    index_policy,
-    rmm::cuda_stream_default,
-    mr);
+  return detail::gather(source_table, gather_map, policy, index_policy, mr);
 }
 
 }  // namespace cudf

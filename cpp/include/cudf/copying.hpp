@@ -35,14 +35,14 @@ namespace cudf {
 
 /**
  * @brief Policy to account for possible out-of-bound indices
- * 
- * `NULLIFY` means to nullify output values corresponding to out-of-bounds gather_map values. 
+ *
+ * `NULLIFY` means to nullify output values corresponding to out-of-bounds gather_map values.
  * `DONT_CHECK` means to not to check whether the indices are out-of-bounds.
  */
 
-enum class out_of_bounds_policy : int8_t { 
-   NULLIFY, /// Output values corresponding to out-of-bounds indices are null
-   DONT_CHECK /// No bounds checking is performed
+enum class out_of_bounds_policy : int8_t {
+  NULLIFY,    /// Output values corresponding to out-of-bounds indices are null
+  DONT_CHECK  /// No bounds checking is performed
 };
 
 /**
@@ -61,7 +61,7 @@ enum class out_of_bounds_policy : int8_t {
  * For dictionary columns, the keys column component is copied and not trimmed
  * if the gather results in abandoned key elements.
  *
- * @throws cudf::logic_error if gather_map contains null values. 
+ * @throws cudf::logic_error if gather_map contains null values.
  *
  * @param[in] source_table The input columns whose rows will be gathered
  * @param[in] gather_map View into a non-nullable column of integral indices that maps the
