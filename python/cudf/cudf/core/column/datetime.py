@@ -12,6 +12,7 @@ from cudf import _lib as libcudf
 from cudf._lib.scalar import as_device_scalar
 from cudf.core.column import column, string
 from cudf.utils.dtypes import is_scalar
+from cudf.utils.utils import _fillna_natwise
 
 # nanoseconds per time_unit
 _numpy_to_pandas_conversion = {
@@ -249,26 +250,10 @@ class DatetimeColumn(column.ColumnBase):
 
         return binop(lhs, rhs, op=op, out_dtype=out_dtype)
 
-    def _fillna_natwise(self):
-        # If the value we are filling is np.datetime64("NAT")
-        # we set the same mask as current column.
-        # However where there are "<NA>" in the
-        # columns, their corresponding locations
-        # in base_data will contain min(int64) values.
-        nat = cudf._lib.scalar._create_dummy_nat_scalar(self.dtype)
-        result = libcudf.replace.replace_nulls(self, nat)
-        return column.build_column(
-            data=result.base_data,
-            dtype=result.dtype,
-            mask=self.base_mask,
-            size=result.size,
-            offset=result.offset,
-            children=result.base_children,
-        )
 
     def fillna(self, fill_value):
         if cudf.utils.utils.isnat(fill_value):
-            return self._fillna_natwise()
+            return _fillna_natwise(self)
         if is_scalar(fill_value):
             if not isinstance(fill_value, cudf.Scalar):
                 fill_value = cudf.Scalar(fill_value, dtype=self.dtype)

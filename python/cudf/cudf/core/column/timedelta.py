@@ -13,6 +13,7 @@ from cudf._lib.scalar import DeviceScalar, as_device_scalar
 from cudf.core.column import column, string
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
+from cudf.utils.utils import _fillna_natwise
 
 _dtype_to_format_conversion = {
     "timedelta64[ns]": "%D days %H:%M:%S",
@@ -270,25 +271,9 @@ class TimeDeltaColumn(column.ColumnBase):
     def time_unit(self):
         return self._time_unit
 
-    def _fillna_natwise(self):
-        # If the value we are filling is np.datetime64("NAT")
-        # we set the same mask as current column.
-        # However where there are "<NA>" in the
-        # columns, their corresponding locations
-        nat = cudf._lib.scalar._create_dummy_nat_scalar(self.dtype)
-        result = libcudf.replace.replace_nulls(self, nat)
-        return column.build_column(
-            data=result.base_data,
-            dtype=result.dtype,
-            mask=self.base_mask,
-            size=result.size,
-            offset=result.offset,
-            children=result.base_children,
-        )
-
     def fillna(self, fill_value):
         if cudf.utils.utils.isnat(fill_value):
-            return self._fillna_natwise()
+            return _fillna_natwise(self)
         col = self
         if is_scalar(fill_value):
             if isinstance(fill_value, np.timedelta64):
