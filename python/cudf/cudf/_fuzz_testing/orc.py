@@ -1,10 +1,12 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
+
 import copy
 import io
 import logging
 import random
 
 import numpy as np
+import pyorc
 
 import cudf
 from cudf._fuzz_testing.io import IOFuzz
@@ -75,7 +77,9 @@ class OrcReader(IOFuzz):
         logging.info(f"Shape of DataFrame generated: {table.shape}")
         self._df = df
         file_obj = io.BytesIO()
-        pandas_to_orc(df, file_io_obj=file_obj)
+        pandas_to_orc(
+            df, file_io_obj=file_obj, stripe_size=self._rand(len(df))
+        )
         file_obj.seek(0)
         buf = file_obj.read()
         self._current_buffer = copy.copy(buf)
@@ -89,11 +93,34 @@ class OrcReader(IOFuzz):
     def set_rand_params(self, params):
         params_dict = {}
         for param, values in params.items():
-            if param == "columns" and values == ALL_POSSIBLE_VALUES:
-                col_size = self._rand(len(self._df.columns))
-                params_dict[param] = list(
-                    np.unique(np.random.choice(self._df.columns, col_size))
-                )
+            if values == ALL_POSSIBLE_VALUES:
+                if param == "columns":
+                    col_size = self._rand(len(self._df.columns))
+                    params_dict[param] = list(
+                        np.unique(np.random.choice(self._df.columns, col_size))
+                    )
+                elif param == "stripes":
+                    f = io.BytesIO(self._current_buffer)
+                    reader = pyorc.Reader(f)
+                    print("READ: ", reader.num_of_stripes)
+                    stripes = [i for i in range(reader.num_of_stripes)]
+                    params_dict[param] = np.random.choice(
+                        [
+                            None,
+                            list(
+                                map(
+                                    int,
+                                    np.unique(
+                                        np.random.choice(
+                                            stripes, reader.num_of_stripes
+                                        )
+                                    ),
+                                )
+                            ),
+                        ]
+                    )
+                elif param == "use_index":
+                    params_dict[param] = np.random.choice([True, False])
             elif param in ("skiprows", "num_rows"):
                 params_dict[param] = np.random.choice(
                     [None, self._rand(len(self._df))]

@@ -50,6 +50,7 @@ PANDAS_TO_ORC_TYPES = {
     np.dtype("int32"): pyorc.Int(),
     np.dtype("int64"): pyorc.BigInt(),
     np.dtype("O"): pyorc.String(),
+    pd.StringDtype(): pyorc.String(),
     np.dtype("float32"): pyorc.Float(),
     np.dtype("float64"): pyorc.Double(),
     np.dtype("<M8[ns]"): pyorc.Timestamp(),
@@ -156,15 +157,13 @@ def get_orc_dtype_info(dtype):
     if dtype in PANDAS_TO_ORC_TYPES:
         return PANDAS_TO_ORC_TYPES[dtype]
     else:
-        print(dtype)
         raise TypeError(
-            "Unsupported dtype according to orc spec:"
-            " https://orc.apache.org/specification/"
+            f"Unsupported dtype({dtype}) according to orc spec:"
+            f" https://orc.apache.org/specification/"
         )
 
 
 def get_avro_schema(df):
-
     fields = [
         {"name": col_name, "type": get_avro_dtype_info(col_dtype)}
         for col_name, col_dtype in df.dtypes.items()
@@ -250,18 +249,45 @@ def _preprocess_to_orc_tuple(df):
     return tuple_list
 
 
-def pandas_to_orc(df, file_name=None, file_io_obj=None):
+def pandas_to_orc(df, file_name=None, file_io_obj=None, stripe_size=67108864):
     schema = get_orc_schema(df)
 
     tuple_list = _preprocess_to_orc_tuple(df)
 
     if file_name is not None:
         with open(file_name, "wb") as data:
-            with pyorc.Writer(data, str(schema)) as writer:
+            with pyorc.Writer(
+                data, str(schema), stripe_size=stripe_size
+            ) as writer:
                 writer.writerows(tuple_list)
     elif file_io_obj is not None:
-        with pyorc.Writer(file_io_obj, str(schema)) as writer:
+        with pyorc.Writer(
+            file_io_obj, str(schema), stripe_size=stripe_size
+        ) as writer:
             writer.writerows(tuple_list)
+
+
+def orc_to_pandas(file_name=None, file_io_obj=None, stripes=None):
+    if file_name is not None:
+        f = open(file_name, "rb")
+    elif file_io_obj is not None:
+        f = file_io_obj
+
+    reader = pyorc.Reader(f)
+
+    if stripes is None:
+        df = pd.DataFrame.from_records(
+            reader, columns=reader.schema.fields.keys()
+        )
+    else:
+        records = []
+        for i in stripes:
+            records.extend(list(reader.read_stripe(i)))
+        df = pd.DataFrame.from_records(
+            records, columns=reader.schema.fields.keys()
+        )
+
+    return df
 
 
 def compare_dataframe(left, right, nullable=True):

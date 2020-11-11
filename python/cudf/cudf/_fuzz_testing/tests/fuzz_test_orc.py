@@ -9,8 +9,10 @@ from cudf._fuzz_testing.orc import OrcReader, OrcWriter
 from cudf._fuzz_testing.utils import (
     ALL_POSSIBLE_VALUES,
     compare_dataframe,
+    orc_to_pandas,
     run_test,
 )
+from cudf.tests.utils import assert_eq
 
 
 @pythonfuzz(
@@ -19,9 +21,10 @@ from cudf._fuzz_testing.utils import (
         "columns": ALL_POSSIBLE_VALUES,
         "skiprows": ALL_POSSIBLE_VALUES,
         "num_rows": ALL_POSSIBLE_VALUES,
+        "use_index": ALL_POSSIBLE_VALUES,
     },
 )
-def orc_reader_test(input_tuple, skiprows, columns, num_rows):
+def orc_reader_test(input_tuple, skiprows, columns, num_rows, use_index):
     # TODO: Remove skiprows=0 after
     # following issue is fixed:
     # https://github.com/rapidsai/cudf/issues/6563
@@ -35,14 +38,37 @@ def orc_reader_test(input_tuple, skiprows, columns, num_rows):
         expected_pdf = expected_pdf.reset_index(drop=True)
     if columns is not None:
         expected_pdf = expected_pdf[columns]
+    if use_index is False:
+        expected_pdf = expected_pdf.reset_index(drop=True)
 
     gdf = cudf.read_orc(
         io.BytesIO(file_buffer),
         columns=columns,
         skiprows=skiprows,
         num_rows=num_rows,
+        use_index=use_index,
     )
     compare_dataframe(expected_pdf, gdf)
+
+
+@pythonfuzz(
+    data_handle=OrcReader,
+    params={"columns": ALL_POSSIBLE_VALUES, "stripes": ALL_POSSIBLE_VALUES},
+)
+def orc_reader_stripes_test(input_tuple, columns, stripes):
+    _, file_buffer = input_tuple
+    expected_pdf = orc_to_pandas(
+        file_io_obj=io.BytesIO(file_buffer), stripes=stripes
+    )
+
+    if columns is not None:
+        expected_pdf = expected_pdf[columns]
+
+    gdf = cudf.read_orc(
+        io.BytesIO(file_buffer), columns=columns, stripes=stripes
+    )
+
+    assert_eq(expected_pdf, gdf, check_dtype=False)
 
 
 @pythonfuzz(
