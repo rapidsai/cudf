@@ -49,10 +49,11 @@ enum class negative_index_policy : bool { ALLOWED, NOT_ALLOWED };
  * @param[in] source_table The input columns whose rows will be gathered
  * @param[in] gather_map View into a non-nullable column of integral indices that maps the
  * rows in the source columns to rows in the destination columns.
- * @param[in] out_of_bounds_policy How to treat out of bounds indices. `NULLIFY` means to nullify
- * output values corresponding to out-of-bounds gather_map values. `IGNORE` means to ignore values
- * in `gather_map` that are out of bounds. `IGNORE` is incompatible with `negative_index_policy ==
- * ALLOW`.
+ * @param[in] out_of_bounds_policy How to treat out of bounds indices. `NULLIFY` coerces rows that
+ * corresponds to out-of-bound indices in the gather map to be null elements. Callers should
+ * use `DONT_CHECK` when they are certain that the gather_map contains only valid indices for
+ * better performance. In case there are out-of-bound indices in the gather map, the behavior
+ * is undefined.
  * @param[in] negative_index_policy Interpret each negative index `i` in the
  * gathermap as the positive index `i+num_source_rows`.
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
