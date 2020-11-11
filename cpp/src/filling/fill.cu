@@ -71,27 +71,16 @@ struct in_place_fill_range_dispatch {
                                                                cudf::size_type end,
                                                                cudaStream_t stream = 0)
   {
-    if (value.type().id() == cudf::type_id::DECIMAL32) {
-      auto s = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-      static_cast<cudf::scalar_type_t<int32_t>*>(s.get())->set_value(
-        static_cast<cudf::scalar_type_t<numeric::decimal32> const&>(value).value());
-      auto in_place_view = cudf::mutable_column_view{s->type(),
-                                                     destination.size(),
-                                                     reinterpret_cast<void*>(destination.data<T>()),
-                                                     destination.null_mask()};
-      in_place_fill<int32_t>(in_place_view, begin, end, *s, stream);
-    } else if (value.type().id() == cudf::type_id::DECIMAL64) {
-      auto s = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT64));
-      static_cast<cudf::scalar_type_t<int64_t>*>(s.get())->set_value(
-        static_cast<cudf::scalar_type_t<numeric::decimal64> const&>(value).value());
-      auto in_place_view = cudf::mutable_column_view{s->type(),
-                                                     destination.size(),
-                                                     reinterpret_cast<void*>(destination.data<T>()),
-                                                     destination.null_mask()};
-      in_place_fill<int64_t>(in_place_view, begin, end, *s, stream);
-    } else {
-      CUDF_FAIL("in-place only works for two fixed_point types: DECIMAL32 and DECIMAL64.");
-    }
+    auto unscaled = reinterpret_cast<cudf::fixed_point_scalar<T> const&>(value).value();
+    using RepType = decltype(unscaled);
+    auto s        = cudf::make_numeric_scalar(cudf::data_type(cudf::type_to_id<RepType>()));
+    static_cast<cudf::scalar_type_t<RepType>*>(s.get())->set_value(unscaled);
+    s->set_valid(value.is_valid());
+    auto in_place_view = cudf::mutable_column_view{s->type(),
+                                                   destination.size(),
+                                                   reinterpret_cast<void*>(destination.data<T>()),
+                                                   destination.null_mask()};
+    in_place_fill<RepType>(in_place_view, begin, end, *s, stream);
   }
 
   template <typename T>
