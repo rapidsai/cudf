@@ -106,6 +106,7 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
     py_result = Column.from_unique_ptr(move(c_result))
     return py_result
 
+
 def minmax(Column incol):
     """
     Top level Cython minmax function wrapping libcudf++ minmax.
@@ -124,5 +125,4 @@ def minmax(Column incol):
     py_result_min = Scalar.from_unique_ptr(move(c_result.first))
     py_result_max = Scalar.from_unique_ptr(move(c_result.second))
 
-    print (py_result_min, py_result_max)
     return py_result_min.value, py_result_max.value
