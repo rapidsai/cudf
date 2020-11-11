@@ -24,7 +24,8 @@
 
 #include <hash/concurrent_unordered_map.cuh>
 #include <join/join_common_utils.hpp>
-#include "rmm/cuda_stream_view.hpp"
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {
@@ -99,8 +100,9 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
   // This will return any new dictionary columns created as well as updated table_views.
   auto matched = cudf::dictionary::detail::match_dictionaries(
     {left.select(left_on), right.select(right_on)},
-    rmm::mr::get_current_device_resource(),  // temporary objects returned
-    stream);
+    stream,
+    rmm::mr::get_current_device_resource());  // temporary objects returned
+
   auto const left_selected  = matched.second.front();
   auto const right_selected = matched.second.back();
 

@@ -181,8 +181,8 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
       dictionary_column_view(target),
       make_column_from_scalar(source.get(), 1, stream, rmm::mr::get_current_device_resource())
         ->view(),
-      mr,
-      stream.value());
+      stream,
+      mr);
     auto dict_view    = dictionary_column_view(dict_target->view());
     auto scalar_index = dictionary::detail::get_index(
       dict_view, source.get(), stream, rmm::mr::get_current_device_resource());

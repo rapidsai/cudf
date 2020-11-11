@@ -32,10 +32,11 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/iterator/constant_iterator.h>
 
 #include <memory>
-#include "rmm/cuda_stream_view.hpp"
 
 namespace {
 template <typename T>
@@ -186,10 +187,10 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
 
   // combine keys so both dictionaries have the same set
   auto target_matched =
-    cudf::dictionary::detail::add_keys(dict_target, dict_source.keys(), mr, stream.value());
+    cudf::dictionary::detail::add_keys(dict_target, dict_source.keys(), stream, mr);
   auto const target_view = cudf::dictionary_column_view(target_matched->view());
   auto source_matched    = cudf::dictionary::detail::set_keys(
-    dict_source, target_view.keys(), rmm::mr::get_current_device_resource(), stream.value());
+    dict_source, target_view.keys(), stream, rmm::mr::get_current_device_resource());
   auto const source_view = cudf::dictionary_column_view(source_matched->view());
 
   // build the new indices by calling in_place_copy_range on just the indices

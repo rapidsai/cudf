@@ -100,7 +100,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
   auto matched = dictionary::detail::match_dictionaries(
-    {t, values}, rmm::mr::get_current_device_resource(), stream.value());
+    {t, values}, stream, rmm::mr::get_current_device_resource());
   auto d_t      = table_device_view::create(matched.second.front(), stream);
   auto d_values = table_device_view::create(matched.second.back(), stream);
   auto count_it = thrust::make_counting_iterator<size_type>(0);
@@ -306,10 +306,10 @@ std::unique_ptr<column> multi_contains_dispatch::operator()<dictionary32>(
   dictionary_column_view const needles(needles_in);
   // first combine keys so both dictionaries have the same set
   auto haystack_matched = dictionary::detail::add_keys(
-    haystack, needles.keys(), rmm::mr::get_current_device_resource(), stream.value());
+    haystack, needles.keys(), stream, rmm::mr::get_current_device_resource());
   auto const haystack_view = dictionary_column_view(haystack_matched->view());
   auto needles_matched     = dictionary::detail::set_keys(
-    needles, haystack_view.keys(), rmm::mr::get_current_device_resource(), stream.value());
+    needles, haystack_view.keys(), stream, rmm::mr::get_current_device_resource());
   auto const needles_view = dictionary_column_view(needles_matched->view());
 
   // now just use the indices for the contains

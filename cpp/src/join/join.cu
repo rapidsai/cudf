@@ -38,8 +38,9 @@ std::unique_ptr<table> inner_join(
   // This will return any new dictionary columns created as well as updated table_views.
   auto matched = cudf::dictionary::detail::match_dictionaries(
     {left_input.select(left_on), right_input.select(right_on)},
-    rmm::mr::get_current_device_resource(),  // temporary objects returned
-    stream);
+    stream,
+    rmm::mr::get_current_device_resource());  // temporary objects returned
+
   // now rebuild the table views with the updated ones
   auto const left  = scatter_columns(matched.second.front(), left_on, left_input);
   auto const right = scatter_columns(matched.second.back(), right_on, right_input);
@@ -90,8 +91,8 @@ std::unique_ptr<table> left_join(
   // This will return any new dictionary columns created as well as updated table_views.
   auto matched = cudf::dictionary::detail::match_dictionaries(
     {left_input.select(left_on), right_input.select(right_on)},  // these should match
-    rmm::mr::get_current_device_resource(),                      // temporary objects returned
-    stream);
+    stream,
+    rmm::mr::get_current_device_resource());  // temporary objects returned
   // now rebuild the table views with the updated ones
   table_view const left  = scatter_columns(matched.second.front(), left_on, left_input);
   table_view const right = scatter_columns(matched.second.back(), right_on, right_input);
@@ -114,8 +115,8 @@ std::unique_ptr<table> full_join(
   // This will return any new dictionary columns created as well as updated table_views.
   auto matched = cudf::dictionary::detail::match_dictionaries(
     {left_input.select(left_on), right_input.select(right_on)},  // these should match
-    rmm::mr::get_current_device_resource(),                      // temporary objects returned
-    stream);
+    stream,
+    rmm::mr::get_current_device_resource());  // temporary objects returned
   // now rebuild the table views with the updated ones
   table_view const left  = scatter_columns(matched.second.front(), left_on, left_input);
   table_view const right = scatter_columns(matched.second.back(), right_on, right_input);

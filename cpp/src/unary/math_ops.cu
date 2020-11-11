@@ -274,10 +274,7 @@ std::unique_ptr<cudf::column> transform_fn(cudf::dictionary_column_view const& i
                                      stream,
                                      default_mr);
   return cudf::dictionary::detail::encode(
-    output->view(),
-    dictionary::detail::get_indices_type_for_size(output->size()),
-    mr,
-    stream.value());
+    output->view(), dictionary::detail::get_indices_type_for_size(output->size()), stream, mr);
 }
 
 template <typename UFN>

@@ -337,8 +337,8 @@ std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(column_vie
   auto result = cudf::dictionary::detail::merge(cudf::dictionary_column_view(lcol),
                                                 cudf::dictionary_column_view(rcol),
                                                 row_order_,
-                                                mr_,
-                                                stream_);
+                                                stream_,
+                                                mr_);
   // set the validity mask
   if (lcol.has_nulls() || rcol.has_nulls()) {
     auto merged_view = result->mutable_view();
@@ -444,7 +444,7 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
   auto matched = cudf::dictionary::detail::match_dictionaries(
-    tables_to_merge, rmm::mr::get_current_device_resource(), stream);
+    tables_to_merge, stream, rmm::mr::get_current_device_resource());
   auto merge_tables = matched.second;
 
   // A queue of (table view, table) pairs

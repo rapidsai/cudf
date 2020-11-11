@@ -325,8 +325,8 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
           matched_view,
           make_column_from_scalar(key_replace, 1, stream, rmm::mr::get_current_device_resource())
             ->view(),
-          mr,
-          stream);
+          stream,
+          mr);
         matched_view = dictionary_column_view(result->view());
       }
     };

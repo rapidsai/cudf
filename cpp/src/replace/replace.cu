@@ -455,13 +455,13 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::diction
   auto matched_input = [&] {
     auto new_keys = cudf::detail::concatenate(
       {values.keys(), replacements.keys()}, stream, rmm::mr::get_current_device_resource());
-    return cudf::dictionary::detail::add_keys(input, new_keys->view(), mr, stream.value());
+    return cudf::dictionary::detail::add_keys(input, new_keys->view(), stream, mr);
   }();
   auto matched_view   = cudf::dictionary_column_view(matched_input->view());
   auto matched_values = cudf::dictionary::detail::set_keys(
-    values, matched_view.keys(), rmm::mr::get_current_device_resource(), stream.value());
+    values, matched_view.keys(), stream, rmm::mr::get_current_device_resource());
   auto matched_replacements = cudf::dictionary::detail::set_keys(
-    replacements, matched_view.keys(), rmm::mr::get_current_device_resource(), stream.value());
+    replacements, matched_view.keys(), stream, rmm::mr::get_current_device_resource());
 
   auto indices_type = matched_view.indices().type();
   auto new_indices  = cudf::type_dispatcher(
