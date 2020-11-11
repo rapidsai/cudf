@@ -148,6 +148,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
           read_options.set_num_rows(chunk_row_cnt);
           if (is_last_chunk) read_options.set_num_rows(-1);
           break;
+        default: CUDF_FAIL("Unsupported row selection method");
       }
 
       cudf_io::read_orc(read_options);
