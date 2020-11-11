@@ -41,7 +41,7 @@
 - PR #6545 Pin cmake policies to cmake 3.17 version
 - PR #6556 Add dictionary support to `cudf::inner_join`, `cudf::left_join` and `cudf::full_join`
 - PR #6557 Support nullable timestamp columns in time range window functions
-- PR #6566 Remove reinterpret_cast conversions between pointer types in ORC
+- PR #6566 Remove `reinterpret_cast` conversions between pointer types in ORC
 - PR #6544 Remove `fixed_point` precise round
 - PR #6552 Use `assert_exceptions_equal` to assert exceptions in pytests
 - PR #6555 Adapt JNI build to libcudf composition of multiple libraries
@@ -62,10 +62,13 @@
 - PR #6644 Cover different CSV reader/writer options in benchmarks
 - PR #6651 Add cudf::dictionary::make_dictionary_pair_iterator
 - PR #6635 Add cudf::test::dictionary_column_wrapper class
+- PR #6676 Add dictionary support to `cudf::quantile`
 - PR #6673 Parameterize avro and json benchmark
 - PR #6609 Support fixed-point decimal for HostColumnVector
+- PR #6712 Remove `reinterpret_cast` conversions between pointer types in Avro
 - PR #6705 Add nested type support to Java table serialization
 - PR #6709 Raise informative error while converting a pandas dataframe with duplicate columns
+- PR #6727 Remove 2nd type-dispatcher call from cudf::reduce
 
 ## Bug Fixes
 
@@ -94,6 +97,7 @@
 - PR #6710 Fix an out-of-bounds indexing error in gather() for lists
 - PR #6670 Fix a bug where PTX parser fails to correctly parse a python lambda generated UDF
 - PR #6687 Fix issue where index name of caller object is being modified in csv writer
+- PR #6696 Fix release_assert.
 - PR #6692 Fix handling of empty column name in csv writer
 - PR #6693 Fix issue related to `na_values` input in `read_csv`
 - PR #6701 Fix issue when `numpy.str_` is given as input to string parameters in io APIs
@@ -101,6 +105,7 @@
 - PR #6708 Apply `na_rep` to column names in csv writer
 - PR #6721 Add missing serialization methods for ListColumn
 - PR #6722 Fix index=False bug in dask_cudf.read_parquet
+- PR #6732 Fix cuDF benchmarks build with static Arrow lib and fix rapids-compose cuDF JNI build
 
 
 # cuDF 0.16.0 (21 Oct 2020)
