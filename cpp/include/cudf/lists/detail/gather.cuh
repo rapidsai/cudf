@@ -20,8 +20,8 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace lists {
@@ -50,7 +50,7 @@ struct gather_data {
  * @copydoc cudf::make_gather_data(cudf::lists_column_view const& source_column,
  *                                 MapItType gather_map,
  *                                 size_type gather_map_size,
- *                                 cudaStream_t stream,
+ *                                 rmm::cuda_stream_view stream,
  *                                 rmm::mr::device_memory_resource* mr)
  *
  * @param prev_base_offsets The buffer backing the base offsets used in the gather map. We can
