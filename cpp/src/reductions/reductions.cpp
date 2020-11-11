@@ -15,11 +15,11 @@
  */
 
 #include <cudf/column/column.hpp>
-#include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/copy.hpp>
+#include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/quantiles.hpp>
-#include <cudf/sorting.hpp>
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/reduction_functions.hpp>
@@ -65,16 +65,16 @@ struct reduce_dispatch_functor {
         return reduction::standard_deviation(col, output_dtype, var_agg->_ddof, mr, stream);
       } break;
       case aggregation::MEDIAN: {
-        auto sorted_indices       = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, mr);
+        auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, mr, stream);
         auto valid_sorted_indices = split(*sorted_indices, {col.size() - col.null_count()})[0];
         auto col_ptr = quantile(col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, mr);
-        return get_element(*col_ptr, 0, mr);
+        return get_element(*col_ptr, 0, stream, mr);
       } break;
       case aggregation::QUANTILE: {
         auto quantile_agg = static_cast<quantile_aggregation const *>(agg.get());
         CUDF_EXPECTS(quantile_agg->_quantiles.size() == 1,
                      "Reduction quantile accepts only one quantile value");
-        auto sorted_indices       = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, mr);
+        auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, mr, stream);
         auto valid_sorted_indices = split(*sorted_indices, {col.size() - col.null_count()})[0];
         auto col_ptr              = quantile(col,
                                 quantile_agg->_quantiles,
@@ -82,7 +82,7 @@ struct reduce_dispatch_functor {
                                 valid_sorted_indices,
                                 true,
                                 mr);
-        return get_element(*col_ptr, 0, mr);
+        return get_element(*col_ptr, 0, stream, mr);
       } break;
       case aggregation::NUNIQUE: {
         auto nunique_agg = static_cast<nunique_aggregation const *>(agg.get());
