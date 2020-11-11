@@ -22,7 +22,7 @@
 /**
  * @file orc_field_writer.hpp
  * @brief Struct to encapsulate common functionality required to implement
- * ProtobufWriter::write(...) functions
+ * `ProtobufWriter::write(...)` functions
  */
 
 namespace cudf {

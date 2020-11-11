@@ -29,7 +29,7 @@ namespace io {
 namespace orc {
 
 /**
- * @brief Functor to run an operator
+ * @brief Functor to run an operator for a specified field.
  *
  * The purpose of this functor is to replace a switch case. If the field in
  * the argument is equal to the field specified in any element of the tuple
@@ -38,7 +38,7 @@ namespace orc {
  * If the field does not match any of the functors then skip_struct_field is
  * called by the ProtobufReader
  *
- * @return Return value of the selected operator or false if no operator
+ * Returns the output of the selected operator or false if no operator
  * matched the field value
  */
 template <int index>
@@ -78,7 +78,7 @@ struct FunctionSwitchImpl<0> {
  * @brief Function to ascertain the return value of ProtobufReader::read
  * function
  *
- * @return Returns false if current pointer to metadata stream is out of
+ * @return Returns 'false' if current pointer to metadata stream is out of
  * bounds
  */
 template <typename T>
@@ -89,9 +89,9 @@ inline bool ProtobufReader::function_builder_return(T &s, const uint8_t *end)
 
 /**
  * @brief Function to ascertain the return value of
- * ProtobufReader::read(FileFooter*, ...) function
+ * `ProtobufReader::read(FileFooter*, ...)` function
  *
- * @return Returns false if current pointer to metadata stream is out of
+ * @return Returns 'false' if current pointer to metadata stream is out of
  * bounds or if the initialization of the parent_idx field of FileFooter
  * is not done correctly
  */
@@ -105,12 +105,12 @@ inline bool ProtobufReader::function_builder_return<FileFooter>(FileFooter &s, c
  * @brief Function to implement ProtobufReader::read based on the tuple of
  * functors provided
  *
- * Bytes are read from the internal metadata stream and field type are
+ * Bytes are read from the internal metadata stream and field types are
  * matched up against user supplied reading functors. If they match then the
  * corresponding values are written to references pointed to by the functors.
  *
- * @return Returns false if an unexpected field is encountered while reading.
- * Otherwise true is returned.
+ * @return Returns 'false' if an unexpected field is encountered while reading.
+ * Otherwise 'true' is returned.
  */
 template <typename T, typename... Operator>
 inline bool ProtobufReader::function_builder(T &s, size_t maxlen, std::tuple<Operator...> &op)
@@ -128,7 +128,7 @@ inline bool ProtobufReader::function_builder(T &s, size_t maxlen, std::tuple<Ope
 /**
  * @brief Functor to set value to 32 bit integer read from metadata stream
  *
- * @return False
+ * Returns 'false'
  */
 struct ProtobufReader::FieldInt32 {
   int field;
@@ -147,7 +147,7 @@ struct ProtobufReader::FieldInt32 {
  * @brief Functor to set value to 32 bit unsigned integer read from metadata
  * stream
  *
- * @return False
+ * Returns 'false'
  */
 struct ProtobufReader::FieldUInt32 {
   int field;
@@ -165,7 +165,7 @@ struct ProtobufReader::FieldUInt32 {
 /**
  * @brief Functor to set value to 64 bit integer read from metadata stream
  *
- * @return False
+ * Returns 'false'
  */
 struct ProtobufReader::FieldInt64 {
   int field;
@@ -184,7 +184,7 @@ struct ProtobufReader::FieldInt64 {
  * @brief Functor to set value to 64 bit unsigned integer read from metadata
  * stream
  *
- * @return False
+ * Returns 'false'
  */
 struct ProtobufReader::FieldUInt64 {
   int field;
@@ -202,7 +202,7 @@ struct ProtobufReader::FieldUInt64 {
 /**
  * @brief Functor to set value to enum read from metadata stream
  *
- * @return False
+ * Returns 'false'
  */
 template <typename Enum>
 struct ProtobufReader::FieldEnum {
@@ -222,7 +222,7 @@ struct ProtobufReader::FieldEnum {
  * @brief Functor to append a 32 bit integer to a vector of integers
  * read from metadata stream
  *
- * @return False
+ * Returns 'false'
  */
 struct ProtobufReader::FieldPackedUInt32 {
   int field;
@@ -244,7 +244,7 @@ struct ProtobufReader::FieldPackedUInt32 {
 /**
  * @brief Functor to set value to string read from metadata stream
  *
- * @return True if the length of the string exceeds bounds of the
+ * Returns 'true' if the length of the string exceeds bounds of the
  * metadata stream
  */
 struct ProtobufReader::FieldString {
@@ -267,7 +267,7 @@ struct ProtobufReader::FieldString {
  * @brief Functor to append a string read from metadata stream
  * to a vector of strings
  *
- * @return True if the length of the string exceeds bounds of the
+ * Returns 'true' if the length of the string exceeds bounds of the
  * metadata stream
  */
 struct ProtobufReader::FieldRepeatedString {
@@ -294,7 +294,7 @@ struct ProtobufReader::FieldRepeatedString {
  * @brief Functor to append an enum read from metadata stream
  * to a vector of enums
  *
- * @return True if the maximum length read by the stream could
+ * Returns 'true' if the maximum length read by the stream could
  * cause out of bounds read of the buffer or if the process of
  * reading the struct fails
  */
@@ -322,7 +322,7 @@ struct ProtobufReader::FieldRepeatedStructFunctor {
  * @brief Functor to append an enum read from metadata stream
  * to a vector of enums
  *
- * @return True if the maximum length read by the stream could
+ * Returns 'true' if the maximum length read by the stream could
  * cause out of bounds read of the buffer
  */
 template <typename Enum>
