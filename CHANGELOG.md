@@ -65,7 +65,7 @@
 - PR #6609 Support fixed-point decimal for HostColumnVector
 - PR #6705 Add nested type support to Java table serialization
 - PR #6709 Raise informative error while converting a pandas dataframe with duplicate columns
-- PR #6743 Binary operations support for decimal type in cudf Java
+- PR #6734 Binary operations support for decimal type in cudf Java
 
 ## Bug Fixes
 
