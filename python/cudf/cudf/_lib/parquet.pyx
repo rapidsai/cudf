@@ -142,7 +142,7 @@ cpdef generate_pandas_metadata(Table table, index):
                             "'category' column dtypes are currently not "
                             + "supported by the gpu accelerated parquet writer"
                         )
-                    elif is_list_dtype(col):
+                    elif is_list_dtype(idx):
                         types.append(col.dtype.to_arrow())
                     else:
                         types.append(np_to_pa_dtype(idx.dtype))
