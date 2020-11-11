@@ -3755,8 +3755,7 @@ class DataFrame(Frame, Serializable):
         common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
         df_normalized = self.astype(common_dtype)
 
-        excluded_types = (str, dict)
-        if isinstance(aggs, Iterable) and not isinstance(aggs, excluded_types):
+        if isinstance(aggs, Iterable) and not isinstance(aggs, (str, dict)):
             result = cudf.DataFrame() 
             # TODO : Allow simultaneous pass for multi-aggregation as a future optimization
             for agg in aggs:
@@ -3773,7 +3772,12 @@ class DataFrame(Frame, Serializable):
             cols=aggs.keys()
             if any([callable(val) for val in aggs.values()]):
                 raise NotImplementedError("callable parameter is not implemented yet")
-            elif any([isinstance(val, Iterable) and not isinstance(val, str) for val in aggs.values()]):
+            elif all([isinstance(val, str) for val in aggs.values()]):
+                result = cudf.Series(index=cols)
+                for key, value in aggs.items():
+                    col = df_normalized[key]
+                    result[key]= getattr(col, value)()
+            elif all([isinstance(val, Iterable) for val in aggs.values()]):
                 idxs=set()
                 for val in aggs.values():
                     if isinstance(val, list):
@@ -3796,11 +3800,6 @@ class DataFrame(Frame, Serializable):
                     elif isinstance(aggs.get(key),str):
                         ans[aggs.get(key)] = getattr(col, agg)()
                     result[key] = ans
-            elif all([isinstance(val, str) for val in aggs.values()]):
-                result = cudf.Series(index=cols)
-                for key, value in aggs.items():
-                    col = df_normalized[key]
-                    result[key]= getattr(col, value)()
             else: raise ValueError("values of dict must be a string or list")
 
             return result 

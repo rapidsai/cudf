@@ -7987,13 +7987,20 @@ def test_dataframe_axis1_unsupported_ops(op):
     "aggs",
     [
         ["min", "sum", "max"],
+        ("min", "sum", "max"),
+        {"min", "sum", "max"},
         "sum",
-        "min",
-        {"a": ["sum", "min"], "b": ["min"], "c": ["max"]},
-        {"a": "sum", "b": "min", "c": "max"},
-        {"a": np.sum, "b": np.min, "c": np.max},
-        {"a": ["sum", "min"], "b": "min", "c": ["max"]},
         "asdf",
+        {"a": "sum", "b": "min", "c": "max"},
+        {"a": "asdf"},
+        {"a": np.sum, "b": np.min, "c": np.max},
+        {"a": ["sum"], "b": ["min"], "c": ["max"]},
+        {"a": ("sum"), "b": ("min"), "c": ("max")},
+        {"a": {"sum"}, "b": {"min"}, "c": {"max"}},
+        {"a": ["sum"], "b": ("min"), "c": {"max"}},
+        {"a": ["sum", "min"], "b": ["sum", "max"], "c": ["min", "max"]},
+        {"a": ("sum", "min"), "b": ("sum", "max"), "c": ("min", "max")},
+        {"a": {"sum", "min"}, "b": {"sum", "max"}, "c": {"min", "max"}},
     ],
 )
 
@@ -8004,9 +8011,14 @@ def test_agg_for_dataframes(data, aggs):
     if aggs == {"a": np.sum, "b": np.min, "c": np.max}:
         with pytest.raises(NotImplementedError):
             got = gdf.agg(aggs)
-    elif aggs =='asdf':
+    elif aggs =="asdf":
         with pytest.raises(
             AttributeError, match=f"'{type(gdf).__name__}' object has no attribute '{aggs}'"
+        ):
+            got = gdf.agg(aggs)
+    elif aggs =={"a":"asdf"}:
+        with pytest.raises(
+            ValueError, match="If using all scalar values, you must pass an index"
         ):
             got = gdf.agg(aggs)
     else:
