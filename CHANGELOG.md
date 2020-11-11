@@ -41,7 +41,7 @@
 - PR #6545 Pin cmake policies to cmake 3.17 version
 - PR #6556 Add dictionary support to `cudf::inner_join`, `cudf::left_join` and `cudf::full_join`
 - PR #6557 Support nullable timestamp columns in time range window functions
-- PR #6566 Remove reinterpret_cast conversions between pointer types in ORC
+- PR #6566 Remove `reinterpret_cast` conversions between pointer types in ORC
 - PR #6544 Remove `fixed_point` precise round
 - PR #6552 Use `assert_exceptions_equal` to assert exceptions in pytests
 - PR #6555 Adapt JNI build to libcudf composition of multiple libraries
@@ -63,6 +63,7 @@
 - PR #6635 Add cudf::test::dictionary_column_wrapper class
 - PR #6673 Parameterize avro and json benchmark
 - PR #6609 Support fixed-point decimal for HostColumnVector
+- PR #6712 Remove `reinterpret_cast` conversions between pointer types in Avro
 - PR #6705 Add nested type support to Java table serialization
 - PR #6709 Raise informative error while converting a pandas dataframe with duplicate columns
 
