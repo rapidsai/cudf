@@ -7,6 +7,7 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.aggregation cimport aggregation
 from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport pair
 
 
 cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:
@@ -25,3 +26,8 @@ cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:
         const unique_ptr[aggregation] agg,
         scan_type inclusive
     ) except +
+
+    cdef pair[unique_ptr[scalar],
+              unique_ptr[scalar]] cpp_minmax "cudf::minmax" (
+        column_view col
+    )
