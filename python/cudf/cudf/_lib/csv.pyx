@@ -6,6 +6,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp.utility cimport move
 
+import pandas as pd
 import cudf
 
 from cudf._lib.cpp.types cimport size_type
@@ -38,7 +39,7 @@ from cudf._lib.cpp.io.types cimport (
     table_with_metadata
 )
 from cudf._lib.io.utils cimport make_source_info, make_sink_info
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, make_table_view
 from cudf._lib.cpp.table.table_view cimport table_view
 
 ctypedef int32_t underlying_type_t_compression
@@ -127,6 +128,7 @@ cdef csv_reader_options make_csv_reader_options(
     if compression is None:
         c_compression = compression_type.NONE
     else:
+        compression = str(compression)
         compression = Compression[compression.upper()]
         c_compression = <compression_type> (
             <underlying_type_t_compression> compression
@@ -267,9 +269,9 @@ cdef csv_reader_options make_csv_reader_options(
 
 def validate_args(
     object delimiter,
-    str sep,
+    object sep,
     bool delim_whitespace,
-    str decimal,
+    object decimal,
     object thousands,
     object nrows,
     int skipfooter,
@@ -302,14 +304,14 @@ def validate_args(
 
 def read_csv(
     object datasource,
-    str lineterminator="\n",
-    str quotechar='"',
+    object lineterminator="\n",
+    object quotechar='"',
     int quoting=0,
     bool doublequote=True,
     object header="infer",
     bool mangle_dupe_cols=True,
     object usecols=None,
-    str sep=",",
+    object sep=",",
     object delimiter=None,
     bool delim_whitespace=False,
     bool skipinitialspace=False,
@@ -318,9 +320,9 @@ def read_csv(
     int skipfooter=0,
     int skiprows=0,
     bool dayfirst=False,
-    str compression="infer",
+    object compression="infer",
     object thousands=None,
-    str decimal=".",
+    object decimal=".",
     object true_values=None,
     object false_values=None,
     object nrows=None,
@@ -398,22 +400,23 @@ def read_csv(
 cpdef write_csv(
     Table table,
     object path_or_buf=None,
-    str sep=",",
-    str na_rep="",
+    object sep=",",
+    object na_rep="",
     bool header=True,
-    str line_terminator="\n",
+    object line_terminator="\n",
     int rows_per_chunk=8,
+    bool index=True,
 ):
     """
     Cython function to call into libcudf API, see `write_csv`.
 
     See Also
     --------
-    cudf.io.csv.write_csv
+    cudf.io.csv.to_csv
     """
 
-    # Index already been reset and added as main column, so just data_view
-    cdef table_view input_table_view = table.data_view()
+    cdef table_view input_table_view = \
+        table.view() if index is True else table.data_view()
     cdef bool include_header_c = header
     cdef char delim_c = ord(sep)
     cdef string line_term_c = line_terminator.encode()
@@ -425,10 +428,28 @@ cpdef write_csv(
     cdef unique_ptr[data_sink] data_sink_c
     cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
 
-    if header is True and table._column_names is not None:
-        metadata_.column_names.reserve(len(table._column_names))
-        for col_name in table._column_names:
-            metadata_.column_names.push_back(str(col_name).encode())
+    if header is True:
+        all_names = columns_apply_na_rep(table._column_names, na_rep)
+        if index is True:
+            all_names = table._index.names + all_names
+
+        if len(all_names) > 0:
+            metadata_.column_names.reserve(len(all_names))
+            if len(all_names) == 1:
+                if all_names[0] in (None, ''):
+                    metadata_.column_names.push_back('""'.encode())
+                else:
+                    metadata_.column_names.push_back(
+                        str(all_names[0]).encode()
+                    )
+            else:
+                for idx, col_name in enumerate(all_names):
+                    if col_name is None:
+                        metadata_.column_names.push_back(''.encode())
+                    else:
+                        metadata_.column_names.push_back(
+                            str(col_name).encode()
+                        )
 
     cdef csv_writer_options options = move(
         csv_writer_options.builder(sink_info_c, input_table_view)
@@ -445,3 +466,11 @@ cpdef write_csv(
 
     with nogil:
         cpp_write_csv(options)
+
+
+def columns_apply_na_rep(column_names, na_rep):
+    return tuple(
+        na_rep if pd.isnull(col_name)
+        else col_name
+        for col_name in column_names
+    )

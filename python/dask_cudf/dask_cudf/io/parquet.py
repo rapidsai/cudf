@@ -69,6 +69,11 @@ class CudfEngine(ArrowEngine):
 
         if index and (index[0] in df.columns):
             df = df.set_index(index[0])
+        elif index is False and set(df.index.names).issubset(columns):
+            # If index=False, we need to make sure all of the
+            # names in `columns` are actually in `df.columns`
+            df.reset_index(inplace=True)
+
         if partition_keys:
             if partitions is None:
                 raise ValueError("Must pass partition sets")
