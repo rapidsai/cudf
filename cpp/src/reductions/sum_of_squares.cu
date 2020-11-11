@@ -69,14 +69,10 @@ std::unique_ptr<cudf::scalar> sum_of_squares(column_view const& col,
                                              rmm::mr::device_memory_resource* mr,
                                              cudaStream_t stream)
 {
-  // using reducer =
-  //  cudf::reduction::simple::element_type_dispatcher<cudf::reduction::op::sum_of_squares>;
   using reducer = same_type_dispatcher<cudf::reduction::op::sum_of_squares>;
 
   auto col_type =
     cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
-
-  // return cudf::type_dispatcher(col_type, reducer(), col, output_dtype, mr, stream);
 
   auto result = cudf::type_dispatcher(col_type, reducer(), col, mr, stream);
 

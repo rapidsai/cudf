@@ -16,7 +16,6 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/reduction_functions.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -69,16 +68,13 @@ std::unique_ptr<cudf::scalar> sum(column_view const& col,
                                   rmm::mr::device_memory_resource* mr,
                                   cudaStream_t stream)
 {
-  // using reducer = cudf::reduction::simple::element_type_dispatcher<cudf::reduction::op::sum>;
-
   using reducer = same_type_dispatcher<cudf::reduction::op::sum>;
 
   auto col_type =
     cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
 
-  // return cudf::type_dispatcher(col_type, reducer(), col, output_dtype, mr, stream);
-
   auto result = cudf::type_dispatcher(col_type, reducer(), col, mr, stream);
+
   if (output_dtype == result->type() || !result->is_valid(stream)) return result;
 
   // if the output_dtype does not match, do extra work to cast it here

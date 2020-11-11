@@ -85,12 +85,10 @@ std::unique_ptr<cudf::scalar> max(column_view const& col,
                                   rmm::mr::device_memory_resource* mr,
                                   cudaStream_t stream)
 {
-  // using reducer = cudf::reduction::simple::element_type_dispatcher<cudf::reduction::op::max>;
   using reducer = max_fn_dispatcher<cudf::reduction::op::max>;
 
   auto col_type =
     cudf::is_dictionary(col.type()) ? dictionary_column_view(col).indices().type() : col.type();
-  // return cudf::type_dispatcher(col_type, reducer(), col, output_dtype, mr, stream);
 
   auto result = cudf::type_dispatcher(col_type, reducer(), col, mr, stream);
 
