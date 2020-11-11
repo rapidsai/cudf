@@ -103,6 +103,7 @@
 - PR #6708 Apply `na_rep` to column names in csv writer
 - PR #6721 Add missing serialization methods for ListColumn
 - PR #6722 Fix index=False bug in dask_cudf.read_parquet
+- PR #6732 Fix cuDF benchmarks build with static Arrow lib and fix rapids-compose cuDF JNI build
 
 
 # cuDF 0.16.0 (21 Oct 2020)

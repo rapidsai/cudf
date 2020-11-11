@@ -61,7 +61,6 @@ include_directories("${CMAKE_BINARY_DIR}/include"
 if(CONDA_INCLUDE_DIRS)
   include_directories("${CONDA_INCLUDE_DIRS}")
 endif(CONDA_INCLUDE_DIRS)
-                    
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
