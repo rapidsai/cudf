@@ -47,9 +47,9 @@ TEST_F(JoinTest, EmptySentinelRepro)
   // This test reproduced an implementation specific behavior where the combination of these
   // particular values ended up hashing to the empty key sentinel value used by the hash join
   // This test may no longer be relevant if the implementation ever changes.
-  auto const left_first_col = cudf::test::fixed_width_column_wrapper<int32_t>{1197};
+  auto const left_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{1197};
   auto const left_second_col = cudf::test::strings_column_wrapper{"201812"};
-  auto const left_third_col = cudf::test::fixed_width_column_wrapper<int64_t>{2550000371};
+  auto const left_third_col  = cudf::test::fixed_width_column_wrapper<int64_t>{2550000371};
 
   auto const right_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{1197};
   auto const right_second_col = cudf::test::strings_column_wrapper{"201812"};
