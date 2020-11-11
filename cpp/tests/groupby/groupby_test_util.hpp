@@ -54,7 +54,8 @@ inline void test_groups(column_view const& keys,
   }
 
   if (values.size()) {
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(table_view({expect_grouped_values}), gb_groups.values->view());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(table_view({expect_grouped_values}),
+                                       gb_groups.values->view());
   }
 }
 
