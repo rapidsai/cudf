@@ -18,6 +18,12 @@
 
 package ai.rapids.cudf;
 
+import ai.rapids.cudf.HostColumnVector.BasicType;
+import ai.rapids.cudf.HostColumnVector.DataType;
+import ai.rapids.cudf.HostColumnVector.ListType;
+import ai.rapids.cudf.HostColumnVector.StructData;
+import ai.rapids.cudf.HostColumnVector.StructType;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -2357,83 +2363,149 @@ public final class Table implements AutoCloseable {
    * tests.
    */
   public static final class TestBuilder {
-    private final List<DType> types = new ArrayList<>();
+    private final List<DataType> types = new ArrayList<>();
     private final List<Object> typeErasedData = new ArrayList<>();
 
     public TestBuilder column(String... values) {
-      types.add(DType.STRING);
+      types.add(new BasicType(true, DType.STRING));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Boolean... values) {
-      types.add(DType.BOOL8);
+      types.add(new BasicType(true, DType.BOOL8));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Byte... values) {
-      types.add(DType.INT8);
+      types.add(new BasicType(true, DType.INT8));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Short... values) {
-      types.add(DType.INT16);
+      types.add(new BasicType(true, DType.INT16));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Integer... values) {
-      types.add(DType.INT32);
+      types.add(new BasicType(true, DType.INT32));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Long... values) {
-      types.add(DType.INT64);
+      types.add(new BasicType(true, DType.INT64));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Float... values) {
-      types.add(DType.FLOAT32);
+      types.add(new BasicType(true, DType.FLOAT32));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Double... values) {
-      types.add(DType.FLOAT64);
+      types.add(new BasicType(true, DType.FLOAT64));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(ListType dataType, List<?>... values) {
+      types.add(dataType);
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(String[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.STRING)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Boolean[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.BOOL8)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Byte[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.INT8)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Short[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.INT16)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Integer[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.INT32)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Long[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.INT64)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Float[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.FLOAT32)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Double[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.FLOAT64)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(StructType dataType, StructData... values) {
+      types.add(dataType);
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(StructType dataType, StructData[]... values) {
+      types.add(new ListType(true, dataType));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder timestampDayColumn(Integer... values) {
-      types.add(DType.TIMESTAMP_DAYS);
+      types.add(new BasicType(true, DType.TIMESTAMP_DAYS));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder timestampNanosecondsColumn(Long... values) {
-      types.add(DType.TIMESTAMP_NANOSECONDS);
+      types.add(new BasicType(true, DType.TIMESTAMP_NANOSECONDS));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder timestampMillisecondsColumn(Long... values) {
-      types.add(DType.TIMESTAMP_MILLISECONDS);
+      types.add(new BasicType(true, DType.TIMESTAMP_MILLISECONDS));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder timestampMicrosecondsColumn(Long... values) {
-      types.add(DType.TIMESTAMP_MICROSECONDS);
+      types.add(new BasicType(true, DType.TIMESTAMP_MICROSECONDS));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder timestampSecondsColumn(Long... values) {
-      types.add(DType.TIMESTAMP_SECONDS);
+      types.add(new BasicType(true, DType.TIMESTAMP_SECONDS));
       typeErasedData.add(values);
       return this;
     }
@@ -2486,11 +2558,38 @@ public final class Table implements AutoCloseable {
       return ret;
     }
 
+    @SuppressWarnings("unchecked")
+    private static <T> ColumnVector fromLists(DataType dataType, Object[][] dataArray) {
+      List[] dataLists = new List[dataArray.length];
+      for (int i = 0; i < dataLists.length; ++i) {
+        Object[] dataList = dataArray[i];
+        dataLists[i] = dataList != null ? Arrays.asList(dataList) : null;
+      }
+      return ColumnVector.fromLists(dataType, dataLists);
+    }
+
+    private static ColumnVector fromStructs(DataType dataType, StructData[] dataArray) {
+      return ColumnVector.fromStructs(dataType, dataArray);
+    }
+
     public Table build() {
       List<ColumnVector> columns = new ArrayList<>(types.size());
       try {
         for (int i = 0; i < types.size(); i++) {
-          columns.add(from(types.get(i), typeErasedData.get(i)));
+          DataType dataType = types.get(i);
+          DType dtype = dataType.getType();
+          Object dataArray = typeErasedData.get(i);
+          if (dtype.isNestedType()) {
+            if (dtype == DType.LIST) {
+              columns.add(fromLists(dataType, (Object[][]) dataArray));
+            } else if (dtype == DType.STRUCT) {
+              columns.add(fromStructs(dataType, (StructData[]) dataArray));
+            } else {
+              throw new IllegalStateException("Unexpected nested type: " + dtype);
+            }
+          } else {
+            columns.add(from(dtype, dataArray));
+          }
         }
         return new Table(columns.toArray(new ColumnVector[columns.size()]));
       } finally {

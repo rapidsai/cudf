@@ -27,7 +27,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     this.rows = rows;
     assert !nullCount.isPresent() || nullCount.get() <= Integer.MAX_VALUE;
     int nc = nullCount.orElse(UNKNOWN_NULL_COUNT).intValue();
-    if (rows == 0) {
+    if (rows == 0  && !type.isNestedType()) {
       this.columnHandle = makeEmptyCudfColumn(type.typeId.getNativeId(), type.getScale());
     } else {
       long cd = data == null ? 0 : data.address;

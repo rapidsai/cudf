@@ -20,6 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
@@ -698,6 +699,328 @@ class strings_column_wrapper : public detail::column_wrapper {
     auto v =
       thrust::make_transform_iterator(strings.begin(), [](auto const& s) { return s.second; });
     wrapped = strings_column_wrapper(begin, end, v).release();
+  }
+};
+
+/**
+ * @brief `column_wrapper` derived class for wrapping dictionary columns.
+ *
+ * This class handles fixed-width type keys.
+ *
+ * @tparam KeyElementTo Specify a fixed-width type for the key values of the dictionary
+ * @tparam SourceElementTo For converting fixed-width values to the KeyElementTo
+ */
+template <typename KeyElementTo, typename SourceElementT = KeyElementTo>
+class dictionary_column_wrapper : public detail::column_wrapper {
+ public:
+  /**
+   * @brief Cast to dictionary_column_view
+   */
+  operator dictionary_column_view() const { return cudf::dictionary_column_view{wrapped->view()}; }
+
+  /**
+   * @brief Default constructor initializes an empty column with dictionary type.
+   */
+  dictionary_column_wrapper() : column_wrapper{}
+  {
+    wrapped = cudf::make_empty_column(cudf::data_type{cudf::type_id::DICTIONARY32});
+  }
+
+  /**
+   * @brief Construct a non-nullable dictionary column of the fixed-width elements in the
+   * range `[begin,end)`.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a non-nullable dictionary column of INT32 elements with 5 elements
+   * std::vector<int32_t> elements{0, 2, 2, 6, 6};
+   * dictionary_column_wrapper<int32_t> w(element.begin(), elements.end());
+   * // keys = {0, 2, 6}, indices = {0, 1, 1, 2, 2}
+   * @endcode
+   *
+   * @note Similar to `std::vector`, this "range" constructor should be used
+   *       with parentheses `()` and not braces `{}`. The latter should only
+   *       be used for the `initializer_list` constructors.
+   *
+   * @param begin The beginning of the sequence of elements
+   * @param end The end of the sequence of elements
+   */
+  template <typename InputIterator>
+  dictionary_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
+  {
+    wrapped = cudf::dictionary::encode(
+      fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end));
+  }
+
+  /**
+   * @brief Construct a nullable dictionary column of the fixed-width elements in the range
+   * `[begin,end)` using the range `[v, v + distance(begin,end))` interpreted
+   * as booleans to indicate the validity of each element.
+   *
+   * If `v[i] == true`, element `i` is valid, else it is null.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable dictionary column with 5 elements and a validity iterator.
+   * std::vector<int32_t> elements{0, 2, 0, 6, 0};
+   * // Validity iterator here sets even rows to null.
+   * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;})
+   * dictionary_column_wrapper<int32_t> w(elements, elements + 5, validity);
+   * // keys = {2, 6}, indices = {NULL, 0, NULL, 1, NULL}
+   * @endcode
+   *
+   * @note Similar to `std::vector`, this "range" constructor should be used
+   *       with parentheses `()` and not braces `{}`. The latter should only
+   *       be used for the `initializer_list` constructors.
+   *
+   * @param begin The beginning of the sequence of elements
+   * @param end The end of the sequence of elements
+   * @param v The beginning of the sequence of validity indicators
+   */
+  template <typename InputIterator, typename ValidityIterator>
+  dictionary_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator v)
+    : column_wrapper{}
+  {
+    wrapped = cudf::dictionary::encode(
+      fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end, v));
+  }
+
+  /**
+   * @brief Construct a non-nullable dictionary column of fixed-width elements from an
+   * initializer list.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a non-nullable dictionary column with 4 elements.
+   * dictionary_column_wrapper<int32_t> w{{1, 2, 3, 1}};
+   * // keys = {1, 2, 3}, indices = {0, 1, 2, 0}
+   * @endcode
+   *
+   * @param element_list The list of elements
+   */
+  template <typename ElementFrom>
+  dictionary_column_wrapper(std::initializer_list<ElementFrom> elements)
+    : dictionary_column_wrapper(std::cbegin(elements), std::cend(elements))
+  {
+  }
+
+  /**
+   * @brief Construct a nullable dictionary column from a list of fixed-width elements
+   * using another list to indicate the validity of each element.
+   *
+   * The validity of each element is determined by an `initializer_list` of
+   * booleans where `true` indicates the element is valid, and `false` indicates
+   * the element is null.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable dictionary column with 4 elements and validity initializer.
+   * dictionary_column_wrapper<int32_t> w{ {1, 0, 3, 0}, {1, 0, 1, 0}};
+   * // keys = {1, 3}, indices = {0, NULL, 1, NULL}
+   * @endcode
+   *
+   * @param elements The list of elements
+   * @param validity The list of validity indicator booleans
+   */
+  template <typename ElementFrom>
+  dictionary_column_wrapper(std::initializer_list<ElementFrom> elements,
+                            std::initializer_list<bool> validity)
+    : dictionary_column_wrapper(std::cbegin(elements), std::cend(elements), std::cbegin(validity))
+  {
+  }
+
+  /**
+   * @brief Construct a nullable dictionary column from a list of fixed-width elements and
+   * the the range `[v, v + element_list.size())` interpreted as booleans to
+   * indicate the validity of each element.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable dictionary column with 6 elements and a validity iterator.
+   * // This validity iterator sets even rows to null.
+   * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;})
+   * dictionary_column_wrapper<int32_t> w{ {0, 4, 0, 4, 0, 5}, validity}
+   * // keys = {4, 5}, indices = {NULL, 0, NULL, 0, NULL, 1}
+   * @endcode
+   *
+   * @tparam ValidityIterator Dereferencing a ValidityIterator must be convertible to `bool`
+   * @param element_list The list of elements
+   * @param v The beginning of the sequence of validity indicators
+   */
+  template <typename ValidityIterator, typename ElementFrom>
+  dictionary_column_wrapper(std::initializer_list<ElementFrom> element_list, ValidityIterator v)
+    : dictionary_column_wrapper(std::cbegin(element_list), std::cend(element_list), v)
+  {
+  }
+
+  /**
+   * @brief Construct a nullable dictionary column of the fixed-width elements in the range
+   * `[begin,end)` using a validity initializer list to indicate the validity of each element.
+   *
+   * The validity of each element is determined by an `initializer_list` of
+   * booleans where `true` indicates the element is valid, and `false` indicates
+   * the element is null.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable column of dictionary elements with 5 elements and validity initializer.
+   * std::vector<int32_t> elements{0, 2, 2, 6, 6};
+   * dictionary_width_column_wrapper<int32_t> w(elements, elements + 5, {0, 1, 0, 1, 0});
+   * // keys = {2, 6}, indices = {NULL, 0, NULL, 1, NULL}
+   * @endcode
+   *
+   * @param begin The beginning of the sequence of elements
+   * @param end The end of the sequence of elements
+   * @param validity The list of validity indicator booleans
+   */
+  template <typename InputIterator>
+  dictionary_column_wrapper(InputIterator begin,
+                            InputIterator end,
+                            std::initializer_list<bool> const& validity)
+    : dictionary_column_wrapper(begin, end, std::cbegin(validity))
+  {
+  }
+};
+
+/**
+ * @brief `column_wrapper` derived class for wrapping a dictionary column with string keys.
+ *
+ * This is a specialization of the `dictionary_column_wrapper` class for strings.
+ */
+template <>
+class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
+ public:
+  /**
+   * @brief Cast to dictionary_column_view
+   */
+  operator dictionary_column_view() const { return cudf::dictionary_column_view{wrapped->view()}; }
+
+  /**
+   * @brief Default constructor initializes an empty dictionary column of strings
+   */
+  dictionary_column_wrapper() : dictionary_column_wrapper(std::initializer_list<std::string>{}) {}
+
+  /**
+   * @brief Construct a non-nullable dictionary column of strings from the range
+   * `[begin,end)`.
+   *
+   * Values in the sequence `[begin,end)` will each be converted to
+   *`std::string` and a dictionary column will be created by encoding the strings.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a non-nullable dictionary column with 7 string elements
+   * std::vector<std::string> strings{"", "aaa", "bbb", "aaa", "bbb, "ccc", "bbb"};
+   * dictionary_column_wrapper<std::string> d(strings.begin(), strings.end());
+   * // keys = {"","aaa","bbb","ccc"}, indices = {0, 1, 2, 1, 2, 3, 2}
+   * @endcode
+   *
+   * @tparam StringsIterator A `std::string` must be constructible from
+   *                         dereferencing a `StringsIterator`.
+   * @param begin The beginning of the sequence
+   * @param end The end of the sequence
+   */
+  template <typename StringsIterator>
+  dictionary_column_wrapper(StringsIterator begin, StringsIterator end) : column_wrapper{}
+  {
+    wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end));
+  }
+
+  /**
+   * @brief Construct a nullable dictionary column of strings from the range
+   * `[begin,end)` using the range `[v, v + distance(begin,end))` interpreted
+   * as booleans to indicate the validity of each string.
+   *
+   * Values in the sequence `[begin,end)` will each be converted to
+   * `std::string` and a dictionary column will be created by encoding the strings.
+   *
+   * If `v[i] == true`, string `i` is valid, else it is treated as null row.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable dictionary column with 7 strings elements and validity iterator.
+   * std::vector<std::string> strings{"", "aaa", "", "aaa", "", "bbb", ""};
+   * // Validity iterator sets even rows to null.
+   * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
+   * dictionary_column_wrapper<std::string> d(strings.begin(), strings.end(), validity);
+   * // keys = {"aaa", "bbb"}, indices = {NULL, 0, NULL, 0, NULL, 1, NULL}
+   * @endcode
+   *
+   * @tparam StringsIterator A `std::string` must be constructible from
+   *                         dereferencing a `StringsIterator`.
+   * @tparam ValidityIterator Dereferencing a ValidityIterator must be
+   *                          convertible to `bool`
+   * @param begin The beginning of the sequence
+   * @param end The end of the sequence
+   * @param v The beginning of the sequence of validity indicators
+   */
+  template <typename StringsIterator, typename ValidityIterator>
+  dictionary_column_wrapper(StringsIterator begin, StringsIterator end, ValidityIterator v)
+    : column_wrapper{}
+  {
+    wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end, v));
+  }
+
+  /**
+   * @brief Construct a non-nullable dictionary column of strings from a list of strings.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a non-nullable dictionary column with 7 string elements.
+   * dictionary_column_wrapper<std::string> d({"", "bb", "a", "bb", "a", "ccc", "a"});
+   * // keys = {"","a","bb","ccc"}, indices = {0, 2, 1, 2, 1, 3, 1}
+   * @endcode
+   *
+   * @param strings The list of strings
+   */
+  dictionary_column_wrapper(std::initializer_list<std::string> strings)
+    : dictionary_column_wrapper(std::cbegin(strings), std::cend(strings))
+  {
+  }
+
+  /**
+   * @brief Construct a nullable dictionary column of strings from a list of strings and
+   * the range `[v, v + strings.size())` interpreted as booleans to indicate the
+   * validity of each string.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable dictionary column with 7 string elements and a validity iterator.
+   * // Validity iterator here sets even rows to null.
+   * auto validity = make_counting_transform_iterator(0, [](auto i){return i%2;});
+   * dictionary_column_wrapper<std::string> d({"", "bb", "", "bb", "", "a", ""}, validity);
+   * // keys = {"a", "bb"}, indices = {NULL, 1, NULL, 1, NULL, 0, NULL}
+   * @endcode
+   *
+   * @tparam ValidityIterator Dereferencing a ValidityIterator must be convertible to `bool`
+   * @param strings The list of strings
+   * @param v The beginning of the sequence of validity indicators
+   */
+  template <typename ValidityIterator>
+  dictionary_column_wrapper(std::initializer_list<std::string> strings, ValidityIterator v)
+    : dictionary_column_wrapper(std::cbegin(strings), std::cend(strings), v)
+  {
+  }
+
+  /**
+   * @brief Construct a nullable dictionary column of strings from a list of strings and
+   * a list of booleans to indicate the validity of each string.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable STRING column with 7 string elements and validity initializer.
+   * dictionary_column_wrapper<std::string> ({"", "a", "", "bb", "", "ccc", ""},
+   *                                         {0,  1,   0,  1,    0,  1,     0});
+   * // keys = {"a", "bb", "ccc"}, indices = {NULL, 0, NULL, 1, NULL, 2, NULL}
+   * @endcode
+   *
+   * @param strings The list of strings
+   * @param validity The list of validity indicator booleans
+   */
+  dictionary_column_wrapper(std::initializer_list<std::string> strings,
+                            std::initializer_list<bool> validity)
+    : dictionary_column_wrapper(std::cbegin(strings), std::cend(strings), std::cbegin(validity))
+  {
   }
 };
 

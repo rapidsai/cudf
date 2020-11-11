@@ -7891,6 +7891,61 @@ def test_dataframe_to_pandas_nullable_dtypes(df, expected_pdf):
     assert_eq(actual_pdf, expected_pdf)
 
 
+def test_dataframe_pipe():
+    pdf = pd.DataFrame()
+    gdf = gd.DataFrame()
+
+    def add_int_col(df, column):
+        df[column] = df._constructor_sliced([10, 20, 30, 40])
+        return df
+
+    def add_str_col(df, column):
+        df[column] = df._constructor_sliced(["a", "b", "xyz", "ai"])
+        return df
+
+    expected = (
+        pdf.pipe(add_int_col, "one")
+        .pipe(add_int_col, column="two")
+        .pipe(add_str_col, "three")
+    )
+    actual = (
+        gdf.pipe(add_int_col, "one")
+        .pipe(add_int_col, column="two")
+        .pipe(add_str_col, "three")
+    )
+
+    assert_eq(expected, actual)
+
+    expected = (
+        pdf.pipe((add_str_col, "df"), column="one")
+        .pipe(add_str_col, column="two")
+        .pipe(add_int_col, "three")
+    )
+    actual = (
+        gdf.pipe((add_str_col, "df"), column="one")
+        .pipe(add_str_col, column="two")
+        .pipe(add_int_col, "three")
+    )
+
+    assert_eq(expected, actual)
+
+
+def test_dataframe_pipe_error():
+    pdf = pd.DataFrame()
+    gdf = gd.DataFrame()
+
+    def custom_func(df, column):
+        df[column] = df._constructor_sliced([10, 20, 30, 40])
+        return df
+
+    assert_exceptions_equal(
+        lfunc=pdf.pipe,
+        rfunc=gdf.pipe,
+        lfunc_args_and_kwargs=([(custom_func, "columns")], {"columns": "d"}),
+        rfunc_args_and_kwargs=([(custom_func, "columns")], {"columns": "d"}),
+    )
+
+
 @pytest.mark.parametrize(
     "op",
     [
@@ -7911,3 +7966,13 @@ def test_dataframe_axis1_unsupported_ops(op):
         NotImplementedError, match="Only axis=0 is currently supported."
     ):
         getattr(df, op)(axis=1)
+
+
+def test_dataframe_from_pandas_duplicate_columns():
+    pdf = pd.DataFrame(columns=["a", "b", "c", "a"])
+    pdf["a"] = [1, 2, 3]
+
+    with pytest.raises(
+        ValueError, match="Duplicate column names are not allowed"
+    ):
+        gd.from_pandas(pdf)
