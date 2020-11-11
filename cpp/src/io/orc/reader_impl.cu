@@ -177,12 +177,12 @@ class metadata {
         selection.emplace_back(&ff.stripes[stripe_idx], nullptr);
         stripe_rows += ff.stripes[stripe_idx].numberOfRows;
       }
-      row_count = static_cast<size_type>(stripe_rows);
+      row_count = static_cast<size_type>(stripe_rows) - row_start;
     } else {
       row_start = std::max(row_start, 0);
       if (row_count < 0) {
         row_count = static_cast<size_type>(
-          std::min<size_t>(get_total_rows(), std::numeric_limits<size_type>::max()));
+          std::min<size_t>(get_total_rows() - row_start, std::numeric_limits<size_type>::max()));
       }
       CUDF_EXPECTS(row_count >= 0, "Invalid row count");
       CUDF_EXPECTS(static_cast<size_t>(row_start) <= get_total_rows(), "Invalid row start");
@@ -777,7 +777,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             break;
           }
         }
-        out_buffers.emplace_back(column_types[i], num_rows - skip_rows, is_nullable, stream, _mr);
+        out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
       }
 
       decode_stream_data(chunks,
