@@ -63,21 +63,6 @@ cdef class DeviceScalar:
         # Caching Mechanism
         self._set_device_value(value, dtype)
 
-    def _initialize_cache(self, value, dtype):
-        if _is_null_host_scalar(value):
-            self._host_value = cudf.NA
-        else:
-            self._host_value = value
-        # need to save the host dtype, because this determines
-        # the codepath for setting the device value later
-        self._host_dtype = dtype
-
-    def _is_host_value_current(self):
-        return self._host_value is not None
-
-    def _is_device_value_current(self):
-        return self.c_value != NULL
-
     def _set_device_value(self, value, dtype):
         valid = not _is_null_host_scalar(value)
 
@@ -134,8 +119,6 @@ cdef class DeviceScalar:
         return self._get_device_value()
 
     cdef const scalar* get_raw_ptr(self) except *:
-        if not self._is_device_value_current():
-            self._set_device_value(self._host_value, self._host_dtype)
         return self.c_value.get()
 
     cpdef bool is_valid(self):
