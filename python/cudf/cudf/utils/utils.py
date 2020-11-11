@@ -397,9 +397,8 @@ def pa_mask_buffer_to_mask(mask_buf, size):
 
 
 def search_range(start, stop, x, step=1, side="left"):
-    """Search the position to insert a value in a monotonically increasing
-    integral arithmatic series (represented by range), so that it will not
-    change the sortedness of the series.
+    """Find the position to insert a value in a range, so that the resulting
+    sequence remains sorted.
 
     When ``side`` is set to 'left', the insertion point ``i`` will hold the
     following invariant:
