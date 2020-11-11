@@ -190,10 +190,10 @@ class Scalar(object):
         )
 
         # datetime handling
-        if out_dtype in "Mm":
-            if self.dtype.char in "Mm" and other.dtype.char not in "Mm":
+        if out_dtype in {"M", "m"}:
+            if self.dtype.char in {"M", "m"} and other.dtype.char not in {"M", "m"}:
                 return self.dtype
-            if other.dtype.char in "Mm" and self.dtype.char not in "Mm":
+            if other.dtype.char in {"M", "m"} and self.dtype.char not in {"M", "m"}:
                 return other.dtype
             else:
                 if (
