@@ -96,10 +96,8 @@ TEST_F(DictionaryRemoveKeysTest, WithNull)
     auto const result =
       cudf::dictionary::remove_keys(cudf::dictionary_column_view(dictionary->view()), del_keys);
     auto const decoded = cudf::dictionary::decode(result->view());
-    std::cout << "here2" << std::endl;
     cudf::test::fixed_width_column_wrapper<int64_t> expected{{444, 0, 333, 0, 222, 0, 222, 444, 0},
                                                              {1, 0, 1, 0, 1, 0, 1, 1, 0}};
-    std::cout << "here3" << std::endl;
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(decoded->view(), expected);
   }
   {
