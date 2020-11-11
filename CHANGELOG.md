@@ -6,6 +6,7 @@
 - PR #6647 Implement `cudf::round` floating point and integer types (`HALF_EVEN`)
 - PR #6562 Implement `cudf::round` floating point and integer types (`HALF_UP`)
 - PR #6685 Implement `cudf::round` `decimal32` & `decimal64` (`HALF_UP` and `HALF_EVEN`)
+- PR #6711 Implement `cudf::cast` for `decimal32/64` to/from integer and floating point
 - PR #6528 Enable `fixed_point` binary operations
 - PR #6460 Add is_timestamp format check API
 - PR #6568 Add function to create hashed vocabulary file from raw vocabulary
@@ -92,13 +93,16 @@
 - PR #6710 Fix an out-of-bounds indexing error in gather() for lists
 - PR #6670 Fix a bug where PTX parser fails to correctly parse a python lambda generated UDF
 - PR #6687 Fix issue where index name of caller object is being modified in csv writer
+- PR #6696 Fix release_assert.
 - PR #6692 Fix handling of empty column name in csv writer
 - PR #6693 Fix issue related to `na_values` input in `read_csv`
 - PR #6701 Fix issue when `numpy.str_` is given as input to string parameters in io APIs
 - PR #6704 Fix leak warnings in JNI unit tests
 - PR #6708 Apply `na_rep` to column names in csv writer
+- PR #6721 Add missing serialization methods for ListColumn
 - PR #6722 Fix index=False bug in dask_cudf.read_parquet
 - PR #6728 Fix cudf python docs and associated build warnings
+- PR #6732 Fix cuDF benchmarks build with static Arrow lib and fix rapids-compose cuDF JNI build
 
 
 # cuDF 0.16.0 (21 Oct 2020)
