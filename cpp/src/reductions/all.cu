@@ -20,41 +20,6 @@
 
 namespace cudf {
 namespace reduction {
-namespace {
-
-template <typename Op>
-struct all_fn_dispatcher {
- private:
-  template <typename ElementType>
-  static constexpr bool is_supported_v()
-  {
-    return std::is_arithmetic<ElementType>();
-  }
-
- public:
-  template <typename ElementType, std::enable_if_t<is_supported_v<ElementType>()>* = nullptr>
-  std::unique_ptr<scalar> operator()(column_view const& col,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
-  {
-    // the dictionary indices can be used for reduce for this operation
-    auto min_col = cudf::is_dictionary(col.type())
-                     ? cudf::dictionary_column_view(col).get_indices_annotated()
-                     : col;
-    return cudf::reduction::simple::simple_reduction<ElementType, bool, Op>(
-      min_col, cudf::data_type{cudf::type_id::BOOL8}, mr, stream);
-  }
-
-  template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
-  std::unique_ptr<scalar> operator()(column_view const& col,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
-  {
-    CUDF_FAIL("Reduction operator `all` not supported for this type");
-  }
-};
-
-}  // namespace
 
 std::unique_ptr<cudf::scalar> all(column_view const& col,
                                   cudf::data_type const output_dtype,
@@ -62,12 +27,12 @@ std::unique_ptr<cudf::scalar> all(column_view const& col,
                                   cudaStream_t stream)
 {
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
-               "all() operation can be applied with output type `bool8` only");
-
-  using reducer = all_fn_dispatcher<cudf::reduction::op::min>;
-  auto col_type =  // we can use just the dictionary indices for this op
-    cudf::is_dictionary(col.type()) ? dictionary_column_view(col).indices().type() : col.type();
-  return cudf::type_dispatcher(col_type, reducer(), col, mr, stream);
+               "all() operation can be applied with output type `BOOL8` only");
+  return cudf::type_dispatcher(col.type(),
+                               simple::bool_result_element_dispatcher<cudf::reduction::op::min>{},
+                               col,
+                               mr,
+                               stream);
 }
 
 }  // namespace reduction

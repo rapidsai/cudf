@@ -17,88 +17,19 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/reduction_functions.hpp>
-#include <cudf/detail/unary.hpp>
-#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <reductions/simple.cuh>
 
 namespace cudf {
 namespace reduction {
-namespace {
-
-// TODO: This is the same code as max_fn_dispatcher -- move to simple.cuh?
-template <typename Op>
-struct min_fn_dispatcher {
- private:
-  template <typename ElementType>
-  static constexpr bool is_supported_v()
-  {
-    return !(cudf::is_fixed_point<ElementType>() ||
-             std::is_same<ElementType, cudf::list_view>::value ||
-             std::is_same<ElementType, cudf::struct_view>::value);
-  }
-
- public:
-  template <
-    typename ElementType,
-    std::enable_if_t<is_supported_v<ElementType>() and cudf::is_numeric<ElementType>()>* = nullptr>
-  std::unique_ptr<scalar> operator()(column_view const& col,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
-  {
-    if (cudf::is_dictionary(col.type())) {
-      auto indices = cudf::dictionary_column_view(col).get_indices_annotated();
-      auto key_index_scalar =
-        cudf::reduction::simple::simple_reduction<ElementType, ElementType, Op>(
-          indices, indices.type(), mr, stream);
-      auto key_index = static_cast<numeric_scalar<ElementType>*>(key_index_scalar.get());
-      return cudf::detail::get_element(
-        cudf::dictionary_column_view(col).keys(), key_index->value(stream), stream, mr);
-    }
-    return cudf::reduction::simple::simple_reduction<ElementType, ElementType, Op>(
-      col, cudf::data_type{cudf::type_to_id<ElementType>()}, mr, stream);
-  }
-
-  template <
-    typename ElementType,
-    std::enable_if_t<is_supported_v<ElementType>() and !cudf::is_numeric<ElementType>()>* = nullptr>
-  std::unique_ptr<scalar> operator()(column_view const& col,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
-  {
-    return cudf::reduction::simple::simple_reduction<ElementType, ElementType, Op>(
-      col, cudf::data_type{cudf::type_to_id<ElementType>()}, mr, stream);
-  }
-
-  template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
-  std::unique_ptr<scalar> operator()(column_view const& col,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
-  {
-    CUDF_FAIL("Reduction operator `min` not supported for this type");
-  }
-};
-
-}  // namespace
 
 std::unique_ptr<cudf::scalar> min(column_view const& col,
                                   data_type const output_dtype,
                                   rmm::mr::device_memory_resource* mr,
                                   cudaStream_t stream)
 {
-  using reducer = min_fn_dispatcher<cudf::reduction::op::min>;
-
-  auto col_type =
-    cudf::is_dictionary(col.type()) ? dictionary_column_view(col).indices().type() : col.type();
-
-  auto result = cudf::type_dispatcher(col_type, reducer(), col, mr, stream);
-
-  if (output_dtype == result->type() || !result->is_valid(stream)) return result;
-
-  // if the output_dtype does not match, do extra work to cast it here
-  auto input = cudf::make_column_from_scalar(*result, 1, mr, stream);
-  // TODO: should build a scalar cast function
-  auto output = cudf::detail::cast(*input, output_dtype, mr, stream);
-  return cudf::detail::get_element(*output, 0, stream, mr);
+  CUDF_EXPECTS(col.type() == output_dtype, "min() operation requires matching output type");
+  return cudf::type_dispatcher(
+    col.type(), simple::same_element_type_dispatcher<cudf::reduction::op::min>{}, col, mr, stream);
 }
 
 }  // namespace reduction
