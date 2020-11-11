@@ -93,8 +93,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     long[] children = new long[] {};
     offHeap = new OffHeapState(type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer, null, children);
     MemoryCleaner.register(this, offHeap);
-    columnView = new ColumnView(type, (int)rows, nullCount,
-        dataBuffer, validityBuffer, offsetBuffer, children);
+    columnView = new ColumnView(offHeap.getViewHandle());
     this.rows = rows;
     this.nullCount = nullCount;
     this.type = type;
@@ -130,6 +129,33 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     incRefCountInternal(true);
   }
 
+
+  public ColumnVector(DType type, long rows, Optional<Long> nullCount,
+                      DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
+                      DeviceMemoryBuffer offsetBuffer, ArrayList<ColumnVector> children) {
+    if (type != DType.STRING && type != DType.LIST) {
+      assert offsetBuffer == null : "offsets are only supported for STRING, LISTS";
+    }
+    List<DeviceMemoryBuffer> toClose = new ArrayList<>();
+    //TODO assert that refcount of children is 1
+    long[] childHandles = new long[children.size()];
+    for (int i = 0; i < children.size(); i++) {
+      childHandles[i] = children.get(i).getNativeView();
+    }
+    offHeap = new OffHeapState(type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer,
+        toClose, childHandles);
+    MemoryCleaner.register(this, offHeap);
+    columnView = new ColumnView(offHeap.getViewHandle());
+    this.rows = rows;
+    this.nullCount = nullCount;
+    this.type = type;
+
+    this.refCount = 0;
+    incRefCountInternal(true);
+    for (ColumnVector ncv : children) {
+      ncv.close();
+    }
+  }
   /**
    * This is a very special constructor that should only ever be called by
    * fromViewWithContiguousAllocation.  It takes a cudf::column_view * instead of a cudf::column *.
@@ -326,7 +352,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       }
       int numChildren = deviceCvPointer.getNumChildren();
       for (int i = 0; i < numChildren; i++) {
-        try(ColumnView childDevPtr = deviceCvPointer.getChildColumnViewAccess(i)) {
+        try(ColumnView childDevPtr = deviceCvPointer.getChildColumnView(i)) {
           children.add(copyToHostNestedHelper(childDevPtr));
         }
       }

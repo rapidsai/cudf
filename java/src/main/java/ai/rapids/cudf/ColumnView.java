@@ -17,6 +17,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     this.viewHandle = viewHandle;
     type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
     rows = ColumnView.getNativeRowCount(viewHandle);
+    nullCount = Optional.of((long)ColumnView.getNativeNullCount(viewHandle));
   }
 
   public ColumnView(DType type, int rows, Optional<Long> nullCount,
@@ -24,8 +25,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
                     long[] childColumnViewHandles) {
     this.type = type;
     this.rows = rows;
-    assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
-        || !nullCount.isPresent();
+    assert !nullCount.isPresent() || nullCount.get() <= Integer.MAX_VALUE;
     int nc = nullCount.orElse(UNKNOWN_NULL_COUNT).intValue();
     if (rows == 0) {
       this.columnHandle = makeEmptyCudfColumn(type.typeId.getNativeId(), type.getScale());
@@ -50,7 +50,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return type;
   }
 
-  public ColumnView getChildColumnViewAccess(int childIndex) {
+  public ColumnView getChildColumnView(int childIndex) {
     int numChildren = getNumChildren();
     assert childIndex < numChildren : "children index should be less than " + numChildren;
     if (!getType().isNestedType()) {
@@ -63,8 +63,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Gets the data buffer for the current column view (viewHandle).
-   * If the type is LIST it returns null.
-   * @return    If the type is LIST or data buffer is empty it returns null,
+   * If the type is LIST, STRUCT it returns null.
+   * @return    If the type is LIST, STRUCT or data buffer is empty it returns null,
    *            else return the data device buffer
    */
 
@@ -82,11 +82,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   public long getNullCount() {
     return getNativeNullCount(viewHandle);
-  }
-
-  @Deprecated
-  public long getNumRows() {
-    return ColumnView.getNativeRowCount(viewHandle);
   }
 
   public long getRowCount() {
