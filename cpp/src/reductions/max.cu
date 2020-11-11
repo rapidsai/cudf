@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/copy.hpp>
 #include <cudf/detail/reduction_functions.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <reductions/simple.cuh>
 
 namespace cudf {
@@ -27,9 +26,21 @@ std::unique_ptr<cudf::scalar> max(column_view const& col,
                                   rmm::mr::device_memory_resource* mr,
                                   cudaStream_t stream)
 {
-  CUDF_EXPECTS(col.type() == output_dtype, "max() operation requires matching output type");
-  return cudf::type_dispatcher(
-    col.type(), simple::same_element_type_dispatcher<cudf::reduction::op::max>{}, col, mr, stream);
+  auto col_type =
+    cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
+  CUDF_EXPECTS(col_type == output_dtype, "max() operation requires matching output type");
+  return cudf::is_dictionary(col.type())
+           ? cudf::type_dispatcher(
+               col_type,
+               simple::same_element_dictionary_dispatcher<cudf::reduction::op::max>{},
+               col,
+               mr,
+               stream)
+           : cudf::type_dispatcher(col_type,
+                                   simple::same_element_type_dispatcher<cudf::reduction::op::max>{},
+                                   col,
+                                   mr,
+                                   stream);
 }
 
 }  // namespace reduction

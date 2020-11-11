@@ -62,30 +62,14 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
       dcol->begin<ElementType>(), simple_op.template get_element_transformer<ResultType>());
     result = detail::reduce(it, col.size(), simple_op, mr, stream);
   }
-  // THIS APPROACH WILL DOUBLE THE COMPILE TIME
-  //} else {
-  //  if (col.has_nulls()) {
-  //    auto it = thrust::make_transform_iterator(
-  //      cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType, true>(*dcol),
-  //      simple_op.template get_null_replacing_element_transformer<ResultType>());
-  //    result = detail::reduce(it, col.size(), simple_op, mr, stream);
-  //  } else {
-  //    auto it = thrust::make_transform_iterator(
-  //      cudf::dictionary::detail::make_dictionary_iterator<ElementType>(*dcol),
-  //      simple_op.template get_element_transformer<ResultType>());
-  //    result = detail::reduce(it, col.size(), simple_op, mr, stream);
-  //  }
-  //}
 
   // set scalar is valid
   result->set_valid((col.null_count() < col.size()), stream);
   return result;
 };
 
-// TODO: Can this be combined/refactored with the above?
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> dictionary_reduction(column_view const& col,
-                                             // data_type const output_dtype,
                                              rmm::mr::device_memory_resource* mr,
                                              cudaStream_t stream)
 {
@@ -98,12 +82,12 @@ std::unique_ptr<scalar> dictionary_reduction(column_view const& col,
     auto it = thrust::make_transform_iterator(
       cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType, true>(*dcol),
       simple_op.template get_null_replacing_element_transformer<ResultType>());
-    result = detail::reduce(it, col.size(), Op{}, mr, stream);
+    result = detail::reduce(it, col.size(), simple_op, mr, stream);
   } else {
     auto it = thrust::make_transform_iterator(
       cudf::dictionary::detail::make_dictionary_iterator<ElementType>(*dcol),
       simple_op.template get_element_transformer<ResultType>());
-    result = detail::reduce(it, col.size(), Op{}, mr, stream);
+    result = detail::reduce(it, col.size(), simple_op, mr, stream);
   }
 
   // set scalar is valid
@@ -180,23 +164,17 @@ struct cast_numeric_scalar_fn {
  */
 template <typename Op>
 struct bool_result_element_dispatcher {
- private:
-  template <typename ElementType>
-  static constexpr bool is_supported_v()
-  {
-    return std::is_arithmetic<ElementType>();
-  }
-
- public:
-  template <typename ElementType, std::enable_if_t<is_supported_v<ElementType>()>* = nullptr>
+  template <typename ElementType,
+            std::enable_if_t<std::is_arithmetic<ElementType>::value>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    return cudf::reduction::simple::simple_reduction<ElementType, bool, Op>(col, mr, stream);
+    return simple_reduction<ElementType, bool, Op>(col, mr, stream);
   }
 
-  template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
+  template <typename ElementType,
+            std::enable_if_t<not std::is_arithmetic<ElementType>::value>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
@@ -205,6 +183,35 @@ struct bool_result_element_dispatcher {
   }
 };
 
+template <typename Op>
+struct bool_result_dictionary_dispatcher {
+  template <typename ElementType,
+            std::enable_if_t<std::is_arithmetic<ElementType>::value>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& col,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
+    return dictionary_reduction<ElementType, bool, Op>(col, mr, stream);
+  }
+
+  template <typename ElementType,
+            std::enable_if_t<not std::is_arithmetic<ElementType>::value>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& col,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
+    CUDF_FAIL("Reduction operator not supported for this type");
+  }
+};
+
+template <typename ElementType>
+static constexpr bool is_same_type_supported()
+{
+  return !(cudf::is_fixed_point<ElementType>() ||
+           std::is_same<ElementType, cudf::dictionary32>::value ||
+           std::is_same<ElementType, cudf::list_view>::value ||
+           std::is_same<ElementType, cudf::struct_view>::value);
+}
 /**
  * @brief Call reduce and return a scalar of type matching the input column.
  *
@@ -214,25 +221,38 @@ struct bool_result_element_dispatcher {
  */
 template <typename Op>
 struct same_element_type_dispatcher {
- private:
-  template <typename ElementType>
-  static constexpr bool is_supported_v()
-  {
-    return !(cudf::is_fixed_point<ElementType>() ||
-             std::is_same<ElementType, cudf::list_view>::value ||
-             std::is_same<ElementType, cudf::struct_view>::value);
-  }
-
- public:
-  template <typename ElementType, std::enable_if_t<is_supported_v<ElementType>()>* = nullptr>
+  template <typename ElementType,
+            std::enable_if_t<is_same_type_supported<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    return cudf::reduction::simple::simple_reduction<ElementType, ElementType, Op>(col, mr, stream);
+    return simple_reduction<ElementType, ElementType, Op>(col, mr, stream);
   }
 
-  template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
+  template <typename ElementType,
+            std::enable_if_t<not is_same_type_supported<ElementType>()>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& col,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
+    CUDF_FAIL("Reduction operator `max` not supported for this type");
+  }
+};
+
+template <typename Op>
+struct same_element_dictionary_dispatcher {
+  template <typename ElementType,
+            std::enable_if_t<is_same_type_supported<ElementType>()>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& col,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
+    return dictionary_reduction<ElementType, ElementType, Op>(col, mr, stream);
+  }
+
+  template <typename ElementType,
+            std::enable_if_t<not is_same_type_supported<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
@@ -260,11 +280,11 @@ struct element_type_dispatcher {
                                      cudaStream_t stream)
   {
     if (output_type == col.type())
-      return cudf::reduction::simple::simple_reduction<ElementType, ElementType, Op>(
-        col, mr, stream);
-    auto result =
-      cudf::reduction::simple::simple_reduction<ElementType, double, Op>(col, mr, stream);
+      return simple_reduction<ElementType, ElementType, Op>(col, mr, stream);
+
+    auto result = simple_reduction<ElementType, double, Op>(col, mr, stream);
     if (output_type == result->type()) return result;
+
     // this will cast the result to the output_type
     return cudf::type_dispatcher(output_type,
                                  simple::cast_numeric_scalar_fn<double>{},
@@ -281,11 +301,72 @@ struct element_type_dispatcher {
                                      cudaStream_t stream)
   {
     if (output_type == col.type())
-      return cudf::reduction::simple::simple_reduction<ElementType, ElementType, Op>(
-        col, mr, stream);
-    auto result =
-      cudf::reduction::simple::simple_reduction<ElementType, int64_t, Op>(col, mr, stream);
+      return simple_reduction<ElementType, ElementType, Op>(col, mr, stream);
+
+    auto result = simple_reduction<ElementType, int64_t, Op>(col, mr, stream);
     if (output_type == result->type()) return result;
+
+    // this will cast the result to the output_type
+    return cudf::type_dispatcher(output_type,
+                                 simple::cast_numeric_scalar_fn<int64_t>{},
+                                 static_cast<numeric_scalar<int64_t>*>(result.get()),
+                                 mr,
+                                 stream);
+    return result;
+  }
+
+  template <typename ElementType,
+            typename std::enable_if_t<!std::is_floating_point<ElementType>::value and
+                                      !std::is_integral<ElementType>::value>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& col,
+                                     data_type const output_type,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
+    CUDF_FAIL("Reduction operator not supported for this type");
+  }
+};
+
+template <typename Op>
+struct element_type_dictionary_dispatcher {
+  template <typename ElementType,
+            typename std::enable_if_t<std::is_floating_point<ElementType>::value>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& col,
+                                     data_type const output_type,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
+    CUDF_EXPECTS(cudf::is_dictionary(col.type()),
+                 "dictionary dispatch only for dictionary columns");
+    if (output_type.id() == cudf::type_to_id<ElementType>())
+      return dictionary_reduction<ElementType, ElementType, Op>(col, mr, stream);
+
+    auto result = dictionary_reduction<ElementType, double, Op>(col, mr, stream);
+    if (output_type == result->type()) return result;
+
+    // this will cast the result to the output_type
+    return cudf::type_dispatcher(output_type,
+                                 simple::cast_numeric_scalar_fn<double>{},
+                                 static_cast<numeric_scalar<double>*>(result.get()),
+                                 mr,
+                                 stream);
+  }
+
+  template <typename ElementType,
+            typename std::enable_if_t<std::is_integral<ElementType>::value>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& col,
+                                     data_type const output_type,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
+    CUDF_EXPECTS(cudf::is_dictionary(col.type()),
+                 "dictionary dispatch only for dictionary columns");
+    if (output_type.id() == cudf::type_to_id<ElementType>())
+      return dictionary_reduction<ElementType, ElementType, Op>(col, mr, stream);
+
+    auto result = dictionary_reduction<ElementType, int64_t, Op>(col, mr, stream);
+    if (output_type == result->type()) return result;
+
     // this will cast the result to the output_type
     return cudf::type_dispatcher(output_type,
                                  simple::cast_numeric_scalar_fn<int64_t>{},

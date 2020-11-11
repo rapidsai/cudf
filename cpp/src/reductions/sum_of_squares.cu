@@ -14,10 +14,8 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/copy.hpp>
-#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/reduction_functions.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <reductions/simple.cuh>
 
 namespace cudf {
@@ -28,13 +26,21 @@ std::unique_ptr<cudf::scalar> sum_of_squares(column_view const& col,
                                              rmm::mr::device_memory_resource* mr,
                                              cudaStream_t stream)
 {
-  return cudf::type_dispatcher(
-    col.type(),
-    simple::element_type_dispatcher<cudf::reduction::op::sum_of_squares>{},
-    col,
-    output_dtype,
-    mr,
-    stream);
+  return cudf::is_dictionary(col.type())
+           ? cudf::type_dispatcher(
+               dictionary_column_view(col).keys().type(),
+               simple::element_type_dictionary_dispatcher<cudf::reduction::op::sum_of_squares>{},
+               col,
+               output_dtype,
+               mr,
+               stream)
+           : cudf::type_dispatcher(
+               col.type(),
+               simple::element_type_dispatcher<cudf::reduction::op::sum_of_squares>{},
+               col,
+               output_dtype,
+               mr,
+               stream);
 }
 
 }  // namespace reduction

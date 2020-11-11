@@ -28,11 +28,19 @@ std::unique_ptr<cudf::scalar> all(column_view const& col,
 {
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
                "all() operation can be applied with output type `BOOL8` only");
-  return cudf::type_dispatcher(col.type(),
-                               simple::bool_result_element_dispatcher<cudf::reduction::op::min>{},
-                               col,
-                               mr,
-                               stream);
+  return cudf::is_dictionary(col.type())
+           ? cudf::type_dispatcher(
+               dictionary_column_view(col).keys().type(),
+               simple::bool_result_dictionary_dispatcher<cudf::reduction::op::min>{},
+               col,
+               mr,
+               stream)
+           : cudf::type_dispatcher(
+               col.type(),
+               simple::bool_result_element_dispatcher<cudf::reduction::op::min>{},
+               col,
+               mr,
+               stream);
 }
 
 }  // namespace reduction

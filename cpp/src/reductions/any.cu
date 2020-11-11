@@ -14,30 +14,35 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/reduction_functions.hpp>
-<<<<<<< HEAD
 #include <cudf/dictionary/dictionary_column_view.hpp>
-=======
->>>>>>> branch-0.17
 #include <reductions/simple.cuh>
 
-namespace cudf
+namespace cudf {
+namespace reduction {
+
+std::unique_ptr<cudf::scalar> any(column_view const& col,
+                                  cudf::data_type const output_dtype,
+                                  rmm::mr::device_memory_resource* mr,
+                                  cudaStream_t stream)
 {
-  namespace reduction {
+  CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
+               "any() operation can be applied with output type `bool8` only");
+  return cudf::is_dictionary(col.type())
+           ? cudf::type_dispatcher(
+               dictionary_column_view(col).keys().type(),
+               simple::bool_result_dictionary_dispatcher<cudf::reduction::op::max>{},
+               col,
+               mr,
+               stream)
+           : cudf::type_dispatcher(
+               col.type(),
+               simple::bool_result_element_dispatcher<cudf::reduction::op::max>{},
+               col,
+               mr,
+               stream);
+}
 
-  std::unique_ptr<cudf::scalar> any(column_view const& col,
-                                    cudf::data_type const output_dtype,
-                                    rmm::mr::device_memory_resource* mr,
-                                    cudaStream_t stream)
-  {
-    CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
-                 "any() operation can be applied with output type `bool8` only");
-    return cudf::type_dispatcher(col.type(),
-                                 simple::bool_result_element_dispatcher<cudf::reduction::op::max>{},
-                                 col,
-                                 mr,
-                                 stream);
-  }
-
-  }  // namespace reduction
+}  // namespace reduction
 }  // namespace cudf
