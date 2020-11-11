@@ -1695,12 +1695,13 @@ def test_index_equals_categories():
 def test_index_rangeindex_search_range():
     # step > 0
     ridx = RangeIndex(-13, 17, 4)
+    stop = ridx._start + ridx._step * len(ridx)
     for i in range(len(ridx)):
         assert i == search_range(
-            ridx[i], ridx._start, ridx._step, len(ridx), side="left"
+            ridx._start, stop, ridx[i], ridx._step, side="left"
         )
         assert i + 1 == search_range(
-            ridx[i], ridx._start, ridx._step, len(ridx), side="right"
+            ridx._start, stop, ridx[i], ridx._step, side="right"
         )
 
 

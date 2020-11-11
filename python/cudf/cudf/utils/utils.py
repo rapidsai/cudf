@@ -396,10 +396,10 @@ def pa_mask_buffer_to_mask(mask_buf, size):
     return Buffer(mask_buf)
 
 
-def search_range(n, start, step, length, side="left"):
+def search_range(start, stop, x, step=1, side="left"):
     """Search the position to insert a value in a monotonically increasing
-    integral arithmatic series so that it will not change the sortedness of the
-    series.
+    integral arithmatic series (represented by range), so that it will not
+    change the sortedness of the series.
 
     When ``side`` is set to 'left', the insertion point ``i`` will hold the
     following invariant:
@@ -411,32 +411,33 @@ def search_range(n, start, step, length, side="left"):
     `all(x <= n for x in range_left) and all(x > n for x in range_right)`
 
     Parameters
-    ----------
-    n : int
-        The value to insert
+    --------
     start : int
         Start value of the series
-    step : int
+    stop : int
+        Stop value of the range
+    x : int
+        The value to insert
+    step : int, default 1
         Step value of the series, assumed positive
-    length : int
-        Length of the series
-    side : {'left', 'right'}
+    side : {'left', 'right'}, default 'left'
         See description for usage.
 
     Returns
-    -------
+    --------
     int
         Insertion position of n.
 
     Examples
-    -------
+    --------
     For series: 1 4 7
-    >>> search_range(n=4, start=1, step=3, length=3, side="left")
+    >>> search_range(start=1, stop=10, x=4, step=3, side="left")
     1
-    >>> search_range(n=4, start=1, step=3, length=3, side="right")
+    >>> search_range(start=1, stop=10, x=4, step=3, side="right")
     2
     """
-    x = 1 if side == "left" else 0
-    i = (n - start - x) // step + 1
+    z = 1 if side == "left" else 0
+    i = (x - start - z) // step + 1
 
+    length = (stop - start) // step
     return max(min(length, i), 0)

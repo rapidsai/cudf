@@ -1724,8 +1724,9 @@ class RangeIndex(Index):
             start = self._start
             step = self._step
 
-        begin = search_range(first, start, step, len(self), side="left")
-        end = search_range(last, start, step, len(self), side="right")
+        stop = start + len(self) * step
+        begin = search_range(start, stop, first, step, side="left")
+        end = search_range(start, stop, last, step, side="right")
 
         return begin, end
 
@@ -1810,7 +1811,8 @@ class RangeIndex(Index):
             start = self._start
             step = self._step
 
-        pos = search_range(label, start, step, len(self), side=side)
+        stop = start + len(self) * step
+        pos = search_range(start, stop, label, step, side=side)
         return pos
 
     @property
