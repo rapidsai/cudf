@@ -62,17 +62,12 @@ class Scalar(object):
                     raise TypeError(
                         "dtype required when constructing a null scalar"
                     )
-                if isinstance(value, (np.datetime64, np.timedelta64)):
-                    if np.isnat(value) and np.datetime_data(
-                        value.dtype
-                    )[0] == 'generic':
-                        raise TypeError("Need a dtype to build a NaT Scalar")
-                    else:
-                        dtype = value.dtype
                 else:
                     dtype = value.dtype
             dtype = np.dtype(dtype)
 
+            # temporary
+            dtype = np.dtype('object') if dtype.char == 'U' else dtype
             self._data = DeviceScalar(value, dtype=dtype)
 
     @property
