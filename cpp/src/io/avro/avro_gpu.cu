@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,8 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <io/utilities/block_utils.cuh>
 #include "avro_gpu.h"
+
+#include <io/utilities/block_utils.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
@@ -332,21 +335,21 @@ cudaError_t __host__ DecodeAvroColumnData(block_desc_s *blocks,
                                           size_t max_rows,
                                           size_t first_row,
                                           uint32_t min_row_size,
-                                          cudaStream_t stream)
+                                          rmm::cuda_stream_view stream)
 {
   dim3 dim_block(32, NWARPS);  // NWARPS warps per threadblock
   dim3 dim_grid((num_blocks + NWARPS - 1) / NWARPS,
                 1);  // 1 warp per datablock, NWARPS datablocks per threadblock
-  gpuDecodeAvroColumnData<<<dim_grid, dim_block, 0, stream>>>(blocks,
-                                                              schema,
-                                                              global_dictionary,
-                                                              avro_data,
-                                                              num_blocks,
-                                                              schema_len,
-                                                              num_dictionary_entries,
-                                                              min_row_size,
-                                                              max_rows,
-                                                              first_row);
+  gpuDecodeAvroColumnData<<<dim_grid, dim_block, 0, stream.value()>>>(blocks,
+                                                                      schema,
+                                                                      global_dictionary,
+                                                                      avro_data,
+                                                                      num_blocks,
+                                                                      schema_len,
+                                                                      num_dictionary_entries,
+                                                                      min_row_size,
+                                                                      max_rows,
+                                                                      first_row);
   return cudaSuccess;
 }
 

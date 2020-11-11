@@ -14,17 +14,20 @@
  * limitations under the License.
  */
 
+#include <io/parquet/parquet_gpu.hpp>
+#include <io/utilities/block_utils.cuh>
+#include <io/utilities/column_buffer.hpp>
+
+#include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/utilities/bit.hpp>
+
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/tuple.h>
-#include <cudf/detail/utilities/release_assert.cuh>
-#include <cudf/utilities/bit.hpp>
-#include <io/utilities/block_utils.cuh>
-#include <io/utilities/column_buffer.hpp>
-
-#include <io/parquet/parquet_gpu.hpp>
 
 #define LOG2_NTHREADS (5 + 2)
 #define NTHREADS (1 << LOG2_NTHREADS)
@@ -1717,16 +1720,16 @@ struct chunk_row_output_iter {
   using reference         = size_type &;
   using iterator_category = thrust::output_device_iterator_tag;
 
-  chunk_row_output_iter operator+ __host__ __device__(int i)
+  __host__ __device__ chunk_row_output_iter operator+(int i)
   {
     return chunk_row_output_iter{p + i};
   }
 
-  void operator++ __host__ __device__() { p++; }
+  __host__ __device__ void operator++() { p++; }
 
-  reference operator[] __device__(int i) { return p[i].chunk_row; }
-  reference operator*__device__() { return p->chunk_row; }
-  void operator= __device__(value_type v) { p->chunk_row = v; }
+  __device__ reference operator[](int i) { return p[i].chunk_row; }
+  __device__ reference operator*() { return p->chunk_row; }
+  __device__ void operator=(value_type v) { p->chunk_row = v; }
 };
 
 struct start_offset_output_iterator {
@@ -1742,19 +1745,19 @@ struct start_offset_output_iterator {
   using reference         = size_type &;
   using iterator_category = thrust::output_device_iterator_tag;
 
-  start_offset_output_iterator operator+ __host__ __device__(int i)
+  __host__ __device__ start_offset_output_iterator operator+(int i)
   {
     return start_offset_output_iterator{
       pages, page_indices, cur_index + i, src_col_schema, nesting_depth};
   }
 
-  void operator++ __host__ __device__() { cur_index++; }
+  __host__ __device__ void operator++() { cur_index++; }
 
-  reference operator[] __device__(int i) { return dereference(cur_index + i); }
-  reference operator*__device__() { return dereference(cur_index); }
+  __device__ reference operator[](int i) { return dereference(cur_index + i); }
+  __device__ reference operator*() { return dereference(cur_index); }
 
  private:
-  reference __device__ dereference(int index)
+  __device__ reference dereference(int index)
   {
     PageInfo const &p = pages[page_indices[index]];
     if (p.src_col_schema != src_col_schema || p.flags & PAGEINFO_FLAGS_DICTIONARY) { return empty; }
@@ -1771,7 +1774,7 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
                                  std::vector<cudf::io::detail::column_buffer> &output_columns,
                                  size_t num_rows,
                                  size_t min_row,
-                                 cudaStream_t stream,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource *mr)
 {
   dim3 dim_block(NTHREADS, 1);
@@ -1780,9 +1783,9 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
   // computes:
   // PageNestingInfo::size for each level of nesting, for each page.
   // The output from this does not take row bounds (num_rows, min_row) into account
-  gpuComputePageSizes<<<dim_grid, dim_block, 0, stream>>>(
+  gpuComputePageSizes<<<dim_grid, dim_block, 0, stream.value()>>>(
     pages.device_ptr(), chunks.device_ptr(), min_row, num_rows, chunks.size(), false);
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  stream.synchronize();
 
   // computes:
   // PageInfo::chunk_row for all pages
@@ -1790,7 +1793,7 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
     pages.device_ptr(), [] __device__(PageInfo const &page) { return page.chunk_idx; });
   auto page_input = thrust::make_transform_iterator(
     pages.device_ptr(), [] __device__(PageInfo const &page) { return page.num_rows; });
-  thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream),
+  thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream.value()),
                                 key_input,
                                 key_input + pages.size(),
                                 page_input,
@@ -1799,7 +1802,7 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
   // computes:
   // PageNestingInfo::size for each level of nesting, for each page, taking row bounds into account.
   // PageInfo::skipped_values, which tells us where to start decoding in the input
-  gpuComputePageSizes<<<dim_grid, dim_block, 0, stream>>>(
+  gpuComputePageSizes<<<dim_grid, dim_block, 0, stream.value()>>>(
     pages.device_ptr(), chunks.device_ptr(), min_row, num_rows, chunks.size(), true);
 
   // retrieve pages back (PageInfo::num_rows has been set. if we don't bring it
@@ -1825,14 +1828,15 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
   rmm::device_uvector<int> page_keys(pages.size(), stream);
   rmm::device_uvector<int> page_index(pages.size(), stream);
   {
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
+    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                       pages.device_ptr(),
                       pages.device_ptr() + pages.size(),
                       page_keys.begin(),
                       [] __device__(PageInfo const &page) { return page.src_col_schema; });
 
-    thrust::sequence(rmm::exec_policy(stream)->on(stream), page_index.begin(), page_index.end());
-    thrust::stable_sort_by_key(rmm::exec_policy(stream)->on(stream),
+    thrust::sequence(
+      rmm::exec_policy(stream)->on(stream.value()), page_index.begin(), page_index.end());
+    thrust::stable_sort_by_key(rmm::exec_policy(stream)->on(stream.value()),
                                page_keys.begin(),
                                page_keys.end(),
                                page_index.begin(),
@@ -1866,7 +1870,7 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
       // columns. so don't compute any given level more than once.
       if (out_buf.size == 0) {
         int size = thrust::reduce(
-          rmm::exec_policy(stream)->on(stream), size_input, size_input + pages.size());
+          rmm::exec_policy(stream)->on(stream.value()), size_input, size_input + pages.size());
 
         // if this is a list column add 1 for non-leaf levels for the terminating offset
         if (out_buf.type.id() == type_id::LIST && l_idx < max_depth) { size++; }
@@ -1876,7 +1880,7 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
       }
 
       // compute per-page start offset
-      thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream),
+      thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream.value()),
                                     page_keys.begin(),
                                     page_keys.end(),
                                     size_input,
@@ -1898,12 +1902,12 @@ cudaError_t __host__ DecodePageData(hostdevice_vector<PageInfo> &pages,
                                     hostdevice_vector<ColumnChunkDesc> const &chunks,
                                     size_t num_rows,
                                     size_t min_row,
-                                    cudaStream_t stream)
+                                    rmm::cuda_stream_view stream)
 {
   dim3 dim_block(NTHREADS, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
-  gpuDecodePageData<<<dim_grid, dim_block, 0, stream>>>(
+  gpuDecodePageData<<<dim_grid, dim_block, 0, stream.value()>>>(
     pages.device_ptr(), chunks.device_ptr(), min_row, num_rows, chunks.size());
 
   return cudaSuccess;

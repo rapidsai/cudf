@@ -16,22 +16,23 @@
 
 #pragma once
 
-#include <cuda_runtime.h>
 #include <io/comp/gpuinflate.h>
 #include <io/statistics/column_stats.h>
-#include <cudf/types.hpp>
 #include <io/parquet/parquet_common.hpp>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
-
 #include <cudf/types.hpp>
-#include <vector>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <cuda_runtime.h>
+
+#include <vector>
 
 namespace cudf {
 namespace io {
@@ -171,8 +172,8 @@ struct ColumnChunkDesc {
       max_num_pages(0),
       page_info(nullptr),
       str_dict_index(nullptr),
-      valid_map_base({nullptr}),
-      column_data_base({nullptr}),
+      valid_map_base{nullptr},
+      column_data_base{nullptr},
       codec(codec_),
       converted_type(converted_type_),
       decimal_scale(decimal_scale_),
@@ -332,7 +333,7 @@ struct EncColumnChunk {
  */
 cudaError_t DecodePageHeaders(ColumnChunkDesc *chunks,
                               int32_t num_chunks,
-                              cudaStream_t stream = (cudaStream_t)0);
+                              rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for building the dictionary index for the column
@@ -346,7 +347,7 @@ cudaError_t DecodePageHeaders(ColumnChunkDesc *chunks,
  */
 cudaError_t BuildStringDictionaryIndex(ColumnChunkDesc *chunks,
                                        int32_t num_chunks,
-                                       cudaStream_t stream = (cudaStream_t)0);
+                                       rmm::cuda_stream_view stream);
 
 /**
  * @brief Preprocess column information for nested schemas.
@@ -375,7 +376,7 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
                                  std::vector<cudf::io::detail::column_buffer> &output_columns,
                                  size_t num_rows,
                                  size_t min_row,
-                                 cudaStream_t stream,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource *mr);
 
 /**
@@ -396,7 +397,7 @@ cudaError_t DecodePageData(hostdevice_vector<PageInfo> &pages,
                            hostdevice_vector<ColumnChunkDesc> const &chunks,
                            size_t num_rows,
                            size_t min_row,
-                           cudaStream_t stream = (cudaStream_t)0);
+                           rmm::cuda_stream_view stream);
 
 /**
  * @brief Dremel data that describes one nested type column
@@ -429,7 +430,7 @@ struct dremel_data {
  *
  * @return A struct containing dremel data
  */
-dremel_data get_dremel_data(column_view h_col, cudaStream_t stream = (cudaStream_t)0);
+dremel_data get_dremel_data(column_view h_col, rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing encoder page fragments
@@ -450,7 +451,7 @@ cudaError_t InitPageFragments(PageFragment *frag,
                               int32_t num_columns,
                               uint32_t fragment_size,
                               uint32_t num_rows,
-                              cudaStream_t stream = (cudaStream_t)0);
+                              rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing fragment statistics groups
@@ -471,7 +472,7 @@ cudaError_t InitFragmentStatistics(statistics_group *groups,
                                    int32_t num_fragments,
                                    int32_t num_columns,
                                    uint32_t fragment_size,
-                                   cudaStream_t stream = (cudaStream_t)0);
+                                   rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing encoder data pages
@@ -494,7 +495,7 @@ cudaError_t InitEncoderPages(EncColumnChunk *chunks,
                              int32_t num_columns,
                              statistics_merge_group *page_grstats  = nullptr,
                              statistics_merge_group *chunk_grstats = nullptr,
-                             cudaStream_t stream                   = (cudaStream_t)0);
+                             rmm::cuda_stream_view stream          = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel for packing column data into parquet pages
@@ -515,7 +516,7 @@ cudaError_t EncodePages(EncPage *pages,
                         uint32_t start_page            = 0,
                         gpu_inflate_input_s *comp_in   = nullptr,
                         gpu_inflate_status_s *comp_out = nullptr,
-                        cudaStream_t stream            = (cudaStream_t)0);
+                        rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel to make the compressed vs uncompressed chunk-level decision
@@ -534,7 +535,7 @@ cudaError_t DecideCompression(EncColumnChunk *chunks,
                               uint32_t num_chunks,
                               uint32_t start_page,
                               const gpu_inflate_status_s *comp_out = nullptr,
-                              cudaStream_t stream                  = (cudaStream_t)0);
+                              rmm::cuda_stream_view stream         = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel to encode page headers
@@ -557,7 +558,7 @@ cudaError_t EncodePageHeaders(EncPage *pages,
                               const gpu_inflate_status_s *comp_out = nullptr,
                               const statistics_chunk *page_stats   = nullptr,
                               const statistics_chunk *chunk_stats  = nullptr,
-                              cudaStream_t stream                  = (cudaStream_t)0);
+                              rmm::cuda_stream_view stream         = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel to gather pages to a single contiguous block per chunk
@@ -573,7 +574,7 @@ cudaError_t EncodePageHeaders(EncPage *pages,
 cudaError_t GatherPages(EncColumnChunk *chunks,
                         const EncPage *pages,
                         uint32_t num_chunks,
-                        cudaStream_t stream = (cudaStream_t)0);
+                        rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for building chunk dictionaries
@@ -590,7 +591,7 @@ cudaError_t BuildChunkDictionaries(EncColumnChunk *chunks,
                                    uint32_t *dev_scratch,
                                    size_t scratch_size,
                                    uint32_t num_chunks,
-                                   cudaStream_t stream = (cudaStream_t)0);
+                                   rmm::cuda_stream_view stream);
 
 }  // namespace gpu
 }  // namespace parquet

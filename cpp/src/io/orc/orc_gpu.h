@@ -16,10 +16,12 @@
 
 #pragma once
 
+#include "timezone.cuh"
+
 #include <io/comp/gpuinflate.h>
 #include <io/statistics/column_stats.h>
 
-#include "timezone.cuh"
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
@@ -194,8 +196,8 @@ struct StripeDictionary {
 cudaError_t ParseCompressedStripeData(CompressedStreamInfo *strm_info,
                                       int32_t num_streams,
                                       uint32_t compression_block_size,
-                                      uint32_t log2maxcr  = 24,
-                                      cudaStream_t stream = (cudaStream_t)0);
+                                      uint32_t log2maxcr           = 24,
+                                      rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel for re-assembling decompressed blocks into a single contiguous block
@@ -208,7 +210,7 @@ cudaError_t ParseCompressedStripeData(CompressedStreamInfo *strm_info,
  **/
 cudaError_t PostDecompressionReassemble(CompressedStreamInfo *strm_info,
                                         int32_t num_streams,
-                                        cudaStream_t stream = (cudaStream_t)0);
+                                        rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel for constructing rowgroup from index streams
@@ -230,7 +232,7 @@ cudaError_t ParseRowGroupIndex(RowGroup *row_groups,
                                uint32_t num_stripes,
                                uint32_t num_rowgroups,
                                uint32_t rowidx_stride,
-                               cudaStream_t stream = (cudaStream_t)0);
+                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel for decoding NULLs and building string dictionary index tables
@@ -245,13 +247,14 @@ cudaError_t ParseRowGroupIndex(RowGroup *row_groups,
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
-                                             DictionaryEntry *global_dictionary,
-                                             uint32_t num_columns,
-                                             uint32_t num_stripes,
-                                             size_t max_rows     = ~0,
-                                             size_t first_row    = 0,
-                                             cudaStream_t stream = (cudaStream_t)0);
+cudaError_t DecodeNullsAndStringDictionaries(
+  ColumnDesc *chunks,
+  DictionaryEntry *global_dictionary,
+  uint32_t num_columns,
+  uint32_t num_stripes,
+  size_t max_rows              = ~0,
+  size_t first_row             = 0,
+  rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel for decoding column data
@@ -281,7 +284,7 @@ cudaError_t DecodeOrcColumnData(ColumnDesc *chunks,
                                 const RowGroup *row_groups   = 0,
                                 uint32_t num_rowgroups       = 0,
                                 uint32_t rowidx_stride       = 0,
-                                cudaStream_t stream          = (cudaStream_t)0);
+                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel for encoding column data
@@ -296,7 +299,7 @@ cudaError_t DecodeOrcColumnData(ColumnDesc *chunks,
 cudaError_t EncodeOrcColumnData(EncChunk *chunks,
                                 uint32_t num_columns,
                                 uint32_t num_rowgroups,
-                                cudaStream_t stream = (cudaStream_t)0);
+                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel for encoding column dictionaries
@@ -315,7 +318,7 @@ cudaError_t EncodeStripeDictionaries(StripeDictionary *stripes,
                                      uint32_t num_string_columns,
                                      uint32_t num_columns,
                                      uint32_t num_stripes,
-                                     cudaStream_t stream = (cudaStream_t)0);
+                                     rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel for compacting chunked column data prior to compression
@@ -332,7 +335,7 @@ cudaError_t CompactOrcDataStreams(StripeStream *strm_desc,
                                   EncChunk *chunks,
                                   uint32_t num_stripe_streams,
                                   uint32_t num_columns,
-                                  cudaStream_t stream = (cudaStream_t)0);
+                                  rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel(s) for compressing data streams
@@ -358,7 +361,7 @@ cudaError_t CompressOrcDataStreams(uint8_t *compressed_data,
                                    uint32_t num_compressed_blocks,
                                    CompressionKind compression,
                                    uint32_t comp_blk_size,
-                                   cudaStream_t stream = (cudaStream_t)0);
+                                   rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel for initializing dictionary chunks
@@ -373,7 +376,7 @@ cudaError_t CompressOrcDataStreams(uint8_t *compressed_data,
 cudaError_t InitDictionaryIndices(DictionaryChunk *chunks,
                                   uint32_t num_columns,
                                   uint32_t num_rowgroups,
-                                  cudaStream_t stream = (cudaStream_t)0);
+                                  rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel for building stripe dictionaries
@@ -394,7 +397,7 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes_dev,
                                     uint32_t num_stripes,
                                     uint32_t num_rowgroups,
                                     uint32_t num_columns,
-                                    cudaStream_t stream = (cudaStream_t)0);
+                                    rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernels to initialize statistics collection
@@ -413,7 +416,7 @@ cudaError_t orc_init_statistics_groups(statistics_group *groups,
                                        uint32_t num_columns,
                                        uint32_t num_rowgroups,
                                        uint32_t row_index_stride,
-                                       cudaStream_t stream = (cudaStream_t)0);
+                                       rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernels to return statistics buffer offsets and sizes
@@ -428,7 +431,7 @@ cudaError_t orc_init_statistics_groups(statistics_group *groups,
 cudaError_t orc_init_statistics_buffersize(statistics_merge_group *groups,
                                            const statistics_chunk *chunks,
                                            uint32_t statistics_count,
-                                           cudaStream_t stream = (cudaStream_t)0);
+                                           rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel to encode statistics in ORC protobuf format
@@ -444,7 +447,7 @@ cudaError_t orc_encode_statistics(uint8_t *blob_bfr,
                                   statistics_merge_group *groups,
                                   const statistics_chunk *chunks,
                                   uint32_t statistics_count,
-                                  cudaStream_t stream = (cudaStream_t)0);
+                                  rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 }  // namespace gpu
 }  // namespace orc

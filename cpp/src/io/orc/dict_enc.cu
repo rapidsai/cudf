@@ -13,11 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <io/utilities/block_utils.cuh>
+
 #include "orc_common.h"
 #include "orc_gpu.h"
 
+#include <io/utilities/block_utils.cuh>
+
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
@@ -450,11 +453,11 @@ __global__ void __launch_bounds__(block_size)
 cudaError_t InitDictionaryIndices(DictionaryChunk *chunks,
                                   uint32_t num_columns,
                                   uint32_t num_rowgroups,
-                                  cudaStream_t stream)
+                                  rmm::cuda_stream_view stream)
 {
   dim3 dim_block(512, 1);  // 512 threads per chunk
   dim3 dim_grid(num_columns, num_rowgroups);
-  gpuInitDictionaryIndices<512><<<dim_grid, dim_block, 0, stream>>>(chunks, num_columns);
+  gpuInitDictionaryIndices<512><<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_columns);
   return cudaSuccess;
 }
 
@@ -477,11 +480,11 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes,
                                     uint32_t num_stripes,
                                     uint32_t num_rowgroups,
                                     uint32_t num_columns,
-                                    cudaStream_t stream)
+                                    rmm::cuda_stream_view stream)
 {
   dim3 dim_block(1024, 1);  // 1024 threads per chunk
   dim3 dim_grid_build(num_columns, num_stripes);
-  gpuCompactChunkDictionaries<<<dim_grid_build, dim_block, 0, stream>>>(
+  gpuCompactChunkDictionaries<<<dim_grid_build, dim_block, 0, stream.value()>>>(
     stripes, chunks, num_columns);
   for (uint32_t i = 0; i < num_stripes * num_columns; i++) {
     if (stripes_host[i].dict_data != nullptr) {
@@ -489,7 +492,7 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes,
       const nvstrdesc_s *str_data =
         static_cast<const nvstrdesc_s *>(stripes_host[i].column_data_base);
       // NOTE: Requires the --expt-extended-lambda nvcc flag
-      thrust::sort(rmm::exec_policy(stream)->on(stream),
+      thrust::sort(rmm::exec_policy(stream)->on(stream.value()),
                    p,
                    p + stripes_host[i].num_strings,
                    [str_data] __device__(const uint32_t &lhs, const uint32_t &rhs) {
@@ -500,7 +503,8 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes,
                    });
     }
   }
-  gpuBuildStripeDictionaries<1024><<<dim_grid_build, dim_block, 0, stream>>>(stripes, num_columns);
+  gpuBuildStripeDictionaries<1024>
+    <<<dim_grid_build, dim_block, 0, stream.value()>>>(stripes, num_columns);
   return cudaSuccess;
 }
 

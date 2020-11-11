@@ -18,6 +18,8 @@
 #include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace io {
 namespace parquet {
@@ -484,21 +486,21 @@ extern "C" __global__ void __launch_bounds__(128)
 
 cudaError_t __host__ DecodePageHeaders(ColumnChunkDesc *chunks,
                                        int32_t num_chunks,
-                                       cudaStream_t stream)
+                                       rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
-  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream>>>(chunks, num_chunks);
+  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks);
   return cudaSuccess;
 }
 
 cudaError_t __host__ BuildStringDictionaryIndex(ColumnChunkDesc *chunks,
                                                 int32_t num_chunks,
-                                                cudaStream_t stream)
+                                                rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
-  gpuBuildStringDictionaryIndex<<<dim_grid, dim_block, 0, stream>>>(chunks, num_chunks);
+  gpuBuildStringDictionaryIndex<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks);
   return cudaSuccess;
 }
 

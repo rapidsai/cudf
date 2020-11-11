@@ -22,6 +22,8 @@
 
 #include <cudf/io/parquet.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace io {
 namespace detail {
@@ -70,7 +72,8 @@ class reader {
    *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read(parquet_reader_options const& options, cudaStream_t stream = 0);
+  table_with_metadata read(parquet_reader_options const& options,
+                           rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 };
 
 /**
@@ -107,11 +110,12 @@ class writer {
    * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  std::unique_ptr<std::vector<uint8_t>> write(table_view const& table,
-                                              const table_metadata* metadata            = nullptr,
-                                              bool return_filemetadata                  = false,
-                                              const std::string column_chunks_file_path = "",
-                                              cudaStream_t stream                       = 0);
+  std::unique_ptr<std::vector<uint8_t>> write(
+    table_view const& table,
+    const table_metadata* metadata            = nullptr,
+    bool return_filemetadata                  = false,
+    const std::string column_chunks_file_path = "",
+    rmm::cuda_stream_view stream              = rmm::cuda_stream_default);
 
   /**
    * @brief Begins the chunked/streamed write process.

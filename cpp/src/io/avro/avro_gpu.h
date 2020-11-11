@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 #pragma once
 
 #include "avro_common.h"
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
@@ -63,10 +65,10 @@ cudaError_t DecodeAvroColumnData(block_desc_s *blocks,
                                  uint32_t num_blocks,
                                  uint32_t schema_len,
                                  uint32_t num_dictionary_entries,
-                                 size_t max_rows       = ~0,
-                                 size_t first_row      = 0,
-                                 uint32_t min_row_size = 0,
-                                 cudaStream_t stream   = (cudaStream_t)0);
+                                 size_t max_rows              = ~0,
+                                 size_t first_row             = 0,
+                                 uint32_t min_row_size        = 0,
+                                 rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 }  // namespace gpu
 }  // namespace avro

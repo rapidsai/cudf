@@ -43,8 +43,11 @@ misrepresented as being the original software.
 Mark Adler    madler@alumni.caltech.edu
 */
 
-#include <io/utilities/block_utils.cuh>
 #include "gpuinflate.h"
+
+#include <io/utilities/block_utils.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
@@ -1199,17 +1202,19 @@ cudaError_t __host__ gpuinflate(gpu_inflate_input_s *inputs,
                                 gpu_inflate_status_s *outputs,
                                 int count,
                                 int parse_hdr,
-                                cudaStream_t stream)
+                                rmm::cuda_stream_view stream)
 {
-  if (count > 0) { inflate_kernel<<<count, NUMTHREADS, 0, stream>>>(inputs, outputs, parse_hdr); }
+  if (count > 0) {
+    inflate_kernel<<<count, NUMTHREADS, 0, stream.value()>>>(inputs, outputs, parse_hdr);
+  }
   return cudaSuccess;
 }
 
 cudaError_t __host__ gpu_copy_uncompressed_blocks(gpu_inflate_input_s *inputs,
                                                   int count,
-                                                  cudaStream_t stream)
+                                                  rmm::cuda_stream_view stream)
 {
-  if (count > 0) { copy_uncompressed_kernel<<<count, 1024, 0, stream>>>(inputs); }
+  if (count > 0) { copy_uncompressed_kernel<<<count, 1024, 0, stream.value()>>>(inputs); }
   return cudaSuccess;
 }
 
