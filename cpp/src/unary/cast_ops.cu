@@ -15,10 +15,12 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/null_mask.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -248,26 +250,18 @@ struct dispatch_unary_cast_to {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    auto const size = input.size();
-    auto output =
-      std::make_unique<column>(type,
-                               size,
-                               rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                               copy_bitmask(input, stream, mr),
-                               input.null_count());
+    if (input.type() == type) return std::make_unique<column>(input);  // TODO add test for this
 
-    // mutable_column_view output_mutable = *output;
+    using namespace numeric;
 
-    // using DeviceT    = device_storage_type_t<TargetT>;
-    // auto const scale = numeric::scale_type{type.scale()};
-
-    // thrust::transform(rmm::exec_policy(stream)->on(stream),
-    //             input.begin<_SourceT>(),
-    //             input.end<_SourceT>(),
-    //             output_mutable.begin<DeviceT>(),
-    //             fixed_point_unary_cast<_SourceT, TargetT>{scale});
-
-    return output;
+    if (input.type().scale() > type.scale()) {
+      auto const scalar = make_fixed_point_scalar<TargetT>(0, scale_type{type.scale()});
+      return detail::binary_operation(input, *scalar, binary_operator::ADD, {}, mr, stream);
+    } else {
+      auto const diff   = input.type().scale() - type.scale();
+      auto const scalar = make_fixed_point_scalar<TargetT>(std::pow(10, -diff), scale_type{diff});
+      return detail::binary_operation(input, *scalar, binary_operator::DIV, {}, mr, stream);
+    }
   }
 
   template <typename TargetT,
