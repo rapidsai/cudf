@@ -31,15 +31,15 @@ def orc_reader_test(input_tuple, skiprows, columns, num_rows, use_index):
     skiprows = 0
 
     pdf, file_buffer = input_tuple
-    expected_pdf = pdf[skiprows:]
+    expected_pdf = pdf.iloc[skiprows:]
     if num_rows is not None:
         expected_pdf = expected_pdf.head(num_rows)
     if skiprows is not None or num_rows is not None:
-        expected_pdf = expected_pdf.reset_index(drop=True)
+        expected_pdf.reset_index(drop=True, inplace=True)
     if columns is not None:
         expected_pdf = expected_pdf[columns]
     if use_index is False:
-        expected_pdf = expected_pdf.reset_index(drop=True)
+        expected_pdf.reset_index(drop=True, inplace=True)
 
     gdf = cudf.read_orc(
         io.BytesIO(file_buffer),

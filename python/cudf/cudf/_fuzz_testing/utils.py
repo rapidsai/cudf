@@ -173,10 +173,7 @@ def get_avro_schema(df):
 
 
 def get_orc_schema(df):
-    ordered_dict = OrderedDict()
-
-    for col_name, col_dtype in df.dtypes.items():
-        ordered_dict[col_name] = get_orc_dtype_info(col_dtype)
+    ordered_dict = OrderedDict((col_name, col_dtype) for col_name, col_dtype in df.dtypes.items())
 
     schema = pyorc.Struct(**ordered_dict)
     return schema
@@ -239,12 +236,7 @@ def _preprocess_to_orc_tuple(df):
         ]
     )
 
-    tuple_list = []
-    for tup in df.itertuples(index=False, name=None):
-        if has_nulls_or_nullable_dtype:
-            tuple_list.append(tuple(map(_null_to_None, tup)))
-        else:
-            tuple_list.append(tup)
+    tuple_list = [tuple(map(_null_to_None, tup)) if has_nulls_or_nullable_dtype else tup for tup in df.itertuples(index=False, name=None)]
 
     return tuple_list
 
@@ -280,9 +272,7 @@ def orc_to_pandas(file_name=None, file_io_obj=None, stripes=None):
             reader, columns=reader.schema.fields.keys()
         )
     else:
-        records = []
-        for i in stripes:
-            records.extend(list(reader.read_stripe(i)))
+        records = [record for i in stripes for record in list(reader.read_stripe(i))]
         df = pd.DataFrame.from_records(
             records, columns=reader.schema.fields.keys()
         )
