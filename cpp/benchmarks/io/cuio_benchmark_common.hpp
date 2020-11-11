@@ -71,3 +71,36 @@ class cuio_source_sink_pair {
   std::vector<char> buffer;
   std::string const file_name;
 };
+
+/**
+ * @brief Column selection strategy.
+ */
+enum class column_selection { ALL, ALTERNATE, FIRST_HALF, SECOND_HALF };
+
+/**
+ * @brief Row selection strategy.
+ *
+ * Not all strategies are applicable to all readers.
+ */
+enum class row_selection { ALL, BYTE_RANGE, NROWS, SKIPFOOTER };
+
+/**
+ * @brief Modify data types such that total selected columns size is a fix fraction of the total
+ * size.
+ *
+ * The data types are multiplied/rearranged such that the columns selected with the given column
+ * selection enumerator add up to a fixed fraction of the total table size, regardless of the data
+ * types.
+ *
+ * @param ids Array of column type IDs
+ * @param cs The column selection enumerator
+ *
+ * @return The duplicated/rearranged array of type IDs
+ */
+std::vector<cudf::type_id> dtypes_for_column_selection(std::vector<cudf::type_id> const& ids,
+                                                       column_selection cs);
+
+/**
+ * @brief Select a subset of columns based on the input enumerator.
+ */
+std::vector<int> select_columns(column_selection cs, int num_cols);
