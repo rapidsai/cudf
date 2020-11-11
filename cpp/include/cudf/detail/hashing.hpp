@@ -16,7 +16,6 @@
 #pragma once
 
 #include <cudf/hashing.hpp>
-#include <cudf/types.hpp>
 
 namespace cudf {
 namespace detail {

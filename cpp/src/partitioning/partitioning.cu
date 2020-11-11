@@ -26,8 +26,6 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 
-#include <utility>
-
 namespace cudf {
 namespace {
 // Launch configuration for optimized hash partition
@@ -783,14 +781,16 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 
   switch (hash_function) {
     case (hash_id::HASH_IDENTITY):
+      for (const size_type& column_id : columns_to_hash) {
+        if (!is_numeric(input.column(column_id).type()))
+          CUDF_FAIL("IdentityHash does not support this data type");
+      }
       return detail::local::hash_partition<IdentityHash>(
         input, columns_to_hash, num_partitions, mr, stream);
     case (hash_id::HASH_MURMUR3):
       return detail::local::hash_partition<MurmurHash3_32>(
         input, columns_to_hash, num_partitions, mr, stream);
-    default:
-      assert(false && "Unsupported hash function in hash_partition");
-      return std::make_pair(nullptr, std::vector<size_type>());
+    default: CUDF_FAIL("Unsupported hash function in hash_partition");
   }
 }
 
