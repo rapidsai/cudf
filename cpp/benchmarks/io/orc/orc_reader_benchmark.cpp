@@ -117,8 +117,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
                                                    int32_t(type_group_id::TIMESTAMP),
                                                    int32_t(cudf::type_id::STRING)}),
                                 col_sel);
-  auto const tbl =
-    create_random_table(data_types, data_types.size() * 2, table_size_bytes{data_size});
+  auto const tbl  = create_random_table(data_types, data_types.size(), table_size_bytes{data_size});
   auto const view = tbl->view();
 
   std::vector<char> orc_data;
@@ -165,12 +164,12 @@ void BM_orc_read_varying_options(benchmark::State& state)
     ->ArgsProduct({{int32_t(type_or_group)}, {0, 1000}, {1, 32}, {true, false}, {src_type}}) \
     ->Unit(benchmark::kMillisecond)                                                          \
     ->UseManualTime();
-/*
+
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, integral, type_group_id::INTEGRAL_SIGNED);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(ORC_RD_BM_INPUTS_DEFINE, string, cudf::type_id::STRING);
-*/
+
 BENCHMARK_DEFINE_F(OrcRead, column_selection)
 (::benchmark::State& state) { BM_orc_read_varying_options(state); }
 BENCHMARK_REGISTER_F(OrcRead, column_selection)
