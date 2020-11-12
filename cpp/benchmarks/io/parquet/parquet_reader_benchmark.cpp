@@ -114,13 +114,20 @@ void BM_parq_read_varying_options(benchmark::State& state)
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
+
+    cudf::size_type rows_read = 0;
     for (int32_t chunk = 0; chunk < num_chunks; ++chunk) {
       auto const is_last_chunk = chunk == (num_chunks - 1);
       switch (row_sel) {
         case row_selection::ALL: break;
-        case row_selection::ROW_GROUPS:
-          read_options.set_row_groups({sections_in_chunk(num_row_groups, num_chunks, chunk)});
-          break;
+        case row_selection::ROW_GROUPS: {
+          auto row_groups_to_read = sections_in_chunk(num_row_groups, num_chunks, chunk);
+          if (is_last_chunk) {
+            // Need to assume that an additional "overflow" row group is present
+            row_groups_to_read.push_back(num_row_groups);
+          }
+          read_options.set_row_groups({row_groups_to_read});
+        } break;
         case row_selection::NROWS:
           read_options.set_skip_rows(chunk * chunk_row_cnt);
           read_options.set_num_rows(chunk_row_cnt);
@@ -129,8 +136,10 @@ void BM_parq_read_varying_options(benchmark::State& state)
         default: CUDF_FAIL("Unsupported row selection method");
       }
 
-      cudf_io::read_parquet(read_options);
+      rows_read += cudf_io::read_parquet(read_options).tbl->num_rows();
     }
+
+    CUDF_EXPECTS(rows_read == view.num_rows(), "Benchmark did not read the entire table");
   }
   auto const data_processed = data_size * cols_to_read.size() / view.num_columns();
   state.SetBytesProcessed(data_processed * state.iterations());

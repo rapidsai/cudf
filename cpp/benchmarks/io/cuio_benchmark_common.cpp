@@ -116,14 +116,12 @@ std::vector<std::string> select_column_names(std::vector<std::string> const& col
 std::vector<cudf::size_type> sections_in_chunk(int num_sections, int num_chunks, int chunk)
 {
   CUDF_EXPECTS(num_sections >= num_chunks,
-               "Number of chunks cannot be greater than the number of stripes in the file");
+               "Number of chunks cannot be greater than the number of sections in the file");
   std::vector<cudf::size_type> cs;
   for (auto i = num_sections * chunk / num_chunks; i < num_sections * (chunk + 1) / num_chunks;
        ++i) {
     cs.push_back(i);
   }
-  // Add a stripe to the last read because we are rounding down `num_sections`
-  if (chunk == num_chunks - 1) cs.push_back(num_sections);
 
   return cs;
 }

@@ -114,13 +114,20 @@ void BM_orc_read_varying_options(benchmark::State& state)
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
+
+    cudf::size_type rows_read = 0;
     for (int32_t chunk = 0; chunk < num_chunks; ++chunk) {
       auto const is_last_chunk = chunk == (num_chunks - 1);
       switch (row_sel) {
         case row_selection::ALL: break;
-        case row_selection::STRIPES:
-          read_options.set_stripes(sections_in_chunk(num_stripes, num_chunks, chunk));
-          break;
+        case row_selection::STRIPES: {
+          auto stripes_to_read = sections_in_chunk(num_stripes, num_chunks, chunk);
+          if (is_last_chunk) {
+            // Need to assume that an additional "overflow" stripe is present
+            stripes_to_read.push_back(num_stripes);
+          }
+          read_options.set_stripes(stripes_to_read);
+        } break;
         case row_selection::NROWS:
           read_options.set_skip_rows(chunk * chunk_row_cnt);
           read_options.set_num_rows(chunk_row_cnt);
@@ -129,8 +136,10 @@ void BM_orc_read_varying_options(benchmark::State& state)
         default: CUDF_FAIL("Unsupported row selection method");
       }
 
-      cudf_io::read_orc(read_options);
+      rows_read += cudf_io::read_orc(read_options).tbl->num_rows();
     }
+
+    CUDF_EXPECTS(rows_read == view.num_rows(), "Benchmark did not read the entire table");
   }
   auto const data_processed = data_size * cols_to_read.size() / view.num_columns();
   state.SetBytesProcessed(data_processed * state.iterations());
@@ -158,7 +167,7 @@ BENCHMARK_REGISTER_F(OrcRead, column_selection)
                   int32_t(column_selection::SECOND_HALF)},
                  {int32_t(row_selection::ALL)},
                  {1},
-                 {0b111},
+                 {0b111},  // defaults
                  {int32_t(cudf::type_id::EMPTY)}})
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();
@@ -169,7 +178,7 @@ BENCHMARK_REGISTER_F(OrcRead, row_selection)
   ->ArgsProduct({{int32_t(column_selection::ALL)},
                  {int32_t(row_selection::STRIPES), int32_t(row_selection::NROWS)},
                  {1, 8},
-                 {0b111},
+                 {0b111},  // defaults
                  {int32_t(cudf::type_id::EMPTY)}})
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();
