@@ -33,7 +33,7 @@ namespace cudf_io = cudf::io;
 class CsvWrite : public cudf::benchmark {
 };
 
-void BM_csv_write_varying_input(benchmark::State& state)
+void BM_csv_write_varying_inout(benchmark::State& state)
 {
   auto const data_types   = get_type_or_group(state.range(0));
   io_type const sink_type = static_cast<io_type>(state.range(1));
@@ -84,7 +84,7 @@ void BM_csv_write_varying_options(benchmark::State& state)
 
 #define CSV_WR_BM_INOUTS_DEFINE(name, type_or_group, sink_type)       \
   BENCHMARK_DEFINE_F(CsvWrite, name)                                  \
-  (::benchmark::State & state) { BM_csv_write_varying_input(state); } \
+  (::benchmark::State & state) { BM_csv_write_varying_inout(state); } \
   BENCHMARK_REGISTER_F(CsvWrite, name)                                \
     ->Args({int32_t(type_or_group), sink_type})                       \
     ->Unit(benchmark::kMillisecond)                                   \

@@ -33,7 +33,7 @@ namespace cudf_io = cudf::io;
 class OrcWrite : public cudf::benchmark {
 };
 
-void BM_orc_write_varying_input(benchmark::State& state)
+void BM_orc_write_varying_inout(benchmark::State& state)
 {
   auto const data_types             = get_type_or_group(state.range(0));
   cudf::size_type const cardinality = state.range(1);
@@ -89,7 +89,7 @@ void BM_orc_write_varying_options(benchmark::State& state)
 
 #define ORC_WR_BM_INOUTS_DEFINE(name, type_or_group, sink_type)                               \
   BENCHMARK_DEFINE_F(OrcWrite, name)                                                          \
-  (::benchmark::State & state) { BM_orc_write_varying_input(state); }                         \
+  (::benchmark::State & state) { BM_orc_write_varying_inout(state); }                         \
   BENCHMARK_REGISTER_F(OrcWrite, name)                                                        \
     ->ArgsProduct({{int32_t(type_or_group)}, {0, 1000}, {1, 32}, {true, false}, {sink_type}}) \
     ->Unit(benchmark::kMillisecond)                                                           \
