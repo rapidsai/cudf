@@ -21,6 +21,8 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/dictionary/detail/iterator.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -67,19 +69,29 @@ struct quantile_functor {
       return output;
     }
 
-    auto d_input  = column_device_view::create(input);
+    auto d_input  = column_device_view::create(input, stream);
     auto d_output = mutable_column_device_view::create(output->mutable_view());
 
     rmm::device_vector<double> q_device{q};
 
-    auto sorted_data = thrust::make_permutation_iterator(input.data<T>(), ordered_indices);
-
-    thrust::transform(q_device.begin(),
-                      q_device.end(),
-                      d_output->template begin<Result>(),
-                      [sorted_data, interp = interp, size = size] __device__(double q) {
-                        return select_quantile_data<Result>(sorted_data, size, q, interp);
-                      });
+    if (!cudf::is_dictionary(input.type())) {
+      auto sorted_data = thrust::make_permutation_iterator(input.data<T>(), ordered_indices);
+      thrust::transform(q_device.begin(),
+                        q_device.end(),
+                        d_output->template begin<Result>(),
+                        [sorted_data, interp = interp, size = size] __device__(double q) {
+                          return select_quantile_data<Result>(sorted_data, size, q, interp);
+                        });
+    } else {
+      auto sorted_data = thrust::make_permutation_iterator(
+        dictionary::detail::make_dictionary_iterator<T>(*d_input), ordered_indices);
+      thrust::transform(q_device.begin(),
+                        q_device.end(),
+                        d_output->template begin<Result>(),
+                        [sorted_data, interp = interp, size = size] __device__(double q) {
+                          return select_quantile_data<Result>(sorted_data, size, q, interp);
+                        });
+    }
 
     if (input.nullable()) {
       auto sorted_validity = thrust::make_transform_iterator(
@@ -118,7 +130,11 @@ std::unique_ptr<column> quantile(column_view const& input,
   auto functor = quantile_functor<exact, SortMapIterator>{
     ordered_indices, size, q, interp, retain_types, mr, stream};
 
-  return type_dispatcher(input.type(), functor, input);
+  auto input_type = cudf::is_dictionary(input.type()) && !input.is_empty()
+                      ? dictionary_column_view(input).keys().type()
+                      : input.type();
+
+  return type_dispatcher(input_type, functor, input);
 }
 
 }  // namespace detail
