@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,11 +29,12 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/copy.h>
 
 #include <memory>
 #include <utility>
-#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace groupby {
@@ -54,7 +55,7 @@ groupby::groupby(table_view const& keys,
 // Select hash vs. sort groupby implementation
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::dispatch_aggregation(
   std::vector<aggregation_request> const& requests,
-  cudaStream_t stream,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
   // If sort groupby has been called once on this groupby object, then

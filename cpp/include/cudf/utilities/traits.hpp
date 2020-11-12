@@ -18,13 +18,13 @@
 
 #include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/structs/struct_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <simt/type_traits>
-#include "cudf/structs/struct_view.hpp"
 
 namespace cudf {
 

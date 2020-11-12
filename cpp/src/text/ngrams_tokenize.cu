@@ -140,7 +140,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
 
   CUDF_EXPECTS(ngrams >= 1, "Parameter ngrams should be an integer value of 1 or greater");
   if (ngrams == 1)  // this is just a straight tokenize
-    return tokenize(strings, delimiter, mr, stream);
+    return tokenize(strings, delimiter, stream, mr);
   auto strings_count = strings.size();
   if (strings.is_empty()) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
