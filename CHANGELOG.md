@@ -97,7 +97,6 @@
 - PR #6670 Fix a bug where PTX parser fails to correctly parse a python lambda generated UDF
 - PR #6687 Fix issue where index name of caller object is being modified in csv writer
 - PR #6735 Fix hash join where row hash values would end up equal to the reserved empty key value
-- PR #6734 Fix hash join where row hash values would end up equal to the reserved empty key value
 - PR #6696 Fix release_assert.
 - PR #6692 Fix handling of empty column name in csv writer
 - PR #6693 Fix issue related to `na_values` input in `read_csv`
