@@ -4903,6 +4903,9 @@ class DataFrame(Frame, Serializable):
         if not isinstance(dataframe, pd.DataFrame):
             raise TypeError("not a pandas.DataFrame")
 
+        if not dataframe.columns.is_unique:
+            raise ValueError("Duplicate column names are not allowed")
+
         df = cls()
         # Set columns
         for col_name, col_value in dataframe.iteritems():

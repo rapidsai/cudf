@@ -16,13 +16,16 @@
 
 #pragma once
 
+#include "avro_common.h"
+
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 #include <algorithm>
 #include <map>
 #include <string>
 #include <vector>
-#include "avro_common.h"
 
 namespace cudf {
 namespace io {
@@ -97,38 +100,24 @@ class schema_parser {
  */
 class container {
  public:
-  container() { m_base = m_cur = m_end = nullptr; }
-  container(const uint8_t *base, size_t len) { init(base, len); }
-  void init(const uint8_t *base, size_t len)
+  container(uint8_t const *base, size_t len) noexcept : m_base{base}, m_cur{base}, m_end{base + len}
   {
-    m_base = m_cur = base;
-    m_end          = base + len;
   }
-  ptrdiff_t bytecount() const { return m_cur - m_base; }
-  unsigned int getb() { return (m_cur < m_end) ? *m_cur++ : 0; }
-  uint64_t get_u64()
+
+  auto bytecount() const { return m_cur - m_base; }
+
+  template <typename T>
+  T get_raw()
   {
-    uint64_t v = 0;
-    for (uint64_t l = 0;; l += 7) {
-      uint64_t c = getb();
-      v |= (c & 0x7f) << l;
-      if (c < 0x80) return v;
-    }
+    if (m_cur + sizeof(T) > m_end) return T{};
+    T val;
+    memcpy(&val, m_cur, sizeof(T));
+    m_cur += sizeof(T);
+    return val;
   }
-  int64_t get_i64()
-  {
-    uint64_t u = get_u64();
-    return (int64_t)((u >> 1u) ^ -(int64_t)(u & 1));
-  }
-  std::string get_str()
-  {
-    const char *s;
-    size_t len = get_u64();
-    len        = ((len & 1) || (m_cur >= m_end)) ? 0 : std::min(len >> 1, (size_t)(m_end - m_cur));
-    s          = reinterpret_cast<const char *>(m_cur);
-    m_cur += len;
-    return std::string(s, len);
-  }
+
+  template <typename T>
+  T get_encoded();
 
  public:
   bool parse(file_metadata *md, size_t max_num_rows = 0x7fffffff, size_t first_row = 0);

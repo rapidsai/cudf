@@ -166,11 +166,11 @@ class ColumnAccessor(MutableMapping):
             loc = ncols
         if not (0 <= loc <= ncols):
             raise ValueError(
-                "insert: loc out of bounds: must be " " 0 <= loc <= ncols"
+                "insert: loc out of bounds: must be  0 <= loc <= ncols"
             )
         # TODO: we should move all insert logic here
         if name in self._data:
-            raise ValueError(f"Cannot insert {name}, already exists")
+            raise ValueError(f"Cannot insert '{name}', already exists")
         if loc == len(self._data):
             self._data[name] = value
         else:

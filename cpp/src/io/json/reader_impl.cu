@@ -517,6 +517,8 @@ void reader::impl::set_data_types(cudaStream_t stream)
       stream);
 
     auto get_type_id = [&](auto const &cinfo) {
+      auto int_count_total =
+        cinfo.big_int_count + cinfo.negative_small_int_count + cinfo.positive_small_int_count;
       if (cinfo.null_count == static_cast<int>(rec_starts_.size())) {
         // Entire column is NULL; allocate the smallest amount of memory
         return type_id::INT8;
@@ -524,10 +526,14 @@ void reader::impl::set_data_types(cudaStream_t stream)
         return type_id::STRING;
       } else if (cinfo.datetime_count > 0) {
         return type_id::TIMESTAMP_MILLISECONDS;
-      } else if (cinfo.float_count > 0 || (cinfo.int_count > 0 && cinfo.null_count > 0)) {
+      } else if (cinfo.float_count > 0 || (int_count_total > 0 && cinfo.null_count > 0)) {
         return type_id::FLOAT64;
-      } else if (cinfo.int_count > 0) {
+      } else if (cinfo.big_int_count == 0 && int_count_total != 0) {
         return type_id::INT64;
+      } else if (cinfo.big_int_count != 0 && cinfo.negative_small_int_count != 0) {
+        return type_id::STRING;
+      } else if (cinfo.big_int_count != 0) {
+        return type_id::UINT64;
       } else if (cinfo.bool_count > 0) {
         return type_id::BOOL8;
       } else {

@@ -215,6 +215,16 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return new Scalar(DType.FLOAT32, makeFloat32Scalar(value, true));
   }
 
+  public static Scalar fromDecimal(int scale, int unscaledValue) {
+    long handle = makeDecimal32Scalar(unscaledValue, scale, true);
+    return new Scalar(DType.create(DType.DTypeEnum.DECIMAL32, scale), handle);
+  }
+
+  public static Scalar fromDecimal(int scale, long unscaledValue) {
+    long handle = makeDecimal64Scalar(unscaledValue, scale, true);
+    return new Scalar(DType.create(DType.DTypeEnum.DECIMAL64, scale), handle);
+  }
+
   public static Scalar fromFloat(Float value) {
     if (value == null) {
       return Scalar.fromNull(DType.FLOAT32);
@@ -233,7 +243,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return Scalar.fromDouble(value.doubleValue());
   }
 
-  public static Scalar fromBigDecimal(BigDecimal value) {
+  public static Scalar fromDecimal(BigDecimal value) {
     if (value == null) {
       return Scalar.fromNull(DType.create(DType.DTypeEnum.DECIMAL64, 0));
     }
