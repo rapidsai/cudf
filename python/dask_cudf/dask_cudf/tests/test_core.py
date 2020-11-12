@@ -8,6 +8,7 @@ import pytest
 import dask
 from dask import dataframe as dd
 from dask.dataframe.core import make_meta, meta_nonempty
+from dask.utils import M
 
 import cudf
 
@@ -721,7 +722,6 @@ def test_dataframe_describe():
 
 def test_index_map_partitions():
     # https://github.com/rapidsai/cudf/issues/6738
-    from dask.utils import M
 
     ddf = dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2)
     mins_pd = ddf.index.map_partitions(M.min, meta=ddf.index).compute()
