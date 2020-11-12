@@ -113,15 +113,17 @@ std::vector<std::string> select_column_names(std::vector<std::string> const& col
   return col_names_to_read;
 }
 
-std::vector<cudf::size_type> sections_in_chunk(int num_sections, int num_chunks, int chunk)
+std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks, int chunk)
 {
-  CUDF_EXPECTS(num_sections >= num_chunks,
-               "Number of chunks cannot be greater than the number of sections in the file");
-  std::vector<cudf::size_type> cs;
-  for (auto i = num_sections * chunk / num_chunks; i < num_sections * (chunk + 1) / num_chunks;
-       ++i) {
-    cs.push_back(i);
+  CUDF_EXPECTS(num_segments >= num_chunks,
+               "Number of chunks cannot be greater than the number of segments in the file");
+  auto start_segment = [num_segments, num_chunks](int chunk) {
+    return num_segments * chunk / num_chunks;
+  };
+  std::vector<cudf::size_type> selected_segments;
+  for (auto segment = start_segment(chunk); segment < start_segment(chunk + 1); ++segment) {
+    selected_segments.push_back(segment);
   }
 
-  return cs;
+  return selected_segments;
 }

@@ -121,7 +121,7 @@ void BM_parq_read_varying_options(benchmark::State& state)
       switch (row_sel) {
         case row_selection::ALL: break;
         case row_selection::ROW_GROUPS: {
-          auto row_groups_to_read = sections_in_chunk(num_row_groups, num_chunks, chunk);
+          auto row_groups_to_read = segments_in_chunk(num_row_groups, num_chunks, chunk);
           if (is_last_chunk) {
             // Need to assume that an additional "overflow" row group is present
             row_groups_to_read.push_back(num_row_groups);

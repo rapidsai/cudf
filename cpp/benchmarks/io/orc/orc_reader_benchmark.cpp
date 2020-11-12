@@ -121,7 +121,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
       switch (row_sel) {
         case row_selection::ALL: break;
         case row_selection::STRIPES: {
-          auto stripes_to_read = sections_in_chunk(num_stripes, num_chunks, chunk);
+          auto stripes_to_read = segments_in_chunk(num_stripes, num_chunks, chunk);
           if (is_last_chunk) {
             // Need to assume that an additional "overflow" stripe is present
             stripes_to_read.push_back(num_stripes);
