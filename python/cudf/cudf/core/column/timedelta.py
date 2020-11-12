@@ -173,7 +173,7 @@ class TimeDeltaColumn(column.ColumnBase):
             lhs = lhs.astype(common_dtype).astype("float64")
 
             if isinstance(rhs, (cudf.Scalar, DeviceScalar)):
-                if rhs.is_valid:
+                if rhs.is_valid():
                     rhs = rhs.value.astype(common_dtype).astype("float64")
                 else:
                     rhs = as_device_scalar(None, "float64")
