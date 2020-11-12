@@ -376,6 +376,7 @@ def _is_null_host_scalar(slr):
     else:
         return False
 
+
 def _create_dummy_nat_scalar(dtype):
     cdef DeviceScalar result = DeviceScalar.__new__(DeviceScalar)
 
