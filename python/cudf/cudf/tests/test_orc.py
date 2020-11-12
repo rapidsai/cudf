@@ -1,6 +1,8 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import os
+import datetime
+import math
 from io import BytesIO
 
 import numpy as np
@@ -10,7 +12,7 @@ import pyarrow.orc
 import pytest
 
 import cudf
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, supported_numpy_dtypes, gen_rand_series
 
 
 @pytest.fixture(scope="module")
@@ -446,3 +448,74 @@ def test_int_overflow(tmpdir):
     df.to_orc(file_path)
 
     assert_eq(cudf.read_orc(file_path), df)
+
+
+supported_stat_types = supported_numpy_dtypes + ["str"]
+supported_stat_types.remove("datetime64[us]")
+# supported_stat_types = ["str"]
+
+
+def normalized_equals(value1, value2):
+    if isinstance(value1, pd.Timestamp):
+        value1 = value1.to_pydatetime()
+    if isinstance(value2, pd.Timestamp):
+        value2 = value2.to_pydatetime()
+    if isinstance(value1, datetime.datetime):
+        value1 = value1.replace(tzinfo=None)
+    if isinstance(value2, datetime.datetime):
+        value2 = value2.replace(tzinfo=None)
+
+    # if one is datetime then both values are datetimes now
+    if isinstance(value1, datetime.datetime):
+        return value1 == value2
+
+    # Compare integers with floats now
+    if isinstance(value1, float) or isinstance(value2, float):
+        return math.isclose(value1, value2)
+
+    return value1 == value2
+
+
+def test_orc_write_statistics(tmpdir, datadir):
+    # Make a dataframe
+    gdf = cudf.DataFrame(
+        {
+            "col_" + str(dtype): gen_rand_series(dtype, 1000, has_nulls=True)
+            for dtype in supported_stat_types
+        }
+    )
+    fname = tmpdir.join("gdf.orc")
+
+    # Write said dataframe to ORC with cuDF
+    gdf.to_orc(fname.strpath)
+
+    # Read back written ORC's statistics
+    orc_file = pa.orc.ORCFile(fname)
+    (file_stats, stripes_stats,) = cudf.io.orc.read_orc_statistics(fname)
+
+    # check file stats
+    for col in gdf:
+        if "minimum" in file_stats[col]:
+            stats_min = file_stats[col]["minimum"]
+            actual_min = gdf[col].min()
+            assert normalized_equals(actual_min, stats_min)
+        if "maximum" in file_stats[col]:
+            stats_max = file_stats[col]["maximum"]
+            actual_max = gdf[col].max()
+            assert normalized_equals(actual_max, stats_max)
+
+    # compare stripe statistics with actual min/max
+    for stripe_idx in range(0, orc_file.nstripes):
+        stripe = orc_file.read_stripe(stripe_idx)
+        # pandas is unable to handle min/max of string col with nulls
+        stripe_df = cudf.DataFrame(stripe.to_pandas())
+        for col in stripe_df:
+            if "minimum" in stripes_stats[stripe_idx][col]:
+                actual_min = stripe_df[col].min()
+                stats_min = stripes_stats[stripe_idx][col]["minimum"]
+                assert normalized_equals(actual_min, stats_min)
+
+            if "maximum" in stripes_stats[stripe_idx][col]:
+                actual_max = stripe_df[col].max()
+                stats_max = stripes_stats[stripe_idx][col]["maximum"]
+                assert normalized_equals(actual_max, stats_max)
