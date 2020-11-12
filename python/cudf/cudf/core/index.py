@@ -1502,7 +1502,7 @@ class RangeIndex(Index):
             start, stop = 0, start
         out._start = int(start)
         out._stop = int(stop)
-        out._step = int(step)
+        out._step = int(step) if step is not None else 1
         out._index = None
         out._name = name
 
