@@ -632,7 +632,7 @@ class Index(Frame, Serializable):
 
         See Also
         --------
-        Index.max : Return the maximum value in an Index.
+        cudf.core.index.Index.max : Return the maximum value in an Index.
         cudf.core.series.Series.min : Return the minimum value in a Series.
         cudf.core.dataframe.DataFrame.min : Return the minimum values in
             a DataFrame.
@@ -657,7 +657,7 @@ class Index(Frame, Serializable):
 
         See Also
         --------
-        Index.min : Return the minimum value in an Index.
+        cudf.core.index.Index.min : Return the minimum value in an Index.
         cudf.core.series.Series.max : Return the maximum value in a Series.
         cudf.core.dataframe.DataFrame.max : Return the maximum values in
             a DataFrame.

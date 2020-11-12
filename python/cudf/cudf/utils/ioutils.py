@@ -13,7 +13,7 @@ from cudf.utils.docutils import docfmt_partial
 _docstring_remote_sources = """
 - cuDF supports local and remote data stores. See configuration details for
   available sources
-  `here <https://docs.dask.org/en/latest/remote-data-services.html>`_.
+  `here <https://docs.dask.org/en/latest/remote-data-services.html>`__.
 """
 
 _docstring_read_avro = """

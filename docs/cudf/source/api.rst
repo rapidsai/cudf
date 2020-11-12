@@ -193,6 +193,13 @@ GroupBy
     :members:
     :exclude-members: deserialize, serialize, device_deserialize, device_serialize, host_deserialize, host_serialize
 
+Window
+------
+.. currentmodule:: cudf.core.window
+.. autoclass:: Rolling
+    :members:
+
+
 General utility functions
 -------------------------
 .. currentmodule:: cudf.testing
@@ -246,3 +253,4 @@ GpuArrowReader
 .. currentmodule:: cudf.comm.gpuarrow
 .. autoclass:: GpuArrowReader
     :members:
+    :exclude-members: count, index
