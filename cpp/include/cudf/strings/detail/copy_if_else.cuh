@@ -60,7 +60,7 @@ std::unique_ptr<cudf::column> copy_if_else(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = std::distance(lhs_begin, lhs_end);
-  if (strings_count == 0) return make_empty_strings_column(mr, stream.value());
+  if (strings_count == 0) return make_empty_strings_column(stream, mr);
 
   auto execpol = rmm::exec_policy(stream);
   // create null mask
@@ -88,14 +88,13 @@ std::unique_ptr<cudf::column> copy_if_else(
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0), offsets_transformer);
   auto offsets_column = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream.value());
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().template data<int32_t>();
 
   // build chars column
-  size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
-  auto chars_column =
-    create_chars_child_column(strings_count, null_count, bytes, mr, stream.value());
-  auto d_chars = chars_column->mutable_view().template data<char>();
+  size_type bytes   = thrust::device_pointer_cast(d_offsets)[strings_count];
+  auto chars_column = create_chars_child_column(strings_count, null_count, bytes, stream, mr);
+  auto d_chars      = chars_column->mutable_view().template data<char>();
   // fill in chars
   thrust::for_each_n(
     execpol->on(stream.value()),

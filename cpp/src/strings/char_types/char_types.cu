@@ -176,7 +176,7 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
 
   // this utility calls filterer to build the offsets and chars columns
   auto children = cudf::strings::detail::make_strings_children(
-    filterer, strings_count, strings.null_count(), mr, stream);
+    filterer, strings_count, strings.null_count(), stream, mr);
 
   // return new strings column
   return make_strings_column(strings_count,

@@ -183,7 +183,7 @@ struct dispatch_from_durations_fn {
     auto offsets_transformer_itr = thrust::make_transform_iterator(
       thrust::make_counting_iterator<int32_t>(0), duration_to_string_size_fn<T>{d_column});
     auto offsets_column = strings::detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream.value());
+      offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
     auto offsets_view  = offsets_column->view();
     auto d_new_offsets = offsets_view.template data<int32_t>();
 
@@ -191,7 +191,7 @@ struct dispatch_from_durations_fn {
     auto const chars_bytes =
       cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
     auto chars_column = strings::detail::create_chars_child_column(
-      strings_count, durations.null_count(), chars_bytes, mr, stream.value());
+      strings_count, durations.null_count(), chars_bytes, stream, mr);
     auto chars_view = chars_column->mutable_view();
     auto d_chars    = chars_view.template data<char>();
 

@@ -47,7 +47,7 @@ struct interleave_columns_functor {
 
     auto strings_count = strings_columns.num_rows();
     if (strings_count == 0)  // All columns have 0 rows
-      return strings::detail::make_empty_strings_column(mr, stream);
+      return strings::detail::make_empty_strings_column(stream, mr);
 
     // Create device views from the strings columns.
     auto table       = table_device_view::create(strings_columns, stream);
@@ -83,13 +83,13 @@ struct interleave_columns_functor {
     auto offsets_transformer_itr = thrust::make_transform_iterator(
       thrust::make_counting_iterator<size_type>(0), offsets_transformer);
     auto offsets_column = strings::detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + num_strings, mr, stream);
+      offsets_transformer_itr, offsets_transformer_itr + num_strings, stream, mr);
     auto d_results_offsets = offsets_column->view().template data<int32_t>();
 
     // Create the chars column
     size_type bytes = thrust::device_pointer_cast(d_results_offsets)[num_strings];
     auto chars_column =
-      strings::detail::create_chars_child_column(num_strings, null_count, bytes, mr, stream);
+      strings::detail::create_chars_child_column(num_strings, null_count, bytes, stream, mr);
     // Fill the chars column
     auto d_results_chars = chars_column->mutable_view().data<char>();
     thrust::for_each_n(

@@ -269,8 +269,7 @@ struct column_to_strings_fn {
     string_scalar delimiter{std::string{options_.get_inter_column_delimiter()}, true, stream_};
     predicate_special_chars pred{delimiter.value(stream_)};
 
-    return modify_strings<probe_special_chars, modify_special_chars>(
-      column_v, mr_, stream_.value(), pred);
+    return modify_strings<probe_special_chars, modify_special_chars>(column_v, stream_, mr_, pred);
   }
 
   // ints:

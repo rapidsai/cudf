@@ -320,8 +320,8 @@ std::unique_ptr<column> column_merger::operator()<cudf::string_view>(column_view
                                                    strings_column_view(rcol),
                                                    row_order_.begin(),
                                                    row_order_.end(),
-                                                   mr_,
-                                                   stream_);
+                                                   stream_,
+                                                   mr_);
   if (lcol.has_nulls() || rcol.has_nulls()) {
     auto merged_view = column->mutable_view();
     materialize_bitmask(lcol, rcol, merged_view, row_order_.data().get(), stream_);

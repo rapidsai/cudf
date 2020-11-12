@@ -52,19 +52,19 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_cha
     auto offsets_transformer_itr =
       thrust::make_transform_iterator(input_begin, offsets_transformer);
     offsets_column = cudf::strings::detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
+      offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   } else {
     auto offsets_transformer_itr =
       thrust::make_transform_iterator(input.begin<string_view>(), offsets_transformer);
     offsets_column = cudf::strings::detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
+      offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   }
 
   auto d_offsets = offsets_column->view().template data<size_type>();
   // build chars column
   size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
   auto chars_column =
-    cudf::strings::detail::create_chars_child_column(strings_count, null_count, bytes, mr, stream);
+    cudf::strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
 
   return std::make_pair(std::move(offsets_column), std::move(chars_column));
 }

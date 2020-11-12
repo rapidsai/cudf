@@ -113,36 +113,36 @@ struct url_encoder_fn {
 //
 std::unique_ptr<column> url_encode(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(mr, stream);
+  if (strings_count == 0) return make_empty_strings_column(stream, mr);
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
 
   // copy null mask
-  rmm::device_buffer null_mask =
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
   // build offsets column
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0), url_encoder_fn{d_strings});
   auto offsets_column = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();
   // build chars column
   auto chars_column =
     create_chars_child_column(strings_count,
                               strings.null_count(),
                               thrust::device_pointer_cast(d_offsets)[strings_count],
-                              mr,
-                              stream);
+                              stream,
+                              mr);
   auto d_chars = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      url_encoder_fn{d_strings, d_offsets, d_chars});
+
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              std::move(chars_column),
@@ -159,7 +159,7 @@ std::unique_ptr<column> url_encode(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::url_encode(strings, mr);
+  return detail::url_encode(strings, rmm::cuda_stream_default, mr);
 }
 
 namespace detail {
@@ -216,23 +216,22 @@ struct url_decoder_fn {
 //
 std::unique_ptr<column> url_decode(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(mr, stream);
+  if (strings_count == 0) return make_empty_strings_column(stream, mr);
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
 
   // copy null mask
-  rmm::device_buffer null_mask =
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
   // build offsets column
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0), url_decoder_fn{d_strings});
   auto offsets_column = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build chars column
@@ -240,14 +239,14 @@ std::unique_ptr<column> url_decode(
     create_chars_child_column(strings_count,
                               strings.null_count(),
                               thrust::device_pointer_cast(d_offsets)[strings_count],
-                              mr,
-                              stream);
+                              stream,
+                              mr);
   auto d_chars = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      url_decoder_fn{d_strings, d_offsets, d_chars});
-  //
+
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              std::move(chars_column),
@@ -265,7 +264,7 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::url_decode(strings, mr);
+  return detail::url_decode(strings, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

@@ -412,7 +412,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
     valid_count);
 
   std::unique_ptr<cudf::column> offsets = cudf::strings::detail::make_offsets_child_column(
-    sizes_view.begin<int32_t>(), sizes_view.end<int32_t>(), mr, stream.value());
+    sizes_view.begin<int32_t>(), sizes_view.end<int32_t>(), stream, mr);
   auto offsets_view   = offsets->mutable_view();
   auto device_offsets = cudf::mutable_column_device_view::create(offsets_view);
   int32_t size;
@@ -423,7 +423,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   // Allocate chars array and output null mask
   cudf::size_type null_count                 = input_col.size() - valid_counter.value(stream);
   std::unique_ptr<cudf::column> output_chars = cudf::strings::detail::create_chars_child_column(
-    input_col.size(), null_count, size, mr, stream.value());
+    input_col.size(), null_count, size, stream, mr);
 
   auto output_chars_view = output_chars->mutable_view();
   auto device_chars      = cudf::mutable_column_device_view::create(output_chars_view);

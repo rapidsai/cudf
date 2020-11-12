@@ -15,12 +15,14 @@
  */
 #pragma once
 
-#include <cuda_runtime.h>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/scan.h>
+
 #include <mutex>
 #include <unordered_map>
 
@@ -43,8 +45,8 @@ template <typename InputIterator>
 std::unique_ptr<column> make_offsets_child_column(
   InputIterator begin,
   InputIterator end,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(begin < end, "Invalid iterator range");
   auto count = thrust::distance(begin, end);
@@ -57,8 +59,8 @@ std::unique_ptr<column> make_offsets_child_column(
   // Rather than manually computing the final offset using values in device memory,
   // we use inclusive-scan on a shifted output (d_offsets+1) and then set the first
   // offset values to zero manually.
-  thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream), begin, end, d_offsets + 1);
-  CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(int32_t), stream));
+  thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()), begin, end, d_offsets + 1);
+  CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(int32_t), stream.value()));
   return offsets_column;
 }
 

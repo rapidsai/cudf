@@ -26,6 +26,7 @@
 #include <strings/regex/regex.cuh>
 #include <strings/utilities.cuh>
 #include <strings/utilities.hpp>
+#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace strings {
@@ -127,16 +128,15 @@ struct replace_multi_regex_fn {
 
 }  // namespace
 
-//
 std::unique_ptr<column> replace_re(
   strings_column_view const& strings,
   std::vector<std::string> const& patterns,
   strings_column_view const& repls,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(mr, stream);
+  if (strings_count == 0) return make_empty_strings_column(stream, mr);
   if (patterns.empty())  // no patterns; just return a copy
     return std::make_unique<column>(strings.parent());
 
@@ -177,25 +177,25 @@ std::unique_ptr<column> replace_re(
         d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, d_repls},
       strings_count,
       null_count,
-      mr,
-      stream);
+      stream,
+      mr);
   else if (regex_insts <= RX_MEDIUM_INSTS)
     children = make_strings_children(
       replace_multi_regex_fn<RX_STACK_MEDIUM>{
         d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, d_repls},
       strings_count,
       null_count,
-      mr,
-      stream);
+      stream,
+      mr);
   else
     children = make_strings_children(
       replace_multi_regex_fn<RX_STACK_LARGE>{
         d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, d_repls},
       strings_count,
       null_count,
-      mr,
-      stream);
-  //
+      stream,
+      mr);
+
   return make_strings_column(strings_count,
                              std::move(children.first),
                              std::move(children.second),
@@ -215,7 +215,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_re(strings, patterns, repls, mr);
+  return detail::replace_re(strings, patterns, repls, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings
