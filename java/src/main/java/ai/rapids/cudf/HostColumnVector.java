@@ -925,7 +925,12 @@ public final class HostColumnVector extends HostColumnVectorCore {
       currentIndex++;
       currentByteIndex += type.getSizeInBytes();
       if (type.hasOffsets()) {
-        offsets.setInt(currentIndex * OFFSET_SIZE, currentByteIndex);
+        if (type.getTypeId() == DType.DTypeEnum.LIST) {
+          offsets.setInt(currentIndex * OFFSET_SIZE, childBuilders.get(0).getCurrentIndex());
+        } else {
+          // It is a String
+          offsets.setInt(currentIndex * OFFSET_SIZE, currentByteIndex);
+        }
       } else if (type == DType.STRUCT) {
         // structs propagate nulls to children and even further down if needed
         for (ColumnBuilder childBuilder : childBuilders) {
@@ -942,33 +947,70 @@ public final class HostColumnVector extends HostColumnVectorCore {
         if (structData == null || structData.dataRecord == null) {
           return appendNull();
         } else {
-          growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
           for (int i = 0; i < structData.getNumFields(); i++) {
             ColumnBuilder childBuilder = childBuilders.get(i);
             appendChildOrNull(childBuilder, structData.dataRecord.get(i));
           }
-          currentIndex++;
+          endStruct();
         }
       }
       return this;
     }
 
+    private boolean allChildrenHaveSameIndex() {
+      if (childBuilders.size() > 0) {
+        int expected = childBuilders.get(0).getCurrentIndex();
+        for (ColumnBuilder child: childBuilders) {
+          if (child.getCurrentIndex() != expected) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    /**
+     * If you want to build up a struct column you can get each child `builder.getChild(N)` and
+     * append to all of them, then when you are done call `endStruct` to update this builder.
+     * Do not start to append to the child and then append a null to this without ending the struct
+     * first or you might not get the results that you expected.
+     * @return this for chaining.
+     */
+    public ColumnBuilder endStruct() {
+      assert type.getTypeId() == DType.DTypeEnum.STRUCT : "This only works for structs";
+      assert allChildrenHaveSameIndex() : "Appending structs data appears to be off " +
+          childBuilders + " should all have the same currentIndex " + type;
+      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+      currentIndex++;
+      return this;
+    }
+
+    /**
+     * If you want to build up a list column you can get `builder.getChild(0)` and append to than,
+     * then when you are done call `endList` and everything that was appended to that builder
+     * will now be in the next list. Do not start to append to the child and then append a null
+     * to this without ending the list first or you might not get the results that you expected.
+     * @return this for chaining.
+     */
+    public ColumnBuilder endList() {
+      assert type.getTypeId() == DType.DTypeEnum.LIST;
+      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+      currentIndex++;
+      offsets.setInt(currentIndex * OFFSET_SIZE, childBuilders.get(0).getCurrentIndex());
+      return this;
+    }
+
     // For lists
     private <T> ColumnBuilder append(List<T> inputList) {
-      assert type.isNestedType();
-      // We know lists have only 1 children
-      ColumnBuilder childBuilder = childBuilders.get(0);
       if (inputList == null) {
-        growBuffersAndRows(true, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
-        setNullAt(currentIndex);
+        appendNull();
       } else {
-        growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+        ColumnBuilder childBuilder = childBuilders.get(0);
         for (Object listElement : inputList) {
           appendChildOrNull(childBuilder, listElement);
         }
+        endList();
       }
-      currentIndex++;
-      offsets.setInt(currentIndex * OFFSET_SIZE, childBuilder.getCurrentIndex());
       return this;
     }
 
@@ -1002,6 +1044,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       }
     }
 
+    @Deprecated
     public void incrCurrentIndex() {
       currentIndex =  currentIndex + 1;
     }

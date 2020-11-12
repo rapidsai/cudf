@@ -32,7 +32,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     numeric_normalize_types,
 )
-from cudf.utils.utils import cached_property
+from cudf.utils.utils import cached_property, search_range
 
 
 def _to_frame(this_index, index=True, name=None):
@@ -632,7 +632,7 @@ class Index(Frame, Serializable):
 
         See Also
         --------
-        Index.max : Return the maximum value in an Index.
+        cudf.core.index.Index.max : Return the maximum value in an Index.
         cudf.core.series.Series.min : Return the minimum value in a Series.
         cudf.core.dataframe.DataFrame.min : Return the minimum values in
             a DataFrame.
@@ -657,7 +657,7 @@ class Index(Frame, Serializable):
 
         See Also
         --------
-        Index.min : Return the minimum value in an Index.
+        cudf.core.index.Index.min : Return the minimum value in an Index.
         cudf.core.series.Series.max : Return the maximum value in a Series.
         cudf.core.dataframe.DataFrame.max : Return the maximum values in
             a DataFrame.
@@ -1463,7 +1463,6 @@ class RangeIndex(Index):
     start : int (default: 0), or other range instance
     stop : int (default: 0)
     step : int (default: 1)
-        Not yet supported
     name : object, optional
         Name to be stored in the index.
     dtype : numpy dtype
@@ -1478,30 +1477,31 @@ class RangeIndex(Index):
     Examples
     --------
     >>> import cudf
-    >>> cudf.RangeIndex(0, 10, name="a")
-    RangeIndex(start=0, stop=10, name='a')
+    >>> cudf.RangeIndex(0, 10, 1, name="a")
+    RangeIndex(start=0, stop=10, step=1, name='a')
 
-    >>> cudf.RangeIndex(range(1, 10), name="a")
-    RangeIndex(start=1, stop=10, name='a')
+    >>> cudf.RangeIndex(range(1, 10, 1), name="a")
+    RangeIndex(start=1, stop=10, step=1, name='a')
     """
 
     def __new__(
-        cls, start, stop=None, step=None, dtype=None, copy=False, name=None
+        cls, start, stop=None, step=1, dtype=None, copy=False, name=None
     ) -> "RangeIndex":
 
-        if step is not None:
-            raise NotImplementedError("step is not yet supported")
+        if step == 0:
+            raise ValueError("Step must not be zero.")
 
         out = Frame.__new__(cls)
         if isinstance(start, range):
             therange = start
             start = therange.start
             stop = therange.stop
+            step = therange.step
         if stop is None:
             start, stop = 0, start
         out._start = int(start)
         out._stop = int(stop)
-        out._cached_values = None
+        out._step = int(step) if step is not None else 1
         out._index = None
         out._name = name
 
@@ -1543,7 +1543,9 @@ class RangeIndex(Index):
     @cached_property
     def _values(self):
         if len(self) > 0:
-            return column.arange(self._start, self._stop, dtype=self.dtype)
+            return column.arange(
+                self._start, self._stop, self._step, dtype=self.dtype
+            )
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
 
@@ -1560,10 +1562,7 @@ class RangeIndex(Index):
             return False
         if not item % 1 == 0:
             return False
-        if self._start <= item < self._stop:
-            return True
-        else:
-            return False
+        return item in range(self._start, self._stop, self._step)
 
     def copy(self, name=None, deep=False, dtype=None, names=None):
         """
@@ -1591,13 +1590,16 @@ class RangeIndex(Index):
 
         name = self.name if name is None else name
 
-        _idx_new = RangeIndex(start=self._start, stop=self._stop, name=name)
+        _idx_new = RangeIndex(
+            start=self._start, stop=self._stop, step=self._step, name=name
+        )
 
         return _idx_new
 
     def __repr__(self):
         return (
             f"{self.__class__.__name__}(start={self._start}, stop={self._stop}"
+            f", step={self._step}"
             + (
                 f", name={pd.io.formats.printing.default_pprint(self.name)}"
                 if self.name is not None
@@ -1607,25 +1609,20 @@ class RangeIndex(Index):
         )
 
     def __len__(self):
-        return max(0, self._stop - self._start)
+        return len(range(self._start, self._stop, self._step))
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            start, stop, step = index.indices(len(self))
-            sln = (stop - start) // step
-            sln = max(0, sln)
-            start += self._start
-            stop += self._start
-            if sln == 0:
-                return RangeIndex(0, stop=None, name=self.name)
-            elif step == 1:
-                return RangeIndex(start, stop=stop, name=self.name)
-            else:
-                return index_from_range(start, stop, step)
+            sl_start, sl_stop, sl_step = index.indices(len(self))
+
+            lo = self._start + sl_start * self._step
+            hi = self._start + sl_stop * self._step
+            st = self._step * sl_step
+            return RangeIndex(start=lo, stop=hi, step=st, name=self._name)
 
         elif isinstance(index, Number):
             index = utils.normalize_index(index, len(self))
-            index += self._start
+            index = self._start + index * self._step
             return index
         else:
             if is_scalar(index):
@@ -1639,7 +1636,11 @@ class RangeIndex(Index):
 
     def equals(self, other):
         if isinstance(other, RangeIndex):
-            if (self._start, self._stop) == (other._start, other._stop):
+            if (self._start, self._stop, self._step) == (
+                other._start,
+                other._stop,
+                other._step,
+            ):
                 return True
         return super().equals(other)
 
@@ -1653,6 +1654,7 @@ class RangeIndex(Index):
         # during de-serialization
         header["index_column"]["start"] = self._start
         header["index_column"]["stop"] = self._stop
+        header["index_column"]["step"] = self._step
         frames = []
 
         header["name"] = pickle.dumps(self.name)
@@ -1667,7 +1669,8 @@ class RangeIndex(Index):
         name = pickle.loads(header["name"])
         start = h["start"]
         stop = h["stop"]
-        return RangeIndex(start=start, stop=stop, name=name)
+        step = h["step"]
+        return RangeIndex(start=start, stop=stop, step=step, name=name)
 
     @property
     def dtype(self):
@@ -1679,17 +1682,27 @@ class RangeIndex(Index):
     @property
     def is_contiguous(self):
         """
-        Returns if the index is contiguous. `True` incase of RangeIndex.
+        Returns if the index is contiguous.
         """
-        return True
+        return self._step == 1
 
     @property
     def size(self):
-        return max(0, self._stop - self._start)
+        return self.__len__()
 
-    def find_label_range(self, first, last):
-        """Find range that starts with `first` and ends with `last`,
-        inclusively.
+    def find_label_range(self, first=None, last=None):
+        """Find subrange in the ``RangeIndex``, marked by their positions, that
+        starts greater or equal to ``first`` and ends less or equal to ``last``
+
+        The range returned is assumed to be monotonically increasing. In cases
+        where there is no such range that suffice the constraint, an exception
+        will be raised.
+
+        Parameters
+        ----------
+        first, last : int, optional, Default None
+            The "start" and "stop" values of the subrange. If None, will use
+            ``self._start`` as first, ``self._stop`` as last.
 
         Returns
         -------
@@ -1697,24 +1710,24 @@ class RangeIndex(Index):
             The starting index and the ending index.
             The `last` value occurs at ``end - 1`` position.
         """
-        # clip first to range
-        if first is None or first < self._start:
-            begin = self._start
-        elif first < self._stop:
-            begin = first
+
+        first = self._start if first is None else first
+        last = self._stop if last is None else last
+
+        if self._step < 0:
+            first = -first
+            last = -last
+            start = -self._start
+            step = -self._step
         else:
-            begin = self._stop
-        # clip last to range
-        if last is None:
-            end = self._stop
-        elif last < self._start:
-            end = begin
-        elif last < self._stop:
-            end = last + 1
-        else:
-            end = self._stop
-        # shift to index
-        return begin - self._start, end - self._start
+            start = self._start
+            step = self._step
+
+        stop = start + len(self) * step
+        begin = search_range(start, stop, first, step, side="left")
+        end = search_range(start, stop, last, step, side="right")
+
+        return begin, end
 
     @copy_docstring(_to_frame)
     def to_frame(self, index=True, name=None):
@@ -1739,6 +1752,7 @@ class RangeIndex(Index):
         return pd.RangeIndex(
             start=self._start,
             stop=self._stop,
+            step=self._step,
             dtype=self.dtype,
             name=self.name,
         )
@@ -1756,7 +1770,7 @@ class RangeIndex(Index):
         Return if the index is monotonic increasing
         (only equal or increasing) values.
         """
-        return self._start <= self._stop
+        return self._step > 0 or len(self) <= 1
 
     @property
     def is_monotonic_decreasing(self):
@@ -1764,18 +1778,41 @@ class RangeIndex(Index):
         Return if the index is monotonic decreasing
         (only equal or decreasing) values.
         """
-        return self._start >= self._stop
+        return self._step < 0 or len(self) <= 1
 
-    def get_slice_bound(self, label, side, kind):
-        if label < self._start:
-            return 0
-        elif label >= self._stop:
-            return len(self)
+    def get_slice_bound(self, label, side, kind=None):
+        """
+        Calculate slice bound that corresponds to given label.
+        Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
+        of given label.
+
+        Parameters
+        ----------
+        label : int
+            A valid value in the ``RangeIndex``
+        side : {'left', 'right'}
+        kind : Unused
+            To keep consistency with other index types.
+
+        Returns
+        -------
+        int
+            Index of label.
+        """
+        if side not in {"left", "right"}:
+            raise ValueError(f"Unrecognized side parameter: {side}")
+
+        if self._step < 0:
+            label = -label
+            start = -self._start
+            step = -self._step
         else:
-            if side == "left":
-                return label - self._start
-            elif side == "right":
-                return (label - self._start) + 1
+            start = self._start
+            step = self._step
+
+        stop = start + len(self) * step
+        pos = search_range(start, stop, label, step, side=side)
+        return pos
 
     @property
     def __cuda_array_interface__(self):
@@ -2702,8 +2739,7 @@ def as_index(arbitrary, **kwargs):
     elif isinstance(arbitrary, cudf.DataFrame):
         return cudf.MultiIndex(source_data=arbitrary)
     elif isinstance(arbitrary, range):
-        if arbitrary.step == 1:
-            return RangeIndex(arbitrary.start, arbitrary.stop, **kwargs)
+        return RangeIndex(arbitrary, **kwargs)
     return as_index(
         column.as_column(arbitrary, dtype=kwargs.get("dtype", None)), **kwargs
     )
