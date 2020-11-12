@@ -450,11 +450,6 @@ def test_int_overflow(tmpdir):
     assert_eq(cudf.read_orc(file_path), df)
 
 
-supported_stat_types = supported_numpy_dtypes + ["str"]
-supported_stat_types.remove("datetime64[us]")
-supported_stat_types = ["datetime64[ms]"]
-
-
 def normalized_equals(value1, value2):
     if isinstance(value1, datetime.datetime):
         value1 = np.datetime64(value1)
@@ -468,11 +463,15 @@ def normalized_equals(value1, value2):
     return value1 == value2
 
 
-def test_orc_write_statistics(tmpdir, datadir):
+@pytest.mark.parametrize("nrows", [1, 100, 6000000])
+def test_orc_write_statistics(tmpdir, datadir, nrows):
+    supported_stat_types = supported_numpy_dtypes + ["str"]
+    supported_stat_types.remove("datetime64[us]")
+
     # Make a dataframe
     gdf = cudf.DataFrame(
         {
-            "col_" + str(dtype): gen_rand_series(dtype, 1000, has_nulls=True)
+            "col_" + str(dtype): gen_rand_series(dtype, nrows, has_nulls=True)
             for dtype in supported_stat_types
         }
     )
