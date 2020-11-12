@@ -67,6 +67,7 @@
 - PR #6676 Add dictionary support to `cudf::quantile`
 - PR #6673 Parameterize avro and json benchmark
 - PR #6609 Support fixed-point decimal for HostColumnVector
+- PR #6662 `RangeIndex` supports `step` parameter
 - PR #6712 Remove `reinterpret_cast` conversions between pointer types in Avro
 - PR #6705 Add nested type support to Java table serialization
 - PR #6709 Raise informative error while converting a pandas dataframe with duplicate columns
