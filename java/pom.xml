@@ -351,6 +351,7 @@
                                     <arg value="-DRMM_LOGGING_LEVEL=${RMM_LOGGING_LEVEL}" />
                                     <arg value="-DCMAKE_CXX_FLAGS=${cxx.flags}"/>
                                     <arg value="-DCMAKE_EXPORT_COMPILE_COMMANDS=${CMAKE_EXPORT_COMPILE_COMMANDS}"/>
+                                    <arg value="-DCUDF_CPP_BUILD_DIR=${CUDF_CPP_BUILD_DIR}"/>
                                     <arg value="-DGPU_ARCHS=ALL"/>
                                 </exec>
                                 <exec dir="${native.build.path}"

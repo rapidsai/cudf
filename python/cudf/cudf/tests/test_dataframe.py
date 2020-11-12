@@ -7967,6 +7967,15 @@ def test_dataframe_axis1_unsupported_ops(op):
     ):
         getattr(df, op)(axis=1)
 
+def test_dataframe_from_pandas_duplicate_columns():
+    pdf = pd.DataFrame(columns=["a", "b", "c", "a"])
+    pdf["a"] = [1, 2, 3]
+
+    with pytest.raises(
+        ValueError, match="Duplicate column names are not allowed"
+    ):
+        gd.from_pandas(pdf)
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -7997,7 +8006,6 @@ def test_dataframe_axis1_unsupported_ops(op):
         {"a": ["sum"], "b": ["min"], "c": ["max"]},
         {"a": ("sum"), "b": ("min"), "c": ("max")},
         {"a": {"sum"}, "b": {"min"}, "c": {"max"}},
-        {"a": ["sum"], "b": ("min"), "c": {"max"}},
         {"a": ["sum", "min"], "b": ["sum", "max"], "c": ["min", "max"]},
         {"a": ("sum", "min"), "b": ("sum", "max"), "c": ("min", "max")},
         {"a": {"sum", "min"}, "b": {"sum", "max"}, "c": {"min", "max"}},
@@ -8013,12 +8021,12 @@ def test_agg_for_dataframes(data, aggs):
             got = gdf.agg(aggs)
     elif aggs =="asdf":
         with pytest.raises(
-            AttributeError, match=f"'{type(gdf).__name__}' object has no attribute '{aggs}'"
+           AttributeError, match=f"{aggs} is not a valid function for 'DataFrame' object"
         ):
             got = gdf.agg(aggs)
-    elif aggs =={"a":"asdf"}:
+    elif aggs == {"a":"asdf"}:
         with pytest.raises(
-            ValueError, match="If using all scalar values, you must pass an index"
+             AttributeError, match=f"{aggs['a']} is not a valid function for 'Series' object"
         ):
             got = gdf.agg(aggs)
     else:

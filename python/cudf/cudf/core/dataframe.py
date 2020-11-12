@@ -874,7 +874,7 @@ class DataFrame(Frame, Serializable):
         else:
             return NotImplemented
 
-    def __array_aggstion__(self, aggs, types, args, kwargs):
+    def __array_function__(self, aggs, types, args, kwargs):
 
         cudf_df_module = DataFrame
         cudf_series_module = Series
@@ -896,7 +896,7 @@ class DataFrame(Frame, Serializable):
 
         if hasattr(cudf_df_module, fname):
             cudf_aggs = getattr(cudf_df_module, fname)
-            # Handle case if cudf_aggs is same as numpy aggstion
+            # Handle case if cudf_aggs is same as numpy function
             if cudf_aggs is aggs:
                 return NotImplemented
             else:
@@ -1169,7 +1169,7 @@ class DataFrame(Frame, Serializable):
 
     def _clean_nulls_from_dataframe(self, df):
         """
-        This aggstion converts all ``null`` values to ``<NA>`` for
+        This function converts all ``null`` values to ``<NA>`` for
         representation as a string in `__repr__`.
 
         Since we utilize Pandas `__repr__` at all places in our code
@@ -3238,7 +3238,7 @@ class DataFrame(Frame, Serializable):
     ):
         """Alter column and index labels.
 
-        aggstion / dict values must be unique (1-to-1). Labels not contained in
+        function / dict values must be unique (1-to-1). Labels not contained in
         a dict / Series will be left as-is. Extra labels listed don’t throw an
         error.
 
@@ -3250,14 +3250,14 @@ class DataFrame(Frame, Serializable):
 
         Parameters
         ----------
-        mapper : dict-like or aggstion, default None
-            optional dict-like or aggstions transformations to apply to
+        mapper : dict-like or function, default None
+            optional dict-like or functions transformations to apply to
             the index/column values depending on selected ``axis``.
         index : dict-like, default None
             Optional dict-like transformations to apply to the index axis'
-            values. Does not support aggstions for axis 0 yet.
-        columns : dict-like or aggstion, default None
-            optional dict-like or aggstions transformations to apply to
+            values. Does not support functions for axis 0 yet.
+        columns : dict-like or function, default None
+            optional dict-like or functions transformations to apply to
             the columns axis' values.
         axis : int, default 0
             Axis to rename with mapper.
@@ -3762,6 +3762,8 @@ class DataFrame(Frame, Serializable):
                 result[agg] = getattr(df_normalized, agg)()
 
         elif isinstance(aggs, str):
+            if not hasattr(df_normalized, aggs):
+                raise AttributeError(f"{aggs} is not a valid function for 'DataFrame' object")
             result = cudf.DataFrame()
             result[aggs] = getattr(df_normalized,aggs)()
             result = result.T.loc[aggs]
@@ -3776,11 +3778,13 @@ class DataFrame(Frame, Serializable):
                 result = cudf.Series(index=cols)
                 for key, value in aggs.items():
                     col = df_normalized[key]
+                    if not hasattr(col, value):
+                        raise AttributeError(f"{value} is not a valid function for 'Series' object")
                     result[key]= getattr(col, value)()
             elif all([isinstance(val, Iterable) for val in aggs.values()]):
                 idxs=set()
                 for val in aggs.values():
-                    if isinstance(val, list):
+                    if isinstance(val, Iterable):
                         idxs.update(val)
                     elif isinstance(val, str):
                         idxs.add(val)    
@@ -3793,13 +3797,18 @@ class DataFrame(Frame, Serializable):
                     col = df_normalized[key]
                     col_empty =  column_empty(len(idxs), dtype=col.dtype, masked=True)
                     ans = cudf.Series(data=col_empty, index=idxs)
-                    if isinstance(aggs.get(key),list):
+                    if isinstance(aggs.get(key), Iterable):
                         # TODO : Allow simultaneous pass for multi-aggregation as a future optimization
                         for agg in aggs.get(key):
+                            if not hasattr(col, agg):
+                                raise AttributeError(f"{agg} is not a valid function for 'Series' object")
                             ans[agg] = getattr(col, agg)()
                     elif isinstance(aggs.get(key),str):
+                        if not hasattr(col, aggs.get(key)):
+                                raise AttributeError(f"{aggs.get(key)} is not a valid function for 'Series' object")
                         ans[aggs.get(key)] = getattr(col, agg)()
                     result[key] = ans
+
             else: raise ValueError("values of dict must be a string or list")
 
             return result 
@@ -4258,7 +4267,7 @@ class DataFrame(Frame, Serializable):
         cache_key=None,
     ):
         """
-        Apply a row-wise user defined aggstion.
+        Apply a row-wise user defined function.
 
         Parameters
         ----------
@@ -4266,13 +4275,13 @@ class DataFrame(Frame, Serializable):
 
         Examples
         --------
-        The user aggstion should loop over the columns and set the output for
+        The user function should loop over the columns and set the output for
         each row. Loop execution order is arbitrary, so each iteration of
         the loop **MUST** be independent of each other.
 
         When ``aggs`` is invoked, the array args corresponding to the
         input/output are strided so as to improve GPU parallelism.
-        The loop in the aggstion resembles serial code, but executes
+        The loop in the function resembles serial code, but executes
         concurrently in multiple threads.
 
         >>> import cudf
@@ -4312,7 +4321,7 @@ class DataFrame(Frame, Serializable):
                 current_col_dtype
             ):
                 raise TypeError(
-                    "User defined aggstions are currently not "
+                    "User defined functions are currently not "
                     "supported on Series with dtypes `str` and `category`."
                 )
         return applyutils.apply_rows(
@@ -4338,7 +4347,7 @@ class DataFrame(Frame, Serializable):
         tpb=None,
     ):
         """
-        Transform user-specified chunks using the user-provided aggstion.
+        Transform user-specified chunks using the user-provided function.
 
         Parameters
         ----------
@@ -4362,7 +4371,7 @@ class DataFrame(Frame, Serializable):
 
         By looping over the range
         ``range(cuda.threadIdx.x, in1.size, cuda.blockDim.x)``, the *kernel*
-        aggstion can be used with any *tpb* in an efficient manner.
+        function can be used with any *tpb* in an efficient manner.
 
         >>> from numba import cuda
         >>> @cuda.jit
@@ -4995,6 +5004,9 @@ class DataFrame(Frame, Serializable):
         if not isinstance(dataframe, pd.DataFrame):
             raise TypeError("not a pandas.DataFrame")
 
+        if not dataframe.columns.is_unique:
+            raise ValueError("Duplicate column names are not allowed")
+
         df = cls()
         # Set columns
         for col_name, col_value in dataframe.iteritems():
@@ -5620,7 +5632,7 @@ class DataFrame(Frame, Serializable):
         Parameters
         ----------
         axis: {index (0), columns(1)}
-            Axis for the aggstion to be applied on.
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
         level: int or level name, default None
@@ -5665,7 +5677,7 @@ class DataFrame(Frame, Serializable):
         Parameters
         ----------
         axis: {index (0), columns(1)}
-            Axis for the aggstion to be applied on.
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
         level: int or level name, default None
@@ -5718,7 +5730,7 @@ class DataFrame(Frame, Serializable):
         ----------
 
         axis: {index (0), columns(1)}
-            Axis for the aggstion to be applied on.
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
         dtype: data type
@@ -5776,7 +5788,7 @@ class DataFrame(Frame, Serializable):
         ----------
 
         axis: {index (0), columns(1)}
-            Axis for the aggstion to be applied on.
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
         dtype: data type
@@ -5834,7 +5846,7 @@ class DataFrame(Frame, Serializable):
         ----------
 
         axis: {index (0), columns(1)}
-            Axis for the aggstion to be applied on.
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values when computing the result.
         dtype: data type
@@ -6032,7 +6044,7 @@ class DataFrame(Frame, Serializable):
         Parameters
         ----------
         axis : {0 or 'index', 1 or 'columns'}
-            Axis for the aggstion to be applied on.
+            Axis for the function to be applied on.
         skipna : bool, default True
             Exclude NA/null values when computing the result.
         level : int or level name, default None
@@ -6043,7 +6055,7 @@ class DataFrame(Frame, Serializable):
             use everything, then use only numeric data. Not implemented for
             Series.
         **kwargs
-            Additional keyword arguments to be passed to the aggstion.
+            Additional keyword arguments to be passed to the function.
 
         Returns
         -------
@@ -6186,7 +6198,7 @@ class DataFrame(Frame, Serializable):
         ----------
 
         axis: {index (0), columns(1)}
-            Axis for the aggstion to be applied on.
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values. If an entire row/column is NA, the result
             will be NA.
@@ -6242,7 +6254,7 @@ class DataFrame(Frame, Serializable):
         ----------
 
         axis: {index (0), columns(1)}
-            Axis for the aggstion to be applied on.
+            Axis for the function to be applied on.
         skipna: bool, default True
             Exclude NA/null values. If an entire row/column is NA, the result
             will be NA.
@@ -6956,7 +6968,7 @@ class DataFrame(Frame, Serializable):
 
         See Also
         --------
-        cudf.core.reshape.concat : General aggstion to concatenate DataFrame or
+        cudf.core.reshape.concat : General function to concatenate DataFrame or
             objects.
 
         Notes
@@ -7286,7 +7298,7 @@ def _align_indices(lhs, rhs):
 
 def _setitem_with_dataframe(input_df, replace_df, input_cols=None, mask=None):
     """
-        This aggstion sets item dataframes relevant columns with replacement df
+        This function sets item dataframes relevant columns with replacement df
         :param input_df: Dataframe to be modified inplace
         :param replace_df: Replacement DataFrame to replace values with
         :param input_cols: columns to replace in the input dataframe
