@@ -296,7 +296,7 @@ struct dispatch_unary_cast_to {
 
     auto const size = input.size();
     auto temporary =
-      std::make_unique<column>(type,
+      std::make_unique<column>(cudf::data_type{type.id(), input.type().scale()},
                                size,
                                rmm::device_buffer{size * cudf::size_of(type), stream, mr},
                                copy_bitmask(input, stream, mr),
