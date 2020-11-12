@@ -617,24 +617,6 @@ TEST_F(ReductionDtypeTest, different_precision)
     sum_agg,
     cudf::data_type(cudf::type_id::TIMESTAMP_MICROSECONDS));
 
-  /*TODO reimplement after Dictionary support
-    this->reduction_test<cudf::timestamp_s, cudf::category>
-        (int_values, static_cast<cudf::category>(expected_value), false,
-         sum_agg, cudf::data_type(cudf::CATEGORY));
-
-    this->reduction_test<int8_t, cudf::category>
-        (int_values, static_cast<cudf::category>(expected_value), false,
-         sum_agg, cudf::data_type(cudf::CATEGORY));
-
-    this->reduction_test<bool, cudf::date32>
-        (int_values, static_cast<cudf::date32>(expected_value), false,
-         sum_agg, cudf::data_type(cudf::CATEGORY));
-         )
-    this->reduction_test<int8_t, cudf::nvstring_category>
-        (int_values, static_cast<cudf::nvstring_category>(expected_value), false,
-           sum_agg, GDF_STRING_CATEGORY);
-     */
-
   std::vector<bool> v = convert_values<bool>(int_values);
 
   // When summing bool values into an non-bool arithmetic type,

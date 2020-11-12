@@ -26,20 +26,13 @@ std::unique_ptr<cudf::scalar> sum(column_view const& col,
                                   rmm::mr::device_memory_resource* mr,
                                   cudaStream_t stream)
 {
-  return cudf::is_dictionary(col.type())
-           ? cudf::type_dispatcher(
-               dictionary_column_view(col).keys().type(),
-               simple::element_type_dictionary_dispatcher<cudf::reduction::op::sum>{},
-               col,
-               output_dtype,
-               mr,
-               stream)
-           : cudf::type_dispatcher(col.type(),
-                                   simple::element_type_dispatcher<cudf::reduction::op::sum>{},
-                                   col,
-                                   output_dtype,
-                                   mr,
-                                   stream);
+  return cudf::type_dispatcher(
+    cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type(),
+    simple::element_type_dispatcher<cudf::reduction::op::sum>{},
+    col,
+    output_dtype,
+    mr,
+    stream);
 }
 
 }  // namespace reduction
