@@ -12,7 +12,6 @@ from cudf.utils.dtypes import (
 
 
 class Scalar(object):
-
     def __init__(self, value, dtype=None):
         """
         A GPU-backed scalar object with NumPy scalar like properties
@@ -90,8 +89,8 @@ class Scalar(object):
     def dtype(self):
         if self._is_host_value_current:
             if isinstance(self._host_value, str):
-                return np.dtype('object')
-            else: 
+                return np.dtype("object")
+            else:
                 return self._host_dtype
         else:
             return self.device_value.dtype

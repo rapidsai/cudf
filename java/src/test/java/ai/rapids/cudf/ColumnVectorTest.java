@@ -21,10 +21,13 @@ package ai.rapids.cudf;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static ai.rapids.cudf.QuantileMethod.HIGHER;
@@ -35,11 +38,7 @@ import static ai.rapids.cudf.QuantileMethod.NEAREST;
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 import static ai.rapids.cudf.TableTest.assertTablesAreEqual;
 import static ai.rapids.cudf.TableTest.assertStructColumnsAreEqual;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class ColumnVectorTest extends CudfTestBase {
@@ -703,11 +702,9 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testFromScalarZeroRows() {
+    // magic number to invoke factory method specialized for decimal types
+    int mockScale = -8;
     for (DType.DTypeEnum type : DType.DTypeEnum.values()) {
-      // Decimal type not supported yet. Update this once it is supported.
-      if (type == DType.DTypeEnum.DECIMAL32 || type == DType.DTypeEnum.DECIMAL64) {
-        continue;
-      }
       Scalar s = null;
       try {
         switch (type) {
@@ -744,6 +741,12 @@ public class ColumnVectorTest extends CudfTestBase {
         case FLOAT64:
           s = Scalar.fromDouble(1.23456789);
           break;
+        case DECIMAL32:
+          s = Scalar.fromDecimal(mockScale, 123456789);
+          break;
+        case DECIMAL64:
+          s = Scalar.fromDecimal(mockScale, 1234567890123456789L);
+          break;
         case TIMESTAMP_DAYS:
           s = Scalar.timestampDaysFromInt(12345);
           break;
@@ -774,7 +777,11 @@ public class ColumnVectorTest extends CudfTestBase {
         }
 
         try (ColumnVector c = ColumnVector.fromScalar(s, 0)) {
-          assertEquals(DType.create(type), c.getType());
+          if (type.isDecimalType()) {
+            assertEquals(DType.create(type, mockScale), c.getType());
+          } else {
+            assertEquals(DType.create(type), c.getType());
+          }
           assertEquals(0, c.getRowCount());
           assertEquals(0, c.getNullCount());
         }
@@ -798,7 +805,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void testFromScalar() {
     final int rowCount = 4;
     for (DType.DTypeEnum type : DType.DTypeEnum.values()) {
-      if(type == DType.DTypeEnum.DECIMAL32 || type == DType.DTypeEnum.DECIMAL64) {
+      if(type.isDecimalType()) {
         continue;
       }
       Scalar s = null;
@@ -964,11 +971,17 @@ public class ColumnVectorTest extends CudfTestBase {
   void testFromScalarNull() {
     final int rowCount = 4;
     for (DType.DTypeEnum type : DType.DTypeEnum.values()) {
-      if (type == DType.DTypeEnum.EMPTY || type == DType.DTypeEnum.LIST || type == DType.DTypeEnum.STRUCT
-          || type == DType.DTypeEnum.DECIMAL32 || type == DType.DTypeEnum.DECIMAL64) {
+      if (type == DType.DTypeEnum.EMPTY || type == DType.DTypeEnum.LIST || type == DType.DTypeEnum.STRUCT) {
         continue;
       }
-      try (Scalar s = Scalar.fromNull(DType.create(type));
+      DType dType;
+      if (type.isDecimalType()) {
+        // magic number to invoke factory method specialized for decimal types
+        dType = DType.create(type, -8);
+      } else {
+        dType = DType.create(type);
+      }
+      try (Scalar s = Scalar.fromNull(dType);
            ColumnVector c = ColumnVector.fromScalar(s, rowCount);
            HostColumnVector hc = c.copyToHost()) {
         assertEquals(type, c.getType().typeId);
@@ -1897,6 +1910,32 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testIsTimestamp() {
+      final String[] TIMESTAMP_STRINGS = {
+          "2018-07-04 12:00:00",
+          "",
+          null,
+          "2023-01-25",
+          "2023-01-25 07:32:12",
+          "2018-07-04 12:00:00"
+      };
+
+      try (ColumnVector timestampStrings = ColumnVector.fromStrings(TIMESTAMP_STRINGS);
+           ColumnVector isTimestamp = timestampStrings.isTimestamp("%Y-%m-%d %H:%M:%S");
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(
+               true, false, null, false, true, true)) {
+          assertColumnsAreEqual(expected, isTimestamp);
+      }
+
+      try (ColumnVector timestampStrings = ColumnVector.fromStrings(TIMESTAMP_STRINGS);
+           ColumnVector isTimestamp = timestampStrings.isTimestamp("%Y-%m-%d");
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(
+                   true, false, null, true, true, true)) {
+          assertColumnsAreEqual(expected, isTimestamp);
+      }
+  }
+
+  @Test
   void testCastTimestampAsString() {
     final String[] TIMES_S_STRING = {
         "2018-07-04 12:00:00",
@@ -2657,8 +2696,8 @@ public class ColumnVectorTest extends CudfTestBase {
   void testCreateDurationDays() {
     Integer[] days = {100, 10, 23, 1, -1, 0, Integer.MAX_VALUE, null, Integer.MIN_VALUE};
 
-    try (ColumnVector durationDays = ColumnVector.durationDaysFromBoxedInts(days)) {
-      HostColumnVector hc = durationDays.copyToHost();
+    try (ColumnVector durationDays = ColumnVector.durationDaysFromBoxedInts(days);
+         HostColumnVector hc = durationDays.copyToHost()) {
       assertTrue(hc.hasNulls());
       assertEquals(DType.DURATION_DAYS, hc.getType());
       for (int i = 0; i < days.length; i++) {
@@ -2674,8 +2713,8 @@ public class ColumnVectorTest extends CudfTestBase {
   void testCreateDurationSeconds() {
     Long[] secs = {10230L, 10L, 203L, 1L, -1L, 0L, Long.MAX_VALUE, null, Long.MIN_VALUE};
 
-    try (ColumnVector durationSeconds = ColumnVector.durationSecondsFromBoxedLongs(secs)) {
-      HostColumnVector hc = durationSeconds.copyToHost();
+    try (ColumnVector durationSeconds = ColumnVector.durationSecondsFromBoxedLongs(secs);
+         HostColumnVector hc = durationSeconds.copyToHost()) {
       assertTrue(hc.hasNulls());
       assertEquals(DType.DURATION_SECONDS, hc.getType());
       for (int i = 0 ; i < secs.length ; i++) {
@@ -2692,8 +2731,8 @@ public class ColumnVectorTest extends CudfTestBase {
     Long[] ms = {12342340230L, 12112340L, 2230233L, 1L, -1L, 0L, Long.MAX_VALUE, null,
         Long.MIN_VALUE};
 
-    try (ColumnVector durationMs = ColumnVector.durationMilliSecondsFromBoxedLongs(ms)) {
-      HostColumnVector hc = durationMs.copyToHost();
+    try (ColumnVector durationMs = ColumnVector.durationMilliSecondsFromBoxedLongs(ms);
+         HostColumnVector hc = durationMs.copyToHost()) {
       assertTrue(hc.hasNulls());
       assertEquals(DType.DURATION_MILLISECONDS, hc.getType());
       for (int i = 0 ; i < ms.length ; i++) {
@@ -2710,8 +2749,8 @@ public class ColumnVectorTest extends CudfTestBase {
     Long[] us = {1234234230L, 132350L, 289877803L, 1L, -1L, 0L, Long.MAX_VALUE, null,
         Long.MIN_VALUE};
 
-    try (ColumnVector durationUs = ColumnVector.durationMicroSecondsFromBoxedLongs(us)) {
-      HostColumnVector hc = durationUs.copyToHost();
+    try (ColumnVector durationUs = ColumnVector.durationMicroSecondsFromBoxedLongs(us);
+         HostColumnVector hc = durationUs.copyToHost()) {
       assertTrue(hc.hasNulls());
       assertEquals(DType.DURATION_MICROSECONDS, hc.getType());
       for (int i = 0 ; i < us.length ; i++) {
@@ -2728,8 +2767,8 @@ public class ColumnVectorTest extends CudfTestBase {
     Long[] ns = {1234234230L, 198832350L, 289877803L, 1L, -1L, 0L, Long.MAX_VALUE, null,
         Long.MIN_VALUE};
 
-    try (ColumnVector durationNs = ColumnVector.durationNanoSecondsFromBoxedLongs(ns)) {
-      HostColumnVector hc = durationNs.copyToHost();
+    try (ColumnVector durationNs = ColumnVector.durationNanoSecondsFromBoxedLongs(ns);
+         HostColumnVector hc = durationNs.copyToHost()) {
       assertTrue(hc.hasNulls());
       assertEquals(DType.DURATION_NANOSECONDS, hc.getType());
       for (int i = 0 ; i < ns.length ; i++) {
@@ -2785,7 +2824,6 @@ public class ColumnVectorTest extends CudfTestBase {
 
     try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ListType(true,
         new HostColumnVector.BasicType(true, DType.STRING)), list1, list2, list3);
-
         HostColumnVector hcv = res.copyToHost()) {
       List<String> ret1 = hcv.getList(0);
       List<String> ret2 = hcv.getList(1);
@@ -2962,6 +3000,28 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testListOfListsCvDecimals() {
+    List<BigDecimal> list1 = Arrays.asList(BigDecimal.valueOf(1.1), BigDecimal.valueOf(2.2), BigDecimal.valueOf(3.3));
+    List<BigDecimal> list2 = Arrays.asList(BigDecimal.valueOf(4.4), BigDecimal.valueOf(5.5), BigDecimal.valueOf(6.6));
+    List<BigDecimal> list3 = Arrays.asList(BigDecimal.valueOf(10.1), BigDecimal.valueOf(20.2), BigDecimal.valueOf(30.3));
+    List<List<BigDecimal>> mainList1 = new ArrayList<>();
+    mainList1.add(list1);
+    mainList1.add(list2);
+    List<List<BigDecimal>> mainList2 = new ArrayList<>();
+    mainList2.add(list3);
+
+    HostColumnVector.BasicType basicType = new HostColumnVector.BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, -1));
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.ListType(true, basicType)), mainList1, mainList2);
+        HostColumnVector hcv = res.copyToHost()) {
+      List<List<BigDecimal>> ret1 = hcv.getList(0);
+      List<List<BigDecimal>> ret2 = hcv.getList(1);
+      assertEquals(mainList1, ret1, "Lists don't match");
+      assertEquals(mainList2, ret2, "Lists don't match");
+    }
+  }
+
+  @Test
   void testConcatLists() {
     List<Integer> list1 = Arrays.asList(0, 1, 2, 3);
     List<Integer> list2 = Arrays.asList(6, 2, 4, 5);
@@ -3057,6 +3117,32 @@ public class ColumnVectorTest extends CudfTestBase {
       assertEquals(val4, ret4, "Lists don't match");
       assertEquals(val5, ret5, "Lists don't match");
       assertEquals(val6, ret6, "Lists don't match");
+    }
+  }
+
+  @Test
+  void testHcvOfDecimals() {
+    List<BigDecimal>[] data = new List[6];
+    data[0] = Arrays.asList(BigDecimal.ONE, BigDecimal.TEN);
+    data[1] = Arrays.asList(BigDecimal.ZERO);
+    data[2] = null;
+    data[3] = Arrays.asList();
+    data[4] = Arrays.asList(BigDecimal.valueOf(123), BigDecimal.valueOf(1, -2));
+    data[5] = Arrays.asList(BigDecimal.valueOf(100, -3), BigDecimal.valueOf(2, -4));
+    try(ColumnVector expected = ColumnVector.fromLists(
+        new HostColumnVector.ListType(true,
+            new HostColumnVector.BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, 0))), data);
+        HostColumnVector hcv = expected.copyToHost()) {
+      for (int i = 0; i < data.length; i++) {
+        if (data[i] == null) {
+          assertNull(hcv.getList(i));
+          continue;
+        }
+        List<BigDecimal> exp = data[i].stream()
+            .map((dec -> (dec == null) ? null : dec.setScale(0, RoundingMode.UNNECESSARY)))
+            .collect(Collectors.toList());
+        assertEquals(exp, hcv.getList(i));
+      }
     }
   }
 

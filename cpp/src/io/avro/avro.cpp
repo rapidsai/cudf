@@ -21,6 +21,39 @@
 namespace cudf {
 namespace io {
 namespace avro {
+
+template <>
+uint64_t container::get_encoded()
+{
+  uint64_t val = 0;
+  for (uint64_t len = 0; len < 64; len += 7) {
+    auto const byte = get_raw<uint8_t>();
+    val |= (byte & 0x7f) << len;
+    if (byte < 0x80) break;
+  }
+  return val;
+}
+
+template <>
+int64_t container::get_encoded()
+{
+  auto const uval = get_encoded<uint64_t>();
+  return (int64_t)((uval >> 1u) ^ -(int64_t)(uval & 1));
+}
+
+template <>
+std::string container::get_encoded()
+{
+  auto const len = [&] {
+    auto const len = get_encoded<uint64_t>();
+    return (len & 1) || (m_cur >= m_end) ? 0
+                                         : std::min(len >> 1, static_cast<uint64_t>(m_end - m_cur));
+  }();
+  auto const s = reinterpret_cast<char const *>(m_cur);
+  m_cur += len;
+  return std::string(s, len);
+}
+
 /**
  * @Brief AVRO file metadata parser
  *
@@ -35,17 +68,17 @@ bool container::parse(file_metadata *md, size_t max_num_rows, size_t first_row)
   uint32_t sig4, max_block_size;
   size_t total_object_count;
 
-  sig4 = getb();
-  sig4 |= getb() << 8;
-  sig4 |= getb() << 16;
-  sig4 |= getb() << 24;
+  sig4 = get_raw<uint8_t>();
+  sig4 |= get_raw<uint8_t>() << 8;
+  sig4 |= get_raw<uint8_t>() << 16;
+  sig4 |= get_raw<uint8_t>() << 24;
   if (sig4 != AVRO_MAGIC) { return false; }
   for (;;) {
-    uint32_t num_md_items = static_cast<uint32_t>(get_i64());
+    uint32_t num_md_items = static_cast<uint32_t>(get_encoded<int64_t>());
     if (num_md_items == 0) { break; }
     for (uint32_t i = 0; i < num_md_items; i++) {
-      std::string key   = get_str();
-      std::string value = get_str();
+      auto const key   = get_encoded<std::string>();
+      auto const value = get_encoded<std::string>();
       if (key == "avro.codec") {
         md->codec = value;
       } else if (key == "avro.schema") {
@@ -57,14 +90,16 @@ bool container::parse(file_metadata *md, size_t max_num_rows, size_t first_row)
       }
     }
   }
-  for (int i = 0; i < 16; i++) { (reinterpret_cast<uint8_t *>(&md->sync_marker[0]))[i] = getb(); }
+  md->sync_marker[0] = get_raw<uint64_t>();
+  md->sync_marker[1] = get_raw<uint64_t>();
+
   md->metadata_size  = m_cur - m_base;
   md->skip_rows      = 0;
   max_block_size     = 0;
   total_object_count = 0;
   while (m_cur + 18 < m_end && total_object_count < max_num_rows) {
-    uint32_t object_count = static_cast<uint32_t>(get_i64());
-    uint32_t block_size   = static_cast<uint32_t>(get_i64());
+    auto const object_count = static_cast<uint32_t>(get_encoded<int64_t>());
+    auto const block_size   = static_cast<uint32_t>(get_encoded<int64_t>());
     if (block_size <= 0 || object_count <= 0 || m_cur + block_size + 16 > m_end) { break; }
     if (object_count > first_row) {
       uint32_t block_row = static_cast<uint32_t>(total_object_count);

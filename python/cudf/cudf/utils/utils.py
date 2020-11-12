@@ -418,3 +418,49 @@ def _fillna_natwise(col):
         offset=result.offset,
         children=result.base_children,
     )
+
+
+def search_range(start, stop, x, step=1, side="left"):
+    """Find the position to insert a value in a range, so that the resulting
+    sequence remains sorted.
+
+    When ``side`` is set to 'left', the insertion point ``i`` will hold the
+    following invariant:
+    `all(x < n for x in range_left) and all(x >= n for x in range_right)`
+    where ``range_left`` and ``range_right`` refers to the range to the left
+    and right of position ``i``, respectively.
+
+    When ``side`` is set to 'right', ``i`` will hold the following invariant:
+    `all(x <= n for x in range_left) and all(x > n for x in range_right)`
+
+    Parameters
+    --------
+    start : int
+        Start value of the series
+    stop : int
+        Stop value of the range
+    x : int
+        The value to insert
+    step : int, default 1
+        Step value of the series, assumed positive
+    side : {'left', 'right'}, default 'left'
+        See description for usage.
+
+    Returns
+    --------
+    int
+        Insertion position of n.
+
+    Examples
+    --------
+    For series: 1 4 7
+    >>> search_range(start=1, stop=10, x=4, step=3, side="left")
+    1
+    >>> search_range(start=1, stop=10, x=4, step=3, side="right")
+    2
+    """
+    z = 1 if side == "left" else 0
+    i = (x - start - z) // step + 1
+
+    length = (stop - start) // step
+    return max(min(length, i), 0)
