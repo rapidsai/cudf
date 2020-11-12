@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import decimal
 import pickle
 
 import numpy as np
@@ -211,3 +212,32 @@ class StructDtype(ExtensionDtype):
 
     def __repr__(self):
         return f"StructDtype({self.fields})"
+
+
+class DecimalDtype(ExtensionDtype):
+
+    name = "decimal"
+    _metadata = ("precision", "scale")
+
+    def __init__(self, precision, scale):
+        self._typ = pa.decimal128(precision, scale)
+
+    @property
+    def precision(self):
+        return self._typ.precision
+
+    @property
+    def scale(self):
+        return self._typ.scale
+
+    @property
+    def type(self):
+        # might need to account for precision and scale here
+        return decimal.Decimal
+
+    def to_arrow(self):
+        return self._typ
+
+    @classmethod
+    def from_arrow(cls, typ):
+        return cls(typ.precision, typ.scale)
