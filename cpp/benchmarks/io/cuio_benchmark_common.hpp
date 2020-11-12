@@ -98,9 +98,20 @@ enum class row_selection { ALL, BYTE_RANGE, NROWS, SKIPFOOTER, STRIPES, ROW_GROU
  * @return The duplicated/rearranged array of type IDs
  */
 std::vector<cudf::type_id> dtypes_for_column_selection(std::vector<cudf::type_id> const& ids,
-                                                       column_selection cs);
+                                                       column_selection col_sel);
 
 /**
  * @brief Select a subset of columns based on the input enumerator.
  */
-std::vector<int> select_columns(column_selection cs, int num_cols);
+std::vector<int> select_column_indexes(int num_cols, column_selection col_sel);
+
+/**
+ * @brief TODO
+ */
+std::vector<std::string> select_column_names(std::vector<std::string> const& col_names,
+                                             column_selection col_sel);
+
+/**
+ * @brief TODO
+ */
+std::vector<cudf::size_type> sections_in_chunk(int num_sections, int num_chunks, int chunk);

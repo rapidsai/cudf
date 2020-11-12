@@ -66,36 +66,12 @@ void BM_orc_read_varying_input(benchmark::State& state)
   state.SetBytesProcessed(data_size * state.iterations());
 }
 
-std::vector<std::string> get_col_names_to_read(std::vector<char> const& orc_data,
-                                               column_selection col_sel)
+std::vector<std::string> get_col_names(std::vector<char> const& orc_data)
 {
   cudf_io::orc_reader_options const read_options =
     cudf_io::orc_reader_options::builder(cudf_io::source_info{orc_data.data(), orc_data.size()})
       .num_rows(1);
-  auto const col_names        = cudf_io::read_orc(read_options).metadata.column_names;
-  auto const col_idxs_to_read = select_columns(col_sel, col_names.size());
-
-  std::vector<std::string> col_names_to_read;
-  std::transform(col_idxs_to_read.begin(),
-                 col_idxs_to_read.end(),
-                 std::back_inserter(col_names_to_read),
-                 [&](auto& idx) { return col_names[idx]; });
-  return col_names_to_read;
-}
-
-std::vector<cudf::size_type> get_chunk_stripes(size_t table_size, int num_chunks, int chunk)
-{
-  auto const num_stripes = table_size / (64 << 20);
-  CUDF_EXPECTS(num_stripes >= num_chunks,
-               "Number of chunks cannot be greater than the number of stripes in the file");
-  std::vector<cudf::size_type> cs;
-  for (auto i = num_stripes * chunk / num_chunks; i < num_stripes * (chunk + 1) / num_chunks; ++i) {
-    cs.push_back(i);
-  }
-  // Add a stripe to the last read because we are rounding down `num_stripes`
-  if (chunk == num_chunks - 1) cs.push_back(num_stripes);
-
-  return cs;
+  return cudf_io::read_orc(read_options).metadata.column_names;
 }
 
 void BM_orc_read_varying_options(benchmark::State& state)
@@ -125,7 +101,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
     cudf_io::orc_writer_options::builder(cudf_io::sink_info{&orc_data}, view);
   cudf_io::write_orc(options);
 
-  auto const cols_to_read = get_col_names_to_read(orc_data, col_sel);
+  auto const cols_to_read = select_column_names(get_col_names(orc_data), col_sel);
   cudf_io::orc_reader_options read_options =
     cudf_io::orc_reader_options::builder(cudf_io::source_info{orc_data.data(), orc_data.size()})
       .columns(cols_to_read)
@@ -134,14 +110,16 @@ void BM_orc_read_varying_options(benchmark::State& state)
       .timestamp_type(ts_type)
       .decimals_as_float64(dec_as_float);
 
+  auto const num_stripes              = data_size / (64 << 20);
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     for (int32_t chunk = 0; chunk < num_chunks; ++chunk) {
       auto const is_last_chunk = chunk == (num_chunks - 1);
       switch (row_sel) {
+        case row_selection::ALL: break;
         case row_selection::STRIPES:
-          read_options.set_stripes(get_chunk_stripes(data_size, num_chunks, chunk));
+          read_options.set_stripes(sections_in_chunk(num_stripes, num_chunks, chunk));
           break;
         case row_selection::NROWS:
           read_options.set_skip_rows(chunk * chunk_row_cnt);
