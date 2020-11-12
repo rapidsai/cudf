@@ -142,6 +142,9 @@ class Index(Frame, Serializable):
     def _values(self) -> "ColumnBase":
         raise NotImplementedError
 
+    def __getitem__(self, key):
+        raise NotImplementedError()
+
     def drop_duplicates(self, keep="first"):
         """
         Return Index with duplicate values removed
