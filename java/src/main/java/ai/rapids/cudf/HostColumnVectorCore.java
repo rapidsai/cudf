@@ -83,7 +83,7 @@ public class HostColumnVectorCore implements AutoCloseable {
     return offHeap.offsets;
   }
 
-  public HostColumnVectorCore getChildColumnViewAccess(int childIndex) {
+  public HostColumnVectorCore getChildColumnView(int childIndex) {
     return getNestedChildren().get(childIndex);
   }
 

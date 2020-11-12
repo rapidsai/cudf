@@ -154,9 +154,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private ColumnVector(long viewAddress, DeviceMemoryBuffer contiguousBuffer) {
     offHeap = new OffHeapState(viewAddress, contiguousBuffer);
     MemoryCleaner.register(this, offHeap);
-    //TODO init column view
     this.type = offHeap.getNativeType();
     this.rows = offHeap.getNativeRowCount();
+    this.columnView = new ColumnView(offHeap.viewHandle);
     // TODO we may want to ask for the null count anyways...
     this.nullCount = Optional.empty();
 
@@ -299,6 +299,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public boolean hasNulls() {
     return getNullCount() > 0;
+  }
+
+  /////////////////////////////////////////////////////////////////////////////
+  // DATA MOVEMENT
+  /////////////////////////////////////////////////////////////////////////////
+
+  /**
+   * Copy the data to the host.
+   */
+  public HostColumnVector copyToHost() {
+    return columnView.copyToHost();
   }
 
   /////////////////////////////////////////////////////////////////////////////

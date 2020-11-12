@@ -391,7 +391,7 @@ public class JCudfSerialization {
         int numChildren = column.getNumChildren();
         childProviders = new ColumnBufferProvider[numChildren];
         for (int i = 0; i < numChildren; i++) {
-          childProviders[i] = new ColumnProvider(column.getChildColumnViewAccess(i), false);
+          childProviders[i] = new ColumnProvider(column.getChildColumnView(i), false);
         }
       } else {
         childProviders = null;

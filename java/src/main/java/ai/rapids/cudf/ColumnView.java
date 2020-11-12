@@ -89,7 +89,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *            else return the data device buffer
    */
 
-  public BaseDeviceMemoryBuffer getDataBuffer() {
+  public BaseDeviceMemoryBuffer getData() {
     return getDataBuffer(viewHandle);
   }
 
@@ -118,7 +118,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   public ColumnVector copyToColumnVector() {
     List<NestedColumnVector> nestedColumnVectors = copyToNestedColumnVectors();
-    return new ColumnVector(type, rows, nullCount, getDataBuffer(),
+    return new ColumnVector(type, rows, nullCount, getData(),
         getValid(), getOffsets(), nestedColumnVectors);
   }
 
@@ -2751,7 +2751,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       DType colType = nestedChild.getType();
       Optional<Long> nullCount = Optional.of(nestedChild.getNullCount());
       long colRows = nestedChild.getRowCount();
-      BaseDeviceMemoryBuffer colData = nestedChild.getNumChildren() == 0 ? nestedChild.getDataBuffer() : null;
+      BaseDeviceMemoryBuffer colData = nestedChild.getNumChildren() == 0 ? nestedChild.getData() : null;
       BaseDeviceMemoryBuffer colValid = nestedChild.getValid();
       BaseDeviceMemoryBuffer colOffsets = nestedChild.getOffsets();
 
@@ -2873,7 +2873,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     try {
       long currRows = deviceCvPointer.getRowCount();
       DType currType = deviceCvPointer.getType();
-      currData = deviceCvPointer.getDataBuffer();
+      currData = deviceCvPointer.getData();
       currOffsets = deviceCvPointer.getOffsets();
       currValidity = deviceCvPointer.getValid();
       if (currData != null) {
