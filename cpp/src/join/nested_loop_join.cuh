@@ -15,18 +15,21 @@
  */
 #pragma once
 
+#include "hash_join.cuh"
+#include "join_common_utils.hpp"
+#include "join_kernels.cuh"
+
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
-#include <iostream>
+#include <cudf/types.hpp>
 
-#include "cudf/types.hpp"
-#include "hash_join.cuh"
-#include "join_common_utils.hpp"
-#include "join_kernels.cuh"
+#include <rmm/cuda_stream_view.hpp>
+
+#include <iostream>
 
 namespace cudf {
 namespace detail {
@@ -48,7 +51,7 @@ size_type estimate_nested_loop_join_output_size(table_device_view left,
                                                 table_device_view right,
                                                 join_kind JoinKind,
                                                 null_equality compare_nulls,
-                                                cudaStream_t stream)
+                                                rmm::cuda_stream_view stream)
 {
   const size_type left_num_rows{left.num_rows()};
   const size_type right_num_rows{right.num_rows()};
@@ -91,8 +94,9 @@ size_type estimate_nested_loop_join_output_size(table_device_view left,
   row_equality equality{left, right, compare_nulls == null_equality::EQUAL};
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
-  compute_nested_loop_join_output_size<block_size><<<numBlocks * num_sms, block_size, 0, stream>>>(
-    left, right, JoinKind, equality, size_estimate.data());
+  compute_nested_loop_join_output_size<block_size>
+    <<<numBlocks * num_sms, block_size, 0, stream.value()>>>(
+      left, right, JoinKind, equality, size_estimate.data());
   CHECK_CUDA(stream);
 
   h_size_estimate = size_estimate.value(stream);
@@ -120,7 +124,7 @@ get_base_nested_loop_join_indices(table_view const& left,
                                   bool flip_join_indices,
                                   join_kind JoinKind,
                                   null_equality compare_nulls,
-                                  cudaStream_t stream)
+                                  rmm::cuda_stream_view stream)
 {
   // The `right` table is always used for the inner loop. We want to use the smaller table
   // for the inner loop. Thus, if `left` is smaller than `right`, swap `left/right`.
@@ -167,14 +171,14 @@ get_base_nested_loop_join_indices(table_view const& left,
     const auto& join_output_r =
       flip_join_indices ? left_indices.data().get() : right_indices.data().get();
     nested_loop_join<block_size, DEFAULT_JOIN_CACHE_SIZE>
-      <<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(*left_table,
-                                                                       *right_table,
-                                                                       JoinKind,
-                                                                       equality,
-                                                                       join_output_l,
-                                                                       join_output_r,
-                                                                       write_index.data(),
-                                                                       estimated_size);
+      <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(*left_table,
+                                                                               *right_table,
+                                                                               JoinKind,
+                                                                               equality,
+                                                                               join_output_l,
+                                                                               join_output_r,
+                                                                               write_index.data(),
+                                                                               estimated_size);
 
     CHECK_CUDA(stream);
 
