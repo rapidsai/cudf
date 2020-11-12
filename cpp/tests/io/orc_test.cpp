@@ -114,6 +114,15 @@ struct OrcChunkedWriterNumericTypeTest : public OrcChunkedWriterTest {
 // Declare typed test cases
 TYPED_TEST_CASE(OrcChunkedWriterNumericTypeTest, SupportedTypes);
 
+// Test fixture for reader tests
+template <typename T>
+struct OrcReaderTest : public cudf::test::BaseFixture {
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
+};
+
+// Declare typed test cases
+TYPED_TEST_CASE(OrcReaderTest, SupportedTypes);
+
 namespace {
 // Generates a vector of uniform random values of type T
 template <typename T>
@@ -845,6 +854,42 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize2)
   auto result = cudf_io::read_orc(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+}
+
+TYPED_TEST(OrcReaderTest, SingleColumnSkipRows)
+{
+  auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  constexpr auto num_rows = 100;
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> input_col(
+    sequence, sequence + num_rows, validity);
+
+  std::vector<std::unique_ptr<column>> input_cols;
+  input_cols.push_back(input_col.release());
+  auto input_table = std::make_unique<table>(std::move(input_cols));
+  EXPECT_EQ(1, input_table->num_columns());
+
+  auto filepath = temp_env->get_temp_filepath("OrcSingleColumnSkipRows.orc");
+  cudf_io::orc_writer_options out_opts =
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, input_table->view());
+  cudf_io::write_orc(out_opts);
+
+  constexpr auto skip_rows = 2;
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> output_col(
+    sequence + skip_rows, sequence + num_rows, validity);
+  std::vector<std::unique_ptr<column>> output_cols;
+  output_cols.push_back(output_col.release());
+  auto expected = std::make_unique<table>(std::move(output_cols));
+  EXPECT_EQ(1, expected->num_columns());
+
+  cudf_io::orc_reader_options in_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+      .use_index(false)
+      .skip_rows(skip_rows);
+  auto result = cudf_io::read_orc(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
