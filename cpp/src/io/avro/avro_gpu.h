@@ -17,6 +17,8 @@
 
 #include "avro_common.h"
 
+#include <cudf/utilities/span.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -25,7 +27,7 @@ namespace avro {
 namespace gpu {
 /**
  * @brief Struct to describe the output of a string datatype
- **/
+ */
 struct nvstrdesc_s {
   const char *ptr;
   size_t count;
@@ -33,7 +35,7 @@ struct nvstrdesc_s {
 
 /**
  * @brief Struct to describe the avro schema
- **/
+ */
 struct schemadesc_s {
   uint32_t kind;   // avro type kind
   uint32_t count;  // for records/unions: number of following child columns, for nulls: global
@@ -50,25 +52,21 @@ struct schemadesc_s {
  * @param[in] avro_data Raw block data
  * @param[in] num_blocks Number of blocks
  * @param[in] schema_len Number of entries in schema
- * @param[in] num_dictionary_entries Number of entries in global dictionary
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  * @param[in] min_row_size Minimum size in bytes of a row
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t DecodeAvroColumnData(block_desc_s *blocks,
-                                 schemadesc_s *schema,
-                                 nvstrdesc_s *global_dictionary,
-                                 const uint8_t *avro_data,
-                                 uint32_t num_blocks,
-                                 uint32_t schema_len,
-                                 uint32_t num_dictionary_entries,
-                                 size_t max_rows              = ~0,
-                                 size_t first_row             = 0,
-                                 uint32_t min_row_size        = 0,
-                                 rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+ */
+void DecodeAvroColumnData(block_desc_s *blocks,
+                          schemadesc_s *schema,
+                          cudf::detail::device_span<nvstrdesc_s> global_dictionary,
+                          const uint8_t *avro_data,
+                          uint32_t num_blocks,
+                          uint32_t schema_len,
+                          size_t max_rows              = ~0,
+                          size_t first_row             = 0,
+                          uint32_t min_row_size        = 0,
+                          rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 }  // namespace gpu
 }  // namespace avro

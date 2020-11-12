@@ -19,6 +19,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+using cudf::detail::device_span;
+
 namespace cudf {
 namespace io {
 namespace avro {
@@ -71,8 +73,7 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
                                                  size_t max_rows,
                                                  const uint8_t *cur,
                                                  const uint8_t *end,
-                                                 const nvstrdesc_s *global_dictionary,
-                                                 uint32_t num_dictionary_entries)
+                                                 device_span<nvstrdesc_s> global_dictionary)
 {
   uint32_t array_start = 0, array_repeat_count = 0;
   int array_children = 0;
@@ -122,7 +123,7 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
           const char *ptr = 0;
           if (kind == type_enum) {  // dictionary
             size_t idx = schema[i].count + v;
-            if (idx < num_dictionary_entries) {
+            if (idx < global_dictionary.size()) {
               ptr   = global_dictionary[idx].ptr;
               count = global_dictionary[idx].count;
             }
@@ -222,7 +223,6 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
  * @param[in] avro_data Raw block data
  * @param[in] num_blocks Number of blocks
  * @param[in] schema_len Number of entries in schema
- * @param[in] num_dictionary_entries Number of entries in global dictionary
  * @param[in] min_row_size Minimum size in bytes of a row
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
@@ -232,11 +232,10 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
 extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
   gpuDecodeAvroColumnData(block_desc_s *blocks,
                           schemadesc_s *schema_g,
-                          nvstrdesc_s *global_dictionary,
+                          device_span<nvstrdesc_s> global_dictionary,
                           const uint8_t *avro_data,
                           uint32_t num_blocks,
                           uint32_t schema_len,
-                          uint32_t num_dictionary_entries,
                           uint32_t min_row_size,
                           size_t max_rows,
                           size_t first_row)
@@ -294,8 +293,7 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
                             max_rows,
                             cur,
                             end,
-                            global_dictionary,
-                            num_dictionary_entries);
+                            global_dictionary);
     }
     if (nrows <= 1) {
       cur = start + SHFL0(static_cast<uint32_t>(cur - start));
@@ -317,40 +315,36 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
  * @param[in] avro_data Raw block data
  * @param[in] num_blocks Number of blocks
  * @param[in] schema_len Number of entries in schema
- * @param[in] num_dictionary_entries Number of entries in global dictionary
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  * @param[in] min_row_size Minimum size in bytes of a row
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t __host__ DecodeAvroColumnData(block_desc_s *blocks,
-                                          schemadesc_s *schema,
-                                          nvstrdesc_s *global_dictionary,
-                                          const uint8_t *avro_data,
-                                          uint32_t num_blocks,
-                                          uint32_t schema_len,
-                                          uint32_t num_dictionary_entries,
-                                          size_t max_rows,
-                                          size_t first_row,
-                                          uint32_t min_row_size,
-                                          rmm::cuda_stream_view stream)
+void DecodeAvroColumnData(block_desc_s *blocks,
+                          schemadesc_s *schema,
+                          device_span<nvstrdesc_s> global_dictionary,
+                          const uint8_t *avro_data,
+                          uint32_t num_blocks,
+                          uint32_t schema_len,
+                          size_t max_rows,
+                          size_t first_row,
+                          uint32_t min_row_size,
+                          rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(32, NWARPS);  // NWARPS warps per threadblock
-  dim3 dim_grid((num_blocks + NWARPS - 1) / NWARPS,
-                1);  // 1 warp per datablock, NWARPS datablocks per threadblock
+  // NWARPS warps per threadblock
+  dim3 const dim_block(32, NWARPS);
+  // 1 warp per datablock, NWARPS datablocks per threadblock
+  dim3 const dim_grid((num_blocks + NWARPS - 1) / NWARPS, 1);
+
   gpuDecodeAvroColumnData<<<dim_grid, dim_block, 0, stream.value()>>>(blocks,
                                                                       schema,
                                                                       global_dictionary,
                                                                       avro_data,
                                                                       num_blocks,
                                                                       schema_len,
-                                                                      num_dictionary_entries,
                                                                       min_row_size,
                                                                       max_rows,
                                                                       first_row);
-  return cudaSuccess;
 }
 
 }  // namespace gpu

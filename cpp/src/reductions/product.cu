@@ -13,19 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-// The translation unit for reduction `product`
 
-#include "simple.cuh"
+#include <reductions/simple.cuh>
 
 #include <cudf/detail/reduction_functions.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
-std::unique_ptr<cudf::scalar> cudf::reduction::product(column_view const& col,
-                                                       cudf::data_type const output_dtype,
-                                                       rmm::cuda_stream_view stream,
-                                                       rmm::mr::device_memory_resource* mr)
+namespace cudf {
+namespace reduction {
+
+std::unique_ptr<cudf::scalar> product(column_view const& col,
+                                      cudf::data_type const output_dtype,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
-  using reducer = cudf::reduction::simple::element_type_dispatcher<cudf::reduction::op::product>;
-  return cudf::type_dispatcher(col.type(), reducer(), col, output_dtype, stream, mr);
+  return cudf::type_dispatcher(col.type(),
+                               simple::element_type_dispatcher<cudf::reduction::op::product>{},
+                               col,
+                               output_dtype,
+                               stream,
+                               mr);
 }
+
+}  // namespace reduction
+}  // namespace cudf

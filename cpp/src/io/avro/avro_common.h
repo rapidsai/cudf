@@ -17,6 +17,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdio.h>
 
 namespace cudf {
 namespace io {

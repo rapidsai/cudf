@@ -13,20 +13,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-// The translation unit for reduction `max`
 
-#include "simple.cuh"
+#include <reductions/simple.cuh>
 
 #include <cudf/detail/reduction_functions.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
-std::unique_ptr<cudf::scalar> cudf::reduction::all(column_view const& col,
-                                                   cudf::data_type const output_dtype,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
+namespace cudf {
+namespace reduction {
+
+std::unique_ptr<cudf::scalar> all(column_view const& col,
+                                  cudf::data_type const output_dtype,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
-               "all() operation can be applied with output type `bool8` only");
-  return cudf::reduction::min(col, cudf::data_type(cudf::type_id::BOOL8), stream, mr);
+               "all() operation can be applied with output type `BOOL8` only");
+  return cudf::type_dispatcher(col.type(),
+                               simple::bool_result_element_dispatcher<cudf::reduction::op::min>{},
+                               col,
+                               stream,
+                               mr);
 }
+
+}  // namespace reduction
+}  // namespace cudf
