@@ -1102,61 +1102,48 @@ INSTANTIATE_TEST_CASE_P(dictionary_cases,
 TEST_P(DictionaryStringReductionTest, MinMax)
 {
   std::vector<std::string> host_strings(GetParam());
+  cudf::data_type output_type{cudf::type_id::STRING};
 
-  cudf::test::strings_column_wrapper col_w(host_strings.begin(), host_strings.end());
-  auto col = cudf::dictionary::encode(col_w);
+  cudf::test::dictionary_column_wrapper<std::string> col(host_strings.begin(), host_strings.end());
+  // auto col = cudf::dictionary::encode(col_w);
 
   std::string expected_min_result = *(std::min_element(host_strings.begin(), host_strings.end()));
   std::string expected_max_result = *(std::max_element(host_strings.begin(), host_strings.end()));
 
   // MIN
-  this->reduction_test(col->view(),
-                       expected_min_result,
-                       true,
-                       cudf::make_min_aggregation(),
-                       cudf::column_view(col_w).type());
+  this->reduction_test(col, expected_min_result, true, cudf::make_min_aggregation(), output_type);
   // MAX
-  this->reduction_test(col->view(),
-                       expected_max_result,
-                       true,
-                       cudf::make_max_aggregation(),
-                       cudf::column_view(col_w).type());
+  this->reduction_test(col, expected_max_result, true, cudf::make_max_aggregation(), output_type);
 }
 
 template <typename T>
 struct DictionaryReductionTest : public ReductionTest<T> {
 };
 
-TYPED_TEST_CASE(DictionaryReductionTest, cudf::test::Types<int32_t>);
+using DictionaryTypes = cudf::test::Types<int16_t, uint32_t, float, double>;
+TYPED_TEST_CASE(DictionaryReductionTest, DictionaryTypes);
 TYPED_TEST(DictionaryReductionTest, Sum)
 {
   using T = TypeParam;
   std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
   std::vector<T> v = convert_values<T>(int_values);
+  cudf::data_type output_type{cudf::type_to_id<T>()};
 
-  cudf::test::fixed_width_column_wrapper<T> col_w(v.begin(), v.end());
-  auto col = cudf::dictionary::encode(col_w);
+  cudf::test::dictionary_column_wrapper<T> col(v.begin(), v.end());
 
   T expected_value = std::accumulate(v.begin(), v.end(), T{0});
-  this->reduction_test(col->view(),
-                       expected_value,
-                       this->ret_non_arithmetic,
-                       cudf::make_sum_aggregation(),
-                       cudf::column_view(col_w).type());
+  this->reduction_test(
+    col, expected_value, this->ret_non_arithmetic, cudf::make_sum_aggregation(), output_type);
 
   // test with nulls
   std::vector<bool> validity({1, 1, 0, 0, 1, 1, 1, 1});
-  cudf::test::fixed_width_column_wrapper<T> col_nulls_w(v.begin(), v.end(), validity.begin());
-  auto col_nulls = cudf::dictionary::encode(col_nulls_w);
+  cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
   expected_value = [v, validity] {
     auto const r = replace_nulls(v, validity, T{0});
     return std::accumulate(r.begin(), r.end(), T{0});
   }();
-  this->reduction_test(col_nulls->view(),
-                       expected_value,
-                       this->ret_non_arithmetic,
-                       cudf::make_sum_aggregation(),
-                       cudf::column_view(col_nulls_w).type());
+  this->reduction_test(
+    col_nulls, expected_value, this->ret_non_arithmetic, cudf::make_sum_aggregation(), output_type);
 }
 
 TYPED_TEST(DictionaryReductionTest, Product)
@@ -1164,31 +1151,30 @@ TYPED_TEST(DictionaryReductionTest, Product)
   using T = TypeParam;
   std::vector<int> int_values({5, -1, 1, 0, 3, 2, 4});
   std::vector<TypeParam> v = convert_values<TypeParam>(int_values);
+  cudf::data_type output_type{cudf::type_to_id<T>()};
 
   auto calc_prod = [](std::vector<T> const &v) {
     return std::accumulate(v.cbegin(), v.cend(), T{1}, [](T acc, T i) { return acc * i; });
   };
 
   // test without nulls
-  cudf::test::fixed_width_column_wrapper<T> col_w(v.begin(), v.end());
-  auto col = cudf::dictionary::encode(col_w);
+  cudf::test::dictionary_column_wrapper<T> col(v.begin(), v.end());
 
-  this->reduction_test(col->view(),
+  this->reduction_test(col,
                        calc_prod(v),  // expected result
                        this->ret_non_arithmetic,
                        cudf::make_product_aggregation(),
-                       cudf::column_view(col_w).type());
+                       output_type);
 
   // test with nulls
   std::vector<bool> validity({1, 1, 0, 0, 1, 1, 1});
-  cudf::test::fixed_width_column_wrapper<T> col_nulls_w(v.begin(), v.end(), validity.begin());
-  auto col_nulls = cudf::dictionary::encode(col_nulls_w);
+  cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
 
-  this->reduction_test(col_nulls->view(),
+  this->reduction_test(col_nulls,
                        calc_prod(replace_nulls(v, validity, T{1})),  // expected
                        this->ret_non_arithmetic,
                        cudf::make_product_aggregation(),
-                       cudf::column_view(col_nulls_w).type());
+                       output_type);
 }
 
 TYPED_TEST(DictionaryReductionTest, SumOfSquare)
@@ -1196,31 +1182,30 @@ TYPED_TEST(DictionaryReductionTest, SumOfSquare)
   using T = TypeParam;
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2});
   std::vector<T> v = convert_values<T>(int_values);
+  cudf::data_type output_type{cudf::type_to_id<T>()};
 
   auto calc_reduction = [](std::vector<T> const &v) {
     return std::accumulate(v.cbegin(), v.cend(), T{0}, [](T acc, T i) { return acc + i * i; });
   };
 
   // test without nulls
-  cudf::test::fixed_width_column_wrapper<T> col_w(v.begin(), v.end());
-  auto col = cudf::dictionary::encode(col_w);
+  cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
 
-  this->reduction_test(col->view(),
+  this->reduction_test(col,
                        calc_reduction(v),
                        this->ret_non_arithmetic,
                        cudf::make_sum_of_squares_aggregation(),
-                       cudf::column_view(col_w).type());
+                       output_type);
 
   // test with nulls
   std::vector<bool> validity({1, 1, 0, 0, 1, 1, 1, 1});
-  cudf::test::fixed_width_column_wrapper<T> col_nulls_w(v.begin(), v.end(), validity.begin());
-  auto col_nulls = cudf::dictionary::encode(col_nulls_w);
+  cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
 
-  this->reduction_test(col_nulls->view(),
+  this->reduction_test(col_nulls,
                        calc_reduction(replace_nulls(v, validity, T{0})),  // expected
                        this->ret_non_arithmetic,
                        cudf::make_sum_of_squares_aggregation(),
-                       cudf::column_view(col_nulls_w).type());
+                       output_type);
 }
 
 TYPED_TEST(DictionaryReductionTest, Mean)
@@ -1228,6 +1213,7 @@ TYPED_TEST(DictionaryReductionTest, Mean)
   using T = TypeParam;
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
   std::vector<T> v = convert_values<T>(int_values);
+  cudf::data_type output_type{cudf::type_to_id<double>()};
 
   auto calc_mean = [](std::vector<T> const &v, cudf::size_type valid_count) {
     double sum = std::accumulate(v.cbegin(), v.cend(), double{0});
@@ -1235,33 +1221,32 @@ TYPED_TEST(DictionaryReductionTest, Mean)
   };
 
   // test without nulls
-  cudf::test::fixed_width_column_wrapper<T> col_w(v.begin(), v.end());
-  auto col = cudf::dictionary::encode(col_w);
+  cudf::test::dictionary_column_wrapper<T> col(v.begin(), v.end());
 
-  this->reduction_test(col->view(),
+  this->reduction_test(col,
                        calc_mean(v, v.size()),  // expected_value,
                        true,
                        cudf::make_mean_aggregation(),
-                       cudf::data_type(cudf::type_id::FLOAT64));
+                       output_type);
 
   // test with nulls
   std::vector<bool> validity({1, 1, 0, 1, 1, 1, 0, 1});
-  cudf::test::fixed_width_column_wrapper<T> col_nulls_w(v.begin(), v.end(), validity.begin());
-  auto col_nulls = cudf::dictionary::encode(col_nulls_w);
+  cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
 
   cudf::size_type valid_count = std::count(validity.begin(), validity.end(), true);
-  this->reduction_test(col_nulls->view(),
+  this->reduction_test(col_nulls,
                        calc_mean(replace_nulls(v, validity, T{0}), valid_count),
                        true,
                        cudf::make_mean_aggregation(),
-                       cudf::data_type(cudf::type_id::FLOAT64));
+                       output_type);
 }
 
-TYPED_TEST(DictionaryReductionTest, var_std)
+TYPED_TEST(DictionaryReductionTest, VarStd)
 {
   using T = TypeParam;
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
   std::vector<T> v = convert_values<T>(int_values);
+  cudf::data_type output_type{cudf::type_to_id<double>()};
 
   auto calc_var = [](std::vector<T> const &v, cudf::size_type valid_count) {
     double mean = std::accumulate(v.cbegin(), v.cend(), double{0});
@@ -1275,31 +1260,27 @@ TYPED_TEST(DictionaryReductionTest, var_std)
   };
 
   // test without nulls
-  cudf::test::fixed_width_column_wrapper<T> col_w(v.begin(), v.end());
-  auto col = cudf::dictionary::encode(col_w);
+  cudf::test::dictionary_column_wrapper<T> col(v.begin(), v.end());
 
   double var   = calc_var(v, v.size());
   double std   = std::sqrt(var);
   auto var_agg = cudf::make_variance_aggregation(/*ddof =*/1);
   auto std_agg = cudf::make_std_aggregation(/*ddof =*/1);
 
-  this->reduction_test(col->view(), var, true, var_agg, cudf::data_type(cudf::type_id::FLOAT64));
-  this->reduction_test(col->view(), std, true, std_agg, cudf::data_type(cudf::type_id::FLOAT64));
+  this->reduction_test(col, var, true, var_agg, output_type);
+  this->reduction_test(col, std, true, std_agg, output_type);
 
   // test with nulls
   std::vector<bool> validity({1, 1, 0, 1, 1, 1, 0, 1});
-  cudf::test::fixed_width_column_wrapper<T> col_nulls_w(v.begin(), v.end(), validity.begin());
-  auto col_nulls = cudf::dictionary::encode(col_nulls_w);
+  cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
 
   cudf::size_type valid_count = std::count(validity.begin(), validity.end(), true);
 
   double var_nulls = calc_var(replace_nulls(v, validity, T{0}), valid_count);
   double std_nulls = std::sqrt(var_nulls);
 
-  this->reduction_test(
-    col_nulls->view(), var_nulls, true, var_agg, cudf::data_type(cudf::type_id::FLOAT64));
-  this->reduction_test(
-    col_nulls->view(), std_nulls, true, std_agg, cudf::data_type(cudf::type_id::FLOAT64));
+  this->reduction_test(col_nulls, var_nulls, true, var_agg, output_type);
+  this->reduction_test(col_nulls, std_nulls, true, std_agg, output_type);
 }
 
 TYPED_TEST(DictionaryReductionTest, NthElement)
@@ -1307,33 +1288,31 @@ TYPED_TEST(DictionaryReductionTest, NthElement)
   using T = TypeParam;
   std::vector<int> int_values({-3, 2, 1, 0, 5, -3, -2, 28});
   std::vector<T> v = convert_values<T>(int_values);
+  cudf::data_type output_type{cudf::type_to_id<T>()};
 
   // test without nulls
-  cudf::test::fixed_width_column_wrapper<T> col_w(v.begin(), v.end());
-  auto col = cudf::dictionary::encode(col_w);
-
+  cudf::test::dictionary_column_wrapper<T> col(v.begin(), v.end());
   cudf::size_type n = 5;
-  this->reduction_test(col->view(),
+  this->reduction_test(col,
                        v[n],  // expected_value,
                        true,
                        cudf::make_nth_element_aggregation(n, cudf::null_policy::INCLUDE),
-                       cudf::column_view(col_w).type());
+                       output_type);
 
   // test with nulls
   std::vector<bool> validity({1, 1, 0, 1, 1, 1, 0, 1});
-  cudf::test::fixed_width_column_wrapper<T> col_nulls_w(v.begin(), v.end(), validity.begin());
-  auto col_nulls              = cudf::dictionary::encode(col_nulls_w);
+  cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
   cudf::size_type valid_count = std::count(validity.begin(), validity.end(), true);
-  this->reduction_test(col_nulls->view(),
+  this->reduction_test(col_nulls,
                        v[n],  // expected_value,
                        true,
                        cudf::make_nth_element_aggregation(n, cudf::null_policy::INCLUDE),
-                       cudf::column_view(col_w).type());
-  this->reduction_test(col_nulls->view(),
+                       output_type);
+  this->reduction_test(col_nulls,
                        v[2],  // null element
                        true,
                        cudf::make_nth_element_aggregation(2, cudf::null_policy::INCLUDE),
-                       cudf::column_view(col_w).type(),
+                       output_type,
                        true);
 }
 
@@ -1342,70 +1321,93 @@ TYPED_TEST(DictionaryReductionTest, UniqueCount)
   using T = TypeParam;
   std::vector<int> int_values({1, -3, 1, 2, 0, 2, -4, 45});  // 6 unique values
   std::vector<T> v = convert_values<T>(int_values);
+  cudf::data_type output_type{cudf::type_to_id<cudf::size_type>()};
 
   // test without nulls
-  cudf::test::fixed_width_column_wrapper<T> col_w(v.begin(), v.end());
-  auto col = cudf::dictionary::encode(col_w);
-  this->reduction_test(col->view(),
+  cudf::test::dictionary_column_wrapper<T> col(v.begin(), v.end());
+  this->reduction_test(col,
                        6,
                        this->ret_non_arithmetic,
                        cudf::make_nunique_aggregation(cudf::null_policy::INCLUDE),
-                       cudf::column_view(col_w).type());
+                       output_type);
 
   // test with nulls
   std::vector<bool> validity({1, 1, 1, 0, 1, 1, 1, 1});
-  cudf::test::fixed_width_column_wrapper<T> col_nulls_w(v.begin(), v.end(), validity.begin());
-  auto col_nulls = cudf::dictionary::encode(col_nulls_w);
+  cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
 
-  this->reduction_test(col_nulls->view(),
+  this->reduction_test(col_nulls,
                        7,
                        this->ret_non_arithmetic,
                        cudf::make_nunique_aggregation(cudf::null_policy::INCLUDE),
-                       cudf::column_view(col_w).type());
-  this->reduction_test(col_nulls->view(),
+                       output_type);
+  this->reduction_test(col_nulls,
                        6,
                        this->ret_non_arithmetic,
                        cudf::make_nunique_aggregation(cudf::null_policy::EXCLUDE),
-                       cudf::column_view(col_w).type());
+                       output_type);
 }
 
-// this requires cudf::quantile to work with dictionary columns
-#if 0
 TYPED_TEST(DictionaryReductionTest, Median)
 {
   using T = TypeParam;
   std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
   std::vector<T> v = convert_values<T>(int_values);
+  cudf::data_type output_type{cudf::type_to_id<double>()};
 
   // test without nulls
-  cudf::test::fixed_width_column_wrapper<T> col_w(v.begin(), v.end());
-  auto col = cudf::dictionary::encode(col_w);
-
-  double expected_value = [] {
-    if (std::is_signed<T>::value) return 3.0;
-    return 13.5;
-  }();
-
-  this->reduction_test(col->view(),
+  cudf::test::dictionary_column_wrapper<T> col(v.begin(), v.end());
+  this->reduction_test(col,
                        (std::is_signed<T>::value) ? 3.0 : 13.5,
                        this->ret_non_arithmetic,
                        cudf::make_median_aggregation(),
-                       cudf::column_view(col_w).type());
+                       output_type);
 
-  //// test with nulls
-  // std::vector<bool> validity({1, 1, 1, 0, 1, 1, 1, 1});
-  // cudf::test::fixed_width_column_wrapper<T> col_nulls_w(v.begin(), v.end(), validity.begin());
-  // auto col_nulls = cudf::dictionary::encode(col_nulls_w);
-  // double expected_null_value = [] {
-  //  if (std::is_signed<T>::value) return 0.0;
-  //  return 13.0;
-  //}();
-  // this->reduction_test(col_nulls,
-  //                     expected_null_value,
-  //                     this->ret_non_arithmetic,
-  //                     cudf::make_median_aggregation(),
-  //                     cudf::column_view(col_w).type());
+  // test with nulls
+  std::vector<bool> validity({1, 1, 1, 0, 1, 1, 1, 1});
+  cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
+  this->reduction_test(col_nulls,
+                       (std::is_signed<T>::value) ? 0.0 : 13.0,
+                       this->ret_non_arithmetic,
+                       cudf::make_median_aggregation(),
+                       output_type);
 }
-#endif
+
+TYPED_TEST(DictionaryReductionTest, Quantile)
+{
+  using T = TypeParam;
+  std::vector<int> int_values({6, -14, 13, 64, 0, -13, -20, 45});
+  std::vector<T> v = convert_values<T>(int_values);
+  cudf::interpolation interp{cudf::interpolation::LINEAR};
+  cudf::data_type output_type{cudf::type_to_id<double>()};
+
+  // test without nulls
+  cudf::test::dictionary_column_wrapper<T> col(v.begin(), v.end());
+  double expected_value = std::is_same<T, bool>::value || std::is_unsigned<T>::value ? 0.0 : -20.0;
+  this->reduction_test(col,
+                       expected_value,
+                       this->ret_non_arithmetic,
+                       cudf::make_quantile_aggregation({0.0}, interp),
+                       output_type);
+  this->reduction_test(col,
+                       64.0,
+                       this->ret_non_arithmetic,
+                       cudf::make_quantile_aggregation({1.0}, interp),
+                       output_type);
+
+  // test with nulls
+  std::vector<bool> validity({1, 1, 1, 0, 1, 1, 1, 1});
+  cudf::test::dictionary_column_wrapper<T> col_nulls(v.begin(), v.end(), validity.begin());
+
+  this->reduction_test(col_nulls,
+                       expected_value,
+                       this->ret_non_arithmetic,
+                       cudf::make_quantile_aggregation({0}, interp),
+                       output_type);
+  this->reduction_test(col_nulls,
+                       45.0,
+                       this->ret_non_arithmetic,
+                       cudf::make_quantile_aggregation({1}, interp),
+                       output_type);
+}
 
 CUDF_TEST_PROGRAM_MAIN()
