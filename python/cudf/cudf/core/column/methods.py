@@ -1,6 +1,8 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from typing import Optional, Union
+from typing import Optional, Union, overload
+
+from typing_extensions import Literal
 
 import cudf
 
@@ -12,15 +14,41 @@ class ColumnMethodsMixin:
         self._column = column
         self._parent = parent
 
+    @overload
     def _return_or_inplace(
-        self, new_col, **kwargs
+        self, new_col, inplace: Literal[False], expand=False, retain_index=True
+    ) -> Union["cudf.Series", "cudf.Index"]:
+        ...
+
+    @overload
+    def _return_or_inplace(
+        self, new_col, expand: bool = False, retain_index: bool = True
+    ) -> Union["cudf.Series", "cudf.Index"]:
+        ...
+
+    @overload
+    def _return_or_inplace(
+        self, new_col, inplace: Literal[True], expand=False, retain_index=True
+    ) -> None:
+        ...
+
+    @overload
+    def _return_or_inplace(
+        self,
+        new_col,
+        inplace: bool = False,
+        expand: bool = False,
+        retain_index: bool = True,
     ) -> Optional[Union["cudf.Series", "cudf.Index"]]:
+        ...
+
+    def _return_or_inplace(
+        self, new_col, inplace=False, expand=False, retain_index=True
+    ):
         """
         Returns an object of the type of the column owner or updates the column
         of the owner (Series or Index) to mimic an inplace operation
         """
-        inplace = kwargs.get("inplace", False)
-
         if inplace:
             if self._parent is not None:
                 self._parent._mimic_inplace(
@@ -36,10 +64,9 @@ class ColumnMethodsMixin:
         else:
             if self._parent is None:
                 return new_col
-            expand = kwargs.get("expand", False) or isinstance(
+            if expand or isinstance(
                 self._parent, (cudf.DataFrame, cudf.MultiIndex)
-            )
-            if expand:
+            ):
                 # This branch indicates the passed as new_col
                 # is a Table
                 table = new_col
@@ -55,7 +82,6 @@ class ColumnMethodsMixin:
                         data=table._data, index=self._parent.index
                     )
             elif isinstance(self._parent, cudf.Series):
-                retain_index = kwargs.get("retain_index", True)
                 if retain_index:
                     return cudf.Series(
                         new_col,

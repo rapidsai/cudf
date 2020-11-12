@@ -38,6 +38,7 @@ dependencies:
   - black=19.10
   - isort=5.0.7
   - mypy=0.782
+  - typing_extensions
   - pre_commit
   - dask>=2.22.0
   - distributed>=2.22.0
