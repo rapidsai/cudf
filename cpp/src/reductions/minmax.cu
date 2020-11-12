@@ -15,8 +15,6 @@
  */
 // The translation unit for reduction `minmax`
 
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/transform_reduce.h>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -24,6 +22,12 @@
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/transform_reduce.h>
+
 #include <type_traits>
 
 namespace cudf {
@@ -66,16 +70,22 @@ template <typename T,
 rmm::device_scalar<OutputType> reduce_device(InputIterator d_in,
                                              cudf::size_type num_items,
                                              Op binary_op,
-                                             rmm::mr::device_memory_resource *mr,
-                                             cudaStream_t stream)
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource *mr)
 {
   OutputType identity{};
   rmm::device_scalar<OutputType> dev_result{identity, stream, mr};  // TODO remove mr
 
   // Allocate temporary storage
   size_t temp_storage_bytes = 0;
-  cub::DeviceReduce::Reduce(
-    nullptr, temp_storage_bytes, d_in, dev_result.data(), num_items, binary_op, identity, stream);
+  cub::DeviceReduce::Reduce(nullptr,
+                            temp_storage_bytes,
+                            d_in,
+                            dev_result.data(),
+                            num_items,
+                            binary_op,
+                            identity,
+                            stream.value());
   auto d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
 
   // Run reduction
@@ -86,7 +96,7 @@ rmm::device_scalar<OutputType> reduce_device(InputIterator d_in,
                             num_items,
                             binary_op,
                             identity,
-                            stream);
+                            stream.value());
 
   return dev_result;
 }
@@ -140,7 +150,7 @@ struct create_minmax_with_nulls {
 struct minmax_functor {
   template <typename T>
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
-    const cudf::column_view &col, rmm::mr::device_memory_resource *mr, cudaStream_t stream)
+    const cudf::column_view &col, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource *mr)
   {
     auto device_col  = column_device_view::create(col, stream);
     using OutputType = minmax_pair<T>;
@@ -162,12 +172,12 @@ struct minmax_functor {
         auto pair           = make_pair_iterator<T, true>(*device_col);
         auto pair_to_minmax = thrust::make_transform_iterator(pair, create_minmax_with_nulls<T>{});
 
-        return reduce_device<T>(pair_to_minmax, col.size(), minmax_binary_op<T>{}, mr, stream);
+        return reduce_device<T>(pair_to_minmax, col.size(), minmax_binary_op<T>{}, stream, mr);
       } else {
         auto col_to_minmax =
           thrust::make_transform_iterator(device_col->begin<T>(), create_minmax<T>{});
 
-        return reduce_device<T>(col_to_minmax, col.size(), minmax_binary_op<T>{}, mr, stream);
+        return reduce_device<T>(col_to_minmax, col.size(), minmax_binary_op<T>{}, stream, mr);
       }
     }();
 
@@ -190,8 +200,8 @@ struct minmax_functor {
 template <>
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax_functor::
 operator()<cudf::dictionary32>(const cudf::column_view &col,
-                               rmm::mr::device_memory_resource *mr,
-                               cudaStream_t stream)
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource *mr)
 {
   CUDF_FAIL("dictionary type not supported");
 }
@@ -199,8 +209,8 @@ operator()<cudf::dictionary32>(const cudf::column_view &col,
 template <>
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax_functor::
 operator()<cudf::string_view>(const cudf::column_view &col,
-                              rmm::mr::device_memory_resource *mr,
-                              cudaStream_t stream)
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource *mr)
 {
   CUDF_FAIL("string type not supported");
 }
@@ -208,8 +218,8 @@ operator()<cudf::string_view>(const cudf::column_view &col,
 template <>
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax_functor::
 operator()<cudf::list_view>(const cudf::column_view &col,
-                            rmm::mr::device_memory_resource *mr,
-                            cudaStream_t stream)
+                            rmm::cuda_stream_view stream,
+                            rmm::mr::device_memory_resource *mr)
 {
   CUDF_FAIL("list type not supported");
 }
@@ -217,8 +227,8 @@ operator()<cudf::list_view>(const cudf::column_view &col,
 template <>
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax_functor::
 operator()<cudf::struct_view>(const cudf::column_view &col,
-                              rmm::mr::device_memory_resource *mr,
-                              cudaStream_t stream)
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource *mr)
 {
   CUDF_FAIL("struct type not supported");
 }
@@ -227,8 +237,8 @@ operator()<cudf::struct_view>(const cudf::column_view &col,
 template <>
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax_functor::
 operator()<numeric::decimal32>(const cudf::column_view &col,
-                               rmm::mr::device_memory_resource *mr,
-                               cudaStream_t stream)
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource *mr)
 {
   CUDF_FAIL("fixed-point type not supported");
 }
@@ -236,8 +246,8 @@ operator()<numeric::decimal32>(const cudf::column_view &col,
 template <>
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax_functor::
 operator()<numeric::decimal64>(const cudf::column_view &col,
-                               rmm::mr::device_memory_resource *mr,
-                               cudaStream_t stream)
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource *mr)
 {
   CUDF_FAIL("fixed-point type not supported");
 }
@@ -246,10 +256,10 @@ operator()<numeric::decimal64>(const cudf::column_view &col,
 
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
   const cudf::column_view &col,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
 {
-  return type_dispatcher(col.type(), minmax_functor{}, col, mr, stream);
+  return type_dispatcher(col.type(), minmax_functor{}, col, stream, mr);
 }
 }  // namespace detail
 
@@ -259,7 +269,7 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
   const cudf::column_view &col, rmm::mr::device_memory_resource *mr)
 {
-  return cudf::detail::minmax(col, mr);
+  return cudf::detail::minmax(col, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf
