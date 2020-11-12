@@ -56,6 +56,7 @@
 - PR #6612 Update JNI to new RMM cuda_stream_view API
 - PR #6646 Replace `cudaStream_t` with `rmm::cuda_stream_view` (part 1)
 - PR #6648 Replace `cudaStream_t` with `rmm::cuda_stream_view` (part 2)
+- PR #6744 Replace `cudaStream_t` with `rmm::cuda_stream_view` (part 3)
 - PR #6579 Update scatter APIs to use reference wrapper / const scalar
 - PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
 - PR #6622 Update `to_pandas` api docs
