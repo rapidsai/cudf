@@ -60,10 +60,9 @@ cdef class DeviceScalar:
             A NumPy dtype.
         """
 
-        # Caching Mechanism
-        self._set_device_value(value, dtype)
+        self._set_value(value, dtype)
 
-    def _set_device_value(self, value, dtype):
+    def _set_value(self, value, dtype):
         valid = not _is_null_host_scalar(value)
 
         if pd.api.types.is_string_dtype(dtype):
@@ -377,7 +376,7 @@ def _is_null_host_scalar(slr):
         return False
 
 
-def _create_dummy_nat_scalar(dtype):
+def _create_proxy_nat_scalar(dtype):
     cdef DeviceScalar result = DeviceScalar.__new__(DeviceScalar)
 
     dtype = np.dtype(dtype)

@@ -408,7 +408,7 @@ def _fillna_natwise(col):
     # we set the same mask as current column.
     # However where there are "<NA>" in the
     # columns, their corresponding locations
-    nat = cudf._lib.scalar._create_dummy_nat_scalar(col.dtype)
+    nat = cudf._lib.scalar._create_proxy_nat_scalar(col.dtype)
     result = cudf._lib.replace.replace_nulls(col, nat)
     return column.build_column(
         data=result.base_data,

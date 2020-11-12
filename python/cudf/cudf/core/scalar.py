@@ -330,7 +330,7 @@ class Scalar(object):
         return getattr(self.value, op)()
 
 
-class cudf_NA_type(object):
+class _NAType(object):
     def __init__(self):
         pass
 
@@ -341,4 +341,4 @@ class cudf_NA_type(object):
         raise TypeError("boolean value of cudf.NA is ambiguous")
 
 
-NA = cudf_NA_type()
+NA = _NAType()
