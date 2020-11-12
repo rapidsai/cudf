@@ -14,45 +14,47 @@
  * limitations under the License.
  */
 
+#include <rolling/jit/code/code.h>
+#include <rolling/rolling_detail.hpp>
+#include <rolling/rolling_jit_detail.hpp>
+
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.cuh>
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/rolling.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <rolling/rolling_detail.hpp>
-#include <rolling/rolling_jit_detail.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <jit/launcher.h>
 #include <jit/parser.h>
 #include <jit/type.h>
-#include <rolling/jit/code/code.h>
-
 #include <jit/bit.hpp.jit>
 #include <jit/rolling_jit_detail.hpp.jit>
 #include <jit/types.hpp.jit>
 
-#include <thrust/binary_search.h>
+#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
+#include <thrust/binary_search.h>
 #include <thrust/detail/execution_policy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
-#include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/detail/utilities/device_operators.cuh>
-#include <cudf/utilities/error.hpp>
-#include <cudf/utilities/traits.hpp>
+
 #include <memory>
 
 namespace cudf {
@@ -499,7 +501,7 @@ struct rolling_window_launcher {
                             FollowingWindowIterator following_window_begin,
                             size_type min_periods,
                             std::unique_ptr<aggregation> const& agg,
-                            cudaStream_t stream)
+                            rmm::cuda_stream_view stream)
   {
     constexpr cudf::size_type block_size = 256;
     cudf::detail::grid_1d grid(input.size(), block_size);
@@ -512,28 +514,28 @@ struct rolling_window_launcher {
 
     if (input.has_nulls()) {
       gpu_rolling<T, target_type_t<InputType, op>, agg_op, op, block_size, true>
-        <<<grid.num_blocks, block_size, 0, stream>>>(*input_device_view,
-                                                     *default_outputs_device_view,
-                                                     *output_device_view,
-                                                     device_valid_count.data(),
-                                                     preceding_window_begin,
-                                                     following_window_begin,
-                                                     min_periods);
+        <<<grid.num_blocks, block_size, 0, stream.value()>>>(*input_device_view,
+                                                             *default_outputs_device_view,
+                                                             *output_device_view,
+                                                             device_valid_count.data(),
+                                                             preceding_window_begin,
+                                                             following_window_begin,
+                                                             min_periods);
     } else {
       gpu_rolling<T, target_type_t<InputType, op>, agg_op, op, block_size, false>
-        <<<grid.num_blocks, block_size, 0, stream>>>(*input_device_view,
-                                                     *default_outputs_device_view,
-                                                     *output_device_view,
-                                                     device_valid_count.data(),
-                                                     preceding_window_begin,
-                                                     following_window_begin,
-                                                     min_periods);
+        <<<grid.num_blocks, block_size, 0, stream.value()>>>(*input_device_view,
+                                                             *default_outputs_device_view,
+                                                             *output_device_view,
+                                                             device_valid_count.data(),
+                                                             preceding_window_begin,
+                                                             following_window_begin,
+                                                             min_periods);
     }
 
     size_type valid_count = device_valid_count.value(stream);
 
     // check the stream for debugging
-    CHECK_CUDA(stream);
+    CHECK_CUDA(stream.value());
 
     return valid_count;
   }
@@ -551,7 +553,7 @@ struct rolling_window_launcher {
                             size_type min_periods,
                             std::unique_ptr<aggregation> const& agg,
                             agg_op const& device_agg_op,
-                            cudaStream_t stream)
+                            rmm::cuda_stream_view stream)
   {
     constexpr cudf::size_type block_size = 256;
     cudf::detail::grid_1d grid(input.size(), block_size);
@@ -564,30 +566,30 @@ struct rolling_window_launcher {
 
     if (input.has_nulls()) {
       gpu_rolling<T, target_type_t<InputType, op>, agg_op, op, block_size, true>
-        <<<grid.num_blocks, block_size, 0, stream>>>(*input_device_view,
-                                                     *default_outputs_device_view,
-                                                     *output_device_view,
-                                                     device_valid_count.data(),
-                                                     preceding_window_begin,
-                                                     following_window_begin,
-                                                     min_periods,
-                                                     device_agg_op);
+        <<<grid.num_blocks, block_size, 0, stream.value()>>>(*input_device_view,
+                                                             *default_outputs_device_view,
+                                                             *output_device_view,
+                                                             device_valid_count.data(),
+                                                             preceding_window_begin,
+                                                             following_window_begin,
+                                                             min_periods,
+                                                             device_agg_op);
     } else {
       gpu_rolling<T, target_type_t<InputType, op>, agg_op, op, block_size, false>
-        <<<grid.num_blocks, block_size, 0, stream>>>(*input_device_view,
-                                                     *default_outputs_device_view,
-                                                     *output_device_view,
-                                                     device_valid_count.data(),
-                                                     preceding_window_begin,
-                                                     following_window_begin,
-                                                     min_periods,
-                                                     device_agg_op);
+        <<<grid.num_blocks, block_size, 0, stream.value()>>>(*input_device_view,
+                                                             *default_outputs_device_view,
+                                                             *output_device_view,
+                                                             device_valid_count.data(),
+                                                             preceding_window_begin,
+                                                             following_window_begin,
+                                                             min_periods,
+                                                             device_agg_op);
     }
 
     size_type valid_count = device_valid_count.value(stream);
 
     // check the stream for debugging
-    CHECK_CUDA(stream);
+    CHECK_CUDA(stream.value());
 
     return valid_count;
   }
@@ -610,8 +612,8 @@ struct rolling_window_launcher {
          FollowingWindowIterator following_window_begin,
          size_type min_periods,
          std::unique_ptr<aggregation> const& agg,
-         rmm::mr::device_memory_resource* mr,
-         cudaStream_t stream)
+         rmm::cuda_stream_view stream,
+         rmm::mr::device_memory_resource* mr)
   {
     if (input.is_empty()) return empty_like(input);
 
@@ -650,8 +652,8 @@ struct rolling_window_launcher {
          FollowingWindowIterator following_window_begin,
          size_type min_periods,
          std::unique_ptr<aggregation> const& agg,
-         rmm::mr::device_memory_resource* mr,
-         cudaStream_t stream)
+         rmm::cuda_stream_view stream,
+         rmm::mr::device_memory_resource* mr)
   {
     if (input.is_empty()) return empty_like(input);
 
@@ -721,8 +723,8 @@ struct rolling_window_launcher {
          FollowingWindowIterator following_window_begin,
          size_type min_periods,
          std::unique_ptr<aggregation> const& agg,
-         rmm::mr::device_memory_resource* mr,
-         cudaStream_t stream)
+         rmm::cuda_stream_view stream,
+         rmm::mr::device_memory_resource* mr)
   {
     CUDF_FAIL("Aggregation operator and/or input type combination is invalid");
   }
@@ -742,8 +744,8 @@ struct rolling_window_launcher {
          size_type min_periods,
          std::unique_ptr<aggregation> const& agg,
          agg_op const& device_agg_op,
-         rmm::mr::device_memory_resource* mr,
-         cudaStream_t stream)
+         rmm::cuda_stream_view stream,
+         rmm::mr::device_memory_resource* mr)
   {
     if (input.is_empty()) return empty_like(input);
 
@@ -793,8 +795,8 @@ struct rolling_window_launcher {
          size_type min_periods,
          std::unique_ptr<aggregation> const& agg,
          agg_op device_agg_op,
-         rmm::mr::device_memory_resource* mr,
-         cudaStream_t stream)
+         rmm::cuda_stream_view stream,
+         rmm::mr::device_memory_resource* mr)
   {
     CUDF_FAIL(
       "Aggregation operator and/or input type combination is invalid: "
@@ -812,8 +814,8 @@ struct rolling_window_launcher {
              FollowingWindowIterator following_window_begin,
              size_type min_periods,
              std::unique_ptr<aggregation> const& agg,
-             rmm::mr::device_memory_resource* mr,
-             cudaStream_t stream)
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr)
   {
     CUDF_EXPECTS(default_outputs.is_empty(),
                  "Only LEAD/LAG window functions support default values.");
@@ -828,8 +830,8 @@ struct rolling_window_launcher {
                                            following_window_begin,
                                            min_periods,
                                            agg,
-                                           mr,
-                                           stream);
+                                           stream,
+                                           mr);
   }
 
   // This variant is just to handle mean
@@ -843,8 +845,8 @@ struct rolling_window_launcher {
     FollowingWindowIterator following_window_begin,
     size_type min_periods,
     std::unique_ptr<aggregation> const& agg,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream)
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
   {
     return launch<InputType, cudf::DeviceSum, op, PrecedingWindowIterator, FollowingWindowIterator>(
       input,
@@ -853,8 +855,8 @@ struct rolling_window_launcher {
       following_window_begin,
       min_periods,
       agg,
-      mr,
-      stream);
+      stream,
+      mr);
   }
 
   template <aggregation::Kind op,
@@ -867,8 +869,8 @@ struct rolling_window_launcher {
              FollowingWindowIterator following_window_begin,
              size_type min_periods,
              std::unique_ptr<aggregation> const& agg,
-             rmm::mr::device_memory_resource* mr,
-             cudaStream_t stream)
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr)
   {
     return launch<InputType,
                   cudf::DeviceLeadLag,
@@ -882,8 +884,8 @@ struct rolling_window_launcher {
       min_periods,
       agg,
       cudf::DeviceLeadLag{static_cast<cudf::detail::lead_lag_aggregation*>(agg.get())->row_offset},
-      mr,
-      stream);
+      stream,
+      mr);
   }
 };
 
@@ -895,8 +897,8 @@ struct dispatch_rolling {
                                      FollowingWindowIterator following_window_begin,
                                      size_type min_periods,
                                      std::unique_ptr<aggregation> const& agg,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     return aggregation_dispatcher(agg->kind,
                                   rolling_window_launcher<T>{},
@@ -906,8 +908,8 @@ struct dispatch_rolling {
                                   following_window_begin,
                                   min_periods,
                                   agg,
-                                  mr,
-                                  stream);
+                                  stream,
+                                  mr);
   }
 };
 
@@ -916,15 +918,14 @@ struct dispatch_rolling {
 // Applies a user-defined rolling window function to the values in a column.
 template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
 std::unique_ptr<column> rolling_window_udf(column_view const& input,
-
                                            PrecedingWindowIterator preceding_window,
                                            std::string const& preceding_window_str,
                                            FollowingWindowIterator following_window,
                                            std::string const& following_window_str,
                                            size_type min_periods,
                                            std::unique_ptr<aggregation> const& agg,
-                                           rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream = 0)
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
                 "bitmask_type size does not match CUDA warp size");
@@ -999,7 +1000,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   output->set_null_count(output->size() - device_valid_count.value(stream));
 
   // check the stream for debugging
-  CHECK_CUDA(stream);
+  CHECK_CUDA(stream.value());
 
   return output;
 }
@@ -1021,8 +1022,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        FollowingWindowIterator following_window_begin,
                                        size_type min_periods,
                                        std::unique_ptr<aggregation> const& agg,
-                                       rmm::mr::device_memory_resource* mr,
-                                       cudaStream_t stream = 0)
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
   static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
                 "bitmask_type size does not match CUDA warp size");
@@ -1037,8 +1038,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                following_window_begin,
                                min_periods,
                                agg,
-                               mr,
-                               stream);
+                               stream,
+                               mr);
 }
 
 }  // namespace detail
@@ -1080,8 +1081,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                             "cudf::size_type",
                                             min_periods,
                                             agg,
-                                            mr,
-                                            0);
+                                            rmm::cuda_stream_default,
+                                            mr);
   } else {
     auto preceding_window_begin = thrust::make_constant_iterator(preceding_window);
     auto following_window_begin = thrust::make_constant_iterator(following_window);
@@ -1092,8 +1093,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                         following_window_begin,
                                         min_periods,
                                         agg,
-                                        mr,
-                                        0);
+                                        rmm::cuda_stream_default,
+                                        mr);
   }
 }
 
@@ -1125,8 +1126,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                             "cudf::size_type*",
                                             min_periods,
                                             agg,
-                                            mr,
-                                            0);
+                                            rmm::cuda_stream_default,
+                                            mr);
   } else {
     return cudf::detail::rolling_window(input,
                                         empty_like(input)->view(),
@@ -1134,8 +1135,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                         following_window.begin<size_type>(),
                                         min_periods,
                                         agg,
-                                        mr,
-                                        0);
+                                        rmm::cuda_stream_default,
+                                        mr);
   }
 }
 
@@ -1241,8 +1242,8 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                             "cudf::detail::following_window_wrapper",
                                             min_periods,
                                             aggr,
-                                            mr,
-                                            0);
+                                            rmm::cuda_stream_default,
+                                            mr);
   } else {
     return cudf::detail::rolling_window(
       input,
@@ -1253,8 +1254,8 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                       following_calculator),
       min_periods,
       aggr,
-      mr,
-      0);
+      rmm::cuda_stream_default,
+      mr);
   }
 }
 
@@ -1387,6 +1388,7 @@ std::unique_ptr<column> time_range_window_ASC(column_view const& input,
                                     following_calculator),
     min_periods,
     aggr,
+    rmm::cuda_stream_default,
     mr);
 }
 
@@ -1558,6 +1560,7 @@ std::unique_ptr<column> time_range_window_ASC(
                                     following_calculator),
     min_periods,
     aggr,
+    rmm::cuda_stream_default,
     mr);
 }
 
@@ -1642,6 +1645,7 @@ std::unique_ptr<column> time_range_window_DESC(column_view const& input,
                                     following_calculator),
     min_periods,
     aggr,
+    rmm::cuda_stream_default,
     mr);
 }
 
@@ -1747,8 +1751,8 @@ std::unique_ptr<column> time_range_window_DESC(
                                       following_calculator),
       min_periods,
       aggr,
-      mr,
-      0);
+      rmm::cuda_stream_default,
+      mr);
   }
 }
 
