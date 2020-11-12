@@ -113,7 +113,9 @@ public interface BinaryOperable {
   ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType);
 
   /**
-   * Add + operator. this + rhs
+   * Add one vector to another with the given output type. this + rhs
+   * Output type is ignored for the operations between decimal types and
+   * it is always decimal type.
    */
   default ColumnVector add(BinaryOperable rhs, DType outType) {
     return binaryOp(BinaryOp.ADD, rhs, outType);
@@ -128,6 +130,8 @@ public interface BinaryOperable {
 
   /**
    * Subtract one vector from another with the given output type. this - rhs
+   * Output type is ignored for the operations between decimal types and
+   * it is always decimal type.
    */
   default ColumnVector sub(BinaryOperable rhs, DType outType) {
     return binaryOp(BinaryOp.SUB, rhs, outType);
@@ -142,6 +146,8 @@ public interface BinaryOperable {
 
   /**
    * Multiply two vectors together with the given output type. this * rhs
+   * Output type is ignored for the operations between decimal types and
+   * it is always decimal type.
    */
   default ColumnVector mul(BinaryOperable rhs, DType outType) {
     return binaryOp(BinaryOp.MUL, rhs, outType);
@@ -156,6 +162,8 @@ public interface BinaryOperable {
 
   /**
    * Divide one vector by another with the given output type. this / rhs
+   * Output type is ignored for the operations between decimal types and
+   * it is always decimal type.
    */
   default ColumnVector div(BinaryOperable rhs, DType outType) {
     return binaryOp(BinaryOp.DIV, rhs, outType);

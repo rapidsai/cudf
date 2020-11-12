@@ -545,7 +545,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
         .max(Comparator.comparingInt(BigDecimal::precision))
         .orElse(BigDecimal.ZERO);
     int maxScale = Arrays.stream(values).filter(Objects::nonNull)
-        .map(decimal -> (decimal == null) ? 0 : decimal.scale())
+        .map(decimal -> decimal.scale())
         .max(Comparator.naturalOrder())
         .orElse(0);
     maxDec = maxDec.setScale(maxScale, RoundingMode.UNNECESSARY);
