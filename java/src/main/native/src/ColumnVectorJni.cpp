@@ -771,7 +771,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_byteListCast(JNIEnv *en
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isTimestamp(
-    JNIEnv *env, jlong handle, jstring formatObj) {
+    JNIEnv *env, jclass, jlong handle, jstring formatObj) {
   JNI_NULL_CHECK(env, handle, "column is null", 0);
   JNI_NULL_CHECK(env, formatObj, "format is null", 0);
 

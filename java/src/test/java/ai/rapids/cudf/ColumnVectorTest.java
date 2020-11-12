@@ -1910,6 +1910,23 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testIsTimestamp() {
+      final String[] TIMESTAMP_STRINGS = {
+          "2018-07-04 12:00:00",
+          "",
+          "2023-01-25",
+          "2023-01-25 07:32:12",
+          "2018-07-04 12:00:00"
+      };
+
+      try (ColumnVector timestampStrings = ColumnVector.fromStrings(TIMESTAMP_STRINGS);
+           ColumnVector isTimestamp = timestampStrings.isTimestamp("%Y-%m-%d %H:%M:%S");
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false, false, true, true)) {
+          assertColumnsAreEqual(expected, isTimestamp);
+      }
+  }
+
+  @Test
   void testCastTimestampAsString() {
     final String[] TIMES_S_STRING = {
         "2018-07-04 12:00:00",
