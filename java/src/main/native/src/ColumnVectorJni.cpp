@@ -788,6 +788,24 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringTimestampToTimestam
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isTimestamp(
+    JNIEnv *env, jclass, jlong handle, jstring formatObj) {
+  JNI_NULL_CHECK(env, handle, "column is null", 0);
+  JNI_NULL_CHECK(env, formatObj, "format is null", 0);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::jni::native_jstring format(env, formatObj);
+    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
+    cudf::strings_column_view strings_column(*column);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::is_timestamp(
+        strings_column, format.get());
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_timestampToStringTimestamp(
     JNIEnv *env, jobject j_object, jlong handle, jstring j_format) {
   JNI_NULL_CHECK(env, handle, "column is null", 0);
