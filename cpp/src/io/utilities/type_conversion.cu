@@ -28,18 +28,22 @@ namespace io {
  **/
 data_type convert_string_to_dtype(const std::string& dtype_in)
 {
+  // TODO: This function should be cleanup to take only libcudf type instances.
   std::string dtype = dtype_in;
   // first, convert to all lower-case
   std::transform(dtype_in.begin(), dtype_in.end(), dtype.begin(), [](unsigned char ch) {
     return static_cast<char>(std::tolower(ch));
   });
   if (dtype == "str") return data_type(cudf::type_id::STRING);
-  if (dtype == "timestamp[s]") return data_type(cudf::type_id::TIMESTAMP_SECONDS);
+  if (dtype == "timestamp[s]" || dtype == "datetime64[s]")
+    return data_type(cudf::type_id::TIMESTAMP_SECONDS);
   // backwards compat: "timestamp" defaults to milliseconds
-  if (dtype == "timestamp[ms]" || dtype == "timestamp")
+  if (dtype == "timestamp[ms]" || dtype == "timestamp" || dtype == "datetime64[ms]")
     return data_type(cudf::type_id::TIMESTAMP_MILLISECONDS);
-  if (dtype == "timestamp[us]") return data_type(cudf::type_id::TIMESTAMP_MICROSECONDS);
-  if (dtype == "timestamp[ns]") return data_type(cudf::type_id::TIMESTAMP_NANOSECONDS);
+  if (dtype == "timestamp[us]" || dtype == "datetime64[us]")
+    return data_type(cudf::type_id::TIMESTAMP_MICROSECONDS);
+  if (dtype == "timestamp[ns]" || dtype == "datetime64[ns]")
+    return data_type(cudf::type_id::TIMESTAMP_NANOSECONDS);
   if (dtype == "date32") return data_type(cudf::type_id::TIMESTAMP_DAYS);
   if (dtype == "bool" || dtype == "boolean") return data_type(cudf::type_id::BOOL8);
   if (dtype == "date" || dtype == "date64") return data_type(cudf::type_id::TIMESTAMP_MILLISECONDS);
