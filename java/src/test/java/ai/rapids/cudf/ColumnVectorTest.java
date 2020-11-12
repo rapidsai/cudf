@@ -3274,15 +3274,9 @@ public class ColumnVectorTest extends CudfTestBase {
         new HostColumnVector.BasicType(true, DType.INT32)), list1, list2, list3);
         ColumnView childColumnView = res.getChildColumnView(0);
         ColumnVector copiedChildCv = childColumnView.copyToColumnVector();
-        HostColumnVector hcv = copiedChildCv.copyToHost();
         ColumnVector expected =
             ColumnVector.fromInts(10, 11, 12, 13, 16, 12, 14, 15, 0, 7, 3, 4, 2)) {
-      System.out.println("columnView type=" + childColumnView.getType());
-      System.out.println("columnView rows=" + childColumnView.getRowCount());
-      System.out.println("copiedChildCv type=" + copiedChildCv.getType());
-      System.out.println("copiedChildCv rows=" + copiedChildCv.getRowCount());
-      System.out.println("copiedChildCv 0th=" + hcv.getInt(0));
-      System.out.println("copiedChildCv 1th=" + hcv.getInt(1));
+      assertColumnsAreEqual(expected, copiedChildCv);
     }
   }
 }

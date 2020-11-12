@@ -1,3 +1,21 @@
+/*
+ *
+ *  Copyright (c) 2020, NVIDIA CORPORATION.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ */
+
 package ai.rapids.cudf;
 
 import java.util.ArrayList;
@@ -75,11 +93,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return getDataBuffer(viewHandle);
   }
 
-  public BaseDeviceMemoryBuffer getOffsetBuffer() {
+  public BaseDeviceMemoryBuffer getOffsets() {
     return getOffsetsBuffer(viewHandle);
   }
 
-  public BaseDeviceMemoryBuffer getValidityBuffer() {
+  public BaseDeviceMemoryBuffer getValid() {
     return getValidityBuffer(viewHandle);
   }
 
@@ -101,7 +119,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public ColumnVector copyToColumnVector() {
     List<NestedColumnVector> nestedColumnVectors = copyToNestedColumnVectors();
     return new ColumnVector(type, rows, nullCount, getDataBuffer(),
-        getValidityBuffer(), getOffsetBuffer(), nestedColumnVectors);
+        getValid(), getOffsets(), nestedColumnVectors);
   }
 
   private List<NestedColumnVector> copyToNestedColumnVectors() {
@@ -2260,7 +2278,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column, used to construct the Java column vector
    *         by the timestampToLong method.
    */
-  private static native long stringTimestampToTimestamp(long viewHandle, int unit, String format);
+  private final static native long stringTimestampToTimestamp(long viewHandle, int unit, String format);
 
   /**
    * Native method to parse and convert a timestamp column vector to string column vector. A unix
@@ -2291,7 +2309,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * @return - native handle of the resulting cudf column used to construct the Java column vector
    */
-  private static native long timestampToStringTimestamp(long viewHandle, String format);
+  private final static native long timestampToStringTimestamp(long viewHandle, String format);
 
   /**
    * Native method for locating the starting index of the first instance of a given substring
@@ -2302,7 +2320,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param start character index to start the search from (inclusive).
    * @param end character index to end the search on (exclusive).
    */
-  private static native long substringLocate(long columnView, long substringScalar, int start, int end);
+  private final static native long substringLocate(long columnView, long substringScalar, int start, int end);
 
   /**
    * Native method which returns array of columns by splitting each string using the specified
@@ -2310,9 +2328,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param columnView native handle of the cudf::column_view being operated on.
    * @param delimiter  UTF-8 encoded string identifying the split points in each string.
    */
-  private static native long[] stringSplit(long columnView, long delimiter);
+  private final static native long[] stringSplit(long columnView, long delimiter);
 
-  private static native long stringSplitRecord(long nativeView, long scalarHandle, int maxSplit);
+  private final static native long stringSplitRecord(long nativeView, long scalarHandle, int maxSplit);
 
   /**
    * Native method to calculate substring from a given string column. 0 indexing.
@@ -2320,7 +2338,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param start      first character index to begin the substring(inclusive).
    * @param end        last character index to stop the substring(exclusive).
    */
-  private static native long substring(long columnView, int start, int end) throws CudfException;
+  private final static native long substring(long columnView, int start, int end) throws CudfException;
 
   /**
    * Native method to calculate substring from a given string column.
@@ -2328,7 +2346,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param startColumn handle of cudf::column_view which has start indices of each string.
    * @param endColumn handle of cudf::column_view which has end indices of each string.
    */
-  private static native long substringColumn(long columnView, long startColumn, long endColumn)
+  private final static native long substringColumn(long columnView, long startColumn, long endColumn)
       throws CudfException;
 
   /**
@@ -2337,7 +2355,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param target handle of scalar containing the string being searched.
    * @param repl handle of scalar containing the string to replace.
    */
-  private static native long stringReplace(long columnView, long target, long repl) throws CudfException;
+  private final static native long stringReplace(long columnView, long target, long repl) throws CudfException;
 
   /**
    * Native method for replacing any character sequence matching the given pattern
@@ -2347,7 +2365,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param replace The replacement template for creating the output string.
    * @return native handle of the resulting cudf column containing the string results.
    */
-  private static native long stringReplaceWithBackrefs(long columnView, String pattern,
+  private final static native long stringReplaceWithBackrefs(long columnView, String pattern,
                                                        String replace) throws CudfException;
 
   /**
@@ -2357,7 +2375,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   of each string in the column.
    * @return native handle of the resulting cudf column containing the boolean results.
    */
-  private static native long stringStartWith(long cudfViewHandle, long compString) throws CudfException;
+  private final static native long stringStartWith(long cudfViewHandle, long compString) throws CudfException;
 
   /**
    * Native method for checking if strings in a column ends with a specified comparison string.
@@ -2366,13 +2384,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   of each string in the column.
    * @return native handle of the resulting cudf column containing the boolean results.
    */
-  private static native long stringEndWith(long cudfViewHandle, long compString) throws CudfException;
+  private final static native long stringEndWith(long cudfViewHandle, long compString) throws CudfException;
 
   /**
    * Native method to strip whitespace from the start and end of a string.
    * @param columnView native handle of the cudf::column_view being operated on.
    */
-  private static native long stringStrip(long columnView, int type, long toStrip) throws CudfException;
+  private final static native long stringStrip(long columnView, int type, long toStrip) throws CudfException;
 
   /**
    * Native method for checking if strings match the passed in regex pattern from the
@@ -2381,7 +2399,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param pattern string regex pattern.
    * @return native handle of the resulting cudf column containing the boolean results.
    */
-  private static native long matchesRe(long cudfViewHandle, String pattern) throws CudfException;
+  private final static native long matchesRe(long cudfViewHandle, String pattern) throws CudfException;
 
   /**
    * Native method for checking if strings match the passed in regex pattern starting at any location.
@@ -2389,7 +2407,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param pattern string regex pattern.
    * @return native handle of the resulting cudf column containing the boolean results.
    */
-  private static native long containsRe(long cudfViewHandle, String pattern) throws CudfException;
+  private final static native long containsRe(long cudfViewHandle, String pattern) throws CudfException;
 
   /**
    * Native method for checking if strings in a column contains a specified comparison string.
@@ -2397,12 +2415,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param compString handle of scalar containing the string being searched for.
    * @return native handle of the resulting cudf column containing the boolean results.
    */
-  private static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
+  private final static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
 
   /**
    * Native method for extracting results from an regular expressions.  Returns a table handle.
    */
-  private static native long[] extractRe(long cudfViewHandle, String pattern) throws CudfException;
+  private final static native long[] extractRe(long cudfViewHandle, String pattern) throws CudfException;
 
   /**
    * Native method to concatenate columns of strings together, combining a row from
@@ -2416,7 +2434,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column, used to construct the Java column
    *         by the stringConcatenate method.
    */
-  private static native long stringConcatenation(long[] columnViews, long separator, long narep);
+  private final static native long stringConcatenation(long[] columnViews, long separator, long narep);
 
   /**
    * Native method for map lookup over a column of List<Struct<String,String>>
@@ -2425,31 +2443,31 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return a string column handle of the resultant
    * @throws CudfException
    */
-  private static native long mapLookup(long columnView, long key) throws CudfException;
+  private final static native long mapLookup(long columnView, long key) throws CudfException;
   /**
    * Native method to add zeros as padding to the left of each string.
    */
-  private static native long zfill(long nativeHandle, int width);
+  private final static native long zfill(long nativeHandle, int width);
 
-  private static native long pad(long nativeHandle, int width, int side, String fillChar);
+  private final static native long pad(long nativeHandle, int width, int side, String fillChar);
 
-  private static native long binaryOpVS(long lhs, long rhs, int op, int dtype, int scale);
+  private final static native long binaryOpVS(long lhs, long rhs, int op, int dtype, int scale);
 
-  private static native long binaryOpVV(long lhs, long rhs, int op, int dtype, int scale);
+  private final static native long binaryOpVV(long lhs, long rhs, int op, int dtype, int scale);
 
-  private static native long byteCount(long viewHandle) throws CudfException;
+  private final static native long byteCount(long viewHandle) throws CudfException;
 
-  private static native long extractListElement(long nativeView, int index);
+  private final static native long extractListElement(long nativeView, int index);
 
-  private static native long castTo(long nativeHandle, int type, int scale);
+  private final static native long castTo(long nativeHandle, int type, int scale);
 
-  private static native long byteListCast(long nativeHandle, boolean config);
+  private final static native long byteListCast(long nativeHandle, boolean config);
 
-  private static native long[] slice(long nativeHandle, int[] indices) throws CudfException;
+  private final static native long[] slice(long nativeHandle, int[] indices) throws CudfException;
 
-  private static native long[] split(long nativeHandle, int[] indices) throws CudfException;
+  private final static native long[] split(long nativeHandle, int[] indices) throws CudfException;
 
-  private static native long findAndReplaceAll(long valuesHandle, long replaceHandle, long myself) throws CudfException;
+  private final static native long findAndReplaceAll(long valuesHandle, long replaceHandle, long myself) throws CudfException;
 
   /**
    * Native method to switch all characters in a column of strings to lowercase characters.
@@ -2457,7 +2475,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column, used to construct the Java column
    *         by the lower method.
    */
-  private static native long lowerStrings(long cudfViewHandle);
+  private final static native long lowerStrings(long cudfViewHandle);
 
   /**
    * Native method to switch all characters in a column of strings to uppercase characters.
@@ -2465,11 +2483,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column, used to construct the Java column
    *         by the upper method.
    */
-  private static native long upperStrings(long cudfViewHandle);
+  private final static native long upperStrings(long cudfViewHandle);
 
-  private static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
+  private final static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
 
-  private static native long rollingWindow(
+  private final static native long rollingWindow(
       long viewHandle,
       long defaultOutputHandle,
       int min_periods,
@@ -2479,67 +2497,67 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       long preceding_col,
       long following_col);
 
-  private static native long nansToNulls(long viewHandle) throws CudfException;
+  private final static native long nansToNulls(long viewHandle) throws CudfException;
 
-  private static native long charLengths(long viewHandle) throws CudfException;
+  private final static native long charLengths(long viewHandle) throws CudfException;
 
-  private static native long concatenate(long[] viewHandles) throws CudfException;
+  private final static native long concatenate(long[] viewHandles) throws CudfException;
 
-  private static native long sequence(long initialValue, long step, int rows);
+  private final static native long sequence(long initialValue, long step, int rows);
 
-  private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
+  private final static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 
-  private static native long replaceNulls(long viewHandle, long scalarHandle) throws CudfException;
+  private final static native long replaceNulls(long viewHandle, long scalarHandle) throws CudfException;
 
-  private static native long ifElseVV(long predVec, long trueVec, long falseVec) throws CudfException;
+  private final static native long ifElseVV(long predVec, long trueVec, long falseVec) throws CudfException;
 
-  private static native long ifElseVS(long predVec, long trueVec, long falseScalar) throws CudfException;
+  private final static native long ifElseVS(long predVec, long trueVec, long falseScalar) throws CudfException;
 
-  private static native long ifElseSV(long predVec, long trueScalar, long falseVec) throws CudfException;
+  private final static native long ifElseSV(long predVec, long trueScalar, long falseVec) throws CudfException;
 
-  private static native long ifElseSS(long predVec, long trueScalar, long falseScalar) throws CudfException;
+  private final static native long ifElseSS(long predVec, long trueScalar, long falseScalar) throws CudfException;
 
-  private static native long reduce(long viewHandle, long aggregation, int dtype, int scale) throws CudfException;
+  private final static native long reduce(long viewHandle, long aggregation, int dtype, int scale) throws CudfException;
 
-  private static native long isNullNative(long viewHandle);
+  private final static native long isNullNative(long viewHandle);
 
-  private static native long isNanNative(long viewHandle);
+  private final static native long isNanNative(long viewHandle);
 
-  private static native long isFloat(long viewHandle);
+  private final static native long isFloat(long viewHandle);
 
-  private static native long isInteger(long viewHandle);
+  private final static native long isInteger(long viewHandle);
 
-  private static native long isNotNanNative(long viewHandle);
+  private final static native long isNotNanNative(long viewHandle);
 
-  private static native long isNotNullNative(long viewHandle);
+  private final static native long isNotNullNative(long viewHandle);
 
-  private static native long unaryOperation(long viewHandle, int op);
+  private final static native long unaryOperation(long viewHandle, int op);
 
-  private static native long year(long viewHandle) throws CudfException;
+  private final static native long year(long viewHandle) throws CudfException;
 
-  private static native long month(long viewHandle) throws CudfException;
+  private final static native long month(long viewHandle) throws CudfException;
 
-  private static native long day(long viewHandle) throws CudfException;
+  private final static native long day(long viewHandle) throws CudfException;
 
-  private static native long hour(long viewHandle) throws CudfException;
+  private final static native long hour(long viewHandle) throws CudfException;
 
-  private static native long minute(long viewHandle) throws CudfException;
+  private final static native long minute(long viewHandle) throws CudfException;
 
-  private static native long second(long viewHandle) throws CudfException;
+  private final static native long second(long viewHandle) throws CudfException;
 
-  private static native long weekDay(long viewHandle) throws CudfException;
+  private final static native long weekDay(long viewHandle) throws CudfException;
 
-  private static native long lastDayOfMonth(long viewHandle) throws CudfException;
+  private final static native long lastDayOfMonth(long viewHandle) throws CudfException;
 
-  private static native long dayOfYear(long viewHandle) throws CudfException;
+  private final static native long dayOfYear(long viewHandle) throws CudfException;
 
-  private static native boolean containsScalar(long columnViewHaystack, long scalarHandle) throws CudfException;
+  private final static native boolean containsScalar(long columnViewHaystack, long scalarHandle) throws CudfException;
 
-  private static native long containsVector(long columnViewHaystack, long columnViewNeedles) throws CudfException;
+  private final static native long containsVector(long columnViewHaystack, long columnViewNeedles) throws CudfException;
 
-  private static native long transform(long viewHandle, String udf, boolean isPtx);
+  private final static native long transform(long viewHandle, String udf, boolean isPtx);
 
-  private static native long clamper(long nativeView, long loScalarHandle, long loScalarReplaceHandle,
+  private final static native long clamper(long nativeView, long loScalarHandle, long loScalarReplaceHandle,
                                      long hiScalarHandle, long hiScalarReplaceHandle);
 
   protected native long title(long handle);
@@ -2552,7 +2570,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return Pointer to a new `column` of normalized values.
    * @throws CudfException On failure to normalize.
    */
-  private static native long normalizeNANsAndZeros(long viewHandle) throws CudfException;
+  private final static native long normalizeNANsAndZeros(long viewHandle) throws CudfException;
 
   /**
    * Native method to deep copy a column while replacing the null mask. The null mask is the
@@ -2562,7 +2580,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param viewHandles array of views whose null masks are merged, must have identical row counts.
    * @return native handle of the copied cudf column with replaced null mask.
    */
-  private static native long bitwiseMergeAndSetValidity(long baseHandle, long[] viewHandles,
+  private final static native long bitwiseMergeAndSetValidity(long baseHandle, long[] viewHandles,
                                                         int nullConfig) throws CudfException;
 
   /**
@@ -2573,7 +2591,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param hashId integer native ID of the hashing function identifier HashType
    * @return native handle of the resulting cudf column containing the hex-string hashing results.
    */
-  private static native long hash(long[] viewHandles, int hashId) throws CudfException;
+  private final static native long hash(long[] viewHandles, int hashId) throws CudfException;
 
   /**
    * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
@@ -2595,14 +2613,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   static native void deleteColumnView(long viewHandle) throws CudfException;
 
-  private static native long getNativeDataAddress(long viewHandle) throws CudfException;
-  private static native long getNativeDataLength(long viewHandle) throws CudfException;
+  private final static native long getNativeDataAddress(long viewHandle) throws CudfException;
+  private final static native long getNativeDataLength(long viewHandle) throws CudfException;
 
-  private static native long getNativeOffsetsAddress(long viewHandle) throws CudfException;
-  private static native long getNativeOffsetsLength(long viewHandle) throws CudfException;
+  private final static native long getNativeOffsetsAddress(long viewHandle) throws CudfException;
+  private final static native long getNativeOffsetsLength(long viewHandle) throws CudfException;
 
-  private static native long getNativeValidityAddress(long viewHandle) throws CudfException;
-  private static native long getNativeValidityLength(long viewHandle) throws CudfException;
+  private final static native long getNativeValidityAddress(long viewHandle) throws CudfException;
+  private final static native long getNativeValidityLength(long viewHandle) throws CudfException;
 
   static native long makeCudfColumnView(int type, int scale, long data, long dataSize, long offsets,
                                                 long valid, int nullCount, int size, long[] childHandle);
@@ -2734,8 +2752,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       Optional<Long> nullCount = Optional.of(nestedChild.getNullCount());
       long colRows = nestedChild.getRowCount();
       BaseDeviceMemoryBuffer colData = nestedChild.getNumChildren() == 0 ? nestedChild.getDataBuffer() : null;
-      BaseDeviceMemoryBuffer colValid = nestedChild.getValidityBuffer();
-      BaseDeviceMemoryBuffer colOffsets = nestedChild.getOffsetBuffer();
+      BaseDeviceMemoryBuffer colValid = nestedChild.getValid();
+      BaseDeviceMemoryBuffer colOffsets = nestedChild.getOffsets();
 
       List<NestedColumnVector> children = new ArrayList<>();
       for (int i = 0; i < nestedChild.getNumChildren(); i++) {
@@ -2830,6 +2848,171 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       NestedColumnVector ret = new NestedColumnVector(type, rows, nullCount, dataBuffer, validityBuffer, offsetBuffer,
           child);
       return ret;
+    }
+  }
+
+
+  /////////////////////////////////////////////////////////////////////////////
+  // DATA MOVEMENT
+  /////////////////////////////////////////////////////////////////////////////
+
+  private final static HostColumnVectorCore copyToHostNestedHelper(
+      ColumnView deviceCvPointer) {
+    if (deviceCvPointer == null) {
+      return null;
+    }
+    HostMemoryBuffer hostOffsets = null;
+    HostMemoryBuffer hostValid = null;
+    HostMemoryBuffer hostData = null;
+    List<HostColumnVectorCore> children = new ArrayList<>();
+    BaseDeviceMemoryBuffer currData = null;
+    BaseDeviceMemoryBuffer currOffsets = null;
+    BaseDeviceMemoryBuffer currValidity = null;
+    long currNullCount = 0l;
+    boolean needsCleanup = true;
+    try {
+      long currRows = deviceCvPointer.getRowCount();
+      DType currType = deviceCvPointer.getType();
+      currData = deviceCvPointer.getDataBuffer();
+      currOffsets = deviceCvPointer.getOffsets();
+      currValidity = deviceCvPointer.getValid();
+      if (currData != null) {
+        hostData = HostMemoryBuffer.allocate(currData.length);
+        hostData.copyFromDeviceBuffer(currData);
+      }
+      if (currValidity != null) {
+        hostValid = HostMemoryBuffer.allocate(currValidity.length);
+        hostValid.copyFromDeviceBuffer(currValidity);
+      }
+      if (currOffsets != null) {
+        hostOffsets = HostMemoryBuffer.allocate(currOffsets.length);
+        hostOffsets.copyFromDeviceBuffer(currOffsets);
+      }
+      int numChildren = deviceCvPointer.getNumChildren();
+      for (int i = 0; i < numChildren; i++) {
+        try(ColumnView childDevPtr = deviceCvPointer.getChildColumnView(i)) {
+          children.add(copyToHostNestedHelper(childDevPtr));
+        }
+      }
+      currNullCount = deviceCvPointer.getNullCount();
+      Optional<Long> nullCount = Optional.of(currNullCount);
+      HostColumnVectorCore ret =
+          new HostColumnVectorCore(currType, currRows, nullCount, hostData,
+              hostValid, hostOffsets, children);
+      needsCleanup = false;
+      return ret;
+    } finally {
+      if (currData != null) {
+        currData.close();
+      }
+      if (currOffsets != null) {
+        currOffsets.close();
+      }
+      if (currValidity != null) {
+        currValidity.close();
+      }
+      if (needsCleanup) {
+        if (hostData != null) {
+          hostData.close();
+        }
+        if (hostOffsets != null) {
+          hostOffsets.close();
+        }
+        if (hostValid != null) {
+          hostValid.close();
+        }
+      }
+    }
+  }
+
+  /**
+   * Copy the data to the host.
+   */
+  public HostColumnVector copyToHost() {
+    try (NvtxRange toHost = new NvtxRange("ensureOnHost", NvtxColor.BLUE)) {
+      HostMemoryBuffer hostDataBuffer = null;
+      HostMemoryBuffer hostValidityBuffer = null;
+      HostMemoryBuffer hostOffsetsBuffer = null;
+      BaseDeviceMemoryBuffer valid = getValid();
+      BaseDeviceMemoryBuffer offsets = getOffsets();
+      BaseDeviceMemoryBuffer data = null;
+      DType type = this.type;
+      Long rows = this.rows;
+      if (!type.isNestedType()) {
+        data = getData();
+      }
+      boolean needsCleanup = true;
+      try {
+        // We don't have a good way to tell if it is cached on the device or recalculate it on
+        // the host for now, so take the hit here.
+        getNullCount();
+        if (!type.isNestedType()) {
+          if (valid != null) {
+            hostValidityBuffer = HostMemoryBuffer.allocate(valid.getLength());
+            hostValidityBuffer.copyFromDeviceBuffer(valid);
+          }
+          if (offsets != null) {
+            hostOffsetsBuffer = HostMemoryBuffer.allocate(offsets.length);
+            hostOffsetsBuffer.copyFromDeviceBuffer(offsets);
+          }
+          // If a strings column is all null values there is no data buffer allocated
+          if (data != null) {
+            hostDataBuffer = HostMemoryBuffer.allocate(data.length);
+            hostDataBuffer.copyFromDeviceBuffer(data);
+          }
+          HostColumnVector ret = new HostColumnVector(type, rows, nullCount,
+              hostDataBuffer, hostValidityBuffer, hostOffsetsBuffer);
+          needsCleanup = false;
+          return ret;
+        } else {
+          HostMemoryBuffer hOffset = null;
+          HostMemoryBuffer hValid = null;
+          HostMemoryBuffer hData = null;
+          if (data != null) {
+            hData = HostMemoryBuffer.allocate(data.length);
+            hData.copyFromDeviceBuffer(data);
+          }
+
+          if (valid != null) {
+            hValid = HostMemoryBuffer.allocate(valid.getLength());
+            hValid.copyFromDeviceBuffer(valid);
+          }
+          if (offsets != null) {
+            hOffset = HostMemoryBuffer.allocate(offsets.getLength());
+            hOffset.copyFromDeviceBuffer(offsets);
+          }
+          List<HostColumnVectorCore> children = new ArrayList<>();
+          for (int i = 0; i < getNumChildren(); i++) {
+            try (ColumnView childDevPtr = getChildColumnView(i)) {
+              children.add(copyToHostNestedHelper(childDevPtr));
+            }
+          }
+          HostColumnVector ret = new HostColumnVector(type, rows, nullCount,
+              hData, hValid, hOffset, children);
+          return ret;
+        }
+      } finally {
+        if (data != null) {
+          data.close();
+        }
+        if (offsets != null) {
+          offsets.close();
+        }
+        if (valid != null) {
+          valid.close();
+        }
+        if (needsCleanup) {
+          if (hostOffsetsBuffer != null) {
+            hostOffsetsBuffer.close();
+          }
+          if (hostDataBuffer != null) {
+            hostDataBuffer.close();
+          }
+          if (hostValidityBuffer != null) {
+            hostValidityBuffer.close();
+          }
+        }
+      }
     }
   }
 }
