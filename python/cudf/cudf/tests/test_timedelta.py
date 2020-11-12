@@ -11,8 +11,6 @@ import pytest
 import cudf
 from cudf.tests import utils as utils
 from cudf.tests.utils import assert_eq, assert_exceptions_equal
-from cudf.utils import dtypes as dtypeutils
-
 
 _TIMEDELTA_DATA = [
     [1000000, 200000, 3000000],
@@ -592,6 +590,7 @@ def test_timedelta_series_ops_with_cudf_scalars(data, cpu_scalar, dtype, op):
 
     assert_eq(expected, actual)
 
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -913,7 +912,6 @@ def test_timedelta_index_ops_with_cudf_scalars(data, cpu_scalar, dtype, op):
         actual = gpu_scalar // gtdi
 
     assert_eq(expected, actual)
-
 
 
 @pytest.mark.parametrize("data", _TIMEDELTA_DATA)

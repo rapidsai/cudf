@@ -5,7 +5,6 @@ import warnings
 from numbers import Number
 from types import SimpleNamespace
 
-
 import cupy
 import numpy as np
 import pandas as pd
@@ -2070,7 +2069,9 @@ def arange(start, stop=None, step=1, dtype=None):
     size = int(np.ceil((stop - start) / step))
 
     return libcudf.filling.sequence(
-        size, as_device_scalar(start, dtype=dtype), as_device_scalar(step, dtype=dtype)
+        size,
+        as_device_scalar(start, dtype=dtype),
+        as_device_scalar(step, dtype=dtype),
     )
 
 

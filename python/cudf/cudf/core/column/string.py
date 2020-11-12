@@ -423,7 +423,9 @@ class StringMethods(ColumnMethodsMixin):
 
         if others is None:
             data = cpp_join(
-                self._column, as_device_scalar(sep), as_device_scalar(na_rep, "str")
+                self._column,
+                as_device_scalar(sep),
+                as_device_scalar(na_rep, "str"),
             )
         else:
             other_cols = _get_cols_list(self._parent, others)
@@ -643,7 +645,9 @@ class StringMethods(ColumnMethodsMixin):
             if regex is True:
                 result_col = cpp_contains_re(self._column, pat)
             else:
-                result_col = cpp_contains(self._column, as_device_scalar(pat, "str"))
+                result_col = cpp_contains(
+                    self._column, as_device_scalar(pat, "str")
+                )
         else:
             result_col = cpp_contains_multiple(
                 self._column, column.as_column(pat, dtype="str")
@@ -748,7 +752,10 @@ class StringMethods(ColumnMethodsMixin):
             cpp_replace_re(self._column, pat, as_device_scalar(repl, "str"), n)
             if regex is True and len(pat) > 1
             else cpp_replace(
-                self._column, as_device_scalar(pat, "str"), as_device_scalar(repl, "str"), n
+                self._column,
+                as_device_scalar(pat, "str"),
+                as_device_scalar(repl, "str"),
+                n,
             ),
             **kwargs,
         )
@@ -1732,7 +1739,8 @@ class StringMethods(ColumnMethodsMixin):
             repl = ""
 
         return self._return_or_inplace(
-            cpp_filter_alphanum(self._column, as_device_scalar(repl), keep), **kwargs,
+            cpp_filter_alphanum(self._column, as_device_scalar(repl), keep),
+            **kwargs,
         )
 
     def slice_from(self, starts, stops, **kwargs):
@@ -1861,7 +1869,9 @@ class StringMethods(ColumnMethodsMixin):
             repl = ""
 
         return self._return_or_inplace(
-            cpp_slice_replace(self._column, start, stop, as_device_scalar(repl)),
+            cpp_slice_replace(
+                self._column, start, stop, as_device_scalar(repl)
+            ),
             **kwargs,
         )
 
@@ -1912,7 +1922,8 @@ class StringMethods(ColumnMethodsMixin):
             repl = ""
 
         return self._return_or_inplace(
-            cpp_string_insert(self._column, start, as_device_scalar(repl)), **kwargs
+            cpp_string_insert(self._column, start, as_device_scalar(repl)),
+            **kwargs,
         )
 
     def get(self, i=0, **kwargs):
@@ -3168,7 +3179,9 @@ class StringMethods(ColumnMethodsMixin):
                 len(self._column), dtype="bool", masked=True
             )
         elif is_scalar(pat):
-            result_col = cpp_endswith(self._column, as_device_scalar(pat, "str"))
+            result_col = cpp_endswith(
+                self._column, as_device_scalar(pat, "str")
+            )
         else:
             result_col = cpp_endswith_multiple(
                 self._column, column.as_column(pat, dtype="str")
@@ -3233,7 +3246,9 @@ class StringMethods(ColumnMethodsMixin):
                 len(self._column), dtype="bool", masked=True
             )
         elif is_scalar(pat):
-            result_col = cpp_startswith(self._column, as_device_scalar(pat, "str"))
+            result_col = cpp_startswith(
+                self._column, as_device_scalar(pat, "str")
+            )
         else:
             result_col = cpp_startswith_multiple(
                 self._column, column.as_column(pat, dtype="str")
@@ -3290,7 +3305,9 @@ class StringMethods(ColumnMethodsMixin):
         if end is None:
             end = -1
 
-        result_col = cpp_find(self._column, as_device_scalar(sub, "str"), start, end)
+        result_col = cpp_find(
+            self._column, as_device_scalar(sub, "str"), start, end
+        )
 
         return self._return_or_inplace(result_col, **kwargs)
 
@@ -3347,7 +3364,9 @@ class StringMethods(ColumnMethodsMixin):
         if end is None:
             end = -1
 
-        result_col = cpp_rfind(self._column, as_device_scalar(sub, "str"), start, end)
+        result_col = cpp_rfind(
+            self._column, as_device_scalar(sub, "str"), start, end
+        )
 
         return self._return_or_inplace(result_col, **kwargs)
 
@@ -3400,7 +3419,9 @@ class StringMethods(ColumnMethodsMixin):
         if end is None:
             end = -1
 
-        result_col = cpp_find(self._column, as_device_scalar(sub, "str"), start, end)
+        result_col = cpp_find(
+            self._column, as_device_scalar(sub, "str"), start, end
+        )
 
         result = self._return_or_inplace(result_col, **kwargs)
 
@@ -3458,7 +3479,9 @@ class StringMethods(ColumnMethodsMixin):
         if end is None:
             end = -1
 
-        result_col = cpp_rfind(self._column, as_device_scalar(sub, "str"), start, end)
+        result_col = cpp_rfind(
+            self._column, as_device_scalar(sub, "str"), start, end
+        )
 
         result = self._return_or_inplace(result_col, **kwargs)
 
@@ -3712,7 +3735,9 @@ class StringMethods(ColumnMethodsMixin):
             repl = ""
         table = str.maketrans(table)
         return self._return_or_inplace(
-            cpp_filter_characters(self._column, table, keep, as_device_scalar(repl)),
+            cpp_filter_characters(
+                self._column, table, keep, as_device_scalar(repl)
+            ),
             **kwargs,
         )
 

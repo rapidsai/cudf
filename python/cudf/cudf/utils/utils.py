@@ -402,6 +402,7 @@ def isnat(val):
     else:
         return val in {"NaT", "NAT"} or np.isnat(val)
 
+
 def _fillna_natwise(col):
     # If the value we are filling is np.datetime64("NAT")
     # we set the same mask as current column.

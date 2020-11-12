@@ -250,7 +250,6 @@ class DatetimeColumn(column.ColumnBase):
 
         return binop(lhs, rhs, op=op, out_dtype=out_dtype)
 
-
     def fillna(self, fill_value):
         if cudf.utils.utils.isnat(fill_value):
             return _fillna_natwise(self)

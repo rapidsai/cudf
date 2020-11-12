@@ -470,8 +470,12 @@ class TimeDeltaColumn(column.ColumnBase):
 
         return (
             self
-            % as_device_scalar(np.timedelta64(_numpy_to_pandas_conversion["D"], "ns"))
-        ) // as_device_scalar(np.timedelta64(_numpy_to_pandas_conversion["s"], "ns"))
+            % as_device_scalar(
+                np.timedelta64(_numpy_to_pandas_conversion["D"], "ns")
+            )
+        ) // as_device_scalar(
+            np.timedelta64(_numpy_to_pandas_conversion["s"], "ns")
+        )
 
     @property
     def microseconds(self):
@@ -489,7 +493,9 @@ class TimeDeltaColumn(column.ColumnBase):
 
         return (
             self % np.timedelta64(_numpy_to_pandas_conversion["s"], "ns")
-        ) // as_device_scalar(np.timedelta64(_numpy_to_pandas_conversion["us"], "ns"))
+        ) // as_device_scalar(
+            np.timedelta64(_numpy_to_pandas_conversion["us"], "ns")
+        )
 
     @property
     def nanoseconds(self):
@@ -511,7 +517,9 @@ class TimeDeltaColumn(column.ColumnBase):
             % as_device_scalar(
                 np.timedelta64(_numpy_to_pandas_conversion["us"], "ns")
             )
-        ) // as_device_scalar(np.timedelta64(_numpy_to_pandas_conversion["ns"], "ns"))
+        ) // as_device_scalar(
+            np.timedelta64(_numpy_to_pandas_conversion["ns"], "ns")
+        )
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")

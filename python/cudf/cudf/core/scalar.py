@@ -59,9 +59,10 @@ class Scalar(object):
         if isinstance(value, DeviceScalar):
             self._device_value = value
         else:
-            self._host_value, self._host_dtype = self._preprocess_host_value(value, dtype)
+            self._host_value, self._host_dtype = self._preprocess_host_value(
+                value, dtype
+            )
 
-    
     @property
     def _is_host_value_current(self):
         return self._host_value is not None
@@ -73,28 +74,34 @@ class Scalar(object):
     @property
     def device_value(self):
         if self._device_value is None:
-            self._device_value = DeviceScalar(self._host_value, self._host_dtype)
+            self._device_value = DeviceScalar(
+                self._host_value, self._host_dtype
+            )
         return self._device_value
 
     @property
     def value(self):
         if not self._is_host_value_current:
-            self._host_value = self._device_value.value
-            self._host_dtype = self._host_value.dtype
+            self._device_value_to_host()
         return self._host_value
 
     @property
     def dtype(self):
         if not self._is_host_value_current:
-            self._host_value = self._device_value.value
-            self._host_dtype = self._host_value.dtype
+            self._device_value_to_host()
         return self._host_dtype
 
     def is_valid(self):
         if not self._is_host_value_current:
-            self._host_value = self._device_value.value
-            self._host_dtype = self._host_value.dtype
+            self._device_value_to_host()
         return not _is_null_host_scalar(self._host_value)
+
+    def _device_value_to_host(self):
+        self._host_value = self._device_value.value
+        if isinstance(self._host_value, str):
+            self._host_dtype = np.dtype("object")
+        else:
+            self._host_dtype = self._host_value.dtype
 
     def _preprocess_host_value(self, value, dtype):
         value = to_cudf_compatible_scalar(value, dtype=dtype)
@@ -104,8 +111,10 @@ class Scalar(object):
             if not valid:
                 if isinstance(value, (np.datetime64, np.timedelta64)):
                     unit, _ = np.datetime_data(value)
-                    if unit == 'generic':
-                        raise TypeError('Cant convert generic NaT to null scalar')
+                    if unit == "generic":
+                        raise TypeError(
+                            "Cant convert generic NaT to null scalar"
+                        )
                     else:
                         dtype = value.dtype
                 else:
@@ -117,7 +126,7 @@ class Scalar(object):
         dtype = np.dtype(dtype)
 
         # temporary
-        dtype = np.dtype('object') if dtype.char == 'U' else dtype
+        dtype = np.dtype("object") if dtype.char == "U" else dtype
 
         if not valid:
             value = NA
@@ -131,15 +140,11 @@ class Scalar(object):
         """
         if self._is_host_value_current and self._is_device_value_current:
             return
-        elif (
-            self._is_host_value_current and not
-            self._is_device_value_current
-        ):
-            self._device_value = DeviceScalar(self._host_value, self._host_dtype)
-        elif (
-            self._is_device_value_current and not
-            self._is_host_value_current
-        ):
+        elif self._is_host_value_current and not self._is_device_value_current:
+            self._device_value = DeviceScalar(
+                self._host_value, self._host_dtype
+            )
+        elif self._is_device_value_current and not self._is_host_value_current:
             self._host_value = self._device_value.value
             self._host_dtype = self._host_value.dtype
         else:
@@ -254,9 +259,15 @@ class Scalar(object):
 
         # datetime handling
         if out_dtype in {"M", "m"}:
-            if self.dtype.char in {"M", "m"} and other.dtype.char not in {"M", "m"}:
+            if self.dtype.char in {"M", "m"} and other.dtype.char not in {
+                "M",
+                "m",
+            }:
                 return self.dtype
-            if other.dtype.char in {"M", "m"} and self.dtype.char not in {"M", "m"}:
+            if other.dtype.char in {"M", "m"} and self.dtype.char not in {
+                "M",
+                "m",
+            }:
                 return other.dtype
             else:
                 if (
