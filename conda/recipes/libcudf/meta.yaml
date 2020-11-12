@@ -70,6 +70,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/null_mask.hpp
     - test -f $PREFIX/include/cudf/detail/nvtx/nvtx3.hpp
     - test -f $PREFIX/include/cudf/detail/nvtx/ranges.hpp
+    - test -f $PREFIX/include/cudf/detail/quantile.hpp
     - test -f $PREFIX/include/cudf/detail/reduction_functions.hpp
     - test -f $PREFIX/include/cudf/detail/repeat.hpp
     - test -f $PREFIX/include/cudf/detail/replace.hpp
