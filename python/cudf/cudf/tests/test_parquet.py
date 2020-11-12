@@ -1579,3 +1579,37 @@ def test_parquet_nullable_boolean(tmpdir, engine):
     actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
 
     assert_eq(actual_gdf, expected_gdf)
+
+
+@pytest.mark.parametrize(
+    "pdf",
+    [
+        pd.DataFrame(index=[1, 2, 3]),
+        # pd.DataFrame(index=pd.RangeIndex(0, 10, 1)),
+        pd.DataFrame({"a": [1, 2, 3]}, index=[0.43534, 345, 0.34534]),
+        pd.DataFrame(
+            {"b": [11, 22, 33], "c": ["a", "b", "c"]},
+            index=pd.Index(["a", "b", "c"], name="custom name"),
+        ),
+        pd.DataFrame(index=pd.Index(["a", "b", "c"], name="custom name")),
+    ],
+)
+@pytest.mark.parametrize("index", [None, True, False])
+def test_parquet_index(tmpdir, pdf, index):
+    pandas_path = tmpdir.join("pandas_index.parquet")
+    cudf_path = tmpdir.join("pandas_index.parquet")
+
+    gdf = cudf.from_pandas(pdf)
+
+    pdf.to_parquet(pandas_path, index=index)
+    gdf.to_parquet(cudf_path, index=index)
+
+    expected = pd.read_parquet(cudf_path)
+    actual = cudf.read_parquet(cudf_path)
+
+    assert_eq(expected, actual)
+
+    expected = pd.read_parquet(pandas_path)
+    actual = cudf.read_parquet(pandas_path)
+
+    assert_eq(expected, actual)
