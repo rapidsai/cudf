@@ -1596,7 +1596,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asTimestampMicroseconds(String format) {
-    return asTimestampMicroseconds(format);
+    return columnView.asTimestampMicroseconds(format);
   }
 
   /**
@@ -1615,7 +1615,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asTimestampMilliseconds(String format) {
-    return asTimestampMilliseconds(format);
+    return columnView.asTimestampMilliseconds(format);
   }
 
   /**
@@ -1634,7 +1634,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asTimestampNanoseconds(String format) {
-   return asTimestampNanoseconds(format);
+   return columnView.asTimestampNanoseconds(format);
   }
 
   /**
