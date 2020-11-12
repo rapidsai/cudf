@@ -21,6 +21,7 @@
 #include <cudf/types.hpp>
 
 #include <strings/utilities.cuh>
+#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace detail {
@@ -38,8 +39,8 @@ struct interleave_columns_functor {
   std::enable_if_t<std::is_same<T, cudf::string_view>::value, std::unique_ptr<cudf::column>>
   operator()(table_view const& strings_columns,
              bool create_mask,
-             rmm::mr::device_memory_resource* mr,
-             cudaStream_t stream = 0)
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr)
   {
     auto num_columns = strings_columns.num_columns();
     if (num_columns == 1)  // Single strings column returns a copy
@@ -93,7 +94,7 @@ struct interleave_columns_functor {
     // Fill the chars column
     auto d_results_chars = chars_column->mutable_view().data<char>();
     thrust::for_each_n(
-      rmm::exec_policy(stream)->on(stream),
+      rmm::exec_policy(stream)->on(stream.value()),
       thrust::make_counting_iterator<size_type>(0),
       num_strings,
       [num_columns, d_table, d_results_offsets, d_results_chars] __device__(size_type idx) {
@@ -122,8 +123,8 @@ struct interleave_columns_functor {
   std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> operator()(
     table_view const& input,
     bool create_mask,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0)
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
   {
     auto arch_column = input.column(0);
     auto output_size = input.num_columns() * input.num_rows();
@@ -142,7 +143,7 @@ struct interleave_columns_functor {
     };
 
     if (not create_mask) {
-      thrust::transform(rmm::exec_policy(stream)->on(stream),
+      thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                         index_begin,
                         index_end,
                         device_output->begin<Type>(),
@@ -156,7 +157,7 @@ struct interleave_columns_functor {
       return input.column(idx % divisor).is_valid(idx / divisor);
     };
 
-    thrust::transform_if(rmm::exec_policy(stream)->on(stream),
+    thrust::transform_if(rmm::exec_policy(stream)->on(stream.value()),
                          index_begin,
                          index_end,
                          device_output->begin<Type>(),
@@ -193,7 +194,12 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   auto const output_needs_mask = std::any_of(
     std::cbegin(input), std::cend(input), [](auto const& col) { return col.nullable(); });
 
-  return type_dispatcher(dtype, detail::interleave_columns_functor{}, input, output_needs_mask, mr);
+  return type_dispatcher(dtype,
+                         detail::interleave_columns_functor{},
+                         input,
+                         output_needs_mask,
+                         rmm::cuda_stream_default,
+                         mr);
 }
 
 }  // namespace cudf
