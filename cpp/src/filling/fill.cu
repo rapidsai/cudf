@@ -72,15 +72,10 @@ struct in_place_fill_range_dispatch {
                                                                cudaStream_t stream = 0)
   {
     auto unscaled = static_cast<cudf::fixed_point_scalar<T> const&>(value).value();
-    using RepType = T::rep;
-    auto s        = cudf::make_numeric_scalar(cudf::data_type(cudf::type_to_id<RepType>()));
-    static_cast<cudf::scalar_type_t<RepType>*>(s.get())->set_value(unscaled);
-    s->set_valid(value.is_valid());
-    auto in_place_view = cudf::mutable_column_view{s->type(),
-                                                   destination.size(),
-                                                   reinterpret_cast<void*>(destination.data<T>()),
-                                                   destination.null_mask()};
-    in_place_fill<RepType>(in_place_view, begin, end, *s, stream);
+    using RepType = typename T::rep;
+    auto s        = cudf::numeric_scalar<RepType>(unscaled, value.is_valid());
+    auto view     = cudf::logical_cast(destination, s.type());
+    in_place_fill<RepType>(view, begin, end, s, stream);
   }
 
   template <typename T>
