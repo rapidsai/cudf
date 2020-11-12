@@ -452,22 +452,14 @@ def test_int_overflow(tmpdir):
 
 supported_stat_types = supported_numpy_dtypes + ["str"]
 supported_stat_types.remove("datetime64[us]")
-# supported_stat_types = ["str"]
+supported_stat_types = ["datetime64[ms]"]
 
 
 def normalized_equals(value1, value2):
-    if isinstance(value1, pd.Timestamp):
-        value1 = value1.to_pydatetime()
-    if isinstance(value2, pd.Timestamp):
-        value2 = value2.to_pydatetime()
     if isinstance(value1, datetime.datetime):
-        value1 = value1.replace(tzinfo=None)
+        value1 = np.datetime64(value1)
     if isinstance(value2, datetime.datetime):
-        value2 = value2.replace(tzinfo=None)
-
-    # if one is datetime then both values are datetimes now
-    if isinstance(value1, datetime.datetime):
-        return value1 == value2
+        value2 = np.datetime64(value2)
 
     # Compare integers with floats now
     if isinstance(value1, float) or isinstance(value2, float):
