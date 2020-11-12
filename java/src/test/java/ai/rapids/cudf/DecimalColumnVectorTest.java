@@ -168,7 +168,7 @@ public class DecimalColumnVectorTest extends CudfTestBase {
   public void testDecimalGeneral() {
     // Safe max precision of Decimal32 is 9, so integers have 10 digits will be backed by DECIMAL64.
     try (ColumnVector cv = ColumnVector.fromDecimals(overflowDecimal32)) {
-      assertEquals(DType.create(DType.DTypeEnum.DECIMAL64, 0), cv.getDataType());
+      assertEquals(DType.create(DType.DTypeEnum.DECIMAL64, 0), cv.getType());
     }
     // Create DECIMAL64 vector with small values
     try (ColumnVector cv =  ColumnVector.decimalFromLongs(0, 0L)) {

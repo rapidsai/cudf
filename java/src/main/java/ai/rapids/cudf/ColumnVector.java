@@ -31,8 +31,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
-import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
-
 /**
  * This class represents the immutable vector of data.  This class holds
  * references to device(GPU) memory and is reference counted to know when to release it.  Call
@@ -104,15 +102,30 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     incRefCountInternal(true);
   }
 
+  /**
+   * Create a new column vector based off of data already on the device with child columns.
+   * @param type the type of the vector, typically a nested type
+   * @param rows the number of rows in this vector.
+   * @param nullCount the number of nulls in the dataset.
+   * @param dataBuffer the data stored on the device.  The column vector takes ownership of the
+   *                   buffer.  Do not use the buffer after calling this.
+   * @param validityBuffer an optional validity buffer. Must be provided if nullCount != 0. The
+   *                      column vector takes ownership of the buffer. Do not use the buffer
+   *                      after calling this.
+   * @param offsetBuffer a host buffer required for strings and string categories. The column
+   *                    vector takes ownership of the buffer. Do not use the buffer after calling
+   *                    this.
+   * @param nestedColumnVectors the child columns list
+   */
   public ColumnVector(DType type, long rows, Optional<Long> nullCount,
-                      DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
-                      DeviceMemoryBuffer offsetBuffer, List<NestedColumnVector> nestedColumnVectors) {
+                      BaseDeviceMemoryBuffer dataBuffer, BaseDeviceMemoryBuffer validityBuffer,
+                      BaseDeviceMemoryBuffer offsetBuffer, List<ColumnView.NestedColumnVector> nestedColumnVectors) {
     if (type != DType.STRING && type != DType.LIST) {
       assert offsetBuffer == null : "offsets are only supported for STRING, LISTS";
     }
-    List<DeviceMemoryBuffer> toClose = new ArrayList<>();
+    List<BaseDeviceMemoryBuffer> toClose = new ArrayList<>();
     long[] childHandles = new long[nestedColumnVectors.size()];
-    for (NestedColumnVector ncv : nestedColumnVectors) {
+    for (ColumnView.NestedColumnVector ncv : nestedColumnVectors) {
       toClose.addAll(ncv.getBuffersToClose());
     }
     for (int i = 0; i < nestedColumnVectors.size(); i++) {
@@ -130,33 +143,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     incRefCountInternal(true);
   }
 
-
-  public ColumnVector(DType type, long rows, Optional<Long> nullCount,
-                      DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
-                      DeviceMemoryBuffer offsetBuffer, ArrayList<ColumnVector> children) {
-    if (!type.hasOffsets()) {
-      assert offsetBuffer == null : "offsets are only supported for STRING, LISTS";
-    }
-    List<DeviceMemoryBuffer> toClose = new ArrayList<>();
-    //TODO assert that refcount of children is 1
-    long[] childHandles = new long[children.size()];
-    for (int i = 0; i < children.size(); i++) {
-      childHandles[i] = children.get(i).getNativeView();
-    }
-    offHeap = new OffHeapState(type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer,
-        toClose, childHandles);
-    MemoryCleaner.register(this, offHeap);
-    columnView = new ColumnView(offHeap.getViewHandle());
-    this.rows = rows;
-    this.nullCount = nullCount;
-    this.type = type;
-
-    this.refCount = 0;
-    incRefCountInternal(true);
-    for (ColumnVector ncv : children) {
-      ncv.close();
-    }
-  }
   /**
    * This is a very special constructor that should only ever be called by
    * fromViewWithContiguousAllocation.  It takes a cudf::column_view * instead of a cudf::column *.
@@ -396,13 +382,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       HostMemoryBuffer hostDataBuffer = null;
       HostMemoryBuffer hostValidityBuffer = null;
       HostMemoryBuffer hostOffsetsBuffer = null;
-      BaseDeviceMemoryBuffer valid = getValidityBuffer();
-      BaseDeviceMemoryBuffer offsets = getOffsetBuffer();
+      BaseDeviceMemoryBuffer valid = getValid();
+      BaseDeviceMemoryBuffer offsets = getOffsets();
       BaseDeviceMemoryBuffer data = null;
       DType type = this.type;
       Long rows = this.rows;
       if (!type.isNestedType()) {
-        data = getDataBuffer();
+        data = getData();
       }
       boolean needsCleanup = true;
       try {
@@ -446,7 +432,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
           }
           List<HostColumnVectorCore> children = new ArrayList<>();
           for (int i = 0; i < getNumChildren(); i++) {
-            try (ColumnView childDevPtr = getChildColumnViewAccess(i)) {
+            try (ColumnView childDevPtr = getChildColumnView(i)) {
               children.add(copyToHostNestedHelper(childDevPtr));
             }
           }
@@ -2367,11 +2353,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     return offHeap.getViewHandle();
   }
 
-  private static DeviceMemoryBufferView getDataBuffer(long viewHandle) {
+  private static DeviceMemoryBufferView getData(long viewHandle) {
     return ColumnView.getDataBuffer(viewHandle);
   }
 
-  private static DeviceMemoryBufferView getValidityBuffer(long viewHandle) {
+  private static DeviceMemoryBufferView getValid(long viewHandle) {
     return ColumnView.getValidityBuffer(viewHandle);
   }
 
@@ -2379,11 +2365,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     return ColumnView.getOffsetsBuffer(viewHandle);
   }
 
-  public long getColumnViewAddress() {
-    return offHeap.viewHandle;
-  }
-
-  public ColumnView getChildColumnViewAccess(int childIndex) {
+  public ColumnView getChildColumnView(int childIndex) {
     if (!type.isNestedType()) {
       return null;
     }
@@ -2392,7 +2374,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     return new ColumnView(childColumnView);
   }
 
-  public BaseDeviceMemoryBuffer getDataBuffer() {
+  public BaseDeviceMemoryBuffer getData() {
     if (type.isNestedType()) {
       throw new IllegalStateException(" Lists and Structs at top level have no data");
     }
@@ -2400,21 +2382,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   }
 
-  public BaseDeviceMemoryBuffer getOffsetBuffer() {
+  public BaseDeviceMemoryBuffer getOffsets() {
     return offHeap.getOffsets();
   }
 
-  public BaseDeviceMemoryBuffer getValidityBuffer() {
+  public BaseDeviceMemoryBuffer getValid() {
     return offHeap.getValid();
-  }
-
-  public DType getDataType() {
-    return offHeap.getNativeType();
-  }
-
-  @Deprecated
-  public long getNumRows() {
-    return offHeap.getNativeRowCount();
   }
 
   public int getNumChildren() {
@@ -2453,8 +2426,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
      * Create a cudf::column_view from device side data.
      */
     public OffHeapState(DType type, int rows, Optional<Long> nullCount,
-                        DeviceMemoryBuffer data, DeviceMemoryBuffer valid, DeviceMemoryBuffer offsets,
-                        List<DeviceMemoryBuffer> buffers,
+                        BaseDeviceMemoryBuffer data, BaseDeviceMemoryBuffer valid, BaseDeviceMemoryBuffer offsets,
+                        List<BaseDeviceMemoryBuffer> buffers,
                         long[] childColumnViewHandles) {
       assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
           || !nullCount.isPresent();
@@ -2533,11 +2506,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
 
     public BaseDeviceMemoryBuffer getData() {
-      return getDataBuffer(getViewHandle());
+      return ColumnVector.getData(getViewHandle());
     }
 
     public BaseDeviceMemoryBuffer getValid() {
-      return getValidityBuffer(getViewHandle());
+      return ColumnVector.getValid(getViewHandle());
     }
 
     public BaseDeviceMemoryBuffer getOffsets() {
@@ -2654,173 +2627,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   public static ColumnVector createNestedColumnVector(DType type, int rows, HostMemoryBuffer data, HostMemoryBuffer valid, HostMemoryBuffer offsets,
                                                       Optional<Long> nullCount, List<HostColumnVectorCore> child) {
-    return NestedColumnVector.createColumnVector(type, rows, data, valid, offsets, nullCount, child);
+    return ColumnView.NestedColumnVector.createColumnVector(type, rows, data, valid, offsets, nullCount, child);
   }
 
-  private static class NestedColumnVector {
-
-    private final DeviceMemoryBuffer data;
-    private final DeviceMemoryBuffer valid;
-    private final DeviceMemoryBuffer offsets;
-    private final DType dataType;
-    private final long rows;
-    private final Optional<Long> nullCount;
-    List<NestedColumnVector> children;
-
-    private NestedColumnVector(DType type, long rows, Optional<Long> nullCount,
-        DeviceMemoryBuffer data, DeviceMemoryBuffer valid,
-        DeviceMemoryBuffer offsets, List<NestedColumnVector> children) {
-      this.dataType = type;
-      this.rows = rows;
-      this.nullCount = nullCount;
-      this.data = data;
-      this.valid = valid;
-      this.offsets = offsets;
-      this.children = children;
-    }
-
-    /**
-     * Returns a LIST ColumnVector, for now, after constructing the NestedColumnVector from the host side
-     * nested Column Vector - children. This is used
-     * @param type top level dtype, which is LIST currently
-     * @param rows top level number of rows in the LIST column
-     * @param valid validity buffer
-     * @param offsets offsets buffer
-     * @param nullCount nullCount for the LIST column
-     * @param child the host side nested column vector list
-     * @return new ColumnVector of type LIST at the moment
-     */
-    static ColumnVector createColumnVector(DType type, int rows, HostMemoryBuffer data,
-        HostMemoryBuffer valid, HostMemoryBuffer offsets, Optional<Long> nullCount, List<HostColumnVectorCore> child) {
-      List<NestedColumnVector> devChildren = new ArrayList<>();
-      for (HostColumnVectorCore c : child) {
-        devChildren.add(createNewNestedColumnVector(c));
-      }
-      int mainColRows = rows;
-      DType mainColType = type;
-      HostMemoryBuffer mainColValid = valid;
-      HostMemoryBuffer mainColOffsets = offsets;
-      DeviceMemoryBuffer mainDataDevBuff = null;
-      DeviceMemoryBuffer mainValidDevBuff = null;
-      DeviceMemoryBuffer mainOffsetsDevBuff = null;
-      if (mainColValid != null) {
-        long validLen = ColumnView.getNativeValidPointerSize(mainColRows);
-        mainValidDevBuff = DeviceMemoryBuffer.allocate(validLen);
-        mainValidDevBuff.copyFromHostBuffer(mainColValid, 0, validLen);
-      }
-      if (data != null) {
-        long dataLen = data.length;
-        mainDataDevBuff = DeviceMemoryBuffer.allocate(dataLen);
-        mainDataDevBuff.copyFromHostBuffer(data, 0, dataLen);
-      }
-      if (mainColOffsets != null) {
-        // The offset buffer has (no. of rows + 1) entries, where each entry is INT32.sizeInBytes
-        long offsetsLen = OFFSET_SIZE * (mainColRows + 1);
-        mainOffsetsDevBuff = DeviceMemoryBuffer.allocate(offsetsLen);
-        mainOffsetsDevBuff.copyFromHostBuffer(mainColOffsets, 0, offsetsLen);
-      }
-      return new ColumnVector(mainColType, mainColRows, nullCount, mainDataDevBuff,
-        mainValidDevBuff, mainOffsetsDevBuff, devChildren);
-    }
-
-    private static NestedColumnVector createNewNestedColumnVector(
-        HostColumnVectorCore nestedChildren) {
-      if (nestedChildren == null) {
-        return null;
-      }
-      DType colType = nestedChildren.getType();
-      Optional<Long> nullCount = Optional.of(nestedChildren.getNullCount());
-      long colRows = nestedChildren.getRowCount();
-      HostMemoryBuffer colData = nestedChildren.getNestedChildren().isEmpty() ? nestedChildren.getData() : null;
-      HostMemoryBuffer colValid = nestedChildren.getValidity();
-      HostMemoryBuffer colOffsets = nestedChildren.getOffsets();
-
-      List<NestedColumnVector> children = new ArrayList<>();
-      for (HostColumnVectorCore nhcv : nestedChildren.getNestedChildren()) {
-        children.add(createNewNestedColumnVector(nhcv));
-      }
-      return createNestedColumnVector(colType, colRows, nullCount, colData, colValid, colOffsets,
-        children);
-    }
-
-    private long getViewHandle() {
-      long[] childrenColViews;
-      if (children != null) {
-        childrenColViews = new long[children.size()];
-        for (int i = 0; i < children.size(); i++) {
-          childrenColViews[i] = children.get(i).getViewHandle();
-        }
-      } else {
-        childrenColViews = new long[] {};
-      }
-      long dataAddr = data == null ? 0 : data.address;
-      long dataLen = data == null ? 0 : data.length;
-      long offsetAddr = offsets == null ? 0 : offsets.address;
-      long validAddr = valid == null ? 0 : valid.address;
-      int nc = nullCount.orElse(OffHeapState.UNKNOWN_NULL_COUNT).intValue();
-      return ColumnView.makeCudfColumnView(dataType.typeId.getNativeId(), dataType.getScale() , dataAddr, dataLen,
-          offsetAddr, validAddr, nc, (int)rows, childrenColViews);
-    }
-
-    private List<DeviceMemoryBuffer> getBuffersToClose() {
-      List<DeviceMemoryBuffer> buffers = new ArrayList<>();
-      if (children != null) {
-        for (NestedColumnVector ncv : children) {
-          buffers.addAll(ncv.getBuffersToClose());
-        }
-      }
-      if (data != null) {
-        buffers.add(data);
-      }
-      if (valid != null) {
-        buffers.add(valid);
-      }
-      if (offsets != null) {
-        buffers.add(offsets);
-      }
-      return buffers;
-    }
-
-    private static long getEndStringOffset(long totalRows, long index, HostMemoryBuffer offsets) {
-      assert index < totalRows;
-      return offsets.getInt((index + 1) * 4);
-    }
-
-    private static NestedColumnVector createNestedColumnVector(DType type, long rows, Optional<Long> nullCount,
-        HostMemoryBuffer dataBuffer, HostMemoryBuffer validityBuffer,
-        HostMemoryBuffer offsetBuffer, List<NestedColumnVector> child) {
-      DeviceMemoryBuffer data = null;
-      DeviceMemoryBuffer valid = null;
-      DeviceMemoryBuffer offsets = null;
-      if (dataBuffer != null) {
-        long dataLen = rows * type.getSizeInBytes();
-        if (type == DType.STRING) {
-          // This needs a different type
-          dataLen = getEndStringOffset(rows, rows - 1, offsetBuffer);
-          if (dataLen == 0 && nullCount.get() == 0) {
-            // This is a work around to an issue where a column of all empty strings must have at
-            // least one byte or it will not be interpreted correctly.
-            dataLen = 1;
-          }
-        }
-        data = DeviceMemoryBuffer.allocate(dataLen);
-        data.copyFromHostBuffer(dataBuffer, 0, dataLen);
-      }
-      if (validityBuffer != null) {
-        long validLen = ColumnView.getNativeValidPointerSize((int)rows);
-        valid = DeviceMemoryBuffer.allocate(validLen);
-        valid.copyFromHostBuffer(validityBuffer, 0, validLen);
-      }
-      if (offsetBuffer != null) {
-        long offsetsLen = OFFSET_SIZE * (rows + 1);
-        offsets = DeviceMemoryBuffer.allocate(offsetsLen);
-        offsets.copyFromHostBuffer(offsetBuffer, 0, offsetsLen);
-      }
-      NestedColumnVector ret = new NestedColumnVector(type, rows, nullCount, data, valid, offsets,
-        child);
-      return ret;
-    }
-  }
   /////////////////////////////////////////////////////////////////////////////
   // BUILDER
   /////////////////////////////////////////////////////////////////////////////
