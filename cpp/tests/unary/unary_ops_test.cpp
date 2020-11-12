@@ -991,7 +991,7 @@ TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeid)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeid32to64Down)
+TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeid)
 {
   using namespace numeric;
   using decimalA    = TypeParam;
@@ -1007,7 +1007,7 @@ TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeid32to64Down)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeid32to64Up)
+TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeid)
 {
   using namespace numeric;
   using decimalA    = TypeParam;
