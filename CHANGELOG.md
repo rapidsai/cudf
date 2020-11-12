@@ -69,6 +69,7 @@
 - PR #6705 Add nested type support to Java table serialization
 - PR #6709 Raise informative error while converting a pandas dataframe with duplicate columns
 - PR #6727 Remove 2nd type-dispatcher call from cudf::reduce
+- PR #6748 Add Java API to concatenate serialized tables to ContiguousTable
 
 ## Bug Fixes
 
