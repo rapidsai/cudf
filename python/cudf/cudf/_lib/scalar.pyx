@@ -86,7 +86,7 @@ cdef class DeviceScalar:
                 f"{type(value).__name__} to cudf scalar"
             )
 
-    def _get_device_value(self):
+    def _to_host_scalar(self):
         if pd.api.types.is_string_dtype(self.dtype):
             result = _get_py_string_from_string(self.c_value)
         elif pd.api.types.is_numeric_dtype(self.dtype):
@@ -115,7 +115,7 @@ cdef class DeviceScalar:
         """
         Returns a host copy of the underlying device scalar.
         """
-        return self._get_device_value()
+        return self._to_host_scalar()
 
     cdef const scalar* get_raw_ptr(self) except *:
         return self.c_value.get()

@@ -13,10 +13,6 @@ from cudf.utils.dtypes import (
 
 class Scalar(object):
 
-    _host_value = None
-    _host_dtype = None
-    _device_value = None
-
     def __init__(self, value, dtype=None):
         """
         A GPU-backed scalar object with NumPy scalar like properties
@@ -56,6 +52,10 @@ class Scalar(object):
         dtype : np.dtype or string specifier
             The data type
         """
+
+        self._host_value = None
+        self._host_dtype = None
+        self._device_value = None
         if isinstance(value, DeviceScalar):
             self._device_value = value
         else:
@@ -85,11 +85,16 @@ class Scalar(object):
             self._device_value_to_host()
         return self._host_value
 
+    # todo: change to cached property
     @property
     def dtype(self):
-        if not self._is_host_value_current:
-            self._device_value_to_host()
-        return self._host_dtype
+        if self._is_host_value_current:
+            if isinstance(self._host_value, str):
+                return np.dtype('object')
+            else: 
+                return self._host_dtype
+        else:
+            return self.device_value.dtype
 
     def is_valid(self):
         if not self._is_host_value_current:
@@ -97,11 +102,7 @@ class Scalar(object):
         return not _is_null_host_scalar(self._host_value)
 
     def _device_value_to_host(self):
-        self._host_value = self._device_value.value
-        if isinstance(self._host_value, str):
-            self._host_dtype = np.dtype("object")
-        else:
-            self._host_dtype = self._host_value.dtype
+        self._host_value = self._device_value._to_host_scalar()
 
     def _preprocess_host_value(self, value, dtype):
         value = to_cudf_compatible_scalar(value, dtype=dtype)

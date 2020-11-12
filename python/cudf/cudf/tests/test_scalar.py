@@ -124,7 +124,7 @@ def test_scalar_device_initialization(value):
     assert s._is_device_value_current
     assert not s._is_host_value_current
 
-    assert s.value == value or np.isnan(s.value) and np.isnan(value)
+    assert s.value == value or s.value is cudf.NA and np.isnan(value)
 
     assert s._is_device_value_current
     assert s._is_host_value_current
