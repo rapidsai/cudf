@@ -975,9 +975,6 @@ TYPED_TEST(FixedPointTests, FixedPointToFixedPointSameTypeidDownPositive)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-struct FixedPointTestsF : public cudf::test::BaseFixture {
-};
-
 TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeid)
 {
   using namespace numeric;
