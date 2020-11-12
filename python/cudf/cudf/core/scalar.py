@@ -57,7 +57,7 @@ class Scalar(object):
             The data type
         """
         if isinstance(value, DeviceScalar):
-            self._data = value
+            self._device_value = value
         else:
             self._host_value, self._host_dtype = self._preprocess_host_value(value, dtype)
 
@@ -71,7 +71,7 @@ class Scalar(object):
         return self._device_value is not None
 
     @property
-    def get_device_value(self):
+    def device_value(self):
         if self._device_value is None:
             self._device_value = DeviceScalar(self._host_value, self._host_dtype)
         return self._device_value
@@ -90,7 +90,6 @@ class Scalar(object):
             self._host_dtype = self._host_value.dtype
         return self._host_dtype
 
-    @property
     def is_valid(self):
         if not self._is_host_value_current:
             self._host_value = self._device_value.value
@@ -103,9 +102,16 @@ class Scalar(object):
 
         if dtype is None:
             if not valid:
-                raise TypeError(
-                    "dtype required when constructing a null scalar"
-                )
+                if isinstance(value, (np.datetime64, np.timedelta64)):
+                    unit, _ = np.datetime_data(value)
+                    if unit == 'generic':
+                        raise TypeError('Cant convert generic NaT to null scalar')
+                    else:
+                        dtype = value.dtype
+                else:
+                    raise TypeError(
+                        "dtype required when constructing a null scalar"
+                    )
             else:
                 dtype = value.dtype
         dtype = np.dtype(dtype)
@@ -134,7 +140,7 @@ class Scalar(object):
             self._is_device_value_current and not
             self._is_host_value_current
         ):
-            self._host_value = self._get_device_value()
+            self._host_value = self._device_value.value
             self._host_dtype = self._host_value.dtype
         else:
             raise ValueError("Invalid cudf.Scalar")

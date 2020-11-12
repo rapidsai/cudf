@@ -358,14 +358,14 @@ def as_device_scalar(val, dtype=None):
         if isinstance(val, (cudf.Scalar, DeviceScalar)):
             raise TypeError("Can't update dtype of existing GPU scalar")
         else:
-            return cudf.Scalar(value=val, dtype=dtype).get_device_value
+            return cudf.Scalar(value=val, dtype=dtype).device_value
     else:
         if isinstance(val, DeviceScalar):
             return val
         if isinstance(val, cudf.Scalar):
-            return val.get_device_value
+            return val.device_value
         else:
-            return cudf.Scalar(val).get_device_value
+            return cudf.Scalar(val).device_value
 
 
 def _is_null_host_scalar(slr):
