@@ -137,16 +137,16 @@ struct launch_functor {
 
   template <typename Element>
   typename std::enable_if_t<!cudf::is_timestamp_t<Element>::value, void> operator()(
-    cudaStream_t stream) const
+    rmm::cuda_stream_view stream) const
   {
     CUDF_FAIL("Cannot extract datetime component from non-timestamp column.");
   }
 
   template <typename Timestamp>
   typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void> operator()(
-    cudaStream_t stream) const
+    rmm::cuda_stream_view stream) const
   {
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
+    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                       input.begin<Timestamp>(),
                       input.end<Timestamp>(),
                       output.begin<OutputColT>(),
@@ -157,7 +157,7 @@ struct launch_functor {
 // Create an output column by applying the functor to every element from the input column
 template <typename TransformFunctor, cudf::type_id OutputColCudfT>
 std::unique_ptr<column> apply_datetime_op(column_view const& column,
-                                          cudaStream_t stream,
+                                          rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(is_timestamp(column.type()), "Column type should be timestamp");
@@ -210,16 +210,16 @@ struct add_calendrical_months_functor {
 
   template <typename Element>
   typename std::enable_if_t<!cudf::is_timestamp_t<Element>::value, void> operator()(
-    cudaStream_t stream) const
+    rmm::cuda_stream_view stream) const
   {
     CUDF_FAIL("Cannot extract datetime component from non-timestamp column.");
   }
 
   template <typename Timestamp>
   typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void> operator()(
-    cudaStream_t stream) const
+    rmm::cuda_stream_view stream) const
   {
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
+    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                       timestamp_column.begin<Timestamp>(),
                       timestamp_column.end<Timestamp>(),
                       months_column.begin<int16_t>(),
@@ -252,7 +252,7 @@ struct add_calendrical_months_functor {
 
 std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_column,
                                                column_view const& months_column,
-                                               cudaStream_t stream,
+                                               rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(is_timestamp(timestamp_column.type()), "Column type should be timestamp");
