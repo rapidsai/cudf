@@ -17,9 +17,9 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/quantile.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/stream_compaction.hpp>
-#include <cudf/quantiles.hpp>
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/reduction_functions.hpp>
@@ -67,7 +67,8 @@ struct reduce_dispatch_functor {
       case aggregation::MEDIAN: {
         auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, mr, stream);
         auto valid_sorted_indices = split(*sorted_indices, {col.size() - col.null_count()})[0];
-        auto col_ptr = quantile(col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, mr);
+        auto col_ptr =
+          quantile(col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, stream, mr);
         return get_element(*col_ptr, 0, stream, mr);
       } break;
       case aggregation::QUANTILE: {
@@ -76,11 +77,13 @@ struct reduce_dispatch_functor {
                      "Reduction quantile accepts only one quantile value");
         auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, mr, stream);
         auto valid_sorted_indices = split(*sorted_indices, {col.size() - col.null_count()})[0];
-        auto col_ptr              = quantile(col,
+
+        auto col_ptr = quantile(col,
                                 quantile_agg->_quantiles,
                                 quantile_agg->_interpolation,
                                 valid_sorted_indices,
                                 true,
+                                stream,
                                 mr);
         return get_element(*col_ptr, 0, stream, mr);
       } break;
