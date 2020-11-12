@@ -178,13 +178,12 @@ std::unique_ptr<column> to_floats(strings_column_view const& strings,
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // create float output column copying the strings null-mask
-  auto results = make_numeric_column(
-    output_type,
-    strings_count,
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
-    strings.null_count(),
-    stream,
-    mr);
+  auto results      = make_numeric_column(output_type,
+                                     strings_count,
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                     strings.null_count(),
+                                     stream,
+                                     mr);
   auto results_view = results->mutable_view();
   // fill output column with floats
   type_dispatcher(output_type, dispatch_to_floats_fn{}, d_strings, results_view, stream);

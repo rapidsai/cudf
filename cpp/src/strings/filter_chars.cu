@@ -127,8 +127,7 @@ std::unique_ptr<column> filter_characters(
   auto d_strings      = *strings_column;
 
   // create null mask
-  rmm::device_buffer null_mask =
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
 
   // create offsets column
   filter_fn ffn{d_strings, keep_characters, table.begin(), table.end(), d_replacement};

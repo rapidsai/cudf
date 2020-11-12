@@ -292,7 +292,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::struct_view>(
     out_mask = detail::copy_bitmask(static_cast<bitmask_type*>(out_mask.data()),
                                     array.offset(),
                                     array.offset() + array.length(),
-                                    rmm::cuda_stream_view{stream},
+                                    stream,
                                     mr);
   }
 

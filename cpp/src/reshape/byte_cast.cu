@@ -100,7 +100,7 @@ std::unique_ptr<cudf::column> byte_list_conversion::operator()<string_view>(
     std::move(contents.children[cudf::strings_column_view::offsets_column_index]),
     std::move(contents.children[cudf::strings_column_view::chars_column_index]),
     input_column.null_count(),
-    detail::copy_bitmask(input_column, rmm::cuda_stream_view{stream}, mr),
+    detail::copy_bitmask(input_column, stream, mr),
     stream,
     mr);
 }

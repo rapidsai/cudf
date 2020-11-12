@@ -284,13 +284,12 @@ struct MathOpDispatcher {
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
   {
-    return transform_fn<T, UFN>(
-      input.begin<T>(),
-      input.end<T>(),
-      cudf::detail::copy_bitmask(input, rmm::cuda_stream_view{stream}, mr),
-      input.null_count(),
-      stream,
-      mr);
+    return transform_fn<T, UFN>(input.begin<T>(),
+                                input.end<T>(),
+                                cudf::detail::copy_bitmask(input, stream, mr),
+                                input.null_count(),
+                                stream,
+                                mr);
   }
 
   struct dictionary_dispatch {

@@ -99,13 +99,13 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings
   if (strings.is_empty()) return cudf::make_empty_column(cudf::data_type{cudf::type_id::BOOL8});
 
   // create empty output column
-  auto results = cudf::make_fixed_width_column(
-    cudf::data_type{cudf::type_id::BOOL8},
-    strings.size(),
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
-    strings.null_count(),
-    stream,
-    mr);
+  auto results =
+    cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::BOOL8},
+                                  strings.size(),
+                                  cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                  strings.null_count(),
+                                  stream,
+                                  mr);
   // set values into output column
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   thrust::transform(rmm::exec_policy(stream)->on(stream),
@@ -207,13 +207,13 @@ std::unique_ptr<cudf::column> porter_stemmer_measure(cudf::strings_column_view c
   if (strings.is_empty()) return cudf::make_empty_column(cudf::data_type{cudf::type_id::INT32});
 
   // create empty output column
-  auto results = cudf::make_fixed_width_column(
-    cudf::data_type{cudf::type_id::INT32},
-    strings.size(),
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
-    strings.null_count(),
-    stream,
-    mr);
+  auto results =
+    cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32},
+                                  strings.size(),
+                                  cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                  strings.null_count(),
+                                  stream,
+                                  mr);
   // compute measures into output column
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   thrust::transform(rmm::exec_policy(stream)->on(stream),

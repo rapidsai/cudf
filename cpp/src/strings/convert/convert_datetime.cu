@@ -568,13 +568,12 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& strings,
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
 
-  auto results = make_numeric_column(
-    data_type{type_id::BOOL8},
-    strings_count,
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
-    strings.null_count(),
-    stream,
-    mr);
+  auto results   = make_numeric_column(data_type{type_id::BOOL8},
+                                     strings_count,
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                     strings.null_count(),
+                                     stream,
+                                     mr);
   auto d_results = results->mutable_view().data<bool>();
 
   format_compiler compiler(format.c_str(), stream);

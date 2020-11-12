@@ -397,8 +397,8 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   auto device_sizes             = cudf::mutable_column_device_view::create(sizes_view);
   auto device_indices           = cudf::mutable_column_device_view::create(indices_view);
 
-  rmm::device_buffer valid_bits = cudf::detail::create_null_mask(
-    input_col.size(), cudf::mask_state::UNINITIALIZED, rmm::cuda_stream_view{stream}, mr);
+  rmm::device_buffer valid_bits =
+    cudf::detail::create_null_mask(input_col.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
 
   // Call first pass kernel to get sizes in offsets
   cudf::detail::grid_1d grid{input_col.size(), BLOCK_SIZE, 1};

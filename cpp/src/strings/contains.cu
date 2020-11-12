@@ -81,13 +81,12 @@ std::unique_ptr<column> contains_util(
   auto d_prog = *prog;
 
   // create the output column
-  auto results = make_numeric_column(
-    data_type{type_id::BOOL8},
-    strings_count,
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
-    strings.null_count(),
-    stream,
-    mr);
+  auto results   = make_numeric_column(data_type{type_id::BOOL8},
+                                     strings_count,
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                     strings.null_count(),
+                                     stream,
+                                     mr);
   auto d_results = results->mutable_view().data<bool>();
 
   // fill the output column
@@ -203,13 +202,12 @@ std::unique_ptr<column> count_re(
   auto d_prog = *prog;
 
   // create the output column
-  auto results = make_numeric_column(
-    data_type{type_id::INT32},
-    strings_count,
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
-    strings.null_count(),
-    stream,
-    mr);
+  auto results   = make_numeric_column(data_type{type_id::INT32},
+                                     strings_count,
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                     strings.null_count(),
+                                     stream,
+                                     mr);
   auto d_results = results->mutable_view().data<int32_t>();
 
   // fill the output column

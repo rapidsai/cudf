@@ -253,14 +253,13 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
     codepoint_to_utf8_fn{*strings_column, cp_chars, cp_offsets, d_offsets, d_chars});
   chars_column->set_null_count(0);  // reset null count for child column
 
-  return cudf::make_strings_column(
-    strings_count,
-    std::move(offsets_column),
-    std::move(chars_column),
-    strings.null_count(),
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
-    stream,
-    mr);
+  return cudf::make_strings_column(strings_count,
+                                   std::move(offsets_column),
+                                   std::move(chars_column),
+                                   strings.null_count(),
+                                   cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                   stream,
+                                   mr);
 }
 
 }  // namespace detail

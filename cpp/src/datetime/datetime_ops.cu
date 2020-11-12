@@ -167,13 +167,12 @@ std::unique_ptr<column> apply_datetime_op(column_view const& column,
   // Return an empty column if source column is empty
   if (size == 0) return make_empty_column(output_col_type);
 
-  auto output =
-    make_fixed_width_column(output_col_type,
-                            size,
-                            cudf::detail::copy_bitmask(column, rmm::cuda_stream_view{stream}, mr),
-                            column.null_count(),
-                            stream,
-                            mr);
+  auto output = make_fixed_width_column(output_col_type,
+                                        size,
+                                        cudf::detail::copy_bitmask(column, stream, mr),
+                                        column.null_count(),
+                                        stream,
+                                        mr);
   auto launch =
     launch_functor<TransformFunctor, typename cudf::id_to_type_impl<OutputColCudfT>::type>{
       column, static_cast<mutable_column_view>(*output)};

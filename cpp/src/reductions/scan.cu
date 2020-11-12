@@ -64,9 +64,8 @@ struct ScanDispatcher {
     auto output_column =
       detail::allocate_like(input_view, size, mask_allocation_policy::NEVER, stream, mr);
     if (null_handling == null_policy::EXCLUDE) {
-      output_column->set_null_mask(
-        detail::copy_bitmask(input_view, rmm::cuda_stream_view{stream}, mr),
-        input_view.null_count());
+      output_column->set_null_mask(detail::copy_bitmask(input_view, stream, mr),
+                                   input_view.null_count());
     }
     mutable_column_view output = output_column->mutable_view();
     auto d_input               = column_device_view::create(input_view, stream);
@@ -133,9 +132,8 @@ struct ScanDispatcher {
     auto output_column =
       detail::allocate_like(input_view, size, mask_allocation_policy::NEVER, stream, mr);
     if (null_handling == null_policy::EXCLUDE) {
-      output_column->set_null_mask(
-        detail::copy_bitmask(input_view, rmm::cuda_stream_view{stream}, mr),
-        input_view.null_count());
+      output_column->set_null_mask(detail::copy_bitmask(input_view, stream, mr),
+                                   input_view.null_count());
     } else {
       if (input_view.nullable()) {
         output_column->set_null_mask(mask_inclusive_scan(input_view, mr, stream),
@@ -185,9 +183,8 @@ struct ScanDispatcher {
 
     auto output_column = make_strings_column(result, Op::template identity<T>(), stream, mr);
     if (null_handling == null_policy::EXCLUDE) {
-      output_column->set_null_mask(
-        detail::copy_bitmask(input_view, rmm::cuda_stream_view{stream}, mr),
-        input_view.null_count());
+      output_column->set_null_mask(detail::copy_bitmask(input_view, stream, mr),
+                                   input_view.null_count());
     } else {
       if (input_view.nullable()) {
         output_column->set_null_mask(mask_inclusive_scan(input_view, mr, stream),

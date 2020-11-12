@@ -62,8 +62,7 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
     cudf::data_type{type_id::INT32},
     strings_count,
     rmm::device_buffer(strings_count * sizeof(int32_t), stream, mr),
-    cudf::detail::copy_bitmask(
-      strings.parent(), rmm::cuda_stream_view{stream}, mr),  // copy the null mask
+    cudf::detail::copy_bitmask(strings.parent(), stream, mr),  // copy the null mask
     strings.null_count());
   auto results_view = results->mutable_view();
   auto d_lengths    = results_view.data<int32_t>();

@@ -132,13 +132,12 @@ std::unique_ptr<column> hex_to_integers(
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // create integer output column copying the strings null-mask
-  auto results = make_numeric_column(
-    output_type,
-    strings_count,
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
-    strings.null_count(),
-    stream,
-    mr);
+  auto results      = make_numeric_column(output_type,
+                                     strings_count,
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                     strings.null_count(),
+                                     stream,
+                                     mr);
   auto results_view = results->mutable_view();
   // fill output column with integers
   type_dispatcher(output_type, dispatch_hex_to_integers_fn{}, d_strings, results_view, stream);
@@ -153,13 +152,12 @@ std::unique_ptr<column> is_hex(strings_column_view const& strings,
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
   // create output column
-  auto results = make_numeric_column(
-    data_type{type_id::BOOL8},
-    strings.size(),
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
-    strings.null_count(),
-    stream,
-    mr);
+  auto results   = make_numeric_column(data_type{type_id::BOOL8},
+                                     strings.size(),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                     strings.null_count(),
+                                     stream,
+                                     mr);
   auto d_results = results->mutable_view().data<bool>();
   thrust::transform(rmm::exec_policy(stream)->on(stream),
                     thrust::make_counting_iterator<size_type>(0),
