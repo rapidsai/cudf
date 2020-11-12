@@ -1127,6 +1127,67 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     return new ColumnVector(dayOfYear(getNativeView()));
   }
 
+  /**
+   * Rounding modes supported in round method.
+   * HALF_UP : Rounding mode to round towards "nearest neighbor". If both neighbors are
+   * equidistant, then round up.
+   * HALF_EVEN : Rounding mode to round towards the "nearest neighbor". If both neighbors are
+   * equidistant, round towards the even neighbor.
+   */
+  public enum RoundMode {
+    HALF_UP(0),
+    HALF_EVEN(1);
+    final int nativeId;
+
+    RoundMode(int nativeId) { this.nativeId = nativeId; }
+  }
+
+  /**
+   * Rounds all the values in a column to the specified number of decimal places.
+   *
+   * @param decimalPlaces Number of decimal places to round to. If negative, this
+   *                      specifies the number of positions to the left of the decimal point.
+   * @param mode          Rounding method(either HALF_UP or HALF_EVEN)
+   * @return a new ColumnVector with rounded values.
+   */
+  public ColumnVector round(int decimalPlaces, RoundMode mode) {
+    return new ColumnVector(round(this.getNativeView(), decimalPlaces, mode.nativeId));
+  }
+
+  /**
+   * Rounds all the values in a column with decimal places = 0. Default number of decimal places
+   * to round to is 0.
+   *
+   * @param round Rounding method(either HALF_UP or HALF_EVEN)
+   * @return a new ColumnVector with rounded values.
+   */
+  public ColumnVector round(RoundMode round) {
+    return round(0, round);
+  }
+
+  /**
+   * Rounds all the values in a column to the specified number of decimal places with HALF_UP
+   * (default) as Rounding method.
+   *
+   * @param decimalPlaces Number of decimal places to round to. If negative, this
+   *                      specifies the number of positions to the left of the decimal point.
+   * @return a new ColumnVector with rounded values.
+   */
+  public ColumnVector round(int decimalPlaces) {
+    return round(decimalPlaces, RoundMode.HALF_UP);
+  }
+
+  /**
+   * Rounds all the values in a column with these default values:
+   * decimalPlaces = 0
+   * Rounding method = RoundMode.HALF_UP
+   *
+   * @return a new ColumnVector with rounded values.
+   */
+  public ColumnVector round() {
+    return round(0, RoundMode.HALF_UP);
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // ARITHMETIC
   /////////////////////////////////////////////////////////////////////////////
@@ -2898,6 +2959,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   private static native long[] split(long nativeHandle, int[] indices) throws CudfException;
 
   private static native long findAndReplaceAll(long valuesHandle, long replaceHandle, long myself) throws CudfException;
+
+  private static native long round(long nativeHandle, int decimalPlaces, int roundingMethod) throws CudfException;
 
   /**
    * Native method to switch all characters in a column of strings to lowercase characters.
