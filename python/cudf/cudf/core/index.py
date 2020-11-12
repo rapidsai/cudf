@@ -1463,7 +1463,6 @@ class RangeIndex(Index):
     start : int (default: 0), or other range instance
     stop : int (default: 0)
     step : int (default: 1)
-        Not yet supported
     name : object, optional
         Name to be stored in the index.
     dtype : numpy dtype
