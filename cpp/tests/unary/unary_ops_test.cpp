@@ -918,7 +918,7 @@ TYPED_TEST(FixedPointTests, CastFromIntLarge)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointTests, FixedPointToFixedPoint)
+TYPED_TEST(FixedPointTests, FixedPointToFixedPointSameScaleUp)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -928,6 +928,48 @@ TYPED_TEST(FixedPointTests, FixedPointToFixedPoint)
   auto const input    = fp_wrapper{{1729, 17290, 172900, 1729000}, scale_type{-3}};
   auto const expected = fp_wrapper{{172, 1729, 17290, 172900}, scale_type{-2}};
   auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(-2));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTests, FixedPointToFixedPointSameScaleDown)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const input    = fp_wrapper{{1729, 17290, 172900, 1729000}, scale_type{-3}};
+  auto const expected = fp_wrapper{{17290, 172900, 1729000, 17290000}, scale_type{-4}};
+  auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(-4));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTests, FixedPointToFixedPointSameScaleUpPositive)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const input    = fp_wrapper{{1, 12, 123, 1234, 12345, 123456}, scale_type{1}};
+  auto const expected = fp_wrapper{{0, 1, 12, 123, 1234, 12345}, scale_type{2}};
+  auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(2));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTests, FixedPointToFixedPointSameScaleDownPositive)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const input    = fp_wrapper{{0, 1, 12, 123, 1234}, scale_type{2}};
+  auto const expected = fp_wrapper{{0, 1000, 12000, 123000, 1234000}, scale_type{-1}};
+  auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(-1));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
