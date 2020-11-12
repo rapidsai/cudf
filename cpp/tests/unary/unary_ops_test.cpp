@@ -981,7 +981,7 @@ TEST_F(FixedPointTestsF, FixedPointToFixedPointDifferentTypeid)
 {
   using namespace numeric;
   using fp_wrapper32 = cudf::test::fixed_point_column_wrapper<int32_t>;
-  using fp_wrapper64 = cudf::test::fixed_point_column_wrapper<int32_t>;
+  using fp_wrapper64 = cudf::test::fixed_point_column_wrapper<int64_t>;
 
   auto const input    = fp_wrapper32{{1729, 17290, 172900, 1729000}, scale_type{-3}};
   auto const expected = fp_wrapper64{{1729, 17290, 172900, 1729000}, scale_type{-3}};

@@ -28,6 +28,7 @@
 
 namespace cudf {
 namespace detail {
+namespace {  // anonymous namespace
 template <typename _TargetT>
 struct unary_cast {
   template <typename SourceT,
@@ -149,6 +150,32 @@ constexpr inline auto is_supported_cast()
   return is_supported_non_fixed_point_cast<From, To>() || is_supported_fixed_point_cast<From, To>();
 }
 
+template <typename From, typename To>
+struct device_cast {
+  __device__ To operator()(From element) { return static_cast<To>(element); }
+};
+
+template <typename T, typename std::enable_if_t<is_fixed_point<T>()>* = nullptr>
+std::unique_ptr<column> rescale(column_view input,
+                                data_type type,
+                                rmm::mr::device_memory_resource* mr,
+                                cudaStream_t stream)
+{
+  CUDF_EXPECTS(type.id() == input.type().id(),
+               "fixed_point rescaling requires typeids to be the same");
+
+  using namespace numeric;
+
+  if (input.type().scale() > type.scale()) {
+    auto const scalar = make_fixed_point_scalar<T>(0, scale_type{type.scale()});
+    return detail::binary_operation(input, *scalar, binary_operator::ADD, {}, mr, stream);
+  } else {
+    auto const diff   = input.type().scale() - type.scale();
+    auto const scalar = make_fixed_point_scalar<T>(std::pow(10, -diff), scale_type{diff});
+    return detail::binary_operation(input, *scalar, binary_operator::DIV, {}, mr, stream);
+  }
+};
+
 template <typename _SourceT>
 struct dispatch_unary_cast_to {
   column_view input;
@@ -242,26 +269,52 @@ struct dispatch_unary_cast_to {
     return output;
   }
 
-  template <typename TargetT,
-            typename SourceT                                            = _SourceT,
-            typename std::enable_if_t<cudf::is_fixed_point<SourceT>() &&
-                                      cudf::is_fixed_point<TargetT>()>* = nullptr>
+  template <
+    typename TargetT,
+    typename SourceT                                                  = _SourceT,
+    typename std::enable_if_t<cudf::is_fixed_point<SourceT>() && cudf::is_fixed_point<TargetT>() &&
+                              std::is_same<SourceT, TargetT>::value>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
     if (input.type() == type) return std::make_unique<column>(input);  // TODO add test for this
 
+    return detail::rescale<TargetT>(input, type, mr, stream);
+  }
+
+  template <
+    typename TargetT,
+    typename SourceT                                                      = _SourceT,
+    typename std::enable_if_t<cudf::is_fixed_point<SourceT>() && cudf::is_fixed_point<TargetT>() &&
+                              not std::is_same<SourceT, TargetT>::value>* = nullptr>
+  std::unique_ptr<column> operator()(data_type type,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
     using namespace numeric;
 
-    if (input.type().scale() > type.scale()) {
-      auto const scalar = make_fixed_point_scalar<TargetT>(0, scale_type{type.scale()});
-      return detail::binary_operation(input, *scalar, binary_operator::ADD, {}, mr, stream);
-    } else {
-      auto const diff   = input.type().scale() - type.scale();
-      auto const scalar = make_fixed_point_scalar<TargetT>(std::pow(10, -diff), scale_type{diff});
-      return detail::binary_operation(input, *scalar, binary_operator::DIV, {}, mr, stream);
-    }
+    auto const size = input.size();
+    auto temporary =
+      std::make_unique<column>(type,
+                               size,
+                               rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+                               copy_bitmask(input, stream, mr),
+                               input.null_count());
+
+    using SourceDeviceT = device_storage_type_t<SourceT>;
+    using TargetDeviceT = device_storage_type_t<TargetT>;
+
+    mutable_column_view output_mutable = *temporary;
+
+    thrust::transform(rmm::exec_policy(stream)->on(stream),
+                      input.begin<SourceDeviceT>(),
+                      input.end<SourceDeviceT>(),
+                      output_mutable.begin<TargetDeviceT>(),
+                      device_cast<SourceDeviceT, TargetDeviceT>{});
+
+    // clearly there is a more efficient way to do this, can optimize in the future
+    return rescale<TargetT>(*temporary, type, mr, stream);
   }
 
   template <typename TargetT,
@@ -303,6 +356,7 @@ struct dispatch_unary_cast_from {
     CUDF_FAIL("Column type must be numeric or chrono or decimal32/64");
   }
 };
+}  // anonymous namespace
 
 std::unique_ptr<column> cast(column_view const& input,
                              data_type type,
