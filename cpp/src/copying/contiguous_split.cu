@@ -23,6 +23,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <numeric>
 
 namespace cudf {
@@ -350,7 +352,7 @@ struct column_preprocess_info {
 thrust::host_vector<column_split_info> preprocess_string_column_info(
   cudf::table_view const& t,
   rmm::device_vector<column_split_info>& device_split_info,
-  cudaStream_t stream)
+  rmm::cuda_stream_view stream)
 {
   // build a list of all the offset columns and their indices for all input string columns and put
   // them on the gpu
@@ -372,7 +374,7 @@ thrust::host_vector<column_split_info> preprocess_string_column_info(
   // compute column split information
   rmm::device_vector<thrust::pair<size_type, size_type>> device_offsets(t.num_columns());
   auto* offsets_p = device_offsets.data().get();
-  thrust::for_each(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each(rmm::exec_policy(stream)->on(stream.value()),
                    device_offset_columns.begin(),
                    device_offset_columns.end(),
                    [offsets_p] __device__(column_preprocess_info const& cpi) {
@@ -410,8 +412,8 @@ thrust::host_vector<column_split_info> preprocess_string_column_info(
  */
 contiguous_split_result alloc_and_copy(cudf::table_view const& t,
                                        rmm::device_vector<column_split_info>& device_split_info,
-                                       rmm::mr::device_memory_resource* mr,
-                                       cudaStream_t stream)
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
   // preprocess column split information for string columns.
   thrust::host_vector<column_split_info> split_info =
@@ -451,8 +453,8 @@ contiguous_split_result alloc_and_copy(cudf::table_view const& t,
 
 std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& input,
                                                       std::vector<size_type> const& splits,
-                                                      rmm::mr::device_memory_resource* mr,
-                                                      cudaStream_t stream)
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::mr::device_memory_resource* mr)
 {
   auto subtables = cudf::split(input, splits);
 
@@ -470,7 +472,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
                  subtables.end(),
                  std::back_inserter(result),
                  [mr, stream, &device_split_info](table_view const& t) {
-                   return alloc_and_copy(t, device_split_info, mr, stream);
+                   return alloc_and_copy(t, device_split_info, stream, mr);
                  });
 
   return result;
@@ -483,7 +485,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
                                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::contiguous_split(input, splits, mr, (cudaStream_t)0);
+  return cudf::detail::contiguous_split(input, splits, rmm::cuda_stream_default, mr);
 }
 
 };  // namespace cudf
