@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,16 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-// The translation unit for reduction `max`
 
 #include <cudf/detail/reduction_functions.hpp>
-#include "simple.cuh"
+#include <reductions/simple.cuh>
 
-std::unique_ptr<cudf::scalar> cudf::reduction::max(column_view const& col,
-                                                   cudf::data_type const output_dtype,
-                                                   rmm::mr::device_memory_resource* mr,
-                                                   cudaStream_t stream)
+namespace cudf {
+namespace reduction {
+
+std::unique_ptr<cudf::scalar> max(column_view const& col,
+                                  cudf::data_type const output_dtype,
+                                  rmm::mr::device_memory_resource* mr,
+                                  cudaStream_t stream)
 {
-  using reducer = cudf::reduction::simple::element_type_dispatcher<cudf::reduction::op::max>;
-  return cudf::type_dispatcher(col.type(), reducer(), col, output_dtype, mr, stream);
+  CUDF_EXPECTS(col.type() == output_dtype, "max() operation requires matching output type");
+  return cudf::type_dispatcher(
+    col.type(), simple::same_element_type_dispatcher<cudf::reduction::op::max>{}, col, mr, stream);
 }
+
+}  // namespace reduction
+}  // namespace cudf

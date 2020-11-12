@@ -130,7 +130,9 @@ class CategoricalAccessor(ColumnMethodsMixin):
         """
         return self._column.ordered
 
-    def as_ordered(self, **kwargs) -> Optional[ParentType]:
+    def as_ordered(
+        self, inplace: bool = False, **kwargs
+    ) -> Optional[ParentType]:
         """
         Set the Categorical to be ordered.
 
@@ -190,9 +192,11 @@ class CategoricalAccessor(ColumnMethodsMixin):
                 self._column.categories, self._column.categories, **kwargs
             )
 
-        return self._return_or_inplace(out_col, **kwargs)
+        return self._return_or_inplace(out_col, inplace=inplace)
 
-    def as_unordered(self, **kwargs) -> Optional[ParentType]:
+    def as_unordered(
+        self, inplace: bool = False, **kwargs
+    ) -> Optional[ParentType]:
         """
         Set the Categorical to be unordered.
 
@@ -263,10 +267,10 @@ class CategoricalAccessor(ColumnMethodsMixin):
                 self._column.categories, self.categories, **kwargs
             )
 
-        return self._return_or_inplace(out_col, **kwargs)
+        return self._return_or_inplace(out_col, inplace=inplace)
 
     def add_categories(
-        self, new_categories: Any, **kwargs
+        self, new_categories: Any, inplace: bool = False, **kwargs
     ) -> Optional[ParentType]:
         """
         Add new categories.
@@ -350,10 +354,10 @@ class CategoricalAccessor(ColumnMethodsMixin):
                 old_categories, new_categories, **kwargs
             )
 
-        return self._return_or_inplace(out_col, **kwargs)
+        return self._return_or_inplace(out_col, inplace=inplace)
 
     def remove_categories(
-        self, removals: Any, **kwargs
+        self, removals: Any, inplace: bool = False, **kwargs
     ) -> Optional[ParentType]:
         """
         Remove the specified categories.
@@ -442,10 +446,15 @@ class CategoricalAccessor(ColumnMethodsMixin):
                 self._column.categories, new_categories, **kwargs
             )
 
-        return self._return_or_inplace(out_col, **kwargs)
+        return self._return_or_inplace(out_col, inplace=inplace)
 
     def set_categories(
-        self, new_categories: Any, **kwargs
+        self,
+        new_categories: Any,
+        ordered: bool = False,
+        rename: bool = False,
+        inplace: bool = False,
+        **kwargs,
     ) -> Optional[ParentType]:
         """
         Set the categories to the specified new_categories.
@@ -571,10 +580,14 @@ class CategoricalAccessor(ColumnMethodsMixin):
                 out_col = self._set_categories(
                     self._column.categories, new_categories, **kwargs
                 )
-        return self._return_or_inplace(out_col, **kwargs)
+        return self._return_or_inplace(out_col, inplace=inplace)
 
     def reorder_categories(
-        self, new_categories: Any, **kwargs
+        self,
+        new_categories: Any,
+        ordered: bool = False,
+        inplace: bool = False,
+        **kwargs,
     ) -> Optional[ParentType]:
         """
         Reorder categories as specified in new_categories.
@@ -652,10 +665,10 @@ class CategoricalAccessor(ColumnMethodsMixin):
                 "old categories"
             )
         out_col = self._set_categories(
-            self._column.categories, new_categories, **kwargs
+            self._column.categories, new_categories, ordered=ordered
         )
 
-        return self._return_or_inplace(out_col, **kwargs)
+        return self._return_or_inplace(out_col, inplace=inplace)
 
     def _categories_equal(
         self, new_categories: "ColumnBase", **kwargs
