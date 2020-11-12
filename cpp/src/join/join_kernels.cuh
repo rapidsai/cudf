@@ -50,6 +50,19 @@ __inline__ __device__ void add_pair_to_cache(const size_type first,
 }
 
 /**
+ * @brief Remaps a hash value to a new value if it is equal to the specified sentinel value.
+ *
+ * @param hash The hash value to potentially remap
+ * @param sentinel The reserved value
+ */
+template <typename H, typename S>
+constexpr auto remap_sentinel_hash(H hash, S sentinel)
+{
+  // Arbitrarily choose hash - 1
+  return (hash == sentinel) ? --hash : hash;
+}
+
+/**
  * @brief Builds a hash table from a row hasher that maps the hash
  * values of each row to its respective row index.
  *
@@ -70,11 +83,7 @@ __global__ void build_hash_table(multimap_type multi_map,
 
   while (i < build_table_num_rows) {
     // Compute the hash value of this row
-    auto const row_hash_value = [&]() {
-      auto const h = hash_build(i);
-      // Remap hash values equal to the empty sentinel value.
-      return (h == multi_map.get_unused_key()) ? (h - 1) : h;
-    }();
+    auto const row_hash_value = remap_sentinel_hash(hash_build(i), multi_map.get_unused_key());
 
     // Insert the (row hash value, row index) into the map
     // using the row hash value to determine the location in the
@@ -132,11 +141,8 @@ __global__ void compute_join_output_size(multimap_type multi_map,
        probe_row_index += stride) {
     // Search the hash map for the hash value of the probe row using the row's
     // hash value to determine the location where to search for the row in the hash map
-    auto const probe_row_hash_value = [&]() {
-      auto const h = hash_probe(probe_row_index);
-      // Remap hash values equal to the empty sentinel value.
-      return (h == unused_key) ? (h - 1) : h;
-    }();
+    auto const probe_row_hash_value = remap_sentinel_hash(hash_probe(probe_row_index), unused_key);
+
     auto found = multi_map.find(probe_row_hash_value, true, probe_row_hash_value);
 
     // for left-joins we always need to add an output
@@ -323,11 +329,7 @@ __global__ void probe_hash_table(multimap_type multi_map,
 
     // Search the hash map for the hash value of the probe row using the row's
     // hash value to determine the location where to search for the row in the hash map
-    auto const probe_row_hash_value = [&]() {
-      auto const h = hash_probe(probe_row_index);
-      // Remap hash values equal to the empty sentinel value.
-      return (h == unused_key) ? (h - 1) : h;
-    }();
+    auto const probe_row_hash_value = remap_sentinel_hash(hash_probe(probe_row_index), unused_key);
 
     auto found = multi_map.find(probe_row_hash_value, true, probe_row_hash_value);
 
