@@ -961,6 +961,20 @@ TYPED_TEST(FixedPointTests, FixedPointToFixedPointSameTypeidUpPositive)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TYPED_TEST(FixedPointTests, FixedPointToFixedPointSameTypeidEmpty)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const input    = fp_wrapper{{}, scale_type{1}};
+  auto const expected = fp_wrapper{{}, scale_type{2}};
+  auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(2));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TYPED_TEST(FixedPointTests, FixedPointToFixedPointSameTypeidDownPositive)
 {
   using namespace numeric;
@@ -991,7 +1005,7 @@ TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeid)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeid)
+TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeidDown)
 {
   using namespace numeric;
   using decimalA    = TypeParam;
@@ -1007,7 +1021,7 @@ TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeid)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeid)
+TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeidUp)
 {
   using namespace numeric;
   using decimalA    = TypeParam;
