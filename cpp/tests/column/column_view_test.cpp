@@ -59,10 +59,9 @@ struct ColumnViewAllTypesTests : public cudf::test::BaseFixture {
 TYPED_TEST_CASE(ColumnViewAllTypesTests, cudf::test::FixedWidthTypes);
 
 template <typename FromType, typename ToType, typename Iterator>
-void do_logical_cast(cudf::test::detail::column_wrapper& input, Iterator begin, Iterator end)
+void do_logical_cast(cudf::column_view const& column_view, Iterator begin, Iterator end)
 {
-  auto column_view         = (cudf::column_view)input;
-  auto mutable_column_view = (cudf::mutable_column_view)input;
+  auto mutable_column_view = reinterpret_cast<cudf::mutable_column_view const&>(column_view);
   if (std::is_same<FromType, ToType>::value) {
     // Cast to same type
     auto output  = cudf::logical_cast(column_view, column_view.type());

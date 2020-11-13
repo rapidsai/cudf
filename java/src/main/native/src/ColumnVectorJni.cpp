@@ -142,8 +142,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
   try {
     cudf::jni::auto_set_device(env);
     auto scalar_val = reinterpret_cast<cudf::scalar const *>(j_scalar);
-    auto dtype = scalar_val->type();
-    cudf::mask_state mask_state =
+    const auto dtype = scalar_val->type();
+    const auto mask_state =
         scalar_val->is_valid() ? cudf::mask_state::UNALLOCATED : cudf::mask_state::ALL_NULL;
     std::unique_ptr<cudf::column> col;
     if (row_count == 0) {

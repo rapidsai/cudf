@@ -557,8 +557,7 @@ size_type count_descendants(column_view parent);
  * duration count. However, an INT32 column cannot be logically cast to INT64 as the sizes differ,
  * nor can an INT32 columm be logically cast to a FLOAT32 since what the bits represent differs.
  *
- * The validity of the conversion can be checked with `cudf::is_logically_castable()`. For other
- * conversions between fixed-width types which require a copy, see `cudf::cast()`.
+ * The validity of the conversion can be checked with `cudf::is_logically_castable()`.
  *
  * @throws cudf::logic_error if the specified cast is not possible, i.e.,
  * `is_logically_castable(input.type(), type)` is false.
@@ -580,8 +579,7 @@ column_view logical_cast(column_view const& input, data_type type);
  * duration count. However, an INT32 column cannot be logically cast to INT64 as the sizes differ,
  * nor can an INT32 columm be logically cast to a FLOAT32 since what the bits represent differs.
  *
- * The validity of the conversion can be checked with `cudf::is_logically_castable()`. For other
- * conversions between fixed-width types which require a copy, see `cudf::cast()`.
+ * The validity of the conversion can be checked with `cudf::is_logically_castable()`.
  *
  * @throws cudf::logic_error if the specified cast is not possible, i.e.,
  * `is_logically_castable(input.type(), type)` is false.
