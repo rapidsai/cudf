@@ -116,7 +116,7 @@ def test_scalar_host_initialization(value):
 
 @pytest.mark.parametrize("value", SCALAR_VALUES)
 def test_scalar_device_initialization(value):
-    column = cudf.Series([value])._column
+    column = cudf.Series([value], nan_as_null=False)._column
     dev_slr = get_element(column, 0)
 
     s = cudf.Scalar(dev_slr)
@@ -124,7 +124,7 @@ def test_scalar_device_initialization(value):
     assert s._is_device_value_current
     assert not s._is_host_value_current
 
-    assert s.value == value or s.value is cudf.NA and np.isnan(value)
+    assert s.value == value or np.isnan(s.value) and np.isnan(value)
 
     assert s._is_device_value_current
     assert s._is_host_value_current
