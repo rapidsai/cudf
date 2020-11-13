@@ -307,8 +307,8 @@ class CategoricalAccessor(ColumnMethodsMixin):
             [old_categories.dtype, new_categories.dtype], []
         )
 
-        new_categories = new_categories.astype(common_dtype, copy=False)
-        old_categories = old_categories.astype(common_dtype, copy=False)
+        new_categories = new_categories.astype(common_dtype)
+        old_categories = old_categories.astype(common_dtype)
 
         if old_categories.isin(new_categories).any():
             raise ValueError("new categories must not include old categories")
@@ -1128,7 +1128,7 @@ class CategoricalColumn(column.ColumnBase):
             return _create_empty_categorical_column(self, dtype)
 
         return self.cat().set_categories(
-            new_categories=dtype.categories, ordered=dtype.ordered, **kwargs
+            new_categories=dtype.categories, ordered=dtype.ordered
         )
 
     def as_numerical_column(self, dtype, **kwargs):

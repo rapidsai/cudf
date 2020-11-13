@@ -161,16 +161,6 @@ _str_to_numeric_typecast_functions = {
     np.dtype("float32"): str_cast.stof,
     np.dtype("float64"): str_cast.stod,
     np.dtype("bool"): str_cast.to_booleans,
-    # TODO: support Date32 UNIX days
-    # np.dtype("datetime64[D]"): str_cast.timestamp2int,
-    np.dtype("datetime64[s]"): str_cast.timestamp2int,
-    np.dtype("datetime64[ms]"): str_cast.timestamp2int,
-    np.dtype("datetime64[us]"): str_cast.timestamp2int,
-    np.dtype("datetime64[ns]"): str_cast.timestamp2int,
-    np.dtype("timedelta64[s]"): str_cast.timedelta2int,
-    np.dtype("timedelta64[ms]"): str_cast.timedelta2int,
-    np.dtype("timedelta64[us]"): str_cast.timedelta2int,
-    np.dtype("timedelta64[ns]"): str_cast.timedelta2int,
 }
 
 _numeric_to_str_typecast_functions = {
@@ -185,6 +175,9 @@ _numeric_to_str_typecast_functions = {
     np.dtype("float32"): str_cast.ftos,
     np.dtype("float64"): str_cast.dtos,
     np.dtype("bool"): str_cast.from_booleans,
+}
+
+_datetime_to_str_typecast_functions = {
     # TODO: support Date32 UNIX days
     # np.dtype("datetime64[D]"): str_cast.int2timestamp,
     np.dtype("datetime64[s]"): str_cast.int2timestamp,
@@ -4601,37 +4594,10 @@ class StringColumn(column.ColumnBase):
         else:
             return self.children[1].size
 
-    def as_numerical_column(self, dtype, **kwargs):
-
+    def as_numerical_column(self, dtype):
         out_dtype = np.dtype(dtype)
-        kwargs.update(dtype=out_dtype)
 
-        if out_dtype.type is np.datetime64:
-            if "format" not in kwargs:
-                if len(self) > 0:
-                    # infer on host from the first not na element
-                    # or return all null column if all values
-                    # are null in current column
-                    if self.null_count == len(self):
-                        return column.column_empty(
-                            len(self), dtype=out_dtype, masked=True
-                        )
-                    else:
-                        fmt = datetime.infer_format(self[self.notna()][0])
-                        kwargs.update(format=fmt)
-
-            # Check for None strings
-            if len(self) > 0 and (self == "None").any():
-                raise ValueError("Could not convert `None` value to datetime")
-
-            boolean_match = self == "NaT"
-        elif out_dtype.type is np.timedelta64:
-            if "format" not in kwargs:
-                if len(self) > 0:
-                    kwargs.update(format="%D days %H:%M:%S")
-
-            boolean_match = self == "NaT"
-        elif out_dtype.kind in {"i", "u"}:
+        if out_dtype.kind in {"i", "u"}:
             if not cpp_is_integer(self).all():
                 raise ValueError(
                     "Could not convert strings to integer "
@@ -4644,22 +4610,55 @@ class StringColumn(column.ColumnBase):
                     "type due to presence of non-floating values."
                 )
 
-        result_col = _str_to_numeric_typecast_functions[out_dtype](
-            self, **kwargs
-        )
-        if (
-            out_dtype.type in (np.datetime64, np.timedelta64)
-        ) and boolean_match.any():
-            result_col[boolean_match] = None
+        result_col = _str_to_numeric_typecast_functions[out_dtype](self)
         return result_col
 
-    def as_datetime_column(self, dtype, **kwargs):
-        return self.as_numerical_column(dtype, **kwargs)
+    def _as_datetime_or_timedelta_column(self, dtype, format):
+        if len(self) == 0:
+            return cudf.core.column.as_column([], dtype=dtype)
 
-    def as_timedelta_column(self, dtype, **kwargs):
-        return self.as_numerical_column(dtype, **kwargs)
+        # Check for None strings
+        if (self == "None").any():
+            raise ValueError("Could not convert `None` value to datetime")
 
-    def as_string_column(self, dtype, **kwargs):
+        casting_func = (
+            str_cast.timestamp2int
+            if dtype.type == np.datetime64
+            else str_cast.timedelta2int
+        )
+        result_col = casting_func(self, dtype, format)
+
+        boolean_match = self == "NaT"
+        if (boolean_match).any():
+            result_col[boolean_match] = None
+
+        return result_col
+
+    def as_datetime_column(self, dtype, format=None):
+        out_dtype = np.dtype(dtype)
+
+        if format is None:
+            # infer on host from the first not na element
+            # or return all null column if all values
+            # are null in current column
+            if self.null_count == len(self):
+                return column.column_empty(
+                    len(self), dtype=out_dtype, masked=True
+                )
+            else:
+                format = datetime.infer_format(self[self.notna()][0])
+
+        return self._as_datetime_or_timedelta_column(out_dtype, format)
+
+    def as_timedelta_column(self, dtype, format=None):
+        out_dtype = np.dtype(dtype)
+
+        if format is None:
+            format = "%D days %H:%M:%S"
+
+        return self._as_datetime_or_timedelta_column(out_dtype, format)
+
+    def as_string_column(self, dtype):
         return self
 
     @property

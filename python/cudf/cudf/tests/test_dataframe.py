@@ -799,7 +799,6 @@ def test_dataframe_to_string_wide():
 [3 rows x 100 columns]
 """
     # values should match despite whitespace difference
-
     assert got.split() == expect.split()
 
 

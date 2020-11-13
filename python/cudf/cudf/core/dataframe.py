@@ -1082,7 +1082,7 @@ class DataFrame(Frame, Serializable):
         else:
             for col in self._data:
                 result._data[col] = self._data[col].astype(
-                    dtype=dtype, errors=errors, copy=copy, **kwargs
+                    dtype=dtype, **kwargs
                 )
 
         return result

@@ -141,7 +141,7 @@ class NumericalColumn(column.ColumnBase):
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
                 np.dtype(self.dtype)
-            ](self, **kwargs)
+            ](self)
         else:
             return as_column([], dtype="object")
 
