@@ -1364,14 +1364,10 @@ public final class HostColumnVector extends HostColumnVectorCore {
       assert currentIndex < rows;
       BigInteger unscaledValue = value.setScale(-type.getScale(), roundingMode).unscaledValue();
       if (type.typeId == DType.DTypeEnum.DECIMAL32) {
-        if (value.precision() > DType.DECIMAL32_MAX_PRECISION) {
-          throw new IllegalStateException(value + " exceeds maximum precision for DECIMAL32 ");
-        }
+        assert value.precision() <= DType.DECIMAL32_MAX_PRECISION : "value exceeds maximum precision for DECIMAL32";
         data.setInt(currentIndex * type.getSizeInBytes(), unscaledValue.intValueExact());
       } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
-        if (value.precision() > DType.DECIMAL64_MAX_PRECISION) {
-          throw new IllegalStateException(value + " exceeds maximum precision for DECIMAL64 ");
-        }
+        assert value.precision() <= DType.DECIMAL64_MAX_PRECISION : "value exceeds maximum precision for DECIMAL64 ";
         data.setLong(currentIndex * type.getSizeInBytes(), unscaledValue.longValueExact());
       } else {
         throw new IllegalStateException(type + " is not a supported decimal type.");

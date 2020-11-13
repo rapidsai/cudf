@@ -34,6 +34,9 @@ public interface BinaryOperable {
    * <p>
    * BOOL8 is treated like an INT8.  Math on boolean operations makes little sense.  If
    * you want to stay as a BOOL8 you will need to explicitly specify the output type.
+   * For decimal types, DECIMAL32 and DECIMAL64 takes in another parameter `scale`. DType is created
+   * with scale=0 as scale is required. Dtype is discarded for binary operations for decimal
+   * types in cudf as a new DType is created for output type with the new scale.
    */
   static DType implicitConversion(BinaryOperable lhs, BinaryOperable rhs) {
     DType a = lhs.getType();
