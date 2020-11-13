@@ -137,9 +137,10 @@ def gather(Table source_table, Column gather_map, bool keep_index=True):
     if len(gather_map) > 0:
         gm_min, gm_max = minmax(gather_map)
         if gm_min < -len(source_table) or gm_max >= len(source_table):
-            raise IndexError(f"Gather map index with min {gm_min}, max"
-                             f" {gm_max} is out of bound in {type(source_table)} with"
-                             f" length {len(source_table)}.")
+            raise IndexError(f"Gather map index with min {gm_min},"
+                             f" max {gm_max} is out of bounds in"
+                             f" {type(source_table)} with {len(source_table)}"
+                             f" rows.")
 
     cdef unique_ptr[table] c_result
     cdef table_view source_table_view
