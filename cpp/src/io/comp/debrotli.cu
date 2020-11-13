@@ -59,6 +59,8 @@ THE SOFTWARE.
 #include "brotli_dict.h"
 #include "gpuinflate.h"
 
+#include <thrust/sequence.h>
+
 namespace cudf {
 namespace io {
 #define HUFFTAB_LUT1_BITS 8
@@ -143,7 +145,7 @@ struct debrotli_state_s {
   uint8_t *context_map;
   uint8_t *dist_context_map;
   uint8_t *context_modes;
-  uint8_t *fb_base;
+  void *fb_base;
   uint32_t fb_size;
   uint8_t block_type_rb[6];
   uint8_t pad[2];
@@ -154,7 +156,7 @@ struct debrotli_state_s {
   debrotli_huff_tree_group_s *distance_hgroup;
   uint16_t *block_type_vlc[3];
   huff_scratch_s hs;
-  uint32_t mtf[65];
+  uint8_t mtf[65 * sizeof(uint32_t)];
   char heap[LOCAL_HEAP_SIZE / sizeof(char)];
 };
 
@@ -318,9 +320,7 @@ static __device__ void local_heap_grow(debrotli_state_s *s, uint32_t bytes)
 }
 
 /// Alloc memory from the fixed-size heap shared between all blocks (thread0-only)
-static __device__ uint8_t *ext_heap_alloc(uint32_t bytes,
-                                          void *ext_heap_base,
-                                          uint32_t ext_heap_size)
+static __device__ void *ext_heap_alloc(uint32_t bytes, void *ext_heap_base, uint32_t ext_heap_size)
 {
   uint32_t len              = (bytes + 0xf) & ~0xf;
   auto heap_ptr             = static_cast<volatile uint32_t *>(ext_heap_base);
@@ -1266,32 +1266,23 @@ static __device__ void DecodeHuffmanTables(debrotli_state_s *s)
  **/
 static __device__ void InverseMoveToFrontTransform(debrotli_state_s *s, uint8_t *v, uint32_t v_len)
 {
+  // Make mtf[-1] addressable.
+  auto mtf = s->mtf + 4;
   // Reinitialize elements that could have been changed.
-  uint32_t i           = 1;
-  uint32_t upper_bound = s->mtf_upper_bound;
-  uint32_t *mtf        = &s->mtf[1];  // Make mtf[-1] addressable.
-  uint8_t *mtf_u8      = reinterpret_cast<uint8_t *>(mtf);
-  uint32_t pattern     = 0x03020100;  // Little-endian
-
   // Initialize list using 4 consequent values pattern.
-  mtf[0] = pattern;
-  do {
-    pattern += 0x04040404;  // Advance all 4 values by 4.
-    mtf[i] = pattern;
-    i++;
-  } while (i <= upper_bound);
+  thrust::sequence(thrust::seq, mtf, mtf + s->mtf_upper_bound, uint8_t{0});
 
   // Transform the input.
-  upper_bound = 0;
-  for (i = 0; i < v_len; ++i) {
+  uint32_t upper_bound = 0;
+  for (int i = 0; i < v_len; ++i) {
     int index     = v[i];
-    uint8_t value = mtf_u8[index];
+    uint8_t value = mtf[index];
     upper_bound |= v[i];
-    v[i]       = value;
-    mtf_u8[-1] = value;
+    v[i]    = value;
+    mtf[-1] = value;
     do {
       index--;
-      mtf_u8[index + 1] = mtf_u8[index];
+      mtf[index + 1] = mtf[index];
     } while (index >= 0);
   }
   // Remember amount of elements to be reinitialized.
@@ -1407,7 +1398,7 @@ static __device__ void HuffmanTreeGroupAlloc(debrotli_state_s *s, debrotli_huff_
     uint32_t code_size      = sizeof(uint16_t) * ntrees * max_table_size;
     group->htrees[0]        = static_cast<uint16_t *>(local_alloc(s, code_size));
     if (!group->htrees[0]) {
-      if (s->fb_base) { group->htrees[0] = reinterpret_cast<uint16_t *>(s->fb_base + s->fb_size); }
+      if (s->fb_base) { group->htrees[0] = static_cast<uint16_t *>(s->fb_base) + s->fb_size / 2; }
       s->fb_size += (code_size + 3) & ~3;
     }
   }
