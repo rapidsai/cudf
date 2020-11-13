@@ -2,6 +2,7 @@
 
 ## New Features
 
+- PR #6116 Add `filters` parameter to Python `read_orc` function or filtering
 - PR #6460 Add is_timestamp format check API
 - PR #6647 Implement `cudf::round` floating point and integer types (`HALF_EVEN`)
 - PR #6562 Implement `cudf::round` floating point and integer types (`HALF_UP`)
@@ -126,7 +127,6 @@
 - PR #5779 Add DataFrame.pivot() and DataFrame.unstack()
 - PR #5975 Add strings `filter_characters` API
 - PR #5843 Add `filters` parameter to Python `read_parquet` function for filtering row groups
-- PR #6116 Add `filters` parameter to Python `read_orc` function or filtering
 - PR #5974 Use libcudf instead of cupy for `arange` or column creation from a scalar.
 - PR #5494 Add Abstract Syntax Tree (AST) evaluator.
 - PR #6076 Add durations type support for csv writer, reader
@@ -135,7 +135,6 @@
 - PR #6119 Add support for `dayofweek` property in `DateTimeIndex` and `DatetimeProperties`
 - PR #6171 Java and Jni support for Struct columns
 - PR #6125 Add support for `Series.mode` and `DataFrame.mode`
-- PR #6142 Add Python `read_orc_statistics` function for reading file- and stripe-level statistics
 - PR #6271 Add support to deep-copy struct columns from struct column-view
 - PR #6262 Add nth_element series aggregation with null handling
 - PR #6316 Add StructColumn to Python API
