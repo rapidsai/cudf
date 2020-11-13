@@ -72,9 +72,9 @@ struct var_functor {
 #if !defined(__CUDACC_DEBUG__)
     using ResultType                = cudf::detail::target_type_t<T, aggregation::Kind::VARIANCE>;
     size_type const* d_group_labels = group_labels.data().get();
-    auto values_view                = column_device_view::create(values);
-    auto means_view                 = column_device_view::create(group_means);
-    auto group_size_view            = column_device_view::create(group_sizes);
+    auto values_view                = column_device_view::create(values, stream);
+    auto means_view                 = column_device_view::create(group_means, stream);
+    auto group_size_view            = column_device_view::create(group_sizes, stream);
 
     std::unique_ptr<column> result = make_numeric_column(data_type(type_to_id<ResultType>()),
                                                          group_sizes.size(),
@@ -98,7 +98,7 @@ struct var_functor {
                           result->mutable_view().data<ResultType>());
 
     // set nulls
-    auto result_view = mutable_column_device_view::create(*result);
+    auto result_view = mutable_column_device_view::create(*result, stream);
 
     thrust::for_each_n(
       rmm::exec_policy(stream)->on(stream.value()),

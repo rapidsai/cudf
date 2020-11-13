@@ -122,6 +122,7 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
   row_equality equality_probe{*left_rows_d, *right_rows_d, compare_nulls == null_equality::EQUAL};
 
   auto hash_table_ptr = hash_table_type::create(hash_table_size,
+                                                stream,
                                                 std::numeric_limits<bool>::max(),
                                                 std::numeric_limits<cudf::size_type>::max(),
                                                 hash_build,

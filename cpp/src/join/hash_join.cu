@@ -211,11 +211,11 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type *)>> build_join_
   size_t const hash_table_size = compute_hash_table_size(build_table_num_rows);
 
   auto hash_table = multimap_type::create(hash_table_size,
+                                          stream,
                                           true,
                                           multimap_type::hasher(),
                                           multimap_type::key_equal(),
-                                          multimap_type::allocator_type(),
-                                          stream.value());
+                                          multimap_type::allocator_type());
 
   row_hash hash_build{build_table};
   rmm::device_scalar<int> failure(0, stream);

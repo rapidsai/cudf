@@ -112,7 +112,7 @@ std::unique_ptr<table> aggregate_keys_info(std::unique_ptr<table> info)
 col_map_ptr_type create_col_names_hash_map(column_view column_name_hashes,
                                            rmm::cuda_stream_view stream)
 {
-  auto key_col_map{col_map_type::create(column_name_hashes.size())};
+  auto key_col_map{col_map_type::create(column_name_hashes.size(), stream)};
   auto const column_data = column_name_hashes.data<uint32_t>();
   thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<size_type>(0),
