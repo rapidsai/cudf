@@ -28,12 +28,12 @@ std::unique_ptr<cudf::scalar> any(column_view const& col,
 {
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
                "any() operation can be applied with output type `bool8` only");
-  return cudf::type_dispatcher(
-    cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type(),
-    simple::bool_result_element_dispatcher<cudf::reduction::op::max>{},
-    col,
-    mr,
-    stream);
+  auto const input_col = cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys() : col;
+  return cudf::type_dispatcher(input_col.type(),
+                               simple::bool_result_element_dispatcher<cudf::reduction::op::max>{},
+                               input_col,
+                               mr,
+                               stream);
 }
 
 }  // namespace reduction

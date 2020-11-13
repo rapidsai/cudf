@@ -177,12 +177,10 @@ template <typename Op>
 struct bool_result_element_dispatcher {
   template <typename ElementType,
             std::enable_if_t<std::is_arithmetic<ElementType>::value>* = nullptr>
-  std::unique_ptr<scalar> operator()(column_view const& input,
+  std::unique_ptr<scalar> operator()(column_view const& col,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    auto const col =
-      cudf::is_dictionary(input.type()) ? dictionary_column_view(input).keys() : input;
     return simple_reduction<ElementType, bool, Op>(col, mr, stream);
   }
 
@@ -217,12 +215,10 @@ struct same_element_type_dispatcher {
 
  public:
   template <typename ElementType, std::enable_if_t<is_supported<ElementType>()>* = nullptr>
-  std::unique_ptr<scalar> operator()(column_view const& input,
+  std::unique_ptr<scalar> operator()(column_view const& col,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    auto const col =
-      cudf::is_dictionary(input.type()) ? dictionary_column_view(input).keys() : input;
     return simple_reduction<ElementType, ElementType, Op>(col, mr, stream);
   }
 
