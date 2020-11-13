@@ -1,7 +1,7 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 import pickle
 import warnings
-from typing import Tuple, Union
+from typing import Sequence, Tuple, Union
 
 import cupy
 import numpy as np
@@ -333,7 +333,9 @@ class StringMethods(ColumnMethodsMixin):
         """
         return self._return_or_inplace(cpp_count_bytes(self._column),)
 
-    def cat(self, others=None, sep=None, na_rep=None) -> ParentType:
+    def cat(
+        self, others=None, sep: str = None, na_rep: str = None
+    ) -> ParentType:
         """
         Concatenate strings in the Series/Index with given separator.
 
@@ -458,7 +460,9 @@ class StringMethods(ColumnMethodsMixin):
             "Columns of arrays / lists are not yet " "supported"
         )
 
-    def extract(self, pat, flags=0, expand=True) -> ParentType:
+    def extract(
+        self, pat: str, flags: int = 0, expand: bool = True
+    ) -> ParentType:
         """
         Extract capture groups in the regex `pat` as columns in a DataFrame.
 
@@ -523,7 +527,12 @@ class StringMethods(ColumnMethodsMixin):
             return self._return_or_inplace(out, expand=expand)
 
     def contains(
-        self, pat, case=True, flags=0, na=np.nan, regex=True
+        self,
+        pat: Union[str, Sequence],
+        case: bool = True,
+        flags: int = 0,
+        na=np.nan,
+        regex: bool = True,
     ) -> ParentType:
         """
         Test if pattern or regex is contained within a string of a Series or
@@ -650,7 +659,13 @@ class StringMethods(ColumnMethodsMixin):
         return self._return_or_inplace(result_col)
 
     def replace(
-        self, pat, repl, n=-1, case=None, flags=0, regex=True
+        self,
+        pat: Union[str, Sequence],
+        repl: Union[str, Sequence],
+        n: int = -1,
+        case=None,
+        flags: int = 0,
+        regex: bool = True,
     ) -> ParentType:
         """
         Replace occurrences of pattern/regex in the Series/Index with some
@@ -750,7 +765,7 @@ class StringMethods(ColumnMethodsMixin):
             ),
         )
 
-    def replace_with_backrefs(self, pat, repl) -> ParentType:
+    def replace_with_backrefs(self, pat: str, repl: str) -> ParentType:
         """
         Use the ``repl`` back-ref template to create a new string
         with the extracted elements found using the ``pat`` expression.
@@ -780,7 +795,9 @@ class StringMethods(ColumnMethodsMixin):
             cpp_replace_with_backrefs(self._column, pat, repl)
         )
 
-    def slice(self, start=None, stop=None, step=None) -> ParentType:
+    def slice(
+        self, start: int = None, stop: int = None, step: int = None
+    ) -> ParentType:
         """
         Slice substrings from each element in the Series or Index.
 
@@ -948,7 +965,7 @@ class StringMethods(ColumnMethodsMixin):
         """
         return self._return_or_inplace(str_cast.is_hex(self._column))
 
-    def istimestamp(self, format) -> ParentType:
+    def istimestamp(self, format: str) -> ParentType:
         """
         Check whether all characters in each string can be converted to
         a timestamp using the given format.
@@ -1695,7 +1712,9 @@ class StringMethods(ColumnMethodsMixin):
         """
         return self._return_or_inplace(cpp_title(self._column))
 
-    def filter_alphanum(self, repl=None, keep=True) -> ParentType:
+    def filter_alphanum(
+        self, repl: str = None, keep: bool = True
+    ) -> ParentType:
         """
         Remove non-alphanumeric characters from strings in this column.
 
@@ -1730,7 +1749,9 @@ class StringMethods(ColumnMethodsMixin):
             cpp_filter_alphanum(self._column, as_scalar(repl), keep),
         )
 
-    def slice_from(self, starts, stops) -> ParentType:
+    def slice_from(
+        self, starts: "cudf.Series", stops: "cudf.Series"
+    ) -> ParentType:
         """
         Return substring of each string using positions for each string.
 
@@ -1773,7 +1794,9 @@ class StringMethods(ColumnMethodsMixin):
             ),
         )
 
-    def slice_replace(self, start=None, stop=None, repl=None) -> ParentType:
+    def slice_replace(
+        self, start: int = None, stop: int = None, repl: str = None
+    ) -> ParentType:
         """
         Replace the specified section of each string with a new string.
 
@@ -1858,7 +1881,7 @@ class StringMethods(ColumnMethodsMixin):
             cpp_slice_replace(self._column, start, stop, as_scalar(repl)),
         )
 
-    def insert(self, start=0, repl=None) -> ParentType:
+    def insert(self, start: int = 0, repl: str = None) -> ParentType:
         """
         Insert the specified string into each string in the specified
         position.
@@ -1908,7 +1931,7 @@ class StringMethods(ColumnMethodsMixin):
             cpp_string_insert(self._column, start, as_scalar(repl))
         )
 
-    def get(self, i=0) -> ParentType:
+    def get(self, i: int = 0) -> ParentType:
         """
         Extract element from each component at specified position.
 
@@ -1952,7 +1975,9 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(cpp_string_get(self._column, i))
 
-    def split(self, pat=None, n=-1, expand=None) -> ParentType:
+    def split(
+        self, pat: str = None, n: int = -1, expand: bool = None
+    ) -> ParentType:
         """
         Split strings around given separator/delimiter.
 
@@ -2050,7 +2075,9 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(result_table, expand=expand)
 
-    def rsplit(self, pat=None, n=-1, expand=None) -> ParentType:
+    def rsplit(
+        self, pat: str = None, n: int = -1, expand: bool = None
+    ) -> ParentType:
         """
         Split strings around given separator/delimiter.
 
@@ -2141,7 +2168,7 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(result_table, expand=expand)
 
-    def partition(self, sep=" ", expand=True) -> ParentType:
+    def partition(self, sep: str = " ", expand: bool = True) -> ParentType:
         """
         Split the string at the first occurrence of sep.
 
@@ -2227,7 +2254,7 @@ class StringMethods(ColumnMethodsMixin):
             cpp_partition(self._column, as_scalar(sep)), expand=expand
         )
 
-    def rpartition(self, sep=" ", expand=True) -> ParentType:
+    def rpartition(self, sep: str = " ", expand: bool = True) -> ParentType:
         """
         Split the string at the last occurrence of sep.
 
@@ -2297,7 +2324,9 @@ class StringMethods(ColumnMethodsMixin):
             cpp_rpartition(self._column, as_scalar(sep)), expand=expand
         )
 
-    def pad(self, width, side="left", fillchar=" ") -> ParentType:
+    def pad(
+        self, width: int, side: str = "left", fillchar: str = " "
+    ) -> ParentType:
         """
         Pad strings in the Series/Index up to width.
 
@@ -2382,7 +2411,7 @@ class StringMethods(ColumnMethodsMixin):
             cpp_pad(self._column, width, fillchar, side)
         )
 
-    def zfill(self, width) -> ParentType:
+    def zfill(self, width: int) -> ParentType:
         """
         Pad strings in the Series/Index by prepending ‘0’ characters.
 
@@ -2455,7 +2484,7 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(cpp_zfill(self._column, width))
 
-    def center(self, width, fillchar=" ") -> ParentType:
+    def center(self, width: int, fillchar: str = " ") -> ParentType:
         """
         Filling left and right side of strings in the Series/Index with an
         additional character.
@@ -2527,7 +2556,7 @@ class StringMethods(ColumnMethodsMixin):
             cpp_center(self._column, width, fillchar)
         )
 
-    def ljust(self, width, fillchar=" ") -> ParentType:
+    def ljust(self, width: int, fillchar: str = " ") -> ParentType:
         """
         Filling right side of strings in the Series/Index with an additional
         character. Equivalent to `str.ljust()
@@ -2581,7 +2610,7 @@ class StringMethods(ColumnMethodsMixin):
             cpp_ljust(self._column, width, fillchar)
         )
 
-    def rjust(self, width, fillchar=" ") -> ParentType:
+    def rjust(self, width: int, fillchar: str = " ") -> ParentType:
         """
         Filling left side of strings in the Series/Index with an additional
         character. Equivalent to `str.rjust()
@@ -2635,7 +2664,7 @@ class StringMethods(ColumnMethodsMixin):
             cpp_rjust(self._column, width, fillchar)
         )
 
-    def strip(self, to_strip=None) -> ParentType:
+    def strip(self, to_strip: str = None) -> ParentType:
         """
         Remove leading and trailing characters.
 
@@ -2694,7 +2723,7 @@ class StringMethods(ColumnMethodsMixin):
             cpp_strip(self._column, as_scalar(to_strip))
         )
 
-    def lstrip(self, to_strip=None) -> ParentType:
+    def lstrip(self, to_strip: str = None) -> ParentType:
         """
         Remove leading and trailing characters.
 
@@ -2741,7 +2770,7 @@ class StringMethods(ColumnMethodsMixin):
             cpp_lstrip(self._column, as_scalar(to_strip))
         )
 
-    def rstrip(self, to_strip=None) -> ParentType:
+    def rstrip(self, to_strip: str = None) -> ParentType:
         """
         Remove leading and trailing characters.
 
@@ -2796,7 +2825,7 @@ class StringMethods(ColumnMethodsMixin):
             cpp_rstrip(self._column, as_scalar(to_strip))
         )
 
-    def wrap(self, width, **kwargs) -> ParentType:
+    def wrap(self, width: int, **kwargs) -> ParentType:
         """
         Wrap long strings in the Series/Index to be formatted in
         paragraphs with length less than a given width.
@@ -2890,7 +2919,7 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(cpp_wrap(self._column, width))
 
-    def count(self, pat, flags=0) -> ParentType:
+    def count(self, pat: str, flags: int = 0) -> ParentType:
         """
         Count occurrences of pattern in each string of the Series/Index.
 
@@ -2950,7 +2979,9 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(cpp_count_re(self._column, pat))
 
-    def findall(self, pat, flags=0, expand=True) -> ParentType:
+    def findall(
+        self, pat: str, flags: int = 0, expand: bool = True
+    ) -> ParentType:
         """
         Find all occurrences of pattern or regular expression in the
         Series/Index.
@@ -3096,7 +3127,7 @@ class StringMethods(ColumnMethodsMixin):
         """
         return self._return_or_inplace(cpp_isspace(self._column))
 
-    def endswith(self, pat) -> ParentType:
+    def endswith(self, pat: str) -> ParentType:
         """
         Test if the end of each string element matches a pattern.
 
@@ -3150,7 +3181,7 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(result_col)
 
-    def startswith(self, pat) -> ParentType:
+    def startswith(self, pat: Union[str, Sequence]) -> ParentType:
         """
         Test if the start of each string element matches a pattern.
 
@@ -3209,7 +3240,7 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(result_col)
 
-    def find(self, sub, start=0, end=None) -> ParentType:
+    def find(self, sub: str, start: int = 0, end: int = None) -> ParentType:
         """
         Return lowest indexes in each strings in the Series/Index
         where the substring is fully contained between ``[start:end]``.
@@ -3262,7 +3293,7 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(result_col)
 
-    def rfind(self, sub, start=0, end=None) -> ParentType:
+    def rfind(self, sub: str, start: int = 0, end: int = None) -> ParentType:
         """
         Return highest indexes in each strings in the Series/Index
         where the substring is fully contained between ``[start:end]``.
@@ -3319,7 +3350,7 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(result_col)
 
-    def index(self, sub, start=0, end=None) -> ParentType:
+    def index(self, sub: str, start: int = 0, end: int = None) -> ParentType:
         """
         Return lowest indexes in each strings where the substring
         is fully contained between ``[start:end]``. This is the same
@@ -3377,7 +3408,7 @@ class StringMethods(ColumnMethodsMixin):
         else:
             return result
 
-    def rindex(self, sub, start=0, end=None) -> ParentType:
+    def rindex(self, sub: str, start: int = 0, end: int = None) -> ParentType:
         """
         Return highest indexes in each strings where the substring
         is fully contained between ``[start:end]``. This is the same
@@ -3435,7 +3466,7 @@ class StringMethods(ColumnMethodsMixin):
         else:
             return result
 
-    def match(self, pat, case=True, flags=0) -> ParentType:
+    def match(self, pat: str, case: bool = True, flags: int = 0) -> ParentType:
         """
         Determine if each string matches a regular expression.
 
@@ -3581,7 +3612,7 @@ class StringMethods(ColumnMethodsMixin):
         else:
             return new_col
 
-    def translate(self, table) -> ParentType:
+    def translate(self, table: dict) -> ParentType:
         """
         Map all characters in the string through the given
         mapping table.
@@ -3624,7 +3655,9 @@ class StringMethods(ColumnMethodsMixin):
         table = str.maketrans(table)
         return self._return_or_inplace(cpp_translate(self._column, table))
 
-    def filter_characters(self, table, keep=True, repl=None) -> ParentType:
+    def filter_characters(
+        self, table: dict, keep: bool = True, repl: str = None
+    ) -> ParentType:
         """
         Remove characters from each string using the character ranges
         in the given mapping table.
@@ -3693,7 +3726,7 @@ class StringMethods(ColumnMethodsMixin):
         """
         return self._return_or_inplace(cpp_normalize_spaces(self._column))
 
-    def normalize_characters(self, do_lower=True) -> ParentType:
+    def normalize_characters(self, do_lower: bool = True) -> ParentType:
         """
         Normalizes strings characters for tokenizing.
 
@@ -3742,7 +3775,7 @@ class StringMethods(ColumnMethodsMixin):
             cpp_normalize_characters(self._column, do_lower)
         )
 
-    def tokenize(self, delimiter=" ") -> ParentType:
+    def tokenize(self, delimiter: str = " ") -> ParentType:
         """
         Each string is split into tokens using the provided delimiter(s).
         The sequence returned contains the tokens in the order
@@ -3774,7 +3807,9 @@ class StringMethods(ColumnMethodsMixin):
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
         return self._return_or_inplace(cpp_tokenize(self._column, delimiter))
 
-    def detokenize(self, indices, separator=" ") -> ParentType:
+    def detokenize(
+        self, indices: "cudf.Series", separator: str = " "
+    ) -> ParentType:
         """
         Combines tokens into strings by concatenating them in the order
         in which they appear in the ``indices`` column. The ``separator`` is
@@ -3782,7 +3817,7 @@ class StringMethods(ColumnMethodsMixin):
 
         Parameters
         ----------
-        indices : list of ints
+        indices : Series
             Each value identifies the output row for the corresponding token.
         separator : str
             The string concatenated between each token in an output row.
@@ -3863,7 +3898,7 @@ class StringMethods(ColumnMethodsMixin):
         else:
             return result_col
 
-    def token_count(self, delimiter=" ") -> ParentType:
+    def token_count(self, delimiter: str = " ") -> ParentType:
         """
         Each string is split into tokens using the provided delimiter.
         The returned integer sequence is the number of tokens in each string.
@@ -3894,7 +3929,7 @@ class StringMethods(ColumnMethodsMixin):
             cpp_count_tokens(self._column, delimiter)
         )
 
-    def ngrams(self, n=2, separator="_") -> ParentType:
+    def ngrams(self, n: int = 2, separator: str = "_") -> ParentType:
         """
         Generate the n-grams from a set of tokens, each record
         in series is treated a token.
@@ -3931,7 +3966,7 @@ class StringMethods(ColumnMethodsMixin):
             cpp_generate_ngrams(self._column, n, separator)
         )
 
-    def character_ngrams(self, n=2) -> ParentType:
+    def character_ngrams(self, n: int = 2) -> ParentType:
         """
         Generate the n-grams from characters in a column of strings.
 
@@ -3967,7 +4002,9 @@ class StringMethods(ColumnMethodsMixin):
             cpp_generate_character_ngrams(self._column, n)
         )
 
-    def ngrams_tokenize(self, n=2, delimiter=" ", separator="_") -> ParentType:
+    def ngrams_tokenize(
+        self, n: int = 2, delimiter: str = " ", separator: str = "_"
+    ) -> ParentType:
         """
         Generate the n-grams using tokens from each string.
         This will tokenize each string and then generate ngrams for each
@@ -4003,7 +4040,7 @@ class StringMethods(ColumnMethodsMixin):
         )
 
     def replace_tokens(
-        self, targets, replacements, delimiter=None
+        self, targets, replacements, delimiter: str = None
     ) -> ParentType:
         """
         The targets tokens are searched for within each string in the series
@@ -4086,7 +4123,10 @@ class StringMethods(ColumnMethodsMixin):
         )
 
     def filter_tokens(
-        self, min_token_length, replacement=None, delimiter=None
+        self,
+        min_token_length: int,
+        replacement: str = None,
+        delimiter: str = None,
     ) -> ParentType:
         """
         Remove tokens from within each string in the series that are
@@ -4155,12 +4195,12 @@ class StringMethods(ColumnMethodsMixin):
 
     def subword_tokenize(
         self,
-        hash_file,
-        max_length=64,
-        stride=48,
-        do_lower=True,
-        do_truncate=False,
-        max_rows_tensor=500,
+        hash_file: str,
+        max_length: int = 64,
+        stride: int = 48,
+        do_lower: bool = True,
+        do_truncate: bool = False,
+        max_rows_tensor: int = 500,
     ) -> Tuple[cupy.ndarray, cupy.ndarray, cupy.ndarray]:
         """
         Run CUDA BERT subword tokenizer on cuDF strings column.
