@@ -189,7 +189,7 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s *s,
   uint32_t maxpos = pos0 + MAX_LITERAL_LENGTH - 31;
   uint32_t match_mask, literal_cnt;
   if (t == 0) { s->copy_length = 0; }
-  SYNCWARP();
+  __syncwarp();
   do {
     bool valid4               = (pos + t + 4 <= len);
     uint32_t data32           = (valid4) ? fetch4(src + pos + t) : 0;
@@ -223,7 +223,7 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s *s,
     } else {
       literal_cnt = 32;
     }
-    SYNCWARP();
+    __syncwarp();
     // Update hash up to the first 4 bytes of the copy length
     local_match &= (0x2 << literal_cnt) - 1;
     if (t <= literal_cnt && t == 31 - __clz(local_match)) { s->hash_map[hash] = pos + t; }
@@ -319,7 +319,7 @@ extern "C" __global__ void __launch_bounds__(128)
         // WARP1: Find a match using 12-bit hashes of 4-byte blocks
         uint32_t t5 = t & 0x1f;
         literal_len = FindFourByteMatch(s, src, pos, t5);
-        SYNCWARP();
+        __syncwarp();
         if (t5 == 0) { s->literal_length = literal_len; }
         copy_len = s->copy_length;
         if (copy_len != 0) {
@@ -328,7 +328,7 @@ extern "C" __global__ void __launch_bounds__(128)
                               src + match_pos - s->copy_distance,
                               min(s->src_len - match_pos, 64 - copy_len),
                               t5);
-          SYNCWARP();
+          __syncwarp();
           if (t5 == 0) { s->copy_length = copy_len; }
         }
       }

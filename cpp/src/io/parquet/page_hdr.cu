@@ -411,7 +411,7 @@ extern "C" __global__ void __launch_bounds__(128)
           bs->cur = bs->end;
         }
       }
-      SYNCWARP();
+      __syncwarp();
       index_out = SHFL0(index_out);
       if (index_out >= 0 && index_out < max_num_pages) {
         // NOTE: Assumes that sizeof(PageInfo) <= 128

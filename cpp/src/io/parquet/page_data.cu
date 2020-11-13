@@ -305,7 +305,7 @@ __device__ void gpuDecodeStream(
     value_count += batch_len;
   }
 
-  SYNCWARP();
+  __syncwarp();
   // update the stream info
   if (!t) {
     s->lvl_start[lvl]         = cur_def;
