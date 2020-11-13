@@ -451,10 +451,10 @@ def test_int_overflow(tmpdir):
 
 
 def normalized_equals(value1, value2):
-    if isinstance(value1, datetime.datetime):
-        value1 = np.datetime64(value1)
-    if isinstance(value2, datetime.datetime):
-        value2 = np.datetime64(value2)
+    if isinstance(value1, (datetime.datetime, np.datetime64)):
+        value1 = np.datetime64(value1, "ms")
+    if isinstance(value2, (datetime.datetime, np.datetime64)):
+        value2 = np.datetime64(value2, "ms")
 
     # Compare integers with floats now
     if isinstance(value1, float) or isinstance(value2, float):
@@ -466,7 +466,6 @@ def normalized_equals(value1, value2):
 @pytest.mark.parametrize("nrows", [1, 100, 6000000])
 def test_orc_write_statistics(tmpdir, datadir, nrows):
     supported_stat_types = supported_numpy_dtypes + ["str"]
-    supported_stat_types.remove("datetime64[us]")
 
     # Make a dataframe
     gdf = cudf.DataFrame(
