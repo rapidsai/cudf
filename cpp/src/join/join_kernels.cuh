@@ -59,7 +59,7 @@ template <typename H, typename S>
 constexpr auto remap_sentinel_hash(H hash, S sentinel)
 {
   // Arbitrarily choose hash - 1
-  return (hash == sentinel) ? --hash : hash;
+  return (hash == sentinel) ? (hash - 1) : hash;
 }
 
 /**
