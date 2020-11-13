@@ -910,25 +910,25 @@ rmm::device_buffer reader::impl::decompress_page_data(
                                stream));
       switch (codec.first) {
         case parquet::GZIP:
-          CUDA_TRY(gpuinflate(inflate_in.device_ptr(start_pos),
-                              inflate_out.device_ptr(start_pos),
-                              argc - start_pos,
-                              1,
-                              stream))
+          gpuinflate(inflate_in.device_ptr(start_pos),
+                     inflate_out.device_ptr(start_pos),
+                     argc - start_pos,
+                     1,
+                     stream);
           break;
         case parquet::SNAPPY:
-          CUDA_TRY(gpu_unsnap(inflate_in.device_ptr(start_pos),
-                              inflate_out.device_ptr(start_pos),
-                              argc - start_pos,
-                              stream));
+          gpu_unsnap(inflate_in.device_ptr(start_pos),
+                     inflate_out.device_ptr(start_pos),
+                     argc - start_pos,
+                     stream);
           break;
         case parquet::BROTLI:
-          CUDA_TRY(gpu_debrotli(inflate_in.device_ptr(start_pos),
-                                inflate_out.device_ptr(start_pos),
-                                debrotli_scratch.data().get(),
-                                debrotli_scratch.size(),
-                                argc - start_pos,
-                                stream));
+          gpu_debrotli(inflate_in.device_ptr(start_pos),
+                       inflate_out.device_ptr(start_pos),
+                       debrotli_scratch.data().get(),
+                       debrotli_scratch.size(),
+                       argc - start_pos,
+                       stream);
           break;
         default: CUDF_EXPECTS(false, "Unexpected decompression dispatch"); break;
       }

@@ -194,11 +194,9 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_
                              stream));
     CUDA_TRY(cudaMemsetAsync(inflate_out.device_ptr(), 0, inflate_out.memory_size(), stream));
     if (_metadata->codec == "deflate") {
-      CUDA_TRY(gpuinflate(
-        inflate_in.device_ptr(), inflate_out.device_ptr(), inflate_in.size(), 0, stream));
+      gpuinflate(inflate_in.device_ptr(), inflate_out.device_ptr(), inflate_in.size(), 0, stream);
     } else if (_metadata->codec == "snappy") {
-      CUDA_TRY(
-        gpu_unsnap(inflate_in.device_ptr(), inflate_out.device_ptr(), inflate_in.size(), stream));
+      gpu_unsnap(inflate_in.device_ptr(), inflate_out.device_ptr(), inflate_in.size(), stream);
     } else {
       CUDF_FAIL("Unsupported compression codec\n");
     }

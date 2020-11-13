@@ -456,21 +456,21 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   if (num_compressed_blocks > 0) {
     switch (decompressor->GetKind()) {
       case orc::ZLIB:
-        CUDA_TRY(gpuinflate(
-          inflate_in.data().get(), inflate_out.data().get(), num_compressed_blocks, 0, stream));
+        gpuinflate(
+          inflate_in.data().get(), inflate_out.data().get(), num_compressed_blocks, 0, stream);
         break;
       case orc::SNAPPY:
-        CUDA_TRY(gpu_unsnap(
-          inflate_in.data().get(), inflate_out.data().get(), num_compressed_blocks, stream));
+        gpu_unsnap(
+          inflate_in.data().get(), inflate_out.data().get(), num_compressed_blocks, stream);
         break;
       default: CUDF_EXPECTS(false, "Unexpected decompression dispatch"); break;
     }
   }
   if (num_uncompressed_blocks > 0) {
-    CUDA_TRY(gpu_copy_uncompressed_blocks(
-      inflate_in.data().get() + num_compressed_blocks, num_uncompressed_blocks, stream));
+    gpu_copy_uncompressed_blocks(
+      inflate_in.data().get() + num_compressed_blocks, num_uncompressed_blocks, stream);
   }
-  CUDA_TRY(gpu::PostDecompressionReassemble(compinfo.device_ptr(), compinfo.size(), stream));
+  gpu::PostDecompressionReassemble(compinfo.device_ptr(), compinfo.size(), stream);
 
   // Update the stream information with the updated uncompressed info
   // TBD: We could update the value from the information we already

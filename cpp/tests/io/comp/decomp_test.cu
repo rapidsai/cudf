@@ -73,7 +73,7 @@ struct DecompressTest : public cudf::test::BaseFixture {
                                           sizeof(cudf::io::gpu_inflate_status_s),
                                           cudaMemcpyHostToDevice,
                                           0));
-    ASSERT_CUDA_SUCCEEDED(static_cast<Decompressor*>(this)->dispatch());
+    static_cast<Decompressor*>(this)->dispatch();
     ASSERT_CUDA_SUCCEEDED(cudaMemcpyAsync(inf_stat,
                                           d_inf_stat.data().get(),
                                           sizeof(cudf::io::gpu_inflate_status_s),
@@ -94,31 +94,25 @@ struct DecompressTest : public cudf::test::BaseFixture {
  * @brief Derived fixture for GZIP decompression
  **/
 struct GzipDecompressTest : public DecompressTest<GzipDecompressTest> {
-  cudaError_t dispatch()
-  {
-    return cudf::io::gpuinflate(d_inf_args.data().get(), d_inf_stat.data().get(), 1, 1);
-  }
+  void dispatch() { cudf::io::gpuinflate(d_inf_args.data().get(), d_inf_stat.data().get(), 1, 1); }
 };
 
 /**
  * @brief Derived fixture for Snappy decompression
  **/
 struct SnappyDecompressTest : public DecompressTest<SnappyDecompressTest> {
-  cudaError_t dispatch()
-  {
-    return cudf::io::gpu_unsnap(d_inf_args.data().get(), d_inf_stat.data().get(), 1);
-  }
+  void dispatch() { cudf::io::gpu_unsnap(d_inf_args.data().get(), d_inf_stat.data().get(), 1); }
 };
 
 /**
  * @brief Derived fixture for Brotli decompression
  **/
 struct BrotliDecompressTest : public DecompressTest<BrotliDecompressTest> {
-  cudaError_t dispatch()
+  void dispatch()
   {
     rmm::device_buffer d_scratch(cudf::io::get_gpu_debrotli_scratch_size(1));
 
-    return cudf::io::gpu_debrotli(
+    cudf::io::gpu_debrotli(
       d_inf_args.data().get(), d_inf_stat.data().get(), d_scratch.data(), d_scratch.size(), 1);
   }
 };

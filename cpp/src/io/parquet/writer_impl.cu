@@ -549,9 +549,7 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
   CUDA_TRY(gpu::EncodePages(
     pages, chunks.device_ptr(), pages_in_batch, first_page_in_batch, comp_in, comp_out, stream));
   switch (compression_) {
-    case parquet::Compression::SNAPPY:
-      CUDA_TRY(gpu_snap(comp_in, comp_out, pages_in_batch, stream));
-      break;
+    case parquet::Compression::SNAPPY: gpu_snap(comp_in, comp_out, pages_in_batch, stream); break;
     default: break;
   }
   // TBD: Not clear if the official spec actually allows dynamically turning off compression at the

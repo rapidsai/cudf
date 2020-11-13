@@ -339,15 +339,14 @@ extern "C" __global__ void __launch_bounds__(128)
   }
 }
 
-cudaError_t __host__ gpu_snap(gpu_inflate_input_s *inputs,
-                              gpu_inflate_status_s *outputs,
-                              int count,
-                              cudaStream_t stream)
+void __host__ gpu_snap(gpu_inflate_input_s *inputs,
+                       gpu_inflate_status_s *outputs,
+                       int count,
+                       cudaStream_t stream)
 {
   dim3 dim_block(128, 1);  // 4 warps per stream, 1 stream per block
   dim3 dim_grid(count, 1);
   if (count > 0) { snap_kernel<<<dim_grid, dim_block, 0, stream>>>(inputs, outputs, count); }
-  return cudaSuccess;
 }
 
 }  // namespace io

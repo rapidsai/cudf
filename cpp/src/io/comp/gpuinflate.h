@@ -51,11 +51,11 @@ struct gpu_inflate_status_s {
  * @param[in] parse_hdr Whether or not to parse GZIP header, default false
  * @param[in] stream CUDA stream to use, default 0
  **/
-cudaError_t gpuinflate(gpu_inflate_input_s *inputs,
-                       gpu_inflate_status_s *outputs,
-                       int count           = 1,
-                       int parse_hdr       = 0,
-                       cudaStream_t stream = (cudaStream_t)0);
+void gpuinflate(gpu_inflate_input_s *inputs,
+                gpu_inflate_status_s *outputs,
+                int count           = 1,
+                int parse_hdr       = 0,
+                cudaStream_t stream = (cudaStream_t)0);
 
 /**
  * @brief Interface for copying uncompressed byte blocks
@@ -64,9 +64,9 @@ cudaError_t gpuinflate(gpu_inflate_input_s *inputs,
  * @param[in] count Number of input structures, default 1
  * @param[in] stream CUDA stream to use, default 0
  **/
-cudaError_t gpu_copy_uncompressed_blocks(gpu_inflate_input_s *inputs,
-                                         int count           = 1,
-                                         cudaStream_t stream = (cudaStream_t)0);
+void gpu_copy_uncompressed_blocks(gpu_inflate_input_s *inputs,
+                                  int count           = 1,
+                                  cudaStream_t stream = (cudaStream_t)0);
 
 /**
  * @brief Interface for decompressing Snappy-compressed data
@@ -78,11 +78,11 @@ cudaError_t gpu_copy_uncompressed_blocks(gpu_inflate_input_s *inputs,
  * @param[out] outputs List of output status structures
  * @param[in] count Number of input/output structures, default 1
  * @param[in] stream CUDA stream to use, default 0
- **/
-cudaError_t gpu_unsnap(gpu_inflate_input_s *inputs,
-                       gpu_inflate_status_s *outputs,
-                       int count           = 1,
-                       cudaStream_t stream = (cudaStream_t)0);
+ */
+void gpu_unsnap(gpu_inflate_input_s *inputs,
+                gpu_inflate_status_s *outputs,
+                int count           = 1,
+                cudaStream_t stream = (cudaStream_t)0);
 
 /**
  * @brief Computes the size of temporary memory for Brotli decompression
@@ -105,13 +105,13 @@ size_t get_gpu_debrotli_scratch_size(int max_num_inputs = 0);
  * @param[in] scratch_size Size in bytes of the temporary memory
  * @param[in] count Number of input/output structures, default 1
  * @param[in] stream CUDA stream to use, default 0
- **/
-cudaError_t gpu_debrotli(gpu_inflate_input_s *inputs,
-                         gpu_inflate_status_s *outputs,
-                         void *scratch,
-                         size_t scratch_size,
-                         int count           = 1,
-                         cudaStream_t stream = (cudaStream_t)0);
+ */
+void gpu_debrotli(gpu_inflate_input_s *inputs,
+                  gpu_inflate_status_s *outputs,
+                  void *scratch,
+                  size_t scratch_size,
+                  int count           = 1,
+                  cudaStream_t stream = (cudaStream_t)0);
 
 /**
  * @brief Interface for compressing data with Snappy
@@ -123,11 +123,11 @@ cudaError_t gpu_debrotli(gpu_inflate_input_s *inputs,
  * @param[out] outputs List of output status structures
  * @param[in] count Number of input/output structures, default 1
  * @param[in] stream CUDA stream to use, default 0
- **/
-cudaError_t gpu_snap(gpu_inflate_input_s *inputs,
-                     gpu_inflate_status_s *outputs,
-                     int count           = 1,
-                     cudaStream_t stream = (cudaStream_t)0);
+ */
+void gpu_snap(gpu_inflate_input_s *inputs,
+              gpu_inflate_status_s *outputs,
+              int count           = 1,
+              cudaStream_t stream = (cudaStream_t)0);
 
 }  // namespace io
 }  // namespace cudf

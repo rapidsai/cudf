@@ -1203,22 +1203,20 @@ __global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_inp
   if (t < len) { dst[t] = src[t]; }
 }
 
-cudaError_t __host__ gpuinflate(gpu_inflate_input_s *inputs,
-                                gpu_inflate_status_s *outputs,
-                                int count,
-                                int parse_hdr,
-                                cudaStream_t stream)
+void __host__ gpuinflate(gpu_inflate_input_s *inputs,
+                         gpu_inflate_status_s *outputs,
+                         int count,
+                         int parse_hdr,
+                         cudaStream_t stream)
 {
   if (count > 0) { inflate_kernel<<<count, NUMTHREADS, 0, stream>>>(inputs, outputs, parse_hdr); }
-  return cudaSuccess;
 }
 
-cudaError_t __host__ gpu_copy_uncompressed_blocks(gpu_inflate_input_s *inputs,
-                                                  int count,
-                                                  cudaStream_t stream)
+void __host__ gpu_copy_uncompressed_blocks(gpu_inflate_input_s *inputs,
+                                           int count,
+                                           cudaStream_t stream)
 {
   if (count > 0) { copy_uncompressed_kernel<<<count, 1024, 0, stream>>>(inputs); }
-  return cudaSuccess;
 }
 
 }  // namespace io
