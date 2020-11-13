@@ -7892,6 +7892,24 @@ def test_dataframe_to_pandas_nullable_dtypes(df, expected_pdf):
     assert_eq(actual_pdf, expected_pdf)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        [{"a": 1, "b": 2, "c": 3}, {"a": 4, "b": 5, "c": 6}],
+        [{"a": 1, "b": 2, "c": None}, {"a": None, "b": 5, "c": 6}],
+        [{"a": 1, "b": 2}, {"a": 1, "b": 5, "c": 6}],
+        [{"a": 1, "b": 2}, {"b": 5, "c": 6}],
+        [{}, {"a": 1, "b": 5, "c": 6}],
+        [{"a": 1, "b": 2, "c": 3}, {"a": 4.5, "b": 5.5, "c": 6.5}],
+    ],
+)
+def test_dataframe_init_from_list_of_dicts(data):
+    expect = pd.DataFrame(data)
+    got = gd.DataFrame(data)
+
+    assert_eq(expect, got)
+
+
 def test_dataframe_pipe():
     pdf = pd.DataFrame()
     gdf = gd.DataFrame()
