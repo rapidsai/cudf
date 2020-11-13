@@ -175,8 +175,9 @@ inline __device__ void skipbits(inflate_state_s *s, uint32_t n)
   if (bitpos >= 32) {
     uint8_t *cur = s->cur + 8;
     s->bitbuf.x  = s->bitbuf.y;
-    s->bitbuf.y  = (cur < s->end) ? *reinterpret_cast<uint32_t *>(cur) : 0;
-    s->cur       = cur - 4;
+    s->bitbuf.y  = 0;
+    if (cur < s->end) { memcpy(&s->bitbuf.y, cur, sizeof(s->bitbuf.y)); }
+    s->cur = cur - 4;
     bitpos &= 0x1f;
   }
   s->bitpos = bitpos;
@@ -889,18 +890,17 @@ __device__ void copy_stored(inflate_state_s *s, int t)
     // Fast copy 16 bytes at a time
     for (int i = t * 16; i < fast_bytes; i += NUMTHREADS * 16) {
       uint4 u;
-      u.x = *reinterpret_cast<const uint32_t *>(cur4 + i + 0 * 4);
-      u.y = *reinterpret_cast<const uint32_t *>(cur4 + i + 1 * 4);
-      u.z = *reinterpret_cast<const uint32_t *>(cur4 + i + 2 * 4);
-      u.w = *reinterpret_cast<const uint32_t *>(cur4 + i + 3 * 4);
+      memcpy(&u, cur4 + i, sizeof(u));
       if (bitpos != 0) {
-        uint32_t v = (bitpos != 0) ? *reinterpret_cast<const uint32_t *>(cur4 + i + 4 * 4) : 0;
-        u.x        = __funnelshift_rc(u.x, u.y, bitpos);
-        u.y        = __funnelshift_rc(u.y, u.z, bitpos);
-        u.z        = __funnelshift_rc(u.z, u.w, bitpos);
-        u.w        = __funnelshift_rc(u.w, v, bitpos);
+        uint32_t v;
+        memcpy(&v, cur4 + i + sizeof(u), sizeof(v));
+
+        u.x = __funnelshift_rc(u.x, u.y, bitpos);
+        u.y = __funnelshift_rc(u.y, u.z, bitpos);
+        u.z = __funnelshift_rc(u.z, u.w, bitpos);
+        u.w = __funnelshift_rc(u.w, v, bitpos);
       }
-      *reinterpret_cast<uint4 *>(out + i) = u;
+      memcpy(out + i, &u, sizeof(u));
     }
   }
   cur += fast_bytes;
@@ -916,15 +916,23 @@ __device__ void copy_stored(inflate_state_s *s, int t)
   __syncthreads();
   if (t == 0) {
     // Reset bitstream to end of block
-    uint8_t *p            = cur + len;
-    uint32_t prefix_bytes = (uint32_t)(((size_t)p) & 3);
+    uint8_t *p              = cur + len;
+    auto const prefix_bytes = reinterpret_cast<size_t>(p) & 3;
     p -= prefix_bytes;
-    s->cur      = p;
-    s->bitbuf.x = (p < s->end) ? *reinterpret_cast<uint32_t *>(p) : 0;
-    p += 4;
-    s->bitbuf.y = (p < s->end) ? *reinterpret_cast<uint32_t *>(p) : 0;
-    s->bitpos   = prefix_bytes * 8;
-    s->out      = out;
+    s->cur    = p;
+    s->bitpos = prefix_bytes * 8;
+    s->out    = out;
+
+    auto read_32bit = [&]() {
+      uint32_t val = 0;
+      if (p < s->end) {
+        memcpy(&val, p, sizeof(val));
+        p += 4;
+      }
+      return val;
+    };
+    s->bitbuf.x = read_32bit();
+    s->bitbuf.y = read_32bit();
   }
 }
 

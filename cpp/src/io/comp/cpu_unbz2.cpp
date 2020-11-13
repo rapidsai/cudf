@@ -174,8 +174,14 @@ static void skipbits(unbz_state_s *s, uint32_t n)
   uint32_t bitpos = s->bitpos + n;
   if (bitpos >= 32) {
     const uint8_t *cur = s->cur + 4;
-    uint32_t next32 =
-      (cur + 4 < s->end) ? __builtin_bswap32(*reinterpret_cast<const uint32_t *>(cur + 4)) : 0;
+    auto const next32  = [&]() {
+      uint32_t next32 = 0;
+      if (cur + 4 < s->end) {
+        memcpy(&next32, cur + 4, sizeof(next32));
+        next32 = __builtin_bswap32(next32);
+      }
+      return next32;
+    }();
     s->cur    = cur;
     s->bitbuf = (s->bitbuf << 32) | next32;
     bitpos &= 0x1f;
@@ -535,7 +541,8 @@ int32_t cpu_bz2_uncompress(
   s.base = source;
   s.end =
     source + sourceLen - 4;  // We will not read the final combined CRC (last 4 bytes of the file)
-  s.bitbuf = __builtin_bswap64(*reinterpret_cast<const uint64_t *>(source));
+  memcpy(&s.bitbuf, source, sizeof(s.bitbuf));
+  s.bitbuf = __builtin_bswap64(s.bitbuf);
   s.bitpos = 0;
 
   s.out     = dest;
@@ -561,7 +568,8 @@ int32_t cpu_bz2_uncompress(
       s.cur    = source + (size_t)(bit_offs >> 3);
       s.bitpos = (uint32_t)(bit_offs & 7);
       if (s.cur + 8 > s.end) return BZ_PARAM_ERROR;
-      s.bitbuf = __builtin_bswap64(*reinterpret_cast<const uint64_t *>(s.cur));
+      memcpy(&s.bitbuf, s.cur, sizeof(s.bitbuf));
+      s.bitbuf = __builtin_bswap64(s.bitbuf);
     }
   }
 

@@ -614,11 +614,7 @@ __global__ void __launch_bounds__(block_size)
   unsnap_state_s *s = &state_g;
   int strm_id       = blockIdx.x;
 
-  if (t < sizeof(gpu_inflate_input_s) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->in)[t] =
-      reinterpret_cast<const uint32_t *>(&inputs[strm_id])[t];
-    __threadfence_block();
-  }
+  if (t == 0) { s->in = inputs[strm_id]; }
   if (t < BATCH_COUNT) { s->q.batch_len[t] = 0; }
   __syncthreads();
   if (!t) {

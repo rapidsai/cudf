@@ -163,16 +163,25 @@ inline __device__ uint32_t Log2Floor(uint32_t value) { return 32 - __clz(value);
 /// @brief initializes the bit reader
 __device__ void initbits(debrotli_state_s *s, const uint8_t *base, size_t len, size_t pos = 0)
 {
-  const uint8_t *p      = base + pos;
-  uint32_t prefix_bytes = (uint32_t)(((size_t)p) & 3);
+  const uint8_t *p = base + pos;
+
+  auto const prefix_bytes = reinterpret_cast<size_t>(p) & 3;
   p -= prefix_bytes;
-  s->base     = base;
-  s->end      = base + len;
-  s->cur      = p;
-  s->bitbuf.x = (p < s->end) ? *reinterpret_cast<const uint32_t *>(p) : 0;
-  p += 4;
-  s->bitbuf.y = (p < s->end) ? *reinterpret_cast<const uint32_t *>(p) : 0;
-  s->bitpos   = prefix_bytes * 8;
+  s->base   = base;
+  s->end    = base + len;
+  s->cur    = p;
+  s->bitpos = prefix_bytes * 8;
+
+  auto read_32bit = [&]() {
+    uint32_t val = 0;
+    if (p < s->end) {
+      memcpy(&val, p, sizeof(val));
+      p += 4;
+    }
+    return val;
+  };
+  s->bitbuf.x = read_32bit();
+  s->bitbuf.y = read_32bit();
 }
 
 // return next 32 bits
@@ -194,8 +203,9 @@ inline __device__ void skipbits(debrotli_state_s *s, uint32_t n)
   if (bitpos >= 32) {
     const uint8_t *cur = s->cur + 8;
     s->bitbuf.x        = s->bitbuf.y;
-    s->bitbuf.y        = (cur < s->end) ? *reinterpret_cast<const uint32_t *>(cur) : 0;
-    s->cur             = cur - 4;
+    s->bitbuf.y        = 0;
+    if (cur < s->end) memcpy(&s->bitbuf.y, cur, sizeof(s->bitbuf.y));
+    s->cur = cur - 4;
     bitpos &= 0x1f;
   }
   s->bitpos = bitpos;
