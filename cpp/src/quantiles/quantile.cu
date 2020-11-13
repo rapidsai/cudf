@@ -57,8 +57,9 @@ struct quantile_functor {
   {
     using Result = std::conditional_t<exact, double, T>;
 
-    auto type   = data_type{type_to_id<Result>()};
-    auto output = make_fixed_width_column(type, q.size(), mask_state::UNALLOCATED, stream, mr);
+    auto type = data_type{type_to_id<Result>()};
+    auto output =
+      make_fixed_width_column(type, q.size(), mask_state::UNALLOCATED, stream.value(), mr);
 
     if (output->size() == 0) { return output; }
 
