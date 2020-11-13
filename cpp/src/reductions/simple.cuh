@@ -68,12 +68,23 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
   return result;
 };
 
+/**
+ * @brief Reduction for 'sum', 'product', 'sum of squares' for dictionary columns.
+ *
+ * @tparam ElementType  The key type of the input dictionary column.
+ * @tparam ResultType   The output data-type for the resulting scalar
+ * @tparam Op           The operator of cudf::reduction::op::
+
+ * @param col Input dictionary column of data to reduce
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @param stream Used for device memory operations and kernel launches.
+ * @return Output scalar in device memory
+ */
 template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> dictionary_reduction(column_view const& col,
                                              rmm::mr::device_memory_resource* mr,
                                              cudaStream_t stream)
 {
-  // reduction by iterator
   auto dcol = cudf::column_device_view::create(col, stream);
   std::unique_ptr<scalar> result;
   Op simple_op{};
@@ -127,13 +138,13 @@ template <typename InputType>
 struct cast_numeric_scalar_fn {
  private:
   template <typename ResultType>
-  static constexpr bool is_supported_v()
+  static constexpr bool is_supported()
   {
     return cudf::is_convertible<InputType, ResultType>::value && cudf::is_numeric<ResultType>();
   }
 
  public:
-  template <typename ResultType, std::enable_if_t<is_supported_v<ResultType>()>* = nullptr>
+  template <typename ResultType, std::enable_if_t<is_supported<ResultType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(numeric_scalar<InputType>* input,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
@@ -146,10 +157,10 @@ struct cast_numeric_scalar_fn {
     return result;
   }
 
-  template <typename ResultType, std::enable_if_t<not is_supported_v<ResultType>()>* = nullptr>
-  std::unique_ptr<scalar> operator()(numeric_scalar<InputType>* input,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+  template <typename ResultType, std::enable_if_t<not is_supported<ResultType>()>* = nullptr>
+  std::unique_ptr<scalar> operator()(numeric_scalar<InputType>*,
+                                     rmm::mr::device_memory_resource*,
+                                     cudaStream_t)
   {
     CUDF_FAIL("input data type is not convertible to output data type");
   }
@@ -158,7 +169,7 @@ struct cast_numeric_scalar_fn {
 /**
  * @brief Call reduce and return a scalar of type bool.
  *
- * This is used by operations any() and all().
+ * This is used by operations `any()` and `all()`.
  *
  * @tparam Op The reduce operation to execute on the column.
  */
@@ -177,33 +188,35 @@ struct bool_result_element_dispatcher {
 
   template <typename ElementType,
             std::enable_if_t<not std::is_arithmetic<ElementType>::value>* = nullptr>
-  std::unique_ptr<scalar> operator()(column_view const& input,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+  std::unique_ptr<scalar> operator()(column_view const&,
+                                     rmm::mr::device_memory_resource*,
+                                     cudaStream_t)
   {
     CUDF_FAIL("Reduction operator not supported for this type");
   }
 };
 
-template <typename ElementType>
-static constexpr bool is_same_type_supported()
-{
-  return !(cudf::is_fixed_point<ElementType>() ||
-           std::is_same<ElementType, cudf::dictionary32>::value ||
-           std::is_same<ElementType, cudf::list_view>::value ||
-           std::is_same<ElementType, cudf::struct_view>::value);
-}
 /**
  * @brief Call reduce and return a scalar of type matching the input column.
  *
- * This is used by operations min() and max().
+ * This is used by operations `min()` and `max()`.
  *
  * @tparam Op The reduce operation to execute on the column.
  */
 template <typename Op>
 struct same_element_type_dispatcher {
-  template <typename ElementType,
-            std::enable_if_t<is_same_type_supported<ElementType>()>* = nullptr>
+ private:
+  template <typename ElementType>
+  static constexpr bool is_supported()
+  {
+    return !(cudf::is_fixed_point<ElementType>() ||
+             std::is_same<ElementType, cudf::dictionary32>::value ||
+             std::is_same<ElementType, cudf::list_view>::value ||
+             std::is_same<ElementType, cudf::struct_view>::value);
+  }
+
+ public:
+  template <typename ElementType, std::enable_if_t<is_supported<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& input,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
@@ -213,13 +226,12 @@ struct same_element_type_dispatcher {
     return simple_reduction<ElementType, ElementType, Op>(col, mr, stream);
   }
 
-  template <typename ElementType,
-            std::enable_if_t<not is_same_type_supported<ElementType>()>* = nullptr>
+  template <typename ElementType, std::enable_if_t<not is_supported<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const&,
                                      rmm::mr::device_memory_resource*,
                                      cudaStream_t)
   {
-    CUDF_FAIL("Reduction operator `max` not supported for this type");
+    CUDF_FAIL("Reduction operator not supported for this type");
   }
 };
 
@@ -234,7 +246,9 @@ struct same_element_type_dispatcher {
  */
 template <typename Op>
 struct element_type_dispatcher {
-  // specialization for reducing floating-point column types
+  /**
+   * @brief Specialization for reducing floating-point column types to any output type.
+   */
   template <typename ElementType,
             typename std::enable_if_t<std::is_floating_point<ElementType>::value>* = nullptr>
   std::unique_ptr<scalar> reduce_numeric(column_view const& col,
@@ -255,7 +269,9 @@ struct element_type_dispatcher {
                                  stream);
   }
 
-  // specialization for reducing integer column types
+  /**
+   * @brief Specialization for reducing integer column types to any output type.
+   */
   template <typename ElementType,
             typename std::enable_if_t<std::is_integral<ElementType>::value>* = nullptr>
   std::unique_ptr<scalar> reduce_numeric(column_view const& col,
@@ -276,6 +292,16 @@ struct element_type_dispatcher {
                                  stream);
   }
 
+  /**
+   * @brief Called by the type-dispatcher to reduce the input column `col` using
+   * the `Op` operation.
+   *
+   * @tparam ElementType The input column type or key type.
+   * @param col Input column (must be numeric)
+   * @param output_type Requested type of the scalar result
+   * @param mr Device memory resource used to allocate the returned scalar's device memory
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   */
   template <typename ElementType,
             typename std::enable_if_t<std::is_floating_point<ElementType>::value or
                                       std::is_integral<ElementType>::value>* = nullptr>
@@ -295,10 +321,10 @@ struct element_type_dispatcher {
   template <typename ElementType,
             typename std::enable_if_t<!std::is_floating_point<ElementType>::value and
                                       !std::is_integral<ElementType>::value>* = nullptr>
-  std::unique_ptr<scalar> operator()(column_view const& col,
-                                     data_type const output_type,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+  std::unique_ptr<scalar> operator()(column_view const&,
+                                     data_type const,
+                                     rmm::mr::device_memory_resource*,
+                                     cudaStream_t)
   {
     CUDF_FAIL("Reduction operator not supported for this type");
   }
