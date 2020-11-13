@@ -16,12 +16,15 @@ def _make_empty_df(filepath_or_buffer, columns):
     orc_file = orc.ORCFile(filepath_or_buffer)
     schema = orc_file.schema
     col_names = schema.names if columns is None else columns
-    empty = {}
-    for col_name in col_names:
-        empty[col_name] = cudf.Series(
-            [], dtype=schema.field(col_name).type.to_pandas_dtype(),
-        )
-    return cudf.DataFrame(empty)
+    return cudf.DataFrame(
+        {
+            col_name: cudf.core.column.column_empty(
+                row_count=0,
+                dtype=schema.field(col_name).type.to_pandas_dtype(),
+            )
+            for col_name in col_names
+        }
+    )
 
 
 def _parse_column_statistics(cs, column_statistics_blob):
