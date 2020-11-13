@@ -110,6 +110,7 @@
 - PR #6693 Fix issue related to `na_values` input in `read_csv`
 - PR #6701 Fix issue when `numpy.str_` is given as input to string parameters in io APIs
 - PR #6704 Fix leak warnings in JNI unit tests
+- PR #6713 Fix missing call to cudaStreamSynchronize in get_value
 - PR #6708 Apply `na_rep` to column names in csv writer
 - PR #6720 Fix implementation of `dtype` parameter in `cudf.read_csv`
 - PR #6721 Add missing serialization methods for ListColumn
@@ -117,6 +118,7 @@
 - PR #6728 Fix cudf python docs and associated build warnings
 - PR #6732 Fix cuDF benchmarks build with static Arrow lib and fix rapids-compose cuDF JNI build
 - PR #6742 Fix concat bug in dask_cudf Series/Index creation
+- PR #6632 Fix DataFrame initialization from list of dicts
 
 
 # cuDF 0.16.0 (21 Oct 2020)
@@ -150,6 +152,7 @@
 - PR #6301 Add JNI bindings to nvcomp
 - PR #6328 Java and JNI bindings for getMapValue/map_lookup
 - PR #6371 Use ColumnViewAccess on Host side
+- PR #6297 cuDF Python Scalars
 
 ## Improvements
 

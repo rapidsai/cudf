@@ -13,7 +13,7 @@ from cudf._lib.cpp.strings.translate cimport (
     filter_characters as cpp_filter_characters
 )
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
 from cudf._lib.cpp.types cimport char_utf8
@@ -54,14 +54,16 @@ def translate(Column source_strings,
 def filter_characters(Column source_strings,
                       object mapping_table,
                       bool keep,
-                      Scalar repl):
+                      DeviceScalar repl):
     """
     Removes or keeps individual characters within each string
     using the provided mapping_table.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
-    cdef string_scalar* scalar_repl = <string_scalar*>(repl.c_value.get())
+    cdef const string_scalar* scalar_repl = <const string_scalar*>(
+        repl.get_raw_ptr()
+    )
     cdef int table_size
     table_size = len(mapping_table)
 
