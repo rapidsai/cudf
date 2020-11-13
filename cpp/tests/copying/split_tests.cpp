@@ -795,9 +795,19 @@ TEST_F(ContiguousSplitTableCornerCases, MixedColumnTypes)
   auto c4    = cudf::test::fixed_width_column_wrapper<int>(iter4, iter4 + 10, valids);
   cols.push_back(c4.release());
 
+  auto iter5 = cudf::test::make_counting_transform_iterator(30, [](auto i) { return (i); });
+  auto c5 =
+    cudf::test::fixed_point_column_wrapper<int32_t>(iter5, iter5 + 10, numeric::scale_type{1});
+  cols.push_back(c5.release());
+
+  auto iter6 = cudf::test::make_counting_transform_iterator(40, [](auto i) { return (i); });
+  auto c6 =
+    cudf::test::fixed_point_column_wrapper<int32_t>(iter6, iter6 + 10, numeric::scale_type{-2});
+  cols.push_back(c6.release());
+
   auto tbl = cudf::table(std::move(cols));
 
-  std::vector<cudf::size_type> splits{5};
+  std::vector<cudf::size_type> splits{7};
 
   auto result   = cudf::contiguous_split(tbl, splits);
   auto expected = cudf::split(tbl, splits);

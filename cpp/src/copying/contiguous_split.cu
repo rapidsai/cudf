@@ -187,10 +187,20 @@ struct column_split_info {
  * a source table.
  */
 struct column_buffer_size_functor {
-  template <typename T>
+  template <typename T, typename std::enable_if_t<!cudf::is_fixed_point<T>()>* = nullptr>
   size_t operator()(column_view const& c, column_split_info& split_info)
   {
     split_info.data_buf_size = cudf::util::round_up_safe(c.size() * sizeof(T), split_align);
+    split_info.validity_buf_size =
+      (c.has_nulls() ? cudf::bitmask_allocation_size_bytes(c.size(), split_align) : 0);
+    return split_info.data_buf_size + split_info.validity_buf_size;
+  }
+
+  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  size_t operator()(column_view const& c, column_split_info& split_info)
+  {
+    using RepType            = typename T::rep;
+    split_info.data_buf_size = cudf::util::round_up_safe(c.size() * sizeof(RepType), split_align);
     split_info.validity_buf_size =
       (c.has_nulls() ? cudf::bitmask_allocation_size_bytes(c.size(), split_align) : 0);
     return split_info.data_buf_size + split_info.validity_buf_size;
@@ -211,7 +221,7 @@ size_t column_buffer_size_functor::operator()<string_view>(column_view const& c,
  * Used for copying each column in a source table into one contiguous buffer of memory.
  */
 struct column_copy_functor {
-  template <typename T>
+  template <typename T, typename std::enable_if_t<!cudf::is_fixed_point<T>()>* = nullptr>
   void operator()(column_view const& in,
                   column_split_info const& split_info,
                   char*& dst,
@@ -244,6 +254,46 @@ struct column_copy_functor {
         *column_device_view::create(in), *mutable_column_device_view::create(mcv));
     } else {
       copy_in_place_kernel<block_size, T, false><<<grid.num_blocks, block_size, 0, 0>>>(
+        *column_device_view::create(in), *mutable_column_device_view::create(mcv));
+    }
+
+    out_cols.push_back(mcv);
+  }
+
+  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  void operator()(column_view const& in,
+                  column_split_info const& split_info,
+                  char*& dst,
+                  std::vector<column_view>& out_cols)
+  {
+    // outgoing pointers
+    char* data             = dst;
+    bitmask_type* validity = split_info.validity_buf_size == 0
+                               ? nullptr
+                               : reinterpret_cast<bitmask_type*>(dst + split_info.data_buf_size);
+
+    // increment working buffer
+    dst += (split_info.data_buf_size + split_info.validity_buf_size);
+
+    // no work to do
+    if (in.is_empty()) {
+      out_cols.push_back(column_view{in.type(), 0, nullptr});
+      return;
+    }
+
+    // custom copy kernel (which could probably just be an in-place copy() function in cudf).
+    cudf::size_type num_els  = cudf::util::round_up_safe(in.size(), cudf::detail::warp_size);
+    constexpr int block_size = 256;
+    cudf::detail::grid_1d grid{num_els, block_size, 1};
+
+    // output copied column
+    using RepType = typename T::rep;
+    mutable_column_view mcv{in.type(), in.size(), data, validity, in.null_count()};
+    if (in.has_nulls()) {
+      copy_in_place_kernel<block_size, RepType, true><<<grid.num_blocks, block_size, 0, 0>>>(
+        *column_device_view::create(in), *mutable_column_device_view::create(mcv));
+    } else {
+      copy_in_place_kernel<block_size, RepType, false><<<grid.num_blocks, block_size, 0, 0>>>(
         *column_device_view::create(in), *mutable_column_device_view::create(mcv));
     }
 

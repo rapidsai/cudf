@@ -78,6 +78,7 @@
 - PR #6748 Add Java API to concatenate serialized tables to ContiguousTable
 - PR #6734 Binary operations support for decimal type in cudf Java
 - PR #6761 Add Java/JNI bindings for round
+- PR #6762 Support contiguous split of fixed-point decimal column
 
 ## Bug Fixes
 
