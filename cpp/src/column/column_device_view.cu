@@ -17,9 +17,11 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <numeric>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
+
+#include <numeric>
 
 namespace cudf {
 // Trivially copy all members but the children
@@ -92,7 +94,7 @@ ColumnDeviceView* child_columns_to_device_array(ColumnView const& source, void* 
 // helper function for column_device_view::create and mutable_column_device::create methods
 template <typename ColumnView, typename ColumnDeviceView>
 std::unique_ptr<ColumnDeviceView, std::function<void(ColumnDeviceView*)>>
-create_device_view_from_view(ColumnView const& source, cudaStream_t stream)
+create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view stream)
 {
   size_type num_children = source.num_children();
   // First calculate the size of memory needed to hold the
@@ -129,9 +131,9 @@ create_device_view_from_view(ColumnView const& source, cudaStream_t stream)
                            staging_buffer.data(),
                            descendant_storage->size(),
                            cudaMemcpyDefault,
-                           stream));
+                           stream.value()));
 
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  CUDA_TRY(cudaStreamSynchronize(stream.value()));
 
   return result;
 }
@@ -153,7 +155,7 @@ column_device_view::column_device_view(column_view source, void* h_ptr, void* d_
 
 // Construct a unique_ptr that invokes `destroy()` as it's deleter
 std::unique_ptr<column_device_view, std::function<void(column_device_view*)>>
-column_device_view::create(column_view source, cudaStream_t stream)
+column_device_view::create(column_view source, rmm::cuda_stream_view stream)
 {
   size_type num_children = source.num_children();
   if (num_children == 0) {
@@ -203,7 +205,7 @@ void mutable_column_device_view::destroy() { delete this; }
 
 // Construct a unique_ptr that invokes `destroy()` as it's deleter
 std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_device_view*)>>
-mutable_column_device_view::create(mutable_column_view source, cudaStream_t stream)
+mutable_column_device_view::create(mutable_column_view source, rmm::cuda_stream_view stream)
 {
   return source.num_children() == 0
            ? std::unique_ptr<mutable_column_device_view>(new mutable_column_device_view(source))

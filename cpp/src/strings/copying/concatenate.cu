@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -249,7 +250,8 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
   rmm::device_buffer null_mask{0, stream, mr};
   size_type null_count{};
   if (has_nulls) {
-    null_mask = create_null_mask(strings_count, mask_state::UNINITIALIZED, stream, mr);
+    null_mask =
+      cudf::detail::create_null_mask(strings_count, mask_state::UNINITIALIZED, stream, mr);
   }
 
   {  // Copy offsets columns with single kernel launch

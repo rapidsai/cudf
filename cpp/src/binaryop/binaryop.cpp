@@ -17,34 +17,36 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/binaryop.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/null_mask.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/utilities/error.hpp>
-#include <cudf/utilities/traits.hpp>
-
 #include <binaryop/jit/code/code.h>
+#include <binaryop/compiled/binary_ops.hpp>
+#include <binaryop/jit/util.hpp>
+
 #include <jit/launcher.h>
 #include <jit/parser.h>
 #include <jit/type.h>
-#include <binaryop/jit/util.hpp>
-#include <cudf/datetime.hpp>  // replace eventually
-
-#include "compiled/binary_ops.hpp"
-#include "cudf/binaryop.hpp"
-#include "cudf/fixed_point/fixed_point.hpp"
-#include "cudf/types.hpp"
-
 #include <jit/bit.hpp.jit>
 #include <jit/common_headers.hpp>
 #include <jit/durations.hpp.jit>
 #include <jit/fixed_point.hpp.jit>
 #include <jit/timestamps.hpp.jit>
 #include <jit/types.hpp.jit>
+
+#include <cudf/binaryop.hpp>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/datetime.hpp>  // replace eventually
+#include <cudf/detail/binaryop.hpp>
+#include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
 #include <string>
 
 namespace cudf {
@@ -62,9 +64,9 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
   if (col.is_empty()) return rmm::device_buffer{0, stream, mr};
 
   if (not s.is_valid()) {
-    return create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr);
+    return cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr);
   } else if (s.is_valid() and col.nullable()) {
-    return copy_bitmask(col, stream, mr);
+    return cudf::detail::copy_bitmask(col, rmm::cuda_stream_view{stream}, mr);
   } else {
     return rmm::device_buffer{0, stream, mr};
   }
@@ -336,7 +338,7 @@ std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lh
   if (binops::is_null_dependent(op)) {
     return make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, mr);
   } else {
-    auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
+    auto new_mask = cudf::detail::bitmask_and(table_view({lhs, rhs}), stream, mr);
     return make_fixed_width_column(
       output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
   }
@@ -731,7 +733,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
   CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
 
-  auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
+  auto new_mask = bitmask_and(table_view({lhs, rhs}), stream, mr);
   auto out      = make_fixed_width_column(
     output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
