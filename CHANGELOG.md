@@ -77,6 +77,7 @@
 - PR #6749 Update nested JNI builder so we can do it incrementally
 - PR #6748 Add Java API to concatenate serialized tables to ContiguousTable
 - PR #6734 Binary operations support for decimal type in cudf Java
+- PR #6761 Add Java/JNI bindings for round
 
 ## Bug Fixes
 
