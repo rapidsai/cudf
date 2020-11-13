@@ -120,6 +120,7 @@
 - PR #6732 Fix cuDF benchmarks build with static Arrow lib and fix rapids-compose cuDF JNI build
 - PR #6742 Fix concat bug in dask_cudf Series/Index creation
 - PR #6632 Fix DataFrame initialization from list of dicts
+- PR #6767 Fix sort order of parameters in `test_scalar_invalid_implicit_conversion` pytest
 
 
 # cuDF 0.16.0 (21 Oct 2020)
