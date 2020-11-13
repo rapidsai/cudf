@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/reduction_functions.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <reductions/simple.cuh>
