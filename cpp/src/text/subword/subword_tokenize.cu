@@ -166,7 +166,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   auto d_offsets_per_tensor = offsets_per_tensor.data();
   auto const execpol        = rmm::exec_policy(stream);
   thrust::transform_exclusive_scan(
-    execpol->on(stream),
+    execpol->on(stream.value()),
     thrust::make_counting_iterator<cudf::size_type>(0),
     thrust::make_counting_iterator<cudf::size_type>(strings_count + 1),
     offsets_per_tensor.begin(),
@@ -186,7 +186,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   rmm::device_uvector<uint32_t> row2row_within_tensor(nrows_tensor_token_ids, stream);
   auto d_row2row_within_tensor = row2row_within_tensor.data();
   thrust::for_each_n(
-    execpol->on(stream),
+    execpol->on(stream.value()),
     thrust::make_counting_iterator<uint32_t>(0),
     strings_count,
     [d_offsets_per_tensor, d_row2tensor, d_row2row_within_tensor] __device__(auto idx) {
@@ -220,7 +220,10 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   constexpr int block_size = 256;
   cudf::detail::grid_1d const grid{
     static_cast<cudf::size_type>(nrows_tensor_token_ids * max_sequence_length), block_size};
-  kernel_compute_tensor_metadata<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
+  kernel_compute_tensor_metadata<<<grid.num_blocks,
+                                   grid.num_threads_per_block,
+                                   0,
+                                   stream.value()>>>(
     device_token_ids,
     device_offsets,
     d_row2tensor,

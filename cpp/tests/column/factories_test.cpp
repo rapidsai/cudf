@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,14 +21,14 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/type_lists.hpp>
+#include "rmm/cuda_stream_view.hpp"
 
 class ColumnFactoryTest : public cudf::test::BaseFixture {
   cudf::size_type _size{1000};
-  cudaStream_t _stream{0};
 
  public:
   cudf::size_type size() { return _size; }
-  cudaStream_t stream() { return _stream; }
+  rmm::cuda_stream_view stream() { return rmm::cuda_stream_default; }
 };
 
 template <typename T>
