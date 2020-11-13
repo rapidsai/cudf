@@ -155,22 +155,31 @@ struct device_cast {
   __device__ To operator()(From element) { return static_cast<To>(element); }
 };
 
+/**
+ * @brief Takes a `fixed_point` column_view as @p input and returns a `fixed_point` column with new
+ * @p scale
+ *
+ * @tparam T     Type of the `fixed_point` column_view (`decimal32` or `decimal64`)
+ * @param input  Input `column_view`
+ * @param scale  `scale` of the returned `column`
+ * @param mr     Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @return std::unique_ptr<column> Returned column with new @p scale
+ */
 template <typename T, typename std::enable_if_t<is_fixed_point<T>()>* = nullptr>
 std::unique_ptr<column> rescale(column_view input,
-                                data_type type,
+                                numeric::scale_type scale,
                                 rmm::mr::device_memory_resource* mr,
                                 cudaStream_t stream)
 {
-  CUDF_EXPECTS(type.id() == input.type().id(),
-               "fixed_point rescaling requires typeids to be the same");
-
   using namespace numeric;
 
-  if (input.type().scale() > type.scale()) {
-    auto const scalar = make_fixed_point_scalar<T>(0, scale_type{type.scale()});
+  if (input.type().scale() > scale) {
+    auto const scalar = make_fixed_point_scalar<T>(0, scale_type{scale});
     return detail::binary_operation(input, *scalar, binary_operator::ADD, {}, mr, stream);
   } else {
-    auto const diff   = input.type().scale() - type.scale();
+    auto const diff   = input.type().scale() - scale;
     auto const scalar = make_fixed_point_scalar<T>(std::pow(10, -diff), scale_type{diff});
     return detail::binary_operation(input, *scalar, binary_operator::DIV, {}, mr, stream);
   }
@@ -280,7 +289,7 @@ struct dispatch_unary_cast_to {
   {
     if (input.type() == type) return std::make_unique<column>(input);  // TODO add test for this
 
-    return detail::rescale<TargetT>(input, type, mr, stream);
+    return detail::rescale<TargetT>(input, numeric::scale_type{type.scale()}, mr, stream);
   }
 
   template <
@@ -314,7 +323,7 @@ struct dispatch_unary_cast_to {
                       device_cast<SourceDeviceT, TargetDeviceT>{});
 
     // clearly there is a more efficient way to do this, can optimize in the future
-    return rescale<TargetT>(*temporary, type, mr, stream);
+    return rescale<TargetT>(*temporary, numeric::scale_type{type.scale()}, mr, stream);
   }
 
   template <typename TargetT,
