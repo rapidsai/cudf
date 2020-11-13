@@ -305,6 +305,7 @@ __device__ void gpuDecodeStream(
     value_count += batch_len;
   }
 
+  SYNCWARP();
   // update the stream info
   if (!t) {
     s->lvl_start[lvl]         = cur_def;
@@ -1657,7 +1658,9 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
       gpuDecodeLevels(s, target_pos, t);
-    } else if (t < out_thread0) {
+    }
+    __syncthreads();
+    if (t >= 32 and t < out_thread0) {
       uint32_t src_target_pos = target_pos + skipped_leaf_values;
 
       // WARP1: Decode dictionary indices, booleans or string positions
@@ -1669,7 +1672,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
         gpuInitStringDescriptors(s, src_target_pos, t & 0x1f);
       }
       if (t == 32) { *(volatile int32_t *)&s->dict_pos = src_target_pos; }
-    } else {
+    } else if (t >= out_thread0) {
       // WARP1..WARP3: Decode values
       int dtype = s->col.data_type & 7;
       out_pos += t - out_thread0;
