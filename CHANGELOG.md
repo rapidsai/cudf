@@ -150,6 +150,7 @@
 - PR #6301 Add JNI bindings to nvcomp
 - PR #6328 Java and JNI bindings for getMapValue/map_lookup
 - PR #6371 Use ColumnViewAccess on Host side
+- PR #6297 cuDF Python Scalars
 
 ## Improvements
 

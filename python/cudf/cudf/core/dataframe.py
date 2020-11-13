@@ -1365,7 +1365,7 @@ class DataFrame(Frame, Serializable):
                         l_opr = self[col]
                 result[col] = op(l_opr, r_opr)
 
-        elif isinstance(other, numbers.Number):
+        elif isinstance(other, (numbers.Number, cudf.Scalar)):
             for col in self._data:
                 result[col] = op(self[col], other)
         else:
