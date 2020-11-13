@@ -154,6 +154,7 @@
 - PR #6328 Java and JNI bindings for getMapValue/map_lookup
 - PR #6371 Use ColumnViewAccess on Host side
 - PR #6297 cuDF Python Scalars
+- PR #6723 Support creating decimal vectors from scalar
 
 ## Improvements
 
@@ -259,7 +260,6 @@
 - PR #6498 Add helper method to ColumnBuilder with some nits
 - PR #6653 Replaced SHFL_XOR calls with cub::WarpReduce
 - PR #6698 Remove macros from ORC reader and writer
-- PR #6723 Support creating decimal vectors from scalar
 
 ## Bug Fixes
 
