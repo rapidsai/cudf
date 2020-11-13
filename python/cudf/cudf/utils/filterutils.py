@@ -30,7 +30,7 @@ def _apply_predicate(op, val, col_stats):
     # Sanitize operator
     if op not in {"=", "==", "!=", "<", "<=", ">", ">=", "in", "not in"}:
         raise ValueError(
-            '"{0}" is not a valid operator in predicates.'.format(op)
+            f"{op}" is not a valid operator in predicates."
         )
 
     has_min = "minimum" in col_stats
