@@ -19,6 +19,7 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/indexalator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.cuh>
 #include <cudf/detail/scatter.hpp>
@@ -75,7 +76,7 @@ void scatter_scalar_bitmask(std::vector<std::reference_wrapper<const scalar>> co
     if (target[i]->nullable() or not source_is_valid) {
       if (not target[i]->nullable()) {
         // Target must have a null mask if the source is not valid
-        auto mask = create_null_mask(target[i]->size(), mask_state::ALL_VALID, stream, mr);
+        auto mask = detail::create_null_mask(target[i]->size(), mask_state::ALL_VALID, stream, mr);
         target[i]->set_null_mask(std::move(mask), 0);
       }
 
@@ -350,7 +351,7 @@ std::unique_ptr<column> boolean_mask_scatter(scalar const& input,
                                              rmm::mr::device_memory_resource* mr,
                                              cudaStream_t stream)
 {
-  return detail::copy_if_else(input, target, boolean_mask, mr, stream);
+  return detail::copy_if_else(input, target, boolean_mask, stream, mr);
 }
 
 std::unique_ptr<table> boolean_mask_scatter(table_view const& input,

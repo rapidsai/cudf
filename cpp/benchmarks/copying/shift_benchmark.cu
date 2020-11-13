@@ -1,30 +1,40 @@
+/*
+ * Copyright (c) 2020, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
+
+#include <cudf/copying.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <benchmark/benchmark.h>
+
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
-#include <cudf/copying.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
-#include <cudf_test/column_wrapper.hpp>
+
 #include <memory>
 
 template <typename T, typename ScalarType = cudf::scalar_type_t<T>>
 std::unique_ptr<cudf::scalar> make_scalar(
-  cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-{
-  auto s = new ScalarType(0, false, stream, mr);
-  return std::unique_ptr<cudf::scalar>(s);
-}
-
-template <typename T, typename ScalarType = cudf::scalar_type_t<T>>
-std::unique_ptr<cudf::scalar> make_scalar(
-  T value,
-  cudaStream_t stream                 = 0,
+  T value                             = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto s = new ScalarType(value, true, stream, mr);

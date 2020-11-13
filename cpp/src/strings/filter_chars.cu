@@ -18,6 +18,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -25,7 +26,10 @@
 #include <cudf/strings/translate.hpp>
 #include <strings/utilities.cuh>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/find.h>
+
 #include <algorithm>
 
 namespace cudf {
@@ -123,7 +127,8 @@ std::unique_ptr<column> filter_characters(
   auto d_strings      = *strings_column;
 
   // create null mask
-  rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
+  rmm::device_buffer null_mask =
+    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
 
   // create offsets column
   filter_fn ffn{d_strings, keep_characters, table.begin(), table.end(), d_replacement};

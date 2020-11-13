@@ -17,8 +17,10 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -152,13 +154,14 @@ struct replace_nulls_column_kernel_forwarder {
     cudf::size_type nrows = input.size();
     cudf::detail::grid_1d grid{nrows, BLOCK_SIZE};
 
-    std::unique_ptr<cudf::column> output;
-    if (replacement.has_nulls())
-      output = cudf::detail::allocate_like(
-        input, input.size(), cudf::mask_allocation_policy::ALWAYS, mr, stream);
-    else
-      output = cudf::detail::allocate_like(
-        input, input.size(), cudf::mask_allocation_policy::NEVER, mr, stream);
+    auto output =
+      cudf::detail::allocate_like(input,
+                                  input.size(),
+                                  replacement.has_nulls() ? cudf::mask_allocation_policy::ALWAYS
+                                                          : cudf::mask_allocation_policy::NEVER,
+                                  stream,
+                                  mr);
+
     auto output_view = output->mutable_view();
 
     auto replace = replace_nulls<col_type, false>;
@@ -217,7 +220,7 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
   auto device_replacement = cudf::column_device_view::create(replacement);
 
   rmm::device_buffer valid_bits =
-    cudf::create_null_mask(input.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
+    cudf::detail::create_null_mask(input.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
 
   // Call first pass kernel to get sizes in offsets
   cudf::detail::grid_1d grid{input.size(), BLOCK_SIZE, 1};

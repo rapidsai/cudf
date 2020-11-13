@@ -19,18 +19,24 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+
 #include <strings/utilities.cuh>
 
 #include <nvtext/normalize.hpp>
+
 #include <text/subword/detail/data_normalizer.hpp>
 #include <text/utilities/tokenize_ops.cuh>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/for_each.h>
 #include <thrust/transform_reduce.h>
+
 #include <limits>
 
 namespace nvtext {
@@ -161,7 +167,8 @@ std::unique_ptr<cudf::column> normalize_spaces(
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // copy bitmask
-  rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
+  rmm::device_buffer null_mask =
+    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
 
   // create offsets by calculating size of each string for output
   auto offsets_transformer_itr =
@@ -247,13 +254,14 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
     codepoint_to_utf8_fn{*strings_column, cp_chars, cp_offsets, d_offsets, d_chars});
   chars_column->set_null_count(0);  // reset null count for child column
 
-  return cudf::make_strings_column(strings_count,
-                                   std::move(offsets_column),
-                                   std::move(chars_column),
-                                   strings.null_count(),
-                                   copy_bitmask(strings.parent(), stream, mr),
-                                   stream,
-                                   mr);
+  return cudf::make_strings_column(
+    strings_count,
+    std::move(offsets_column),
+    std::move(chars_column),
+    strings.null_count(),
+    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
+    stream,
+    mr);
 }
 
 }  // namespace detail
