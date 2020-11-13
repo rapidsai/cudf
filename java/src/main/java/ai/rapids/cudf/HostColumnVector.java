@@ -544,8 +544,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
     BigDecimal maxDec = Arrays.stream(values).filter(Objects::nonNull)
         .max(Comparator.comparingInt(BigDecimal::precision))
         .orElse(BigDecimal.ZERO);
-    int maxScale = Arrays.stream(values)
-        .map(decimal -> (decimal == null) ? 0 : decimal.scale())
+    int maxScale = Arrays.stream(values).filter(Objects::nonNull)
+        .map(decimal -> decimal.scale())
         .max(Comparator.naturalOrder())
         .orElse(0);
     maxDec = maxDec.setScale(maxScale, RoundingMode.UNNECESSARY);
@@ -1364,8 +1364,10 @@ public final class HostColumnVector extends HostColumnVectorCore {
       assert currentIndex < rows;
       BigInteger unscaledValue = value.setScale(-type.getScale(), roundingMode).unscaledValue();
       if (type.typeId == DType.DTypeEnum.DECIMAL32) {
+        assert value.precision() <= DType.DECIMAL32_MAX_PRECISION : "value exceeds maximum precision for DECIMAL32";
         data.setInt(currentIndex * type.getSizeInBytes(), unscaledValue.intValueExact());
       } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
+        assert value.precision() <= DType.DECIMAL64_MAX_PRECISION : "value exceeds maximum precision for DECIMAL64 ";
         data.setLong(currentIndex * type.getSizeInBytes(), unscaledValue.longValueExact());
       } else {
         throw new IllegalStateException(type + " is not a supported decimal type.");
