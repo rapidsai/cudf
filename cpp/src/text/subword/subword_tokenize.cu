@@ -23,6 +23,8 @@
 #include <nvtext/subword_tokenize.hpp>
 #include <text/subword/detail/wordpiece_tokenizer.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/for_each.h>
 #include <thrust/transform_scan.h>
 
@@ -127,7 +129,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   bool do_lower_case,
                                   bool do_truncate,
                                   uint32_t max_rows_tensor,
-                                  cudaStream_t stream,
+                                  rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(stride <= max_sequence_length,

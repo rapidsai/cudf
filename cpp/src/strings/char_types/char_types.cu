@@ -39,8 +39,8 @@ std::unique_ptr<column> all_characters_of_type(
   strings_column_view const& strings,
   string_character_types types,
   string_character_types verify_types,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count  = strings.size();
   auto strings_column = column_device_view::create(strings.parent(), stream);
@@ -58,7 +58,7 @@ std::unique_ptr<column> all_characters_of_type(
   // get the static character types table
   auto d_flags = detail::get_character_flags_table();
   // set the output values by checking the character types for each string
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
+  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
@@ -147,7 +147,7 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
                                                   string_character_types types_to_remove,
                                                   string_scalar const& replacement,
                                                   string_character_types types_to_keep,
-                                                  cudaStream_t stream,
+                                                  rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(replacement.is_valid(), "Parameter replacement must be valid");
@@ -188,8 +188,8 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
 
 std::unique_ptr<column> is_integer(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
@@ -201,7 +201,7 @@ std::unique_ptr<column> is_integer(
                                      stream,
                                      mr);
   auto d_results = results->mutable_view().data<bool>();
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
+  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings.size()),
                     d_results,
@@ -213,7 +213,7 @@ std::unique_ptr<column> is_integer(
   return results;
 }
 
-bool all_integer(strings_column_view const& strings, cudaStream_t stream = 0)
+bool all_integer(strings_column_view const& strings, rmm::cuda_stream_view stream)
 {
   auto strings_column  = column_device_view::create(strings.parent(), stream);
   auto d_column        = *strings_column;
@@ -222,7 +222,7 @@ bool all_integer(strings_column_view const& strings, cudaStream_t stream = 0)
       if (d_column.is_null(idx)) return false;
       return string::is_integer(d_column.element<string_view>(idx));
     });
-  return thrust::all_of(rmm::exec_policy(stream)->on(stream),
+  return thrust::all_of(rmm::exec_policy(stream)->on(stream.value()),
                         transformer_itr,
                         transformer_itr + strings.size(),
                         thrust::identity<bool>());
@@ -230,8 +230,8 @@ bool all_integer(strings_column_view const& strings, cudaStream_t stream = 0)
 
 std::unique_ptr<column> is_float(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
@@ -244,7 +244,7 @@ std::unique_ptr<column> is_float(
                                      mr);
   auto d_results = results->mutable_view().data<bool>();
   // check strings for valid float chars
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
+  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings.size()),
                     d_results,
@@ -256,7 +256,7 @@ std::unique_ptr<column> is_float(
   return results;
 }
 
-bool all_float(strings_column_view const& strings, cudaStream_t stream = 0)
+bool all_float(strings_column_view const& strings, rmm::cuda_stream_view stream)
 {
   auto strings_column  = column_device_view::create(strings.parent(), stream);
   auto d_column        = *strings_column;
@@ -265,7 +265,7 @@ bool all_float(strings_column_view const& strings, cudaStream_t stream = 0)
       if (d_column.is_null(idx)) return false;
       return string::is_float(d_column.element<string_view>(idx));
     });
-  return thrust::all_of(rmm::exec_policy(stream)->on(stream),
+  return thrust::all_of(rmm::exec_policy(stream)->on(stream.value()),
                         transformer_itr,
                         transformer_itr + strings.size(),
                         thrust::identity<bool>());
@@ -281,7 +281,7 @@ std::unique_ptr<column> all_characters_of_type(strings_column_view const& string
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::all_characters_of_type(strings, types, verify_types, mr);
+  return detail::all_characters_of_type(strings, types, verify_types, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> filter_characters_of_type(strings_column_view const& strings,
@@ -292,33 +292,33 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
 {
   CUDF_FUNC_RANGE();
   return detail::filter_characters_of_type(
-    strings, types_to_remove, replacement, types_to_keep, 0, mr);
+    strings, types_to_remove, replacement, types_to_keep, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> is_integer(strings_column_view const& strings,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_integer(strings, mr);
+  return detail::is_integer(strings, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> is_float(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_float(strings, mr);
+  return detail::is_float(strings, rmm::cuda_stream_default, mr);
 }
 
 bool all_integer(strings_column_view const& strings)
 {
   CUDF_FUNC_RANGE();
-  return detail::all_integer(strings);
+  return detail::all_integer(strings, rmm::cuda_stream_default);
 }
 
 bool all_float(strings_column_view const& strings)
 {
   CUDF_FUNC_RANGE();
-  return detail::all_float(strings);
+  return detail::all_float(strings, rmm::cuda_stream_default);
 }
 
 }  // namespace strings
