@@ -1128,21 +1128,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   }
 
   /**
-   * Rounding modes supported in round method.
-   * HALF_UP : Rounding mode to round towards "nearest neighbor". If both neighbors are
-   * equidistant, then round up.
-   * HALF_EVEN : Rounding mode to round towards the "nearest neighbor". If both neighbors are
-   * equidistant, round towards the even neighbor.
-   */
-  public enum RoundMode {
-    HALF_UP(0),
-    HALF_EVEN(1);
-    final int nativeId;
-
-    RoundMode(int nativeId) { this.nativeId = nativeId; }
-  }
-
-  /**
    * Rounds all the values in a column to the specified number of decimal places.
    *
    * @param decimalPlaces Number of decimal places to round to. If negative, this
