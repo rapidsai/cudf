@@ -1,7 +1,26 @@
-#include <thrust/iterator/counting_iterator.h>
+/*
+ * Copyright (c) 2020, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 #include <cudf/detail/copy_range.cuh>
 #include <cudf/detail/gather.cuh>
 #include <cudf/lists/lists_column_view.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+
 #include <iostream>
 
 namespace cudf {
@@ -54,7 +73,8 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
           cudf::detail::slice(lists.child(), {start_offset, end_offset}, stream).front());
 
   // Compute the null mask of the result:
-  auto null_mask = cudf::copy_bitmask(lists.null_mask(), start, end, stream, mr);
+  auto null_mask =
+    cudf::detail::copy_bitmask(lists.null_mask(), start, end, rmm::cuda_stream_view{stream}, mr);
 
   return make_lists_column(lists_count,
                            std::move(offsets),

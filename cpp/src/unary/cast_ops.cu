@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/binaryop.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -25,6 +26,7 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {
@@ -204,7 +206,7 @@ struct dispatch_unary_cast_to {
       std::make_unique<column>(type,
                                size,
                                rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                               copy_bitmask(input, stream, mr),
+                               detail::copy_bitmask(input, stream, mr),
                                input.null_count());
 
     mutable_column_view output_mutable = *output;
