@@ -127,10 +127,7 @@ __global__ void __launch_bounds__(block_size, 2)
   uint32_t nnz, start_row, dict_char_count;
   int t = threadIdx.x;
 
-  if (t < sizeof(DictionaryChunk) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&s->chunk)[t] =
-      ((const uint32_t *)&chunks[group_id * num_columns + col_id])[t];
-  }
+  if (t == 0) s->chunk = chunks[group_id * num_columns + col_id];
   for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += block_size) {
     if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
   }
@@ -317,16 +314,10 @@ extern "C" __global__ void __launch_bounds__(1024)
   const uint32_t *src;
   uint32_t *dst;
 
-  if (t < sizeof(StripeDictionary) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&stripe_g)[t] =
-      ((const uint32_t *)&stripes[stripe_id * num_columns + col_id])[t];
-  }
+  if (t == 0) stripe_g = stripes[stripe_id * num_columns + col_id];
   __syncthreads();
   if (!stripe_g.dict_data) { return; }
-  if (t < sizeof(DictionaryChunk) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&chunk_g)[t] =
-      ((const uint32_t *)&chunks[stripe_g.start_chunk * num_columns + col_id])[t];
-  }
+  if (t == 0) chunk_g = chunks[stripe_g.start_chunk * num_columns + col_id];
   __syncthreads();
   dst = stripe_g.dict_data + chunk_g.num_dict_strings;
   for (uint32_t g = 1; g < stripe_g.num_chunks; g++) {
@@ -374,19 +365,16 @@ __global__ void __launch_bounds__(block_size)
   using warp_reduce = cub::WarpReduce<uint32_t>;
   __shared__ typename warp_reduce::TempStorage temp_storage[block_size / 32];
 
-  volatile build_state_s *const s = &state_g;
-  uint32_t col_id                 = blockIdx.x;
-  uint32_t stripe_id              = blockIdx.y;
+  build_state_s *const s = &state_g;
+  uint32_t col_id        = blockIdx.x;
+  uint32_t stripe_id     = blockIdx.y;
   uint32_t num_strings;
   uint32_t *dict_data, *dict_index;
   uint32_t dict_char_count;
   const nvstrdesc_s *str_data;
   int t = threadIdx.x;
 
-  if (t < sizeof(StripeDictionary) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&s->stripe)[t] =
-      ((const uint32_t *)&stripes[stripe_id * num_columns + col_id])[t];
-  }
+  if (t == 0) s->stripe = stripes[stripe_id * num_columns + col_id];
   if (t == 31 * 32) { s->total_dupes = 0; }
   __syncthreads();
   num_strings = s->stripe.num_strings;

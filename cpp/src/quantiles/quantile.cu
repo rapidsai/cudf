@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <memory>
-#include <vector>
+#include <quantiles/quantiles_util.hpp>
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/dictionary/detail/iterator.cuh>
@@ -26,7 +26,11 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <quantiles/quantiles_util.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <memory>
+#include <vector>
 
 namespace cudf {
 namespace detail {
@@ -38,7 +42,7 @@ struct quantile_functor {
   interpolation interp;
   bool retain_types;
   rmm::mr::device_memory_resource* mr;
-  cudaStream_t stream;
+  rmm::cuda_stream_view stream;
 
   template <typename T>
   std::enable_if_t<not std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
@@ -53,13 +57,14 @@ struct quantile_functor {
   {
     using Result = std::conditional_t<exact, double, T>;
 
-    auto type   = data_type{type_to_id<Result>()};
-    auto output = make_fixed_width_column(type, q.size(), mask_state::UNALLOCATED, stream, mr);
+    auto type = data_type{type_to_id<Result>()};
+    auto output =
+      make_fixed_width_column(type, q.size(), mask_state::UNALLOCATED, stream.value(), mr);
 
     if (output->size() == 0) { return output; }
 
     if (input.is_empty()) {
-      auto mask = create_null_mask(output->size(), mask_state::ALL_NULL, stream, mr);
+      auto mask = cudf::detail::create_null_mask(output->size(), mask_state::ALL_NULL, stream, mr);
       output->set_null_mask(std::move(mask), output->size());
       return output;
     }

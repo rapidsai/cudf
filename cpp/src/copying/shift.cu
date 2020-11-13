@@ -26,9 +26,12 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/copy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
+
 #include <algorithm>
 #include <iterator>
 #include <memory>
@@ -53,8 +56,8 @@ struct shift_functor {
     column_view const& input,
     size_type offset,
     scalar const& fill_value,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream)
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
   {
     using Type       = device_storage_type_t<T>;
     using ScalarType = cudf::scalar_type_t<Type>;
@@ -62,7 +65,7 @@ struct shift_functor {
 
     auto device_input = column_device_view::create(input);
     auto output =
-      detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, mr, stream);
+      detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream, mr);
     auto device_output = mutable_column_device_view::create(*output);
 
     auto size        = input.size();
@@ -103,7 +106,7 @@ struct shift_functor {
       };
 
     thrust::transform(
-      rmm::exec_policy(stream)->on(stream), index_begin, index_end, data, func_value);
+      rmm::exec_policy(stream)->on(stream.value()), index_begin, index_end, data, func_value);
 
     return output;
   }
@@ -111,11 +114,13 @@ struct shift_functor {
 
 }  // anonymous namespace
 
+namespace detail {
+
 std::unique_ptr<column> shift(column_view const& input,
                               size_type offset,
                               scalar const& fill_value,
-                              rmm::mr::device_memory_resource* mr,
-                              cudaStream_t stream)
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input.type() == fill_value.type(),
@@ -123,7 +128,17 @@ std::unique_ptr<column> shift(column_view const& input,
 
   if (input.is_empty()) { return empty_like(input); }
 
-  return type_dispatcher(input.type(), shift_functor{}, input, offset, fill_value, mr, stream);
+  return type_dispatcher(input.type(), shift_functor{}, input, offset, fill_value, stream, mr);
+}
+
+}  // namespace detail
+
+std::unique_ptr<column> shift(column_view const& input,
+                              size_type offset,
+                              scalar const& fill_value,
+                              rmm::mr::device_memory_resource* mr)
+{
+  return detail::shift(input, offset, fill_value, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

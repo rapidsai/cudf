@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/concatenate.hpp>
@@ -225,7 +226,7 @@ std::unique_ptr<column> fused_concatenate(std::vector<column_view> const& views,
 
   // Allocate output
   auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
-  auto out_col      = detail::allocate_like(views.front(), output_size, policy, mr, stream);
+  auto out_col      = detail::allocate_like(views.front(), output_size, policy, stream, mr);
   out_col->set_null_count(0);  // prevent null count from being materialized
   auto out_view   = out_col->mutable_view();
   auto d_out_view = mutable_column_device_view::create(out_view, stream);
@@ -386,7 +387,7 @@ rmm::device_buffer concatenate_masks(std::vector<column_view> const& views,
       });
 
     rmm::device_buffer null_mask =
-      create_null_mask(total_element_count, mask_state::UNINITIALIZED, 0, mr);
+      create_null_mask(total_element_count, mask_state::UNINITIALIZED, mr);
 
     detail::concatenate_masks(views, static_cast<bitmask_type*>(null_mask.data()), 0);
 
