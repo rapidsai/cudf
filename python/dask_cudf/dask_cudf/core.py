@@ -12,16 +12,16 @@ from dask.base import normalize_token, tokenize
 from dask.compatibility import apply
 from dask.context import _globals
 from dask.core import flatten
-from dask.dataframe.core import Scalar, handle_out, map_partitions
+from dask.dataframe.core import Scalar, finalize, handle_out, map_partitions
 from dask.dataframe.utils import raise_on_meta_error
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
 from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 
-from dask_cudf import sorting
-
 import cudf
 from cudf import _lib as libcudf
+
+from dask_cudf import sorting
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
@@ -37,14 +37,6 @@ def optimize(dsk, keys, **kwargs):
     )
     dsk, _ = cull(dsk, keys)
     return dsk
-
-
-def finalize(results):
-    if results and isinstance(
-        results[0], (cudf.DataFrame, cudf.Series, cudf.Index, cudf.MultiIndex)
-    ):
-        return cudf.concat(results)
-    return results
 
 
 class _Frame(dd.core._Frame, OperatorMethodMixin):

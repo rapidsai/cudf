@@ -168,8 +168,12 @@ public final class HostColumnVector extends HostColumnVectorCore {
    */
   public ColumnVector copyToDevice() {
     if (rows == 0) {
-      // TODO this does not work for nested types!!!
-      return new ColumnVector(type, 0, Optional.of(0L), null, null, null);
+      if (type.isNestedType()) {
+        return ColumnVector.createNestedColumnVector(type, 0,
+                null, null, null, Optional.of(0L), children);
+      } else {
+        return new ColumnVector(type, 0, Optional.of(0L), null, null, null);
+      }
     }
     // The simplest way is just to copy the buffers and pass them down.
     DeviceMemoryBuffer data = null;
@@ -288,6 +292,13 @@ public final class HostColumnVector extends HostColumnVectorCore {
     cb.appendStructValues(values);
     return cb.build();
   }
+
+  public static HostColumnVector fromStructs(DataType dataType, StructData... values) {
+    ColumnBuilder cb = new ColumnBuilder(dataType, values.length);
+    cb.appendStructValues(values);
+    return cb.build();
+  }
+
   /**
    * Create a new vector from the given values.
    */
@@ -809,7 +820,12 @@ public final class HostColumnVector extends HostColumnVectorCore {
       return this;
     }
 
-
+    public ColumnBuilder appendStructValues(StructData... inputList) {
+      for (StructData structInput : inputList) {
+        append(structInput);
+      }
+      return this;
+    }
 
     /**
      * A method that is responsible for growing the buffers as needed
@@ -908,8 +924,18 @@ public final class HostColumnVector extends HostColumnVectorCore {
       setNullAt(currentIndex);
       currentIndex++;
       currentByteIndex += type.getSizeInBytes();
-      if (type == DType.STRING || type.isNestedType()) {
-        offsets.setInt(currentIndex * OFFSET_SIZE, currentByteIndex);
+      if (type.hasOffsets()) {
+        if (type.getTypeId() == DType.DTypeEnum.LIST) {
+          offsets.setInt(currentIndex * OFFSET_SIZE, childBuilders.get(0).getCurrentIndex());
+        } else {
+          // It is a String
+          offsets.setInt(currentIndex * OFFSET_SIZE, currentByteIndex);
+        }
+      } else if (type == DType.STRUCT) {
+        // structs propagate nulls to children and even further down if needed
+        for (ColumnBuilder childBuilder : childBuilders) {
+          childBuilder.appendNull();
+        }
       }
       return this;
     }
@@ -918,48 +944,78 @@ public final class HostColumnVector extends HostColumnVectorCore {
     private ColumnBuilder append(StructData structData) {
       assert type.isNestedType();
       if (type == DType.STRUCT) {
-        if (structData.dataRecord == null) {
-          growBuffersAndRows(true, 0);
-          setNullAt(currentIndex);
-          // structs propagate nulls to children and even further down if needed
-          for (ColumnBuilder childBuilder : childBuilders) {
-            appendChildOrNull(childBuilder, structData);
-          }
-          currentIndex++;
-          return this;
+        if (structData == null || structData.dataRecord == null) {
+          return appendNull();
         } else {
-          growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
           for (int i = 0; i < structData.getNumFields(); i++) {
             ColumnBuilder childBuilder = childBuilders.get(i);
             appendChildOrNull(childBuilder, structData.dataRecord.get(i));
           }
-          currentIndex++;
+          endStruct();
         }
       }
+      return this;
+    }
+
+    private boolean allChildrenHaveSameIndex() {
+      if (childBuilders.size() > 0) {
+        int expected = childBuilders.get(0).getCurrentIndex();
+        for (ColumnBuilder child: childBuilders) {
+          if (child.getCurrentIndex() != expected) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    /**
+     * If you want to build up a struct column you can get each child `builder.getChild(N)` and
+     * append to all of them, then when you are done call `endStruct` to update this builder.
+     * Do not start to append to the child and then append a null to this without ending the struct
+     * first or you might not get the results that you expected.
+     * @return this for chaining.
+     */
+    public ColumnBuilder endStruct() {
+      assert type.getTypeId() == DType.DTypeEnum.STRUCT : "This only works for structs";
+      assert allChildrenHaveSameIndex() : "Appending structs data appears to be off " +
+          childBuilders + " should all have the same currentIndex " + type;
+      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+      currentIndex++;
+      return this;
+    }
+
+    /**
+     * If you want to build up a list column you can get `builder.getChild(0)` and append to than,
+     * then when you are done call `endList` and everything that was appended to that builder
+     * will now be in the next list. Do not start to append to the child and then append a null
+     * to this without ending the list first or you might not get the results that you expected.
+     * @return this for chaining.
+     */
+    public ColumnBuilder endList() {
+      assert type.getTypeId() == DType.DTypeEnum.LIST;
+      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+      currentIndex++;
+      offsets.setInt(currentIndex * OFFSET_SIZE, childBuilders.get(0).getCurrentIndex());
       return this;
     }
 
     // For lists
     private <T> ColumnBuilder append(List<T> inputList) {
-      assert type.isNestedType();
-      // We know lists have only 1 children
-      ColumnBuilder childBuilder = childBuilders.get(0);
       if (inputList == null) {
-        growBuffersAndRows(true, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
-        setNullAt(currentIndex);
+        appendNull();
       } else {
-        growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+        ColumnBuilder childBuilder = childBuilders.get(0);
         for (Object listElement : inputList) {
           appendChildOrNull(childBuilder, listElement);
         }
+        endList();
       }
-      currentIndex++;
-      offsets.setInt(currentIndex * OFFSET_SIZE, childBuilder.getCurrentIndex());
       return this;
     }
 
     private void appendChildOrNull(ColumnBuilder childBuilder, Object listElement) {
-      if (listElement == null || (listElement instanceof StructData && ((StructData) listElement).dataRecord == null)) {
+      if (listElement == null) {
         childBuilder.appendNull();
       } else if (listElement instanceof Integer) {
         childBuilder.append((Integer) listElement);
@@ -983,9 +1039,12 @@ public final class HostColumnVector extends HostColumnVectorCore {
         childBuilder.append((List) listElement);
       } else if (listElement instanceof StructData) {
         childBuilder.append((StructData) listElement);
+      } else {
+        throw new IllegalStateException("Unexpected element type: " + listElement.getClass());
       }
     }
 
+    @Deprecated
     public void incrCurrentIndex() {
       currentIndex =  currentIndex + 1;
     }
@@ -1765,6 +1824,10 @@ public final class HostColumnVector extends HostColumnVectorCore {
       this.dataRecord = dataRecord;
     }
 
+    public StructData(Object... data) {
+      this(Arrays.asList(data));
+    }
+
     public int getNumFields() {
       if (dataRecord != null) {
         return dataRecord.size();
@@ -1781,6 +1844,10 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public StructType(boolean isNullable, List<HostColumnVector.DataType> children) {
       this.isNullable = isNullable;
       this.children = children;
+    }
+
+    public StructType(boolean isNullable, DataType... children) {
+      this(isNullable, Arrays.asList(children));
     }
 
     @Override

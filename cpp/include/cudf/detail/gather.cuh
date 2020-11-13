@@ -17,6 +17,7 @@
 
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/indexalator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/detail/valid_if.cuh>
@@ -24,7 +25,6 @@
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/lists/detail/gather.cuh>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/gather.cuh>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
@@ -175,7 +175,7 @@ struct column_gatherer_impl {
     auto const num_rows = cudf::distance(gather_map_begin, gather_map_end);
     auto const policy   = cudf::mask_allocation_policy::NEVER;
     auto destination_column =
-      cudf::detail::allocate_like(source_column, num_rows, policy, mr, stream);
+      cudf::detail::allocate_like(source_column, num_rows, policy, stream, mr);
 
     using Type = device_storage_type_t<Element>;
 
@@ -403,7 +403,7 @@ struct column_gatherer_impl<dictionary32, MapItType> {
     // Perform gather on just the indices
     column_view indices = dictionary.get_indices_annotated();
     auto new_indices    = cudf::detail::allocate_like(
-      indices, output_count, cudf::mask_allocation_policy::NEVER, mr, stream);
+      indices, output_count, cudf::mask_allocation_policy::NEVER, stream, mr);
     gather_helper(
       cudf::detail::indexalator_factory::make_input_iterator(indices),
       indices.size(),
@@ -496,7 +496,7 @@ void gather_bitmask(table_view const& source,
         not target[i]->nullable()) {
       auto const state =
         op == gather_bitmask_op::PASSTHROUGH ? mask_state::ALL_VALID : mask_state::UNINITIALIZED;
-      auto mask = create_null_mask(target[i]->size(), state, stream, mr);
+      auto mask = detail::create_null_mask(target[i]->size(), state, stream, mr);
       target[i]->set_null_mask(std::move(mask), 0);
     }
   }
