@@ -28,6 +28,7 @@
 #include <cudf/reduction.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/rolling.hpp>
+#include <cudf/round.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/search.hpp>
 #include <cudf/strings/attributes.hpp>
@@ -560,6 +561,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_unaryOperation(JNIEnv *
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_round(JNIEnv *env, jclass,
+                                                               jlong input_ptr, jint decimal_places,
+                                                               jint rounding_method) {
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+   try {
+     cudf::jni::auto_set_device(env);
+     cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_ptr);
+     cudf::rounding_method method = static_cast<cudf::rounding_method>(rounding_method);
+     std::unique_ptr<cudf::column> ret = cudf::round(*input, decimal_places, method);
+     return reinterpret_cast<jlong>(ret.release());
+   }
+   CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_year(JNIEnv *env, jclass,
                                                               jlong input_ptr) {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
@@ -765,6 +780,24 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_byteListCast(JNIEnv *en
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
     cudf::flip_endianness config(static_cast<cudf::flip_endianness>(endianness_config));
     std::unique_ptr<cudf::column> result = byte_cast(*column, config);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isTimestamp(
+    JNIEnv *env, jclass, jlong handle, jstring formatObj) {
+  JNI_NULL_CHECK(env, handle, "column is null", 0);
+  JNI_NULL_CHECK(env, formatObj, "format is null", 0);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::jni::native_jstring format(env, formatObj);
+    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
+    cudf::strings_column_view strings_column(*column);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::is_timestamp(
+        strings_column, format.get());
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

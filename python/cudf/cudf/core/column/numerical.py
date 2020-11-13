@@ -9,7 +9,6 @@ from pandas.api.types import is_integer_dtype
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.quantiles import quantile as cpp_quantile
-from cudf._lib.scalar import Scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import as_column, build_column, column, string
 from cudf.utils import cudautils, utils
@@ -82,7 +81,9 @@ class NumericalColumn(column.ColumnBase):
         tmp = rhs
         if reflect:
             tmp = self
-        if isinstance(rhs, (NumericalColumn, Scalar)) or np.isscalar(rhs):
+        if isinstance(
+            rhs, (NumericalColumn, cudf.Scalar, cudf._lib.scalar.DeviceScalar)
+        ) or np.isscalar(rhs):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
                 if (tmp.dtype in int_dtypes) and (
@@ -107,8 +108,14 @@ class NumericalColumn(column.ColumnBase):
     def normalize_binop_value(self, other):
         if other is None:
             return other
+        if isinstance(other, cudf.Scalar):
+            # expensive device-host transfer just to
+            # adjust the dtype
+            other = other.value
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in {"b", "i", "u", "f"}:
+            if isinstance(other, cudf.Scalar):
+                return other
             other_dtype = np.promote_types(self.dtype, other_dtype)
             if other_dtype == np.dtype("float16"):
                 other = np.dtype("float32").type(other)
@@ -277,7 +284,7 @@ class NumericalColumn(column.ColumnBase):
             result = result[0]
             return (
                 cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-                if result is None
+                if result is cudf.NA
                 else result
             )
         return result
@@ -411,6 +418,11 @@ class NumericalColumn(column.ColumnBase):
         """
         Fill null values with *fill_value*
         """
+        if (
+            isinstance(fill_value, cudf.Scalar)
+            and fill_value.dtype == self.dtype
+        ):
+            return libcudf.replace.replace_nulls(self, fill_value)
         if np.isscalar(fill_value):
             # castsafely to the same dtype as self
             fill_value_casted = self.dtype.type(fill_value)
@@ -419,7 +431,7 @@ class NumericalColumn(column.ColumnBase):
                     f"Cannot safely cast non-equivalent "
                     f"{type(fill_value).__name__} to {self.dtype.name}"
                 )
-            fill_value = fill_value_casted
+            fill_value = cudf.Scalar(fill_value_casted)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
             # cast safely to the same dtype as self

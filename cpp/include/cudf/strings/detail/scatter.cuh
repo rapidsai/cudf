@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,12 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace strings {
@@ -62,7 +65,8 @@ std::unique_ptr<column> scatter(
 
   // create null mask -- caller must update this
   rmm::device_buffer null_mask{0, stream, mr};
-  if (target.has_nulls()) null_mask = copy_bitmask(target.parent(), stream, mr);
+  if (target.has_nulls())
+    null_mask = cudf::detail::copy_bitmask(target.parent(), rmm::cuda_stream_view{stream}, mr);
 
   // create string vectors
   rmm::device_vector<string_view> target_vector = create_string_vector_from_column(target, stream);

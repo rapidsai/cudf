@@ -84,4 +84,41 @@ TEST(StreamCheck, CatchFailedKernel)
   CUDA_TRY(cudaStreamDestroy(stream));
 }
 
-CUDF_TEST_PROGRAM_MAIN()
+__global__ void assert_false_kernel() { release_assert(false && "this kernel should die"); }
+
+__global__ void assert_true_kernel() { release_assert(true && "this kernel should live"); }
+
+TEST(ReleaseAssertDeathTest, release_assert_false)
+{
+  testing::FLAGS_gtest_death_test_style = "threadsafe";
+
+  auto call_kernel = []() {
+    assert_false_kernel<<<1, 1>>>();
+
+    // Kernel should fail with `cudaErrorAssert`
+    // This error invalidates the current device context, so we need to kill
+    // the current process. Running with EXPECT_DEATH spawns a new process for
+    // each attempted kernel launch
+    if (cudaErrorAssert == cudaDeviceSynchronize()) { std::abort(); }
+
+    // If we reach this point, the release_assert didn't work so we exit normally, which will cause
+    // EXPECT_DEATH to fail.
+  };
+
+  EXPECT_DEATH(call_kernel(), "this kernel should die");
+}
+
+TEST(ReleaseAssert, release_assert_true)
+{
+  assert_true_kernel<<<1, 1>>>();
+  ASSERT_EQ(cudaSuccess, cudaDeviceSynchronize());
+}
+
+// These tests don't use CUDF_TEST_PROGRAM_MAIN because :
+// 1.) They don't need the RMM Pool
+// 2.) The RMM Pool interferes with the death test
+int main(int argc, char** argv)
+{
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}

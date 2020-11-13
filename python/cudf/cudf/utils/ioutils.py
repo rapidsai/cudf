@@ -13,7 +13,7 @@ from cudf.utils.docutils import docfmt_partial
 _docstring_remote_sources = """
 - cuDF supports local and remote data stores. See configuration details for
   available sources
-  `here <https://docs.dask.org/en/latest/remote-data-services.html>`_.
+  `here <https://docs.dask.org/en/latest/remote-data-services.html>`__.
 """
 
 _docstring_read_avro = """
@@ -737,9 +737,11 @@ skipinitialspace : bool, default False
     Skip spaces after delimiter.
 names : list of str, default None
     List of column names to be used.
-dtype : type, list of types, or dict of column -> type, default None
-    Data type(s) for data or columns. If list, types are applied in the same
-    order as the column names. If dict, types are mapped to the column names.
+dtype : type, str, list of types, or dict of column -> type, default None
+    Data type(s) for data or columns. If `dtype` is a type/str, all columns
+    are mapped to the particular type passed. If list, types are applied in
+    the same order as the column names. If dict, types are mapped to the
+    column names.
     E.g. {{‘a’: np.float64, ‘b’: int32, ‘c’: ‘float’}}
     If `None`, dtypes are inferred from the dataset. Use `str` to preserve data
     and not infer or interpret to dtype.
