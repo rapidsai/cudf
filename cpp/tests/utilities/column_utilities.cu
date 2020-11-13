@@ -594,7 +594,7 @@ struct column_view_printer {
     //
     //  Implementation for strings, call special to_host variant
     //
-    if (col.is_empty() == 0) return;
+    if (col.is_empty()) return;
     auto h_data = cudf::test::to_host<std::string>(col);
 
     out.resize(col.size());
