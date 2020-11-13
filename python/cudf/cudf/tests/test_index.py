@@ -20,6 +20,8 @@ from cudf.core.index import (
     RangeIndex,
     as_index,
 )
+from cudf.utils.utils import search_range
+
 from cudf.tests.utils import (
     FLOAT_TYPES,
     NUMERIC_TYPES,
@@ -28,6 +30,7 @@ from cudf.tests.utils import (
     SIGNED_TYPES,
     UNSIGNED_TYPES,
     assert_eq,
+    assert_exceptions_equal,
 )
 
 
@@ -69,7 +72,7 @@ def test_df_slice_empty_index():
         df.index[1]
 
 
-def test_index_find_label_range():
+def test_index_find_label_range_genericindex():
     # Monotonic Index
     idx = Int64Index(np.asarray([4, 5, 6, 10]))
     assert idx.find_label_range(4, 6) == (0, 3)
@@ -89,6 +92,26 @@ def test_index_find_label_range():
     with pytest.raises(ValueError) as raises:
         idx_nm.find_label_range(4, 11)
     raises.match("value not found")
+
+
+def test_index_find_label_range_rangeindex():
+    """Cudf specific
+    """
+    # step > 0
+    # 3, 8, 13, 18
+    ridx = RangeIndex(3, 20, 5)
+    assert ridx.find_label_range(3, 8) == (0, 2)
+    assert ridx.find_label_range(0, 7) == (0, 1)
+    assert ridx.find_label_range(3, 19) == (0, 4)
+    assert ridx.find_label_range(2, 21) == (0, 4)
+
+    # step < 0
+    # 20, 15, 10, 5
+    ridx = RangeIndex(20, 3, -5)
+    assert ridx.find_label_range(15, 10) == (1, 3)
+    assert ridx.find_label_range(10, 0) == (2, 4)
+    assert ridx.find_label_range(30, 13) == (0, 2)
+    assert ridx.find_label_range(30, 0) == (0, 4)
 
 
 def test_index_comparision():
@@ -479,11 +502,13 @@ def test_index_names():
         range(0, 5),
         range(1, 10),
         range(1, 10, 1),
+        range(1, 10, 3),
+        range(10, 1, -3),
         range(-5, 10),
     ],
 )
 def test_range_index_from_range(data):
-    assert_eq(pd.Index(data), cudf.core.index.as_index(data))
+    assert_eq(pd.Index(data), cudf.Index(data))
 
 
 @pytest.mark.parametrize(
@@ -649,10 +674,13 @@ def test_index_where(data, condition, other, error):
                 .values,
             )
     else:
-        with pytest.raises(error):
-            ps.where(ps_condition, other=ps_other)
-        with pytest.raises(error):
-            gs.where(gs_condition, other=gs_other)
+        assert_exceptions_equal(
+            lfunc=ps.where,
+            rfunc=gs.where,
+            lfunc_args_and_kwargs=([ps_condition], {"other": ps_other}),
+            rfunc_args_and_kwargs=([gs_condition], {"other": gs_other}),
+            compare_error_message=False,
+        )
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + OTHER_TYPES)
@@ -788,13 +816,12 @@ def test_index_difference_sort_error():
     pdi = pd.Index([1, 2, 3])
     gdi = cudf.Index([1, 2, 3])
 
-    try:
-        pdi.difference(pdi, sort=True)
-    except Exception as e:
-        with pytest.raises(type(e), match=e.__str__()):
-            gdi.difference(gdi, sort=True)
-    else:
-        raise AssertionError("Expected pdi.difference to fail when sort=True")
+    assert_exceptions_equal(
+        pdi.difference,
+        gdi.difference,
+        ([pdi], {"sort": True}),
+        ([gdi], {"sort": True}),
+    )
 
 
 @pytest.mark.parametrize(
@@ -1077,8 +1104,14 @@ def test_index_append_error(data, other):
         gd_other.append(gd_data)
 
     sr = gd_other.to_series()
-    with pytest.raises(TypeError, match=r"all inputs must be Index"):
-        gd_data.append([sr])
+
+    assert_exceptions_equal(
+        lfunc=gd_data.to_pandas().append,
+        rfunc=gd_data.append,
+        lfunc_args_and_kwargs=([[sr.to_pandas()]],),
+        rfunc_args_and_kwargs=([[sr]],),
+        expected_error_message=r"all inputs must be Index",
+    )
 
 
 @pytest.mark.parametrize(
@@ -1326,30 +1359,39 @@ def test_index_sample_basic(n, frac, replace):
     gindex = cudf.Index(psr)
     random_state = 0
 
-    kind = None
-
     try:
         pout = psr.sample(
             n=n, frac=frac, replace=replace, random_state=random_state
         )
-    except BaseException as e:
-        kind = type(e)
-        msg = str(e)
-
-    if kind is not None:
-        with pytest.raises(kind, match=msg):
-            gout = gindex.sample(
-                n=n, frac=frac, replace=replace, random_state=random_state
-            )
+    except BaseException:
+        assert_exceptions_equal(
+            lfunc=psr.sample,
+            rfunc=gindex.sample,
+            lfunc_args_and_kwargs=(
+                [],
+                {
+                    "n": n,
+                    "frac": frac,
+                    "replace": replace,
+                    "random_state": random_state,
+                },
+            ),
+            rfunc_args_and_kwargs=(
+                [],
+                {
+                    "n": n,
+                    "frac": frac,
+                    "replace": replace,
+                    "random_state": random_state,
+                },
+            ),
+        )
     else:
         gout = gindex.sample(
             n=n, frac=frac, replace=replace, random_state=random_state
         )
 
-    if kind is not None:
-        return
-
-    assert pout.shape == gout.shape
+        assert pout.shape == gout.shape
 
 
 @pytest.mark.parametrize("n", [2, 5, 10, None])
@@ -1370,8 +1412,6 @@ def test_multiindex_sample_basic(n, frac, replace, axis):
     mul_index = cudf.Index(DataFrame.from_pandas(pdf))
     random_state = 0
 
-    kind = None
-
     try:
         pout = pdf.sample(
             n=n,
@@ -1380,19 +1420,31 @@ def test_multiindex_sample_basic(n, frac, replace, axis):
             random_state=random_state,
             axis=axis,
         )
-    except BaseException as e:
-        kind = type(e)
-        msg = str(e)
-
-    if kind is not None:
-        with pytest.raises(kind, match=msg):
-            gout = mul_index.sample(
-                n=n,
-                frac=frac,
-                replace=replace,
-                random_state=random_state,
-                axis=axis,
-            )
+    except BaseException:
+        assert_exceptions_equal(
+            lfunc=pdf.sample,
+            rfunc=mul_index.sample,
+            lfunc_args_and_kwargs=(
+                [],
+                {
+                    "n": n,
+                    "frac": frac,
+                    "replace": replace,
+                    "random_state": random_state,
+                    "axis": axis,
+                },
+            ),
+            rfunc_args_and_kwargs=(
+                [],
+                {
+                    "n": n,
+                    "frac": frac,
+                    "replace": replace,
+                    "random_state": random_state,
+                    "axis": axis,
+                },
+            ),
+        )
     else:
         gout = mul_index.sample(
             n=n,
@@ -1401,11 +1453,7 @@ def test_multiindex_sample_basic(n, frac, replace, axis):
             random_state=random_state,
             axis=axis,
         )
-
-    if kind is not None:
-        return
-
-    assert pout.shape == gout.shape
+        assert pout.shape == gout.shape
 
 
 @pytest.mark.parametrize(
@@ -1642,3 +1690,72 @@ def test_index_equals_categories():
     expect = lhs.to_pandas().equals(rhs.to_pandas())
 
     assert_eq(expect, got)
+
+
+def test_index_rangeindex_search_range():
+    # step > 0
+    ridx = RangeIndex(-13, 17, 4)
+    stop = ridx._start + ridx._step * len(ridx)
+    for i in range(len(ridx)):
+        assert i == search_range(
+            ridx._start, stop, ridx[i], ridx._step, side="left"
+        )
+        assert i + 1 == search_range(
+            ridx._start, stop, ridx[i], ridx._step, side="right"
+        )
+
+
+@pytest.mark.parametrize(
+    "rge", [(1, 10, 1), (1, 10, 3), (10, -17, -1), (10, -17, -3)],
+)
+def test_index_rangeindex_get_item_basic(rge):
+    pridx = pd.RangeIndex(*rge)
+    gridx = cudf.RangeIndex(*rge)
+
+    for i in range(-len(pridx), len(pridx)):
+        assert pridx[i] == gridx[i]
+
+
+@pytest.mark.parametrize(
+    "rge", [(1, 10, 3), (10, 1, -3)],
+)
+def test_index_rangeindex_get_item_out_of_bounds(rge):
+    gridx = cudf.RangeIndex(*rge)
+    with pytest.raises(IndexError):
+        _ = gridx[4]
+
+
+@pytest.mark.parametrize(
+    "rge", [(10, 1, 1), (-17, 10, -3)],
+)
+def test_index_rangeindex_get_item_null_range(rge):
+    gridx = cudf.RangeIndex(*rge)
+
+    with pytest.raises(IndexError):
+        gridx[0]
+
+
+@pytest.mark.parametrize(
+    "rge", [(-17, 21, 2), (21, -17, -3), (0, 0, 1), (0, 1, -3), (10, 0, 5)]
+)
+@pytest.mark.parametrize(
+    "sl",
+    [
+        slice(1, 7, 1),
+        slice(1, 7, 2),
+        slice(-1, 7, 1),
+        slice(-1, 7, 2),
+        slice(-3, 7, 2),
+        slice(7, 1, -2),
+        slice(7, -3, -2),
+        slice(None, None, 1),
+        slice(0, None, 2),
+        slice(0, None, 3),
+        slice(0, 0, 3),
+    ],
+)
+def test_index_rangeindex_get_item_slices(rge, sl):
+    pridx = pd.RangeIndex(*rge)
+    gridx = cudf.RangeIndex(*rge)
+
+    assert_eq(pridx[sl], gridx[sl])

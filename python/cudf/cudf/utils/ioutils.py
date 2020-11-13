@@ -13,7 +13,7 @@ from cudf.utils.docutils import docfmt_partial
 _docstring_remote_sources = """
 - cuDF supports local and remote data stores. See configuration details for
   available sources
-  `here <https://docs.dask.org/en/latest/remote-data-services.html>`_.
+  `here <https://docs.dask.org/en/latest/remote-data-services.html>`__.
 """
 
 _docstring_read_avro = """
@@ -30,7 +30,7 @@ engine : {{ 'cudf', 'fastavro' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read.
-skip_rows : int, default None
+skiprows : int, default None
     If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
@@ -130,7 +130,7 @@ row_groups : int, or list, or a list of lists default None
     If not None, specifies, for each input file, which row groups to read.
     If reading multiple inputs, a list of lists should be passed, one list
     for each input.
-skip_rows : int, default None
+skiprows : int, default None
     If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
@@ -311,7 +311,7 @@ filters : list of tuple, list of lists of tuples default None
 stripes: list, default None
     If not None, only these stripe will be read from the file. Stripes are
     concatenated with index ignored.
-skip_rows : int, default None
+skiprows : int, default None
     If not None, the number of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
@@ -754,9 +754,11 @@ skipinitialspace : bool, default False
     Skip spaces after delimiter.
 names : list of str, default None
     List of column names to be used.
-dtype : type, list of types, or dict of column -> type, default None
-    Data type(s) for data or columns. If list, types are applied in the same
-    order as the column names. If dict, types are mapped to the column names.
+dtype : type, str, list of types, or dict of column -> type, default None
+    Data type(s) for data or columns. If `dtype` is a type/str, all columns
+    are mapped to the particular type passed. If list, types are applied in
+    the same order as the column names. If dict, types are mapped to the
+    column names.
     E.g. {{‘a’: np.float64, ‘b’: int32, ‘c’: ‘float’}}
     If `None`, dtypes are inferred from the dataset. Use `str` to preserve data
     and not infer or interpret to dtype.
@@ -817,8 +819,13 @@ parse_dates : list of int or names, default None
 comment : char, default None
     Character used as a comments indicator. If found at the beginning of a
     line, the line will be ignored altogether.
-na_values : list, default None
-    Values to consider as invalid
+na_values : scalar, str, or list-like, optional
+    Additional strings to recognize as nulls.
+    By default the following values are interpreted as
+    nulls: '', '#N/A', '#N/A N/A', '#NA', '-1.#IND',
+    '-1.#QNAN', '-NaN', '-nan', '1.#IND', '1.#QNAN',
+    '<NA>', 'N/A', 'NA', 'NULL', 'NaN', 'n/a', 'nan',
+    'null'.
 keep_default_na : bool, default True
     Whether or not to include the default NA values when parsing the data.
 na_filter : bool, default True

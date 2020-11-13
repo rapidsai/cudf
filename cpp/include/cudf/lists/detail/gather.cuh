@@ -105,9 +105,9 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
   rmm::device_uvector<int32_t> base_offsets = rmm::device_uvector<int32_t>(output_count, stream);
   thrust::transform(rmm::exec_policy(stream)->on(stream),
                     gather_map,
-                    gather_map + offset_count,
+                    gather_map + output_count,
                     base_offsets.data(),
-                    [src_offsets, output_count, src_size, shift] __device__(int32_t index) {
+                    [src_offsets, src_size, shift] __device__(int32_t index) {
                       // if this is an invalid index, this will be a NULL list
                       if (NullifyOutOfBounds && ((index < 0) || (index >= src_size))) { return 0; }
                       return src_offsets[index] - shift;

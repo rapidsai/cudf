@@ -22,9 +22,11 @@
 
 #include <cudf/binaryop.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
 namespace cudf {
@@ -2062,11 +2064,12 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpAdd)
 
   auto const sz = std::size_t{1000};
 
-  auto vec1       = std::vector<decimalXX>(sz);
-  auto const vec2 = std::vector<decimalXX>(sz, decimalXX{1, scale_type{-1}});
+  auto begin      = make_counting_transform_iterator(1, [](auto i) {
+    return decimalXX{i, scale_type{0}};
+  });
+  auto const vec1 = std::vector<decimalXX>(begin, begin + sz);
+  auto const vec2 = std::vector<decimalXX>(sz, decimalXX{2, scale_type{0}});
   auto expected   = std::vector<decimalXX>(sz);
-
-  std::iota(std::begin(vec1), std::end(vec1), decimalXX{});
 
   std::transform(std::cbegin(vec1),
                  std::cend(vec1),
@@ -2078,8 +2081,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpAdd)
   auto const rhs          = wrapper<decimalXX>(vec2.begin(), vec2.end());
   auto const expected_col = wrapper<decimalXX>(expected.begin(), expected.end());
 
-  auto const result = cudf::binary_operation(
-    lhs, rhs, cudf::binary_operator::ADD, static_cast<cudf::column_view>(lhs).type());
+  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, {});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col, result->view());
 }
@@ -2091,11 +2093,12 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiply)
 
   auto const sz = std::size_t{1000};
 
-  auto vec1       = std::vector<decimalXX>(sz);
-  auto const vec2 = std::vector<decimalXX>(sz, decimalXX{1, scale_type{-1}});
+  auto begin      = make_counting_transform_iterator(1, [](auto i) {
+    return decimalXX{i, scale_type{0}};
+  });
+  auto const vec1 = std::vector<decimalXX>(begin, begin + sz);
+  auto const vec2 = std::vector<decimalXX>(sz, decimalXX{2, scale_type{0}});
   auto expected   = std::vector<decimalXX>(sz);
-
-  std::iota(std::begin(vec1), std::end(vec1), decimalXX{});
 
   std::transform(std::cbegin(vec1),
                  std::cend(vec1),
@@ -2107,37 +2110,148 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiply)
   auto const rhs          = wrapper<decimalXX>(vec2.begin(), vec2.end());
   auto const expected_col = wrapper<decimalXX>(expected.begin(), expected.end());
 
-  auto const result = cudf::binary_operation(
-    lhs, rhs, cudf::binary_operator::MUL, static_cast<cudf::column_view>(lhs).type());
+  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::MUL, {});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_col, result->view());
+}
+
+template <typename T>
+using fp_wrapper = cudf::test::fixed_point_column_wrapper<T>;
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiply2)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{11, 22, 33, 44, 55}, scale_type{-1}};
+  auto const rhs      = fp_wrapper<RepType>{{10, 10, 10, 10, 10}, scale_type{0}};
+  auto const expected = fp_wrapper<RepType>{{110, 220, 330, 440, 550}, scale_type{-1}};
+
+  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::MUL, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpDiv)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{-1}};
+  auto const rhs      = fp_wrapper<RepType>{{4, 4, 4, 4}, scale_type{0}};
+  auto const expected = fp_wrapper<RepType>{{2, 7, 12, 17}, scale_type{-1}};
+
+  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpDiv2)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{-1}};
+  auto const rhs      = fp_wrapper<RepType>{{4, 4, 4, 4}, scale_type{-2}};
+  auto const expected = fp_wrapper<RepType>{{2, 7, 12, 17}, scale_type{1}};
+
+  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::DIV, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpDiv3)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{10, 30, 50, 70}, scale_type{-1}};
+  auto const rhs      = make_fixed_point_scalar<decimalXX>(12, scale_type{-1});
+  auto const expected = fp_wrapper<RepType>{{0, 2, 4, 5}, scale_type{0}};
+
+  auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::DIV, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpDiv4)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto begin          = make_counting_transform_iterator(0, [](auto i) { return i * 11; });
+  auto result_begin   = make_counting_transform_iterator(0, [](auto i) { return (i * 11) / 12; });
+  auto const lhs      = fp_wrapper<RepType>(begin, begin + 1000, scale_type{-1});
+  auto const rhs      = make_fixed_point_scalar<decimalXX>(12, scale_type{-1});
+  auto const expected = fp_wrapper<RepType>(result_begin, result_begin + 1000, scale_type{0});
+
+  auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::DIV, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpAdd2)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{11, 22, 33, 44, 55}, scale_type{-1}};
+  auto const rhs      = fp_wrapper<RepType>{{100, 200, 300, 400, 500}, scale_type{-2}};
+  auto const expected = fp_wrapper<RepType>{{210, 420, 630, 840, 1050}, scale_type{-2}};
+
+  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpAdd3)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{1100, 2200, 3300, 4400, 5500}, scale_type{-3}};
+  auto const rhs      = fp_wrapper<RepType>{{100, 200, 300, 400, 500}, scale_type{-2}};
+  auto const expected = fp_wrapper<RepType>{{2100, 4200, 6300, 8400, 10500}, scale_type{-3}};
+
+  auto const result = cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpMultiplyScalar)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  auto const lhs      = fp_wrapper<RepType>{{11, 22, 33, 44, 55}, scale_type{-1}};
+  auto const rhs      = make_fixed_point_scalar<decimalXX>(100, scale_type{-1});
+  auto const expected = fp_wrapper<RepType>{{1100, 2200, 3300, 4400, 5500}, scale_type{-2}};
+
+  auto const result = cudf::binary_operation(lhs, *rhs, cudf::binary_operator::MUL, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
 TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualSimple)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
 
-  auto const ONE   = decimalXX{1, scale_type{0}};
-  auto const TWO   = decimalXX{2, scale_type{0}};
-  auto const THREE = decimalXX{3, scale_type{0}};
-  auto const FOUR  = decimalXX{4, scale_type{0}};
-
-  auto const ONE_2   = decimalXX{1, scale_type{-2}};
-  auto const TWO_2   = decimalXX{2, scale_type{-2}};
-  auto const THREE_2 = decimalXX{3, scale_type{-2}};
-  auto const FOUR_2  = decimalXX{4, scale_type{-2}};
-
-  auto const vec1  = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
-  auto const vec2  = std::vector<decimalXX>{ONE_2, TWO_2, THREE_2, FOUR_2};
-  auto const trues = std::vector<bool>(4, true);
-
-  auto const col1     = wrapper<decimalXX>(vec1.begin(), vec1.end());
-  auto const col2     = wrapper<decimalXX>(vec2.begin(), vec2.end());
+  auto const trues    = std::vector<bool>(4, true);
+  auto const col1     = fp_wrapper<RepType>{{1, 2, 3, 4}, scale_type{0}};
+  auto const col2     = fp_wrapper<RepType>{{100, 200, 300, 400}, scale_type{-2}};
   auto const expected = wrapper<bool>(trues.begin(), trues.end());
 
-  auto const result = cudf::binary_operation(
-    col1, col2, cudf::binary_operator::EQUAL, cudf::data_type{type_id::BOOL8});
+  auto const result = cudf::binary_operation(col1, col2, binary_operator::EQUAL, {});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -2146,39 +2260,38 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointBinaryOpEqualLessGreater)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
 
   auto const sz = std::size_t{1000};
 
   // TESTING binary op ADD
 
-  auto vec1 = std::vector<decimalXX>(sz, decimalXX{0, scale_type{-3}});
-  auto vec2 = std::vector<decimalXX>(sz, decimalXX{0, scale_type{-1}});
+  auto begin      = make_counting_transform_iterator(1, [](auto e) { return e * 1000; });
+  auto const vec1 = std::vector<RepType>(begin, begin + sz);
+  auto const vec2 = std::vector<RepType>(sz, 0);
 
-  std::iota(std::begin(vec1), std::end(vec1), decimalXX{1, scale_type{-3}});
+  auto const iota_3  = fp_wrapper<RepType>(vec1.begin(), vec1.end(), scale_type{-3});
+  auto const zeros_3 = fp_wrapper<RepType>(vec2.begin(), vec2.end(), scale_type{-1});
 
-  auto const iota_1  = wrapper<decimalXX>(vec1.begin(), vec1.end());
-  auto const zeros_3 = wrapper<decimalXX>(vec2.begin(), vec2.end());
+  auto const iota_3_after_add = cudf::binary_operation(zeros_3, iota_3, binary_operator::ADD, {});
 
-  auto const iota_3 = cudf::binary_operation(
-    zeros_3, iota_1, cudf::binary_operator::ADD, static_cast<cudf::column_view>(zeros_3).type());
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(iota_1, iota_3->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(iota_3, iota_3_after_add->view());
 
   // TESTING binary op EQUAL, LESS, GREATER
 
   auto const trues    = std::vector<bool>(sz, true);
   auto const true_col = wrapper<bool>(trues.begin(), trues.end());
 
-  auto const equal_result = cudf::binary_operation(
-    iota_1, iota_3->view(), cudf::binary_operator::EQUAL, data_type{type_id::BOOL8});
+  auto const equal_result =
+    cudf::binary_operation(iota_3, iota_3_after_add->view(), binary_operator::EQUAL, {});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(true_col, equal_result->view());
 
-  auto const less_result = cudf::binary_operation(
-    zeros_3, iota_3->view(), cudf::binary_operator::LESS, data_type{type_id::BOOL8});
+  auto const less_result =
+    cudf::binary_operation(zeros_3, iota_3_after_add->view(), binary_operator::LESS, {});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(true_col, less_result->view());
 
-  auto const greater_result = cudf::binary_operation(
-    iota_3->view(), zeros_3, cudf::binary_operator::GREATER, data_type{type_id::BOOL8});
+  auto const greater_result =
+    cudf::binary_operation(iota_3_after_add->view(), zeros_3, binary_operator::GREATER, {});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(true_col, greater_result->view());
 }
 

@@ -6,7 +6,9 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp.utility cimport move
 
+import pandas as pd
 import cudf
+import numpy as np
 
 from cudf._lib.cpp.types cimport size_type
 
@@ -38,7 +40,7 @@ from cudf._lib.cpp.io.types cimport (
     table_with_metadata
 )
 from cudf._lib.io.utils cimport make_source_info, make_sink_info
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, make_table_view
 from cudf._lib.cpp.table.table_view cimport table_view
 
 ctypedef int32_t underlying_type_t_compression
@@ -127,6 +129,7 @@ cdef csv_reader_options make_csv_reader_options(
     if compression is None:
         c_compression = compression_type.NONE
     else:
+        compression = str(compression)
         compression = Compression[compression.upper()]
         c_compression = <compression_type> (
             <underlying_type_t_compression> compression
@@ -233,14 +236,31 @@ cdef csv_reader_options make_csv_reader_options(
             c_dtypes.reserve(len(dtype))
             for k, v in dtype.items():
                 c_dtypes.push_back(
-                    str(str(k)+":"+str(v)).encode()
+                    str(
+                        str(k)+":"+
+                        _get_cudf_compatible_str_from_dtype(v)
+                    ).encode()
                 )
+        elif (
+            cudf.utils.dtypes.is_scalar(dtype) or
+            isinstance(dtype, (
+                np.dtype, pd.core.dtypes.dtypes.ExtensionDtype, type
+            ))
+        ):
+            c_dtypes.reserve(1)
+            c_dtypes.push_back(
+                _get_cudf_compatible_str_from_dtype(dtype).encode()
+            )
         elif isinstance(dtype, abc.Iterable):
             c_dtypes.reserve(len(dtype))
             for col_dtype in dtype:
-                c_dtypes.push_back(str(col_dtype).encode())
+                c_dtypes.push_back(
+                    _get_cudf_compatible_str_from_dtype(col_dtype).encode()
+                )
         else:
-            c_dtypes.push_back(str(dtype).encode())
+            raise ValueError(
+                "dtype should be a scalar/str/list-like/dict-like"
+            )
 
         csv_reader_options_c.set_dtypes(c_dtypes)
 
@@ -266,15 +286,15 @@ cdef csv_reader_options make_csv_reader_options(
 
 
 def validate_args(
-    delimiter,
-    sep,
-    delim_whitespace,
-    decimal,
-    thousands,
-    nrows,
-    skipfooter,
-    byte_range,
-    skiprows
+    object delimiter,
+    object sep,
+    bool delim_whitespace,
+    object decimal,
+    object thousands,
+    object nrows,
+    int skipfooter,
+    object byte_range,
+    int skiprows
 ):
     if delim_whitespace:
         if delimiter is not None:
@@ -301,38 +321,38 @@ def validate_args(
 
 
 def read_csv(
-    datasource,
-    lineterminator="\n",
-    quotechar='"',
-    quoting=0,
-    doublequote=True,
-    header="infer",
-    mangle_dupe_cols=True,
-    usecols=None,
-    sep=",",
-    delimiter=None,
-    delim_whitespace=False,
-    skipinitialspace=False,
-    names=None,
-    dtype=None,
-    skipfooter=0,
-    skiprows=0,
-    dayfirst=False,
-    compression="infer",
-    thousands=None,
-    decimal=".",
-    true_values=None,
-    false_values=None,
-    nrows=None,
-    byte_range=None,
-    skip_blank_lines=True,
-    parse_dates=None,
-    comment=None,
-    na_values=None,
-    keep_default_na=True,
-    na_filter=True,
-    prefix=None,
-    index_col=None,
+    object datasource,
+    object lineterminator="\n",
+    object quotechar='"',
+    int quoting=0,
+    bool doublequote=True,
+    object header="infer",
+    bool mangle_dupe_cols=True,
+    object usecols=None,
+    object sep=",",
+    object delimiter=None,
+    bool delim_whitespace=False,
+    bool skipinitialspace=False,
+    object names=None,
+    object dtype=None,
+    int skipfooter=0,
+    int skiprows=0,
+    bool dayfirst=False,
+    object compression="infer",
+    object thousands=None,
+    object decimal=".",
+    object true_values=None,
+    object false_values=None,
+    object nrows=None,
+    object byte_range=None,
+    bool skip_blank_lines=True,
+    object parse_dates=None,
+    object comment=None,
+    object na_values=None,
+    bool keep_default_na=True,
+    bool na_filter=True,
+    object prefix=None,
+    object index_col=None,
     **kwargs,
 ):
     """
@@ -397,24 +417,24 @@ def read_csv(
 
 cpdef write_csv(
     Table table,
-    path_or_buf=None,
-    sep=",",
-    na_rep="",
-    header=True,
-    line_terminator="\n",
-    rows_per_chunk=8,
-
+    object path_or_buf=None,
+    object sep=",",
+    object na_rep="",
+    bool header=True,
+    object line_terminator="\n",
+    int rows_per_chunk=8,
+    bool index=True,
 ):
     """
     Cython function to call into libcudf API, see `write_csv`.
 
     See Also
     --------
-    cudf.io.csv.write_csv
+    cudf.io.csv.to_csv
     """
 
-    # Index already been reset and added as main column, so just data_view
-    cdef table_view input_table_view = table.data_view()
+    cdef table_view input_table_view = \
+        table.view() if index is True else table.data_view()
     cdef bool include_header_c = header
     cdef char delim_c = ord(sep)
     cdef string line_term_c = line_terminator.encode()
@@ -426,10 +446,28 @@ cpdef write_csv(
     cdef unique_ptr[data_sink] data_sink_c
     cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
 
-    if header is True and table._column_names is not None:
-        metadata_.column_names.reserve(len(table._column_names))
-        for col_name in table._column_names:
-            metadata_.column_names.push_back(str(col_name).encode())
+    if header is True:
+        all_names = columns_apply_na_rep(table._column_names, na_rep)
+        if index is True:
+            all_names = table._index.names + all_names
+
+        if len(all_names) > 0:
+            metadata_.column_names.reserve(len(all_names))
+            if len(all_names) == 1:
+                if all_names[0] in (None, ''):
+                    metadata_.column_names.push_back('""'.encode())
+                else:
+                    metadata_.column_names.push_back(
+                        str(all_names[0]).encode()
+                    )
+            else:
+                for idx, col_name in enumerate(all_names):
+                    if col_name is None:
+                        metadata_.column_names.push_back(''.encode())
+                    else:
+                        metadata_.column_names.push_back(
+                            str(col_name).encode()
+                        )
 
     cdef csv_writer_options options = move(
         csv_writer_options.builder(sink_info_c, input_table_view)
@@ -446,3 +484,37 @@ cpdef write_csv(
 
     with nogil:
         cpp_write_csv(options)
+
+
+def _get_cudf_compatible_str_from_dtype(dtype):
+    if (
+        str(dtype) in cudf.utils.dtypes.ALL_TYPES or
+        str(dtype) in {
+            "hex", "hex32", "hex64", "date", "date32", "timestamp",
+            "timestamp[us]", "timestamp[s]", "timestamp[ms]", "timestamp[ns]",
+            "date64"
+        }
+    ):
+        return str(dtype)
+    pd_dtype = pd.core.dtypes.common.pandas_dtype(dtype)
+
+    if pd_dtype in cudf.utils.dtypes.pandas_dtypes_to_cudf_dtypes:
+        return str(cudf.utils.dtypes.pandas_dtypes_to_cudf_dtypes[pd_dtype])
+    elif isinstance(pd_dtype, np.dtype) and pd_dtype.kind in ("O", "U"):
+        return "str"
+    elif (
+        pd_dtype in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes or
+        str(pd_dtype) in cudf.utils.dtypes.ALL_TYPES or
+        cudf.utils.dtypes.is_categorical_dtype(pd_dtype)
+    ):
+        return str(pd_dtype)
+    else:
+        raise ValueError(f"dtype not understood: {dtype}")
+
+
+def columns_apply_na_rep(column_names, na_rep):
+    return tuple(
+        na_rep if pd.isnull(col_name)
+        else col_name
+        for col_name in column_names
+    )

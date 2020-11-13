@@ -36,6 +36,8 @@
 #include <cudf/stream_compaction.hpp>
 
 #include "cudf_jni_apis.hpp"
+#include "row_conversion.hpp"
+#include "dtype_utils.hpp"
 
 namespace cudf {
 namespace jni {
@@ -1190,7 +1192,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_convertCudfToArrowTable(JNIEnv
   try {
     cudf::jni::auto_set_device(env);
     std::unique_ptr<std::shared_ptr<arrow::Table>> result(new std::shared_ptr<arrow::Table>(nullptr));
-    *result = cudf::to_arrow(*tview, state->column_names);
+    auto column_metadata = std::vector<cudf::column_metadata>{};
+    column_metadata.reserve(state->column_names.size());
+    std::transform(
+      std::begin(state->column_names),
+      std::end(state->column_names),
+      std::back_inserter(column_metadata),
+      [](auto const& column_name) { return cudf::column_metadata{column_name}; }
+    );
+    *result = cudf::to_arrow(*tview, column_metadata);
     if (!result->get()) {
       return 0;
     }
@@ -1708,6 +1718,45 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gather(JNIEnv *env, jclas
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertToRows(
+    JNIEnv *env, jclass clazz, jlong input_table) {
+  JNI_NULL_CHECK(env, input_table, "input table is null", 0);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
+    std::vector<std::unique_ptr<cudf::column>> cols = cudf::java::convert_to_rows(*n_input_table);
+    int num_columns = cols.size();
+    cudf::jni::native_jlongArray outcol_handles(env, num_columns);
+    for (int i = 0; i < num_columns; i++) {
+      outcol_handles[i] = reinterpret_cast<jlong>(cols[i].release());
+    }
+    return outcol_handles.get_jArray();
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertFromRows(
+    JNIEnv *env, jclass clazz, jlong input_column, jintArray types, jintArray scale) {
+  JNI_NULL_CHECK(env, input_column, "input column is null", 0);
+  JNI_NULL_CHECK(env, types, "types is null", 0);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_column);
+    cudf::lists_column_view list_input(*input);
+    cudf::jni::native_jintArray n_types(env, types);
+    cudf::jni::native_jintArray n_scale(env, scale);
+    std::vector<cudf::data_type> types_vec;
+    for (int i = 0; i < n_types.size(); i++) {
+      types_vec.emplace_back(cudf::jni::make_data_type(n_types[i], n_scale[i]));
+    }
+    std::unique_ptr<cudf::table> result = cudf::java::convert_from_rows(list_input, types_vec);
+    return cudf::jni::convert_table_for_return(env, result);
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_repeatStaticCount(JNIEnv *env, jclass,
                                                                          jlong input_jtable,
                                                                          jint count) {
@@ -1803,13 +1852,16 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplit(JNIEnv 
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
     JNIEnv *env, jclass clazz, jlong j_input_table, jintArray j_keys,
-    jintArray j_aggregate_column_indices, jlongArray j_agg_instances, jintArray j_min_periods,
+    jlongArray j_default_output, 
+    jintArray j_aggregate_column_indices, jlongArray j_agg_instances, 
+    jintArray j_min_periods,
     jintArray j_preceding, jintArray j_following, jboolean ignore_null_keys) {
 
   JNI_NULL_CHECK(env, j_input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, j_keys, "input keys are null", NULL);
   JNI_NULL_CHECK(env, j_aggregate_column_indices, "input aggregate_column_indices are null", NULL);
   JNI_NULL_CHECK(env, j_agg_instances, "agg_instances are null", NULL);
+  JNI_NULL_CHECK(env, j_default_output, "default_outputs are null", NULL);
 
   try {
     cudf::jni::auto_set_device(env);
@@ -1821,6 +1873,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
     cudf::jni::native_jintArray keys{env, j_keys};
     cudf::jni::native_jintArray values{env, j_aggregate_column_indices};
     cudf::jni::native_jpointerArray<cudf::aggregation> agg_instances(env, j_agg_instances);
+    cudf::jni::native_jpointerArray<cudf::column_view> default_output(env, j_default_output);
     cudf::jni::native_jintArray min_periods{env, j_min_periods};
     cudf::jni::native_jintArray preceding{env, j_preceding};
     cudf::jni::native_jintArray following{env, j_following};
@@ -1838,9 +1891,17 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
     std::vector<std::unique_ptr<cudf::column>> result_columns;
     for (int i(0); i < values.size(); ++i) {
       int agg_column_index = values[i];
-      result_columns.emplace_back(std::move(cudf::grouped_rolling_window(
-          groupby_keys, input_table->column(agg_column_index), preceding[i], following[i],
-          min_periods[i], agg_instances[i]->clone())));
+      if (default_output[i] != nullptr) {
+        result_columns.emplace_back(std::move(cudf::grouped_rolling_window(
+            groupby_keys, input_table->column(agg_column_index), *default_output[i],
+            preceding[i], following[i],
+            min_periods[i], agg_instances[i]->clone())));
+      } else {
+        result_columns.emplace_back(std::move(cudf::grouped_rolling_window(
+            groupby_keys, input_table->column(agg_column_index),
+            preceding[i], following[i],
+            min_periods[i], agg_instances[i]->clone())));
+      }
     }
 
     auto result_table = std::make_unique<cudf::table>(std::move(result_columns));

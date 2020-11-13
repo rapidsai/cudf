@@ -74,5 +74,5 @@ def to_json(cudf_val, path_or_buf=None, *args, **kwargs):
         "Using CPU via Pandas to write JSON dataset, this may "
         "be GPU accelerated in the future"
     )
-    pd_value = cudf_val.to_pandas()
+    pd_value = cudf_val.to_pandas(nullable=True)
     return pd.io.json.to_json(path_or_buf, pd_value, *args, **kwargs)

@@ -80,10 +80,7 @@ class reader::impl {
 
   // parsing options
   const bool allow_newlines_in_strings_ = false;
-  ParseOptions opts_{',', '\n', '\"', '.'};
-  rmm::device_vector<SerialTrieNode> d_trie_true_;
-  rmm::device_vector<SerialTrieNode> d_trie_false_;
-  rmm::device_vector<SerialTrieNode> d_trie_na_;
+  parse_options opts_{',', '\n', '\"', '.'};
 
   /**
    * @brief Sets the column map data member and makes a device copy to be used as a kernel

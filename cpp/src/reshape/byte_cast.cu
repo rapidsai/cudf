@@ -16,12 +16,16 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
+namespace detail {
 namespace {
 struct byte_list_conversion {
   /**
@@ -67,7 +71,8 @@ struct byte_list_conversion {
     auto offsets_column = cudf::strings::detail::make_offsets_child_column(
       begin, begin + input_column.size(), mr, stream);
 
-    rmm::device_buffer null_mask = copy_bitmask(input_column, stream, mr);
+    rmm::device_buffer null_mask =
+      detail::copy_bitmask(input_column, rmm::cuda_stream_view{stream}, mr);
 
     return make_lists_column(input_column.size(),
                              std::move(offsets_column),
@@ -96,20 +101,37 @@ std::unique_ptr<cudf::column> byte_list_conversion::operator()<string_view>(
     std::move(contents.children[cudf::strings_column_view::offsets_column_index]),
     std::move(contents.children[cudf::strings_column_view::chars_column_index]),
     input_column.null_count(),
-    copy_bitmask(input_column, stream, mr),
+    detail::copy_bitmask(input_column, rmm::cuda_stream_view{stream}, mr),
     stream,
     mr);
 }
 }  // namespace
 
+/**
+ * @copydoc cudf::byte_cast(input_column,flip_endianess,rmm::mr::device_memory_resource)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
 std::unique_ptr<column> byte_cast(column_view const& input_column,
-                                  flip_endianness configuration,
+                                  flip_endianness endian_configuration,
                                   rmm::mr::device_memory_resource* mr,
                                   cudaStream_t stream)
 {
-  CUDF_FUNC_RANGE();
   return type_dispatcher(
-    input_column.type(), byte_list_conversion{}, input_column, configuration, mr, stream);
+    input_column.type(), byte_list_conversion{}, input_column, endian_configuration, mr, stream);
+}
+
+}  // namespace detail
+
+/**
+ * @copydoc cudf::byte_cast(input_column,flip_endianess,rmm::mr::device_memory_resource)
+ */
+std::unique_ptr<column> byte_cast(column_view const& input_column,
+                                  flip_endianness endian_configuration,
+                                  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::byte_cast(input_column, endian_configuration, mr, cudaStreamDefault);
 }
 
 }  // namespace cudf

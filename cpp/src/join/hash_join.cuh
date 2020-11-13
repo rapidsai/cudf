@@ -17,15 +17,15 @@
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/join.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
-#include "cudf/types.hpp"
-#include "join_common_utils.hpp"
-#include "join_kernels.cuh"
+#include <join/join_common_utils.hpp>
+#include <join/join_kernels.cuh>
+
+#include <thrust/sequence.h>
+#include <limits>
 
 namespace cudf {
 namespace detail {
@@ -39,6 +39,7 @@ namespace detail {
  * output size by using only a subset of the rows in the probe table.
  *
  * @throw cudf::logic_error if JoinKind is not INNER_JOIN or LEFT_JOIN
+ * @throw cudf::logic_error if the estimated size overflows cudf::size_type
  *
  * @tparam JoinKind The type of join to be performed
  * @tparam multimap_type The type of the hash table
@@ -59,6 +60,8 @@ size_type estimate_join_output_size(table_device_view build_table,
                                     null_equality compare_nulls,
                                     cudaStream_t stream)
 {
+  using estimate_size_type = int64_t;  // use 64-bit size so we can detect overflow
+
   const size_type build_table_num_rows{build_table.num_rows()};
   const size_type probe_table_num_rows{probe_table.num_rows()};
 
@@ -89,8 +92,8 @@ size_type estimate_join_output_size(table_device_view build_table,
   if (probe_to_build_ratio > MAX_RATIO) { sample_probe_num_rows = build_table_num_rows; }
 
   // Allocate storage for the counter used to get the size of the join output
-  size_type h_size_estimate{0};
-  rmm::device_scalar<size_type> size_estimate(0, stream);
+  estimate_size_type h_size_estimate{0};
+  rmm::device_scalar<estimate_size_type> size_estimate(0, stream);
 
   CHECK_CUDA(stream);
 
@@ -112,7 +115,7 @@ size_type estimate_join_output_size(table_device_view build_table,
   do {
     sample_probe_num_rows = std::min(sample_probe_num_rows, probe_table_num_rows);
 
-    size_estimate.set_value(0);
+    size_estimate.set_value(0, stream);
 
     row_hash hash_probe{probe_table};
     row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
@@ -132,10 +135,15 @@ size_type estimate_join_output_size(table_device_view build_table,
     // increase the estimated output size by a factor of the ratio between the
     // probe and build tables
     if (sample_probe_num_rows < probe_table_num_rows) {
-      h_size_estimate = size_estimate.value() * probe_to_build_ratio;
+      h_size_estimate = size_estimate.value(stream) * probe_to_build_ratio;
     } else {
-      h_size_estimate = size_estimate.value();
+      h_size_estimate = size_estimate.value(stream);
     }
+
+    // Detect overflow
+    CUDF_EXPECTS(h_size_estimate <
+                   static_cast<estimate_size_type>(std::numeric_limits<cudf::size_type>::max()),
+                 "Maximum join output size exceeded");
 
     // If the size estimate is non-zero, then we have a valid estimate and can break
     // If sample_probe_num_rows >= probe_table_num_rows, then we've sampled the entire
@@ -154,7 +162,7 @@ size_type estimate_join_output_size(table_device_view build_table,
 
   } while (true);
 
-  return h_size_estimate;
+  return static_cast<cudf::size_type>(h_size_estimate);
 }
 
 /**
@@ -216,7 +224,9 @@ struct hash_join::hash_join_impl {
    * @param build The build table, from which the hash table is built.
    * @param build_on The column indices from `build` to join on.
    */
-  hash_join_impl(cudf::table_view const& build, std::vector<size_type> const& build_on);
+  hash_join_impl(cudf::table_view const& build,
+                 std::vector<size_type> const& build_on,
+                 cudaStream_t stream = 0);
 
   std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> inner_join(
     cudf::table_view const& probe,
@@ -224,21 +234,24 @@ struct hash_join::hash_join_impl {
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     common_columns_output_side common_columns_output_side,
     null_equality compare_nulls,
-    rmm::mr::device_memory_resource* mr) const;
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream = 0) const;
 
   std::unique_ptr<cudf::table> left_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     null_equality compare_nulls,
-    rmm::mr::device_memory_resource* mr) const;
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream = 0) const;
 
   std::unique_ptr<cudf::table> full_join(
     cudf::table_view const& probe,
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     null_equality compare_nulls,
-    rmm::mr::device_memory_resource* mr) const;
+    rmm::mr::device_memory_resource* mr,
+    cudaStream_t stream = 0) const;
 
  private:
   /**

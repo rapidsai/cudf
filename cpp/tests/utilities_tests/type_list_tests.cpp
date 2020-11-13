@@ -25,7 +25,7 @@ constexpr bool is_same_v = std::is_same<T, U>::value;
 }
 
 namespace {
-// Work around to remove paranthesis surrounding a type
+// Work around to remove parentheses surrounding a type
 template <typename T>
 struct argument_type;
 template <typename T, typename U>
@@ -37,7 +37,7 @@ struct argument_type<T(U)> {
  * @brief Performs a compile-time check that two types are equivalent.
  *
  * @note In order to work around commas in macros, any type containing commas
- * should be wrapped in paranthesis.
+ * should be wrapped in parentheses.
  *
  * Example:
  * ```
@@ -45,7 +45,7 @@ struct argument_type<T(U)> {
  *
  * EXPECT_SAME_TYPE(int, float); // compile error
  *
- * // Paranthesis around types with commas
+ * // Parentheses around types with commas
  * EXPECT_SAME_TYPE((std::map<int, float>), (std::map<int, float>));
  * ```
  **/

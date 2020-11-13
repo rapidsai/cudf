@@ -198,16 +198,14 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         elif isinstance(o, cudf.Series):
             typs.add(cudf.Series)
         else:
-            raise ValueError(f"cannot concatenate object of type {type(o)}")
+            raise TypeError(f"cannot concatenate object of type {type(o)}")
 
     allowed_typs = {cudf.Series, cudf.DataFrame}
 
     param_axis = _axis_map.get(axis, None)
     if param_axis is None:
         raise ValueError(
-            '`axis` must be 0 / "index" or 1 / "columns", got: {0}'.format(
-                param_axis
-            )
+            f'`axis` must be 0 / "index" or 1 / "columns", got: {param_axis}'
         )
     else:
         axis = param_axis
@@ -227,11 +225,9 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             for col in o._data.names:
                 if col in df._data:
                     raise NotImplementedError(
-                        "A Column with duplicate name found: {0}, cuDF\
-                        doesn't support having multiple columns with\
-                        same names yet.".format(
-                            col
-                        )
+                        f"A Column with duplicate name found: {col}, cuDF "
+                        f"doesn't support having multiple columns with "
+                        f"same names yet."
                     )
                 df[col] = o._data[col]
 
@@ -257,9 +253,9 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             _normalize_series_and_dataframe(objs, axis=axis)
             typ = cudf.DataFrame
         else:
-            raise ValueError(
-                "`concat` cannot concatenate objects of "
-                "types: %r." % sorted([t.__name__ for t in typs])
+            raise TypeError(
+                f"`concat` cannot concatenate objects of "
+                f"types: {sorted([t.__name__ for t in typs])}."
             )
 
     if typ is cudf.DataFrame:
@@ -296,7 +292,7 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     elif issubclass(typ, cudf.Index):
         return cudf.Index._concat(objs)
     else:
-        raise ValueError(f"cannot concatenate object of type {typ}")
+        raise TypeError(f"cannot concatenate object of type {typ}")
 
 
 def melt(
@@ -381,9 +377,8 @@ def melt(
         missing = set(id_vars) - set(frame.columns)
         if not len(missing) == 0:
             raise KeyError(
-                "The following 'id_vars' are not present"
-                " in the DataFrame: {missing}"
-                "".format(missing=list(missing))
+                f"The following 'id_vars' are not present"
+                f" in the DataFrame: {list(missing)}"
             )
     else:
         id_vars = []
@@ -396,9 +391,8 @@ def melt(
         missing = set(value_vars) - set(frame.columns)
         if not len(missing) == 0:
             raise KeyError(
-                "The following 'value_vars' are not present"
-                " in the DataFrame: {missing}"
-                "".format(missing=list(missing))
+                f"The following 'value_vars' are not present"
+                f" in the DataFrame: {list(missing)}"
             )
     else:
         # then all remaining columns in frame
@@ -424,10 +418,9 @@ def melt(
     overlap = set(id_vars).intersection(set(value_vars))
     if not len(overlap) == 0:
         raise KeyError(
-            "'value_vars' and 'id_vars' cannot have overlap."
-            " The following 'value_vars' are ALSO present"
-            " in 'id_vars': {overlap}"
-            "".format(overlap=list(overlap))
+            f"'value_vars' and 'id_vars' cannot have overlap."
+            f" The following 'value_vars' are ALSO present"
+            f" in 'id_vars': {list(overlap)}"
         )
 
     N = len(frame)
@@ -447,7 +440,7 @@ def melt(
 
     # Step 2: add variable
     var_cols = []
-    for i, var in enumerate(value_vars):
+    for i, _ in enumerate(value_vars):
         var_cols.append(
             cudf.Series(cudf.core.column.full(N, i, dtype=np.int8))
         )
@@ -483,7 +476,7 @@ def get_dummies(
     prefix_sep="_",
     dummy_na=False,
     columns=None,
-    cats={},
+    cats=None,
     sparse=False,
     drop_first=False,
     dtype="uint8",
@@ -552,6 +545,8 @@ def get_dummies(
     2      0      0      1       0
     3      0      0      0       1
     """
+    if cats is None:
+        cats = {}
     if sparse:
         raise NotImplementedError("sparse is not supported yet")
 
@@ -564,17 +559,12 @@ def get_dummies(
         columns = df.select_dtypes(include=encode_fallback_dtypes).columns
 
     def length_check(obj, name):
-        err_msg = (
-            "Length of '{name}' ({len_obj}) did not match the "
-            "length of the columns being encoded ({len_required})."
-        )
-
         if cudf.utils.dtypes.is_list_like(obj):
             if len(obj) != len(columns):
-                err_msg = err_msg.format(
-                    name=name, len_obj=len(obj), len_required=len(columns)
+                raise ValueError(
+                    f"Length of '{name}' ({len(obj)}) did not match the "
+                    f"length of the columns being encoded ({len(columns)})."
                 )
-                raise ValueError(err_msg)
 
     length_check(prefix, "prefix")
     length_check(prefix_sep, "prefix_sep")
@@ -686,7 +676,7 @@ def merge_sorted(
             na_position=na_position,
         )
     )
-    result._copy_categories(objs[0])
+    result._postprocess_columns(objs[0])
     return result
 
 

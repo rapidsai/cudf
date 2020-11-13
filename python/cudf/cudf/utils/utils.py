@@ -17,6 +17,21 @@ from cudf.utils.dtypes import to_cudf_compatible_scalar
 mask_dtype = np.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
 
+_EQUALITY_OPS = {
+    "eq",
+    "ne",
+    "lt",
+    "gt",
+    "le",
+    "ge",
+    "__eq__",
+    "__ne__",
+    "__lt__",
+    "__gt__",
+    "__le__",
+    "__ge__",
+}
+
 
 @njit
 def mask_get(mask, pos):
@@ -322,7 +337,9 @@ def to_flat_dict(d):
     with tuple keys.
     """
 
-    def _inner(d, parents=[]):
+    def _inner(d, parents=None):
+        if parents is None:
+            parents = []
         for k, v in d.items():
             if not isinstance(v, d.__class__):
                 if parents:
@@ -365,3 +382,85 @@ def raise_iteration_error(obj):
         f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
         f"if you wish to iterate over the values."
     )
+
+
+def pa_mask_buffer_to_mask(mask_buf, size):
+    """
+    Convert PyArrow mask buffer to cuDF mask buffer
+    """
+    mask_size = cudf._lib.null_mask.bitmask_allocation_size_bytes(size)
+    if mask_buf.size < mask_size:
+        dbuf = rmm.DeviceBuffer(size=mask_size)
+        dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
+        return Buffer(dbuf)
+    return Buffer(mask_buf)
+
+
+def isnat(val):
+    if not isinstance(val, (np.datetime64, np.timedelta64, str)):
+        return False
+    else:
+        return val in {"NaT", "NAT"} or np.isnat(val)
+
+
+def _fillna_natwise(col):
+    # If the value we are filling is np.datetime64("NAT")
+    # we set the same mask as current column.
+    # However where there are "<NA>" in the
+    # columns, their corresponding locations
+    nat = cudf._lib.scalar._create_proxy_nat_scalar(col.dtype)
+    result = cudf._lib.replace.replace_nulls(col, nat)
+    return column.build_column(
+        data=result.base_data,
+        dtype=result.dtype,
+        mask=col.base_mask,
+        size=result.size,
+        offset=result.offset,
+        children=result.base_children,
+    )
+
+
+def search_range(start, stop, x, step=1, side="left"):
+    """Find the position to insert a value in a range, so that the resulting
+    sequence remains sorted.
+
+    When ``side`` is set to 'left', the insertion point ``i`` will hold the
+    following invariant:
+    `all(x < n for x in range_left) and all(x >= n for x in range_right)`
+    where ``range_left`` and ``range_right`` refers to the range to the left
+    and right of position ``i``, respectively.
+
+    When ``side`` is set to 'right', ``i`` will hold the following invariant:
+    `all(x <= n for x in range_left) and all(x > n for x in range_right)`
+
+    Parameters
+    --------
+    start : int
+        Start value of the series
+    stop : int
+        Stop value of the range
+    x : int
+        The value to insert
+    step : int, default 1
+        Step value of the series, assumed positive
+    side : {'left', 'right'}, default 'left'
+        See description for usage.
+
+    Returns
+    --------
+    int
+        Insertion position of n.
+
+    Examples
+    --------
+    For series: 1 4 7
+    >>> search_range(start=1, stop=10, x=4, step=3, side="left")
+    1
+    >>> search_range(start=1, stop=10, x=4, step=3, side="right")
+    2
+    """
+    z = 1 if side == "left" else 0
+    i = (x - start - z) // step + 1
+
+    length = (stop - start) // step
+    return max(min(length, i), 0)

@@ -28,8 +28,8 @@
 #include "jit/code/code.h"
 
 #include <jit/common_headers.hpp>
-#include <timestamps.hpp.jit>
-#include <types.hpp.jit>
+#include <jit/timestamps.hpp.jit>
+#include <jit/types.hpp.jit>
 
 namespace cudf {
 namespace transformation {
@@ -94,7 +94,7 @@ std::unique_ptr<column> transform(column_view const& input,
   std::unique_ptr<column> output = make_fixed_width_column(
     output_type, input.size(), copy_bitmask(input), cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
-  if (input.size() == 0) { return output; }
+  if (input.is_empty()) { return output; }
 
   mutable_column_view output_view = *output;
 

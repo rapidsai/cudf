@@ -19,6 +19,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+
 #include <strings/utilities.cuh>
 
 namespace cudf {
@@ -127,22 +128,24 @@ struct interleave_columns_functor {
     auto arch_column = input.column(0);
     auto output_size = input.num_columns() * input.num_rows();
     auto output =
-      allocate_like(arch_column, output_size, mask_allocation_policy::NEVER, mr, stream);
+      allocate_like(arch_column, output_size, mask_allocation_policy::NEVER, stream, mr);
     auto device_input  = table_device_view::create(input);
     auto device_output = mutable_column_device_view::create(*output);
     auto index_begin   = thrust::make_counting_iterator<size_type>(0);
     auto index_end     = thrust::make_counting_iterator<size_type>(output_size);
 
+    using Type = device_storage_type_t<T>;
+
     auto func_value = [input   = *device_input,
                        divisor = input.num_columns()] __device__(size_type idx) {
-      return input.column(idx % divisor).element<T>(idx / divisor);
+      return input.column(idx % divisor).element<Type>(idx / divisor);
     };
 
     if (not create_mask) {
       thrust::transform(rmm::exec_policy(stream)->on(stream),
                         index_begin,
                         index_end,
-                        device_output->data<T>(),
+                        device_output->begin<Type>(),
                         func_value);
 
       return output;
@@ -156,7 +159,7 @@ struct interleave_columns_functor {
     thrust::transform_if(rmm::exec_policy(stream)->on(stream),
                          index_begin,
                          index_end,
-                         device_output->data<T>(),
+                         device_output->begin<Type>(),
                          func_value,
                          func_validity);
 
@@ -180,13 +183,15 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input.num_columns() > 0, "input must have at least one column to determine dtype.");
 
-  auto dtype             = input.column(0).type();
-  auto output_needs_mask = false;
+  auto const dtype = input.column(0).type();
 
-  for (auto& col : input) {
-    CUDF_EXPECTS(dtype == col.type(), "DTYPE mismatch");
-    output_needs_mask |= col.nullable();
-  }
+  CUDF_EXPECTS(std::all_of(std::cbegin(input),
+                           std::cend(input),
+                           [dtype](auto const& col) { return dtype == col.type(); }),
+               "DTYPE mismatch");
+
+  auto const output_needs_mask = std::any_of(
+    std::cbegin(input), std::cend(input), [](auto const& col) { return col.nullable(); });
 
   return type_dispatcher(dtype, detail::interleave_columns_functor{}, input, output_needs_mask, mr);
 }

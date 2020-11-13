@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/detail/converters.hpp>
@@ -26,10 +27,12 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <strings/utilities.cuh>
 
-#include <memory.h>
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
+
 #include <cmath>
 #include <limits>
 
@@ -175,12 +178,13 @@ std::unique_ptr<column> to_floats(strings_column_view const& strings,
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // create float output column copying the strings null-mask
-  auto results      = make_numeric_column(output_type,
-                                     strings_count,
-                                     copy_bitmask(strings.parent(), stream, mr),
-                                     strings.null_count(),
-                                     stream,
-                                     mr);
+  auto results = make_numeric_column(
+    output_type,
+    strings_count,
+    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
+    strings.null_count(),
+    stream,
+    mr);
   auto results_view = results->mutable_view();
   // fill output column with floats
   type_dispatcher(output_type, dispatch_to_floats_fn{}, d_strings, results_view, stream);
@@ -467,7 +471,8 @@ struct dispatch_from_floats_fn {
     auto d_column           = *column;
 
     // copy the null mask
-    rmm::device_buffer null_mask = copy_bitmask(floats, stream, mr);
+    rmm::device_buffer null_mask =
+      cudf::detail::copy_bitmask(floats, rmm::cuda_stream_view{stream}, mr);
     // build offsets column
     auto offsets_transformer_itr = thrust::make_transform_iterator(
       thrust::make_counting_iterator<int32_t>(0), float_to_string_size_fn<FloatType>{d_column});

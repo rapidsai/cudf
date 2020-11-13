@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,12 @@
  */
 #pragma once
 
+#include <cudf/column/column_view.hpp>
+
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
-#include "column_view.hpp"
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
 #include <memory>
@@ -50,9 +52,6 @@ class column {
   /**
    * @brief Construct a new column by deep copying the contents of `other`.
    *
-   * All device memory allocation and copying is done using the
-   * `device_memory_resource` and `stream` from `other`.
-   *
    * @param other The column to copy
    **/
   column(column const& other);
@@ -69,7 +68,7 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   column(column const& other,
-         cudaStream_t stream,
+         rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -124,7 +123,7 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   explicit column(column_view view,
-                  cudaStream_t stream                 = 0,
+                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -312,15 +311,15 @@ class column {
   operator mutable_column_view() { return this->mutable_view(); };
 
  private:
-  data_type _type{type_id::EMPTY};  ///< Logical type of elements in the column
-  cudf::size_type _size{};          ///< The number of elements in the column
-  rmm::device_buffer _data{};       ///< Dense, contiguous, type erased device memory
-                                    ///< buffer containing the column elements
-  rmm::device_buffer _null_mask{};  ///< Bitmask used to represent null values.
-                                    ///< May be empty if `null_count() == 0`
-  mutable size_type _null_count{UNKNOWN_NULL_COUNT};  ///< The number of null elements
-  std::vector<std::unique_ptr<column>> _children{};   ///< Depending on element type, child
-                                                      ///< columns may contain additional data
+  cudf::data_type _type{type_id::EMPTY};  ///< Logical type of elements in the column
+  cudf::size_type _size{};                ///< The number of elements in the column
+  rmm::device_buffer _data{};             ///< Dense, contiguous, type erased device memory
+                                          ///< buffer containing the column elements
+  rmm::device_buffer _null_mask{};        ///< Bitmask used to represent null values.
+                                          ///< May be empty if `null_count() == 0`
+  mutable cudf::size_type _null_count{UNKNOWN_NULL_COUNT};  ///< The number of null elements
+  std::vector<std::unique_ptr<column>> _children{};         ///< Depending on element type, child
+                                                            ///< columns may contain additional data
 };
 
 /** @} */  // end of group

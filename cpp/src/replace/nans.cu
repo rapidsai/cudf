@@ -43,7 +43,7 @@ struct replace_nans_functor {
     CUDF_EXPECTS(input.type() == replacement.type(),
                  "Input and replacement must be of the same type");
 
-    if (input.size() == 0) { return cudf::make_empty_column(input.type()); }
+    if (input.is_empty()) { return cudf::make_empty_column(input.type()); }
 
     auto input_device_view = column_device_view::create(input);
     size_type size         = input.size();
@@ -61,8 +61,8 @@ struct replace_nans_functor {
                             input_pair_iterator + size,
                             replacement_pair_iterator,
                             predicate,
-                            mr,
-                            stream);
+                            stream,
+                            mr);
       } else {
         auto replacement_pair_iterator = make_pair_iterator<T, false>(replacement);
         return copy_if_else(true,
@@ -70,8 +70,8 @@ struct replace_nans_functor {
                             input_pair_iterator + size,
                             replacement_pair_iterator,
                             predicate,
-                            mr,
-                            stream);
+                            stream,
+                            mr);
       }
     } else {
       auto input_pair_iterator = make_pair_iterator<T, false>(*input_device_view);
@@ -82,8 +82,8 @@ struct replace_nans_functor {
                             input_pair_iterator + size,
                             replacement_pair_iterator,
                             predicate,
-                            mr,
-                            stream);
+                            stream,
+                            mr);
       } else {
         auto replacement_pair_iterator = make_pair_iterator<T, false>(replacement);
         return copy_if_else(false,
@@ -91,8 +91,8 @@ struct replace_nans_functor {
                             input_pair_iterator + size,
                             replacement_pair_iterator,
                             predicate,
-                            mr,
-                            stream);
+                            stream,
+                            mr);
       }
     }
   }
@@ -200,7 +200,7 @@ namespace cudf {
 namespace detail {
 void normalize_nans_and_zeros(mutable_column_view in_out, cudaStream_t stream = 0)
 {
-  if (in_out.size() == 0) { return; }
+  if (in_out.is_empty()) { return; }
   CUDF_EXPECTS(
     in_out.type() == data_type(type_id::FLOAT32) || in_out.type() == data_type(type_id::FLOAT64),
     "Expects float or double input");

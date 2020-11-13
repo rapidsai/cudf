@@ -6,7 +6,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from enum import IntEnum
 from libcpp.string cimport string
 from cudf._lib.cpp.column.column cimport column
@@ -127,7 +127,7 @@ def rjust(Column source_strings,
           fill_char):
     """
     Returns a Column by filling left side of strings in `source_strings`
-    with additional character, `fill_char` upto the given `width`.
+    with additional character, `fill_char` up to the given `width`.
     """
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()

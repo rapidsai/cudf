@@ -18,11 +18,17 @@
 
 package ai.rapids.cudf;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.StringJoiner;
 import java.util.function.Consumer;
 
 /**
@@ -35,10 +41,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
   /**
    * The size in bytes of an offset entry
    */
-  static final int OFFSET_SIZE = DType.INT32.sizeInBytes;
-  static {
-    NativeDepsLoader.loadNativeDeps();
-  }
+  static final int OFFSET_SIZE = DType.INT32.getSizeInBytes();
 
   private int refCount;
 
@@ -66,7 +69,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
    */
 
   //Constructor for lists and struct
-  HostColumnVector(DType type, long rows, Optional<Long> nullCount,
+  public HostColumnVector(DType type, long rows, Optional<Long> nullCount,
                    HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
                    HostMemoryBuffer offsetBuffer, List<HostColumnVectorCore> nestedHcv) {
     super(type, rows, nullCount, hostDataBuffer, hostValidityBuffer, offsetBuffer, nestedHcv);
@@ -165,7 +168,12 @@ public final class HostColumnVector extends HostColumnVectorCore {
    */
   public ColumnVector copyToDevice() {
     if (rows == 0) {
-      return new ColumnVector(type, 0, Optional.of(0L), null, null, null);
+      if (type.isNestedType()) {
+        return ColumnVector.createNestedColumnVector(type, 0,
+                null, null, null, Optional.of(0L), children);
+      } else {
+        return new ColumnVector(type, 0, Optional.of(0L), null, null, null);
+      }
     }
     // The simplest way is just to copy the buffers and pass them down.
     DeviceMemoryBuffer data = null;
@@ -175,7 +183,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       if (!type.isNestedType()) {
         HostMemoryBuffer hdata = this.offHeap.data;
         if (hdata != null) {
-          long dataLen = rows * type.sizeInBytes;
+          long dataLen = rows * type.getSizeInBytes();
           if (type == DType.STRING) {
             // This needs a different type
             dataLen = getEndStringOffset(rows - 1);
@@ -284,6 +292,13 @@ public final class HostColumnVector extends HostColumnVectorCore {
     cb.appendStructValues(values);
     return cb.build();
   }
+
+  public static HostColumnVector fromStructs(DataType dataType, StructData... values) {
+    ColumnBuilder cb = new ColumnBuilder(dataType, values.length);
+    cb.appendStructValues(values);
+    return cb.build();
+  }
+
   /**
    * Create a new vector from the given values.
    */
@@ -444,6 +459,50 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   /**
+   * Create a new decimal vector from unscaled values (int array) and scale.
+   * The created vector is of type DType.DECIMAL32, whose max precision is 9.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static HostColumnVector decimalFromInts(int scale, int... values) {
+    return build(DType.create(DType.DTypeEnum.DECIMAL32, scale), values.length, (b) -> b.appendUnscaledDecimalArray(values));
+  }
+
+  /**
+   * Create a new decimal vector from unscaled values (long array) and scale.
+   * The created vector is of type DType.DECIMAL64, whose max precision is 18.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static HostColumnVector decimalFromLongs(int scale, long... values) {
+    return build(DType.create(DType.DTypeEnum.DECIMAL64, scale), values.length, (b) -> b.appendUnscaledDecimalArray(values));
+  }
+
+  /**
+   * Create a new decimal vector from double floats with specific DecimalType and RoundingMode.
+   * All doubles will be rescaled if necessary, according to scale of input DecimalType and RoundingMode.
+   * If any overflow occurs in extracting integral part, an IllegalArgumentException will be thrown.
+   * This API is inefficient because of slow double -> decimal conversion, so it is mainly for testing.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static HostColumnVector decimalFromDoubles(DType type, RoundingMode mode, double... values) {
+    assert type.isDecimalType();
+    if (type.typeId == DType.DTypeEnum.DECIMAL64) {
+      long[] data = new long[values.length];
+      for (int i = 0; i < values.length; i++) {
+        BigDecimal dec = BigDecimal.valueOf(values[i]).setScale(-type.getScale(), mode);
+        data[i] = dec.unscaledValue().longValueExact();
+      }
+      return build(type, values.length, (b) -> b.appendUnscaledDecimalArray(data));
+    } else {
+      int[] data = new int[values.length];
+      for (int i = 0; i < values.length; i++) {
+        BigDecimal dec = BigDecimal.valueOf(values[i]).setScale(-type.getScale(), mode);
+        data[i] = dec.unscaledValue().intValueExact();
+      }
+      return build(type, values.length, (b) -> b.appendUnscaledDecimalArray(data));
+    }
+  }
+
+  /**
    * Create a new string vector from the given values.  This API
    * supports inline nulls. This is really intended to be used only for testing as
    * it is slow and memory intensive to translate between java strings and UTF8 strings.
@@ -468,6 +527,30 @@ public final class HostColumnVector extends HostColumnVectorCore {
         b.append(s);
       }
     });
+  }
+
+  /**
+   * Create a new vector from the given values.  This API supports inline nulls,
+   * but is much slower than building from primitive array of unscaledValues.
+   * Notice:
+   *  1. Input values will be rescaled with min scale (max scale in terms of java.math.BigDecimal),
+   *  which avoids potential precision loss due to rounding. But there exists risk of precision overflow.
+   *  2. The scale will be zero if all input values are null.
+   */
+  public static HostColumnVector fromDecimals(BigDecimal... values) {
+    // 1. Fetch the element with max precision (maxDec). Fill with ZERO if inputs is empty.
+    // 2. Fetch the max scale. Fill with ZERO if inputs is empty.
+    // 3. Rescale the maxDec with the max scale, so to come out the max precision capacity we need.
+    BigDecimal maxDec = Arrays.stream(values).filter(Objects::nonNull)
+        .max(Comparator.comparingInt(BigDecimal::precision))
+        .orElse(BigDecimal.ZERO);
+    int maxScale = Arrays.stream(values)
+        .map(decimal -> (decimal == null) ? 0 : decimal.scale())
+        .max(Comparator.naturalOrder())
+        .orElse(0);
+    maxDec = maxDec.setScale(maxScale, RoundingMode.UNNECESSARY);
+
+    return build(DType.fromJavaBigDecimal(maxDec), values.length, (b) -> b.appendBoxed(values));
   }
 
   /**
@@ -685,6 +768,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     //TODO nullable currently not used
     private boolean nullable;
     private long rows;
+    private long estimatedRows;
     private boolean built = false;
     private List<ColumnBuilder> childBuilders = new ArrayList<>();
 
@@ -692,13 +776,13 @@ public final class HostColumnVector extends HostColumnVectorCore {
     private int currentByteIndex = 0;
 
 
-    public ColumnBuilder(HostColumnVector.DataType type, int rows) {
+    public ColumnBuilder(HostColumnVector.DataType type, long estimatedRows) {
       this.type = type.getType();
       this.nullable = type.isNullable();
-      this.rows = rows;
+      this.rows = 0;
+      this.estimatedRows = estimatedRows;
       for (int i = 0; i < type.getNumChildren(); i++) {
-        // initially assume 0 rows and increment as we go
-        childBuilders.add(new ColumnBuilder(type.getChild(i), 0));
+        childBuilders.add(new ColumnBuilder(type.getChild(i), estimatedRows));
       }
     }
 
@@ -720,12 +804,6 @@ public final class HostColumnVector extends HostColumnVectorCore {
       return new HostColumnVectorCore(type, rows, Optional.of(nullCount), data, valid, offsets, hostColumnVectorCoreList);
     }
 
-    private void allocateBitmaskAndSetDefaultValues() {
-      long bitmaskSize = ColumnVector.getNativeValidPointerSize((int) rows);
-      valid = HostMemoryBuffer.allocate(bitmaskSize);
-      valid.setMemory(0, bitmaskSize, (byte) 0xFF);
-    }
-
     public ColumnBuilder appendLists(List... inputLists) {
       for (List inputList : inputLists) {
         // one row
@@ -742,45 +820,122 @@ public final class HostColumnVector extends HostColumnVectorCore {
       return this;
     }
 
-    private void initAndResizeOffsetBuffer(int currentIndex) {
-      if (this.offsets == null) {
-        offsets = HostMemoryBuffer.allocate((rows + 1) * OFFSET_SIZE);
-        offsets.setInt(0, 0);
-      } else {
-        if (offsets.length <= currentIndex * OFFSET_SIZE + OFFSET_SIZE) {
-          HostMemoryBuffer newOffset = HostMemoryBuffer.allocate(offsets.length * 2);
-          try {
-            newOffset.copyFromHostBuffer(0, offsets, 0, offsets.length);
-            offsets.close();
-            offsets = newOffset;
-            newOffset = null;
-          } finally {
-            if (newOffset != null) {
-              newOffset.close();
-            }
+    public ColumnBuilder appendStructValues(StructData... inputList) {
+      for (StructData structInput : inputList) {
+        append(structInput);
+      }
+      return this;
+    }
+
+    /**
+     * A method that is responsible for growing the buffers as needed
+     * and incrementing the row counts when we append values or nulls.
+     * @param hasNull indicates whether the validity buffer needs to be considered, as the
+     *                nullcount may not have been fully calculated yet
+     * @param length used for strings
+     */
+    private void growBuffersAndRows(boolean hasNull, int length) {
+      assert rows + 1 <= Integer.MAX_VALUE : "Row count cannot go over Integer.MAX_VALUE";
+      rows++;
+      long targetDataSize = 0;
+
+      if (!type.isNestedType()) {
+        if (type == DType.STRING) {
+          targetDataSize = data == null ? length : currentByteIndex + length;
+        } else {
+          targetDataSize = data == null ? estimatedRows * type.getSizeInBytes() : rows * type.getSizeInBytes();
+        }
+      }
+
+      if (targetDataSize > 0) {
+        if (data == null) {
+          data = HostMemoryBuffer.allocate(targetDataSize);
+        } else {
+          long maxLen;
+          if (type == DType.STRING) {
+            maxLen = Integer.MAX_VALUE;
+          } else {
+            maxLen = Integer.MAX_VALUE * (long) type.getSizeInBytes();
           }
+          long oldLen = data.getLength();
+          long newDataLen = Math.max(1, oldLen);
+          while (targetDataSize > newDataLen) {
+            newDataLen = newDataLen * 2;
+          }
+          if (newDataLen != oldLen) {
+            newDataLen = Math.min(newDataLen, maxLen);
+            if (newDataLen < targetDataSize) {
+              throw new IllegalStateException("A data buffer for strings is not supported over 2GB in size");
+            }
+            HostMemoryBuffer newData = HostMemoryBuffer.allocate(newDataLen);
+            data = copyBuffer(newData, data);
+          }
+        }
+      }
+      if (type == DType.LIST || type == DType.STRING) {
+        if (offsets == null) {
+          offsets = HostMemoryBuffer.allocate((estimatedRows + 1) * OFFSET_SIZE);
+          offsets.setInt(0, 0);
+        } else if ((rows +1) * OFFSET_SIZE > offsets.length) {
+          long newOffsetLen = offsets.length * 2;
+          HostMemoryBuffer newOffsets = HostMemoryBuffer.allocate(newOffsetLen);
+          offsets = copyBuffer(newOffsets, offsets);
+        }
+      }
+      if (hasNull || nullCount > 0) {
+        if (valid == null) {
+          long targetValidSize = ColumnVector.getNativeValidPointerSize((int)estimatedRows);
+          valid = HostMemoryBuffer.allocate(targetValidSize);
+          valid.setMemory(0, targetValidSize, (byte) 0xFF);
+        } else if (valid.length < ColumnVector.getNativeValidPointerSize((int)rows)) {
+          long newValidLen = valid.length * 2;
+          HostMemoryBuffer newValid = HostMemoryBuffer.allocate(newValidLen);
+          newValid.setMemory(0, newValidLen, (byte) 0xFF);
+          valid = copyBuffer(newValid, valid);
         }
       }
     }
 
-    private void initValidBuffer() {
-      if (this.valid == null) {
-        allocateBitmaskAndSetDefaultValues();
+    private HostMemoryBuffer copyBuffer(HostMemoryBuffer targetBuffer, HostMemoryBuffer buffer) {
+      try {
+        targetBuffer.copyFromHostBuffer(0, buffer, 0, buffer.length);
+        buffer.close();
+        buffer = targetBuffer;
+        targetBuffer = null;
+      } finally {
+        if (targetBuffer != null) {
+          targetBuffer.close();
+        }
       }
+      return buffer;
     }
 
+    /**
+     * Method that sets the null bit in the validity vector
+     * @param index the row index at which the null is marked
+     */
     private void setNullAt(int index) {
-      initValidBuffer();
+      assert index < rows : "Index for null value should fit the column with " + rows + " rows";
       nullCount += BitVectorHelper.setNullAt(valid, index);
     }
 
     public final ColumnBuilder appendNull() {
-      resizeDataBuffer(currentIndex * type.getSizeInBytes());
+      growBuffersAndRows(true, 0);
       setNullAt(currentIndex);
       currentIndex++;
-      if (type == DType.STRING || type.isNestedType()) {
-        initAndResizeOffsetBuffer(currentIndex);
-        offsets.setInt(currentIndex * OFFSET_SIZE, currentByteIndex);
+      currentByteIndex += type.getSizeInBytes();
+      if (type.hasOffsets()) {
+        if (type.getTypeId() == DType.DTypeEnum.LIST) {
+          offsets.setInt(currentIndex * OFFSET_SIZE, childBuilders.get(0).getCurrentIndex());
+        } else {
+          // It is a String
+          offsets.setInt(currentIndex * OFFSET_SIZE, currentByteIndex);
+        }
+      } else if (type == DType.STRUCT) {
+        // structs propagate nulls to children and even further down if needed
+        for (ColumnBuilder childBuilder : childBuilders) {
+          childBuilder.appendNull();
+        }
       }
       return this;
     }
@@ -789,46 +944,78 @@ public final class HostColumnVector extends HostColumnVectorCore {
     private ColumnBuilder append(StructData structData) {
       assert type.isNestedType();
       if (type == DType.STRUCT) {
-        if (structData.dataRecord == null) {
-          setNullAt(currentIndex);
-          // structs propagate nulls to children and even further down if needed
-          for (ColumnBuilder childBuilder : childBuilders) {
-            appendChildOrNull(childBuilder, structData);
+        if (structData == null || structData.dataRecord == null) {
+          return appendNull();
+        } else {
+          for (int i = 0; i < structData.getNumFields(); i++) {
+            ColumnBuilder childBuilder = childBuilders.get(i);
+            appendChildOrNull(childBuilder, structData.dataRecord.get(i));
           }
-          currentIndex++;
-          return this;
+          endStruct();
         }
-        for (int i = 0; i < structData.getNumFields(); i++) {
-          ColumnBuilder childBuilder = childBuilders.get(i);
-          appendChildOrNull(childBuilder, structData.dataRecord.get(i));
-        }
-        currentIndex++;
       }
+      return this;
+    }
+
+    private boolean allChildrenHaveSameIndex() {
+      if (childBuilders.size() > 0) {
+        int expected = childBuilders.get(0).getCurrentIndex();
+        for (ColumnBuilder child: childBuilders) {
+          if (child.getCurrentIndex() != expected) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    /**
+     * If you want to build up a struct column you can get each child `builder.getChild(N)` and
+     * append to all of them, then when you are done call `endStruct` to update this builder.
+     * Do not start to append to the child and then append a null to this without ending the struct
+     * first or you might not get the results that you expected.
+     * @return this for chaining.
+     */
+    public ColumnBuilder endStruct() {
+      assert type.getTypeId() == DType.DTypeEnum.STRUCT : "This only works for structs";
+      assert allChildrenHaveSameIndex() : "Appending structs data appears to be off " +
+          childBuilders + " should all have the same currentIndex " + type;
+      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+      currentIndex++;
+      return this;
+    }
+
+    /**
+     * If you want to build up a list column you can get `builder.getChild(0)` and append to than,
+     * then when you are done call `endList` and everything that was appended to that builder
+     * will now be in the next list. Do not start to append to the child and then append a null
+     * to this without ending the list first or you might not get the results that you expected.
+     * @return this for chaining.
+     */
+    public ColumnBuilder endList() {
+      assert type.getTypeId() == DType.DTypeEnum.LIST;
+      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+      currentIndex++;
+      offsets.setInt(currentIndex * OFFSET_SIZE, childBuilders.get(0).getCurrentIndex());
       return this;
     }
 
     // For lists
     private <T> ColumnBuilder append(List<T> inputList) {
-      assert type.isNestedType();
-      // We know lists have only 1 children
-      ColumnBuilder childBuilder = childBuilders.get(0);
       if (inputList == null) {
-        initValidBuffer();
-        setNullAt(currentIndex);
+        appendNull();
       } else {
+        ColumnBuilder childBuilder = childBuilders.get(0);
         for (Object listElement : inputList) {
           appendChildOrNull(childBuilder, listElement);
         }
+        endList();
       }
-      currentIndex++;
-      initAndResizeOffsetBuffer(currentIndex);
-      offsets.setInt(currentIndex * OFFSET_SIZE, childBuilder.getCurrentIndex());
       return this;
     }
 
     private void appendChildOrNull(ColumnBuilder childBuilder, Object listElement) {
-      childBuilder.rows += 1;
-      if (listElement == null || (listElement instanceof StructData && ((StructData) listElement).dataRecord == null)) {
+      if (listElement == null) {
         childBuilder.appendNull();
       } else if (listElement instanceof Integer) {
         childBuilder.append((Integer) listElement);
@@ -846,13 +1033,18 @@ public final class HostColumnVector extends HostColumnVectorCore {
         childBuilder.append((Byte) listElement);
       } else if (listElement instanceof Short) {
         childBuilder.append((Short) listElement);
+      } else if (listElement instanceof BigDecimal) {
+        childBuilder.append((BigDecimal) listElement);
       } else if (listElement instanceof List) {
         childBuilder.append((List) listElement);
       } else if (listElement instanceof StructData) {
         childBuilder.append((StructData) listElement);
+      } else {
+        throw new IllegalStateException("Unexpected element type: " + listElement.getClass());
       }
     }
 
+    @Deprecated
     public void incrCurrentIndex() {
       currentIndex =  currentIndex + 1;
     }
@@ -866,72 +1058,89 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public final ColumnBuilder append(byte value) {
-      assert type == DType.INT8;
+      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+      assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8;
       assert currentIndex < rows;
-      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
-      data.setByte(currentIndex * type.sizeInBytes, value);
+      data.setByte(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
-      currentByteIndex += type.sizeInBytes;
+      currentByteIndex += type.getSizeInBytes();
       return this;
     }
 
     public final ColumnBuilder append(short value) {
-      assert type == DType.INT16;
+      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+      assert type == DType.INT16 || type == DType.UINT16;
       assert currentIndex < rows;
-      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
-      data.setShort(currentIndex * type.sizeInBytes, value);
+      data.setShort(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
-      currentByteIndex += type.sizeInBytes;
+      currentByteIndex += type.getSizeInBytes();
       return this;
     }
 
     public final ColumnBuilder append(int value) {
+      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type.isBackedByInt();
       assert currentIndex < rows;
-      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
-      data.setInt(currentIndex * type.sizeInBytes, value);
+      data.setInt(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
-      currentByteIndex += type.sizeInBytes;
+      currentByteIndex += type.getSizeInBytes();
       return this;
     }
 
     public final ColumnBuilder append(long value) {
-      assert type == DType.INT64;
+      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+      assert type.isBackedByLong();
       assert currentIndex < rows;
-      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
-      data.setLong(currentIndex * type.sizeInBytes, value);
+      data.setLong(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
-      currentByteIndex += type.sizeInBytes;
+      currentByteIndex += type.getSizeInBytes();
       return this;
     }
 
     public final ColumnBuilder append(float value) {
+      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type == DType.FLOAT32;
       assert currentIndex < rows;
-      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
-      data.setFloat(currentIndex * type.sizeInBytes, value);
+      data.setFloat(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
-      currentByteIndex += type.sizeInBytes;
+      currentByteIndex += type.getSizeInBytes();
       return this;
     }
 
     public final ColumnBuilder append(double value) {
+      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type == DType.FLOAT64;
       assert currentIndex < rows;
-      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
-      data.setDouble(currentIndex * type.sizeInBytes, value);
+      data.setDouble(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
-      currentByteIndex += type.sizeInBytes;
+      currentByteIndex += type.getSizeInBytes();
       return this;
     }
 
     public final ColumnBuilder append(boolean value) {
+      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       assert type == DType.BOOL8;
       assert currentIndex < rows;
-      resizeDataBuffer(currentIndex * type.sizeInBytes + type.getSizeInBytes());
-      data.setBoolean(currentIndex * type.sizeInBytes, value);
+      data.setBoolean(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
-      currentByteIndex += type.sizeInBytes;
+      currentByteIndex += type.getSizeInBytes();
+      return this;
+    }
+
+    public final ColumnBuilder append(BigDecimal value) {
+      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+      assert currentIndex < rows;
+      // Rescale input decimal with UNNECESSARY policy, which accepts no precision loss.
+      BigInteger unscaledVal = value.setScale(-type.getScale(), RoundingMode.UNNECESSARY).unscaledValue();
+      if (type.typeId == DType.DTypeEnum.DECIMAL32) {
+        data.setInt(currentIndex * type.getSizeInBytes(), unscaledVal.intValueExact());
+      } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
+        data.setLong(currentIndex * type.getSizeInBytes(), unscaledVal.longValueExact());
+      } else {
+        throw new IllegalStateException(type + " is not a supported decimal type.");
+      }
+      currentIndex++;
+      currentByteIndex += type.getSizeInBytes();
       return this;
     }
 
@@ -950,58 +1159,37 @@ public final class HostColumnVector extends HostColumnVectorCore {
       assert length >= 0;
       assert value.length + srcOffset <= length;
       assert type == DType.STRING : " type " + type + " is not String";
+      currentIndex++;
+      growBuffersAndRows(false, length);
       assert currentIndex < rows + 1;
-      resizeDataBuffer(length);
       if (length > 0) {
         data.setBytes(currentByteIndex, value, srcOffset, length);
       }
       currentByteIndex += length;
-      currentIndex++;
-      initAndResizeOffsetBuffer(currentIndex);
       offsets.setInt(currentIndex * OFFSET_SIZE, currentByteIndex);
       return this;
-    }
-
-    private void resizeDataBuffer(int length) {
-      // just for strings we want to throw a real exception if we would overrun the buffer
-      if (data == null) {
-        // since rows can be updated as we go, make data buffer as big as that or the requested length
-        data = HostMemoryBuffer.allocate(length);
-        return;
-      }
-      long oldLen = data.getLength();
-      long newLen = oldLen;
-      while (currentByteIndex + length > newLen) {
-        newLen *= 2;
-      }
-      if (newLen > Integer.MAX_VALUE) {
-        throw new IllegalStateException("A string buffer is not supported over 2GB in size");
-      }
-      if (newLen != oldLen) {
-        // need to grow the size of the buffer.
-        HostMemoryBuffer newData = HostMemoryBuffer.allocate(newLen);
-        try {
-          newData.copyFromHostBuffer(0, data, 0, currentByteIndex);
-          data.close();
-          data = newData;
-          newData = null;
-        } finally {
-          if (newData != null) {
-            newData.close();
-          }
-        }
-      }
     }
 
     public ColumnBuilder getChild(int index) {
       return childBuilders.get(index);
     }
 
+    /**
+     * Finish and create the immutable ColumnVector, copied to the device.
+     */
+    public final ColumnVector buildAndPutOnDevice() {
+      try (HostColumnVector tmp = build()) {
+        return tmp.copyToDevice();
+      }
+    }
+
     @Override
-    public void close() throws Exception {
+    public void close() {
       if (!built) {
-        data.close();
-        data = null;
+        if (data != null) {
+          data.close();
+          data = null;
+        }
         if (valid != null) {
           valid.close();
           valid = null;
@@ -1012,6 +1200,25 @@ public final class HostColumnVector extends HostColumnVectorCore {
         }
         built = true;
       }
+    }
+
+    @Override
+    public String toString() {
+      StringJoiner sj = new StringJoiner(",");
+      for (ColumnBuilder cb : childBuilders) {
+        sj.add(cb.toString());
+      }
+      return "ColumnBuilder{" +
+          "type=" + type +
+          ", children=" + sj.toString() +
+          ", data=" + data +
+          ", valid=" + valid +
+          ", currentIndex=" + currentIndex +
+          ", nullCount=" + nullCount +
+          ", estimatedRows=" + estimatedRows +
+          ", populatedRows=" + rows +
+          ", built=" + built +
+          '}';
     }
   }
 
@@ -1047,7 +1254,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
         // The first offset is always 0
         this.offsets.setInt(0, 0);
       } else {
-        this.data = HostMemoryBuffer.allocate(rows * type.sizeInBytes);
+        this.data = HostMemoryBuffer.allocate(rows * type.getSizeInBytes());
       }
     }
 
@@ -1071,31 +1278,31 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public final Builder append(boolean value) {
       assert type == DType.BOOL8;
       assert currentIndex < rows;
-      data.setByte(currentIndex * type.sizeInBytes, value ? (byte)1 : (byte)0);
+      data.setByte(currentIndex * type.getSizeInBytes(), value ? (byte)1 : (byte)0);
       currentIndex++;
       return this;
     }
 
     public final Builder append(byte value) {
-      assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8;
+      assert type.isBackedByByte();
       assert currentIndex < rows;
-      data.setByte(currentIndex * type.sizeInBytes, value);
+      data.setByte(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
       return this;
     }
 
     public final Builder append(byte value, long count) {
       assert (count + currentIndex) <= rows;
-      assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8;
-      data.setMemory(currentIndex * type.sizeInBytes, count, value);
+      assert type.isBackedByByte();
+      data.setMemory(currentIndex * type.getSizeInBytes(), count, value);
       currentIndex += count;
       return this;
     }
 
     public final Builder append(short value) {
-      assert type == DType.INT16 || type == DType.UINT16;
+      assert type.isBackedByShort();
       assert currentIndex < rows;
-      data.setShort(currentIndex * type.sizeInBytes, value);
+      data.setShort(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
       return this;
     }
@@ -1103,7 +1310,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public final Builder append(int value) {
       assert type.isBackedByInt();
       assert currentIndex < rows;
-      data.setInt(currentIndex * type.sizeInBytes, value);
+      data.setInt(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
       return this;
     }
@@ -1111,7 +1318,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public final Builder append(long value) {
       assert type.isBackedByLong();
       assert currentIndex < rows;
-      data.setLong(currentIndex * type.sizeInBytes, value);
+      data.setLong(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
       return this;
     }
@@ -1119,7 +1326,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public final Builder append(float value) {
       assert type == DType.FLOAT32;
       assert currentIndex < rows;
-      data.setFloat(currentIndex * type.sizeInBytes, value);
+      data.setFloat(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
       return this;
     }
@@ -1127,7 +1334,58 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public final Builder append(double value) {
       assert type == DType.FLOAT64;
       assert currentIndex < rows;
-      data.setDouble(currentIndex * type.sizeInBytes, value);
+      data.setDouble(currentIndex * type.getSizeInBytes(), value);
+      currentIndex++;
+      return this;
+    }
+
+    /**
+     * Append java.math.BigDecimal into HostColumnVector with UNNECESSARY RoundingMode.
+     * Input decimal should have a larger scale than column vector.Otherwise, an ArithmeticException will be thrown while rescaling.
+     * If unscaledValue after rescaling exceeds the max precision of rapids type,
+     * an ArithmeticException will be thrown while extracting integral.
+     *
+     * @param value BigDecimal value to be appended
+     */
+    public final Builder append(BigDecimal value) {
+      return append(value, RoundingMode.UNNECESSARY);
+    }
+
+    /**
+     * Append java.math.BigDecimal into HostColumnVector with user-defined RoundingMode.
+     * Input decimal will be rescaled according to scale of column type and RoundingMode before appended.
+     * If unscaledValue after rescaling exceeds the max precision of rapids type, an ArithmeticException will be thrown.
+     *
+     * @param value        BigDecimal value to be appended
+     * @param roundingMode rounding mode determines rescaling behavior
+     */
+    public final Builder append(BigDecimal value, RoundingMode roundingMode) {
+      assert type.isDecimalType();
+      assert currentIndex < rows;
+      BigInteger unscaledValue = value.setScale(-type.getScale(), roundingMode).unscaledValue();
+      if (type.typeId == DType.DTypeEnum.DECIMAL32) {
+        data.setInt(currentIndex * type.getSizeInBytes(), unscaledValue.intValueExact());
+      } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
+        data.setLong(currentIndex * type.getSizeInBytes(), unscaledValue.longValueExact());
+      } else {
+        throw new IllegalStateException(type + " is not a supported decimal type.");
+      }
+      currentIndex++;
+      return this;
+    }
+
+    public final Builder appendUnscaledDecimal(int value) {
+      assert type.typeId == DType.DTypeEnum.DECIMAL32;
+      assert currentIndex < rows;
+      data.setInt(currentIndex * type.getSizeInBytes(), value);
+      currentIndex++;
+      return this;
+    }
+
+    public final Builder appendUnscaledDecimal(long value) {
+      assert type.typeId == DType.DTypeEnum.DECIMAL64;
+      assert currentIndex < rows;
+      data.setLong(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
       return this;
     }
@@ -1182,16 +1440,16 @@ public final class HostColumnVector extends HostColumnVectorCore {
 
     public Builder appendArray(byte... values) {
       assert (values.length + currentIndex) <= rows;
-      assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8;
-      data.setBytes(currentIndex * type.sizeInBytes, values, 0, values.length);
+      assert type.isBackedByByte();
+      data.setBytes(currentIndex * type.getSizeInBytes(), values, 0, values.length);
       currentIndex += values.length;
       return this;
     }
 
     public Builder appendArray(short... values) {
-      assert type == DType.INT16 || type == DType.UINT16;
+      assert type.isBackedByShort();
       assert (values.length + currentIndex) <= rows;
-      data.setShorts(currentIndex * type.sizeInBytes, values, 0, values.length);
+      data.setShorts(currentIndex * type.getSizeInBytes(), values, 0, values.length);
       currentIndex += values.length;
       return this;
     }
@@ -1199,7 +1457,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public Builder appendArray(int... values) {
       assert type.isBackedByInt();
       assert (values.length + currentIndex) <= rows;
-      data.setInts(currentIndex * type.sizeInBytes, values, 0, values.length);
+      data.setInts(currentIndex * type.getSizeInBytes(), values, 0, values.length);
       currentIndex += values.length;
       return this;
     }
@@ -1207,7 +1465,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public Builder appendArray(long... values) {
       assert type.isBackedByLong();
       assert (values.length + currentIndex) <= rows;
-      data.setLongs(currentIndex * type.sizeInBytes, values, 0, values.length);
+      data.setLongs(currentIndex * type.getSizeInBytes(), values, 0, values.length);
       currentIndex += values.length;
       return this;
     }
@@ -1215,7 +1473,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public Builder appendArray(float... values) {
       assert type == DType.FLOAT32;
       assert (values.length + currentIndex) <= rows;
-      data.setFloats(currentIndex * type.sizeInBytes, values, 0, values.length);
+      data.setFloats(currentIndex * type.getSizeInBytes(), values, 0, values.length);
       currentIndex += values.length;
       return this;
     }
@@ -1223,8 +1481,42 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public Builder appendArray(double... values) {
       assert type == DType.FLOAT64;
       assert (values.length + currentIndex) <= rows;
-      data.setDoubles(currentIndex * type.sizeInBytes, values, 0, values.length);
+      data.setDoubles(currentIndex * type.getSizeInBytes(), values, 0, values.length);
       currentIndex += values.length;
+      return this;
+    }
+
+    public Builder appendUnscaledDecimalArray(int... values) {
+      assert type.typeId == DType.DTypeEnum.DECIMAL32;
+      assert (values.length + currentIndex) <= rows;
+      data.setInts(currentIndex * type.getSizeInBytes(), values, 0, values.length);
+      currentIndex += values.length;
+      return this;
+    }
+
+    public Builder appendUnscaledDecimalArray(long... values) {
+      assert type.typeId == DType.DTypeEnum.DECIMAL64;
+      assert (values.length + currentIndex) <= rows;
+      data.setLongs(currentIndex * type.getSizeInBytes(), values, 0, values.length);
+      currentIndex += values.length;
+      return this;
+    }
+
+    /**
+     * Append multiple values.  This is very slow and should really only be used for tests.
+     * @param values the values to append, including nulls.
+     * @return this for chaining.
+     * @throws {@link IndexOutOfBoundsException}
+     */
+    public Builder appendBoxed(BigDecimal... values) throws IndexOutOfBoundsException {
+      assert type.isDecimalType();
+      for (BigDecimal v : values) {
+        if (v == null) {
+          appendNull();
+        } else {
+          append(v);
+        }
+      }
       return this;
     }
 
@@ -1372,15 +1664,15 @@ public final class HostColumnVector extends HostColumnVectorCore {
      */
     public final Builder append(HostColumnVector columnVector) {
       assert columnVector.rows <= (rows - currentIndex);
-      assert columnVector.type == type;
+      assert columnVector.type.equals(type);
 
       if (type == DType.STRING) {
         throw new UnsupportedOperationException(
             "Appending a string column vector client side is not currently supported");
       } else {
-        data.copyFromHostBuffer(currentIndex * type.sizeInBytes, columnVector.offHeap.data,
+        data.copyFromHostBuffer(currentIndex * type.getSizeInBytes(), columnVector.offHeap.data,
             0L,
-            columnVector.getRowCount() * type.sizeInBytes);
+            columnVector.getRowCount() * type.getSizeInBytes());
       }
 
       //As this is doing the append on the host assume that a null count is available
@@ -1532,6 +1824,10 @@ public final class HostColumnVector extends HostColumnVectorCore {
       this.dataRecord = dataRecord;
     }
 
+    public StructData(Object... data) {
+      this(Arrays.asList(data));
+    }
+
     public int getNumFields() {
       if (dataRecord != null) {
         return dataRecord.size();
@@ -1548,6 +1844,10 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public StructType(boolean isNullable, List<HostColumnVector.DataType> children) {
       this.isNullable = isNullable;
       this.children = children;
+    }
+
+    public StructType(boolean isNullable, DataType... children) {
+      this(isNullable, Arrays.asList(children));
     }
 
     @Override

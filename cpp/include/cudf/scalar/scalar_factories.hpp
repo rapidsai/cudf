@@ -15,10 +15,7 @@
  */
 #pragma once
 
-#include <cudf/null_mask.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
-#include "scalar.hpp"
+#include <cudf/scalar/scalar.hpp>
 
 namespace cudf {
 /**
@@ -132,6 +129,24 @@ std::unique_ptr<scalar> make_fixed_width_scalar(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   return std::make_unique<scalar_type_t<T>>(value, true, stream, mr);
+}
+
+/**
+ * @brief Construct scalar using the given value of fixed_point type
+ *
+ * @tparam T Datatype of the value to be represented by the scalar
+ * @param value The value to store in the scalar object
+ * @param stream CUDA stream used for device memory operations.
+ * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
+ */
+template <typename T>
+std::unique_ptr<scalar> make_fixed_point_scalar(
+  typename T::rep value,
+  numeric::scale_type scale,
+  cudaStream_t stream                 = 0,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  return std::make_unique<scalar_type_t<T>>(value, scale, true, stream, mr);
 }
 
 /** @} */  // end of group

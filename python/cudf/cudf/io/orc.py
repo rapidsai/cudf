@@ -1,17 +1,15 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
-import warnings
 import datetime
+import warnings
 
 import pyarrow as pa
 from pyarrow import orc as orc
 
 import cudf
 from cudf import _lib as libcudf
-from cudf.utils import ioutils
-from cudf.utils import filterutils
-
-import cudf.utils.metadata.orc_column_statistics_pb2 as cs_pb2
+from cudf.utils import filterutils, ioutils
+from cudf.utils.metadata import orc_column_statistics_pb2 as cs_pb2
 
 
 def _make_empty_df(filepath_or_buffer, columns):
@@ -202,7 +200,7 @@ def read_orc(
     columns=None,
     filters=None,
     stripes=None,
-    skip_rows=None,
+    skiprows=None,
     num_rows=None,
     use_index=True,
     decimals_as_float=True,
@@ -222,7 +220,7 @@ def read_orc(
 
     if filters is not None:
         selected_stripes = _filter_stripes(
-            filters, filepath_or_buffer, stripes, skip_rows, num_rows
+            filters, filepath_or_buffer, stripes, skiprows, num_rows
         )
 
         # Return empty if everything was filtered
@@ -237,7 +235,7 @@ def read_orc(
                 filepath_or_buffer,
                 columns,
                 stripes,
-                skip_rows,
+                skiprows,
                 num_rows,
                 use_index,
                 decimals_as_float,
