@@ -954,8 +954,10 @@ __device__ void prefetch_warp(volatile inflate_state_s *s, int t)
     int do_pref =
       SHFL0((t == 0) ? (cur_lo - *(volatile int32_t *)&s->cur < PREFETCH_SIZE - 32 * 4 - 4) : 0);
     if (do_pref) {
-      const uint8_t *p             = cur_p + 4 * t;
-      *PREFETCH_ADDR32(s->pref, p) = (p < end) ? *reinterpret_cast<const uint32_t *>(p) : 0;
+      const uint8_t *p = cur_p + 4 * t;
+      auto dst         = PREFETCH_ADDR32(s->pref, p);
+      *dst             = 0;
+      if (p < end) { memcpy(dst, p, sizeof(uint32_t)); };
       cur_p += 4 * 32;
       __threadfence_block();
       SYNCWARP();
@@ -1045,7 +1047,6 @@ __global__ void __launch_bounds__(NUMTHREADS)
   if (!t) {
     uint8_t *p      = const_cast<uint8_t *>(static_cast<uint8_t const *>(inputs[z].srcDevice));
     size_t src_size = inputs[z].srcSize;
-    uint32_t prefix_bytes;
     // Parse header if needed
     state->err = 0;
     if (parse_hdr) {
@@ -1063,13 +1064,21 @@ __global__ void __launch_bounds__(NUMTHREADS)
     state->outbase = state->out;
     state->outend  = state->out + inputs[z].dstSize;
     state->end     = p + src_size;
-    prefix_bytes   = (uint32_t)(((size_t)p) & 3);
+    auto const prefix_bytes = reinterpret_cast<size_t>(p) & 3;
     p -= prefix_bytes;
-    state->cur      = p;
-    state->bitbuf.x = (p < state->end) ? *reinterpret_cast<uint32_t *>(p) : 0;
-    p += 4;
-    state->bitbuf.y = (p < state->end) ? *reinterpret_cast<uint32_t *>(p) : 0;
-    state->bitpos   = prefix_bytes * 8;
+    state->cur    = p;
+    state->bitpos = prefix_bytes * 8;
+
+    auto read_32bit = [&]() {
+      uint32_t val = 0;
+      if (p < state->end) {
+        memcpy(&val, p, sizeof(val));
+        p += 4;
+      }
+      return val;
+    };
+    state->bitbuf.x = read_32bit();
+    state->bitbuf.y = read_32bit();
   }
   __syncthreads();
   // Main loop decoding blocks
@@ -1189,12 +1198,16 @@ __global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_inp
   src_align_bytes = (uint32_t)(3 & reinterpret_cast<uintptr_t>(src));
   src_align_bits  = src_align_bytes << 3;
   while (len >= 32) {
-    const uint32_t *src32 = reinterpret_cast<const uint32_t *>(src - src_align_bytes);
-    uint32_t copy_cnt     = min(len >> 2, 1024);
+    uint32_t const copy_cnt = min(len >> 2, 1024);
     if (t < copy_cnt) {
-      uint32_t v = src32[t];
-      if (src_align_bits != 0) { v = __funnelshift_r(v, src32[t + 1], src_align_bits); }
-      reinterpret_cast<uint32_t *>(dst)[t] = v;
+      uint32_t v;
+      memcpy(&v, src - src_align_bytes, sizeof(v));
+      if (src_align_bits != 0) {
+        uint32_t v1;
+        memcpy(&v1, src - src_align_bytes, sizeof(v1));
+        v = __funnelshift_r(v, v1, src_align_bits);
+      }
+      memcpy(dst + 4 * t, &v, sizeof(v));
     }
     src += copy_cnt * 4;
     dst += copy_cnt * 4;

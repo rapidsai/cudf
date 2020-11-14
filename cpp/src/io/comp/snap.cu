@@ -56,10 +56,16 @@ static inline __device__ uint32_t snap_hash(uint32_t v)
  **/
 static inline __device__ uint32_t fetch4(const uint8_t *src)
 {
-  uint32_t src_align    = 3 & reinterpret_cast<uintptr_t>(src);
-  const uint32_t *src32 = reinterpret_cast<const uint32_t *>(src - src_align);
-  uint32_t v            = src32[0];
-  return (src_align) ? __funnelshift_r(v, src32[1], src_align * 8) : v;
+  uint32_t const src_align = 3 & reinterpret_cast<uintptr_t>(src);
+  uint32_t v;
+  memcpy(&v, src - src_align, sizeof(v));
+  if (src_align) {
+    uint32_t v1;
+    memcpy(&v1, src - src_align + 4, sizeof(v));
+    return __funnelshift_r(v, v1, src_align * 8);
+  } else {
+    return v;
+  }
 }
 
 /**
@@ -286,9 +292,7 @@ extern "C" __global__ void __launch_bounds__(128)
     s->copy_length    = 0;
     s->copy_distance  = 0;
   }
-  for (uint32_t i = t; i < sizeof(s->hash_map) / sizeof(uint32_t); i += 128) {
-    *reinterpret_cast<volatile uint32_t *>(&s->hash_map[i * 2]) = 0;
-  }
+  for (uint32_t i = t; i < sizeof(s->hash_map) / sizeof(uint16_t); i += 128) { s->hash_map[i] = 0; }
   __syncthreads();
   src = s->src;
   pos = 0;
