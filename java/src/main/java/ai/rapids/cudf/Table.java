@@ -25,6 +25,8 @@ import ai.rapids.cudf.HostColumnVector.StructData;
 import ai.rapids.cudf.HostColumnVector.StructType;
 
 import java.io.File;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -2510,6 +2512,58 @@ public final class Table implements AutoCloseable {
       return this;
     }
 
+    public TestBuilder decimal32Column(int scale, Integer... unscaledValues) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, scale)));
+      typeErasedData.add(unscaledValues);
+      return this;
+    }
+
+    public TestBuilder decimal32Column(int scale, RoundingMode mode, Double... values) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, scale)));
+      BigDecimal[] data = Arrays.stream(values).map((x) -> {
+        if (x == null) return null;
+        return BigDecimal.valueOf(x).setScale(-scale, mode);
+      }).toArray(BigDecimal[]::new);
+      typeErasedData.add(data);
+      return this;
+    }
+
+    public TestBuilder decimal32Column(int scale, RoundingMode mode, String... values) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, scale)));
+      BigDecimal[] data = Arrays.stream(values).map((x) -> {
+        if (x == null) return null;
+        return new BigDecimal(x).setScale(-scale, mode);
+      }).toArray(BigDecimal[]::new);
+      typeErasedData.add(data);
+      return this;
+    }
+
+    public TestBuilder decimal64Column(int scale, Long... unscaledValues) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL64, scale)));
+      typeErasedData.add(unscaledValues);
+      return this;
+    }
+
+    public TestBuilder decimal64Column(int scale, RoundingMode mode, Double... values) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL64, scale)));
+      BigDecimal[] data = Arrays.stream(values).map((x) -> {
+        if (x == null) return null;
+        return BigDecimal.valueOf(x).setScale(-scale, mode);
+      }).toArray(BigDecimal[]::new);
+      typeErasedData.add(data);
+      return this;
+    }
+
+    public TestBuilder decimal64Column(int scale, RoundingMode mode, String... values) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL64, scale)));
+      BigDecimal[] data = Arrays.stream(values).map((x) -> {
+        if (x == null) return null;
+        return new BigDecimal(x).setScale(-scale, mode);
+      }).toArray(BigDecimal[]::new);
+      typeErasedData.add(data);
+      return this;
+    }
+
     private static ColumnVector from(DType type, Object dataArray) {
       ColumnVector ret = null;
       switch (type.typeId) {
@@ -2551,6 +2605,27 @@ public final class Table implements AutoCloseable {
           break;
         case FLOAT64:
           ret = ColumnVector.fromBoxedDoubles((Double[]) dataArray);
+          break;
+        case DECIMAL32:
+        case DECIMAL64:
+          int scale = type.getScale();
+          if (dataArray instanceof Integer[]) {
+            BigDecimal[] data = Arrays.stream(((Integer[]) dataArray))
+                .map((i) -> i == null ? null : BigDecimal.valueOf(i, -scale))
+                .toArray(BigDecimal[]::new);
+            ret = ColumnVector.build(type, data.length, (b) -> b.appendBoxed(data));
+          } else if (dataArray instanceof Long[]) {
+            BigDecimal[] data = Arrays.stream(((Long[]) dataArray))
+                .map((i) -> i == null ? null : BigDecimal.valueOf(i, -scale))
+                .toArray(BigDecimal[]::new);
+            ret = ColumnVector.build(type, data.length, (b) -> b.appendBoxed(data));
+          } else if (dataArray instanceof BigDecimal[]) {
+            BigDecimal[] data = (BigDecimal[]) dataArray;
+            ret = ColumnVector.build(type, data.length, (b) -> b.appendBoxed(data));
+          } else {
+            throw new IllegalArgumentException(
+                "Data array of invalid type(" + dataArray.getClass() + ") to build decimal column");
+          }
           break;
         default:
           throw new IllegalArgumentException(type + " is not supported yet");
