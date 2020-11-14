@@ -29,16 +29,11 @@ def _apply_filter_not_eq(val, col_stats):
 def _apply_predicate(op, val, col_stats):
     # Sanitize operator
     if op not in {"=", "==", "!=", "<", "<=", ">", ">=", "in", "not in"}:
-        raise ValueError(
-            f"{op}" is not a valid operator in predicates."
-        )
+        raise ValueError(f"'{op}' is not a valid operator in predicates.")
 
-    has_min = "minimum" in col_stats
-    has_max = "maximum" in col_stats
-    has_sum = "sum" in col_stats
-    col_min = col_stats["minimum"] if has_min else None
-    col_max = col_stats["maximum"] if has_max else None
-    col_sum = col_stats["sum"] if has_sum else None
+    col_min = col_stats.get("minimum", None)
+    col_max = col_stats.get("maximum", None)
+    col_sum = col_stats.get("sum", None)
 
     # Apply operator
     if op == "=" or op == "==":
@@ -49,44 +44,49 @@ def _apply_predicate(op, val, col_stats):
         if not _apply_filter_bool_eq(val, col_stats):
             return False
     elif op == "!=":
-        if has_min and has_max and val == col_min and val == col_max:
+        if (
+            col_min is not None
+            and col_max is not None
+            and val == col_min
+            and val == col_max
+        ):
             return False
         if _apply_filter_bool_eq(val, col_stats):
             return False
-    elif has_min and (
+    elif col_min is not None and (
         (op == "<" and val <= col_min) or (op == "<=" and val < col_min)
     ):
         return False
-    elif has_max and (
+    elif col_max is not None and (
         (op == ">" and val >= col_max) or (op == ">=" and val > col_max)
     ):
         return False
     elif (
-        has_sum
+        col_sum is not None
         and op == ">"
         and (
-            (has_min and col_min >= 0 and col_sum <= val)
-            or (has_max and col_max <= 0 and col_sum >= val)
+            (col_min is not None and col_min >= 0 and col_sum <= val)
+            or (col_max is not None and col_max <= 0 and col_sum >= val)
         )
     ):
         return False
     elif (
-        has_sum
+        col_sum is not None
         and op == ">="
         and (
-            (has_min and col_min >= 0 and col_sum < val)
-            or (has_max and col_max <= 0 and col_sum > val)
+            (col_min is not None and col_min >= 0 and col_sum < val)
+            or (col_max is not None and col_max <= 0 and col_sum > val)
         )
     ):
         return False
     elif op == "in":
-        if (has_max and col_max < min(val)) or (
-            has_min and col_min > max(val)
+        if (col_max is not None and col_max < min(val)) or (
+            col_min is not None and col_min > max(val)
         ):
             return False
         if all(_apply_filter_not_eq(elem, col_stats) for elem in val):
             return False
-    elif op == "not in" and has_min and has_max:
+    elif op == "not in" and col_min is not None and col_max is not None:
         if any(elem == col_min == col_max for elem in val):
             return False
         col_range = None
