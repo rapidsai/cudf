@@ -599,9 +599,7 @@ def istimestamp(
     return Column.from_unique_ptr(move(c_result))
 
 
-def timedelta2int(
-        Column input_col,
-        **kwargs):
+def timedelta2int(Column input_col, dtype, format):
     """
     Converting/Casting input string column to TimeDelta column with specified
     format
@@ -615,16 +613,14 @@ def timedelta2int(
     A Column with string represented in TimeDelta format
 
     """
-    if input_col.size == 0:
-        return as_column([], dtype=kwargs.get('dtype'))
     cdef column_view input_column_view = input_col.view()
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[kwargs.get('dtype')]
+            np_to_cudf_types[dtype]
         )
     )
     cdef data_type out_type = data_type(tid)
-    cdef string c_duration_format = kwargs.get('format').encode('UTF-8')
+    cdef string c_duration_format = format.encode('UTF-8')
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(

@@ -184,6 +184,9 @@ _datetime_to_str_typecast_functions = {
     np.dtype("datetime64[ms]"): str_cast.int2timestamp,
     np.dtype("datetime64[us]"): str_cast.int2timestamp,
     np.dtype("datetime64[ns]"): str_cast.int2timestamp,
+}
+
+_timedelta_to_str_typecast_functions = {
     np.dtype("timedelta64[s]"): str_cast.int2timedelta,
     np.dtype("timedelta64[ms]"): str_cast.int2timedelta,
     np.dtype("timedelta64[us]"): str_cast.int2timedelta,
@@ -3757,7 +3760,9 @@ class StringMethods(ColumnMethodsMixin):
         dtype: object
         """
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
-        return self._return_or_inplace(cpp_tokenize(self._column, delimiter))
+        return self._return_or_inplace(
+            cpp_tokenize(self._column, delimiter), retain_index=False
+        )
 
     def detokenize(self, indices, separator=" "):
         """
