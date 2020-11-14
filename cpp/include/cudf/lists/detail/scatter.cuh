@@ -656,13 +656,26 @@ struct list_child_constructor
       num_child_rows,
       std::move(child_offsets),
       std::move(child_column),
-      child_null_mask.second,            // Null count
+      child_null_mask.second,           // Null count
       std::move(child_null_mask.first), // Null mask
       stream,
       mr
     );
   }
 };
+
+/**
+ * @brief Checks that the specified columns have matching schemas, all the way down.
+ */
+void assert_same_data_type(column_view const& lhs, column_view const& rhs)
+{
+  CUDF_EXPECTS(lhs.type().id() == rhs.type().id(), "Mismatched Data types.");
+  CUDF_EXPECTS(lhs.num_children() == rhs.num_children(), "Mismatched number of child columns.");
+
+  for (int i{0}; i<lhs.num_children(); ++i) {
+    assert_same_data_type(lhs.child(i), rhs.child(i));
+  }
+}
 
 } // namespace;
 
@@ -705,19 +718,17 @@ std::unique_ptr<column> scatter(
 
     auto child_column_type = lists_column_view(target).child().type();
 
-    // TODO: Deep(er) checks that source and target have identical types.
+    assert_same_data_type(source, target);
 
     using lists_column_device_view = cudf::detail::lists_column_device_view;
     using unbound_list_view = cudf::lists::detail::unbound_list_view;
 
     auto source_lists_column_view = lists_column_view(source); // Checks that this is a list column.
     auto source_device_view = column_device_view::create(source, stream);
-    // auto source_lists_column_device_view = lists_column_device_view(*source_device_view);
     auto source_vector = list_vector_from_column(unbound_list_view::SOURCE, lists_column_device_view(*source_device_view), stream);
 
     auto target_lists_column_view = lists_column_view(target); // Checks that target is a list column.
     auto target_device_view = column_device_view::create(target, stream);
-    // auto target_lists_column_device_view = lists_column_device_view(*target_device_view);
     auto target_vector = list_vector_from_column(unbound_list_view::TARGET, lists_column_device_view(*target_device_view), stream);
 
     // Scatter.

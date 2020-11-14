@@ -34,7 +34,19 @@ class list_device_view {
 
     list_device_view() = default;
 
-    CUDA_DEVICE_CALLABLE list_device_view(lists_column_device_view const& lists_column, size_type const& idx);
+    CUDA_DEVICE_CALLABLE list_device_view(lists_column_device_view const& lists_column, size_type const& row_index)
+      : lists_column(lists_column), _row_index(row_index)
+    {
+      release_assert(row_index >= 0 && row_index < lists_column.size() && "row_index out of bounds");
+
+      column_device_view const& offsets = lists_column.offsets();
+      release_assert(row_index < offsets.size() && "row_index should not have exceeded offset size");
+
+      begin_offset = offsets.element<size_type>(row_index);
+      release_assert(begin_offset >= 0 && begin_offset <= lists_column.child().size() &&
+                    "begin_offset out of bounds.");
+      _size = offsets.element<size_type>(row_index + 1) - begin_offset;
+    }
 
     ~list_device_view() = default;
 
@@ -59,7 +71,11 @@ class list_device_view {
      * The offset of this element as stored in the child column (i.e. 5)
      * may be fetched using this method.
      */
-    CUDA_DEVICE_CALLABLE size_type element_offset(size_type idx) const;
+    CUDA_DEVICE_CALLABLE size_type element_offset(size_type idx) const
+    {
+      release_assert(idx >= 0 && idx < size() && "idx out of bounds");
+      return begin_offset + idx;
+    }
 
     /**
      * @brief Fetches the element at the specified index, within the list row.
@@ -69,17 +85,28 @@ class list_device_view {
      * @return The element at the specified index of the list row.
      */
     template <typename T>
-    CUDA_DEVICE_CALLABLE T element(size_type idx) const;
+    CUDA_DEVICE_CALLABLE T element(size_type idx) const
+    {
+      return lists_column.child().element<T>(element_offset(idx));
+    }
 
     /**
      * @brief Checks whether element is null at specified index in the list row.
      */
-    CUDA_DEVICE_CALLABLE bool is_null(size_type idx) const;
+    CUDA_DEVICE_CALLABLE bool is_null(size_type idx) const
+    {
+      release_assert(idx >= 0 && idx < size() && "Index out of bounds.");
+      auto element_offset = begin_offset + idx;
+      return lists_column.child().is_null(element_offset);
+    }
 
     /**
      * @brief Checks whether this list row is null.
      */
-    CUDA_DEVICE_CALLABLE bool is_null() const;
+    CUDA_DEVICE_CALLABLE bool is_null() const
+    {
+      return lists_column.is_null(_row_index);
+    }
 
     /**
      * @brief Fetches the number of elements in this list row.
@@ -100,45 +127,5 @@ class list_device_view {
     size_type begin_offset;  // Offset in list_column_device_view where this list begins.
 
 };
-
-CUDA_DEVICE_CALLABLE list_device_view::list_device_view(
-  lists_column_device_view const& lists_column, size_type const& row_index)
-  : lists_column(lists_column), _row_index(row_index)
-{
-  release_assert(row_index >= 0 && row_index < lists_column.size() && "row_index out of bounds");
-
-  column_device_view const& offsets = lists_column.offsets();
-  release_assert(row_index < offsets.size() && "row_index should not have exceeded offset size");
-
-  begin_offset = offsets.element<size_type>(row_index);
-  release_assert(begin_offset >= 0 && begin_offset <= lists_column.child().size() &&
-                 "begin_offset out of bounds.");
-  _size = offsets.element<size_type>(row_index + 1) - begin_offset;
-}
-
-CUDA_DEVICE_CALLABLE size_type list_device_view::element_offset(size_type idx) const
-{
-  release_assert(idx >= 0 && idx < size() && "idx out of bounds");
-  // release_assert(!is_null() && !is_null(idx) && "Cannot read null element.");
-  return begin_offset + idx;
-}
-
-template <typename T>
-CUDA_DEVICE_CALLABLE T list_device_view::element(size_type idx) const
-{
-  return lists_column.child().element<T>(element_offset(idx));
-}
-
-CUDA_DEVICE_CALLABLE bool list_device_view::is_null(size_type idx) const
-{
-  release_assert(idx >= 0 && idx < size() && "Index out of bounds.");
-  auto element_offset = begin_offset + idx;
-  return lists_column.child().is_null(element_offset);
-}
-
-CUDA_DEVICE_CALLABLE bool list_device_view::is_null() const
-{
-  return lists_column.is_null(_row_index);
-}
 
 }  // namespace cudf
