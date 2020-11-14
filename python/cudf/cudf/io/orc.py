@@ -8,7 +8,7 @@ from pyarrow import orc as orc
 
 import cudf
 from cudf import _lib as libcudf
-from cudf.utils import filterutils, ioutils
+from cudf.utils import ioutils
 from cudf.utils.metadata import orc_column_statistics_pb2 as cs_pb2
 
 
@@ -160,7 +160,7 @@ def _filter_stripes(
     filters, filepath_or_buffer, stripes=None, skip_rows=None, num_rows=None
 ):
     # Prepare filters
-    filters = filterutils._prepare_filters(filters)
+    filters = ioutils._prepare_filters(filters)
 
     # Get columns relevant to filtering
     columns_in_predicate = [
@@ -173,7 +173,7 @@ def _filter_stripes(
     )
 
     # Filter using file-level statistics
-    if not filterutils._apply_filters(filters, file_statistics):
+    if not ioutils._apply_filters(filters, file_statistics):
         return []
 
     # Filter using stripe-level statistics
@@ -196,7 +196,7 @@ def _filter_stripes(
             and num_rows_before_stripe >= skip_rows + num_rows
         ):
             continue
-        if filterutils._apply_filters(filters, stripe_statistics):
+        if ioutils._apply_filters(filters, stripe_statistics):
             selected_stripes.append(i)
 
     return selected_stripes
