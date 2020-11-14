@@ -127,25 +127,31 @@ def read_orc_statistics(
 
     # Parse statistics
     cs = cs_pb2.ColumnStatistics()
-    file_statistics = {}
+
+    file_statistics = {
+        column_names[i]: _parse_column_statistics(cs, raw_file_stats)
+        for i, raw_file_stats in enumerate(raw_file_statistics)
+        if columns is None or column_names[i] in columns
+    }
+    if any(
+        not parsed_statistics for parsed_statistics in file_statistics.values()
+    ):
+        return None
+
     stripes_statistics = []
-    for i, raw_file_stats in enumerate(raw_file_statistics):
-        if columns is None or column_names[i] in columns:
-            parsed_statistics = _parse_column_statistics(cs, raw_file_stats)
-            if not parsed_statistics:
-                return None
-            file_statistics[column_names[i]] = parsed_statistics
     for raw_stripe_statistics in raw_stripes_statistics:
-        stripe_statistics = {}
-        for i, raw_file_stats in enumerate(raw_stripe_statistics):
-            if columns is None or column_names[i] in columns:
-                parsed_statistics = _parse_column_statistics(
-                    cs, raw_file_stats
-                )
-                if not parsed_statistics:
-                    return None
-                stripe_statistics[column_names[i]] = parsed_statistics
-        stripes_statistics.append(stripe_statistics)
+        stripe_statistics = {
+            column_names[i]: _parse_column_statistics(cs, raw_file_stats)
+            for i, raw_file_stats in enumerate(raw_stripe_statistics)
+            if columns is None or column_names[i] in columns
+        }
+        if any(
+            not parsed_statistics
+            for parsed_statistics in stripe_statistics.values()
+        ):
+            return None
+        else:
+            stripes_statistics.append(stripe_statistics)
 
     return file_statistics, stripes_statistics
 
