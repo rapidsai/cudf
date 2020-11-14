@@ -30,15 +30,52 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   protected long columnHandle;
   protected long viewHandle = 0;
-  private final DType type;
-  private final long rows;
-  private Optional<Long> nullCount = Optional.empty();
+  protected DType type;
+  protected long rows;
+  protected Optional<Long> nullCount = Optional.empty();
 
-  public ColumnView(long viewHandle) {
-    this.viewHandle = viewHandle;
-    type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
-    rows = ColumnView.getNativeRowCount(viewHandle);
-    nullCount = Optional.of((long)ColumnView.getNativeNullCount(viewHandle));
+  public ColumnView(DType type, long rows, Optional<Long> nullCount,
+                    BaseDeviceMemoryBuffer dataBuffer, BaseDeviceMemoryBuffer validityBuffer,
+                    BaseDeviceMemoryBuffer offsetBuffer, List<ColumnView.NestedColumnVector> nestedColumnVectors) {
+    if (type != DType.STRING && type != DType.LIST) {
+      assert offsetBuffer == null : "offsets are only supported for STRING, LISTS";
+    }
+    this.rows = rows;
+    this.nullCount = nullCount;
+    this.type = type;
+
+    List<BaseDeviceMemoryBuffer> toClose = new ArrayList<>();
+    long[] childHandles = new long[nestedColumnVectors.size()];
+    for (ColumnView.NestedColumnVector ncv : nestedColumnVectors) {
+      toClose.addAll(ncv.getBuffersToClose());
+    }
+    for (int i = 0; i < nestedColumnVectors.size(); i++) {
+      childHandles[i] = nestedColumnVectors.get(i).getViewHandle();
+    }
+    assert !nullCount.isPresent() || nullCount.get() <= Integer.MAX_VALUE;
+    int nc = nullCount.orElse(UNKNOWN_NULL_COUNT).intValue();
+    if (rows == 0  && !type.isNestedType()) {
+      this.columnHandle = makeEmptyCudfColumn(type.typeId.getNativeId(), type.getScale());
+    } else {
+      long cd = dataBuffer == null ? 0 : dataBuffer.address;
+      long cdSize = dataBuffer == null ? 0 : dataBuffer.length;
+      long od = offsetBuffer == null ? 0 : offsetBuffer.address;
+      long vd = validityBuffer == null ? 0 : validityBuffer.address;
+      this.viewHandle = makeCudfColumnView(type.typeId.getNativeId(), type.getScale(), cd, cdSize,
+          od, vd, nc, (int)rows, childHandles) ;
+    }
+  }
+
+  //TODO can we make this better
+  protected ColumnView(long address, boolean isColumnView) {
+    if (isColumnView) {
+      this.viewHandle = address;
+    } else {
+      this.columnHandle = address;
+    }
+    this.type = DType.fromNative(ColumnView.getNativeTypeId(getNativeView()), ColumnView.getNativeTypeScale(getNativeView()));
+    this.rows = ColumnView.getNativeRowCount(getNativeView());
+    this.nullCount = Optional.of((long)ColumnView.getNativeNullCount(getNativeView()));
   }
 
   public ColumnView(DType type, int rows, Optional<Long> nullCount,
@@ -46,6 +83,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
                     long[] childColumnViewHandles) {
     this.type = type;
     this.rows = rows;
+    this.nullCount = nullCount;
     assert !nullCount.isPresent() || nullCount.get() <= Integer.MAX_VALUE;
     int nc = nullCount.orElse(UNKNOWN_NULL_COUNT).intValue();
     if (rows == 0  && !type.isNestedType()) {
@@ -60,6 +98,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
   }
 
+  /**
+   * USE WITH CAUTION: This method exposes the address of the native cudf::column_view.  This allows
+   * writing custom kernels or other cuda operations on the data.  DO NOT close this column
+   * vector until you are completely done using the native column_view.  DO NOT modify the column in
+   * any way.  This should be treated as a read only data structure. This API is unstable as
+   * the underlying C/C++ API is still not stabilized.  If the underlying data structure
+   * is renamed this API may be replaced.  The underlying data structure can change from release
+   * to release (it is not stable yet) so be sure that your native code is complied against the
+   * exact same version of libcudf as this is released for.
+   */
   public long getNativeView() {
     if (viewHandle == 0) {
       viewHandle = getNativeColumnView(columnHandle);
@@ -79,7 +127,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
     long childColumnView = ColumnView.getChildCvPointer(viewHandle, childIndex);
     //this is returning a new ColumnView - must close this!
-    return new ColumnView(childColumnView);
+    return new ColumnView(childColumnView, true);
   }
 
   /**
@@ -116,21 +164,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return ColumnView.getNativeNumChildren(viewHandle);
   }
 
-  public ColumnVector copyToColumnVector() {
-    List<NestedColumnVector> nestedColumnVectors = copyToNestedColumnVectors();
-    return new ColumnVector(type, rows, nullCount, getData(),
-        getValid(), getOffsets(), nestedColumnVectors);
-  }
-
-  private List<NestedColumnVector> copyToNestedColumnVectors() {
-    List<NestedColumnVector> children = new ArrayList<>();
-    if (type.isNestedType()) {
-      for (int i = 0; i < getNumChildren(); i++) {
-        NestedColumnVector childNcv = NestedColumnVector.createNewNestedColumnVector(getChildColumnView(i));
-        children.add(childNcv);
-      }
-    }
-    return children;
+  public final ColumnVector copyToColumnVector() {
+    long mainCvHandle = ColumnView.copyColumnViewToCV(viewHandle);
+    return new ColumnVector(mainCvHandle);
   }
 
   @Override
@@ -403,7 +439,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param indices
    * @return A new ColumnVector array with slices from the original ColumnVector
    */
-  public ColumnVector[] slice(int... indices) {
+  public final ColumnVector[] slice(int... indices) {
     long[] nativeHandles = slice(this.getNativeView(), indices);
     ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
     for (int i = 0; i < nativeHandles.length; i++) {
@@ -416,7 +452,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Return a subVector from start inclusive to the end of the vector.
    * @param start the index to start at.
    */
-  public ColumnVector subVector(int start) {
+  public final ColumnVector subVector(int start) {
     return subVector(start, (int)rows);
   }
 
@@ -425,7 +461,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param start the index to start at (inclusive).
    * @param end the index to end at (exclusive).
    */
-  public ColumnVector subVector(int start, int end) {
+  public final ColumnVector subVector(int start, int end) {
     ColumnVector [] tmp = slice(start, end);
     assert tmp.length == 1;
     return tmp[0];
@@ -474,7 +510,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param indices the indexes to split with
    * @return A new ColumnVector array with slices from the original ColumnVector
    */
-  public ColumnVector[] split(int... indices) {
+  public final ColumnVector[] split(int... indices) {
     long[] nativeHandles = split(this.getNativeView(), indices);
     ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
     for (int i = 0; i < nativeHandles.length; i++) {
@@ -554,7 +590,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * @return A new ColumnVector with all elements equivalent to NaN/0.0 replaced with a normalized equivalent.
    */
-  public ColumnVector normalizeNANsAndZeros() {
+  public final ColumnVector normalizeNANsAndZeros() {
     return new ColumnVector(normalizeNANsAndZeros(getNativeView()));
   }
 
@@ -566,7 +602,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param columns array of columns whose null masks are merged, must have identical number of rows.
    * @return the new ColumnVector with merged null mask.
    */
-  public ColumnVector mergeAndSetValidity(BinaryOp mergeOp, ColumnVector... columns) {
+  public final ColumnVector mergeAndSetValidity(BinaryOp mergeOp, ColumnVector... columns) {
     assert mergeOp == BinaryOp.BITWISE_AND : "Only BITWISE_AND supported right now";
     long[] columnViews = new long[columns.length];
     long size = getRowCount();
@@ -616,7 +652,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * is responsible for its lifecycle.
    * @return - A new INT16 vector allocated on the GPU.
    */
-  public ColumnVector year() {
+  public final ColumnVector year() {
     assert type.isTimestamp();
     return new ColumnVector(year(getNativeView()));
   }
@@ -628,7 +664,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * is responsible for its lifecycle.
    * @return - A new INT16 vector allocated on the GPU.
    */
-  public ColumnVector month() {
+  public final ColumnVector month() {
     assert type.isTimestamp();
     return new ColumnVector(month(getNativeView()));
   }
@@ -640,7 +676,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * is responsible for its lifecycle.
    * @return - A new INT16 vector allocated on the GPU.
    */
-  public ColumnVector day() {
+  public final ColumnVector day() {
     assert type.isTimestamp();
     return new ColumnVector(day(getNativeView()));
   }
@@ -652,7 +688,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * is responsible for its lifecycle.
    * @return - A new INT16 vector allocated on the GPU.
    */
-  public ColumnVector hour() {
+  public final ColumnVector hour() {
     assert type.hasTimeResolution();
     return new ColumnVector(hour(getNativeView()));
   }
@@ -664,7 +700,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * is responsible for its lifecycle.
    * @return - A new INT16 vector allocated on the GPU.
    */
-  public ColumnVector minute() {
+  public final ColumnVector minute() {
     assert type.hasTimeResolution();
     return new ColumnVector(minute(getNativeView()));
   }
@@ -676,7 +712,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * is responsible for its lifecycle.
    * @return A new INT16 vector allocated on the GPU.
    */
-  public ColumnVector second() {
+  public final ColumnVector second() {
     assert type.hasTimeResolution();
     return new ColumnVector(second(getNativeView()));
   }
@@ -688,7 +724,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * is responsible for its lifecycle.
    * @return A new INT16 vector allocated on the GPU. Monday=1, ..., Sunday=7
    */
-  public ColumnVector weekDay() {
+  public final ColumnVector weekDay() {
     assert type.isTimestamp();
     return new ColumnVector(weekDay(getNativeView()));
   }
@@ -700,7 +736,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * is responsible for its lifecycle.
    * @return A new TIMESTAMP_DAYS vector allocated on the GPU.
    */
-  public ColumnVector lastDayOfMonth() {
+  public final ColumnVector lastDayOfMonth() {
     assert type.isTimestamp();
     return new ColumnVector(lastDayOfMonth(getNativeView()));
   }
@@ -712,7 +748,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * is responsible for its lifecycle.
    * @return A new INT16 vector allocated on the GPU. The value is between [1, {365-366}]
    */
-  public ColumnVector dayOfYear() {
+  public final ColumnVector dayOfYear() {
     assert type.isTimestamp();
     return new ColumnVector(dayOfYear(getNativeView()));
   }
@@ -729,7 +765,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param udf This function will be applied to every element in the vector
    * @param isPtx is the code of the function ptx? true or C/C++ false.
    */
-  public ColumnVector transform(String udf, boolean isPtx) {
+  public final ColumnVector transform(String udf, boolean isPtx) {
     return new ColumnVector(transform(getNativeView(), udf, isPtx));
   }
 
@@ -738,112 +774,112 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param op      the operation to perform
    * @return the result
    */
-  public ColumnVector unaryOp(UnaryOp op) {
+  public final ColumnVector unaryOp(UnaryOp op) {
     return new ColumnVector(unaryOperation(getNativeView(), op.nativeId));
   }
 
   /**
    * Calculate the sin, output is the same type as input.
    */
-  public ColumnVector sin() {
+  public final ColumnVector sin() {
     return unaryOp(UnaryOp.SIN);
   }
 
   /**
    * Calculate the cos, output is the same type as input.
    */
-  public ColumnVector cos() {
+  public final ColumnVector cos() {
     return unaryOp(UnaryOp.COS);
   }
 
   /**
    * Calculate the tan, output is the same type as input.
    */
-  public ColumnVector tan() {
+  public final ColumnVector tan() {
     return unaryOp(UnaryOp.TAN);
   }
 
   /**
    * Calculate the arcsin, output is the same type as input.
    */
-  public ColumnVector arcsin() {
+  public final ColumnVector arcsin() {
     return unaryOp(UnaryOp.ARCSIN);
   }
 
   /**
    * Calculate the arccos, output is the same type as input.
    */
-  public ColumnVector arccos() {
+  public final ColumnVector arccos() {
     return unaryOp(UnaryOp.ARCCOS);
   }
 
   /**
    * Calculate the arctan, output is the same type as input.
    */
-  public ColumnVector arctan() {
+  public final ColumnVector arctan() {
     return unaryOp(UnaryOp.ARCTAN);
   }
 
   /**
    * Calculate the hyperbolic sin, output is the same type as input.
    */
-  public ColumnVector sinh() {
+  public final ColumnVector sinh() {
     return unaryOp(UnaryOp.SINH);
   }
 
   /**
    * Calculate the hyperbolic cos, output is the same type as input.
    */
-  public ColumnVector cosh() {
+  public final ColumnVector cosh() {
     return unaryOp(UnaryOp.COSH);
   }
 
   /**
    * Calculate the hyperbolic tan, output is the same type as input.
    */
-  public ColumnVector tanh() {
+  public final ColumnVector tanh() {
     return unaryOp(UnaryOp.TANH);
   }
 
   /**
    * Calculate the hyperbolic arcsin, output is the same type as input.
    */
-  public ColumnVector arcsinh() {
+  public final ColumnVector arcsinh() {
     return unaryOp(UnaryOp.ARCSINH);
   }
 
   /**
    * Calculate the hyperbolic arccos, output is the same type as input.
    */
-  public ColumnVector arccosh() {
+  public final ColumnVector arccosh() {
     return unaryOp(UnaryOp.ARCCOSH);
   }
 
   /**
    * Calculate the hyperbolic arctan, output is the same type as input.
    */
-  public ColumnVector arctanh() {
+  public final ColumnVector arctanh() {
     return unaryOp(UnaryOp.ARCTANH);
   }
 
   /**
    * Calculate the exp, output is the same type as input.
    */
-  public ColumnVector exp() {
+  public final ColumnVector exp() {
     return unaryOp(UnaryOp.EXP);
   }
 
   /**
    * Calculate the log, output is the same type as input.
    */
-  public ColumnVector log() {
+  public final ColumnVector log() {
     return unaryOp(UnaryOp.LOG);
   }
 
   /**
    * Calculate the log with base 2, output is the same type as input.
    */
-  public ColumnVector log2() {
+  public final ColumnVector log2() {
     try (Scalar base = Scalar.fromInt(2)) {
       return binaryOp(BinaryOp.LOG_BASE, base, getType());
     }
@@ -852,7 +888,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Calculate the log with base 10, output is the same type as input.
    */
-  public ColumnVector log10() {
+  public final ColumnVector log10() {
     try (Scalar base = Scalar.fromInt(10)) {
       return binaryOp(BinaryOp.LOG_BASE, base, getType());
     }
@@ -861,49 +897,49 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Calculate the sqrt, output is the same type as input.
    */
-  public ColumnVector sqrt() {
+  public final ColumnVector sqrt() {
     return unaryOp(UnaryOp.SQRT);
   }
 
   /**
    * Calculate the cube root, output is the same type as input.
    */
-  public ColumnVector cbrt() {
+  public final ColumnVector cbrt() {
     return unaryOp(UnaryOp.CBRT);
   }
 
   /**
    * Calculate the ceil, output is the same type as input.
    */
-  public ColumnVector ceil() {
+  public final ColumnVector ceil() {
     return unaryOp(UnaryOp.CEIL);
   }
 
   /**
    * Calculate the floor, output is the same type as input.
    */
-  public ColumnVector floor() {
+  public final ColumnVector floor() {
     return unaryOp(UnaryOp.FLOOR);
   }
 
   /**
    * Calculate the abs, output is the same type as input.
    */
-  public ColumnVector abs() {
+  public final ColumnVector abs() {
     return unaryOp(UnaryOp.ABS);
   }
 
   /**
    * Rounds a floating-point argument to the closest integer value, but returns it as a float.
    */
-  public ColumnVector rint() {
+  public final ColumnVector rint() {
     return unaryOp(UnaryOp.RINT);
   }
 
   /**
    * invert the bits, output is the same type as input.
    */
-  public ColumnVector bitInvert() {
+  public final ColumnVector bitInvert() {
     return unaryOp(UnaryOp.BIT_INVERT);
   }
 
@@ -915,7 +951,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return the result
    */
   @Override
-  public ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType) {
+  public final ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType) {
     if (rhs instanceof ColumnView) {
       assert rows == ((ColumnView) rhs).getRowCount();
       return new ColumnVector(binaryOp(this, (ColumnView) rhs, op, outType));
@@ -1165,7 +1201,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param quantiles the quantile values [0,1]
    * @return the quantiles as doubles, in the same order passed in. The type can be changed in future
    */
-  public ColumnVector quantile(QuantileMethod method, double[] quantiles) {
+  public final ColumnVector quantile(QuantileMethod method, double[] quantiles) {
     return new ColumnVector(quantile(getNativeView(), method.nativeId, quantiles));
   }
 
@@ -1178,7 +1214,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return Column containing aggregate function result.
    * @throws IllegalArgumentException if unsupported window specification * (i.e. other than {@link WindowOptions.FrameType#ROWS} is used.
    */
-  public ColumnVector rollingWindow(Aggregation op, WindowOptions options) {
+  public final ColumnVector rollingWindow(Aggregation op, WindowOptions options) {
     // Check that only row-based windows are used.
     if (!options.getFrameType().equals(WindowOptions.FrameType.ROWS)) {
       throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: "
@@ -1209,7 +1245,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a vector of the logical `not` of each value in the input
    * column (this)
    */
-  public ColumnVector not() {
+  public final ColumnVector not() {
     return unaryOp(UnaryOp.NOT);
   }
 
@@ -1251,10 +1287,21 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param needles
    * @return A new ColumnVector of type {@link DType#BOOL8}
    */
-  public ColumnVector contains(ColumnVector needles) {
+  public final ColumnVector contains(ColumnVector needles) {
     return new ColumnVector(containsVector(getNativeView(), needles.getNativeView()));
   }
 
+  /**
+   * Returns a column of strings where, for each string row in the input,
+   * the first character after spaces is modified to upper-case,
+   * while all the remaining characters in a word are modified to lower-case.
+   *
+   * Any null string entries return corresponding null output column entries
+   */
+  public final ColumnVector toTitle() {
+    assert type == DType.STRING;
+    return new ColumnVector(title(getNativeView()));
+  }
   /////////////////////////////////////////////////////////////////////////////
   // TYPE CAST
   /////////////////////////////////////////////////////////////////////////////
@@ -1291,7 +1338,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * representation of the data will be used for the cast.
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asBytes() {
+  public final ColumnVector asBytes() {
     return castTo(DType.INT8);
   }
 
@@ -1302,7 +1349,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asByteList() {
+  public final ColumnVector asByteList() {
     return new ColumnVector(byteListCast(getNativeView(), true));
   }
 
@@ -1314,7 +1361,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param config Flips the byte order (endianness) if true, retains byte order otherwise
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asByteList(boolean config) {
+  public final ColumnVector asByteList(boolean config) {
     return new ColumnVector(byteListCast(getNativeView(), config));
   }
 
@@ -1329,7 +1376,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * {@link Byte#toUnsignedInt(byte)}.
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asUnsignedBytes() {
+  public final ColumnVector asUnsignedBytes() {
     return castTo(DType.UINT8);
   }
 
@@ -1340,7 +1387,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * representation of the data will be used for the cast.
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asShorts() {
+  public final ColumnVector asShorts() {
     return castTo(DType.INT16);
   }
 
@@ -1355,7 +1402,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * {@link Short#toUnsignedInt(short)}.
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asUnsignedShorts() {
+  public final ColumnVector asUnsignedShorts() {
     return castTo(DType.UINT16);
   }
 
@@ -1366,7 +1413,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * representation of the data will be used for the cast.
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asInts() {
+  public final ColumnVector asInts() {
     return castTo(DType.INT32);
   }
 
@@ -1381,7 +1428,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * {@link Integer#toUnsignedLong(int)}.
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asUnsignedInts() {
+  public final ColumnVector asUnsignedInts() {
     return castTo(DType.UINT32);
   }
 
@@ -1392,7 +1439,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * representation of the data will be used for the cast.
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asLongs() {
+  public final ColumnVector asLongs() {
     return castTo(DType.INT64);
   }
 
@@ -1407,7 +1454,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * {@link Long#toUnsignedString(long)}.
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asUnsignedLongs() {
+  public final ColumnVector asUnsignedLongs() {
     return castTo(DType.UINT64);
   }
 
@@ -1418,7 +1465,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * representatio of the data will be used for the cast.
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asFloats() {
+  public final ColumnVector asFloats() {
     return castTo(DType.FLOAT32);
   }
 
@@ -1429,7 +1476,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * representation of the data will be used for the cast.
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asDoubles() {
+  public final ColumnVector asDoubles() {
     return castTo(DType.FLOAT64);
   }
 
@@ -1438,7 +1485,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * This method takes the value provided by the ColumnVector and casts to TIMESTAMP_DAYS
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asTimestampDays() {
+  public final ColumnVector asTimestampDays() {
     if (type == DType.STRING) {
       return asTimestamp(DType.TIMESTAMP_DAYS, "%Y-%m-%dT%H:%M:%SZ%f");
     }
@@ -1451,7 +1498,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param format timestamp string format specifier, ignored if the column type is not string
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asTimestampDays(String format) {
+  public final ColumnVector asTimestampDays(String format) {
     assert type == DType.STRING : "A column of type string is required when using a format string";
     return asTimestamp(DType.TIMESTAMP_DAYS, format);
   }
@@ -1461,7 +1508,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * This method takes the value provided by the ColumnVector and casts to TIMESTAMP_SECONDS
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asTimestampSeconds() {
+  public final ColumnVector asTimestampSeconds() {
     if (type == DType.STRING) {
       return asTimestamp(DType.TIMESTAMP_SECONDS, "%Y-%m-%dT%H:%M:%SZ%f");
     }
@@ -1474,7 +1521,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param format timestamp string format specifier, ignored if the column type is not string
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asTimestampSeconds(String format) {
+  public final ColumnVector asTimestampSeconds(String format) {
     assert type == DType.STRING : "A column of type string is required when using a format string";
     return asTimestamp(DType.TIMESTAMP_SECONDS, format);
   }
@@ -1484,7 +1531,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * This method takes the value provided by the ColumnVector and casts to TIMESTAMP_MICROSECONDS
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asTimestampMicroseconds() {
+  public final ColumnVector asTimestampMicroseconds() {
     if (type == DType.STRING) {
       return asTimestamp(DType.TIMESTAMP_MICROSECONDS, "%Y-%m-%dT%H:%M:%SZ%f");
     }
@@ -1497,7 +1544,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param format timestamp string format specifier, ignored if the column type is not string
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asTimestampMicroseconds(String format) {
+  public final ColumnVector asTimestampMicroseconds(String format) {
     assert type == DType.STRING : "A column of type string is required when using a format string";
     return asTimestamp(DType.TIMESTAMP_MICROSECONDS, format);
   }
@@ -1507,7 +1554,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * This method takes the value provided by the ColumnVector and casts to TIMESTAMP_MILLISECONDS.
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asTimestampMilliseconds() {
+  public final ColumnVector asTimestampMilliseconds() {
     if (type == DType.STRING) {
       return asTimestamp(DType.TIMESTAMP_MILLISECONDS, "%Y-%m-%dT%H:%M:%SZ%f");
     }
@@ -1520,7 +1567,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param format timestamp string format specifier, ignored if the column type is not string
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asTimestampMilliseconds(String format) {
+  public final ColumnVector asTimestampMilliseconds(String format) {
     assert type == DType.STRING : "A column of type string is required when using a format string";
     return asTimestamp(DType.TIMESTAMP_MILLISECONDS, format);
   }
@@ -1530,7 +1577,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * This method takes the value provided by the ColumnVector and casts to TIMESTAMP_NANOSECONDS.
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asTimestampNanoseconds() {
+  public final ColumnVector asTimestampNanoseconds() {
     if (type == DType.STRING) {
       return asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%dT%H:%M:%SZ%9f");
     }
@@ -1543,7 +1590,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param format timestamp string format specifier, ignored if the column type is not string
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asTimestampNanoseconds(String format) {
+  public final ColumnVector asTimestampNanoseconds(String format) {
     assert type == DType.STRING : "A column of type string is required when using a format string";
     return asTimestamp(DType.TIMESTAMP_NANOSECONDS, format);
   }
@@ -1559,7 +1606,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new ColumnVector containing the long representations of the timestamps in the
    *         original column vector.
    */
-  public ColumnVector asTimestamp(DType timestampType, String format) {
+  public final ColumnVector asTimestamp(DType timestampType, String format) {
     assert type == DType.STRING : "A column of type string " +
         "is required for .to_timestamp() operation";
     assert format != null : "Format string may not be NULL";
@@ -1582,7 +1629,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * @return A new vector allocated on the GPU.
    */
-  public ColumnVector asStrings() {
+  public final ColumnVector asStrings() {
     switch(type.typeId) {
       case TIMESTAMP_SECONDS:
         return asStrings("%Y-%m-%d %H:%M:%S");
@@ -1627,7 +1674,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * @return A new vector allocated on the GPU
    */
-  public ColumnVector asStrings(String format) {
+  public final ColumnVector asStrings(String format) {
     assert type.isTimestamp() : "unsupported conversion from non-timestamp DType";
     assert format != null || format.isEmpty(): "Format string may not be NULL or empty";
 
@@ -1668,7 +1715,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param format String specifying the timestamp format in strings.
    * @return New boolean ColumnVector.
    */
-  public ColumnVector isTimestamp(String format) {
+  public final ColumnVector isTimestamp(String format) {
     return new ColumnVector(isTimestamp(getNativeView(), format));
   }
 
@@ -1683,7 +1730,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *              list.
    * @return a new column of the values at those indexes.
    */
-  public ColumnVector extractListElement(int index) {
+  public final ColumnVector extractListElement(int index) {
     assert type == DType.LIST : "A column of type LIST is required for .extractListElement()";
     return new ColumnVector(extractListElement(getNativeView(), index));
   }
@@ -1695,7 +1742,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Convert a string to upper case.
    */
-  public ColumnVector upper() {
+  public final ColumnVector upper() {
     assert type == DType.STRING : "A column of type string is required for .upper() operation";
     return new ColumnVector(upperStrings(getNativeView()));
   }
@@ -1703,7 +1750,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Convert a string to lower case.
    */
-  public ColumnVector lower() {
+  public final ColumnVector lower() {
     assert type == DType.STRING : "A column of type string is required for .lower() operation";
     return new ColumnVector(lowerStrings(getNativeView()));
   }
@@ -1715,7 +1762,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param columns array of columns containing strings.
    * @return A new java column vector containing the concatenated strings.
    */
-  public ColumnVector stringConcatenate(ColumnVector[] columns) {
+  public final ColumnVector stringConcatenate(ColumnVector[] columns) {
     try (Scalar emptyString = Scalar.fromString("");
          Scalar nullString = Scalar.fromString(null)) {
       return stringConcatenate(emptyString, nullString, columns);
@@ -1757,7 +1804,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * default values for start (0) and end index.
    * @param substring scalar containing the string to locate within each row.
    */
-  public ColumnVector stringLocate(Scalar substring) {
+  public final ColumnVector stringLocate(Scalar substring) {
     return stringLocate(substring, 0);
   }
 
@@ -1768,7 +1815,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param substring scalar containing the string to locate within each row.
    * @param start character index to start the search from (inclusive).
    */
-  public ColumnVector stringLocate(Scalar substring, int start) {
+  public final ColumnVector stringLocate(Scalar substring, int start) {
     return stringLocate(substring, start, -1);
   }
 
@@ -1780,7 +1827,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param start character index to start the search from (inclusive).
    * @param end character index to end the search on (exclusive).
    */
-  public ColumnVector stringLocate(Scalar substring, int start, int end) {
+  public final ColumnVector stringLocate(Scalar substring, int start, int end) {
     assert type == DType.STRING : "column type must be a String";
     assert substring != null : "target string may not be null";
     assert substring.getType() == DType.STRING : "substring scalar must be a string scalar";
@@ -1823,7 +1870,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns a column of lists of strings by splitting each string using whitespace as the delimiter.
    */
-  public ColumnVector stringSplitRecord() {
+  public final ColumnVector stringSplitRecord() {
     return stringSplitRecord(-1);
   }
 
@@ -1831,7 +1878,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a column of lists of strings by splitting each string using whitespace as the delimiter.
    * @param maxSplit the maximum number of records to split, or -1 for all of them.
    */
-  public ColumnVector stringSplitRecord(int maxSplit) {
+  public final ColumnVector stringSplitRecord(int maxSplit) {
     try (Scalar emptyString = Scalar.fromString("")) {
       return stringSplitRecord(emptyString, maxSplit);
     }
@@ -1842,7 +1889,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param delimiter UTF-8 encoded string identifying the split points in each string.
    *                  An empty string indicates split on whitespace.
    */
-  public ColumnVector stringSplitRecord(Scalar delimiter) {
+  public final ColumnVector stringSplitRecord(Scalar delimiter) {
     return stringSplitRecord(delimiter, -1);
   }
 
@@ -1854,7 +1901,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param maxSplit the maximum number of records to split, or -1 for all of them.
    * @return New table of strings columns.
    */
-  public ColumnVector stringSplitRecord(Scalar delimiter, int maxSplit) {
+  public final ColumnVector stringSplitRecord(Scalar delimiter, int maxSplit) {
     assert type == DType.STRING : "column type must be a String";
     assert delimiter != null : "delimiter may not be null";
     assert delimiter.getType() == DType.STRING : "delimiter must be a string scalar";
@@ -1868,7 +1915,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * read until end of string.
    * @param start first character index to begin the substring(inclusive).
    */
-  public ColumnVector substring(int start) {
+  public final ColumnVector substring(int start) {
     return substring(start, -1);
   }
 
@@ -1880,7 +1927,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param end   last character index to stop the substring(exclusive)
    * @return A new java column vector containing the substrings.
    */
-  public ColumnVector substring(int start, int end) {
+  public final ColumnVector substring(int start, int end) {
     assert type == DType.STRING : "column type must be a String";
     return new ColumnVector(substring(getNativeView(), start, end));
   }
@@ -1892,7 +1939,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param end   Vector containing end indices of each string. -1 indicated to read until end of string.
    * @return A new java column vector containing the substrings/
    */
-  public ColumnVector substring(ColumnVector start, ColumnVector end) {
+  public final ColumnVector substring(ColumnVector start, ColumnVector end) {
     assert type == DType.STRING : "column type must be a String";
     assert (rows == start.getRowCount() && rows == end.getRowCount()) : "Number of rows must be equal";
     assert (start.getType() == DType.INT32 && end.getType() == DType.INT32) : "start and end " +
@@ -1913,7 +1960,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param replace Replacement string if target is found.
    * @return A new java column vector containing replaced strings
    */
-  public ColumnVector stringReplace(Scalar target, Scalar replace) {
+  public final ColumnVector stringReplace(Scalar target, Scalar replace) {
 
     assert type == DType.STRING : "column type must be a String";
     assert target != null : "target string may not be null";
@@ -1934,7 +1981,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param replace The replacement template for creating the output string.
    * @return A new java column vector containing the string results.
    */
-  public ColumnVector stringReplaceWithBackrefs(String pattern, String replace) {
+  public final ColumnVector stringReplaceWithBackrefs(String pattern, String replace) {
     return new ColumnVector(stringReplaceWithBackrefs(getNativeView(), pattern,
         replace));
   }
@@ -1950,7 +1997,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param width The minimum number of characters for each string.
    * @return New column of strings.
    */
-  public ColumnVector zfill(int width) {
+  public final ColumnVector zfill(int width) {
     return new ColumnVector(zfill(getNativeView(), width));
   }
 
@@ -1965,7 +2012,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param width the minimum number of characters for each string.
    * @return the new strings column.
    */
-  public ColumnVector pad(int width) {
+  public final ColumnVector pad(int width) {
     return pad(width, PadSide.RIGHT, " ");
   }
 
@@ -1981,7 +2028,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param side where to add new characters.
    * @return the new strings column.
    */
-  public ColumnVector pad(int width, PadSide side) {
+  public final ColumnVector pad(int width, PadSide side) {
     return pad(width, side, " ");
   }
 
@@ -1998,7 +2045,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param fillChar a single character string that holds what should be added.
    * @return the new strings column.
    */
-  public ColumnVector pad(int width, PadSide side, String fillChar) {
+  public final ColumnVector pad(int width, PadSide side, String fillChar) {
     assert fillChar != null;
     assert fillChar.length() == 1;
     return new ColumnVector(pad(getNativeView(), width, side.getNativeId(), fillChar));
@@ -2010,7 +2057,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param pattern scalar containing the string being searched for at the beginning of the column's strings.
    * @return A new java column vector containing the boolean results.
    */
-  public ColumnVector startsWith(Scalar pattern) {
+  public final ColumnVector startsWith(Scalar pattern) {
     assert type == DType.STRING : "column type must be a String";
     assert pattern != null : "pattern scalar may not be null";
     assert pattern.getType() == DType.STRING : "pattern scalar must be a string scalar";
@@ -2023,7 +2070,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param pattern scalar containing the string being searched for at the end of the column's strings.
    * @return A new java column vector containing the boolean results.
    */
-  public ColumnVector endsWith(Scalar pattern) {
+  public final ColumnVector endsWith(Scalar pattern) {
     assert type == DType.STRING : "column type must be a String";
     assert pattern != null : "pattern scalar may not be null";
     assert pattern.getType() == DType.STRING : "pattern scalar must be a string scalar";
@@ -2034,7 +2081,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Removes whitespace from the beginning and end of a string.
    * @return A new java column vector containing the stripped strings.
    */
-  public ColumnVector strip() {
+  public final ColumnVector strip() {
     assert type == DType.STRING : "column type must be a String";
     try (Scalar emptyString = Scalar.fromString("")) {
       return new ColumnVector(stringStrip(getNativeView(), StripType.BOTH.nativeId,
@@ -2047,7 +2094,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param toStrip UTF-8 encoded characters to strip from each string.
    * @return A new java column vector containing the stripped strings.
    */
-  public ColumnVector strip(Scalar toStrip) {
+  public final ColumnVector strip(Scalar toStrip) {
     assert type == DType.STRING : "column type must be a String";
     assert toStrip != null : "toStrip scalar may not be null";
     assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
@@ -2058,7 +2105,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Removes whitespace from the beginning of a string.
    * @return A new java column vector containing the stripped strings.
    */
-  public ColumnVector lstrip() {
+  public final ColumnVector lstrip() {
     assert type == DType.STRING : "column type must be a String";
     try (Scalar emptyString = Scalar.fromString("")) {
       return new ColumnVector(stringStrip(getNativeView(), StripType.LEFT.nativeId,
@@ -2071,7 +2118,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param toStrip UTF-8 encoded characters to strip from each string.
    * @return A new java column vector containing the stripped strings.
    */
-  public ColumnVector lstrip(Scalar toStrip) {
+  public final ColumnVector lstrip(Scalar toStrip) {
     assert type == DType.STRING : "column type must be a String";
     assert toStrip != null : "toStrip  Scalar may not be null";
     assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
@@ -2082,7 +2129,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Removes whitespace from the end of a string.
    * @return A new java column vector containing the stripped strings.
    */
-  public ColumnVector rstrip() {
+  public final ColumnVector rstrip() {
     assert type == DType.STRING : "column type must be a String";
     try (Scalar emptyString = Scalar.fromString("")) {
       return new ColumnVector(stringStrip(getNativeView(), StripType.RIGHT.nativeId,
@@ -2095,7 +2142,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param toStrip UTF-8 encoded characters to strip from each string.
    * @return A new java column vector containing the stripped strings.
    */
-  public ColumnVector rstrip(Scalar toStrip) {
+  public final ColumnVector rstrip(Scalar toStrip) {
     assert type == DType.STRING : "column type must be a String";
     assert toStrip != null : "toStrip  Scalar may not be null";
     assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
@@ -2109,7 +2156,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new java column vector containing the boolean results.
    */
 
-  public ColumnVector stringContains(Scalar compString) {
+  public final ColumnVector stringContains(Scalar compString) {
     assert type == DType.STRING : "column type must be a String";
     assert compString != null : "compString scalar may not be null";
     assert compString.getType() == DType.STRING : "compString scalar must be a string scalar";
@@ -2147,7 +2194,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *           Ignored if null.
    * @return Returns a new clamped column as per `lo` and `hi` boundaries
    */
-  public ColumnVector clamp(Scalar lo, Scalar hi) {
+  public final ColumnVector clamp(Scalar lo, Scalar hi) {
     return new ColumnVector(clamper(this.getNativeView(), lo.getScalarHandle(),
         lo.getScalarHandle(), hi.getScalarHandle(), hi.getScalarHandle()));
   }
@@ -2187,7 +2234,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param hiReplace - All elements greater than `hi` will be replaced by `hiReplace`.
    * @return - a new clamped column as per `lo` and `hi` boundaries
    */
-  public ColumnVector clamp(Scalar lo, Scalar loReplace, Scalar hi, Scalar hiReplace) {
+  public final ColumnVector clamp(Scalar lo, Scalar loReplace, Scalar hi, Scalar hiReplace) {
     return new ColumnVector(clamper(this.getNativeView(), lo.getScalarHandle(),
         loReplace.getScalarHandle(), hi.getScalarHandle(), hiReplace.getScalarHandle()));
   }
@@ -2208,7 +2255,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param pattern Regex pattern to match to each string.
    * @return New ColumnVector of boolean results for each string.
    */
-  public ColumnVector matchesRe(String pattern) {
+  public final ColumnVector matchesRe(String pattern) {
     assert type == DType.STRING : "column type must be a String";
     assert pattern != null : "pattern may not be null";
     assert !pattern.isEmpty() : "pattern string may not be empty";
@@ -2231,7 +2278,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param pattern Regex pattern to match to each string.
    * @return New ColumnVector of boolean results for each string.
    */
-  public ColumnVector containsRe(String pattern) {
+  public final ColumnVector containsRe(String pattern) {
     assert type == DType.STRING : "column type must be a String";
     assert pattern != null : "pattern may not be null";
     assert !pattern.isEmpty() : "pattern string may not be empty";
@@ -2261,7 +2308,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param key the String scalar to lookup in the column
    * @return a string column of values or nulls based on the lookup result
    */
-  public ColumnVector getMapValue(Scalar key) {
+  public final ColumnVector getMapValue(Scalar key) {
 
     assert type == DType.LIST : "column type must be a LIST";
     assert key != null : "target string may not be null";
@@ -2269,6 +2316,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
     return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
   }
+
+  /////////////////////////////////////////////////////////////////////////////
+  // INTERNAL/NATIVE ACCESS
+  /////////////////////////////////////////////////////////////////////////////
 
   static DeviceMemoryBufferView getDataBuffer(long viewHandle) {
     long address = getNativeDataAddress(viewHandle);
@@ -2316,7 +2367,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column, used to construct the Java column vector
    *         by the timestampToLong method.
    */
-  private final static native long stringTimestampToTimestamp(long viewHandle, int unit, String format);
+  private static native long stringTimestampToTimestamp(long viewHandle, int unit, String format);
 
   /**
    * Native method to parse and convert a timestamp column vector to string column vector. A unix
@@ -2347,7 +2398,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * @return - native handle of the resulting cudf column used to construct the Java column vector
    */
-  private final static native long timestampToStringTimestamp(long viewHandle, String format);
+  private static native long timestampToStringTimestamp(long viewHandle, String format);
 
   /**
    * Native method for locating the starting index of the first instance of a given substring
@@ -2358,7 +2409,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param start character index to start the search from (inclusive).
    * @param end character index to end the search on (exclusive).
    */
-  private final static native long substringLocate(long columnView, long substringScalar, int start, int end);
+  private static native long substringLocate(long columnView, long substringScalar, int start, int end);
 
   /**
    * Native method which returns array of columns by splitting each string using the specified
@@ -2366,9 +2417,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param columnView native handle of the cudf::column_view being operated on.
    * @param delimiter  UTF-8 encoded string identifying the split points in each string.
    */
-  private final static native long[] stringSplit(long columnView, long delimiter);
+  private static native long[] stringSplit(long columnView, long delimiter);
 
-  private final static native long stringSplitRecord(long nativeView, long scalarHandle, int maxSplit);
+  private static native long stringSplitRecord(long nativeView, long scalarHandle, int maxSplit);
 
   /**
    * Native method to calculate substring from a given string column. 0 indexing.
@@ -2376,7 +2427,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param start      first character index to begin the substring(inclusive).
    * @param end        last character index to stop the substring(exclusive).
    */
-  private final static native long substring(long columnView, int start, int end) throws CudfException;
+  private static native long substring(long columnView, int start, int end) throws CudfException;
 
   /**
    * Native method to calculate substring from a given string column.
@@ -2384,7 +2435,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param startColumn handle of cudf::column_view which has start indices of each string.
    * @param endColumn handle of cudf::column_view which has end indices of each string.
    */
-  private final static native long substringColumn(long columnView, long startColumn, long endColumn)
+  private static native long substringColumn(long columnView, long startColumn, long endColumn)
       throws CudfException;
 
   /**
@@ -2393,7 +2444,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param target handle of scalar containing the string being searched.
    * @param repl handle of scalar containing the string to replace.
    */
-  private final static native long stringReplace(long columnView, long target, long repl) throws CudfException;
+  private static native long stringReplace(long columnView, long target, long repl) throws CudfException;
 
   /**
    * Native method for replacing any character sequence matching the given pattern
@@ -2403,7 +2454,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param replace The replacement template for creating the output string.
    * @return native handle of the resulting cudf column containing the string results.
    */
-  private final static native long stringReplaceWithBackrefs(long columnView, String pattern,
+  private static native long stringReplaceWithBackrefs(long columnView, String pattern,
                                                        String replace) throws CudfException;
 
   /**
@@ -2413,7 +2464,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   of each string in the column.
    * @return native handle of the resulting cudf column containing the boolean results.
    */
-  private final static native long stringStartWith(long cudfViewHandle, long compString) throws CudfException;
+  private static native long stringStartWith(long cudfViewHandle, long compString) throws CudfException;
 
   /**
    * Native method for checking if strings in a column ends with a specified comparison string.
@@ -2422,13 +2473,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   of each string in the column.
    * @return native handle of the resulting cudf column containing the boolean results.
    */
-  private final static native long stringEndWith(long cudfViewHandle, long compString) throws CudfException;
+  private static native long stringEndWith(long cudfViewHandle, long compString) throws CudfException;
 
   /**
    * Native method to strip whitespace from the start and end of a string.
    * @param columnView native handle of the cudf::column_view being operated on.
    */
-  private final static native long stringStrip(long columnView, int type, long toStrip) throws CudfException;
+  private static native long stringStrip(long columnView, int type, long toStrip) throws CudfException;
 
   /**
    * Native method for checking if strings match the passed in regex pattern from the
@@ -2437,7 +2488,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param pattern string regex pattern.
    * @return native handle of the resulting cudf column containing the boolean results.
    */
-  private final static native long matchesRe(long cudfViewHandle, String pattern) throws CudfException;
+  private static native long matchesRe(long cudfViewHandle, String pattern) throws CudfException;
 
   /**
    * Native method for checking if strings match the passed in regex pattern starting at any location.
@@ -2445,7 +2496,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param pattern string regex pattern.
    * @return native handle of the resulting cudf column containing the boolean results.
    */
-  private final static native long containsRe(long cudfViewHandle, String pattern) throws CudfException;
+  private static native long containsRe(long cudfViewHandle, String pattern) throws CudfException;
 
   /**
    * Native method for checking if strings in a column contains a specified comparison string.
@@ -2453,12 +2504,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param compString handle of scalar containing the string being searched for.
    * @return native handle of the resulting cudf column containing the boolean results.
    */
-  private final static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
+  private static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
 
   /**
    * Native method for extracting results from an regular expressions.  Returns a table handle.
    */
-  private final static native long[] extractRe(long cudfViewHandle, String pattern) throws CudfException;
+  private static native long[] extractRe(long cudfViewHandle, String pattern) throws CudfException;
 
   /**
    * Native method to concatenate columns of strings together, combining a row from
@@ -2472,7 +2523,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column, used to construct the Java column
    *         by the stringConcatenate method.
    */
-  private final static native long stringConcatenation(long[] columnViews, long separator, long narep);
+  private static native long stringConcatenation(long[] columnViews, long separator, long narep);
 
   /**
    * Native method for map lookup over a column of List<Struct<String,String>>
@@ -2481,31 +2532,31 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return a string column handle of the resultant
    * @throws CudfException
    */
-  private final static native long mapLookup(long columnView, long key) throws CudfException;
+  private static native long mapLookup(long columnView, long key) throws CudfException;
   /**
    * Native method to add zeros as padding to the left of each string.
    */
-  private final static native long zfill(long nativeHandle, int width);
+  private static native long zfill(long nativeHandle, int width);
 
-  private final static native long pad(long nativeHandle, int width, int side, String fillChar);
+  private static native long pad(long nativeHandle, int width, int side, String fillChar);
 
-  private final static native long binaryOpVS(long lhs, long rhs, int op, int dtype, int scale);
+  private static native long binaryOpVS(long lhs, long rhs, int op, int dtype, int scale);
 
-  private final static native long binaryOpVV(long lhs, long rhs, int op, int dtype, int scale);
+  private static native long binaryOpVV(long lhs, long rhs, int op, int dtype, int scale);
 
-  private final static native long byteCount(long viewHandle) throws CudfException;
+  private static native long byteCount(long viewHandle) throws CudfException;
 
-  private final static native long extractListElement(long nativeView, int index);
+  private static native long extractListElement(long nativeView, int index);
 
-  private final static native long castTo(long nativeHandle, int type, int scale);
+  private static native long castTo(long nativeHandle, int type, int scale);
 
-  private final static native long byteListCast(long nativeHandle, boolean config);
+  private static native long byteListCast(long nativeHandle, boolean config);
 
-  private final static native long[] slice(long nativeHandle, int[] indices) throws CudfException;
+  private static native long[] slice(long nativeHandle, int[] indices) throws CudfException;
 
-  private final static native long[] split(long nativeHandle, int[] indices) throws CudfException;
+  private static native long[] split(long nativeHandle, int[] indices) throws CudfException;
 
-  private final static native long findAndReplaceAll(long valuesHandle, long replaceHandle, long myself) throws CudfException;
+  private static native long findAndReplaceAll(long valuesHandle, long replaceHandle, long myself) throws CudfException;
 
   /**
    * Native method to switch all characters in a column of strings to lowercase characters.
@@ -2513,7 +2564,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column, used to construct the Java column
    *         by the lower method.
    */
-  private final static native long lowerStrings(long cudfViewHandle);
+  private static native long lowerStrings(long cudfViewHandle);
 
   /**
    * Native method to switch all characters in a column of strings to uppercase characters.
@@ -2521,11 +2572,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column, used to construct the Java column
    *         by the upper method.
    */
-  private final static native long upperStrings(long cudfViewHandle);
+  private static native long upperStrings(long cudfViewHandle);
 
-  private final static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
+  private static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
 
-  private final static native long rollingWindow(
+  private static native long rollingWindow(
       long viewHandle,
       long defaultOutputHandle,
       int min_periods,
@@ -2535,67 +2586,67 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       long preceding_col,
       long following_col);
 
-  private final static native long nansToNulls(long viewHandle) throws CudfException;
+  private static native long nansToNulls(long viewHandle) throws CudfException;
 
-  private final static native long charLengths(long viewHandle) throws CudfException;
+  private static native long charLengths(long viewHandle) throws CudfException;
 
-  private final static native long concatenate(long[] viewHandles) throws CudfException;
+  private static native long concatenate(long[] viewHandles) throws CudfException;
 
-  private final static native long sequence(long initialValue, long step, int rows);
+  private static native long sequence(long initialValue, long step, int rows);
 
-  private final static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
+  private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 
-  private final static native long replaceNulls(long viewHandle, long scalarHandle) throws CudfException;
+  private static native long replaceNulls(long viewHandle, long scalarHandle) throws CudfException;
 
-  private final static native long ifElseVV(long predVec, long trueVec, long falseVec) throws CudfException;
+  private static native long ifElseVV(long predVec, long trueVec, long falseVec) throws CudfException;
 
-  private final static native long ifElseVS(long predVec, long trueVec, long falseScalar) throws CudfException;
+  private static native long ifElseVS(long predVec, long trueVec, long falseScalar) throws CudfException;
 
-  private final static native long ifElseSV(long predVec, long trueScalar, long falseVec) throws CudfException;
+  private static native long ifElseSV(long predVec, long trueScalar, long falseVec) throws CudfException;
 
-  private final static native long ifElseSS(long predVec, long trueScalar, long falseScalar) throws CudfException;
+  private static native long ifElseSS(long predVec, long trueScalar, long falseScalar) throws CudfException;
 
-  private final static native long reduce(long viewHandle, long aggregation, int dtype, int scale) throws CudfException;
+  private static native long reduce(long viewHandle, long aggregation, int dtype, int scale) throws CudfException;
 
-  private final static native long isNullNative(long viewHandle);
+  private static native long isNullNative(long viewHandle);
 
-  private final static native long isNanNative(long viewHandle);
+  private static native long isNanNative(long viewHandle);
 
-  private final static native long isFloat(long viewHandle);
+  private static native long isFloat(long viewHandle);
 
-  private final static native long isInteger(long viewHandle);
+  private static native long isInteger(long viewHandle);
 
-  private final static native long isNotNanNative(long viewHandle);
+  private static native long isNotNanNative(long viewHandle);
 
-  private final static native long isNotNullNative(long viewHandle);
+  private static native long isNotNullNative(long viewHandle);
 
-  private final static native long unaryOperation(long viewHandle, int op);
+  private static native long unaryOperation(long viewHandle, int op);
 
-  private final static native long year(long viewHandle) throws CudfException;
+  private static native long year(long viewHandle) throws CudfException;
 
-  private final static native long month(long viewHandle) throws CudfException;
+  private static native long month(long viewHandle) throws CudfException;
 
-  private final static native long day(long viewHandle) throws CudfException;
+  private static native long day(long viewHandle) throws CudfException;
 
-  private final static native long hour(long viewHandle) throws CudfException;
+  private static native long hour(long viewHandle) throws CudfException;
 
-  private final static native long minute(long viewHandle) throws CudfException;
+  private static native long minute(long viewHandle) throws CudfException;
 
-  private final static native long second(long viewHandle) throws CudfException;
+  private static native long second(long viewHandle) throws CudfException;
 
-  private final static native long weekDay(long viewHandle) throws CudfException;
+  private static native long weekDay(long viewHandle) throws CudfException;
 
-  private final static native long lastDayOfMonth(long viewHandle) throws CudfException;
+  private static native long lastDayOfMonth(long viewHandle) throws CudfException;
 
-  private final static native long dayOfYear(long viewHandle) throws CudfException;
+  private static native long dayOfYear(long viewHandle) throws CudfException;
 
-  private final static native boolean containsScalar(long columnViewHaystack, long scalarHandle) throws CudfException;
+  private static native boolean containsScalar(long columnViewHaystack, long scalarHandle) throws CudfException;
 
-  private final static native long containsVector(long columnViewHaystack, long columnViewNeedles) throws CudfException;
+  private static native long containsVector(long columnViewHaystack, long columnViewNeedles) throws CudfException;
 
-  private final static native long transform(long viewHandle, String udf, boolean isPtx);
+  private static native long transform(long viewHandle, String udf, boolean isPtx);
 
-  private final static native long clamper(long nativeView, long loScalarHandle, long loScalarReplaceHandle,
+  private static native long clamper(long nativeView, long loScalarHandle, long loScalarReplaceHandle,
                                      long hiScalarHandle, long hiScalarReplaceHandle);
 
   protected native long title(long handle);
@@ -2609,7 +2660,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return Pointer to a new `column` of normalized values.
    * @throws CudfException On failure to normalize.
    */
-  private final static native long normalizeNANsAndZeros(long viewHandle) throws CudfException;
+  private static native long normalizeNANsAndZeros(long viewHandle) throws CudfException;
 
   /**
    * Native method to deep copy a column while replacing the null mask. The null mask is the
@@ -2619,7 +2670,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param viewHandles array of views whose null masks are merged, must have identical row counts.
    * @return native handle of the copied cudf column with replaced null mask.
    */
-  private final static native long bitwiseMergeAndSetValidity(long baseHandle, long[] viewHandles,
+  private static native long bitwiseMergeAndSetValidity(long baseHandle, long[] viewHandles,
                                                         int nullConfig) throws CudfException;
 
   /**
@@ -2630,7 +2681,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param hashId integer native ID of the hashing function identifier HashType
    * @return native handle of the resulting cudf column containing the hex-string hashing results.
    */
-  private final static native long hash(long[] viewHandles, int hashId) throws CudfException;
+  private static native long hash(long[] viewHandles, int hashId) throws CudfException;
 
   /**
    * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
@@ -2652,14 +2703,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   static native void deleteColumnView(long viewHandle) throws CudfException;
 
-  private final static native long getNativeDataAddress(long viewHandle) throws CudfException;
-  private final static native long getNativeDataLength(long viewHandle) throws CudfException;
+  private static native long getNativeDataAddress(long viewHandle) throws CudfException;
+  private static native long getNativeDataLength(long viewHandle) throws CudfException;
 
-  private final static native long getNativeOffsetsAddress(long viewHandle) throws CudfException;
-  private final static native long getNativeOffsetsLength(long viewHandle) throws CudfException;
+  private static native long getNativeOffsetsAddress(long viewHandle) throws CudfException;
+  private static native long getNativeOffsetsLength(long viewHandle) throws CudfException;
 
-  private final static native long getNativeValidityAddress(long viewHandle) throws CudfException;
-  private final static native long getNativeValidityLength(long viewHandle) throws CudfException;
+  private static native long getNativeValidityAddress(long viewHandle) throws CudfException;
+  private static native long getNativeValidityLength(long viewHandle) throws CudfException;
 
   static native long makeCudfColumnView(int type, int scale, long data, long dataSize, long offsets,
                                                 long valid, int nullCount, int size, long[] childHandle);
@@ -2669,6 +2720,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   static native int getNativeNumChildren(long viewHandle) throws CudfException;
 
+  static native long copyColumnViewToCV(long viewHandle) throws CudfException;
   ////////
   // Native methods specific to cudf::column. These either take or create a cudf::column
   // instead of a cudf::column_view so they need to be used with caution. These should
@@ -2698,17 +2750,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   static class NestedColumnVector {
 
-    private final BaseDeviceMemoryBuffer data;
-    private final BaseDeviceMemoryBuffer valid;
-    private final BaseDeviceMemoryBuffer offsets;
+    private final DeviceMemoryBuffer data;
+    private final DeviceMemoryBuffer valid;
+    private final DeviceMemoryBuffer offsets;
     private final DType dataType;
     private final long rows;
     private final Optional<Long> nullCount;
     List<NestedColumnVector> children;
 
     private NestedColumnVector(DType type, long rows, Optional<Long> nullCount,
-        BaseDeviceMemoryBuffer data, BaseDeviceMemoryBuffer valid,
-        BaseDeviceMemoryBuffer offsets, List<NestedColumnVector> children) {
+        DeviceMemoryBuffer data, DeviceMemoryBuffer valid,
+        DeviceMemoryBuffer offsets, List<NestedColumnVector> children) {
       this.dataType = type;
       this.rows = rows;
       this.nullCount = nullCount;
@@ -2782,27 +2834,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         children);
     }
 
-    private static NestedColumnVector createNewNestedColumnVector(
-        ColumnView nestedChild) {
-      if (nestedChild.getNativeView() == 0) {
-        return null;
-      }
-      DType colType = nestedChild.getType();
-      Optional<Long> nullCount = Optional.of(nestedChild.getNullCount());
-      long colRows = nestedChild.getRowCount();
-      BaseDeviceMemoryBuffer colData = nestedChild.getNumChildren() == 0 ? nestedChild.getData() : null;
-      BaseDeviceMemoryBuffer colValid = nestedChild.getValid();
-      BaseDeviceMemoryBuffer colOffsets = nestedChild.getOffsets();
-
-      List<NestedColumnVector> children = new ArrayList<>();
-      for (int i = 0; i < nestedChild.getNumChildren(); i++) {
-        ColumnView nhcv = nestedChild.getChildColumnView(i);
-        children.add(createNewNestedColumnVector(nhcv));
-      }
-      return createNestedColumnVector(colType, colRows, nullCount, colData, colValid, colOffsets,
-          children);
-    }
-
     long getViewHandle() {
       long[] childrenColViews;
       if (children != null) {
@@ -2822,8 +2853,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
           offsetAddr, validAddr, nc, (int)rows, childrenColViews);
     }
 
-    List<BaseDeviceMemoryBuffer> getBuffersToClose() {
-      List<BaseDeviceMemoryBuffer> buffers = new ArrayList<>();
+    List<DeviceMemoryBuffer> getBuffersToClose() {
+      List<DeviceMemoryBuffer> buffers = new ArrayList<>();
       if (children != null) {
         for (NestedColumnVector ncv : children) {
           buffers.addAll(ncv.getBuffersToClose());
@@ -2880,14 +2911,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         child);
       return ret;
     }
-
-    private static NestedColumnVector createNestedColumnVector(DType type, long rows, Optional<Long> nullCount,
-                                                               BaseDeviceMemoryBuffer dataBuffer, BaseDeviceMemoryBuffer validityBuffer,
-                                                               BaseDeviceMemoryBuffer offsetBuffer, List<NestedColumnVector> child) {
-      NestedColumnVector ret = new NestedColumnVector(type, rows, nullCount, dataBuffer, validityBuffer, offsetBuffer,
-          child);
-      return ret;
-    }
   }
 
 
@@ -2895,7 +2918,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   // DATA MOVEMENT
   /////////////////////////////////////////////////////////////////////////////
 
-  private final static HostColumnVectorCore copyToHostNestedHelper(
+  private static HostColumnVectorCore copyToHostNestedHelper(
       ColumnView deviceCvPointer) {
     if (deviceCvPointer == null) {
       return null;
