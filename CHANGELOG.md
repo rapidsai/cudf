@@ -17,6 +17,7 @@
 - PR #6638 Add support for `pipe` API
 - PR #6675 Add DecimalDtype to cuDF
 - PR #6739 Add Java bindings for is_timestamp
+- PR #6768 Add support for scatter() on list columns
 
 ## Improvements
 

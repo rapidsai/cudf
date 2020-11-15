@@ -24,8 +24,8 @@
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
-#include <cudf/strings/detail/scatter.cuh>
 #include <cudf/lists/detail/scatter.cuh>
+#include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/traits.hpp>
 
@@ -128,7 +128,8 @@ struct column_scatterer_impl<list_view, MapIterator> {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream) const
   {
-    return cudf::lists::detail::scatter(source, scatter_map_begin, scatter_map_end, target, mr, stream);
+    return cudf::lists::detail::scatter(
+      source, scatter_map_begin, scatter_map_end, target, mr, stream);
   }
 };
 
