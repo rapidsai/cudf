@@ -333,20 +333,14 @@ def get_units(value):
 
     return value
 
+
 class DateOffset(object):
     def __init__(self, months):
         self._months = months
 
     def _generate_column(self, size, op):
-        if op == 'add':
-            months = self._months
-        if op == 'sub':
-            months = -self._months
-
         col = cudf.core.column.as_column(
-            months,
-            dtype=np.dtype('int16'),
-            length=size
+            self._months, dtype=np.dtype("int16"), length=size
         )
         return col
 

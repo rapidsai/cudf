@@ -8,6 +8,7 @@ from cudf._lib.column cimport Column
 
 cimport cudf._lib.cpp.datetime as libcudf_datetime
 
+
 def add_months(Column col, Column months):
     # months must be int16 dtype
     cdef unique_ptr[column] c_result
@@ -23,6 +24,7 @@ def add_months(Column col, Column months):
         )
 
     return Column.from_unique_ptr(move(c_result))
+
 
 def extract_datetime_component(Column col, object field):
 
