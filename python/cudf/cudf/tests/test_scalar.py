@@ -262,7 +262,7 @@ def test_scalar_implicit_int_conversion(value):
 
 
 @pytest.mark.parametrize("cls", [int, float, bool])
-@pytest.mark.parametrize("dtype", set(ALL_TYPES) - {"category"})
+@pytest.mark.parametrize("dtype", sorted(set(ALL_TYPES) - {"category"}))
 def test_scalar_invalid_implicit_conversion(cls, dtype):
 
     try:
