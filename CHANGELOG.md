@@ -19,6 +19,7 @@
 - PR #6652 Add support for struct columns in concatenate
 - PR #6675 Add DecimalDtype to cuDF
 - PR #6739 Add Java bindings for is_timestamp
+- PR #6775 Implement cudf.DateOffset for months
 
 ## Improvements
 
