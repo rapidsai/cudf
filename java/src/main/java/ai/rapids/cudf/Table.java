@@ -100,7 +100,7 @@ public final class Table implements AutoCloseable {
         if (this.columns[i] != null) {
           this.columns[i].close();
         } else {
-          ColumnView.deleteCudfColumn(cudfColumns[i]);
+          ColumnVector.deleteCudfColumn(cudfColumns[i]);
         }
       }
       throw t;

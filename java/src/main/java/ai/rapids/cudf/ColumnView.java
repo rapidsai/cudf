@@ -55,7 +55,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert !nullCount.isPresent() || nullCount.get() <= Integer.MAX_VALUE;
     int nc = nullCount.orElse(UNKNOWN_NULL_COUNT).intValue();
     if (rows == 0  && !type.isNestedType()) {
-      this.columnHandle = makeEmptyCudfColumn(type.typeId.getNativeId(), type.getScale());
+      this.columnHandle = ColumnVector.makeEmptyCudfColumn(type.typeId.getNativeId(), type.getScale());
     } else {
       long cd = dataBuffer == null ? 0 : dataBuffer.address;
       long cdSize = dataBuffer == null ? 0 : dataBuffer.length;
@@ -87,7 +87,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert !nullCount.isPresent() || nullCount.get() <= Integer.MAX_VALUE;
     int nc = nullCount.orElse(UNKNOWN_NULL_COUNT).intValue();
     if (rows == 0  && !type.isNestedType()) {
-      this.columnHandle = makeEmptyCudfColumn(type.typeId.getNativeId(), type.getScale());
+      this.columnHandle = ColumnVector.makeEmptyCudfColumn(type.typeId.getNativeId(), type.getScale());
     } else {
       long cd = data == null ? 0 : data.address;
       long cdSize = data == null ? 0 : data.length;
@@ -110,7 +110,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public long getNativeView() {
     if (viewHandle == 0) {
-      viewHandle = getNativeColumnView(columnHandle);
+      viewHandle = ColumnVector.getNativeColumnView(columnHandle);
     }
     return viewHandle;
   }
@@ -2721,32 +2721,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   static native int getNativeNumChildren(long viewHandle) throws CudfException;
 
   static native long copyColumnViewToCV(long viewHandle) throws CudfException;
-  ////////
-  // Native methods specific to cudf::column. These either take or create a cudf::column
-  // instead of a cudf::column_view so they need to be used with caution. These should
-  // only be called from the OffHeap inner class.
-  ////////
-
-  /**
-   * Delete the column. This is not private because there are a few cases where Table
-   * may get back an array of columns pointers and we want to have best effort in cleaning them up
-   * on any failure.
-   */
-  static native void deleteCudfColumn(long cudfColumnHandle) throws CudfException;
-
-  static native int getNativeNullCountColumn(long cudfColumnHandle) throws CudfException;
-
-  static native void setNativeNullCountColumn(long cudfColumnHandle, int nullCount) throws CudfException;
-
-  /**
-   * Create a cudf::column_view from a cudf::column.
-   * @param cudfColumnHandle the pointer to the cudf::column
-   * @return a pointer to a cudf::column_view
-   * @throws CudfException on any error
-   */
-  static native long getNativeColumnView(long cudfColumnHandle) throws CudfException;
-
-  static native long makeEmptyCudfColumn(int type, int scale);
 
   static class NestedColumnVector {
 
