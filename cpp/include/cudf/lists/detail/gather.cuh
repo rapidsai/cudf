@@ -15,13 +15,14 @@
  */
 #pragma once
 
-#include <thrust/transform_scan.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include "rmm/cuda_stream_view.hpp"
+
+#include <thrust/transform_scan.h>
 
 namespace cudf {
 namespace lists {

@@ -35,9 +35,9 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <algorithm>
-#include "rmm/cuda_stream_view.hpp"
 
 #include <thrust/functional.h>
 #include <thrust/gather.h>

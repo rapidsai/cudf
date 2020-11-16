@@ -22,11 +22,10 @@
 namespace cudf {
 namespace detail {
 
-/** @copydoc cudf::quantile(column_view const&, std::vector<double> const&, interpolation,
-    column_view const&, bool, rmm::mr::device_memory_resource*)
-  *
-  * @param stream CUDA stream used for device memory operations and kernel launches.
-  */
+/** @copydoc cudf::quantile()
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
 std::unique_ptr<column> quantile(
   column_view const& input,
   std::vector<double> const& q,
@@ -36,12 +35,10 @@ std::unique_ptr<column> quantile(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-/** @copydoc cudf::quantiles(table_view const&, std::vector<double> const&, interpolation,
-    cudf::sorted, std::vector<order> const&, std::vector<null_order> const&,
-    rmm::mr::device_memory_resource*)
-  *
-  * @param stream CUDA stream used for device memory operations and kernel launches.
-  */
+/** @copydoc cudf::quantiles()
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
 std::unique_ptr<table> quantiles(
   table_view const& input,
   std::vector<double> const& q,
