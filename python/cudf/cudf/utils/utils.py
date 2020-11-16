@@ -2,8 +2,11 @@
 import functools
 from collections import OrderedDict
 from math import floor, isinf, isnan
+import warnings
+
 
 import numpy as np
+import cupy as cp
 import pandas as pd
 from numba import njit
 
@@ -394,3 +397,74 @@ def pa_mask_buffer_to_mask(mask_buf, size):
         dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
         return Buffer(dbuf)
     return Buffer(mask_buf)
+
+
+# Utils for using appropiate dispatch for array functions
+def get_appropiate_dispatched_func(
+    cudf_submodule, cupy_submodule, func, args, kwargs
+):
+    fname = func.__name__
+    if hasattr(cudf_submodule, fname):
+        cudf_func = getattr(cudf_submodule, fname)
+        return cudf_func(*args, **kwargs)
+
+    elif hasattr(cupy_submodule, fname):
+        cupy_func = getattr(cupy_submodule, fname)
+        # Handle case if cupy impliments it as a numpy function
+        # Unsure if needed
+        if cupy_func is func:
+            return NotImplemented
+
+        cupy_compatible_args = get_cupy_compatible_args(args)
+        cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
+        return cast_to_appropitate_cudf_type(cupy_output)
+    else:
+        return NotImplemented
+
+
+def cast_cudf_series_to_cupy(ser):
+    if isinstance(ser._column, cudf.core.column.NumericalColumn):
+        if ser.null_count == 0:
+            return cp.asarray(ser)
+        else:
+            raise ValueError("Objects with null mask are not supported")
+    else:
+        raise ValueError("Non numerical columns are not supported by cupy")
+
+
+def cast_to_appropitate_cudf_type(val):
+    # TODO Handle scaler
+    if val.ndim == 0:
+        return cudf.Scalar(val)
+    # 1D array
+    elif (val.ndim == 1) or (val.ndim == 2 and val.shape[1] == 1):
+        return cudf.Series(val)
+    else:
+        return NotImplemented
+
+
+def get_cupy_compatible_args(args):
+    casted_ls = []
+    for arg in args:
+        if isinstance(arg, cp.ndarray):
+            casted_ls.append(arg)
+        elif isinstance(arg, cudf.Series):
+            casted_arg = cast_cudf_series_to_cupy(arg)
+            casted_ls.append(casted_arg)
+        # handle list of arguments
+        elif isinstance(arg, collections.abc.Sequence):
+            casted_arg = get_cupy_compatible_args(arg)
+            casted_ls.append(casted_arg)
+        else:
+            casted_ls.append(arg)
+    return casted_ls
+
+
+def get_relevant_submodule(func, module):
+    # point to the correct submodule
+    for submodule in func.__module__.split(".")[1:]:
+        if hasattr(module, submodule):
+            module = getattr(module, submodule)
+        else:
+            return None
+    return module
