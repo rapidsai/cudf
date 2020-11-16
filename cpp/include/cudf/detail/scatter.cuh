@@ -129,7 +129,7 @@ struct column_scatterer_impl<list_view, MapIterator> {
                                      cudaStream_t stream) const
   {
     return cudf::lists::detail::scatter(
-      source, scatter_map_begin, scatter_map_end, target, mr, stream);
+      source, scatter_map_begin, scatter_map_end, target, stream, mr);
   }
 };
 
