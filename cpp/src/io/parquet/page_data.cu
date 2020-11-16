@@ -912,21 +912,13 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
   int chunk_idx;
 
   // Fetch page info
-  // NOTE: Assumes that sizeof(PageInfo) <= 256 (and is padded to 4 bytes)
-  if (t < sizeof(PageInfo) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->page)[t] = reinterpret_cast<const uint32_t *>(p)[t];
-  }
+  if (t == 0) s->page = *p;
   __syncthreads();
+
   if (s->page.flags & PAGEINFO_FLAGS_DICTIONARY) { return false; }
   // Fetch column chunk info
   chunk_idx = s->page.chunk_idx;
-  if ((uint32_t)chunk_idx < (uint32_t)num_chunks) {
-    // NOTE: Assumes that sizeof(ColumnChunkDesc) <= 256 (and is padded to 4 bytes)
-    if (t < sizeof(ColumnChunkDesc) / sizeof(uint32_t)) {
-      reinterpret_cast<uint32_t *>(&s->col)[t] =
-        reinterpret_cast<const uint32_t *>(&chunks[chunk_idx])[t];
-    }
-  }
+  if (t == 0) { s->col = chunks[chunk_idx]; }
 
   // zero nested value and valid counts
   int d = 0;
@@ -1127,7 +1119,7 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
         s->page.skipped_leaf_values = s->first_row;
       }
 
-      s->input_value_count = s->page.skipped_values;
+      s->input_value_count = s->page.skipped_values > -1 ? s->page.skipped_values : 0;
     } else {
       s->input_value_count        = 0;
       s->input_leaf_count         = 0;
