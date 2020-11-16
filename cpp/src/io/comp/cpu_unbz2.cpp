@@ -276,7 +276,7 @@ int32_t bz2_decompress_block(unbz_state_s *s)
     int32_t maxLen  = 0;
     huff_s *sel     = &s->ht[t];
     for (i = 0; i < alphaSize; i++) {
-      for (;;) {
+      while (true) {
         uint32_t v = showbits(s, 2);
         if (curr < 1 || curr > 20) return BZ_DATA_ERROR;
         if (v < 2) {
@@ -343,11 +343,11 @@ int32_t bz2_decompress_block(unbz_state_s *s)
   groupNo  = -1;
   groupPos = 0;
 
-  for (;;) {
+  while (true) {
     uint32_t es = 0;
     uint32_t N  = 1;
     uint32_t nextSym, nn, uc;
-    for (;;) {
+    while (true) {
       uint32_t next32, zvec;
       int32_t zn;
       if (groupPos == 0) {
@@ -358,7 +358,7 @@ int32_t bz2_decompress_block(unbz_state_s *s)
       groupPos--;
       next32 = next32bits(s);
       zn     = gSel->minLen;
-      for (;;) {
+      while (true) {
         zvec = next32 >> (32u - (uint32_t)zn);
         if (zn > 20)  // the longest code
           return BZ_DATA_ERROR;

@@ -322,13 +322,15 @@ static __device__ void local_heap_grow(debrotli_state_s *s, uint32_t bytes)
 /// Alloc memory from the fixed-size heap shared between all blocks (thread0-only)
 static __device__ void *ext_heap_alloc(uint32_t bytes, void *ext_heap_base, uint32_t ext_heap_size)
 {
+  static constexpr auto uninitialized = std::numeric_limits<uint32_t>::max();
+
   uint32_t len              = (bytes + 0xf) & ~0xf;
   auto heap_ptr             = static_cast<volatile uint32_t *>(ext_heap_base);
-  uint32_t first_free_block = ~0;
+  uint32_t first_free_block = uninitialized;
   while (true) {
     uint32_t blk_next, blk_prev;
     first_free_block = atomicExch((unsigned int *)heap_ptr, first_free_block);
-    if (first_free_block == ~0 || first_free_block >= ext_heap_size) {
+    if (first_free_block == uninitialized || first_free_block >= ext_heap_size) {
       // Some other block is holding the heap or there are no free blocks: try again later
       // Wait a bit in an attempt to make the spin less resource-hungry
       NANOSLEEP(100);
@@ -395,14 +397,16 @@ static __device__ void ext_heap_free(void *ptr,
                                      void *ext_heap_base,
                                      uint32_t ext_heap_size)
 {
+  static constexpr auto uninitialized = std::numeric_limits<uint32_t>::max();
+
   uint32_t len              = (bytes + 0xf) & ~0xf;
   auto heap_ptr             = static_cast<volatile uint32_t *>(ext_heap_base);
-  uint32_t first_free_block = ~0;
+  uint32_t first_free_block = uninitialized;
   auto const cur_blk =
     static_cast<uint32_t>(static_cast<uint8_t *>(ptr) - static_cast<uint8_t *>(ext_heap_base));
-  for (;;) {
+  while (true) {
     first_free_block = atomicExch((unsigned int *)heap_ptr, first_free_block);
-    if (first_free_block != ~0) { break; }
+    if (first_free_block != uninitialized) { break; }
     // Some other block is holding the heap: wait
     NANOSLEEP(50);
   }
@@ -414,7 +418,7 @@ static __device__ void ext_heap_free(void *ptr,
   } else {
     uint32_t blk_prev = 0;
     uint32_t blk_next = first_free_block;
-    for (;;) {
+    while (true) {
       uint32_t next  = heap_ptr[(blk_next >> 2) + 0];
       uint32_t blksz = heap_ptr[(blk_next >> 2) + 1];
       if (cur_blk + len < blk_next) {

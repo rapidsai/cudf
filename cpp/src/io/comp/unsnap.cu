@@ -90,7 +90,7 @@ __device__ void snappy_prefetch_bytestream(unsnap_state_s *s, int t)
       s->q.prefetch_wrpos = pos;
       minrdpos            = pos - min(pos, PREFETCH_SIZE - 32u);
       blen                = (int)min(32u, end - pos);
-      for (;;) {
+      while (true) {
         uint32_t rdpos = s->q.prefetch_rdpos;
         if (rdpos >= minrdpos) break;
         if (s->q.prefetch_end) {
@@ -274,7 +274,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
   uint32_t dst_pos    = 0;
   int32_t batch       = 0;
 
-  for (;;) {
+  while (true) {
     int32_t batch_len;
     volatile unsnap_batch_s *b;
 
