@@ -123,6 +123,7 @@
 - PR #6742 Fix concat bug in dask_cudf Series/Index creation
 - PR #6632 Fix DataFrame initialization from list of dicts
 - PR #6767 Fix sort order of parameters in `test_scalar_invalid_implicit_conversion` pytest
+- PR #6771 Fix index handling in parquet reader and writer
 
 
 # cuDF 0.16.0 (21 Oct 2020)
