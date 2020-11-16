@@ -794,7 +794,7 @@ class Series(Frame, Serializable):
             return NotImplemented
 
     def __array_function__(self, func, types, args, kwargs):
-        handled_types = [cudf.Series, cupy.core.core.ndarray]
+        handled_types = [cudf.Series]
         for t in types:
             if t not in handled_types:
                 return NotImplemented
