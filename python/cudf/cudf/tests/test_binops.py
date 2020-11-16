@@ -1459,3 +1459,29 @@ def test_scalar_power_invalid(dtype_l, dtype_r):
 
     with pytest.raises(TypeError):
         lval_gpu ** rval_gpu
+
+@pytest.mark.parametrize('date_col', [
+    ['2000-01-01 00:00:00.012345678', '2000-01-31 00:00:00.012345678', '2000-02-29 00:00:00.012345678']
+])
+@pytest.mark.parametrize('n_periods', [0,1,-1,12,-12])
+@pytest.mark.parametrize('frequency', ['months']
+)
+@pytest.mark.parametrize('dtype', ['datetime64[ns]', 'datetime64[us]', 'datetime64[ms]', 'datetime64[s]'])
+def test_datetime_dateoffset_binaryop(date_col, n_periods, frequency, dtype):
+    gsr = cudf.Series(date_col, dtype=dtype)
+    psr = gsr.to_pandas() # converts to nanos
+
+    kwargs = {frequency: n_periods}
+
+    goffset = cudf.DateOffset(**kwargs)
+    poffset = pd.DateOffset(**kwargs)
+
+    expect = psr + poffset
+    got = gsr + goffset
+
+    utils.assert_eq(expect, got)
+
+    expect = psr - poffset
+    got = gsr - goffset 
+
+    utils.assert_eq(expect, got)
