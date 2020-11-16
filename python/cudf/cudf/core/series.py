@@ -7,7 +7,7 @@ from shutil import get_terminal_size
 from uuid import uuid4
 import collections.abc
 
-import cupy
+import cupy as cp
 import numpy as np
 import pandas as pd
 from nvtx import annotate
@@ -51,6 +51,9 @@ from cudf.utils.dtypes import (
     min_scalar_type,
     numeric_normalize_types,
 )
+
+from cudf.utils.utils import get_relevant_submodule
+from cudf.utils.utils import get_appropiate_dispatched_func
 
 
 class Series(Frame, Serializable):
@@ -785,21 +788,23 @@ class Series(Frame, Serializable):
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         if method == "__call__":
-            return get_dispatched_func(Series, cupy, ufunc, inputs, kwargs)
+            return get_appropiate_dispatched_func(
+                Series, cp, ufunc, inputs, kwargs
+            )
         else:
             return NotImplemented
 
     def __array_function__(self, func, types, args, kwargs):
-
-        cudf_series_module = get_relevant_submodule(func, Series)
-        cupy_module = get_relevant_submodule(func, cupy)
-        handled_types = [cudf_series_module, cupy_module]
+        handled_types = [cudf.Series, cp.core.core.ndarray]
         for t in types:
             if t not in handled_types:
                 return NotImplemented
 
-        return get_dispatched_func(
-            cudf_series_module, cupy_module, func, args, kwargs
+        cudf_submodule = get_relevant_submodule(func, Series)
+        cupy_submodule = get_relevant_submodule(func, cp)
+
+        return get_appropiate_dispatched_func(
+            cudf_submodule, cupy_submodule, func, args, kwargs
         )
 
     def map(self, arg, na_action=None) -> "Series":
@@ -5207,64 +5212,3 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         result_col[equal_nulls] = True
 
     return Series(result_col, index=index)
-
-
-def cast_cudf_series_to_cupy(ser):
-    if isinstance(ser._column, cudf.core.column.NumericalColumn):
-        if ser.null_count == 0:
-            return cupy.asarray(ser)
-        else:
-            raise ValueError("Objects with null mask are not supported")
-    else:
-        raise ValueError("Non numerical columns are not supported by cupy")
-
-
-def get_relevant_submodule(func, module):
-    # point to the correct submodule
-    for submodule in func.__module__.split(".")[1:]:
-        if hasattr(module, submodule):
-            module = getattr(module, submodule)
-        else:
-            return None
-
-    return module
-
-
-def get_cupy_compatible_args(args):
-    casted_ls = []
-    for arg in args:
-        if isinstance(arg, Series):
-            casted_arg = cast_cudf_series_to_cupy(arg)
-            casted_ls.append(casted_arg)
-
-        # handle list of arguments
-        elif isinstance(arg, collections.abc.Sequence):
-            casted_arg = get_cupy_compatible_args(arg)
-            casted_ls.append(casted_arg)
-        else:
-            casted_ls.append(arg)
-    return casted_ls
-
-
-def get_dispatched_func(cudf_series_module, cupy_module, func, args, kwargs):
-
-    fname = func.__name__
-    if hasattr(cudf_series_module, fname):
-        cudf_func = getattr(cudf_series_module, fname)
-        # Handle case if cudf_func is same as numpy function
-        if cudf_func is func:
-            return NotImplemented
-        else:
-            return cudf_func(*args, **kwargs)
-
-    elif hasattr(cupy_module, fname):
-        cupy_func = getattr(cupy_module, fname)
-        cupy_compatible_args = get_cupy_compatible_args(args)
-        cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
-        ## TODO: Handle scalar
-        if cupy_output.ndim < 2:
-            return cudf.Series(cupy_output)
-        else:
-            return NotImplemented
-    else:
-        return NotImplemented
