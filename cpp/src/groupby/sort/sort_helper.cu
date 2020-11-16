@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -239,7 +239,8 @@ column_view sort_groupby_helper::keys_bitmask_column(cudaStream_t stream)
 {
   if (_keys_bitmask_column) return _keys_bitmask_column->view();
 
-  auto row_bitmask = bitmask_and(_keys, rmm::mr::get_current_device_resource(), stream);
+  auto row_bitmask =
+    cudf::detail::bitmask_and(_keys, stream, rmm::mr::get_current_device_resource());
 
   _keys_bitmask_column = make_numeric_column(data_type(type_id::INT8),
                                              _keys.num_rows(),

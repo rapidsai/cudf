@@ -158,7 +158,7 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
   cudaStream_t stream)
 {
   auto output =
-    detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, mr, stream);
+    detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream, mr);
   // mask will not change
   if (input.nullable()) { output->set_null_mask(copy_bitmask(input), input.null_count()); }
 
