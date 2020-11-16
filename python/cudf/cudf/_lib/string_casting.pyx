@@ -3,8 +3,8 @@
 import numpy as np
 
 from cudf._lib.column cimport Column
-from cudf._lib.scalar import as_scalar
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar import as_device_scalar
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.types import np_to_cudf_types
 from cudf._lib.types cimport underlying_type_t_type_id
 
@@ -447,10 +447,10 @@ def _to_booleans(Column input_col, object string_true="True"):
     A Column with string values cast to boolean
     """
 
-    cdef Scalar str_true = as_scalar(string_true)
+    cdef DeviceScalar str_true = as_device_scalar(string_true)
     cdef column_view input_column_view = input_col.view()
-    cdef string_scalar* string_scalar_true = <string_scalar*>(
-        str_true.c_value.get())
+    cdef const string_scalar* string_scalar_true = <const string_scalar*>(
+        str_true.get_raw_ptr())
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(
@@ -484,13 +484,13 @@ def _from_booleans(
     A Column with boolean values cast to string
     """
 
-    cdef Scalar str_true = as_scalar(string_true)
-    cdef Scalar str_false = as_scalar(string_false)
+    cdef DeviceScalar str_true = as_device_scalar(string_true)
+    cdef DeviceScalar str_false = as_device_scalar(string_false)
     cdef column_view input_column_view = input_col.view()
-    cdef string_scalar* string_scalar_true = <string_scalar*>(
-        str_true.c_value.get())
-    cdef string_scalar* string_scalar_false = <string_scalar*>(
-        str_false.c_value.get())
+    cdef const string_scalar* string_scalar_true = <const string_scalar*>(
+        str_true.get_raw_ptr())
+    cdef const string_scalar* string_scalar_false = <const string_scalar*>(
+        str_false.get_raw_ptr())
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(

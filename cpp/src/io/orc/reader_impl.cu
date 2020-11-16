@@ -139,7 +139,7 @@ class metadata {
     const uint8_t *ps_data = &buffer->data()[max_ps_size - ps_length - 1];
     ProtobufReader pb;
     pb.init(ps_data, ps_length);
-    CUDF_EXPECTS(pb.read(&ps, ps_length), "Cannot read postscript");
+    CUDF_EXPECTS(pb.read(ps, ps_length), "Cannot read postscript");
     CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
 
     // If compression is used, all the rest of the metadata is compressed
@@ -151,7 +151,7 @@ class metadata {
     size_t ff_length = 0;
     auto ff_data     = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
     pb.init(ff_data, ff_length);
-    CUDF_EXPECTS(pb.read(&ff, ff_length), "Cannot read filefooter");
+    CUDF_EXPECTS(pb.read(ff, ff_length), "Cannot read filefooter");
     CUDF_EXPECTS(get_num_columns() > 0, "No columns found");
   }
 
@@ -218,7 +218,7 @@ class metadata {
         size_t sf_length  = 0;
         auto sf_data      = decompressor->Decompress(buffer->data(), sf_comp_length, &sf_length);
         pb.init(sf_data, sf_length);
-        CUDF_EXPECTS(pb.read(&stripefooters[i], sf_length), "Cannot read stripefooter");
+        CUDF_EXPECTS(pb.read(stripefooters[i], sf_length), "Cannot read stripefooter");
         selection[i].second = &stripefooters[i];
       }
     }

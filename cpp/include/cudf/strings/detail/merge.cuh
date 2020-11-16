@@ -17,8 +17,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/merge.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -62,7 +62,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
   rmm::device_buffer null_mask{0, stream, mr};
   size_type null_count = lhs.null_count() + rhs.null_count();
   if (null_count > 0)
-    null_mask = create_null_mask(strings_count, mask_state::ALL_VALID, stream, mr);
+    null_mask = cudf::detail::create_null_mask(strings_count, mask_state::ALL_VALID, stream, mr);
 
   // build offsets column
   auto offsets_transformer = [d_lhs, d_rhs] __device__(auto index_pair) {

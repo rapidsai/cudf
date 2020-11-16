@@ -561,7 +561,7 @@ class Series(Frame, Serializable):
 
         See Also
         --------
-        cudf.concat : General function to concatenate DataFrame or
+        cudf.core.reshape.concat : General function to concatenate DataFrame or
             Series objects.
 
         Examples
@@ -2612,7 +2612,7 @@ class Series(Frame, Serializable):
             The mask and index are preserved.
 
         Notes
-        --------
+        -----
         The supported Python features are listed in
 
           https://numba.pydata.org/numba-doc/dev/cuda/cudapysupported.html

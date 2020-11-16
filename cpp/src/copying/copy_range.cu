@@ -21,6 +21,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy_range.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -32,8 +33,6 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
-
-#include <cuda_runtime.h>
 
 #include <memory>
 
@@ -103,7 +102,7 @@ struct out_of_place_copy_range_dispatch {
     auto p_ret = std::make_unique<cudf::column>(target, stream, mr);
     if ((!p_ret->nullable()) && source.has_nulls(source_begin, source_end)) {
       p_ret->set_null_mask(
-        cudf::create_null_mask(p_ret->size(), cudf::mask_state::ALL_VALID, stream, mr), 0);
+        cudf::detail::create_null_mask(p_ret->size(), cudf::mask_state::ALL_VALID, stream, mr), 0);
     }
 
     if (source_end != source_begin) {  // otherwise no-op
