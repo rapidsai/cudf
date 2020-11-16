@@ -252,22 +252,15 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
 
   // Fetch schema into shared mem if possible
   if (schema_len <= MAX_SHARED_SCHEMA_LEN) {
-    for (int i = threadIdx.y * 32 + threadIdx.x;
-         i < schema_len * sizeof(schemadesc_s) / sizeof(uint32_t);
-         i += NWARPS * 32) {
-      reinterpret_cast<uint32_t *>(&g_shared_schema)[i] =
-        reinterpret_cast<const uint32_t *>(schema_g)[i];
+    for (int i = threadIdx.y * 32 + threadIdx.x; i < schema_len; i += NWARPS * 32) {
+      g_shared_schema[i] = schema_g[i];
     }
     __syncthreads();
     schema = g_shared_schema;
   } else {
     schema = schema_g;
   }
-  if (block_id < num_blocks && threadIdx.x < sizeof(block_desc_s) / sizeof(uint32_t)) {
-    reinterpret_cast<volatile uint32_t *>(blk)[threadIdx.x] =
-      reinterpret_cast<const uint32_t *>(&blocks[block_id])[threadIdx.x];
-    __threadfence_block();
-  }
+  if (block_id < num_blocks and threadIdx.x == 0) { *blk = blocks[block_id]; }
   __syncthreads();
   if (block_id >= num_blocks) { return; }
   cur_row        = blk->first_row;

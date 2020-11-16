@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/column/column_view.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -28,7 +29,8 @@ namespace detail {
 /**
  * @brief Return a fixed-width value from column.
  *
- * This will retrieve the specified value from device memory.
+ * Retrieves the specified value from device memory. This function
+ * synchronizes the stream.
  *
  * @throw cudf::logic_error if `col_view` is not a fixed-width column
  * @throw cudf::logic_error if `element_index < 0 or >= col_view.size()`
@@ -52,6 +54,7 @@ T get_value(column_view const& col_view, size_type element_index, rmm::cuda_stre
                            sizeof(T),
                            cudaMemcpyDeviceToHost,
                            stream.value()));
+  stream.synchronize();
   return result;
 }
 

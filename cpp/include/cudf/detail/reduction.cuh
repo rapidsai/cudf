@@ -16,16 +16,19 @@
 
 #pragma once
 
+#include "reduction_operators.cuh"
+
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
+#include <cub/device/device_reduce.cuh>
+
 #include <thrust/for_each.h>
 #include <thrust/iterator/iterator_traits.h>
-#include <cub/device/device_reduce.cuh>
-#include "reduction_operators.cuh"
-#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace reduction {

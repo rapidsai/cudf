@@ -970,6 +970,51 @@ def test_datetime_series_ops_with_scalars(data, other_scalars, dtype, op):
         )
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        np.array([10, 20, 30, None, 100]),
+        cp.asarray([10, 20, 30, 100]),
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [1],
+        [12, 11, 232, 223432411, 2343241, 234324, 23234],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ],
+)
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        datetime.timedelta(days=768),
+        datetime.timedelta(seconds=768),
+        datetime.timedelta(microseconds=7),
+        pytest.param(np.timedelta64("nat"), marks=pytest.mark.xfail),
+        np.timedelta64(1, "s"),
+        np.timedelta64(1, "ms"),
+        np.timedelta64(1, "us"),
+        np.timedelta64(1, "ns"),
+    ],
+)
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+@pytest.mark.parametrize("op", [np.add, np.subtract])
+def test_datetime_series_ops_with_cudf_scalars(data, scalar, dtype, op):
+    gsr = cudf.Series(data=data, dtype=dtype)
+    psr = gsr.to_pandas()
+
+    expect = op(psr, scalar)
+    got = op(gsr, cudf.Scalar(scalar))
+
+    assert_eq(expect, got)
+
+
 def test_datetime_invalid_ops():
     sr = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
     psr = sr.to_pandas()

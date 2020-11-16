@@ -1149,9 +1149,7 @@ __global__ void __launch_bounds__(block_size)
   uint32_t chunk_id       = stripe * num_columns + column;
   int t                   = threadIdx.x;
 
-  if (t < sizeof(ColumnDesc) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&s->chunk)[t] = ((const uint32_t *)&chunks[chunk_id])[t];
-  }
+  if (t == 0) s->chunk = chunks[chunk_id];
   __syncthreads();
   if (is_nulldec) {
     uint32_t null_count = 0;
@@ -1427,18 +1425,14 @@ __global__ void __launch_bounds__(block_size)
   int t = threadIdx.x;
 
   if (num_rowgroups > 0) {
-    if (t < sizeof(RowGroup) / sizeof(uint32_t)) {
-      ((volatile uint32_t *)&s->top.data.index)[t] =
-        ((const uint32_t *)&row_groups[blockIdx.y * num_columns + blockIdx.x])[t];
-    }
+    if (t == 0) s->top.data.index = row_groups[blockIdx.y * num_columns + blockIdx.x];
     __syncthreads();
     chunk_id = s->top.data.index.chunk_id;
   } else {
     chunk_id = blockIdx.x;
   }
-  if (t < sizeof(ColumnDesc) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&s->chunk)[t] = ((const uint32_t *)&chunks[chunk_id])[t];
-  }
+  if (t == 0) s->chunk = chunks[chunk_id];
+
   __syncthreads();
   if (t == 0) {
     // If we have an index, seek to the initial run and update row positions
