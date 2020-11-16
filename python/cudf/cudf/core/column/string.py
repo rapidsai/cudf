@@ -3795,7 +3795,8 @@ class StringMethods(ColumnMethodsMixin):
         """
         separator = _massage_string_arg(separator, "separator")
         return self._return_or_inplace(
-            cpp_detokenize(self._column, indices._column, separator)
+            cpp_detokenize(self._column, indices._column, separator),
+            retain_index=False,
         )
 
     def character_tokenize(self):
@@ -3918,7 +3919,7 @@ class StringMethods(ColumnMethodsMixin):
         """
         separator = _massage_string_arg(separator, "separator")
         return self._return_or_inplace(
-            cpp_generate_ngrams(self._column, n, separator)
+            cpp_generate_ngrams(self._column, n, separator), retain_index=False
         )
 
     def character_ngrams(self, n=2):
@@ -3954,7 +3955,7 @@ class StringMethods(ColumnMethodsMixin):
         dtype: object
         """
         return self._return_or_inplace(
-            cpp_generate_character_ngrams(self._column, n)
+            cpp_generate_character_ngrams(self._column, n), retain_index=False
         )
 
     def ngrams_tokenize(self, n=2, delimiter=" ", separator="_"):
@@ -3990,6 +3991,7 @@ class StringMethods(ColumnMethodsMixin):
         separator = _massage_string_arg(separator, "separator")
         return self._return_or_inplace(
             cpp_ngrams_tokenize(self._column, n, delimiter, separator),
+            retain_index=False,
         )
 
     def replace_tokens(self, targets, replacements, delimiter=None):

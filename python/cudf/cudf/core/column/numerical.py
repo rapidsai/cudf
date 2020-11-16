@@ -137,7 +137,6 @@ class NumericalColumn(column.ColumnBase):
         return libcudf.string_casting.int2ip(self)
 
     def as_string_column(self, dtype, **kwargs):
-
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
                 np.dtype(self.dtype)
