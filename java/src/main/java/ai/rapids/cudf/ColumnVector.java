@@ -128,20 +128,6 @@ public final class ColumnVector extends ColumnView {
     incRefCountInternal(true);
   }
 
-  public ColumnVector(DType type, long rows, Optional<Long> nullCount,
-                      DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
-                      DeviceMemoryBuffer offsetBuffer, long[] childHandles) {
-    super(initViewHandle(type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
-        dataBuffer, validityBuffer,
-        offsetBuffer, childHandles));
-    List<DeviceMemoryBuffer> toClose = new ArrayList<>();
-    offHeap = new OffHeapState(type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer,
-        toClose, childHandles);
-    MemoryCleaner.register(this, offHeap);
-    this.refCount = 0;
-    incRefCountInternal(true);
-  }
-
   /**
    * This is a very special constructor that should only ever be called by
    * fromViewWithContiguousAllocation.  It takes a cudf::column_view * instead of a cudf::column *.
@@ -170,8 +156,8 @@ public final class ColumnVector extends ColumnView {
   }
 
 
-  static long initViewHandle(DType type, int rows, int nc, DeviceMemoryBuffer dataBuffer,
-                                DeviceMemoryBuffer validityBuffer, DeviceMemoryBuffer offsetBuffer, long[] childHandles) {
+  private static long initViewHandle(DType type, int rows, int nc, DeviceMemoryBuffer dataBuffer,
+                                     DeviceMemoryBuffer validityBuffer, DeviceMemoryBuffer offsetBuffer, long[] childHandles) {
     long cd = dataBuffer == null ? 0 : dataBuffer.address;
     long cdSize = dataBuffer == null ? 0 : dataBuffer.length;
     long od = offsetBuffer == null ? 0 : offsetBuffer.address;
@@ -179,6 +165,7 @@ public final class ColumnVector extends ColumnView {
     return makeCudfColumnView(type.typeId.getNativeId(), type.getScale(), cd, cdSize,
         od, vd, nc, rows, childHandles) ;
   }
+
   static ColumnVector fromViewWithContiguousAllocation(long columnViewAddress, DeviceMemoryBuffer buffer) {
     return new ColumnVector(columnViewAddress, buffer);
   }
@@ -241,25 +228,10 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * Returns the number of rows in this vector.
-   */
-  public long getRowCount() {
-    return rows;
-  }
-
-  /**
    * Returns the amount of device memory used.
    */
   public long getDeviceMemorySize() {
     return offHeap != null ? offHeap.getDeviceMemorySize() : 0;
-  }
-
-  /**
-   * Returns the type of this vector.
-   */
-  @Override
-  public DType getType() {
-    return type;
   }
 
   /**
@@ -341,7 +313,8 @@ public final class ColumnVector extends ColumnView {
    * @return - new ColumnVector
    */
   public static ColumnVector fromScalar(Scalar scalar, int rows) {
-    return ColumnView.fromScalar(scalar, rows);
+    long columnHandle = fromScalar(scalar.getScalarHandle(), rows);
+    return new ColumnVector(columnHandle);
   }
 
   /**
@@ -353,7 +326,10 @@ public final class ColumnVector extends ColumnView {
    * @return the new ColumnVector.
    */
   public static ColumnVector sequence(Scalar initialValue, Scalar step, int rows) {
-    return ColumnView.sequence(initialValue, step, rows);
+    if (!initialValue.isValid() || !step.isValid()) {
+      throw new IllegalArgumentException("nulls are not supported in sequence");
+    }
+    return new ColumnVector(sequence(initialValue.getScalarHandle(), step.getScalarHandle(), rows));
   }
 
   /**
@@ -364,9 +340,11 @@ public final class ColumnVector extends ColumnView {
    * @return the new ColumnVector.
    */
   public static ColumnVector sequence(Scalar initialValue, int rows) {
-    return ColumnView.sequence(initialValue, rows);
+    if (!initialValue.isValid()) {
+      throw new IllegalArgumentException("nulls are not supported in sequence");
+    }
+    return new ColumnVector(sequence(initialValue.getScalarHandle(), 0, rows));
   }
-
   /**
    * Create a new vector by concatenating multiple columns together.
    * Note that all columns must have the same type.
@@ -449,6 +427,7 @@ public final class ColumnVector extends ColumnView {
    * @param type type of the resulting ColumnVector
    * @return A new vector allocated on the GPU
    */
+  @Override
   public ColumnVector castTo(DType type) {
     if (this.type == type) {
       // Optimization
@@ -456,6 +435,14 @@ public final class ColumnVector extends ColumnView {
     }
     return super.castTo(type);
   }
+
+  /////////////////////////////////////////////////////////////////////////////
+  // NATIVE METHODS
+  /////////////////////////////////////////////////////////////////////////////
+
+  private static native long sequence(long initialValue, long step, int rows);
+
+  private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
@@ -506,46 +493,6 @@ public final class ColumnVector extends ColumnView {
 
   static native long makeEmptyCudfColumn(int type, int scale);
 
-  private static DeviceMemoryBufferView getData(long viewHandle) {
-    return ColumnView.getDataBuffer(viewHandle);
-  }
-
-  private static DeviceMemoryBufferView getValid(long viewHandle) {
-    return ColumnView.getValidityBuffer(viewHandle);
-  }
-
-  public ColumnView getChildColumnView(int childIndex) {
-    if (!type.isNestedType()) {
-      return null;
-    }
-    long childColumnView = ColumnView.getChildCvPointer(getNativeView(), childIndex);
-    //this is returning a new ColumnView - must close this!
-    return new ColumnView(childColumnView);
-  }
-
-  public BaseDeviceMemoryBuffer getData() {
-    if (type.isNestedType()) {
-      throw new IllegalStateException(" Lists and Structs at top level have no data");
-    }
-    return offHeap.getData();
-
-  }
-
-  public BaseDeviceMemoryBuffer getOffsets() {
-    return offHeap.getOffsets();
-  }
-
-  public BaseDeviceMemoryBuffer getValid() {
-    return offHeap.getValid();
-  }
-
-  public int getNumChildren() {
-    if (!type.isNestedType()) {
-      return 0;
-    }
-    return ColumnView.getNativeNumChildren(getNativeView());
-  }
-
   /////////////////////////////////////////////////////////////////////////////
   // HELPER CLASSES
   /////////////////////////////////////////////////////////////////////////////
@@ -594,7 +541,7 @@ public final class ColumnVector extends ColumnView {
         toClose.addAll(buffers);
       }
       if (rows == 0 && !type.isNestedType()) {
-        this.columnHandle = ColumnVector.makeEmptyCudfColumn(type.typeId.getNativeId(), type.getScale());
+        this.columnHandle = makeEmptyCudfColumn(type.typeId.getNativeId(), type.getScale());
       } else {
         long cd = data == null ? 0 : data.address;
         long cdSize = data == null ? 0 : data.length;
@@ -655,11 +602,11 @@ public final class ColumnVector extends ColumnView {
     }
 
     public BaseDeviceMemoryBuffer getData() {
-      return ColumnVector.getData(getViewHandle());
+      return getDataBuffer(getViewHandle());
     }
 
     public BaseDeviceMemoryBuffer getValid() {
-      return ColumnVector.getValid(getViewHandle());
+      return getValidityBuffer(getViewHandle());
     }
 
     public BaseDeviceMemoryBuffer getOffsets() {
@@ -772,11 +719,6 @@ public final class ColumnVector extends ColumnView {
       size += data != null ? data.getLength() : 0;
       return size;
     }
-  }
-
-  public static ColumnVector createNestedColumnVector(DType type, int rows, HostMemoryBuffer data, HostMemoryBuffer valid, HostMemoryBuffer offsets,
-                                                      Optional<Long> nullCount, List<HostColumnVectorCore> child) {
-    return ColumnView.NestedColumnVector.createColumnVector(type, rows, data, valid, offsets, nullCount, child);
   }
 
   /////////////////////////////////////////////////////////////////////////////

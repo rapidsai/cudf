@@ -24,6 +24,11 @@ import java.util.Optional;
 
 import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
 
+/** This class represents the column_view of a column analogous to its cudf cpp counterpart.
+ * It holds view information like the native handle and other metadata for a column_view. It also
+ * exposes APIs that would allow operations on a view.
+ *
+ */
 public class ColumnView implements AutoCloseable, BinaryOperable {
 
   public static final long UNKNOWN_NULL_COUNT = -1;
@@ -62,22 +67,27 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * to release (it is not stable yet) so be sure that your native code is complied against the
    * exact same version of libcudf as this is released for.
    */
-  public long getNativeView() {
+  public final long getNativeView() {
     return viewHandle;
   }
 
-  public DType getType() {
+  public final DType getType() {
     return type;
   }
 
-  public ColumnView getChildColumnView(int childIndex) {
+  /**
+   * Returns the choild column view at a given index.
+   * Please note that it is the responsibility of the caller to close this view.
+   * @param childIndex the index of the child
+   * @return a column view
+   */
+  public final ColumnView getChildColumnView(int childIndex) {
     int numChildren = getNumChildren();
     assert childIndex < numChildren : "children index should be less than " + numChildren;
     if (!getType().isNestedType()) {
       return null;
     }
     long childColumnView = ColumnView.getChildCvPointer(viewHandle, childIndex);
-    //this is returning a new ColumnView - must close this!
     return new ColumnView(childColumnView);
   }
 
@@ -87,28 +97,35 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return    If the type is LIST, STRUCT or data buffer is empty it returns null,
    *            else return the data device buffer
    */
-
-  public BaseDeviceMemoryBuffer getData() {
+  public final BaseDeviceMemoryBuffer getData() {
     return getDataBuffer(viewHandle);
   }
 
-  public BaseDeviceMemoryBuffer getOffsets() {
+  public final BaseDeviceMemoryBuffer getOffsets() {
     return getOffsetsBuffer(viewHandle);
   }
 
-  public BaseDeviceMemoryBuffer getValid() {
+  public final BaseDeviceMemoryBuffer getValid() {
     return getValidityBuffer(viewHandle);
   }
 
+  /**
+   * Returns the number of nulls in the data. Note that this might end up
+   * being a very expensive operation because if the null count is not
+   * known it will be calculated.
+   */
   public long getNullCount() {
     return getNativeNullCount(viewHandle);
   }
 
-  public long getRowCount() {
-    return ColumnView.getNativeRowCount(viewHandle);
+  /**
+   * Returns the number of rows in this vector.
+   */
+  public final long getRowCount() {
+    return rows;
   }
 
-  public int getNumChildren() {
+  public final int getNumChildren() {
     if (!getType().isNestedType()) {
       return 0;
     }
@@ -119,6 +136,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public void close() {
     ColumnView.deleteColumnView(viewHandle);
   }
+
   /**
    * Used for string strip function.
    * Indicates characters to be stripped from the beginning, end, or both of each string.
@@ -260,7 +278,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param newValues - A vector containing new values
    * @return - A new vector containing the old values replaced with new values
    */
-  public final ColumnVector findAndReplaceAll(ColumnVector oldValues, ColumnVector newValues) {
+  public final ColumnVector findAndReplaceAll(ColumnView oldValues, ColumnView newValues) {
     return new ColumnVector(findAndReplaceAll(oldValues.getNativeView(), newValues.getNativeView(), this.getNativeView()));
   }
 
@@ -286,7 +304,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param falseValues the values to select if a row in this column is not true
    * @return the computed vector
    */
-  public final ColumnVector ifElse(ColumnVector trueValues, ColumnVector falseValues) {
+  public final ColumnVector ifElse(ColumnView trueValues, ColumnView falseValues) {
     if (type != DType.BOOL8) {
       throw new IllegalArgumentException("Cannot select with a predicate vector of type " + type);
     }
@@ -306,7 +324,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param falseValue the value to select if a row in this column is not true
    * @return the computed vector
    */
-  public final ColumnVector ifElse(ColumnVector trueValues, Scalar falseValue) {
+  public final ColumnVector ifElse(ColumnView trueValues, Scalar falseValue) {
     if (type != DType.BOOL8) {
       throw new IllegalArgumentException("Cannot select with a predicate vector of type " + type);
     }
@@ -326,7 +344,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param falseValues the values to select if a row in this column is not true
    * @return the computed vector
    */
-  public final ColumnVector ifElse(Scalar trueValue, ColumnVector falseValues) {
+  public final ColumnVector ifElse(Scalar trueValue, ColumnView falseValues) {
     if (type != DType.BOOL8) {
       throw new IllegalArgumentException("Cannot select with a predicate vector of type " + type);
     }
@@ -466,47 +484,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Create a new vector of length rows, where each row is filled with the Scalar's
-   * value
-   * @param scalar - Scalar to use to fill rows
-   * @param rows - Number of rows in the new ColumnVector
-   * @return - new ColumnVector
-   */
-  public static ColumnVector fromScalar(Scalar scalar, int rows) {
-    long columnHandle = fromScalar(scalar.getScalarHandle(), rows);
-    return new ColumnVector(columnHandle);
-  }
-
-  /**
-   * Create a new vector of length rows, starting at the initialValue and going by step each time.
-   * Only numeric types are supported.
-   * @param initialValue the initial value to start at.
-   * @param step the step to add to each subsequent row.
-   * @param rows the total number of rows
-   * @return the new ColumnVector.
-   */
-  public static ColumnVector sequence(Scalar initialValue, Scalar step, int rows) {
-    if (!initialValue.isValid() || !step.isValid()) {
-      throw new IllegalArgumentException("nulls are not supported in sequence");
-    }
-    return new ColumnVector(sequence(initialValue.getScalarHandle(), step.getScalarHandle(), rows));
-  }
-
-  /**
-   * Create a new vector of length rows, starting at the initialValue and going by 1 each time.
-   * Only numeric types are supported.
-   * @param initialValue the initial value to start at.
-   * @param rows the total number of rows
-   * @return the new ColumnVector.
-   */
-  public static ColumnVector sequence(Scalar initialValue, int rows) {
-    if (!initialValue.isValid()) {
-      throw new IllegalArgumentException("nulls are not supported in sequence");
-    }
-    return new ColumnVector(sequence(initialValue.getScalarHandle(), 0, rows));
-  }
-
-  /**
    * Create a new vector by concatenating multiple columns together.
    * Note that all columns must have the same type.
    */
@@ -548,7 +525,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param columns array of columns whose null masks are merged, must have identical number of rows.
    * @return the new ColumnVector with merged null mask.
    */
-  public final ColumnVector mergeAndSetValidity(BinaryOp mergeOp, ColumnVector... columns) {
+  public final ColumnVector mergeAndSetValidity(BinaryOp mergeOp, ColumnView... columns) {
     assert mergeOp == BinaryOp.BITWISE_AND : "Only BITWISE_AND supported right now";
     long[] columnViews = new long[columns.length];
     long size = getRowCount();
@@ -568,7 +545,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param columns array of columns to hash, must have identical number of rows.
    * @return the new ColumnVector of 32 character hex strings representing each row's hash value.
    */
-  public static ColumnVector md5Hash(ColumnVector... columns) {
+  public static ColumnVector md5Hash(ColumnView... columns) {
     if (columns.length < 1) {
       throw new IllegalArgumentException("MD5 hashing requires at least 1 column of input");
     }
@@ -1233,7 +1210,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param needles
    * @return A new ColumnVector of type {@link DType#BOOL8}
    */
-  public final ColumnVector contains(ColumnVector needles) {
+  public final ColumnVector contains(ColumnView needles) {
     return new ColumnVector(containsVector(getNativeView(), needles.getNativeView()));
   }
 
@@ -1750,7 +1727,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *                  An empty string indicates split on whitespace.
    * @return New table of strings columns.
    */
-  public Table stringSplit(Scalar delimiter) {
+  public final Table stringSplit(Scalar delimiter) {
     assert type == DType.STRING : "column type must be a String";
     assert delimiter != null : "delimiter may not be null";
     assert delimiter.getType() == DType.STRING : "delimiter must be a string scalar";
@@ -1764,7 +1741,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Null string entries return corresponding null output columns.
    * @return New table of strings columns.
    */
-  public Table stringSplit() {
+  public final Table stringSplit() {
     try (Scalar emptyString = Scalar.fromString("")) {
       return stringSplit(emptyString);
     }
@@ -1842,7 +1819,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param end   Vector containing end indices of each string. -1 indicated to read until end of string.
    * @return A new java column vector containing the substrings/
    */
-  public final ColumnVector substring(ColumnVector start, ColumnVector end) {
+  public final ColumnVector substring(ColumnView start, ColumnView end) {
     assert type == DType.STRING : "column type must be a String";
     assert (rows == start.getRowCount() && rows == end.getRowCount()) : "Number of rows must be equal";
     assert (start.getType() == DType.INT32 && end.getType() == DType.INT32) : "start and end " +
@@ -2200,7 +2177,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @throws CudfException if any error happens including if the RE does
    * not contain any capture groups.
    */
-  public Table extractRe(String pattern) throws CudfException {
+  public final Table extractRe(String pattern) throws CudfException {
     assert type == DType.STRING : "column type must be a String";
     assert pattern != null : "pattern may not be null";
     return new Table(extractRe(this.getNativeView(), pattern));
@@ -2493,12 +2470,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long charLengths(long viewHandle) throws CudfException;
 
-  private static native long concatenate(long[] viewHandles) throws CudfException;
-
-  private static native long sequence(long initialValue, long step, int rows);
-
-  private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
-
   private static native long replaceNulls(long viewHandle, long scalarHandle) throws CudfException;
 
   private static native long ifElseVV(long predVec, long trueVec, long falseVec) throws CudfException;
@@ -2553,6 +2524,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
                                      long hiScalarHandle, long hiScalarReplaceHandle);
 
   protected native long title(long handle);
+
   private static native long isTimestamp(long nativeView, String format);
   /**
    * Native method to normalize the various bitwise representations of NAN and zero.
@@ -2586,6 +2558,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long hash(long[] viewHandles, int hashId) throws CudfException;
 
+  private static native long concatenate(long[] viewHandles) throws CudfException;
   /**
    * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
    */
@@ -2625,6 +2598,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   static native long copyColumnViewToCV(long viewHandle) throws CudfException;
 
+  /**
+   * A utility class to create column vector like objects without refcounts and other APIs when
+   * creating the device side vector from host side nested vectors. Eventually this can go away or
+   * be refactored to hold less state like just the handles and the buffers to close.
+   */
   static class NestedColumnVector {
 
     private final DeviceMemoryBuffer data;

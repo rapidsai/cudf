@@ -3056,9 +3056,12 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector expected = ColumnVector.fromLists(new HostColumnVector.ListType(true,
              new HostColumnVector.BasicType(true, DType.STRING)) , list, list3, list2)) {
       assert res1.getNullCount() == 1: "Null count is incorrect on input column";
-      assert res1.getChildColumnView(0).getNullCount() == 0 : "Null count is incorrect on input column";
       assert res2.getNullCount() == 0 : "Null count is incorrect on input column";
-      assert res2.getChildColumnView(0).getNullCount() == 2 : "Null count is incorrect on input column";
+      try(ColumnView cView1 = res1.getChildColumnView(0);
+          ColumnView cView2 = res2.getChildColumnView(0)) {
+        assert cView1.getNullCount() == 0 : "Null count is incorrect on input column";
+        assert cView2.getNullCount() == 2 : "Null count is incorrect on input column";
+      }
       assertColumnsAreEqual(expected, v);
     }
   }

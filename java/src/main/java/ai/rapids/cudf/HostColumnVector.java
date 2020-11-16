@@ -169,7 +169,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
   public ColumnVector copyToDevice() {
     if (rows == 0) {
       if (type.isNestedType()) {
-        return ColumnVector.createNestedColumnVector(type, 0,
+        return ColumnView.NestedColumnVector.createColumnVector(type, 0,
                 null, null, null, Optional.of(0L), children);
       } else {
         return new ColumnVector(type, 0, Optional.of(0L), null, null, null);
@@ -216,7 +216,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
         offsets = null;
         return ret;
       } else {
-        return ColumnVector.createNestedColumnVector(type, (int) rows, offHeap.data, offHeap.valid, offHeap.offsets, nullCount, children);
+        return ColumnView.NestedColumnVector.createColumnVector(
+            type, (int) rows, offHeap.data, offHeap.valid, offHeap.offsets, nullCount, children);
       }
     } finally {
       if (data != null) {
