@@ -477,7 +477,6 @@ struct list_child_constructor {
          d_string_offsets = string_offsets_column.template data<int32_t>(),
          d_string_chars =
            string_chars_column.template data<char>()] __device__(auto const& string_idx) {
-          // auto string_offset     = output_start_offset + string_idx;
           auto string_start_idx = d_string_offsets[input_list_start + string_idx];
           auto string_end_idx   = d_string_offsets[input_list_start + string_idx + 1];
 
@@ -644,8 +643,8 @@ void assert_same_data_type(column_view const& lhs, column_view const& rhs)
  * @tparam SourceIterator must produce list_view objects
  * @tparam MapIterator must produce index values within the target column.
  *
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New lists column.
  */
 template <typename MapIterator>
@@ -657,28 +656,25 @@ std::unique_ptr<column> scatter(
   rmm::cuda_stream_view stream        = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  auto num_rows = target.size();
+  auto const num_rows = target.size();
 
   if (num_rows == 0) { return cudf::empty_like(target); }
 
-  auto child_column_type = lists_column_view(target).child().type();
+  auto const child_column_type = lists_column_view(target).child().type();
 
   assert_same_data_type(source, target);
 
   using lists_column_device_view = cudf::detail::lists_column_device_view;
   using unbound_list_view        = cudf::lists::detail::unbound_list_view;
 
-  auto source_lists_column_view = lists_column_view(source);  // Checks that this is a list column.
-  auto source_device_view       = column_device_view::create(source, stream);
-  auto source_vector            = list_vector_from_column(unbound_list_view::label_type::SOURCE,
-                                               lists_column_device_view(*source_device_view),
-                                               stream,
-                                               mr);
+  auto const source_device_view = column_device_view::create(source, stream);
+  auto const source_vector      = list_vector_from_column(unbound_list_view::label_type::SOURCE,
+                                                     lists_column_device_view(*source_device_view),
+                                                     stream,
+                                                     mr);
 
-  auto target_lists_column_view =
-    lists_column_view(target);  // Checks that target is a list column.
-  auto target_device_view = column_device_view::create(target, stream);
-  auto target_vector      = list_vector_from_column(unbound_list_view::label_type::TARGET,
+  auto const target_device_view = column_device_view::create(target, stream);
+  auto target_vector            = list_vector_from_column(unbound_list_view::label_type::TARGET,
                                                lists_column_device_view(*target_device_view),
                                                stream,
                                                mr);
@@ -689,6 +685,11 @@ std::unique_ptr<column> scatter(
                   source_vector.end(),
                   scatter_map_begin,
                   target_vector.begin());
+
+  auto const source_lists_column_view =
+    lists_column_view(source);  // Checks that this is a list column.
+  auto const target_lists_column_view =
+    lists_column_view(target);  // Checks that target is a list column.
 
   auto list_size_begin = thrust::make_transform_iterator(
     target_vector.begin(), [] __device__(unbound_list_view l) { return l.size(); });
@@ -704,8 +705,8 @@ std::unique_ptr<column> scatter(
                                             stream,
                                             mr);
 
-  rmm::device_buffer null_mask{0, stream, mr};
-  if (target.has_nulls()) { null_mask = copy_bitmask(target, stream, mr); }
+  auto null_mask =
+    target.has_nulls() ? copy_bitmask(target, stream, mr) : rmm::device_buffer{0, stream, mr};
 
   return cudf::make_lists_column(num_rows,
                                  std::move(offsets_column),

@@ -36,10 +36,9 @@ class list_device_view {
                                         size_type const& row_index)
     : lists_column(lists_column), _row_index(row_index)
   {
-    release_assert(row_index >= 0 && row_index < lists_column.size() && "row_index out of bounds");
-
     column_device_view const& offsets = lists_column.offsets();
-    release_assert(row_index < offsets.size() && "row_index should not have exceeded offset size");
+    release_assert(row_index >= 0 && row_index < lists_column.size() &&
+                   row_index < offsets.size() && "row_index out of bounds");
 
     begin_offset = offsets.element<size_type>(row_index);
     release_assert(begin_offset >= 0 && begin_offset <= lists_column.child().size() &&
@@ -77,7 +76,7 @@ class list_device_view {
   }
 
   /**
-   * @brief Fetches the element at the specified index, within the list row.
+   * @brief Fetches the element at the specified index within the list row.
    *
    * @tparam The type of the list's element.
    * @param The index into the list row
