@@ -332,3 +332,15 @@ def get_units(value):
         return _unit_map[value.lower()]
 
     return value
+
+class DateOffset(object):
+    def __init__(self, months):
+        self._months = months
+
+    def _generate_column(self, size):
+        col = cudf.core.column.as_column(
+            self._months,
+            dtype=np.dtype('int16'),
+            length=size
+        )
+        return col

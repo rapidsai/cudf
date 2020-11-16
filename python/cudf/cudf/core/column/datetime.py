@@ -137,6 +137,8 @@ class DatetimeColumn(column.ColumnBase):
             other = other.to_datetime64()
         elif isinstance(other, pd.Timedelta):
             other = other.to_timedelta64()
+        elif isinstance(other, cudf.DateOffset):
+            return other
         if isinstance(other, np.datetime64):
             if np.isnat(other):
                 return cudf.Scalar(None, dtype=self.dtype)
@@ -219,6 +221,8 @@ class DatetimeColumn(column.ColumnBase):
         return result.astype("datetime64[ns]")
 
     def binary_operator(self, op, rhs, reflect=False):
+        if isinstance(rhs, cudf.DateOffset):
+            return binop_offset(self, rhs, op)
         lhs, rhs = self, rhs
         if op in ("eq", "ne", "lt", "gt", "le", "ge"):
             out_dtype = np.bool
@@ -317,6 +321,11 @@ class DatetimeColumn(column.ColumnBase):
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
 def binop(lhs, rhs, op, out_dtype):
     out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
+    return out
+
+def binop_offset(lhs, rhs, op):
+    rhs = rhs._generate_column(len(lhs))
+    out = libcudf.datetime.add_months(lhs, rhs)
     return out
 
 
