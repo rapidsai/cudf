@@ -18,10 +18,10 @@
 #include <groupby/hash/groupby_kernels.cuh>
 
 #include <cudf/aggregation.hpp>
-#include <cudf/copying.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>

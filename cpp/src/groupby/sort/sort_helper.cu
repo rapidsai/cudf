@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
- #include <cudf/column/column_factories.hpp>
- #include <cudf/detail/copy.hpp>
- #include <cudf/detail/gather.cuh>
- #include <cudf/detail/gather.hpp>
- #include <cudf/detail/groupby/sort_helper.hpp>
- #include <cudf/detail/iterator.cuh>
- #include <cudf/detail/scatter.hpp>
- #include <cudf/detail/sorting.hpp>
- #include <cudf/table/row_operators.cuh>
- #include <cudf/table/table_device_view.cuh>
- #include <cudf/copying.hpp>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
+#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
+#include <cudf/detail/groupby/sort_helper.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/scatter.hpp>
+#include <cudf/detail/sorting.hpp>
+#include <cudf/table/row_operators.cuh>
+#include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
