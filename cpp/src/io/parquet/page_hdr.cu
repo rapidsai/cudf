@@ -406,7 +406,6 @@ extern "C" __global__ void __launch_bounds__(128)
           bs->cur = bs->end;
         }
       }
-      __syncwarp();
       index_out = SHFL0(index_out);
       if (index_out >= 0 && index_out < max_num_pages && lane_id == 0)
         page_info[index_out] = bs->page;

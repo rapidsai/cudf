@@ -45,6 +45,7 @@ namespace gpu {
 struct page_state_s {
   const uint8_t *data_start;
   const uint8_t *data_end;
+  const uint8_t *lvl_end;
   const uint8_t *dict_base;    // ptr to dictionary page data
   int32_t dict_size;           // size of dictionary data
   int32_t first_row;           // First row in page to output
@@ -236,7 +237,7 @@ __device__ void gpuDecodeStream(
   uint32_t *output, page_state_s *s, int32_t target_count, int t, level_type lvl)
 {
   const uint8_t *cur_def    = s->lvl_start[lvl];
-  const uint8_t *end        = s->data_start;
+  const uint8_t *end        = s->lvl_end;
   uint32_t level_run        = s->initial_rle_run[lvl];
   int32_t level_val         = s->initial_rle_value[lvl];
   int level_bits            = s->col.level_bits[lvl];
@@ -305,7 +306,6 @@ __device__ void gpuDecodeStream(
     value_count += batch_len;
   }
 
-  __syncwarp();
   // update the stream info
   if (!t) {
     s->lvl_start[lvl]         = cur_def;
@@ -1078,6 +1078,7 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
           break;
       }
       if (cur > end) { s->error = 1; }
+      s->lvl_end    = cur;
       s->data_start = cur;
       s->data_end   = end;
     } else {
@@ -1650,9 +1651,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
       gpuDecodeLevels(s, target_pos, t);
-    }
-    __syncthreads();
-    if (t >= 32 and t < out_thread0) {
+    } else if (t < out_thread0) {
       uint32_t src_target_pos = target_pos + skipped_leaf_values;
 
       // WARP1: Decode dictionary indices, booleans or string positions
@@ -1664,7 +1663,7 @@ extern "C" __global__ void __launch_bounds__(NTHREADS)
         gpuInitStringDescriptors(s, src_target_pos, t & 0x1f);
       }
       if (t == 32) { *(volatile int32_t *)&s->dict_pos = src_target_pos; }
-    } else if (t >= out_thread0) {
+    } else {
       // WARP1..WARP3: Decode values
       int dtype = s->col.data_type & 7;
       out_pos += t - out_thread0;
