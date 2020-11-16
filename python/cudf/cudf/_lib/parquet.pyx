@@ -6,6 +6,7 @@ import cudf
 import errno
 import os
 import pyarrow as pa
+from collections import OrderedDict
 
 try:
     import ujson as json
@@ -129,9 +130,9 @@ cpdef generate_pandas_metadata(Table table, index):
                 descr = {
                     "kind": "range",
                     "name": table.index.name,
-                    "start": table.index._start,
-                    "stop": table.index._stop,
-                    "step": 1,
+                    "start": table.index.start,
+                    "stop": table.index.stop,
+                    "step": table.index.step,
                 }
             else:
                 descr = _index_level_name(idx.name, level, col_names)
@@ -222,15 +223,24 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     column_names = [x.decode() for x in c_out_table.metadata.column_names]
 
     # Access the Parquet user_data json to find the index
-    index_col = ''
+    index_col = None
     cdef map[string, string] user_data = c_out_table.metadata.user_data
     json_str = user_data[b'pandas'].decode('utf-8')
     meta = None
     if json_str != "":
         meta = json.loads(json_str)
         if 'index_columns' in meta and len(meta['index_columns']) > 0:
-            index_col = meta['index_columns'][0]
-
+            index_col = meta['index_columns']
+            if isinstance(index_col[0], dict) and \
+                    index_col[0]['kind'] == 'range':
+                is_range_index = True
+            else:
+                is_range_index = False
+                index_col_names = OrderedDict()
+                for idx_col in index_col:
+                    for c in meta['columns']:
+                        if c['field_name'] == idx_col:
+                            index_col_names[idx_col] = c['name']
     df = cudf.DataFrame._from_table(
         Table.from_unique_ptr(
             move(c_out_table.tbl),
@@ -247,7 +257,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
         if not column_names:
             column_names = [o['name'] for o in meta['columns']]
-            if index_col in cols_dtype_map:
+            if not is_range_index and index_col in cols_dtype_map:
                 column_names.remove(index_col)
 
         for col in column_names:
@@ -258,16 +268,38 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
             )
 
     # Set the index column
-    if index_col is not '' and isinstance(index_col, str):
-        if index_col in column_names:
-            df = df.set_index(index_col)
-            new_index_name = pa.pandas_compat._backwards_compatible_index_name(
-                df.index.name, df.index.name
+    if index_col is not None and len(index_col) > 0:
+        if is_range_index:
+            range_index_meta = index_col[0]
+            idx = cudf.RangeIndex(
+                start=range_index_meta['start'],
+                stop=range_index_meta['stop'],
+                step=range_index_meta['step'],
+                name=range_index_meta['name']
             )
-            df.index.name = new_index_name
+            if skiprows is not None:
+                idx = idx[skiprows:]
+            if num_rows is not None:
+                idx = idx[:num_rows]
+            df.index = idx
+        elif set(index_col).issubset(column_names):
+            index_data = df[index_col]
+            actual_index_names = list(index_col_names.values())
+            if len(index_data._data) == 1:
+                idx = cudf.Index(
+                    index_data._data.columns[0],
+                    name=actual_index_names[0]
+                )
+            else:
+                idx = cudf.MultiIndex.from_frame(
+                    index_data,
+                    names=actual_index_names
+                )
+            df.drop(columns=index_col, inplace=True)
+            df.index = idx
         else:
             if use_pandas_metadata:
-                df.index.name = index_col
+                df.index.names = index_col
 
     return df
 

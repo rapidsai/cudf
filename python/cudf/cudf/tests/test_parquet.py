@@ -1,4 +1,5 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
+
 import os
 import pathlib
 import random
@@ -967,15 +968,7 @@ def test_parquet_reader_list_skiprows(skip, tmpdir):
     src.to_parquet(fname)
     assert os.path.exists(fname)
 
-    expect = pd.DataFrame(
-        {
-            "a": list_gen(int_gen, skip, num_rows - skip, 80, 50),
-            "b": list_gen(string_gen, skip, num_rows - skip, 80, 50),
-            "c": list_gen(
-                int_gen, skip, num_rows - skip, 80, 50, include_validity=True
-            ),
-        }
-    )
+    expect = src.iloc[skip:]
     got = cudf.read_parquet(fname, skiprows=skip)
     assert_eq(expect, got, check_dtype=False)
 
@@ -998,18 +991,7 @@ def test_parquet_reader_list_num_rows(skip, tmpdir):
     assert os.path.exists(fname)
 
     rows_to_read = min(3, num_rows - skip)
-    expect = pd.DataFrame(
-        {
-            "a": list_gen(int_gen, skip, rows_to_read, 80, 50),
-            "b": list_gen(string_gen, skip, rows_to_read, 80, 50),
-            "c": list_gen(
-                int_gen, skip, rows_to_read, 80, 50, include_validity=True
-            ),
-            "d": list_gen(
-                string_gen, skip, rows_to_read, 80, 50, include_validity=True
-            ),
-        }
-    )
+    expect = src.iloc[skip:].head(rows_to_read)
     got = cudf.read_parquet(fname, skiprows=skip, num_rows=rows_to_read)
     assert_eq(expect, got, check_dtype=False)
 
@@ -1514,7 +1496,7 @@ def test_parquet_writer_sliced(tmpdir):
     df_select = df.iloc[1:3]
 
     df_select.to_parquet(cudf_path)
-    assert_eq(cudf.read_parquet(cudf_path), df_select.reset_index(drop=True))
+    assert_eq(cudf.read_parquet(cudf_path), df_select)
 
 
 def test_parquet_writer_list_basic(tmpdir):
@@ -1585,13 +1567,37 @@ def test_parquet_nullable_boolean(tmpdir, engine):
     "pdf",
     [
         pd.DataFrame(index=[1, 2, 3]),
-        # pd.DataFrame(index=pd.RangeIndex(0, 10, 1)),
+        pytest.param(
+            pd.DataFrame(index=pd.RangeIndex(0, 10, 1)),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/37897"
+                "https://github.com/pandas-dev/pandas/issues/37896"
+            ),
+        ),
         pd.DataFrame({"a": [1, 2, 3]}, index=[0.43534, 345, 0.34534]),
         pd.DataFrame(
             {"b": [11, 22, 33], "c": ["a", "b", "c"]},
             index=pd.Index(["a", "b", "c"], name="custom name"),
         ),
+        pd.DataFrame(
+            {"a": [10, 11, 12], "b": [99, 88, 77]},
+            index=pd.RangeIndex(12, 17, 2),
+        ),
+        pd.DataFrame(
+            {"b": [99, 88, 77]},
+            index=pd.RangeIndex(22, 27, 2, name="hello index"),
+        ),
         pd.DataFrame(index=pd.Index(["a", "b", "c"], name="custom name")),
+        pd.DataFrame(
+            {"a": ["a", "bb", "cc"], "b": [10, 21, 32]},
+            index=pd.MultiIndex.from_tuples([[1, 2], [10, 11], [15, 16]]),
+        ),
+        pd.DataFrame(
+            {"a": ["a", "bb", "cc"], "b": [10, 21, 32]},
+            index=pd.MultiIndex.from_tuples(
+                [[1, 2], [10, 11], [15, 16]], names=["first", "second"]
+            ),
+        ),
     ],
 )
 @pytest.mark.parametrize("index", [None, True, False])
