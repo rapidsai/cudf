@@ -277,9 +277,22 @@ std::unique_ptr<cudf::column> transform_fn(cudf::dictionary_column_view const& i
 
 template <typename UFN>
 struct MathOpDispatcher {
-  template <
-    typename T,
-    typename std::enable_if_t<std::is_arithmetic<T>::value or cudf::is_fixed_point<T>()>* = nullptr>
+  template <typename T, typename std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
+  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
+                                           rmm::mr::device_memory_resource* mr,
+                                           cudaStream_t stream)
+  {
+    return transform_fn<T, UFN>(
+      input.begin<T>(),
+      input.end<T>(),
+      input.type(),
+      cudf::detail::copy_bitmask(input, rmm::cuda_stream_view{stream}, mr),
+      input.null_count(),
+      mr,
+      stream);
+  }
+
+  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream)
