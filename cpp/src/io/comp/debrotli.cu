@@ -325,7 +325,7 @@ static __device__ void *ext_heap_alloc(uint32_t bytes, void *ext_heap_base, uint
   uint32_t len              = (bytes + 0xf) & ~0xf;
   auto heap_ptr             = static_cast<volatile uint32_t *>(ext_heap_base);
   uint32_t first_free_block = ~0;
-  for (;;) {
+  while (true) {
     uint32_t blk_next, blk_prev;
     first_free_block = atomicExch((unsigned int *)heap_ptr, first_free_block);
     if (first_free_block == ~0 || first_free_block >= ext_heap_size) {
