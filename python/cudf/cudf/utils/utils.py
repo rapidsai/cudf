@@ -1,7 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import functools
 from collections import OrderedDict
-from collections.abc import Sequence
+from collections.abc import Sequence 
 from math import floor, isinf, isnan
 import warnings
 
@@ -400,7 +400,6 @@ def pa_mask_buffer_to_mask(mask_buf, size):
     return Buffer(mask_buf)
 
 
-<<<<<<< HEAD
 def isnat(val):
     if not isinstance(val, (np.datetime64, np.timedelta64, str)):
         return False
@@ -469,7 +468,6 @@ def search_range(start, stop, x, step=1, side="left"):
 
     length = (stop - start) // step
     return max(min(length, i), 0)
-=======
 # Utils for using appropiate dispatch for array functions
 def get_appropiate_dispatched_func(
     cudf_submodule, cupy_submodule, func, args, kwargs
@@ -528,4 +526,3 @@ def get_relevant_submodule(func, module):
         else:
             return None
     return module
->>>>>>> added more tests and cleaned up code
