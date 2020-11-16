@@ -157,7 +157,7 @@ struct debrotli_state_s {
   uint16_t *block_type_vlc[3];
   huff_scratch_s hs;
   uint8_t mtf[65 * sizeof(uint32_t)];
-  char heap[LOCAL_HEAP_SIZE / sizeof(char)];
+  char heap[LOCAL_HEAP_SIZE];
 };
 
 inline __device__ uint32_t Log2Floor(uint32_t value) { return 32 - __clz(value); }
@@ -281,13 +281,13 @@ static __device__ uint32_t getvlc(debrotli_state_s *s, const uint16_t *lut)
   return vlc;
 }
 
-static auto __device__ align_up(uint32_t bytes) { return (bytes + 3) & ~3; }
+static auto __device__ allocation_size(uint32_t bytes) { return (bytes + 3) & ~3; }
 
 /// Alloc bytes from the local (shared mem) heap
 static __device__ void *local_alloc(debrotli_state_s *s, uint32_t bytes)
 {
   int heap_used  = s->heap_used;
-  auto const len = align_up(bytes);
+  auto const len = allocation_size(bytes);
   if (heap_used + len <= s->heap_limit) {
     s->heap_used = (uint16_t)(heap_used + len);
     return &s->heap[heap_used];
@@ -302,7 +302,7 @@ static __device__ void *local_heap_shrink(debrotli_state_s *s, uint32_t bytes)
 {
   int heap_used  = s->heap_used;
   int heap_limit = s->heap_limit;
-  auto const len = align_up(bytes);
+  auto const len = allocation_size(bytes);
   if (heap_limit - len >= heap_used) {
     heap_limit -= len;
     s->heap_limit = (uint16_t)heap_limit;
@@ -314,7 +314,7 @@ static __device__ void *local_heap_shrink(debrotli_state_s *s, uint32_t bytes)
 
 static __device__ void local_heap_grow(debrotli_state_s *s, uint32_t bytes)
 {
-  auto const len = align_up(bytes);
+  auto const len = allocation_size(bytes);
   int heap_limit = s->heap_limit + len;
   s->heap_limit  = (uint16_t)heap_limit;
 }
@@ -396,7 +396,7 @@ static __device__ void ext_heap_free(void *ptr,
                                      uint32_t ext_heap_size)
 {
   uint32_t len              = (bytes + 0xf) & ~0xf;
-  auto heap_ptr             = (volatile uint32_t *)ext_heap_base;
+  auto heap_ptr             = static_cast<volatile uint32_t *>(ext_heap_base);
   uint32_t first_free_block = ~0;
   auto const cur_blk =
     static_cast<uint32_t>(static_cast<uint8_t *>(ptr) - static_cast<uint8_t *>(ext_heap_base));
@@ -1266,10 +1266,10 @@ static __device__ void DecodeHuffmanTables(debrotli_state_s *s)
  **/
 static __device__ void InverseMoveToFrontTransform(debrotli_state_s *s, uint8_t *v, uint32_t v_len)
 {
-  // Make mtf[-1] addressable.
-  auto mtf = s->mtf + 4;
+  // Make mtf[-1] addressable and keep alignment.
+  auto const mtf = s->mtf + 4;
+
   // Reinitialize elements that could have been changed.
-  // Initialize list using 4 consequent values pattern.
   thrust::sequence(thrust::seq, mtf, mtf + s->mtf_upper_bound, uint8_t{0});
 
   // Transform the input.
