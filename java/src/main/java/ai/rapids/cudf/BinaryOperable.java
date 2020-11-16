@@ -34,6 +34,9 @@ public interface BinaryOperable {
    * <p>
    * BOOL8 is treated like an INT8.  Math on boolean operations makes little sense.  If
    * you want to stay as a BOOL8 you will need to explicitly specify the output type.
+   * For decimal types, DECIMAL32 and DECIMAL64 takes in another parameter `scale`. DType is created
+   * with scale=0 as scale is required. Dtype is discarded for binary operations for decimal
+   * types in cudf as a new DType is created for output type with the new scale.
    */
   static DType implicitConversion(BinaryOperable lhs, BinaryOperable rhs) {
     DType a = lhs.getType();
@@ -76,6 +79,25 @@ public interface BinaryOperable {
     if (a == DType.BOOL8 || b == DType.BOOL8) {
       return DType.BOOL8;
     }
+    if (a.isDecimalType() && b.isDecimalType()) {
+      // Here scale is created with value 0 as `scale` is required to create DType of
+      // decimal type. Dtype is discarded for binary operations for decimal types in cudf as a new
+      // DType is created for output type with new scale. New scale for output depends upon operator.
+      int scale = 0;
+      if (a.typeId == DType.DTypeEnum.DECIMAL32) {
+        if (b.typeId == DType.DTypeEnum.DECIMAL32) {
+          return DType.create(DType.DTypeEnum.DECIMAL32, scale);
+        } else {
+          throw new IllegalArgumentException("Both columns must be of the same fixed_point type");
+        }
+      } else if (a.typeId == DType.DTypeEnum.DECIMAL64) {
+        if (b.typeId == DType.DTypeEnum.DECIMAL64) {
+          return DType.create(DType.DTypeEnum.DECIMAL64, scale);
+        } else {
+          throw new IllegalArgumentException("Both columns must be of the same fixed_point type");
+        }
+      }
+    }
     throw new IllegalArgumentException("Unsupported types " + a + " and " + b);
   }
 
@@ -94,7 +116,9 @@ public interface BinaryOperable {
   ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType);
 
   /**
-   * Add + operator. this + rhs
+   * Add one vector to another with the given output type. this + rhs
+   * Output type is ignored for the operations between decimal types and
+   * it is always decimal type.
    */
   default ColumnVector add(BinaryOperable rhs, DType outType) {
     return binaryOp(BinaryOp.ADD, rhs, outType);
@@ -109,6 +133,8 @@ public interface BinaryOperable {
 
   /**
    * Subtract one vector from another with the given output type. this - rhs
+   * Output type is ignored for the operations between decimal types and
+   * it is always decimal type.
    */
   default ColumnVector sub(BinaryOperable rhs, DType outType) {
     return binaryOp(BinaryOp.SUB, rhs, outType);
@@ -123,6 +149,8 @@ public interface BinaryOperable {
 
   /**
    * Multiply two vectors together with the given output type. this * rhs
+   * Output type is ignored for the operations between decimal types and
+   * it is always decimal type.
    */
   default ColumnVector mul(BinaryOperable rhs, DType outType) {
     return binaryOp(BinaryOp.MUL, rhs, outType);
@@ -137,6 +165,8 @@ public interface BinaryOperable {
 
   /**
    * Divide one vector by another with the given output type. this / rhs
+   * Output type is ignored for the operations between decimal types and
+   * it is always decimal type.
    */
   default ColumnVector div(BinaryOperable rhs, DType outType) {
     return binaryOp(BinaryOp.DIV, rhs, outType);
