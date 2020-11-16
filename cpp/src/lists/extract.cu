@@ -15,9 +15,9 @@
  */
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/lists/extract.hpp>
-#include <cudf/copying.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
