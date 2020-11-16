@@ -492,16 +492,6 @@ def get_appropiate_dispatched_func(
         return NotImplemented
 
 
-def cast_cudf_series_to_cupy(ser):
-    if isinstance(ser._column, cudf.core.column.NumericalColumn):
-        if ser.null_count == 0:
-            return cp.asarray(ser)
-        else:
-            raise ValueError("Objects with null mask are not supported")
-    else:
-        raise ValueError("Non numerical columns are not supported by cupy")
-
-
 def cast_to_appropitate_cudf_type(val):
     # TODO Handle scaler
     if val.ndim == 0:
@@ -519,8 +509,7 @@ def get_cupy_compatible_args(args):
         if isinstance(arg, cp.ndarray):
             casted_ls.append(arg)
         elif isinstance(arg, cudf.Series):
-            casted_arg = cast_cudf_series_to_cupy(arg)
-            casted_ls.append(casted_arg)
+            casted_ls.append(arg.values)
         # handle list of arguments
         elif isinstance(arg, collections.abc.Sequence):
             casted_arg = get_cupy_compatible_args(arg)

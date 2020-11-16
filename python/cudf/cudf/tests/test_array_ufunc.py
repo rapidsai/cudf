@@ -51,3 +51,19 @@ def test_ufunc_cudf_series_cupy_array(np_ar_tup, func):
         assert_eq(expect, got)
     else:
         assert_eq(expect, got.to_array())
+
+
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda x, y: np.greater(x, y),
+        lambda x, y: np.less(x, y),
+        lambda x, y: np.less_equal(x, y),
+        lambda x, y: np.subtract(x, y),
+    ],
+)
+def test_error_with_null_cudf_series(func):
+    s_1 = cudf.Series([1, 2])
+    s_2 = cudf.Series([1, 2, None])
+    with pytest.raises(ValueError):
+        func(s_1, s_2)
