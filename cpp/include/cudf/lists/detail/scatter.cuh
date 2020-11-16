@@ -51,7 +51,7 @@ struct unbound_list_view {
    * @brief Flag type, indicating whether this list row originated from
    *        the source or target column, in `scatter()`.
    */
-  enum label_t : bool { SOURCE, TARGET };
+  enum class label_type : bool { SOURCE, TARGET };
 
   using lists_column_device_view = cudf::detail::lists_column_device_view;
   using list_device_view         = cudf::list_device_view;
@@ -69,7 +69,7 @@ struct unbound_list_view {
    * @param lists_column The actual source/target lists column
    * @param row_index Index of the row in lists_column that this instance represents
    */
-  CUDA_DEVICE_CALLABLE unbound_list_view(label_t scatter_source_label,
+  CUDA_DEVICE_CALLABLE unbound_list_view(label_type scatter_source_label,
                                          cudf::detail::lists_column_device_view const& lists_column,
                                          size_type const& row_index)
     : _label{scatter_source_label}, _row_index{row_index}
@@ -85,7 +85,7 @@ struct unbound_list_view {
    * @param row_index Index of the row that this instance represents in the source/target column
    * @param size The number of elements in this list row
    */
-  CUDA_DEVICE_CALLABLE unbound_list_view(label_t scatter_source_label,
+  CUDA_DEVICE_CALLABLE unbound_list_view(label_type scatter_source_label,
                                          size_type const& row_index,
                                          size_type const& size)
     : _label{scatter_source_label}, _row_index{row_index}, _size{size}
@@ -100,7 +100,7 @@ struct unbound_list_view {
   /**
    * @brief Returns whether this row came from the `scatter()` source or target
    */
-  CUDA_DEVICE_CALLABLE label_t label() const { return _label; }
+  CUDA_DEVICE_CALLABLE label_type label() const { return _label; }
 
   /**
    * @brief Returns the index in the source/target column
@@ -119,20 +119,22 @@ struct unbound_list_view {
   bind_to_column(lists_column_device_view const& scatter_source,
                  lists_column_device_view const& scatter_target) const
   {
-    return list_device_view(_label == SOURCE ? scatter_source : scatter_target, _row_index);
+    return list_device_view(_label == label_type::SOURCE ? scatter_source : scatter_target,
+                            _row_index);
   }
 
  private:
   // Note: Cannot store reference to list column, because of storage in device_vector.
   // Only keep track of whether this list row came from the source or target of scatter.
 
-  label_t _label{SOURCE};  // Whether this list row came from the scatter source or target.
+  label_type _label{
+    label_type::SOURCE};   // Whether this list row came from the scatter source or target.
   size_type _row_index{};  // Row index in the Lists column.
   size_type _size{};       // Number of elements in *this* list row.
 };
 
 rmm::device_vector<unbound_list_view> list_vector_from_column(
-  unbound_list_view::label_t label,
+  unbound_list_view::label_type label,
   cudf::detail::lists_column_device_view const& lists_column,
   rmm::cuda_stream_view stream)
 {
@@ -324,7 +326,8 @@ struct list_child_constructor {
    * @brief SFINAE catch-all, for unsupported child column types.
    */
   template <typename T, typename... Args>
-  std::enable_if_t<!is_supported_child_type<T>::value, std::unique_ptr<column>> operator()(Args&&... args)
+  std::enable_if_t<!is_supported_child_type<T>::value, std::unique_ptr<column>> operator()(
+    Args&&... args)
   {
     CUDF_FAIL("list_child_constructor unsupported!");
   }
@@ -386,7 +389,8 @@ struct list_child_constructor {
       auto unbound_list_row = d_scattered_lists[row_index];
       auto actual_list_row  = unbound_list_row.bind_to_column(source_lists, target_lists);
       auto const& bound_column =
-        (unbound_list_row.label() == unbound_list_view::SOURCE ? source_lists : target_lists);
+        (unbound_list_row.label() == unbound_list_view::label_type::SOURCE ? source_lists
+                                                                           : target_lists);
       auto list_begin_offset =
         bound_column.offsets().element<size_type>(unbound_list_row.row_index());
       auto list_end_offset =
@@ -396,7 +400,7 @@ struct list_child_constructor {
       printf(
         "%d: Unbound == %s[%d](%d), Bound size == %d, calc_begin==%d, calc_end=%d, calc_size=%d\n",
         row_index,
-        (unbound_list_row.label() == unbound_list_view::SOURCE ? "S" : "T"),
+        (unbound_list_row.label() == unbound_list_view::label_type::SOURCE ? "S" : "T"),
         unbound_list_row.row_index(),
         unbound_list_row.size(),
         actual_list_row.size(),
@@ -658,7 +662,7 @@ std::unique_ptr<column> scatter(
   MapIterator scatter_map_begin,
   MapIterator scatter_map_end,
   column_view const& target,
-  rmm::cuda_stream_view stream                 = 0,
+  rmm::cuda_stream_view stream        = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto num_rows = target.size();
@@ -675,13 +679,13 @@ std::unique_ptr<column> scatter(
   auto source_lists_column_view = lists_column_view(source);  // Checks that this is a list column.
   auto source_device_view       = column_device_view::create(source, stream);
   auto source_vector            = list_vector_from_column(
-    unbound_list_view::SOURCE, lists_column_device_view(*source_device_view), stream);
+    unbound_list_view::label_type::SOURCE, lists_column_device_view(*source_device_view), stream);
 
   auto target_lists_column_view =
     lists_column_view(target);  // Checks that target is a list column.
   auto target_device_view = column_device_view::create(target, stream);
   auto target_vector      = list_vector_from_column(
-    unbound_list_view::TARGET, lists_column_device_view(*target_device_view), stream);
+    unbound_list_view::label_type::TARGET, lists_column_device_view(*target_device_view), stream);
 
   // Scatter.
   thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
