@@ -337,9 +337,14 @@ class DateOffset(object):
     def __init__(self, months):
         self._months = months
 
-    def _generate_column(self, size):
+    def _generate_column(self, size, op):
+        if op == 'add':
+            months = self._months
+        if op == 'sub':
+            months = -self._months
+
         col = cudf.core.column.as_column(
-            self._months,
+            months,
             dtype=np.dtype('int16'),
             length=size
         )
