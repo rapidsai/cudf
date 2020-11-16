@@ -152,36 +152,24 @@ rmm::device_uvector<unbound_list_view> list_vector_from_column(
                       return unbound_list_view{label, lists_column, row_index};
                     });
 
-  /*
-  thrust::for_each_n(
-    rmm::exec_policy(stream)->on(stream.value()),
-    thrust::make_counting_iterator<size_type>(0),
-    n_rows,
-    [label, lists_column, output = vector.data().get()] __device__(size_type row_index) {
-      output[row_index] = unbound_list_view{label, lists_column, row_index};
-    });
-    */
-
   return vector;
 }
 
 /**
- * @brief Utility function to fetch the number of rows in a lists column's
- *        child column, given its offsets column.
- *        (This is simply the last value in the offsets column.)
+ * @brief Fetch the number of rows in a lists column's child given its offsets column.
  *
  * @param list_offsets Offsets child of a lists column
  * @param stream The cuda-stream to synchronize on, when reading from device memory
- * @return int32_t The last element in the list_offsets column, indicating
+ * @return cudf::size_type The last element in the list_offsets column, indicating
  *         the number of rows in the lists-column's child.
  */
-int32_t get_num_child_rows(cudf::column_view const& list_offsets, rmm::cuda_stream_view stream)
+cudf::size_type get_num_child_rows(cudf::column_view const& list_offsets, rmm::cuda_stream_view stream)
 {
   // Number of rows in child-column == last offset value.
-  int32_t num_child_rows{};
+  cudf::size_type num_child_rows{};
   CUDA_TRY(cudaMemcpyAsync(&num_child_rows,
-                           list_offsets.data<int32_t>() + list_offsets.size() - 1,
-                           sizeof(int32_t),
+                           list_offsets.data<cudf::size_type>() + list_offsets.size() - 1,
+                           sizeof(cudf::size_type),
                            cudaMemcpyDeviceToHost,
                            stream.value()));
   stream.synchronize();
@@ -196,8 +184,8 @@ int32_t get_num_child_rows(cudf::column_view const& list_offsets, rmm::cuda_stre
  * @param source_lists Source lists column for scatter operation
  * @param target_lists Target lists column for scatter operation
  * @param num_child_rows Number of rows in child column
- * @param mr Device memory resource used to allocate child column's null mask
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate child column's null mask
  * @return std::pair<rmm::device_buffer, size_type> Child column's null mask and null row count
  */
 std::pair<rmm::device_buffer, size_type> construct_child_nullmask(
@@ -303,9 +291,8 @@ void print(std::string const& msg,
  *    a. Child:        [8,8,8,2,2,9,9,9,9]  <--- THIS
  *    b. Offsets:      [0,    3,  5,     9]
  *
- * It is the Expected Child column above that list_child_constructor attempts
- * to construct.
- *
+ * `list_child_constructor` constructs the Expected Child column indicated above.
+ * 
  * `list_child_constructor` expects to be called with the `Source`/`Target`
  * lists columns, along with the following:
  *
@@ -322,8 +309,7 @@ void print(std::string const& msg,
 struct list_child_constructor {
  private:
   /**
-   * @brief Function to determine what types are supported as child column types,
-   *        when scattering lists.
+   * @brief Determine whether the child column type is supported with scattering lists. 
    *
    * @tparam T The data type of the child column of the list being scattered.
    */
@@ -334,9 +320,8 @@ struct list_child_constructor {
   };
 
  public:
-  /**
-   * @brief SFINAE catch-all, for unsupported child column types.
-   */
+
+   // SFINAE catch-all, for unsupported child column types.
   template <typename T, typename... Args>
   std::enable_if_t<!is_supported_child_type<T>::value, std::unique_ptr<column>> operator()(
     Args&&... args)
@@ -363,7 +348,6 @@ struct list_child_constructor {
     auto source_lists = cudf::detail::lists_column_device_view(*source_column_device_view);
     auto target_lists = cudf::detail::lists_column_device_view(*target_column_device_view);
 
-    // Number of rows in child-column == last offset value.
     int32_t num_child_rows{get_num_child_rows(list_offsets, stream)};
 
     auto child_null_mask =
