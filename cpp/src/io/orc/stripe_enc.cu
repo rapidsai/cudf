@@ -348,6 +348,8 @@ static inline __device__ void StoreBitsBigEndian(
  * @param[in] numvals max number of values to encode
  * @param[in] flush encode all remaining values if nonzero
  * @param[in] t thread id
+ * @param[in] temp_storage_full shared memory storage to performance warp reduce
+ * @param[in] temp_storage_half shared memory storage to performance half warp reduce
  *
  * @return number of input values encoded
  *
@@ -679,10 +681,7 @@ __global__ void __launch_bounds__(block_size)
   uint32_t group_id       = blockIdx.y;
   int t                   = threadIdx.x;
 
-  if (t < sizeof(EncChunk) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&s->chunk)[t] =
-      ((const uint32_t *)&chunks[group_id * num_columns + col_id])[t];
-  }
+  if (t == 0) s->chunk = chunks[group_id * num_columns + col_id];
   if (t < CI_NUM_STREAMS) { s->strm_pos[t] = 0; }
   __syncthreads();
   if (!t) {
@@ -991,15 +990,12 @@ __global__ void __launch_bounds__(block_size)
   const nvstrdesc_s *str_desc;
   const uint32_t *dict_data;
 
-  if (t < sizeof(StripeDictionary) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&s->u.dict_stripe)[t] = ((const uint32_t *)&stripes[stripe_id])[t];
-  }
+  if (t == 0) s->u.dict_stripe = stripes[stripe_id];
+
   __syncthreads();
   chunk_id = s->u.dict_stripe.start_chunk * num_columns + s->u.dict_stripe.column_id;
-  if (t < sizeof(EncChunk) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&s->chunk)[t] = ((const uint32_t *)&chunks[chunk_id])[t];
-  }
   if (t == 0) {
+    s->chunk         = chunks[chunk_id];
     s->strm_pos[cid] = 0;
     s->numlengths    = 0;
     s->nrows         = s->u.dict_stripe.num_strings;
@@ -1077,15 +1073,12 @@ __global__ void __launch_bounds__(1024)
   uint32_t t = threadIdx.x;
   uint8_t *dst_ptr;
 
-  if (t < sizeof(StripeStream) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&ss)[t] = ((const uint32_t *)&strm_desc[strm_id])[t];
+  if (t == 0) {
+    ss  = strm_desc[strm_id];
+    ck0 = chunks[ss.first_chunk_id];
   }
   __syncthreads();
-  ck0_id = ss.first_chunk_id;
-  if (t < sizeof(EncChunk) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&ck0)[t] = ((const uint32_t *)&chunks[ck0_id])[t];
-  }
-  __syncthreads();
+  ck0_id  = ss.first_chunk_id;
   cid     = ss.stream_type;
   dst_ptr = ck0.streams[cid] + ck0.strm_len[cid];
   for (uint32_t g = 1; g < ss.num_chunks; g++) {
@@ -1141,11 +1134,10 @@ __global__ void __launch_bounds__(256) gpuInitCompressionBlocks(StripeStream *st
   uint32_t num_blocks;
   uint8_t *src, *dst;
 
-  if (t < sizeof(StripeStream) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&ss)[t] = ((const uint32_t *)&strm_desc[strm_id])[t];
+  if (t == 0) {
+    ss            = strm_desc[strm_id];
+    uncomp_base_g = chunks[ss.first_chunk_id].streams[ss.stream_type];
   }
-  __syncthreads();
-  if (t == 0) { uncomp_base_g = chunks[ss.first_chunk_id].streams[ss.stream_type]; }
   __syncthreads();
   src        = uncomp_base_g;
   dst        = compressed_bfr + ss.bfr_offset;
@@ -1193,10 +1185,9 @@ __global__ void __launch_bounds__(1024) gpuCompactCompressedBlocks(StripeStream 
   const uint8_t *src;
   uint8_t *dst;
 
-  if (t < sizeof(StripeStream) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&ss)[t] = ((const uint32_t *)&strm_desc[strm_id])[t];
-  }
+  if (t == 0) ss = strm_desc[strm_id];
   __syncthreads();
+
   num_blocks = (ss.stream_size > 0) ? (ss.stream_size - 1) / comp_blk_size + 1 : 0;
   dst        = compressed_bfr + ss.bfr_offset;
   b          = 0;

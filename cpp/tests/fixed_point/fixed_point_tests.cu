@@ -31,6 +31,7 @@
 #include <numeric>
 #include <type_traits>
 #include <vector>
+#include "cudf_test/column_utilities.hpp"
 
 using namespace numeric;
 
@@ -572,12 +573,12 @@ TYPED_TEST(FixedPointTestBothReps, NoScaleOrWrongTypeID)
 
 TYPED_TEST(FixedPointTestBothReps, SimpleFixedPointColumnWrapper)
 {
-  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+  using RepType = cudf::device_storage_type_t<TypeParam>;
 
-  auto const a = cudf::test::fixed_point_column_wrapper<int32_t>{{11, 22, 33}, scale_type{-1}};
-  auto const b = cudf::test::fixed_point_column_wrapper<int32_t>{{110, 220, 330}, scale_type{-2}};
+  auto const a = cudf::test::fixed_point_column_wrapper<RepType>{{11, 22, 33}, scale_type{-1}};
+  auto const b = cudf::test::fixed_point_column_wrapper<RepType>{{110, 220, 330}, scale_type{-2}};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(a, b);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(a, b);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

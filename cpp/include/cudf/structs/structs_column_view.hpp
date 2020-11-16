@@ -30,7 +30,7 @@ namespace cudf {
  * @{
  */
 
-class structs_column_view : private column_view {
+class structs_column_view : public column_view {
  public:
   // Foundation members:
   structs_column_view(structs_column_view const&) = default;

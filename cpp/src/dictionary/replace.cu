@@ -117,8 +117,8 @@ std::unique_ptr<column> replace_indices(column_view const& input,
                                     input_pair_iterator + input.size(),
                                     replacement_iter,
                                     predicate,
-                                    mr,
-                                    stream);
+                                    stream,
+                                    mr);
 }
 
 }  // namespace

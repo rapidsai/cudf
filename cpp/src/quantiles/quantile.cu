@@ -14,17 +14,23 @@
  * limitations under the License.
  */
 
-#include <memory>
-#include <vector>
+#include <quantiles/quantiles_util.hpp>
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/dictionary/detail/iterator.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <quantiles/quantiles_util.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <memory>
+#include <vector>
 
 namespace cudf {
 namespace detail {
@@ -36,7 +42,7 @@ struct quantile_functor {
   interpolation interp;
   bool retain_types;
   rmm::mr::device_memory_resource* mr;
-  cudaStream_t stream;
+  rmm::cuda_stream_view stream;
 
   template <typename T>
   std::enable_if_t<not std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
@@ -51,30 +57,41 @@ struct quantile_functor {
   {
     using Result = std::conditional_t<exact, double, T>;
 
-    auto type   = data_type{type_to_id<Result>()};
-    auto output = make_fixed_width_column(type, q.size(), mask_state::UNALLOCATED, stream, mr);
+    auto type = data_type{type_to_id<Result>()};
+    auto output =
+      make_fixed_width_column(type, q.size(), mask_state::UNALLOCATED, stream.value(), mr);
 
     if (output->size() == 0) { return output; }
 
     if (input.is_empty()) {
-      auto mask = create_null_mask(output->size(), mask_state::ALL_NULL, stream, mr);
+      auto mask = cudf::detail::create_null_mask(output->size(), mask_state::ALL_NULL, stream, mr);
       output->set_null_mask(std::move(mask), output->size());
       return output;
     }
 
-    auto d_input  = column_device_view::create(input);
+    auto d_input  = column_device_view::create(input, stream);
     auto d_output = mutable_column_device_view::create(output->mutable_view());
 
     rmm::device_vector<double> q_device{q};
 
-    auto sorted_data = thrust::make_permutation_iterator(input.data<T>(), ordered_indices);
-
-    thrust::transform(q_device.begin(),
-                      q_device.end(),
-                      d_output->template begin<Result>(),
-                      [sorted_data, interp = interp, size = size] __device__(double q) {
-                        return select_quantile_data<Result>(sorted_data, size, q, interp);
-                      });
+    if (!cudf::is_dictionary(input.type())) {
+      auto sorted_data = thrust::make_permutation_iterator(input.data<T>(), ordered_indices);
+      thrust::transform(q_device.begin(),
+                        q_device.end(),
+                        d_output->template begin<Result>(),
+                        [sorted_data, interp = interp, size = size] __device__(double q) {
+                          return select_quantile_data<Result>(sorted_data, size, q, interp);
+                        });
+    } else {
+      auto sorted_data = thrust::make_permutation_iterator(
+        dictionary::detail::make_dictionary_iterator<T>(*d_input), ordered_indices);
+      thrust::transform(q_device.begin(),
+                        q_device.end(),
+                        d_output->template begin<Result>(),
+                        [sorted_data, interp = interp, size = size] __device__(double q) {
+                          return select_quantile_data<Result>(sorted_data, size, q, interp);
+                        });
+    }
 
     if (input.nullable()) {
       auto sorted_validity = thrust::make_transform_iterator(
@@ -113,7 +130,11 @@ std::unique_ptr<column> quantile(column_view const& input,
   auto functor = quantile_functor<exact, SortMapIterator>{
     ordered_indices, size, q, interp, retain_types, mr, stream};
 
-  return type_dispatcher(input.type(), functor, input);
+  auto input_type = cudf::is_dictionary(input.type()) && !input.is_empty()
+                      ? dictionary_column_view(input).keys().type()
+                      : input.type();
+
+  return type_dispatcher(input_type, functor, input);
 }
 
 }  // namespace detail
