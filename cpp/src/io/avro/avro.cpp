@@ -16,6 +16,7 @@
 
 #include "avro.h"
 #include <string.h>
+#include <iostream>
 #include <unordered_map>
 
 namespace cudf {
@@ -325,7 +326,8 @@ bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &
         state     = state_attrname;
         break;
       case ']':
-        if (depth == 0 || (state != state_nextattr && state != state_nextsymbol) ||
+        if (depth == 0 ||
+            (state != state_nextattr && state != state_nextsymbol && state != state_attrname) ||
             depthbuf[depth - 1] != '[')
           return false;
         --depth;

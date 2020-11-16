@@ -129,7 +129,6 @@ class metadata : public file_metadata {
         }
       }
     }
-    CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
 
     return selection;
   }
