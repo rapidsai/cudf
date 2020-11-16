@@ -163,7 +163,8 @@ rmm::device_uvector<unbound_list_view> list_vector_from_column(
  * @return cudf::size_type The last element in the list_offsets column, indicating
  *         the number of rows in the lists-column's child.
  */
-cudf::size_type get_num_child_rows(cudf::column_view const& list_offsets, rmm::cuda_stream_view stream)
+cudf::size_type get_num_child_rows(cudf::column_view const& list_offsets,
+                                   rmm::cuda_stream_view stream)
 {
   // Number of rows in child-column == last offset value.
   cudf::size_type num_child_rows{};
@@ -292,7 +293,7 @@ void print(std::string const& msg,
  *    b. Offsets:      [0,    3,  5,     9]
  *
  * `list_child_constructor` constructs the Expected Child column indicated above.
- * 
+ *
  * `list_child_constructor` expects to be called with the `Source`/`Target`
  * lists columns, along with the following:
  *
@@ -309,7 +310,7 @@ void print(std::string const& msg,
 struct list_child_constructor {
  private:
   /**
-   * @brief Determine whether the child column type is supported with scattering lists. 
+   * @brief Determine whether the child column type is supported with scattering lists.
    *
    * @tparam T The data type of the child column of the list being scattered.
    */
@@ -320,8 +321,7 @@ struct list_child_constructor {
   };
 
  public:
-
-   // SFINAE catch-all, for unsupported child column types.
+  // SFINAE catch-all, for unsupported child column types.
   template <typename T, typename... Args>
   std::enable_if_t<!is_supported_child_type<T>::value, std::unique_ptr<column>> operator()(
     Args&&... args)
@@ -350,7 +350,7 @@ struct list_child_constructor {
 
     int32_t num_child_rows{get_num_child_rows(list_offsets, stream)};
 
-    auto child_null_mask =
+    auto const child_null_mask =
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
         ? construct_child_nullmask(
             list_vector, list_offsets, source_lists, target_lists, num_child_rows, stream, mr)
@@ -365,7 +365,6 @@ struct list_child_constructor {
     print("scatter_rows ", list_vector, stream);
 #endif  // NDEBUG
 
-    // Init child-column.
     auto child_column = cudf::make_fixed_width_column(cudf::data_type{cudf::type_to_id<T>()},
                                                       num_child_rows,
                                                       child_null_mask.first,
@@ -373,8 +372,6 @@ struct list_child_constructor {
                                                       stream.value(),
                                                       mr);
 
-    // Function to copy child-values for specified index of unbound_list_view
-    // to the child column.
     auto copy_child_values_for_list_index = [d_scattered_lists =
                                                list_vector.begin(),  // unbound_list_view*
                                              d_child_column =
@@ -382,14 +379,14 @@ struct list_child_constructor {
                                              d_offsets = list_offsets.template data<int32_t>(),
                                              source_lists,
                                              target_lists] __device__(auto const& row_index) {
-      auto unbound_list_row = d_scattered_lists[row_index];
-      auto actual_list_row  = unbound_list_row.bind_to_column(source_lists, target_lists);
+      auto const unbound_list_row = d_scattered_lists[row_index];
+      auto const actual_list_row  = unbound_list_row.bind_to_column(source_lists, target_lists);
       auto const& bound_column =
         (unbound_list_row.label() == unbound_list_view::label_type::SOURCE ? source_lists
                                                                            : target_lists);
-      auto list_begin_offset =
+      auto const list_begin_offset =
         bound_column.offsets().element<size_type>(unbound_list_row.row_index());
-      auto list_end_offset =
+      auto const list_end_offset =
         bound_column.offsets().element<size_type>(unbound_list_row.row_index() + 1);
 
 #ifndef NDEBUG
@@ -406,7 +403,7 @@ struct list_child_constructor {
 #endif  // NDEBUG
 
       // Copy all elements in this list row, to "appropriate" offset in child-column.
-      auto destination_start_offset = d_offsets[row_index];
+      auto const destination_start_offset = d_offsets[row_index];
       thrust::for_each_n(thrust::seq,
                          thrust::make_counting_iterator<size_type>(0),
                          actual_list_row.size(),
