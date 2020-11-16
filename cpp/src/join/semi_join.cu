@@ -158,8 +158,11 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
 
   // rebuild left table for call to gather
   auto const left_updated = scatter_columns(left_selected, left_on, left);
-  return cudf::detail::gather(
-    left_updated.select(return_columns), gather_map.begin(), gather_map_end, false, stream, mr);
+  return cudf::detail::gather(left_updated.select(return_columns),
+                              gather_map.begin(),
+                              gather_map_end,
+                              out_of_bounds_policy::DONT_CHECK,
+                              mr);
 }
 }  // namespace detail
 

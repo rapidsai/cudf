@@ -49,7 +49,7 @@ enum class negative_index_policy : bool { ALLOWED, NOT_ALLOWED };
  * @param[in] source_table The input columns whose rows will be gathered
  * @param[in] gather_map View into a non-nullable column of integral indices that maps the
  * rows in the source columns to rows in the destination columns.
- * @param[in] out_of_bounds_policy How to treat out of bounds indices. `NULLIFY` coerces rows that
+ * @param[in] bounds_policy How to treat out of bounds indices. `NULLIFY` coerces rows that
  * corresponds to out-of-bound indices in the gather map to be null elements. Callers should
  * use `DONT_CHECK` when they are certain that the gather_map contains only valid indices for
  * better performance. In case there are out-of-bound indices in the gather map, the behavior
@@ -63,7 +63,7 @@ enum class negative_index_policy : bool { ALLOWED, NOT_ALLOWED };
 std::unique_ptr<table> gather(
   table_view const& source_table,
   column_view const& gather_map,
-  out_of_bounds_policy bounds,
+  out_of_bounds_policy bounds_policy,
   negative_index_policy neg_indices,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

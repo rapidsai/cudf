@@ -18,6 +18,7 @@
 #include <groupby/hash/groupby_kernels.cuh>
 
 #include <cudf/aggregation.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
@@ -151,8 +152,12 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
     auto to_dense_agg_result =
       [&sparse_results, &gather_map, map_size, i, mr, stream](auto const& agg) {
         auto s                  = sparse_results.get_result(i, agg);
-        auto dense_result_table = cudf::detail::gather(
-          table_view({s}), gather_map.begin(), gather_map.begin() + map_size, false, stream, mr);
+        auto dense_result_table = cudf::detail::gather(table_view({s}),
+                                                       gather_map.begin(),
+                                                       gather_map.begin() + map_size,
+                                                       out_of_bounds_policy::DONT_CHECK,
+                                                       mr,
+                                                       stream);
         return std::move(dense_result_table->release()[0]);
       };
 
@@ -387,8 +392,12 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
   // Compact all results from sparse_results and insert into cache
   sparse_to_dense_results(requests, sparse_results, cache, gather_map, map_size, stream, mr);
 
-  return cudf::detail::gather(
-    keys, gather_map.begin(), gather_map.begin() + map_size, false, stream, mr);
+  return cudf::detail::gather(keys,
+                              gather_map.begin(),
+                              gather_map.begin() + map_size,
+                              out_of_bounds_policy::DONT_CHECK,
+                              mr,
+                              stream);
 }
 
 }  // namespace

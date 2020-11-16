@@ -32,7 +32,7 @@ namespace detail {
 
 std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
-                              out_of_bounds_policy bounds,
+                              out_of_bounds_policy bounds_policy,
                               negative_index_policy neg_indices,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
@@ -51,19 +51,18 @@ std::unique_ptr<table> gather(table_view const& source_table,
     return gather(source_table,
                   thrust::make_transform_iterator(map_begin, idx_converter),
                   thrust::make_transform_iterator(map_end, idx_converter),
-                  bounds == out_of_bounds_policy::NULLIFY,
+                  bounds_policy,
                   mr,
                   stream);
   }
-  return gather(
-    source_table, map_begin, map_end, bounds == out_of_bounds_policy::NULLIFY, mr, stream);
+  return gather(source_table, map_begin, map_end, bounds_policy, mr, stream);
 }
 
 }  // namespace detail
 
 std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
-                              out_of_bounds_policy policy,
+                              out_of_bounds_policy bounds_policy,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -71,7 +70,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
   auto index_policy = is_unsigned(gather_map.type()) ? detail::negative_index_policy::NOT_ALLOWED
                                                      : detail::negative_index_policy::ALLOWED;
 
-  return detail::gather(source_table, gather_map, policy, index_policy, mr);
+  return detail::gather(source_table, gather_map, bounds_policy, index_policy, mr);
 }
 
 }  // namespace cudf

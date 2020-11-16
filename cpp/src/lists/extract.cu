@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/lists/extract.hpp>
+#include <cudf/copying.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -98,9 +99,9 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
   auto result = cudf::detail::gather(table_view({child_column}),
                                      d_gather_map,
                                      d_gather_map + gather_map->size(),
-                                     true,  // nullify-out-of-bounds
-                                     stream,
-                                     mr)
+                                     out_of_bounds_policy::NULLIFY,  // nullify-out-of-bounds
+                                     mr,
+                                     stream)
                   ->release();
   if (result.front()->null_count() == 0)
     result.front()->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
