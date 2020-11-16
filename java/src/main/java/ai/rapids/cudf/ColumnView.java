@@ -28,74 +28,28 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   public static final long UNKNOWN_NULL_COUNT = -1;
 
-  protected long columnHandle;
   protected long viewHandle = 0;
   protected DType type;
   protected long rows;
   protected Optional<Long> nullCount = Optional.empty();
 
-  public ColumnView(DType type, long rows, Optional<Long> nullCount,
-                    BaseDeviceMemoryBuffer dataBuffer, BaseDeviceMemoryBuffer validityBuffer,
-                    BaseDeviceMemoryBuffer offsetBuffer, List<ColumnView.NestedColumnVector> nestedColumnVectors) {
-    if (type != DType.STRING && type != DType.LIST) {
-      assert offsetBuffer == null : "offsets are only supported for STRING, LISTS";
-    }
-    this.rows = rows;
-    this.nullCount = nullCount;
-    this.type = type;
-
-    List<BaseDeviceMemoryBuffer> toClose = new ArrayList<>();
-    long[] childHandles = new long[nestedColumnVectors.size()];
-    for (ColumnView.NestedColumnVector ncv : nestedColumnVectors) {
-      toClose.addAll(ncv.getBuffersToClose());
-    }
-    for (int i = 0; i < nestedColumnVectors.size(); i++) {
-      childHandles[i] = nestedColumnVectors.get(i).getViewHandle();
-    }
-    assert !nullCount.isPresent() || nullCount.get() <= Integer.MAX_VALUE;
-    int nc = nullCount.orElse(UNKNOWN_NULL_COUNT).intValue();
-    if (rows == 0  && !type.isNestedType()) {
-      this.columnHandle = ColumnVector.makeEmptyCudfColumn(type.typeId.getNativeId(), type.getScale());
-    } else {
-      long cd = dataBuffer == null ? 0 : dataBuffer.address;
-      long cdSize = dataBuffer == null ? 0 : dataBuffer.length;
-      long od = offsetBuffer == null ? 0 : offsetBuffer.address;
-      long vd = validityBuffer == null ? 0 : validityBuffer.address;
-      this.viewHandle = makeCudfColumnView(type.typeId.getNativeId(), type.getScale(), cd, cdSize,
-          od, vd, nc, (int)rows, childHandles) ;
-    }
-  }
 
   //TODO can we make this better
-  protected ColumnView(long address, boolean isColumnView) {
-    if (isColumnView) {
-      this.viewHandle = address;
-    } else {
-      this.columnHandle = address;
-    }
+  protected ColumnView(long address) {
+    this.viewHandle = address;
     this.type = DType.fromNative(ColumnView.getNativeTypeId(getNativeView()), ColumnView.getNativeTypeScale(getNativeView()));
     this.rows = ColumnView.getNativeRowCount(getNativeView());
     this.nullCount = Optional.of((long)ColumnView.getNativeNullCount(getNativeView()));
   }
 
-  public ColumnView(DType type, int rows, Optional<Long> nullCount,
-                    DeviceMemoryBuffer data, DeviceMemoryBuffer valid, DeviceMemoryBuffer offsets,
-                    long[] childColumnViewHandles) {
-    this.type = type;
-    this.rows = rows;
-    this.nullCount = nullCount;
-    assert !nullCount.isPresent() || nullCount.get() <= Integer.MAX_VALUE;
-    int nc = nullCount.orElse(UNKNOWN_NULL_COUNT).intValue();
-    if (rows == 0  && !type.isNestedType()) {
-      this.columnHandle = ColumnVector.makeEmptyCudfColumn(type.typeId.getNativeId(), type.getScale());
-    } else {
-      long cd = data == null ? 0 : data.address;
-      long cdSize = data == null ? 0 : data.length;
-      long od = offsets == null ? 0 : offsets.address;
-      long vd = valid == null ? 0 : valid.address;
-      this.viewHandle = makeCudfColumnView(type.typeId.getNativeId(), type.getScale(), cd, cdSize,
-          od, vd, nc, rows, childColumnViewHandles) ;
+  protected static long viewHandleFromColumnHandle(long columnHandle) {
+    try {
+      long res = ColumnVector.getNativeColumnView(columnHandle);
+      return res;
+    } catch (CudfException e) {
+      ColumnVector.deleteCudfColumn(columnHandle);
     }
+    return 0;
   }
 
   /**
@@ -109,9 +63,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * exact same version of libcudf as this is released for.
    */
   public long getNativeView() {
-    if (viewHandle == 0) {
-      viewHandle = ColumnVector.getNativeColumnView(columnHandle);
-    }
     return viewHandle;
   }
 
@@ -127,7 +78,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
     long childColumnView = ColumnView.getChildCvPointer(viewHandle, childIndex);
     //this is returning a new ColumnView - must close this!
-    return new ColumnView(childColumnView, true);
+    return new ColumnView(childColumnView);
   }
 
   /**
@@ -162,11 +113,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       return 0;
     }
     return ColumnView.getNativeNumChildren(viewHandle);
-  }
-
-  public final ColumnVector copyToColumnVector() {
-    long mainCvHandle = ColumnView.copyColumnViewToCV(viewHandle);
-    return new ColumnVector(mainCvHandle);
   }
 
   @Override
@@ -2741,8 +2687,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         mainOffsetsDevBuff = DeviceMemoryBuffer.allocate(offsetsLen);
         mainOffsetsDevBuff.copyFromHostBuffer(mainColOffsets, 0, offsetsLen);
       }
+      List<DeviceMemoryBuffer> toClose = new ArrayList<>();
+      long[] childHandles = new long[devChildren.size()];
+      for (ColumnView.NestedColumnVector ncv : devChildren) {
+        toClose.addAll(ncv.getBuffersToClose());
+      }
+      for (int i = 0; i < devChildren.size(); i++) {
+        childHandles[i] = devChildren.get(i).getViewHandle();
+      }
       return new ColumnVector(mainColType, mainColRows, nullCount, mainDataDevBuff,
-        mainValidDevBuff, mainOffsetsDevBuff, devChildren);
+        mainValidDevBuff, mainOffsetsDevBuff, toClose, childHandles);
     }
 
     private static NestedColumnVector createNewNestedColumnVector(

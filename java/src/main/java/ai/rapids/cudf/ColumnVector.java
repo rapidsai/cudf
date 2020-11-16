@@ -55,7 +55,7 @@ public final class ColumnVector extends ColumnView {
    *                      owned by this instance.
    */
   public ColumnVector(long nativePointer) {
-    super(nativePointer, false);
+    super(viewHandleFromColumnHandle(nativePointer));
     assert nativePointer != 0;
     offHeap = new OffHeapState(nativePointer);
     MemoryCleaner.register(this, offHeap);
@@ -80,7 +80,9 @@ public final class ColumnVector extends ColumnView {
   public ColumnVector(DType type, long rows, Optional<Long> nullCount,
       DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
       DeviceMemoryBuffer offsetBuffer) {
-    super(type, (int)rows, nullCount, dataBuffer, validityBuffer, offsetBuffer, new long[] {});
+    super(ColumnVector.initViewHandle(
+        type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
+        dataBuffer, validityBuffer, offsetBuffer, new long[] {}));
     assert type != DType.LIST : "This constructor should not be used for list type";
     if (type != DType.STRING) {
       assert offsetBuffer == null : "offsets are only supported for STRING";
@@ -106,22 +108,17 @@ public final class ColumnVector extends ColumnView {
    * @param offsetBuffer a host buffer required for strings and string categories. The column
    *                    vector takes ownership of the buffer. Do not use the buffer after calling
    *                    this.
-   * @param nestedColumnVectors the child columns list
+   * @param toClose  List of buffers to track adn close once done, usually in case of children
+   * @param childHandles array of longs for child column view handles.
    */
   public ColumnVector(DType type, long rows, Optional<Long> nullCount,
                       DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
-                      DeviceMemoryBuffer offsetBuffer, List<ColumnView.NestedColumnVector> nestedColumnVectors) {
-    super(type, (int)rows, nullCount, dataBuffer, validityBuffer, offsetBuffer, nestedColumnVectors);
+                      DeviceMemoryBuffer offsetBuffer, List<DeviceMemoryBuffer> toClose, long[] childHandles) {
+    super(initViewHandle(type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
+        dataBuffer, validityBuffer,
+        offsetBuffer, childHandles));
     if (type != DType.STRING && type != DType.LIST) {
       assert offsetBuffer == null : "offsets are only supported for STRING, LISTS";
-    }
-    List<DeviceMemoryBuffer> toClose = new ArrayList<>();
-    long[] childHandles = new long[nestedColumnVectors.size()];
-    for (ColumnView.NestedColumnVector ncv : nestedColumnVectors) {
-      toClose.addAll(ncv.getBuffersToClose());
-    }
-    for (int i = 0; i < nestedColumnVectors.size(); i++) {
-      childHandles[i] = nestedColumnVectors.get(i).getViewHandle();
     }
     offHeap = new OffHeapState(type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer,
             toClose, childHandles);
@@ -134,7 +131,9 @@ public final class ColumnVector extends ColumnView {
   public ColumnVector(DType type, long rows, Optional<Long> nullCount,
                       DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
                       DeviceMemoryBuffer offsetBuffer, long[] childHandles) {
-    super(type, (int)rows, nullCount, dataBuffer, validityBuffer, offsetBuffer, childHandles);
+    super(initViewHandle(type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
+        dataBuffer, validityBuffer,
+        offsetBuffer, childHandles));
     List<DeviceMemoryBuffer> toClose = new ArrayList<>();
     offHeap = new OffHeapState(type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer,
         toClose, childHandles);
@@ -152,7 +151,7 @@ public final class ColumnVector extends ColumnView {
    * @param contiguousBuffer the buffer that this is based off of.
    */
   private ColumnVector(long viewAddress, DeviceMemoryBuffer contiguousBuffer) {
-    super(viewAddress, true);
+    super(viewAddress);
     offHeap = new OffHeapState(viewAddress, contiguousBuffer);
     MemoryCleaner.register(this, offHeap);
     // TODO we may want to ask for the null count anyways...
@@ -162,6 +161,24 @@ public final class ColumnVector extends ColumnView {
     incRefCountInternal(true);
   }
 
+  /** Creates a ColumnVector from a column view handle
+   * @return a new ColumnVector
+   */
+  public static ColumnVector fromColumnView(long columnViewHandle) {
+    long mainCvHandle = ColumnView.copyColumnViewToCV(columnViewHandle);
+    return new ColumnVector(mainCvHandle);
+  }
+
+
+  static long initViewHandle(DType type, int rows, int nc, DeviceMemoryBuffer dataBuffer,
+                                DeviceMemoryBuffer validityBuffer, DeviceMemoryBuffer offsetBuffer, long[] childHandles) {
+    long cd = dataBuffer == null ? 0 : dataBuffer.address;
+    long cdSize = dataBuffer == null ? 0 : dataBuffer.length;
+    long od = offsetBuffer == null ? 0 : offsetBuffer.address;
+    long vd = validityBuffer == null ? 0 : validityBuffer.address;
+    return makeCudfColumnView(type.typeId.getNativeId(), type.getScale(), cd, cdSize,
+        od, vd, nc, rows, childHandles) ;
+  }
   static ColumnVector fromViewWithContiguousAllocation(long columnViewAddress, DeviceMemoryBuffer buffer) {
     return new ColumnVector(columnViewAddress, buffer);
   }
@@ -503,7 +520,7 @@ public final class ColumnVector extends ColumnView {
     }
     long childColumnView = ColumnView.getChildCvPointer(getNativeView(), childIndex);
     //this is returning a new ColumnView - must close this!
-    return new ColumnView(childColumnView, true);
+    return new ColumnView(childColumnView);
   }
 
   public BaseDeviceMemoryBuffer getData() {

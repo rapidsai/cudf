@@ -26,7 +26,6 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -3299,7 +3298,7 @@ public class ColumnVectorTest extends CudfTestBase {
     try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ListType(true,
         new HostColumnVector.BasicType(true, DType.INT32)), list1, list2, list3);
         ColumnView childColumnView = res.getChildColumnView(0);
-        ColumnVector copiedChildCv = childColumnView.copyToColumnVector();
+        ColumnVector copiedChildCv = ColumnVector.fromColumnView(childColumnView.viewHandle);
         ColumnVector expected =
             ColumnVector.fromInts(10, 11, 12, 13, 16, 12, 14, 15, 0, 7, 3, 4, 2)) {
       assertColumnsAreEqual(expected, copiedChildCv);
