@@ -60,7 +60,7 @@ std::unique_ptr<table> sample(table_view const& input,
       thrust::make_transform_iterator(thrust::counting_iterator<size_type>(0), RandomGen);
     auto end = thrust::make_transform_iterator(thrust::counting_iterator<size_type>(n), RandomGen);
 
-    return detail::gather(input, begin, end, out_of_bounds_policy::DONT_CHECK, mr, stream);
+    return detail::gather(input, begin, end, out_of_bounds_policy::DONT_CHECK, mr, stream.value());
   } else {
     auto gather_map = make_numeric_column(
       data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, stream.value());
