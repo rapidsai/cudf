@@ -17,7 +17,7 @@ from numba import cuda
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.scalar import as_scalar
+from cudf._lib.scalar import as_device_scalar
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import Dtype, ScalarObj
 from cudf.core.buffer import Buffer
@@ -130,9 +130,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         """
         return self._column.ordered
 
-    def as_ordered(
-        self, inplace: bool = False, **kwargs
-    ) -> Optional[ParentType]:
+    def as_ordered(self, inplace: bool = False) -> Optional[ParentType]:
         """
         Set the Categorical to be ordered.
 
@@ -187,16 +185,13 @@ class CategoricalAccessor(ColumnMethodsMixin):
         """
         out_col = self._column
         if not out_col.ordered:
-            kwargs["ordered"] = True
             out_col = self._set_categories(
-                self._column.categories, self._column.categories, **kwargs
+                self._column.categories, self._column.categories, ordered=True,
             )
 
         return self._return_or_inplace(out_col, inplace=inplace)
 
-    def as_unordered(
-        self, inplace: bool = False, **kwargs
-    ) -> Optional[ParentType]:
+    def as_unordered(self, inplace: bool = False) -> Optional[ParentType]:
         """
         Set the Categorical to be unordered.
 
@@ -262,15 +257,14 @@ class CategoricalAccessor(ColumnMethodsMixin):
         """
         out_col = self._column
         if out_col.ordered:
-            kwargs["ordered"] = False
             out_col = self._set_categories(
-                self._column.categories, self.categories, **kwargs
+                self._column.categories, self.categories, ordered=False
             )
 
         return self._return_or_inplace(out_col, inplace=inplace)
 
     def add_categories(
-        self, new_categories: Any, inplace: bool = False, **kwargs
+        self, new_categories: Any, inplace: bool = False
     ) -> Optional[ParentType]:
         """
         Add new categories.
@@ -341,23 +335,21 @@ class CategoricalAccessor(ColumnMethodsMixin):
             [old_categories.dtype, new_categories.dtype], []
         )
 
-        new_categories = new_categories.astype(common_dtype, copy=False)
-        old_categories = old_categories.astype(common_dtype, copy=False)
+        new_categories = new_categories.astype(common_dtype)
+        old_categories = old_categories.astype(common_dtype)
 
         if old_categories.isin(new_categories).any():
             raise ValueError("new categories must not include old categories")
 
         new_categories = old_categories.append(new_categories)
         out_col = self._column
-        if not self._categories_equal(new_categories, **kwargs):
-            out_col = self._set_categories(
-                old_categories, new_categories, **kwargs
-            )
+        if not self._categories_equal(new_categories):
+            out_col = self._set_categories(old_categories, new_categories)
 
         return self._return_or_inplace(out_col, inplace=inplace)
 
     def remove_categories(
-        self, removals: Any, inplace: bool = False, **kwargs
+        self, removals: Any, inplace: bool = False,
     ) -> Optional[ParentType]:
         """
         Remove the specified categories.
@@ -441,9 +433,9 @@ class CategoricalAccessor(ColumnMethodsMixin):
 
         new_categories = cats[~cats.isin(removals)]._column
         out_col = self._column
-        if not self._categories_equal(new_categories, **kwargs):
+        if not self._categories_equal(new_categories):
             out_col = self._set_categories(
-                self._column.categories, new_categories, **kwargs
+                self._column.categories, new_categories
             )
 
         return self._return_or_inplace(out_col, inplace=inplace)
@@ -454,7 +446,6 @@ class CategoricalAccessor(ColumnMethodsMixin):
         ordered: bool = False,
         rename: bool = False,
         inplace: bool = False,
-        **kwargs,
     ) -> Optional[ParentType]:
         """
         Set the categories to the specified new_categories.
@@ -483,7 +474,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         new_categories : list-like
             The categories in new order.
 
-        ordered : bool, default False
+        ordered : bool, default None
             Whether or not the categorical is treated as
             a ordered categorical. If not given, do
             not change the ordered information.
@@ -537,8 +528,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         dtype: category
         Categories (2, int64): [1, 10]
         """
-        ordered = kwargs.get("ordered", self.ordered)
-        rename = kwargs.pop("rename", False)
+        ordered = ordered if ordered is not None else self.ordered
         new_categories = column.as_column(new_categories)
 
         if isinstance(new_categories, CategoricalColumn):
@@ -574,11 +564,12 @@ class CategoricalAccessor(ColumnMethodsMixin):
                         categories=new_categories, ordered=ordered
                     ),
                 )
-            elif not self._categories_equal(
-                new_categories, **kwargs
-            ) or not self.ordered == kwargs.get("ordered"):
+            elif (
+                not self._categories_equal(new_categories, ordered=ordered)
+                or not self.ordered == ordered
+            ):
                 out_col = self._set_categories(
-                    self._column.categories, new_categories, **kwargs
+                    self._column.categories, new_categories, ordered=ordered,
                 )
         return self._return_or_inplace(out_col, inplace=inplace)
 
@@ -587,7 +578,6 @@ class CategoricalAccessor(ColumnMethodsMixin):
         new_categories: Any,
         ordered: bool = False,
         inplace: bool = False,
-        **kwargs,
     ) -> Optional[ParentType]:
         """
         Reorder categories as specified in new_categories.
@@ -671,7 +661,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         return self._return_or_inplace(out_col, inplace=inplace)
 
     def _categories_equal(
-        self, new_categories: "ColumnBase", **kwargs
+        self, new_categories: "ColumnBase", ordered=False
     ) -> bool:
         cur_categories = self._column.categories
         if len(new_categories) != len(cur_categories):
@@ -679,7 +669,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         if new_categories.dtype != cur_categories.dtype:
             return False
         # if order doesn't matter, sort before the equals call below
-        if not kwargs.get("ordered", self.ordered):
+        if not ordered:
             cur_categories = cudf.Series(cur_categories).sort_values(
                 ignore_index=True
             )
@@ -689,7 +679,11 @@ class CategoricalAccessor(ColumnMethodsMixin):
         return cur_categories.equals(new_categories)
 
     def _set_categories(
-        self, current_categories: Any, new_categories: Any, **kwargs
+        self,
+        current_categories: Any,
+        new_categories: Any,
+        is_unique: bool = False,
+        ordered: bool = False,
     ) -> "CategoricalColumn":
         """Returns a new CategoricalColumn with the categories set to the
         specified *new_categories*.
@@ -707,7 +701,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         # categories that don't exist in the new categories
 
         # Ensure new_categories is unique first
-        if not (kwargs.get("is_unique", False) or new_cats.is_unique):
+        if not (is_unique or new_cats.is_unique):
             # drop_duplicates() instead of unique() to preserve order
             new_cats = (
                 cudf.Series(new_cats)
@@ -736,7 +730,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         df = df.sort_values(by="order")
         df.reset_index(drop=True, inplace=True)
 
-        ordered = kwargs.get("ordered", self.ordered)
+        ordered = ordered if ordered is not None else self.ordered
         new_codes = df["new_codes"]._column
 
         # codes can't have masks, so take mask out before moving in
@@ -963,7 +957,7 @@ class CategoricalColumn(column.ColumnBase):
             return self if inplace else self.copy()
 
         fill_code = self._encode(fill_value)
-        fill_scalar = as_scalar(fill_code, self.codes.dtype)
+        fill_scalar = as_device_scalar(fill_code, self.codes.dtype)
 
         result = self if inplace else self.copy()
 
@@ -1267,7 +1261,7 @@ class CategoricalColumn(column.ColumnBase):
             return _create_empty_categorical_column(self, dtype)
 
         return self.cat().set_categories(
-            new_categories=dtype.categories, ordered=dtype.ordered, **kwargs
+            new_categories=dtype.categories, ordered=dtype.ordered
         )
 
     def as_numerical_column(self, dtype: Dtype, **kwargs) -> "NumericalColumn":
@@ -1275,9 +1269,9 @@ class CategoricalColumn(column.ColumnBase):
             dtype, **kwargs
         )
 
-    def as_string_column(self, dtype, **kwargs) -> "StringColumn":
+    def as_string_column(self, dtype, format=None) -> "StringColumn":
         return self._get_decategorized_column().as_string_column(
-            dtype, **kwargs
+            dtype, format=format
         )
 
     def as_datetime_column(self, dtype, **kwargs) -> "DatetimeColumn":

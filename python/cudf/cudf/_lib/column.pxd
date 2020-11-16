@@ -12,8 +12,6 @@ from cudf._lib.cpp.column.column_view cimport (
     column_view, mutable_column_view
 )
 
-from cudf._lib.scalar cimport Scalar
-
 
 cdef class Column:
     cdef public:

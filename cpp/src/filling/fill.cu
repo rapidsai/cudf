@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy_range.cuh>
 #include <cudf/detail/fill.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/detail/search.hpp>
@@ -30,8 +31,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
-
-#include <cuda_runtime.h>
 
 #include <memory>
 
@@ -93,7 +92,8 @@ struct out_of_place_fill_range_dispatch {
     if (end != begin) {  // otherwise no fill
       if (!p_ret->nullable() && !value.is_valid()) {
         p_ret->set_null_mask(
-          cudf::create_null_mask(p_ret->size(), cudf::mask_state::ALL_VALID, stream, mr), 0);
+          cudf::detail::create_null_mask(p_ret->size(), cudf::mask_state::ALL_VALID, stream, mr),
+          0);
       }
 
       auto ret_view = p_ret->mutable_view();
@@ -153,7 +153,7 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
   if (!value.is_valid()) {
     auto result = std::make_unique<cudf::column>(input, stream, mr);
     auto mview  = result->mutable_view();
-    cudf::set_null_mask(mview.null_mask(), begin, end, false, stream);
+    cudf::detail::set_null_mask(mview.null_mask(), begin, end, false, stream);
     mview.set_null_count(input.null_count() + (end - begin));
     return result;
   }

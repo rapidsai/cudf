@@ -17,14 +17,18 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
+
 #include <nvtext/detail/tokenize.hpp>
 #include <nvtext/replace.hpp>
+
 #include <strings/utilities.cuh>
+
 #include <text/utilities/tokenize_ops.cuh>
 
 namespace nvtext {
@@ -214,7 +218,8 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& st
                              *replacements_column};
 
   // copy null mask from input column
-  rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
+  rmm::device_buffer null_mask =
+    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
 
   // this utility calls replacer to build the offsets and chars columns
   auto children = cudf::strings::detail::make_strings_children(
@@ -249,7 +254,8 @@ std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& str
   remove_small_tokens_fn filterer{*strings_column, d_delimiter, min_token_length, d_replacement};
 
   // copy null mask from input column
-  rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
+  rmm::device_buffer null_mask =
+    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
 
   // this utility calls filterer to build the offsets and chars columns
   auto children = cudf::strings::detail::make_strings_children(

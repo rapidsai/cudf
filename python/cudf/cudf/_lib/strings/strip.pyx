@@ -6,7 +6,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from libcpp.string cimport string
 from cudf._lib.cpp.column.column cimport column
 
@@ -17,7 +17,7 @@ from cudf._lib.cpp.strings.strip cimport (
 
 
 def strip(Column source_strings,
-          Scalar repl):
+          DeviceScalar repl):
     """
     Returns a Column by removing leading and trailing characters.
     The set of characters need be stripped from left and right side
@@ -26,7 +26,9 @@ def strip(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(repl.c_value.get())
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        repl.get_raw_ptr()
+    )
 
     with nogil:
         c_result = move(cpp_strip(
@@ -39,7 +41,7 @@ def strip(Column source_strings,
 
 
 def lstrip(Column source_strings,
-           Scalar repl):
+           DeviceScalar repl):
     """
     Returns a Column by removing leading and trailing characters.
     The set of characters need be stripped from left side can
@@ -48,7 +50,9 @@ def lstrip(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(repl.c_value.get())
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        repl.get_raw_ptr()
+    )
 
     with nogil:
         c_result = move(cpp_strip(
@@ -61,7 +65,7 @@ def lstrip(Column source_strings,
 
 
 def rstrip(Column source_strings,
-           Scalar repl):
+           DeviceScalar repl):
     """
     Returns a Column by removing leading and trailing characters.
     The set of characters need be stripped from right side can
@@ -70,7 +74,9 @@ def rstrip(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(repl.c_value.get())
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        repl.get_raw_ptr()
+    )
 
     with nogil:
         c_result = move(cpp_strip(

@@ -31,7 +31,7 @@ from cudf._lib.null_mask import (
     bitmask_allocation_size_bytes,
     create_null_mask,
 )
-from cudf._lib.scalar import as_scalar
+from cudf._lib.scalar import as_device_scalar
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import Dtype, ScalarObj
@@ -437,6 +437,7 @@ class ColumnBase(Column, Serializable):
         if ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
         """
+
         return self.to_gpu_array(fillna=fillna).copy_to_host()
 
     def _fill(
@@ -449,7 +450,7 @@ class ColumnBase(Column, Serializable):
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
-        fill_scalar = as_scalar(fill_value, self.dtype)
+        fill_scalar = as_device_scalar(fill_value, self.dtype)
 
         if not inplace:
             return libcudf.filling.fill(self, begin, end, fill_scalar)
@@ -469,7 +470,7 @@ class ColumnBase(Column, Serializable):
         return self
 
         fill_code = self._encode(fill_value)
-        fill_scalar = as_scalar(fill_code, self.codes.dtype)
+        fill_scalar = as_device_scalar(fill_code, self.codes.dtype)
 
         result = self if inplace else self.copy()
 
@@ -1024,7 +1025,7 @@ class ColumnBase(Column, Serializable):
         raise NotImplementedError
 
     def as_string_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format=None
     ) -> "cudf.core.column.StringColumn":
         raise NotImplementedError
 
@@ -1823,6 +1824,10 @@ def as_column(
         data = as_column(
             np.asarray(arbitrary), dtype=dtype, nan_as_null=nan_as_null
         )
+    elif isinstance(arbitrary, cudf.Scalar):
+        data = ColumnBase.from_scalar(
+            arbitrary.device_value, length if length else 1
+        )
     elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
         cudf_dtype = arbitrary._data.dtype
 
@@ -2080,7 +2085,9 @@ def arange(
     size = int(np.ceil((stop - start) / step))
 
     return libcudf.filling.sequence(
-        size, as_scalar(start, dtype=dtype), as_scalar(step, dtype=dtype)
+        size,
+        as_device_scalar(start, dtype=dtype),
+        as_device_scalar(step, dtype=dtype),
     )
 
 
@@ -2118,4 +2125,4 @@ def full(
     dtype: int8
     """
 
-    return ColumnBase.from_scalar(as_scalar(fill_value, dtype), size)
+    return ColumnBase.from_scalar(as_device_scalar(fill_value, dtype), size)

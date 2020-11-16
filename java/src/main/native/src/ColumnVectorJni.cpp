@@ -28,6 +28,7 @@
 #include <cudf/reduction.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/rolling.hpp>
+#include <cudf/round.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/search.hpp>
 #include <cudf/strings/attributes.hpp>
@@ -558,6 +559,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_unaryOperation(JNIEnv *
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_round(JNIEnv *env, jclass,
+                                                               jlong input_ptr, jint decimal_places,
+                                                               jint rounding_method) {
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+   try {
+     cudf::jni::auto_set_device(env);
+     cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_ptr);
+     cudf::rounding_method method = static_cast<cudf::rounding_method>(rounding_method);
+     std::unique_ptr<cudf::column> ret = cudf::round(*input, decimal_places, method);
+     return reinterpret_cast<jlong>(ret.release());
+   }
+   CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_year(JNIEnv *env, jclass,

@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/row_operators.cuh>
@@ -25,6 +26,8 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/sequence.h>
@@ -242,8 +245,12 @@ std::unique_ptr<column> rank(column_view const &input,
   std::unique_ptr<column> rank_column = [&null_handling, &output_type, &input, &mr, &stream] {
     // na_option=keep assign NA to NA values
     if (null_handling == null_policy::EXCLUDE)
-      return make_numeric_column(
-        output_type, input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);
+      return make_numeric_column(output_type,
+                                 input.size(),
+                                 detail::copy_bitmask(input, stream, mr),
+                                 input.null_count(),
+                                 stream,
+                                 mr);
     else
       return make_numeric_column(output_type, input.size(), mask_state::UNALLOCATED, stream, mr);
   }();

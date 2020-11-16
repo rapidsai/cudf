@@ -10,7 +10,6 @@ from pandas.api.types import is_integer_dtype
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.quantiles import quantile as cpp_quantile
-from cudf._lib.scalar import Scalar
 from cudf._typing import Dtype, DtypeObj, ScalarObj
 from cudf.core.buffer import Buffer
 from cudf.core.column import (
@@ -85,7 +84,7 @@ class NumericalColumn(ColumnBase):
     def binary_operator(
         self,
         binop: str,
-        rhs: Union["ColumnBase", Scalar],
+        rhs: Union["ColumnBase", "cudf.Scalar"],
         reflect: bool = False,
     ) -> "ColumnBase":
         int_dtypes = [
@@ -102,11 +101,19 @@ class NumericalColumn(ColumnBase):
             out_dtype = self.dtype
         else:
             if not (
-                isinstance(rhs, (NumericalColumn, Scalar)) or np.isscalar(rhs)
+                isinstance(
+                    rhs,
+                    (
+                        NumericalColumn,
+                        cudf.Scalar,
+                        cudf._lib.scalar.DeviceScalar,
+                    ),
+                )
+                or np.isscalar(rhs)
             ):
                 msg = "{!r} operator not supported between {} and {}"
                 raise TypeError(msg.format(binop, type(self), type(rhs)))
-            out_dtype = np.result_type(self.dtype, rhs)
+            out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
                 tmp = self if reflect else rhs
                 if (tmp.dtype in int_dtypes) and (
@@ -126,8 +133,14 @@ class NumericalColumn(ColumnBase):
     ) -> Union["ColumnBase", ScalarObj]:
         if other is None:
             return other
+        if isinstance(other, cudf.Scalar):
+            # expensive device-host transfer just to
+            # adjust the dtype
+            other = other.value
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in {"b", "i", "u", "f"}:
+            if isinstance(other, cudf.Scalar):
+                return other
             other_dtype = np.promote_types(self.dtype, other_dtype)
             if other_dtype == np.dtype("float16"):
                 other_dtype = np.dtype("float32")
@@ -154,12 +167,12 @@ class NumericalColumn(ColumnBase):
         return libcudf.string_casting.int2ip(self)
 
     def as_string_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format=None
     ) -> "cudf.core.column.StringColumn":
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
                 np.dtype(self.dtype)
-            ](self, **kwargs)
+            ](self)
         else:
             return cast(
                 "cudf.core.column.StringColumn", as_column([], dtype="object")
@@ -302,7 +315,7 @@ class NumericalColumn(ColumnBase):
         if isinstance(q, Number):
             return (
                 cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
-                if result[0] is None
+                if result[0] is cudf.NA
                 else result[0]
             )
         return result
@@ -436,6 +449,11 @@ class NumericalColumn(ColumnBase):
         """
         Fill null values with *fill_value*
         """
+        if (
+            isinstance(fill_value, cudf.Scalar)
+            and fill_value.dtype == self.dtype
+        ):
+            return libcudf.replace.replace_nulls(self, fill_value)
         if np.isscalar(fill_value):
             # castsafely to the same dtype as self
             fill_value_casted = self.dtype.type(fill_value)
@@ -444,7 +462,7 @@ class NumericalColumn(ColumnBase):
                     f"Cannot safely cast non-equivalent "
                     f"{type(fill_value).__name__} to {self.dtype.name}"
                 )
-            fill_value = fill_value_casted
+            fill_value = cudf.Scalar(fill_value_casted)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
             # cast safely to the same dtype as self

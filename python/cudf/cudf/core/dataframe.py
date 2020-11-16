@@ -399,18 +399,24 @@ class DataFrame(Frame, Serializable):
             index = as_index(index)
 
         self._index = as_index(index)
-        data = list(itertools.zip_longest(*data))
 
-        if columns is not None and len(data) == 0:
-            data = [
-                cudf.core.column.column_empty(row_count=0, dtype=None)
-                for _ in columns
-            ]
+        # list-of-dicts case
+        if len(data) > 0 and isinstance(data[0], dict):
+            data = DataFrame.from_pandas(pd.DataFrame(data))
+            self._data = data._data
+        else:
+            data = list(itertools.zip_longest(*data))
 
-        for col_name, col in enumerate(data):
-            self._data[col_name] = column.as_column(col)
+            if columns is not None and len(data) == 0:
+                data = [
+                    cudf.core.column.column_empty(row_count=0, dtype=None)
+                    for _ in columns
+                ]
 
-        self.columns = columns
+            for col_name, col in enumerate(data):
+                self._data[col_name] = column.as_column(col)
+        if columns:
+            self.columns = columns
 
     def _init_from_dict_like(self, data, index=None, columns=None):
         data = data.copy()
@@ -1083,7 +1089,7 @@ class DataFrame(Frame, Serializable):
         else:
             for col in self._data:
                 result._data[col] = self._data[col].astype(
-                    dtype=dtype, errors=errors, copy=copy, **kwargs
+                    dtype=dtype, **kwargs
                 )
 
         return result
@@ -1366,7 +1372,7 @@ class DataFrame(Frame, Serializable):
                         l_opr = self[col]
                 result[col] = op(l_opr, r_opr)
 
-        elif isinstance(other, numbers.Number):
+        elif isinstance(other, (numbers.Number, cudf.Scalar)):
             for col in self._data:
                 result[col] = op(self[col], other)
         else:

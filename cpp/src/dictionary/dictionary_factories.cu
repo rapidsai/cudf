@@ -16,10 +16,13 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace {
@@ -57,7 +60,8 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
     type_dispatcher(indices_column.type(), dispatch_create_indices{}, indices_column, mr, stream);
   rmm::device_buffer null_mask{0, stream, mr};
   auto null_count = indices_column.null_count();
-  if (null_count) null_mask = copy_bitmask(indices_column, stream, mr);
+  if (null_count)
+    null_mask = detail::copy_bitmask(indices_column, rmm::cuda_stream_view{stream}, mr);
 
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(indices_copy));

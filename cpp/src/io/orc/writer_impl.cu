@@ -1235,7 +1235,7 @@ void writer::impl::write_chunk(table_view const &table, orc_chunked_state &state
       if (orc_columns[i - 1].orc_kind() == TIMESTAMP) { sf.writerTimezone = "UTC"; }
     }
     buffer_.resize((compression_kind_ != NONE) ? 3 : 0);
-    pbw_.write(&sf);
+    pbw_.write(sf);
     stripes[stripe_id].footerLength = buffer_.size();
     if (compression_kind_ != NONE) {
       uint32_t uncomp_sf_len = (stripes[stripe_id].footerLength - 3) * 2 + 1;
@@ -1327,7 +1327,7 @@ void writer::impl::write_chunked_end(orc_chunked_state &state)
   // Write statistics metadata
   if (state.md.stripeStats.size() != 0) {
     buffer_.resize((compression_kind_ != NONE) ? 3 : 0);
-    pbw_.write(&state.md);
+    pbw_.write(state.md);
     add_uncompressed_block_headers(buffer_);
     ps.metadataLength = buffer_.size();
     out_sink_->host_write(buffer_.data(), buffer_.size());
@@ -1335,7 +1335,7 @@ void writer::impl::write_chunked_end(orc_chunked_state &state)
     ps.metadataLength = 0;
   }
   buffer_.resize((compression_kind_ != NONE) ? 3 : 0);
-  pbw_.write(&state.ff);
+  pbw_.write(state.ff);
   add_uncompressed_block_headers(buffer_);
 
   // Write postscript metadata
@@ -1344,7 +1344,7 @@ void writer::impl::write_chunked_end(orc_chunked_state &state)
   ps.compressionBlockSize = compression_blocksize_;
   ps.version              = {0, 12};
   ps.magic                = MAGIC;
-  const auto ps_length    = static_cast<uint8_t>(pbw_.write(&ps));
+  const auto ps_length    = static_cast<uint8_t>(pbw_.write(ps));
   buffer_.push_back(ps_length);
   out_sink_->host_write(buffer_.data(), buffer_.size());
   out_sink_->flush();
