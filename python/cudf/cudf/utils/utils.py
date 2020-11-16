@@ -1,6 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import functools
 from collections import OrderedDict
+from collections.abc import Sequence
 from math import floor, isinf, isnan
 import warnings
 
@@ -511,7 +512,7 @@ def get_cupy_compatible_args(args):
         elif isinstance(arg, cudf.Series):
             casted_ls.append(arg.values)
         # handle list of arguments
-        elif isinstance(arg, collections.abc.Sequence):
+        elif isinstance(arg, Sequence):
             casted_arg = get_cupy_compatible_args(arg)
             casted_ls.append(casted_arg)
         else:

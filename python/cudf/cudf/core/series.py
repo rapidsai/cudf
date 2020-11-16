@@ -5,9 +5,8 @@ from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
 from uuid import uuid4
-import collections.abc
 
-import cupy as cp
+import cupy
 import numpy as np
 import pandas as pd
 from nvtx import annotate
@@ -789,19 +788,19 @@ class Series(Frame, Serializable):
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         if method == "__call__":
             return get_appropiate_dispatched_func(
-                Series, cp, ufunc, inputs, kwargs
+                Series, cupy, ufunc, inputs, kwargs
             )
         else:
             return NotImplemented
 
     def __array_function__(self, func, types, args, kwargs):
-        handled_types = [cudf.Series, cp.core.core.ndarray]
+        handled_types = [cudf.Series, cupy.core.core.ndarray]
         for t in types:
             if t not in handled_types:
                 return NotImplemented
 
         cudf_submodule = get_relevant_submodule(func, Series)
-        cupy_submodule = get_relevant_submodule(func, cp)
+        cupy_submodule = get_relevant_submodule(func, cupy)
 
         return get_appropiate_dispatched_func(
             cudf_submodule, cupy_submodule, func, args, kwargs
