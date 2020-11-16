@@ -34,10 +34,10 @@ namespace cudf {
  */
 
 /**
- * @brief Policy to account for possible out-of-bound indices
+ * @brief Policy to account for possible out-of-bounds indices
  *
  * `NULLIFY` means to nullify output values corresponding to out-of-bounds gather_map values.
- * `DONT_CHECK` means to not to check whether the indices are out-of-bounds.
+ * `DONT_CHECK` means do not check whether the indices are out-of-bounds.
  */
 
 enum class out_of_bounds_policy : int8_t {
