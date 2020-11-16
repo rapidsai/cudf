@@ -61,6 +61,7 @@
 - PR #6471 Replace index type-dispatch call with indexalator in cudf::strings::substring
 - PR #6485 Add File IO to cuIO benchmarks
 - PR #6504 Update Java bindings version to 0.17-SNAPSHOT
+- PR #6523 Remove bounds check for `cudf::gather`
 - PR #6489 Add `AVRO` fuzz tests with varying function parameters
 - PR #6540 Add dictionary support to `cudf::unary_operation`
 - PR #6537 Refactor ORC timezone
