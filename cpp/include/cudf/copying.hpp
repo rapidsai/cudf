@@ -66,7 +66,7 @@ enum class out_of_bounds_policy : int8_t {
  * @param[in] source_table The input columns whose rows will be gathered
  * @param[in] gather_map View into a non-nullable column of integral indices that maps the
  * rows in the source columns to rows in the destination columns.
- * @param[in] policy Policy to apply to account for possible out-of-bound indices
+ * @param[in] bounds_policy Policy to apply to account for possible out-of-bound indices
  * `DONT_CHECK` skips all bound checking for gather map values. `NULLIFY` coerces rows that
  * corresponds to out-of-bound indices in the gather map to be null elements. Callers should
  * use `DONT_CHECK` when they are certain that the gather_map contains only valid indices for
@@ -78,7 +78,7 @@ enum class out_of_bounds_policy : int8_t {
 std::unique_ptr<table> gather(
   table_view const& source_table,
   column_view const& gather_map,
-  out_of_bounds_policy policy         = out_of_bounds_policy::NULLIFY,
+  out_of_bounds_policy bounds_policy  = out_of_bounds_policy::NULLIFY,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

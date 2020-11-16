@@ -14,16 +14,17 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.cuh>
-#include <cudf/detail/gather.hpp>
-#include <cudf/detail/groupby/sort_helper.hpp>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/detail/scatter.hpp>
-#include <cudf/detail/sorting.hpp>
-#include <cudf/table/row_operators.cuh>
-#include <cudf/table/table_device_view.cuh>
+ #include <cudf/column/column_factories.hpp>
+ #include <cudf/detail/copy.hpp>
+ #include <cudf/detail/gather.cuh>
+ #include <cudf/detail/gather.hpp>
+ #include <cudf/detail/groupby/sort_helper.hpp>
+ #include <cudf/detail/iterator.cuh>
+ #include <cudf/detail/scatter.hpp>
+ #include <cudf/detail/sorting.hpp>
+ #include <cudf/table/row_operators.cuh>
+ #include <cudf/table/table_device_view.cuh>
+ #include <cudf/copying.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -307,8 +308,12 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view st
   auto gather_map_it = thrust::make_transform_iterator(
     group_offsets().begin(), [idx_data] __device__(size_type i) { return idx_data[i]; });
 
-  return cudf::detail::gather(
-    _keys, gather_map_it, gather_map_it + num_groups(), false, stream, mr);
+  return cudf::detail::gather(_keys,
+                              gather_map_it,
+                              gather_map_it + num_groups(),
+                              out_of_bounds_policy::DONT_CHECK,
+                              stream,
+                              mr);
 }
 
 std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::cuda_stream_view stream,

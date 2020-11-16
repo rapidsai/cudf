@@ -38,6 +38,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cub/cub.cuh>
+#include "cudf/copying.hpp"
 
 #include <algorithm>
 
@@ -268,8 +269,12 @@ struct scatter_gather_functor {
                     indices.begin(),
                     filter);
 
-    auto output_table = cudf::detail::gather(
-      cudf::table_view{{input}}, indices.begin(), indices.end(), false, stream, mr);
+    auto output_table = cudf::detail::gather(cudf::table_view{{input}},
+                                             indices.begin(),
+                                             indices.end(),
+                                             cudf::out_of_bounds_policy::DONT_CHECK,
+                                             stream,
+                                             mr);
 
     // There will be only one column
     return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));

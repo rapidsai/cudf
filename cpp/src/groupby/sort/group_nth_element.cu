@@ -22,6 +22,7 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
+#include <cudf/copying.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -105,8 +106,12 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
                          return (bitmask_iterator[i] && intra_group_index[i] == nth);
                        });
   }
-  auto output_table = cudf::detail::gather(
-    table_view{{values}}, nth_index.begin(), nth_index.end(), true, stream, mr);
+  auto output_table = cudf::detail::gather(table_view{{values}},
+                                           nth_index.begin(),
+                                           nth_index.end(),
+                                           out_of_bounds_policy::NULLIFY,
+                                           stream,
+                                           mr);
   if (!output_table->get_column(0).has_nulls()) output_table->get_column(0).set_null_mask({}, 0);
   return std::make_unique<column>(std::move(output_table->get_column(0)));
 }
