@@ -794,6 +794,22 @@ TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryAbs)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryAbsLarge)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto a = thrust::make_counting_iterator(-2000);
+  auto b = cudf::test::make_counting_transform_iterator(-2000, [](auto e) { return std::abs(e); });
+  auto const input    = fp_wrapper{a, a + 4000, scale_type{-1}};
+  auto const expected = fp_wrapper{b, b + 4000, scale_type{-1}};
+  auto const result   = cudf::unary_operation(input, cudf::unary_op::ABS);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 template <typename T>
 inline auto make_fixed_point_data_type(int32_t scale)
 {
