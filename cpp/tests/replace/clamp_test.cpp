@@ -586,4 +586,27 @@ TEST_F(ClampDictionaryTest, WithReplace)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, decoded->view());
 }
 
+template <typename T>
+struct FixedPointTest : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(FixedPointTest, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTest, ZeroScale)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const scale    = scale_type{0};
+  auto const lo       = cudf::make_fixed_point_scalar<decimalXX>(2, scale);
+  auto const hi       = cudf::make_fixed_point_scalar<decimalXX>(8, scale);
+  auto const input    = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, scale};
+  auto const expected = fp_wrapper{{2, 2, 2, 3, 4, 5, 6, 7, 8, 8, 8}, scale};
+  auto const result   = cudf::clamp(input, *lo, *hi);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 CUDF_TEST_PROGRAM_MAIN()
