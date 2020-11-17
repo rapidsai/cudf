@@ -1,7 +1,8 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
+import builtins
 import pickle
 import warnings
-from typing import Sequence, Tuple, Union
+from typing import Any, Dict, Optional, Sequence, Tuple, Union, cast, overload
 
 import cupy
 import numpy as np
@@ -139,6 +140,7 @@ from cudf._lib.strings.translate import (
     translate as cpp_translate,
 )
 from cudf._lib.strings.wrap import wrap as cpp_wrap
+from cudf._typing import Dtype, ScalarObj
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -329,9 +331,17 @@ class StringMethods(ColumnMethodsMixin):
         """
         return self._return_or_inplace(cpp_count_bytes(self._column),)
 
+    @overload
+    def cat(self, sep: str = None, na_rep: str = None) -> str:
+        ...
+
+    @overload
     def cat(
-        self, others=None, sep: str = None, na_rep: str = None
-    ) -> ParentType:
+        self, others, sep: str = None, na_rep: str = None
+    ) -> Union[ParentType, "cudf.core.column.StringColumn"]:
+        ...
+
+    def cat(self, others=None, sep=None, na_rep=None):
         """
         Concatenate strings in the Series/Index with given separator.
 
@@ -342,28 +352,28 @@ class StringMethods(ColumnMethodsMixin):
 
         Parameters
         ----------
-            others : Series or List of str
-                Strings to be appended.
-                The number of strings must match ``size()`` of this instance.
-                This must be either a Series of string dtype or a Python
-                list of strings.
+        others : Series or List of str
+            Strings to be appended.
+            The number of strings must match ``size()`` of this instance.
+            This must be either a Series of string dtype or a Python
+            list of strings.
 
-            sep : str
-                If specified, this separator will be appended to each string
-                before appending the others.
+        sep : str
+            If specified, this separator will be appended to each string
+            before appending the others.
 
-            na_rep : str
-                This character will take the place of any null strings
-                (not empty strings) in either list.
+        na_rep : str
+            This character will take the place of any null strings
+            (not empty strings) in either list.
 
-                -  If ``na_rep`` is ``None``, and ``others`` is ``None``,
-                   missing values in the Series/Index are
-                   omitted from the result.
+            -  If ``na_rep`` is ``None``, and ``others`` is ``None``,
+               missing values in the Series/Index are
+               omitted from the result.
 
-                -  If ``na_rep`` is ``None``, and ``others`` is
-                   not ``None``, a row containing a missing value
-                   in any of the columns (before concatenation)
-                   will have a missing value in the result.
+            -  If ``na_rep`` is ``None``, and ``others`` is
+               not ``None``, a row containing a missing value
+               in any of the columns (before concatenation)
+               will have a missing value in the result.
 
         Returns
         -------
@@ -4515,8 +4525,17 @@ class StringColumn(column.ColumnBase):
     """Implements operations for Columns of String type
     """
 
+    _start_offset: Optional[int]
+    _end_offset: Optional[int]
+    _cached_sizeof: Optional[int]
+
     def __init__(
-        self, mask=None, size=None, offset=0, null_count=None, children=()
+        self,
+        mask: Buffer = None,
+        size: int = None,
+        offset: int = 0,
+        null_count: int = None,
+        children: Tuple["column.ColumnBase", ...] = (),
     ):
         """
         Parameters
@@ -4566,34 +4585,38 @@ class StringColumn(column.ColumnBase):
         self._end_offset = None
 
     @property
-    def start_offset(self):
+    def start_offset(self) -> int:
         if self._start_offset is None:
             if (
                 len(self.base_children) == 2
                 and self.offset < self.base_children[0].size
             ):
-                self._start_offset = int(self.base_children[0][self.offset])
+                self._start_offset = int(
+                    self.base_children[0].element_indexing(self.offset)
+                )
             else:
                 self._start_offset = 0
 
         return self._start_offset
 
     @property
-    def end_offset(self):
+    def end_offset(self) -> int:
         if self._end_offset is None:
             if (
                 len(self.base_children) == 2
                 and (self.offset + self.size) < self.base_children[0].size
             ):
                 self._end_offset = int(
-                    self.base_children[0][self.offset + self.size]
+                    self.base_children[0].element_indexing(
+                        self.offset + self.size
+                    )
                 )
             else:
                 self._end_offset = 0
 
         return self._end_offset
 
-    def __sizeof__(self):
+    def __sizeof__(self) -> int:
         if self._cached_sizeof is None:
             n = 0
             if len(self.base_children) == 2:
@@ -4615,7 +4638,7 @@ class StringColumn(column.ColumnBase):
         return self._cached_sizeof
 
     @property
-    def base_size(self):
+    def base_size(self) -> int:
         if len(self.base_children) == 0:
             return 0
         else:
@@ -4628,7 +4651,9 @@ class StringColumn(column.ColumnBase):
     def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
         raise ValueError("Cannot get an array view of a StringColumn")
 
-    def sum(self, skipna=None, dtype=None, min_count=0):
+    def sum(
+        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
+    ):
         result_col = self._process_for_reduction(
             skipna=skipna, min_count=min_count
         )
@@ -4646,39 +4671,38 @@ class StringColumn(column.ColumnBase):
         else:
             super().set_base_data(value)
 
-    def set_base_mask(self, value):
+    def set_base_mask(self, value: Optional[Buffer]):
         super().set_base_mask(value)
 
-    def set_base_children(self, value):
+    def set_base_children(self, value: Tuple["column.ColumnBase", ...]):
         # TODO: Implement dtype validation of the children here somehow
         super().set_base_children(value)
 
-    def __contains__(self, item):
+    def __contains__(self, item: ScalarObj) -> bool:
         return True in self.str().contains(f"^{item}$")
 
-    def str(self, parent=None):
+    def str(self, parent: ParentType = None) -> StringMethods:
         return StringMethods(self, parent=parent)
 
-    def unary_operator(self, unaryop):
+    def unary_operator(self, unaryop: builtins.str):
         raise TypeError(
             f"Series of dtype `str` cannot perform the operation: "
             f"{unaryop}"
         )
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.size
 
-    def _set_mask(self, value):
-        super()._set_mask(value)
-
     @property
-    def _nbytes(self):
+    def _nbytes(self) -> int:
         if self.size == 0:
             return 0
         else:
             return self.children[1].size
 
-    def as_numerical_column(self, dtype, **kwargs):
+    def as_numerical_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.NumericalColumn":
         out_dtype = np.dtype(dtype)
 
         if out_dtype.kind in {"i", "u"}:
@@ -4718,42 +4742,49 @@ class StringColumn(column.ColumnBase):
 
         return result_col
 
-    def as_datetime_column(self, dtype, format=None):
+    def as_datetime_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.DatetimeColumn":
         out_dtype = np.dtype(dtype)
 
+        # infer on host from the first not na element
+        # or return all null column if all values
+        # are null in current column
+        format = kwargs.get("format", None)
         if format is None:
-            # infer on host from the first not na element
-            # or return all null column if all values
-            # are null in current column
             if self.null_count == len(self):
-                return column.column_empty(
-                    len(self), dtype=out_dtype, masked=True
+                return cast(
+                    "cudf.core.column.DatetimeColumn",
+                    column.column_empty(
+                        len(self), dtype=out_dtype, masked=True
+                    ),
                 )
             else:
-                format = datetime.infer_format(self[self.notna()][0])
+                format = datetime.infer_format(
+                    self.apply_boolean_mask(self.notna()).element_indexing(0)
+                )
 
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
-    def as_timedelta_column(self, dtype, format=None):
+    def as_timedelta_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.TimeDeltaColumn":
         out_dtype = np.dtype(dtype)
-
-        if format is None:
-            format = "%D days %H:%M:%S"
-
+        format = "%D days %H:%M:%S"
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
-    def as_string_column(self, dtype, format=None):
+    def as_string_column(self, dtype: Dtype, format=None) -> "StringColumn":
         return self
 
     @property
-    def values_host(self):
+    def values_host(self) -> np.ndarray:
         """
         Return a numpy representation of the StringColumn.
         """
         return self.to_pandas().values
 
     @property
-    def values(self):
+    def values(self) -> cupy.ndarray:
         """
         Return a CuPy representation of the StringColumn.
         """
@@ -4761,7 +4792,7 @@ class StringColumn(column.ColumnBase):
             "String Arrays is not yet implemented in cudf"
         )
 
-    def to_array(self, fillna=None):
+    def to_array(self, fillna: bool = None) -> np.ndarray:
         """Get a dense numpy array for the data.
 
         Notes
@@ -4794,8 +4825,8 @@ class StringColumn(column.ColumnBase):
             "consider using .to_arrow()"
         )
 
-    def serialize(self):
-        header = {"null_count": self.null_count}
+    def serialize(self) -> Tuple[dict, list]:
+        header = {"null_count": self.null_count}  # type: Dict[Any, Any]
         header["type-serialized"] = pickle.dumps(type(self))
         header["size"] = self.size
 
@@ -4815,31 +4846,33 @@ class StringColumn(column.ColumnBase):
         return header, frames
 
     @classmethod
-    def deserialize(cls, header, frames):
+    def deserialize(cls, header: dict, frames: list) -> "StringColumn":
         size = header["size"]
         # Deserialize the mask, value, and offset frames
         buffers = [Buffer(each_frame) for each_frame in frames]
 
+        nbuf = None
         if header["null_count"] > 0:
             nbuf = buffers[2]
-        else:
-            nbuf = None
 
         children = []
         for h, b in zip(header["subheaders"], buffers[:2]):
             column_type = pickle.loads(h["type-serialized"])
             children.append(column_type.deserialize(h, [b]))
 
-        col = column.build_column(
-            data=None,
-            dtype="str",
-            mask=nbuf,
-            children=tuple(children),
-            size=size,
+        col = cast(
+            "StringColumn",
+            column.build_column(
+                data=None,
+                dtype="str",
+                mask=nbuf,
+                children=tuple(children),
+                size=size,
+            ),
         )
         return col
 
-    def can_cast_safely(self, to_dtype):
+    def can_cast_safely(self, to_dtype: Dtype) -> bool:
         to_dtype = np.dtype(to_dtype)
 
         if self.dtype == to_dtype:
@@ -4851,7 +4884,9 @@ class StringColumn(column.ColumnBase):
         else:
             return True
 
-    def find_and_replace(self, to_replace, replacement, all_nan):
+    def find_and_replace(
+        self, to_replace, replacement, all_nan: bool
+    ) -> "StringColumn":
         """
         Return col with *to_replace* replaced with *value*
         """
@@ -4859,29 +4894,29 @@ class StringColumn(column.ColumnBase):
         replacement = column.as_column(replacement, dtype=self.dtype)
         return libcudf.replace.replace(self, to_replace, replacement)
 
-    def fillna(self, fill_value):
+    def fillna(self, fill_value) -> "StringColumn":
         if not is_scalar(fill_value):
             fill_value = column.as_column(fill_value, dtype=self.dtype)
         return libcudf.replace.replace_nulls(self, fill_value, dtype="object")
 
-    def _find_first_and_last(self, value):
+    def _find_first_and_last(self, value: ScalarObj) -> Tuple[int, int]:
         found_indices = self.str().contains(f"^{value}$")
         found_indices = libcudf.unary.cast(found_indices, dtype=np.int32)
         first = column.as_column(found_indices).find_first_value(1)
         last = column.as_column(found_indices).find_last_value(1)
         return first, last
 
-    def find_first_value(self, value, closest=False):
+    def find_first_value(self, value: ScalarObj, closest: bool = False) -> int:
         return self._find_first_and_last(value)[0]
 
-    def find_last_value(self, value, closest=False):
+    def find_last_value(self, value: ScalarObj, closest: bool = False) -> int:
         return self._find_first_and_last(value)[1]
 
-    def normalize_binop_value(self, other):
+    def normalize_binop_value(self, other) -> "column.ColumnBase":
         # fastpath: gpu scalar
         if isinstance(other, cudf.Scalar) and other.dtype == "object":
             return column.as_column(other, length=len(self))
-        if isinstance(other, column.Column):
+        if isinstance(other, column.ColumnBase):
             return other.astype(self.dtype)
         elif isinstance(other, str) or other is None:
             col = utils.scalar_broadcast_to(
@@ -4891,16 +4926,18 @@ class StringColumn(column.ColumnBase):
         else:
             raise TypeError(f"cannot broadcast {type(other)}")
 
-    def default_na_value(self):
+    def default_na_value(self) -> ScalarObj:
         return None
 
-    def binary_operator(self, op, rhs, reflect=False):
+    def binary_operator(
+        self, op: builtins.str, rhs, reflect: bool = False
+    ) -> "column.ColumnBase":
         lhs = self
         if reflect:
             lhs, rhs = rhs, lhs
         if isinstance(rhs, (StringColumn, str)):
             if op == "add":
-                return lhs.str().cat(others=rhs)
+                return cast("column.ColumnBase", lhs.str().cat(others=rhs))
             elif op in ("eq", "ne", "gt", "lt", "ge", "le"):
                 return _string_column_binop(self, rhs, op=op, out_dtype="bool")
 
@@ -4909,7 +4946,7 @@ class StringColumn(column.ColumnBase):
         )
 
     @property
-    def is_unique(self):
+    def is_unique(self) -> bool:
         return len(self.unique()) == len(self)
 
     @property
@@ -4918,19 +4955,17 @@ class StringColumn(column.ColumnBase):
             "Strings are not yet supported via `__cuda_array_interface__`"
         )
 
-    def _mimic_inplace(self, other_col, inplace=False):
-        out = super()._mimic_inplace(other_col, inplace=inplace)
-        return out
-
     @copy_docstring(column.ColumnBase.view)
-    def view(self, dtype):
+    def view(self, dtype) -> "cudf.core.column.ColumnBase":
         if self.null_count > 0:
             raise ValueError(
                 "Can not produce a view of a string column with nulls"
             )
         dtype = np.dtype(dtype)
-        str_byte_offset = self.base_children[0][self.offset]
-        str_end_byte_offset = self.base_children[0][self.offset + self.size]
+        str_byte_offset = self.base_children[0].element_indexing(self.offset)
+        str_end_byte_offset = self.base_children[0].element_indexing(
+            self.offset + self.size
+        )
         char_dtype_size = self.base_children[1].dtype.itemsize
 
         n_bytes_to_view = (
@@ -4948,7 +4983,12 @@ class StringColumn(column.ColumnBase):
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
-def _string_column_binop(lhs, rhs, op, out_dtype):
+def _string_column_binop(
+    lhs: "column.ColumnBase",
+    rhs: "column.ColumnBase",
+    op: str,
+    out_dtype: Dtype,
+) -> "column.ColumnBase":
     out = libcudf.binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype=out_dtype)
     return out
 

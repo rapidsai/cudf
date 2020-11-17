@@ -1,5 +1,5 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-
+import builtins
 import pickle
 import warnings
 from collections.abc import MutableSequence
@@ -13,6 +13,7 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
+    TypeVar,
     Union,
     cast,
 )
@@ -55,6 +56,8 @@ from cudf.utils.dtypes import (
     np_to_pa_dtype,
 )
 from cudf.utils.utils import mask_dtype
+
+T = TypeVar("T", bound="ColumnBase")
 
 
 class ColumnBase(Column, Serializable):
@@ -142,7 +145,7 @@ class ColumnBase(Column, Serializable):
         return cupy.asarray(self.data_array_view)
 
     def binary_operator(
-        self, binop: str, rhs, reflect: bool = False
+        self, binop: builtins.str, rhs, reflect: bool = False
     ) -> "ColumnBase":
         raise NotImplementedError()
 
@@ -174,6 +177,9 @@ class ColumnBase(Column, Serializable):
     def cat(
         self, parent=None
     ) -> "cudf.core.column.categorical.CategoricalAccessor":
+        raise NotImplementedError()
+
+    def str(self, parent=None) -> "cudf.core.column.string.StringMethods":
         raise NotImplementedError()
 
     @classmethod
@@ -564,7 +570,7 @@ class ColumnBase(Column, Serializable):
             )
             return build_column(view_buf, dtype=dtype)
 
-    def element_indexing(self, index: int) -> ScalarObj:
+    def element_indexing(self, index: int):
         """Default implementation for indexing to an element
 
         Raises
@@ -762,21 +768,22 @@ class ColumnBase(Column, Serializable):
         return ColumnBase._concat([self, as_column(other)])
 
     def quantile(
-        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+        self,
+        q: Union[float, Sequence[float]],
+        interpolation: builtins.str,
+        exact: bool,
     ) -> "ColumnBase":
         raise TypeError(f"cannot perform quantile with type {self.dtype}")
 
     def median(self, skipna: bool = None) -> ScalarObj:
         raise TypeError(f"cannot perform median with type {self.dtype}")
 
-    def take(
-        self, indices: "ColumnBase", keep_index: bool = True
-    ) -> "ColumnBase":
+    def take(self: T, indices: "ColumnBase", keep_index: bool = True) -> T:
         """Return Column by taking values from the corresponding *indices*.
         """
         # Handle zero size
         if indices.size == 0:
-            return column_empty_like(self, newsize=0)
+            return cast(T, column_empty_like(self, newsize=0))
         try:
             return (
                 self.as_frame()
@@ -904,7 +911,9 @@ class ColumnBase(Column, Serializable):
                 )
         return self._is_monotonic_decreasing
 
-    def get_slice_bound(self, label: ScalarObj, side: str, kind: str) -> int:
+    def get_slice_bound(
+        self, label: ScalarObj, side: builtins.str, kind: builtins.str
+    ) -> int:
         """
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
@@ -932,13 +941,17 @@ class ColumnBase(Column, Serializable):
             raise ValueError(f"Invalid value for side: {side}")
 
     def sort_by_values(
-        self: "ColumnBase", ascending: bool = True, na_position: str = "last"
+        self: "ColumnBase",
+        ascending: bool = True,
+        na_position: builtins.str = "last",
     ) -> Tuple["ColumnBase", "cudf.core.column.NumericalColumn"]:
         col_inds = self.as_frame()._get_sorted_inds(ascending, na_position)
         col_keys = self.take(col_inds)
         return col_keys, col_inds
 
-    def distinct_count(self, method: str = "sort", dropna: bool = True) -> int:
+    def distinct_count(
+        self, method: builtins.str = "sort", dropna: bool = True
+    ) -> int:
         if method != "sort":
             msg = "non sort based distinct_count() not implemented yet"
             raise NotImplementedError(msg)
@@ -1029,7 +1042,7 @@ class ColumnBase(Column, Serializable):
     ) -> "cudf.core.column.StringColumn":
         raise NotImplementedError
 
-    def apply_boolean_mask(self, mask: "Buffer") -> "ColumnBase":
+    def apply_boolean_mask(self, mask) -> "ColumnBase":
         mask = as_column(mask, dtype="bool")
         result = (
             self.as_frame()._apply_boolean_mask(boolean_mask=mask)._as_column()
@@ -1037,7 +1050,7 @@ class ColumnBase(Column, Serializable):
         return result
 
     def argsort(
-        self, ascending: bool = True, na_position: str = "last"
+        self, ascending: bool = True, na_position: builtins.str = "last"
     ) -> "ColumnBase":
 
         sorted_indices = self.as_frame()._get_sorted_inds(
@@ -1046,7 +1059,7 @@ class ColumnBase(Column, Serializable):
         return sorted_indices
 
     @property
-    def __cuda_array_interface__(self) -> Mapping[str, Any]:
+    def __cuda_array_interface__(self) -> Mapping[builtins.str, Any]:
         output = {
             "shape": (len(self),),
             "strides": (self.dtype.itemsize,),
@@ -1120,9 +1133,9 @@ class ColumnBase(Column, Serializable):
     def searchsorted(
         self,
         value,
-        side: str = "left",
+        side: builtins.str = "left",
         ascending: bool = True,
-        na_position: str = "last",
+        na_position: builtins.str = "last",
     ):
         values = as_column(value).as_frame()
         return self.as_frame().searchsorted(

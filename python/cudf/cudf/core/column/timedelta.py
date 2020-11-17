@@ -303,7 +303,7 @@ class TimeDeltaColumn(column.ColumnBase):
         else:
             return column.column_empty(0, dtype="object", masked=False)
 
-    def as_timedelta_column(self, dtype, **kwargs):
+    def as_timedelta_column(self, dtype):
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self
