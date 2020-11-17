@@ -285,7 +285,6 @@ std::unique_ptr<column> unary_op_with(column_view const& input,
 template <typename OutputType, typename UFN, typename InputIterator>
 std::unique_ptr<cudf::column> transform_fn(InputIterator begin,
                                            InputIterator end,
-                                           data_type const& type,
                                            rmm::device_buffer&& null_mask,
                                            size_type null_count,
                                            rmm::mr::device_memory_resource* mr,
@@ -293,16 +292,18 @@ std::unique_ptr<cudf::column> transform_fn(InputIterator begin,
 {
   auto const size = cudf::distance(begin, end);
 
-  std::unique_ptr<cudf::column> output = make_fixed_width_column(
-    type, size, std::forward<rmm::device_buffer>(null_mask), null_count, stream, mr);
-
+  std::unique_ptr<cudf::column> output =
+    make_fixed_width_column(data_type{type_to_id<OutputType>()},
+                            size,
+                            std::forward<rmm::device_buffer>(null_mask),
+                            null_count,
+                            stream,
+                            mr);
   if (size == 0) return output;
-
-  using Type = device_storage_type_t<OutputType>;
 
   auto output_view = output->mutable_view();
   thrust::transform(
-    rmm::exec_policy(stream)->on(stream), begin, end, output_view.template begin<Type>(), UFN{});
+    rmm::exec_policy(stream)->on(stream), begin, end, output_view.begin<OutputType>(), UFN{});
   return output;
 }
 
@@ -318,7 +319,6 @@ std::unique_ptr<cudf::column> transform_fn(cudf::dictionary_column_view const& i
   auto output = transform_fn<T, UFN>(
     dictionary_itr,
     dictionary_itr + input.size(),
-    data_type{type_to_id<T>()},
     detail::copy_bitmask(input.parent(), rmm::cuda_stream_view{stream}, default_mr),
     input.null_count(),
     default_mr,
@@ -337,7 +337,6 @@ struct MathOpDispatcher {
     return transform_fn<T, UFN>(
       input.begin<T>(),
       input.end<T>(),
-      input.type(),
       cudf::detail::copy_bitmask(input, rmm::cuda_stream_view{stream}, mr),
       input.null_count(),
       mr,
@@ -396,7 +395,6 @@ struct BitwiseOpDispatcher {
     return transform_fn<T, UFN>(
       input.begin<T>(),
       input.end<T>(),
-      data_type{type_to_id<T>()},
       cudf::detail::copy_bitmask(input, rmm::cuda_stream_view{stream}, mr),
       input.null_count(),
       mr,
@@ -463,7 +461,6 @@ struct LogicalOpDispatcher {
     return transform_fn<bool, UFN>(
       input.begin<T>(),
       input.end<T>(),
-      data_type{type_to_id<bool>()},
       cudf::detail::copy_bitmask(input, rmm::cuda_stream_view{stream}, mr),
       input.null_count(),
       mr,
@@ -481,7 +478,6 @@ struct LogicalOpDispatcher {
       return transform_fn<bool, UFN>(
         dictionary_itr,
         dictionary_itr + input.size(),
-        data_type{type_to_id<bool>()},
         cudf::detail::copy_bitmask(input.parent(), rmm::cuda_stream_view{stream}, mr),
         input.null_count(),
         mr,
