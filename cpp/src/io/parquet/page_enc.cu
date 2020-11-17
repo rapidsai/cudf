@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -128,10 +128,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
   uint32_t t                 = threadIdx.x;
   uint32_t start_row, dtype_len, dtype_len_in, dtype;
 
-  if (t < sizeof(EncColumnDesc) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->col)[t] =
-      reinterpret_cast<const uint32_t *>(&col_desc[blockIdx.x])[t];
-  }
+  if (t == 0) s->col = col_desc[blockIdx.x];
   for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += block_size) {
     if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
   }
@@ -196,23 +193,21 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
       len = dtype_len;
       if (dtype != BOOLEAN) {
         if (dtype == BYTE_ARRAY) {
-          const char *ptr =
-            reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[val_idx].ptr;
+          const char *ptr = static_cast<const nvstrdesc_s *>(s->col.column_data_base)[val_idx].ptr;
           uint32_t count =
             (uint32_t) reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[val_idx]
               .count;
           len += count;
           hash = nvstr_init_hash(reinterpret_cast<const uint8_t *>(ptr), count);
         } else if (dtype_len_in == 8) {
-          hash =
-            uint64_init_hash(reinterpret_cast<const uint64_t *>(s->col.column_data_base)[val_idx]);
+          hash = uint64_init_hash(static_cast<const uint64_t *>(s->col.column_data_base)[val_idx]);
         } else {
           hash = uint32_init_hash(
             (dtype_len_in == 4)
-              ? reinterpret_cast<const uint32_t *>(s->col.column_data_base)[val_idx]
+              ? static_cast<const uint32_t *>(s->col.column_data_base)[val_idx]
               : (dtype_len_in == 2)
-                  ? reinterpret_cast<const uint16_t *>(s->col.column_data_base)[val_idx]
-                  : reinterpret_cast<const uint8_t *>(s->col.column_data_base)[val_idx]);
+                  ? static_cast<const uint16_t *>(s->col.column_data_base)[val_idx]
+                  : static_cast<const uint8_t *>(s->col.column_data_base)[val_idx]);
         }
       }
     } else {
@@ -333,7 +328,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
         ck_row_ref = start_row + (s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0] >> INIT_HASH_BITS);
         if (ck_row_ref != ck_row) {
           if (dtype == BYTE_ARRAY) {
-            const nvstrdesc_s *ck_data = reinterpret_cast<const nvstrdesc_s *>(col_data);
+            const nvstrdesc_s *ck_data = static_cast<const nvstrdesc_s *>(col_data);
             const char *str1           = ck_data[ck_row].ptr;
             uint32_t len1              = (uint32_t)ck_data[ck_row].count;
             const char *str2           = ck_data[ck_row_ref].ptr;
@@ -342,21 +337,21 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
             dupe_data_size += (is_dupe) ? 4 + len1 : 0;
           } else {
             if (dtype_len_in == 8) {
-              uint64_t v1 = reinterpret_cast<const uint64_t *>(col_data)[ck_row];
-              uint64_t v2 = reinterpret_cast<const uint64_t *>(col_data)[ck_row_ref];
+              uint64_t v1 = static_cast<const uint64_t *>(col_data)[ck_row];
+              uint64_t v2 = static_cast<const uint64_t *>(col_data)[ck_row_ref];
               is_dupe     = (v1 == v2);
               dupe_data_size += (is_dupe) ? 8 : 0;
             } else {
               uint32_t v1, v2;
               if (dtype_len_in == 4) {
-                v1 = reinterpret_cast<const uint32_t *>(col_data)[ck_row];
-                v2 = reinterpret_cast<const uint32_t *>(col_data)[ck_row_ref];
+                v1 = static_cast<const uint32_t *>(col_data)[ck_row];
+                v2 = static_cast<const uint32_t *>(col_data)[ck_row_ref];
               } else if (dtype_len_in == 2) {
-                v1 = reinterpret_cast<const uint16_t *>(col_data)[ck_row];
-                v2 = reinterpret_cast<const uint16_t *>(col_data)[ck_row_ref];
+                v1 = static_cast<const uint16_t *>(col_data)[ck_row];
+                v2 = static_cast<const uint16_t *>(col_data)[ck_row_ref];
               } else {
-                v1 = reinterpret_cast<const uint8_t *>(col_data)[ck_row];
-                v2 = reinterpret_cast<const uint8_t *>(col_data)[ck_row_ref];
+                v1 = static_cast<const uint8_t *>(col_data)[ck_row];
+                v2 = static_cast<const uint8_t *>(col_data)[ck_row_ref];
               }
               is_dupe = (v1 == v2);
               dupe_data_size += (is_dupe) ? 4 : 0;
@@ -397,10 +392,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     }
   }
   __syncthreads();
-  if (t < sizeof(PageFragment) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&frag[blockIdx.x * num_fragments + blockIdx.y])[t] =
-      reinterpret_cast<uint32_t *>(&s->frag)[t];
-  }
+  if (t == 0) frag[blockIdx.x * num_fragments + blockIdx.y] = s->frag;
 }
 
 // blockDim {128,1,1}
@@ -413,20 +405,17 @@ __global__ void __launch_bounds__(128) gpuInitFragmentStats(statistics_group *gr
 {
   __shared__ __align__(8) statistics_group group_g[4];
 
-  uint32_t t                = threadIdx.x & 0x1f;
+  uint32_t lane_id          = threadIdx.x & 0x1f;
   uint32_t frag_id          = blockIdx.y * 4 + (threadIdx.x >> 5);
   uint32_t column_id        = blockIdx.x;
   statistics_group *const g = &group_g[threadIdx.x >> 5];
-  if (!t && frag_id < num_fragments) {
+  if (!lane_id && frag_id < num_fragments) {
     g->col       = &col_desc[column_id];
     g->start_row = frag_id * fragment_size;
     g->num_rows  = fragments[column_id * num_fragments + frag_id].num_rows;
   }
   __syncthreads();
-  if (t < sizeof(statistics_group) / sizeof(uint32_t) && frag_id < num_fragments) {
-    reinterpret_cast<uint32_t *>(&groups[column_id * num_fragments + frag_id])[t] =
-      reinterpret_cast<uint32_t *>(g)[t];
-  }
+  if (frag_id < num_fragments and lane_id == 0) groups[column_id * num_fragments + frag_id] = *g;
 }
 
 // blockDim {128,1,1}
@@ -446,13 +435,9 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
 
   uint32_t t = threadIdx.x;
 
-  if (t < sizeof(EncColumnDesc) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&col_g)[t] =
-      reinterpret_cast<const uint32_t *>(&col_desc[blockIdx.x])[t];
-  }
-  if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&ck_g)[t] =
-      reinterpret_cast<const uint32_t *>(&chunks[blockIdx.y * num_columns + blockIdx.x])[t];
+  if (t == 0) {
+    col_g = col_desc[blockIdx.x];
+    ck_g  = chunks[blockIdx.y * num_columns + blockIdx.x];
   }
   __syncthreads();
   if (t < 32) {
@@ -495,13 +480,9 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
         comp_page_offset += page_g.max_hdr_size + GetMaxCompressedBfrSize(page_g.max_data_size);
       }
       SYNCWARP();
-      if (pages && t < sizeof(EncPage) / sizeof(uint32_t)) {
-        reinterpret_cast<uint32_t *>(&pages[ck_g.first_page])[t] =
-          reinterpret_cast<uint32_t *>(&page_g)[t];
-      }
-      if (page_grstats && t < sizeof(statistics_merge_group) / sizeof(uint32_t)) {
-        reinterpret_cast<uint32_t *>(&page_grstats[ck_g.first_page])[t] =
-          reinterpret_cast<uint32_t *>(&pagestats_g)[t];
+      if (t == 0) {
+        if (pages) pages[ck_g.first_page] = page_g;
+        if (page_grstats) page_grstats[ck_g.first_page] = pagestats_g;
       }
       num_pages = 1;
     }
@@ -516,10 +497,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
       uint32_t fragment_data_size, max_page_size, minmax_len = 0;
       SYNCWARP();
       if (num_rows < ck_g.num_rows) {
-        if (t < sizeof(PageFragment) / sizeof(uint32_t)) {
-          reinterpret_cast<uint32_t *>(&frag_g)[t] =
-            reinterpret_cast<const uint32_t *>(&ck_g.fragments[fragments_in_chunk])[t];
-        }
+        if (t == 0) { frag_g = ck_g.fragments[fragments_in_chunk]; }
         if (!t && ck_g.stats && col_g.stats_dtype == dtype_string) {
           minmax_len = max(ck_g.stats[fragments_in_chunk].min_value.str_val.length,
                            ck_g.stats[fragments_in_chunk].max_value.str_val.length);
@@ -609,14 +587,12 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
           ck_max_stats_len = max(ck_max_stats_len, max_stats_len);
         }
         SYNCWARP();
-        if (pages && t < sizeof(EncPage) / sizeof(uint32_t)) {
-          reinterpret_cast<uint32_t *>(&pages[ck_g.first_page + num_pages])[t] =
-            reinterpret_cast<uint32_t *>(&page_g)[t];
+        if (t == 0) {
+          if (pages) { pages[ck_g.first_page + num_pages] = page_g; }
+
+          if (page_grstats) { page_grstats[ck_g.first_page + num_pages] = pagestats_g; }
         }
-        if (page_grstats && t < sizeof(statistics_merge_group) / sizeof(uint32_t)) {
-          reinterpret_cast<uint32_t *>(&page_grstats[ck_g.first_page + num_pages])[t] =
-            reinterpret_cast<uint32_t *>(&pagestats_g)[t];
-        }
+
         num_pages++;
         page_size           = 0;
         rows_in_page        = 0;
@@ -650,13 +626,9 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
     }
   }
   __syncthreads();
-  if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&chunks[blockIdx.y * num_columns + blockIdx.x])[t] =
-      reinterpret_cast<uint32_t *>(&ck_g)[t];
-  }
-  if (chunk_grstats && t < sizeof(statistics_merge_group) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&chunk_grstats[blockIdx.y * num_columns + blockIdx.x])[t] =
-      reinterpret_cast<uint32_t *>(&pagestats_g)[t];
+  if (t == 0) {
+    chunks[blockIdx.y * num_columns + blockIdx.x] = ck_g;
+    if (chunk_grstats) chunk_grstats[blockIdx.y * num_columns + blockIdx.x] = pagestats_g;
   }
 }
 
@@ -949,23 +921,14 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   uint32_t dtype, dtype_len_in, dtype_len_out;
   int32_t dict_bits;
 
-  if (t < sizeof(EncPage) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->page)[t] =
-      reinterpret_cast<uint32_t *>(&pages[start_page + blockIdx.x])[t];
+  if (t == 0) {
+    s->page = pages[start_page + blockIdx.x];
+    s->ck   = chunks[s->page.chunk_id];
+    s->col  = *s->ck.col_desc;
+    s->cur  = s->page.page_data + s->page.max_hdr_size;
   }
   __syncthreads();
-  if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->ck)[t] =
-      reinterpret_cast<const uint32_t *>(&chunks[s->page.chunk_id])[t];
-  }
-  __syncthreads();
-  if (t < sizeof(EncColumnDesc) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->col)[t] =
-      reinterpret_cast<const uint32_t *>(s->ck.col_desc)[t];
-  }
-  __syncthreads();
-  if (!t) { s->cur = s->page.page_data + s->page.max_hdr_size; }
-  __syncthreads();
+
   // Encode Repetition and Definition levels
   if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.level_bits != 0 &&
       s->col.nesting_levels == 0) {
@@ -1206,17 +1169,10 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
     s->comp_out.reserved         = 0;
   }
   __syncthreads();
-  if (t < sizeof(EncPage) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&pages[start_page + blockIdx.x])[t] =
-      reinterpret_cast<uint32_t *>(&s->page)[t];
-  }
-  if (comp_in && t < sizeof(gpu_inflate_input_s) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&comp_in[blockIdx.x])[t] =
-      reinterpret_cast<uint32_t *>(&s->comp_in)[t];
-  }
-  if (comp_out && t < sizeof(gpu_inflate_status_s) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&comp_out[blockIdx.x])[t] =
-      reinterpret_cast<uint32_t *>(&s->comp_out)[t];
+  if (t == 0) {
+    pages[start_page + blockIdx.x] = s->page;
+    if (comp_in) comp_in[blockIdx.x] = s->comp_in;
+    if (comp_out) comp_out[blockIdx.x] = s->comp_out;
   }
 }
 
@@ -1236,11 +1192,10 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(EncColumnChunk *chun
   uint32_t compressed_data_size   = 0;
   uint32_t first_page, num_pages;
 
-  if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&ck_g)[t] =
-      reinterpret_cast<const uint32_t *>(&chunks[blockIdx.x])[t];
+  if (t == 0) {
+    ck_g = chunks[blockIdx.x];
+    atomicAnd(&error_count, 0);
   }
-  if (t == 0) { atomicAnd(&error_count, 0); }
   __syncthreads();
   if (t < 32) {
     first_page = ck_g.first_page;
@@ -1446,23 +1401,13 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
 
   uint32_t t = threadIdx.x;
 
-  if (t < sizeof(EncPage) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&page_g)[t] =
-      reinterpret_cast<uint32_t *>(&pages[start_page + blockIdx.x])[t];
-  }
-  __syncthreads();
-  if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&ck_g)[t] =
-      reinterpret_cast<const uint32_t *>(&chunks[page_g.chunk_id])[t];
-  }
-  __syncthreads();
-  if (t < sizeof(EncColumnDesc) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&col_g)[t] = reinterpret_cast<const uint32_t *>(ck_g.col_desc)[t];
-  }
-  __syncthreads();
-  if (!t) {
+  if (t == 0) {
     uint8_t *hdr_start, *hdr_end;
     uint32_t compressed_page_size, uncompressed_page_size;
+
+    page_g = pages[start_page + blockIdx.x];
+    ck_g   = chunks[page_g.chunk_id];
+    col_g  = *ck_g.col_desc;
 
     if (chunk_stats && start_page + blockIdx.x == ck_g.first_page) {
       hdr_start = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;
@@ -1524,10 +1469,7 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
     page_g.hdr_size = (uint32_t)(hdr_end - hdr_start);
   }
   __syncthreads();
-  if (t < sizeof(EncPage) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&pages[start_page + blockIdx.x])[t] =
-      reinterpret_cast<uint32_t *>(&page_g)[t];
-  }
+  if (t == 0) pages[start_page + blockIdx.x] = page_g;
 }
 
 // blockDim(1024, 1, 1)
@@ -1541,11 +1483,9 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
   const EncPage *first_page;
   uint32_t num_pages, uncompressed_size;
 
-  if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&ck_g)[t] =
-      reinterpret_cast<const uint32_t *>(&chunks[blockIdx.x])[t];
-  }
+  if (t == 0) ck_g = chunks[blockIdx.x];
   __syncthreads();
+
   first_page = &pages[ck_g.first_page];
   num_pages  = ck_g.num_pages;
   dst        = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;
@@ -1556,10 +1496,7 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
     const uint8_t *src;
     uint32_t hdr_len, data_len;
 
-    if (t < sizeof(EncPage) / sizeof(uint32_t)) {
-      reinterpret_cast<uint32_t *>(&page_g)[t] =
-        reinterpret_cast<const uint32_t *>(&first_page[page])[t];
-    }
+    if (t == 0) { page_g = first_page[page]; }
     __syncthreads();
 
     src = (ck_g.is_compressed) ? page_g.compressed_data : page_g.page_data;

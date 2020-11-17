@@ -15,9 +15,8 @@
  */
 #pragma once
 
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 #include <cudf/column/column_view.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -26,6 +25,11 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 /**
  * @file column_device_view.cuh
@@ -385,7 +389,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *`source_view` available in device memory.
    */
   static std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> create(
-    column_view source_view, cudaStream_t stream = 0);
+    column_view source_view, rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   /**
    * @brief Destroy the `column_device_view` object.
@@ -479,7 +483,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    */
   static std::unique_ptr<mutable_column_device_view,
                          std::function<void(mutable_column_device_view*)>>
-  create(mutable_column_view source_view, cudaStream_t stream = 0);
+  create(mutable_column_view source_view, rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   /**
    * @brief Returns pointer to the base device memory allocation casted to
@@ -749,6 +753,42 @@ __device__ inline dictionary32 const column_device_view::element<dictionary32>(
   return dictionary32{type_dispatcher(indices.type(), index_element_fn{}, indices, index)};
 }
 
+/**
+ * @brief Returns a `numeric::decimal32` element at the specified index for a `fixed_point` column.
+ *
+ * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
+ * then any attempt to use the result will lead to undefined behavior.
+ *
+ * @param element_index Position of the desired element
+ * @return numeric::decimal32 representing the element at this index
+ */
+template <>
+__device__ inline numeric::decimal32 const column_device_view::element<numeric::decimal32>(
+  size_type element_index) const noexcept
+{
+  using namespace numeric;
+  auto const scale = scale_type{_type.scale()};
+  return decimal32{scaled_integer<int32_t>{data<int32_t>()[element_index], scale}};
+}
+
+/**
+ * @brief Returns a `numeric::decimal64` element at the specified index for a `fixed_point` column.
+ *
+ * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
+ * then any attempt to use the result will lead to undefined behavior.
+ *
+ * @param element_index Position of the desired element
+ * @return numeric::decimal64 representing the element at this index
+ */
+template <>
+__device__ inline numeric::decimal64 const column_device_view::element<numeric::decimal64>(
+  size_type element_index) const noexcept
+{
+  using namespace numeric;
+  auto const scale = scale_type{_type.scale()};
+  return decimal64{scaled_integer<int64_t>{data<int64_t>()[element_index], scale}};
+}
+
 namespace detail {
 /**
  * @brief value accessor of column without null bitmask
@@ -774,7 +814,7 @@ struct value_accessor {
    */
   value_accessor(column_device_view const& _col) : col{_col}
   {
-    CUDF_EXPECTS(data_type(type_to_id<T>()) == col.type(), "the data type mismatch");
+    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
   }
 
   __device__ T operator()(cudf::size_type i) const { return col.element<T>(i); }
@@ -829,7 +869,7 @@ struct mutable_value_accessor {
    */
   mutable_value_accessor(mutable_column_device_view& _col) : col{_col}
   {
-    CUDF_EXPECTS(data_type(type_to_id<T>()) == col.type(), "the data type mismatch");
+    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
   }
 
   __device__ T& operator()(cudf::size_type i) { return col.element<T>(i); }

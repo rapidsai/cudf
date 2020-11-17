@@ -18,11 +18,13 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/concatenate.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
+#include <cudf/structs/detail/concatenate.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 
@@ -225,12 +227,12 @@ std::unique_ptr<column> fused_concatenate(std::vector<column_view> const& views,
 
   // Allocate output
   auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
-  auto out_col      = detail::allocate_like(views.front(), output_size, policy, mr, stream);
+  auto out_col      = detail::allocate_like(views.front(), output_size, policy, stream, mr);
   out_col->set_null_count(0);  // prevent null count from being materialized
   auto out_view   = out_col->mutable_view();
   auto d_out_view = mutable_column_device_view::create(out_view, stream);
 
-  rmm::device_scalar<size_type> d_valid_count(0);
+  rmm::device_scalar<size_type> d_valid_count(0, stream);
 
   // Launch kernel
   constexpr size_type block_size{256};
@@ -294,11 +296,13 @@ struct concatenate_dispatch {
     bool const has_nulls =
       std::any_of(views.cbegin(), views.cend(), [](auto const& col) { return col.has_nulls(); });
 
+    using Type = device_storage_type_t<T>;
+
     // Use a heuristic to guess when the fused kernel will be faster
     if (use_fused_kernel_heuristic(has_nulls, views.size())) {
-      return fused_concatenate<T>(views, has_nulls, mr, stream);
+      return fused_concatenate<Type>(views, has_nulls, mr, stream);
     } else {
-      return for_each_concatenate<T>(views, has_nulls, mr, stream);
+      return for_each_concatenate<Type>(views, has_nulls, mr, stream);
     }
   }
 };
@@ -319,6 +323,12 @@ template <>
 std::unique_ptr<column> concatenate_dispatch::operator()<cudf::list_view>()
 {
   return cudf::lists::detail::concatenate(views, stream, mr);
+}
+
+template <>
+std::unique_ptr<column> concatenate_dispatch::operator()<cudf::struct_view>()
+{
+  return cudf::structs::detail::concatenate(views, stream, mr);
 }
 
 // Concatenates the elements from a vector of column_views
@@ -384,7 +394,7 @@ rmm::device_buffer concatenate_masks(std::vector<column_view> const& views,
       });
 
     rmm::device_buffer null_mask =
-      create_null_mask(total_element_count, mask_state::UNINITIALIZED, 0, mr);
+      create_null_mask(total_element_count, mask_state::UNINITIALIZED, mr);
 
     detail::concatenate_masks(views, static_cast<bitmask_type*>(null_mask.data()), 0);
 

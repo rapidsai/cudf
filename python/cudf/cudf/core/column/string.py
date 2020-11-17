@@ -42,7 +42,7 @@ from cudf._lib.nvtext.tokenize import (
     detokenize as cpp_detokenize,
     tokenize as cpp_tokenize,
 )
-from cudf._lib.scalar import Scalar, as_scalar
+from cudf._lib.scalar import DeviceScalar, as_device_scalar
 from cudf._lib.strings.attributes import (
     code_points as cpp_code_points,
     count_bytes as cpp_count_bytes,
@@ -86,6 +86,7 @@ from cudf._lib.strings.convert.convert_urls import (
 from cudf._lib.strings.extract import extract as cpp_extract
 from cudf._lib.strings.find import (
     contains as cpp_contains,
+    contains_multiple as cpp_contains_multiple,
     endswith as cpp_endswith,
     endswith_multiple as cpp_endswith_multiple,
     find as cpp_find,
@@ -422,7 +423,9 @@ class StringMethods(ColumnMethodsMixin):
 
         if others is None:
             data = cpp_join(
-                self._column, as_scalar(sep), as_scalar(na_rep, "str")
+                self._column,
+                as_device_scalar(sep),
+                as_device_scalar(na_rep, "str"),
             )
         else:
             other_cols = _get_cols_list(self._parent, others)
@@ -431,8 +434,8 @@ class StringMethods(ColumnMethodsMixin):
                 cudf.DataFrame(
                     {index: value for index, value in enumerate(all_cols)}
                 ),
-                as_scalar(sep),
-                as_scalar(na_rep, "str"),
+                as_device_scalar(sep),
+                as_device_scalar(na_rep, "str"),
             )
 
         if len(data) == 1 and data.null_count == 1:
@@ -534,8 +537,10 @@ class StringMethods(ColumnMethodsMixin):
 
         Parameters
         ----------
-        pat : str
+        pat : str or list-like
             Character sequence or regular expression.
+            If ``pat`` is list-like then regular expressions are not
+            accepted.
         regex : bool, default True
             If True, assumes the pattern is a regular expression.
             If False, treats the pattern as a literal string.
@@ -612,6 +617,18 @@ class StringMethods(ColumnMethodsMixin):
         3     True
         4    False
         dtype: bool
+
+        The ``pat`` may also be a list of strings in which case
+        the individual strings are searched in corresponding rows.
+
+        >>> s2 = cudf.Series(['house', 'dog', 'and', '', ''])
+        >>> s1.str.contains(s2)
+        0    False
+        1     True
+        2     True
+        3     True
+        4     null
+        dtype: bool
         """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
@@ -620,12 +637,22 @@ class StringMethods(ColumnMethodsMixin):
         elif na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
 
-        return self._return_or_inplace(
-            cpp_contains_re(self._column, pat)
-            if regex is True
-            else cpp_contains(self._column, as_scalar(pat, "str")),
-            **kwargs,
-        )
+        if pat is None:
+            result_col = column.column_empty(
+                len(self._column), dtype="bool", masked=True
+            )
+        elif is_scalar(pat):
+            if regex is True:
+                result_col = cpp_contains_re(self._column, pat)
+            else:
+                result_col = cpp_contains(
+                    self._column, as_device_scalar(pat, "str")
+                )
+        else:
+            result_col = cpp_contains_multiple(
+                self._column, column.as_column(pat, dtype="str")
+            )
+        return self._return_or_inplace(result_col, **kwargs)
 
     def replace(
         self, pat, repl, n=-1, case=None, flags=0, regex=True, **kwargs
@@ -722,10 +749,13 @@ class StringMethods(ColumnMethodsMixin):
 
         # Pandas forces non-regex replace when pat is a single-character
         return self._return_or_inplace(
-            cpp_replace_re(self._column, pat, as_scalar(repl, "str"), n)
+            cpp_replace_re(self._column, pat, as_device_scalar(repl, "str"), n)
             if regex is True and len(pat) > 1
             else cpp_replace(
-                self._column, as_scalar(pat, "str"), as_scalar(repl, "str"), n
+                self._column,
+                as_device_scalar(pat, "str"),
+                as_device_scalar(repl, "str"),
+                n,
             ),
             **kwargs,
         )
@@ -927,6 +957,30 @@ class StringMethods(ColumnMethodsMixin):
         dtype: bool
         """
         return self._return_or_inplace(str_cast.is_hex(self._column), **kwargs)
+
+    def istimestamp(self, format, **kwargs):
+        """
+        Check whether all characters in each string can be converted to
+        a timestamp using the given format.
+
+        Returns : Series or Index of bool
+            Series or Index of boolean values with the same
+            length as the original Series/Index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(["20201101", "192011", "18200111", "2120-11-01"])
+        >>> s.str.istimestamp("%Y%m%d")
+        0     True
+        1    False
+        2     True
+        3    False
+        dtype: bool
+        """
+        return self._return_or_inplace(
+            str_cast.istimestamp(self._column, format), **kwargs
+        )
 
     def isfloat(self, **kwargs):
         """
@@ -1685,7 +1739,8 @@ class StringMethods(ColumnMethodsMixin):
             repl = ""
 
         return self._return_or_inplace(
-            cpp_filter_alphanum(self._column, as_scalar(repl), keep), **kwargs,
+            cpp_filter_alphanum(self._column, as_device_scalar(repl), keep),
+            **kwargs,
         )
 
     def slice_from(self, starts, stops, **kwargs):
@@ -1814,7 +1869,9 @@ class StringMethods(ColumnMethodsMixin):
             repl = ""
 
         return self._return_or_inplace(
-            cpp_slice_replace(self._column, start, stop, as_scalar(repl)),
+            cpp_slice_replace(
+                self._column, start, stop, as_device_scalar(repl)
+            ),
             **kwargs,
         )
 
@@ -1865,7 +1922,8 @@ class StringMethods(ColumnMethodsMixin):
             repl = ""
 
         return self._return_or_inplace(
-            cpp_string_insert(self._column, start, as_scalar(repl)), **kwargs
+            cpp_string_insert(self._column, start, as_device_scalar(repl)),
+            **kwargs,
         )
 
     def get(self, i=0, **kwargs):
@@ -2004,7 +2062,7 @@ class StringMethods(ColumnMethodsMixin):
         if pat is None:
             pat = ""
 
-        result_table = cpp_split(self._column, as_scalar(pat, "str"), n)
+        result_table = cpp_split(self._column, as_device_scalar(pat, "str"), n)
         if len(result_table._data) == 1:
             if result_table._data[0].null_count == len(self._parent):
                 result_table = []
@@ -2096,7 +2154,7 @@ class StringMethods(ColumnMethodsMixin):
         if pat is None:
             pat = ""
 
-        result_table = cpp_rsplit(self._column, as_scalar(pat), n)
+        result_table = cpp_rsplit(self._column, as_device_scalar(pat), n)
         if len(result_table._data) == 1:
             if result_table._data[0].null_count == len(self._parent):
                 result_table = []
@@ -2189,7 +2247,7 @@ class StringMethods(ColumnMethodsMixin):
             sep = " "
 
         return self._return_or_inplace(
-            cpp_partition(self._column, as_scalar(sep)), **kwargs
+            cpp_partition(self._column, as_device_scalar(sep)), **kwargs
         )
 
     def rpartition(self, sep=" ", expand=True, **kwargs):
@@ -2260,7 +2318,7 @@ class StringMethods(ColumnMethodsMixin):
             sep = " "
 
         return self._return_or_inplace(
-            cpp_rpartition(self._column, as_scalar(sep)), **kwargs
+            cpp_rpartition(self._column, as_device_scalar(sep)), **kwargs
         )
 
     def pad(self, width, side="left", fillchar=" ", **kwargs):
@@ -2659,7 +2717,7 @@ class StringMethods(ColumnMethodsMixin):
             to_strip = ""
 
         return self._return_or_inplace(
-            cpp_strip(self._column, as_scalar(to_strip)), **kwargs
+            cpp_strip(self._column, as_device_scalar(to_strip)), **kwargs
         )
 
     def lstrip(self, to_strip=None, **kwargs):
@@ -2706,7 +2764,7 @@ class StringMethods(ColumnMethodsMixin):
             to_strip = ""
 
         return self._return_or_inplace(
-            cpp_lstrip(self._column, as_scalar(to_strip)), **kwargs
+            cpp_lstrip(self._column, as_device_scalar(to_strip)), **kwargs
         )
 
     def rstrip(self, to_strip=None, **kwargs):
@@ -2761,7 +2819,7 @@ class StringMethods(ColumnMethodsMixin):
             to_strip = ""
 
         return self._return_or_inplace(
-            cpp_rstrip(self._column, as_scalar(to_strip)), **kwargs
+            cpp_rstrip(self._column, as_device_scalar(to_strip)), **kwargs
         )
 
     def wrap(self, width, **kwargs):
@@ -3121,7 +3179,9 @@ class StringMethods(ColumnMethodsMixin):
                 len(self._column), dtype="bool", masked=True
             )
         elif is_scalar(pat):
-            result_col = cpp_endswith(self._column, as_scalar(pat, "str"))
+            result_col = cpp_endswith(
+                self._column, as_device_scalar(pat, "str")
+            )
         else:
             result_col = cpp_endswith_multiple(
                 self._column, column.as_column(pat, dtype="str")
@@ -3186,7 +3246,9 @@ class StringMethods(ColumnMethodsMixin):
                 len(self._column), dtype="bool", masked=True
             )
         elif is_scalar(pat):
-            result_col = cpp_startswith(self._column, as_scalar(pat, "str"))
+            result_col = cpp_startswith(
+                self._column, as_device_scalar(pat, "str")
+            )
         else:
             result_col = cpp_startswith_multiple(
                 self._column, column.as_column(pat, dtype="str")
@@ -3236,13 +3298,16 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
         if not isinstance(sub, str):
-            msg = "expected a string object, not {0}"
-            raise TypeError(msg.format(type(sub).__name__))
+            raise TypeError(
+                f"expected a string object, not {type(sub).__name__}"
+            )
 
         if end is None:
             end = -1
 
-        result_col = cpp_find(self._column, as_scalar(sub, "str"), start, end)
+        result_col = cpp_find(
+            self._column, as_device_scalar(sub, "str"), start, end
+        )
 
         return self._return_or_inplace(result_col, **kwargs)
 
@@ -3292,13 +3357,16 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
         if not isinstance(sub, str):
-            msg = "expected a string object, not {0}"
-            raise TypeError(msg.format(type(sub).__name__))
+            raise TypeError(
+                f"expected a string object, not {type(sub).__name__}"
+            )
 
         if end is None:
             end = -1
 
-        result_col = cpp_rfind(self._column, as_scalar(sub, "str"), start, end)
+        result_col = cpp_rfind(
+            self._column, as_device_scalar(sub, "str"), start, end
+        )
 
         return self._return_or_inplace(result_col, **kwargs)
 
@@ -3344,13 +3412,16 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
         if not isinstance(sub, str):
-            msg = "expected a string object, not {0}"
-            raise TypeError(msg.format(type(sub).__name__))
+            raise TypeError(
+                f"expected a string object, not {type(sub).__name__}"
+            )
 
         if end is None:
             end = -1
 
-        result_col = cpp_find(self._column, as_scalar(sub, "str"), start, end)
+        result_col = cpp_find(
+            self._column, as_device_scalar(sub, "str"), start, end
+        )
 
         result = self._return_or_inplace(result_col, **kwargs)
 
@@ -3401,13 +3472,16 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
         if not isinstance(sub, str):
-            msg = "expected a string object, not {0}"
-            raise TypeError(msg.format(type(sub).__name__))
+            raise TypeError(
+                f"expected a string object, not {type(sub).__name__}"
+            )
 
         if end is None:
             end = -1
 
-        result_col = cpp_rfind(self._column, as_scalar(sub, "str"), start, end)
+        result_col = cpp_rfind(
+            self._column, as_device_scalar(sub, "str"), start, end
+        )
 
         result = self._return_or_inplace(result_col, **kwargs)
 
@@ -3661,7 +3735,9 @@ class StringMethods(ColumnMethodsMixin):
             repl = ""
         table = str.maketrans(table)
         return self._return_or_inplace(
-            cpp_filter_characters(self._column, table, keep, as_scalar(repl)),
+            cpp_filter_characters(
+                self._column, table, keep, as_device_scalar(repl)
+            ),
             **kwargs,
         )
 
@@ -4081,7 +4157,7 @@ class StringMethods(ColumnMethodsMixin):
                 self._column,
                 targets_column,
                 replacements_column,
-                as_scalar(delimiter, dtype="str"),
+                as_device_scalar(delimiter, dtype="str"),
             ),
             **kwargs,
         )
@@ -4149,8 +4225,8 @@ class StringMethods(ColumnMethodsMixin):
             cpp_filter_tokens(
                 self._column,
                 min_token_length,
-                as_scalar(replacement, dtype="str"),
-                as_scalar(delimiter, dtype="str"),
+                as_device_scalar(replacement, dtype="str"),
+                as_device_scalar(delimiter, dtype="str"),
             ),
             **kwargs,
         )
@@ -4177,6 +4253,8 @@ class StringMethods(ColumnMethodsMixin):
         ----------
         hash_file : str
             Path to hash file containing vocabulary of words with token-ids.
+            This can be created from the raw vocabulary
+            using the ``cudf.utils.hash_vocab_utils.hash_vocab`` function
         max_length : int, Default is 64
             Limits the length of the sequence returned.
             If tokenized string is shorter than max_length,
@@ -4200,7 +4278,14 @@ class StringMethods(ColumnMethodsMixin):
             sequence. If set to false, there may be multiple output
             sequences when the max_length is smaller than generated tokens.
         max_rows_tensor : int, Default is 500
-            The maximum number of rows in the output
+            Maximum number of rows for the output token-ids expected
+            to be generated by the tokenizer.
+            Used for allocating temporary working memory on the GPU device.
+            If the output generates a larger number of rows, behavior
+            is undefined.
+            This will vary based on stride, truncation, and max_length.
+            For example, for non-overlapping sequences output rows
+            will be the same as input rows.
 
         Returns
         -------
@@ -4217,9 +4302,23 @@ class StringMethods(ColumnMethodsMixin):
         Examples
         --------
         >>> import cudf
+        >>> from cudf.utils.hash_vocab_utils  import hash_vocab
+        >>> hash_vocab('bert-base-uncased-vocab.txt', 'voc_hash.txt')
         >>> ser = cudf.Series(['this is the', 'best book'])
-        >>> tokens, masks, metadata =
-               ser.str.subword_tokenize("bert_hash_table.txt")
+        >>> stride, max_length = 8, 8
+        >>> max_rows_tensor = len(ser)
+        >>> tokens, masks, metadata = ser.str.subword_tokenize('voc_hash.txt',
+        ... max_length=max_length, stride=stride,
+        ... max_rows_tensor=max_rows_tensor)
+        >>> tokens.reshape(-1, max_length)
+        array([[2023, 2003, 1996,    0,    0,    0,    0,    0],
+               [2190, 2338,    0,    0,    0,    0,    0,    0]], dtype=uint32)
+        >>> masks.reshape(-1, max_length)
+        array([[1, 1, 1, 0, 0, 0, 0, 0],
+               [1, 1, 0, 0, 0, 0, 0, 0]], dtype=uint32)
+        >>> metadata.reshape(-1, 3)
+        array([[0, 0, 2],
+               [1, 0, 1]], dtype=uint32)
         """
         tokens, masks, metadata = cpp_subword_tokenize(
             self._column,
@@ -4401,9 +4500,9 @@ class StringMethods(ColumnMethodsMixin):
 
 def _massage_string_arg(value, name, allow_col=False):
     if isinstance(value, str):
-        return as_scalar(value, dtype="str")
+        return as_device_scalar(value, dtype="str")
 
-    if isinstance(value, Scalar) and is_string_dtype(value.dtype):
+    if isinstance(value, DeviceScalar) and is_string_dtype(value.dtype):
         return value
 
     allowed_types = ["Scalar"]
@@ -4418,9 +4517,8 @@ def _massage_string_arg(value, name, allow_col=False):
         allowed_types.append("Column")
 
     raise ValueError(
-        "Expected {} for {} but got {}".format(
-            _expected_types_format(allowed_types), name, type(value)
-        )
+        f"Expected {_expected_types_format(allowed_types)} "
+        f"for {name} but got {type(value)}"
     )
 
 
@@ -4482,6 +4580,58 @@ class StringColumn(column.ColumnBase):
             children=children,
         )
 
+        self._start_offset = None
+        self._end_offset = None
+
+    @property
+    def start_offset(self):
+        if self._start_offset is None:
+            if (
+                len(self.base_children) == 2
+                and self.offset < self.base_children[0].size
+            ):
+                self._start_offset = int(self.base_children[0][self.offset])
+            else:
+                self._start_offset = 0
+
+        return self._start_offset
+
+    @property
+    def end_offset(self):
+        if self._end_offset is None:
+            if (
+                len(self.base_children) == 2
+                and (self.offset + self.size) < self.base_children[0].size
+            ):
+                self._end_offset = int(
+                    self.base_children[0][self.offset + self.size]
+                )
+            else:
+                self._end_offset = 0
+
+        return self._end_offset
+
+    def __sizeof__(self):
+        if self._cached_sizeof is None:
+            n = 0
+            if len(self.base_children) == 2:
+                child0_size = (self.size + 1) * self.base_children[
+                    0
+                ].dtype.itemsize
+
+                child1_size = (
+                    self.end_offset - self.start_offset
+                ) * self.base_children[1].dtype.itemsize
+
+                n += child0_size + child1_size
+            if self.nullable:
+                n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
+                    self.size
+                )
+            self._cached_sizeof = n
+
+        return self._cached_sizeof
+
     @property
     def base_size(self):
         if len(self.base_children) == 0:
@@ -4523,20 +4673,6 @@ class StringColumn(column.ColumnBase):
     def str(self, parent=None):
         return StringMethods(self, parent=parent)
 
-    def __sizeof__(self):
-        n = 0
-        if len(self.base_children) == 2:
-            n += (
-                self.base_children[0].__sizeof__()
-                + self.base_children[1].__sizeof__()
-            )
-        if self.base_mask is not None:
-            n += self.base_mask.size
-        return n
-
-    def _memory_usage(self, **kwargs):
-        return self.__sizeof__()
-
     def unary_operator(self, unaryop):
         raise TypeError(
             f"Series of dtype `str` cannot perform the operation: "
@@ -4576,16 +4712,16 @@ class StringColumn(column.ColumnBase):
                         kwargs.update(format=fmt)
 
             # Check for None strings
-            if len(self) > 0 and self.binary_operator("eq", "None").any():
+            if len(self) > 0 and (self == "None").any():
                 raise ValueError("Could not convert `None` value to datetime")
 
-            boolean_match = self.binary_operator("eq", "NaT")
+            boolean_match = self == "NaT"
         elif out_dtype.type is np.timedelta64:
             if "format" not in kwargs:
                 if len(self) > 0:
                     kwargs.update(format="%D days %H:%M:%S")
 
-            boolean_match = self.binary_operator("eq", "NaT")
+            boolean_match = self == "NaT"
         elif out_dtype.kind in {"i", "u"}:
             if not cpp_is_integer(self).all():
                 raise ValueError(
@@ -4669,7 +4805,7 @@ class StringColumn(column.ColumnBase):
     def serialize(self):
         header = {"null_count": self.null_count}
         header["type-serialized"] = pickle.dumps(type(self))
-        header["size"] = pickle.dumps(self.size)
+        header["size"] = self.size
 
         frames = []
         sub_headers = []
@@ -4688,7 +4824,7 @@ class StringColumn(column.ColumnBase):
 
     @classmethod
     def deserialize(cls, header, frames):
-        size = pickle.loads(header["size"])
+        size = header["size"]
         # Deserialize the mask, value, and offset frames
         buffers = [Buffer(each_frame) for each_frame in frames]
 
@@ -4750,6 +4886,9 @@ class StringColumn(column.ColumnBase):
         return self._find_first_and_last(value)[1]
 
     def normalize_binop_value(self, other):
+        # fastpath: gpu scalar
+        if isinstance(other, cudf.Scalar) and other.dtype == "object":
+            return column.as_column(other, length=len(self))
         if isinstance(other, column.Column):
             return other.astype(self.dtype)
         elif isinstance(other, str) or other is None:
@@ -4758,7 +4897,7 @@ class StringColumn(column.ColumnBase):
             )
             return col
         else:
-            raise TypeError("cannot broadcast {}".format(type(other)))
+            raise TypeError(f"cannot broadcast {type(other)}")
 
     def default_na_value(self):
         return None
@@ -4772,8 +4911,10 @@ class StringColumn(column.ColumnBase):
                 return lhs.str().cat(others=rhs)
             elif op in ("eq", "ne", "gt", "lt", "ge", "le"):
                 return _string_column_binop(self, rhs, op=op, out_dtype="bool")
-        msg = "{!r} operator not supported between {} and {}"
-        raise TypeError(msg.format(op, type(self), type(rhs)))
+
+        raise TypeError(
+            f"{op} operator not supported between {type(self)} and {type(rhs)}"
+        )
 
     @property
     def is_unique(self):

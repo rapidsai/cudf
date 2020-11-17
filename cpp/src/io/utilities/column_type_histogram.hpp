@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,24 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #pragma once
 
-#include <stdint.h>
-#include <string>
-#include <vector>
+#include <cudf/types.hpp>
 
 namespace cudf {
 namespace io {
+
 /**
- * @brief Creates a transition table to convert ORC timestamps to UTC
- *
- * @param[out] table output table (1st entry = gmtOffset, 2 int64_t per transition, last 800
- *transitions repeat forever with 400 year cycle)
- * @param[in] timezone_name standard timezone name (for example, "US/Pacific")
- *
- * @return true if successful, false if failed to find/parse the timezone information
- **/
-bool BuildTimezoneTransitionTable(std::vector<int64_t> &table, const std::string &timezone_name);
+ * @brief Per-column histogram struct containing detected occurrences of each dtype
+ */
+struct column_type_histogram {
+  cudf::size_type float_count;
+  cudf::size_type datetime_count;
+  cudf::size_type string_count;
+  cudf::size_type negative_small_int_count;
+  cudf::size_type positive_small_int_count;
+  cudf::size_type big_int_count;
+  cudf::size_type bool_count;
+  cudf::size_type null_count;
+};
 
 }  // namespace io
 }  // namespace cudf

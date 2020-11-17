@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,10 +83,7 @@ __device__ void FetchDictionaryFragment(dict_state_s *s,
                                         uint32_t frag_start_row,
                                         uint32_t t)
 {
-  if (t < sizeof(PageFragment) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->frag)[t] =
-      reinterpret_cast<const uint32_t *>(s->cur_fragment)[t];
-  }
+  if (t == 0) s->frag = *s->cur_fragment;
   __syncthreads();
   // Store the row values in shared mem and set the corresponding dict_data to zero (end-of-list)
   // It's easiest to do this here since we're only dealing with values all within a 5K-row window
@@ -157,17 +154,14 @@ __global__ void __launch_bounds__(block_size, 1)
   uint32_t t            = threadIdx.x;
   uint32_t dtype, dtype_len, dtype_len_in;
 
-  if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->ck)[t] =
-      reinterpret_cast<const uint32_t *>(&chunks[blockIdx.x])[t];
-  }
+  if (t == 0) s->ck = chunks[blockIdx.x];
   __syncthreads();
+
   if (!s->ck.has_dictionary) { return; }
-  if (t < sizeof(EncColumnDesc) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->col)[t] =
-      reinterpret_cast<const uint32_t *>(s->ck.col_desc)[t];
-  }
+
+  if (t == 0) s->col = *s->ck.col_desc;
   __syncthreads();
+
   if (!t) {
     s->hashmap               = dev_scratch + s->ck.dictionary_id * (size_t)(1 << kDictHashBits);
     s->row_cnt               = 0;
@@ -204,18 +198,18 @@ __global__ void __launch_bounds__(block_size, 1)
         row = frag_start_row + s->frag_dict[i + t];
         len = dtype_len;
         if (dtype == BYTE_ARRAY) {
-          const char *ptr = reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].ptr;
-          uint32_t count =
-            (uint32_t) reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].count;
+          const char *ptr = static_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].ptr;
+          uint32_t count  = static_cast<uint32_t>(
+            static_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].count);
           len += count;
           hash = nvstr_hash16(reinterpret_cast<const uint8_t *>(ptr), count);
           // Walk the list of rows with the same hash
           next_addr = &s->hashmap[hash];
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
             const char *ptr2 =
-              reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].ptr;
+              static_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].ptr;
             uint32_t count2 =
-              reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].count;
+              static_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].count;
             if (count2 == count && nvstr_is_equal(ptr, count, ptr2, count2)) {
               is_dupe = 1;
               break;
@@ -226,14 +220,14 @@ __global__ void __launch_bounds__(block_size, 1)
           uint64_t val;
 
           if (dtype_len_in == 8) {
-            val  = reinterpret_cast<const uint64_t *>(s->col.column_data_base)[row];
+            val  = static_cast<const uint64_t *>(s->col.column_data_base)[row];
             hash = uint64_hash16(val);
           } else {
             val = (dtype_len_in == 4)
-                    ? reinterpret_cast<const uint32_t *>(s->col.column_data_base)[row]
+                    ? static_cast<const uint32_t *>(s->col.column_data_base)[row]
                     : (dtype_len_in == 2)
-                        ? reinterpret_cast<const uint16_t *>(s->col.column_data_base)[row]
-                        : reinterpret_cast<const uint8_t *>(s->col.column_data_base)[row];
+                        ? static_cast<const uint16_t *>(s->col.column_data_base)[row]
+                        : static_cast<const uint8_t *>(s->col.column_data_base)[row];
             hash = uint32_hash16(val);
           }
           // Walk the list of rows with the same hash
@@ -241,12 +235,12 @@ __global__ void __launch_bounds__(block_size, 1)
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
             uint64_t val2 =
               (dtype_len_in == 8)
-                ? reinterpret_cast<const uint64_t *>(s->col.column_data_base)[next - 1]
+                ? static_cast<const uint64_t *>(s->col.column_data_base)[next - 1]
                 : (dtype_len_in == 4)
-                    ? reinterpret_cast<const uint32_t *>(s->col.column_data_base)[next - 1]
+                    ? static_cast<const uint32_t *>(s->col.column_data_base)[next - 1]
                     : (dtype_len_in == 2)
-                        ? reinterpret_cast<const uint16_t *>(s->col.column_data_base)[next - 1]
-                        : reinterpret_cast<const uint8_t *>(s->col.column_data_base)[next - 1];
+                        ? static_cast<const uint16_t *>(s->col.column_data_base)[next - 1]
+                        : static_cast<const uint8_t *>(s->col.column_data_base)[next - 1];
             if (val2 == val) {
               is_dupe = 1;
               break;

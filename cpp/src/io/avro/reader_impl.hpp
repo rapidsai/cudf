@@ -24,6 +24,7 @@
 #include "avro.h"
 #include "avro_gpu.h"
 
+#include <cudf/utilities/span.hpp>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
 
@@ -89,14 +90,12 @@ class reader::impl {
    * @param block_data Uncompressed block data
    * @param dict Dictionary entries
    * @param global_dictionary Dictionary allocation
-   * @param total_dictionary_entries Number of dictionary entries
    * @param out_buffers Output columns' device buffers
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   void decode_data(const rmm::device_buffer &block_data,
                    const std::vector<std::pair<uint32_t, uint32_t>> &dict,
-                   hostdevice_vector<uint8_t> &global_dictionary,
-                   size_t total_dictionary_entries,
+                   cudf::detail::device_span<gpu::nvstrdesc_s> global_dictionary,
                    size_t num_rows,
                    std::vector<std::pair<int, std::string>> columns,
                    std::vector<column_buffer> &out_buffers,

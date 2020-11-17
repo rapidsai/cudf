@@ -141,6 +141,32 @@ TEST(TextSubwordTest, TokenizeMultiRow)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_metadata->view(), expected_metadata);
 }
 
+TEST(TextSubwordTest, TokenizeMaxEqualsTokens)
+{
+  cudf::test::strings_column_wrapper strings({"This is a test."});
+  std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
+  create_hashed_vocab(hash_file);
+
+  uint32_t max_sequence_length = 5;  // five tokens in strings;
+  uint32_t stride              = 5;  // this should not effect the result
+
+  auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
+                                         hash_file,
+                                         max_sequence_length,
+                                         stride,
+                                         true,   // do_lower_case
+                                         false,  // do_truncate
+                                         MAX_ROWS_TENSOR);
+
+  EXPECT_EQ(1, result.nrows_tensor);
+  cudf::test::fixed_width_column_wrapper<uint32_t> expected_tokens({2023, 2003, 1037, 3231, 1012});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_token_ids->view(), expected_tokens);
+  cudf::test::fixed_width_column_wrapper<uint32_t> expected_attn({1, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_attention_mask->view(), expected_attn);
+  cudf::test::fixed_width_column_wrapper<uint32_t> expected_metadata({0, 0, 4});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_metadata->view(), expected_metadata);
+}
+
 TEST(TextSubwordTest, ParameterErrors)
 {
   std::vector<const char*> h_strings{"This is a test.", "This is a test. This is a tést."};

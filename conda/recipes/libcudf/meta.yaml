@@ -20,6 +20,7 @@ build:
     - CUDAHOSTCXX
     - PARALLEL_LEVEL
     - VERSION_SUFFIX
+    - PROJECT_FLASH
   run_exports:
     - {{ pin_subpackage("libcudf", max_pin="x.x") }}
 
@@ -74,6 +75,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/repeat.hpp
     - test -f $PREFIX/include/cudf/detail/replace.hpp
     - test -f $PREFIX/include/cudf/detail/reshape.hpp
+    - test -f $PREFIX/include/cudf/detail/round.hpp
     - test -f $PREFIX/include/cudf/detail/scatter.hpp
     - test -f $PREFIX/include/cudf/detail/search.hpp
     - test -f $PREFIX/include/cudf/detail/sequence.hpp
@@ -86,6 +88,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/utilities/int_fastdiv.h
     - test -f $PREFIX/include/cudf/dictionary/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/encode.hpp
+    - test -f $PREFIX/include/cudf/dictionary/detail/merge.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/replace.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/search.hpp
     - test -f $PREFIX/include/cudf/dictionary/detail/update_keys.hpp
@@ -100,9 +103,10 @@ test:
     - test -f $PREFIX/include/cudf/hashing.hpp
     - test -f $PREFIX/include/cudf/interop.hpp
     - test -f $PREFIX/include/cudf/io/avro.hpp
-    - test -f $PREFIX/include/cudf/io/csv.hpp
     - test -f $PREFIX/include/cudf/io/data_sink.hpp
     - test -f $PREFIX/include/cudf/io/datasource.hpp
+    - test -f $PREFIX/include/cudf/io/orc_metadata.hpp
+    - test -f $PREFIX/include/cudf/io/csv.hpp
     - test -f $PREFIX/include/cudf/io/detail/avro.hpp
     - test -f $PREFIX/include/cudf/io/detail/csv.hpp
     - test -f $PREFIX/include/cudf/io/detail/json.hpp
@@ -126,6 +130,7 @@ test:
     - test -f $PREFIX/include/cudf/replace.hpp
     - test -f $PREFIX/include/cudf/reshape.hpp
     - test -f $PREFIX/include/cudf/rolling.hpp
+    - test -f $PREFIX/include/cudf/round.hpp
     - test -f $PREFIX/include/cudf/scalar/scalar_factories.hpp
     - test -f $PREFIX/include/cudf/scalar/scalar.hpp
     - test -f $PREFIX/include/cudf/search.hpp
@@ -169,6 +174,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/wrap.hpp
     - test -f $PREFIX/include/cudf/structs/structs_column_view.hpp
     - test -f $PREFIX/include/cudf/structs/struct_view.hpp
+    - test -f $PREFIX/include/cudf/structs/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/table/table.hpp
     - test -f $PREFIX/include/cudf/table/table_view.hpp
     - test -f $PREFIX/include/cudf/transform.hpp
@@ -190,6 +196,7 @@ test:
     - test -f $PREFIX/include/cudf_test/column_wrapper.hpp
     - test -f $PREFIX/include/cudf_test/cudf_gtest.hpp
     - test -f $PREFIX/include/cudf_test/cxxopts.hpp
+    - test -f $PREFIX/include/cudf_test/file_utilities.hpp
     - test -f $PREFIX/include/cudf_test/scalar_utilities.hpp
     - test -f $PREFIX/include/cudf_test/table_utilities.hpp
     - test -f $PREFIX/include/cudf_test/timestamp_utilities.cuh

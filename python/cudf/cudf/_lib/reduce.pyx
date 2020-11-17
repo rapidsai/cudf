@@ -6,7 +6,7 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport data_type, type_id
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.column cimport Column
 from cudf._lib.types import np_to_cudf_types
 from cudf._lib.types cimport underlying_type_t_type_id
@@ -67,7 +67,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
             c_out_dtype
         ))
 
-    py_result = Scalar.from_unique_ptr(move(c_result))
+    py_result = DeviceScalar.from_unique_ptr(move(c_result))
     return py_result.value
 
 

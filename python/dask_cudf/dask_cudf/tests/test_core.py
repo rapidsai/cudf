@@ -8,10 +8,11 @@ import pytest
 import dask
 from dask import dataframe as dd
 from dask.dataframe.core import make_meta, meta_nonempty
-
-import dask_cudf as dgd
+from dask.utils import M
 
 import cudf
+
+import dask_cudf as dgd
 
 
 def test_from_cudf():
@@ -568,6 +569,7 @@ def test_drop(gdf, gddf):
 @pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize("index", [True, False])
 def test_memory_usage(gdf, gddf, index, deep):
+
     dd.assert_eq(
         gdf.memory_usage(deep=deep, index=index),
         gddf.memory_usage(deep=deep, index=index),
@@ -716,3 +718,15 @@ def test_dataframe_describe():
     pddf = dd.from_pandas(pdf, npartitions=4)
 
     dd.assert_eq(ddf.describe(), pddf.describe(), check_less_precise=3)
+
+
+def test_index_map_partitions():
+    # https://github.com/rapidsai/cudf/issues/6738
+
+    ddf = dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2)
+    mins_pd = ddf.index.map_partitions(M.min, meta=ddf.index).compute()
+
+    gddf = dgd.from_cudf(cudf.DataFrame({"a": range(10)}), npartitions=2)
+    mins_gd = gddf.index.map_partitions(M.min, meta=gddf.index).compute()
+
+    dd.assert_eq(mins_pd, mins_gd)

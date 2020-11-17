@@ -22,6 +22,7 @@
 #pragma once
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
@@ -30,6 +31,7 @@
 #include <cudf_test/column_utilities.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
 namespace cudf {
@@ -61,8 +63,8 @@ inline rmm::device_buffer create_data(
 }
 
 /**
- * @brief Class for holding device memory buffers to column data that will be
- * eventually used create to create a column.
+ * @brief Class for holding device memory buffers to column data that eventually
+ * will be used to create a column.
  */
 struct column_buffer {
   // there is a potential bug here.  In the decoding step, the buffer of
@@ -117,7 +119,10 @@ struct column_buffer {
 
       default: _data = create_data(type, size, stream, mr); break;
     }
-    if (is_nullable) { _null_mask = create_null_mask(size, mask_state::ALL_NULL, stream, mr); }
+    if (is_nullable) {
+      _null_mask = cudf::detail::create_null_mask(
+        size, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr);
+    }
   }
 
   auto data() { return _strings.size() ? _strings.data().get() : _data.data(); }

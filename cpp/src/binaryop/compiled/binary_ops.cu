@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
+#include "binary_ops.hpp"
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
-
-#include "binary_ops.hpp"
 
 namespace cudf {
 namespace binops {
@@ -164,7 +165,7 @@ struct binary_op {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    auto new_mask = bitmask_and(table_view({lhs, rhs}), mr, stream);
+    auto new_mask = cudf::detail::bitmask_and(table_view({lhs, rhs}), stream, mr);
     auto out      = make_fixed_width_column(
       out_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
@@ -423,8 +424,8 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::type_id::STRING, "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(rhs.type().id() == cudf::type_id::STRING, "Invalid/Unsupported rhs datatype");
-  if (null_using_binop(op)) {
-    if (rhs.size() == 0) return cudf::make_empty_column(output_type);
+  if (is_null_dependent(op)) {
+    if (rhs.is_empty()) return cudf::make_empty_column(output_type);
     auto rhs_device_view = cudf::column_device_view::create(rhs, stream);
     return null_considering_binop{}(lhs, *rhs_device_view, op, output_type, rhs.size(), mr, stream);
   } else {
@@ -445,8 +446,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::type_id::STRING, "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(rhs.type().id() == cudf::type_id::STRING, "Invalid/Unsupported rhs datatype");
-  if (null_using_binop(op)) {
-    if (lhs.size() == 0) return cudf::make_empty_column(output_type);
+  if (is_null_dependent(op)) {
+    if (lhs.is_empty()) return cudf::make_empty_column(output_type);
     auto lhs_device_view = cudf::column_device_view::create(lhs, stream);
     return null_considering_binop{}(*lhs_device_view, rhs, op, output_type, lhs.size(), mr, stream);
   } else {
@@ -466,9 +467,9 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::type_id::STRING, "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS(rhs.type().id() == cudf::type_id::STRING, "Invalid/Unsupported rhs datatype");
-  if (null_using_binop(op)) {
+  if (is_null_dependent(op)) {
     CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes do not match");
-    if (lhs.size() == 0) return cudf::make_empty_column(output_type);
+    if (lhs.is_empty()) return cudf::make_empty_column(output_type);
     auto lhs_device_view = cudf::column_device_view::create(lhs, stream);
     auto rhs_device_view = cudf::column_device_view::create(rhs, stream);
     return null_considering_binop{}(

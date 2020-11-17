@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
-#include "../fixture/benchmark_fixture.hpp"
-#include "../synchronization/synchronization.hpp"
+#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/null_mask.hpp>
+
+#include <benchmark/benchmark.h>
 
 class SetNullmask : public cudf::benchmark {
 };
@@ -31,7 +32,7 @@ void BM_setnullmask(benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()), begin, end, true, 0);
+    cudf::set_null_mask(static_cast<cudf::bitmask_type*>(mask.data()), begin, end, true);
   }
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * size / 8);

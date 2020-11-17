@@ -12,7 +12,7 @@ from dask.base import normalize_token, tokenize
 from dask.compatibility import apply
 from dask.context import _globals
 from dask.core import flatten
-from dask.dataframe.core import Scalar, handle_out, map_partitions
+from dask.dataframe.core import Scalar, finalize, handle_out, map_partitions
 from dask.dataframe.utils import raise_on_meta_error
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
@@ -37,14 +37,6 @@ def optimize(dsk, keys, **kwargs):
     )
     dsk, _ = cull(dsk, keys)
     return dsk
-
-
-def finalize(results):
-    if results and isinstance(
-        results[0], (cudf.DataFrame, cudf.Series, cudf.Index, cudf.MultiIndex)
-    ):
-        return cudf.concat(results)
-    return results
 
 
 class _Frame(dd.core._Frame, OperatorMethodMixin):
@@ -81,10 +73,9 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
         meta = dd.core.make_meta(meta)
         if not isinstance(meta, self._partition_type):
             raise TypeError(
-                "Expected meta to specify type {0}, got type "
-                "{1}".format(
-                    self._partition_type.__name__, type(meta).__name__
-                )
+                f"Expected meta to specify type "
+                f"{self._partition_type.__name__}, got type "
+                f"{type(meta).__name__}"
             )
         self._meta = meta
         self.divisions = tuple(divisions)

@@ -6,7 +6,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from enum import IntEnum
 from libcpp.string cimport string
 from cudf._lib.cpp.column.column cimport column

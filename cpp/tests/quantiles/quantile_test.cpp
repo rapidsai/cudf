@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -447,6 +447,28 @@ TYPED_TEST(QuantileUnsupportedTypesTest, TestMultipleElements)
 
   EXPECT_THROW(cudf::quantile(input, {0}), cudf::logic_error);
 }
+
+struct QuantileDictionaryTest : public BaseFixture {
+};
+
+TEST_F(QuantileDictionaryTest, TestValid)
+{
+  dictionary_column_wrapper<int32_t> col{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  fixed_width_column_wrapper<int32_t> indices{0, 2, 4, 6, 8, 1, 3, 5, 7, 9};
+
+  auto result = cudf::quantile(col, {0.5}, cudf::interpolation::LINEAR);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), fixed_width_column_wrapper<double>{5.5});
+
+  result = cudf::quantile(col, {0.5}, cudf::interpolation::LINEAR, indices);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), fixed_width_column_wrapper<double>{5.5});
+
+  result = cudf::quantile(col, {0.1, 0.2}, cudf::interpolation::HIGHER);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), fixed_width_column_wrapper<double>{2.0, 3.0});
+
+  result = cudf::quantile(col, {0.25, 0.5, 0.75}, cudf::interpolation::MIDPOINT);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(),
+                                      fixed_width_column_wrapper<double>{3.5, 5.5, 7.5});
+};
 
 }  // anonymous namespace
 

@@ -3,17 +3,39 @@
 
 import logging
 import random
+from collections import abc as abc
+
+import numpy as np
 
 import cudf
 from cudf._fuzz_testing.io import IOFuzz
-from cudf._fuzz_testing.utils import _generate_rand_meta, pyarrow_to_pandas
+from cudf._fuzz_testing.utils import (
+    ALL_POSSIBLE_VALUES,
+    _generate_rand_meta,
+    pyarrow_to_pandas,
+)
 from cudf.tests import dataset_generator as dg
+from cudf.utils.dtypes import pandas_dtypes_to_cudf_dtypes
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
     level=logging.INFO,
     datefmt="%Y-%m-%d %H:%M:%S",
 )
+
+
+def _get_dtype_param_value(dtype_val):
+    if dtype_val is not None and isinstance(dtype_val, abc.Mapping):
+        processed_dtypes = {}
+        for col_name, dtype in dtype_val.items():
+            if cudf.utils.dtypes.is_categorical_dtype(dtype):
+                processed_dtypes[col_name] = "category"
+            else:
+                processed_dtypes[col_name] = str(
+                    pandas_dtypes_to_cudf_dtypes.get(dtype, dtype)
+                )
+        return processed_dtypes
+    return dtype_val
 
 
 class JSONReader(IOFuzz):
@@ -42,12 +64,18 @@ class JSONReader(IOFuzz):
         else:
             seed = random.randint(0, 2 ** 32 - 1)
             random.seed(seed)
-            dtypes_list = list(cudf.utils.dtypes.ALL_TYPES)
+            dtypes_list = list(
+                cudf.utils.dtypes.ALL_TYPES
+                # https://github.com/pandas-dev/pandas/issues/20599
+                - {"uint64"}
+                # TODO: Remove DATETIME_TYPES after this is fixed:
+                # https://github.com/rapidsai/cudf/issues/6586
+                - set(cudf.utils.dtypes.DATETIME_TYPES)
+            )
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
             self._current_params["dtypes_meta"] = dtypes_meta
-            self._current_params["file_name"] = self._file_name
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_columns"] = num_cols
@@ -57,10 +85,28 @@ class JSONReader(IOFuzz):
         )
         table = dg.rand_dataframe(dtypes_meta, num_rows, seed)
         df = pyarrow_to_pandas(table)
-
+        self._current_buffer = df
         logging.info(f"Shape of DataFrame generated: {df.shape}")
 
-        return df.to_json()
+        return df.to_json(orient="records", lines=True)
+
+    def write_data(self, file_name):
+        if self._current_buffer is not None:
+            self._current_buffer.to_json(
+                file_name + "_crash_json.json", orient="records", lines=True
+            )
+
+    def set_rand_params(self, params):
+        params_dict = {}
+        for param, values in params.items():
+            if param == "dtype" and values == ALL_POSSIBLE_VALUES:
+                dtype_val = np.random.choice(
+                    [True, self._current_buffer.dtypes.to_dict()]
+                )
+                params_dict[param] = _get_dtype_param_value(dtype_val)
+            else:
+                params_dict[param] = np.random.choice(values)
+        self._current_params["test_kwargs"] = self.process_kwargs(params_dict)
 
 
 class JSONWriter(IOFuzz):
@@ -89,7 +135,14 @@ class JSONWriter(IOFuzz):
         else:
             seed = random.randint(0, 2 ** 32 - 1)
             random.seed(seed)
-            dtypes_list = list(cudf.utils.dtypes.ALL_TYPES)
+            dtypes_list = list(
+                cudf.utils.dtypes.ALL_TYPES
+                # https://github.com/pandas-dev/pandas/issues/20599
+                - {"uint64"}
+                # TODO: Remove DATETIME_TYPES after this is fixed:
+                # https://github.com/rapidsai/cudf/issues/6586
+                - set(cudf.utils.dtypes.DATETIME_TYPES)
+            )
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
@@ -101,9 +154,27 @@ class JSONWriter(IOFuzz):
             f"Generating DataFrame with rows: {num_rows} "
             f"and columns: {num_cols}"
         )
-        df = cudf.DataFrame.from_arrow(
-            dg.rand_dataframe(dtypes_meta, num_rows, seed)
-        )
-        logging.info(f"Shape of DataFrame generated: {df.shape}")
+        table = dg.rand_dataframe(dtypes_meta, num_rows, seed)
+        df = pyarrow_to_pandas(table)
 
+        logging.info(f"Shape of DataFrame generated: {df.shape}")
+        self._current_buffer = df
         return df
+
+    def write_data(self, file_name):
+        if self._current_buffer is not None:
+            self._current_buffer.to_json(
+                file_name + "_crash_json.json", lines=True, orient="records"
+            )
+
+    def set_rand_params(self, params):
+        params_dict = {}
+        for param, values in params.items():
+            if param == "dtype" and values == ALL_POSSIBLE_VALUES:
+                dtype_val = np.random.choice(
+                    [True, self._current_buffer.dtypes.to_dict()]
+                )
+                params_dict[param] = _get_dtype_param_value(dtype_val)
+            else:
+                params_dict[param] = np.random.choice(values)
+        self._current_params["test_kwargs"] = self.process_kwargs(params_dict)

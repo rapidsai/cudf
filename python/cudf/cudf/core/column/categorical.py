@@ -403,8 +403,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         # list. If not, raise an error to match Pandas behavior
         if not removals_mask.all():
             vals = removals[~removals_mask].to_array()
-            msg = "removals must all be in old categories: {}".format(vals)
-            raise ValueError(msg)
+            raise ValueError(f"removals must all be in old categories: {vals}")
 
         new_categories = cats[~cats.isin(removals)]._column
         out_col = self._column
@@ -874,9 +873,6 @@ class CategoricalColumn(column.ColumnBase):
             f"{unaryop}"
         )
 
-    def __eq__(self, other):
-        return self.binary_operator("eq", other).all()
-
     def binary_operator(self, op, rhs, reflect=False):
 
         if not (self.ordered and rhs.ordered) and op not in ("eq", "ne"):
@@ -928,7 +924,7 @@ class CategoricalColumn(column.ColumnBase):
             " if you need this functionality."
         )
 
-    def to_pandas(self, index=None):
+    def to_pandas(self, index=None, nullable=False):
         signed_dtype = min_signed_type(len(self.categories))
         codes = self.cat().codes.astype(signed_dtype).fillna(-1).to_array()
         categories = self.categories.to_pandas()
@@ -1243,7 +1239,7 @@ def pandas_categorical_as_column(categorical, codes=None):
     codes = categorical.codes if codes is None else codes
     codes = column.as_column(codes)
 
-    valid_codes = codes.binary_operator("ne", codes.dtype.type(-1))
+    valid_codes = codes != codes.dtype.type(-1)
 
     mask = None
     if not valid_codes.all():
