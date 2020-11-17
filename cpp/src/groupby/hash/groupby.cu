@@ -99,31 +99,38 @@ bool constexpr is_hash_aggregation(aggregation::Kind t)
          (t == aggregation::VARIANCE);
 }
 
+template <typename Map>
 class hash_compound_agg_finalizer final : public cudf::detail::aggregation_finalizer {
-  size_t i;
+  size_t col_idx;
   column_view col;
-  cudf::detail::result_cache& sparse_results;
+  cudf::detail::result_cache* sparse_results;
   cudf::detail::result_cache* dense_results;
   rmm::device_vector<size_type> const& gather_map;
   size_type const map_size;
+  Map& map;
+  bitmask_type const* __restrict__ row_bitmask;
   rmm::mr::device_memory_resource* mr;
   cudaStream_t stream;
 
  public:
   hash_compound_agg_finalizer(size_t col_idx,
                               column_view col,
-                              cudf::detail::result_cache& sparse_results,
+                              cudf::detail::result_cache* sparse_results,
                               cudf::detail::result_cache* dense_results,
                               rmm::device_vector<size_type> const& gather_map,
                               size_type map_size,
+                              Map& map,
+                              bitmask_type const* row_bitmask,
                               cudaStream_t stream,
                               rmm::mr::device_memory_resource* mr)
-    : i(col_idx),
+    : col_idx(col_idx),
       col(col),
       sparse_results(sparse_results),
       dense_results(dense_results),
       gather_map(gather_map),
       map_size(map_size),
+      map(map),
+      row_bitmask(row_bitmask),
       stream(stream),
       mr(mr)
   {
@@ -131,14 +138,14 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
 
   auto to_dense_agg_result(cudf::aggregation const& agg)
   {
-    auto s                  = sparse_results.get_result(i, agg);
+    auto s                  = sparse_results->get_result(col_idx, agg);
     auto dense_result_table = cudf::detail::gather(
       table_view({s}), gather_map.begin(), gather_map.begin() + map_size, false, mr, stream);
     return std::move(dense_result_table->release()[0]);
   }
 
   // Enables conversion of ARGMIN/ARGMAX into MIN/MAX
-  auto transformed_result(aggregation::Kind const& agg_kind)
+  auto gather_argminmax(aggregation::Kind const& agg_kind)
   {
     auto transformed_agg = std::make_unique<aggregation>(agg_kind);
     auto arg_result      = to_dense_agg_result(*transformed_agg);
@@ -151,7 +158,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
       data_type(type_to_id<size_type>()),
       arg_result->size(),
       static_cast<void const*>(arg_result->view().template data<size_type>()));
-    auto transformed_result =
+    auto gather_argminmax =
       cudf::detail::gather(table_view({col}),
                            null_removed_map,
                            arg_result->nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
@@ -159,46 +166,103 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
                            cudf::detail::negative_index_policy::NOT_ALLOWED,
                            mr,
                            stream);
-    return std::move(transformed_result->release()[0]);
+    return std::move(gather_argminmax->release()[0]);
   };
 
   // Declare overloads for each kind of aggregation to dispatch
   void visit(cudf::aggregation& agg) override
   {
-    dense_results->add_result(i, agg, to_dense_agg_result(agg));
+    if (dense_results->has_result(col_idx, agg)) return;
+    dense_results->add_result(col_idx, agg, to_dense_agg_result(agg));
   }
 
   void visit(cudf::detail::min_aggregation& agg) override
   {
+    if (dense_results->has_result(col_idx, agg)) return;
     if (col.type().id() == type_id::STRING)
-      dense_results->add_result(i, agg, transformed_result(aggregation::ARGMIN));
+      dense_results->add_result(col_idx, agg, gather_argminmax(aggregation::ARGMIN));
     else
-      dense_results->add_result(i, agg, to_dense_agg_result(agg));
+      dense_results->add_result(col_idx, agg, to_dense_agg_result(agg));
   }
 
   void visit(cudf::detail::max_aggregation& agg) override
   {
+    if (dense_results->has_result(col_idx, agg)) return;
+
     if (col.type().id() == type_id::STRING)
-      dense_results->add_result(i, agg, transformed_result(aggregation::ARGMAX));
+      dense_results->add_result(col_idx, agg, gather_argminmax(aggregation::ARGMAX));
     else
-      dense_results->add_result(i, agg, to_dense_agg_result(agg));
+      dense_results->add_result(col_idx, agg, to_dense_agg_result(agg));
   }
 
   void visit(cudf::detail::mean_aggregation& agg) override
   {
-    dense_results->add_result(i, agg, to_dense_agg_result(aggregation{agg.kind}));
+    if (dense_results->has_result(col_idx, agg)) return;
+
+    auto sum_agg   = make_sum_aggregation();
+    auto count_agg = make_count_aggregation();
+    this->visit(*sum_agg);
+    this->visit(*count_agg);
+    column_view sum_result   = dense_results->get_result(col_idx, *sum_agg);
+    column_view count_result = dense_results->get_result(col_idx, *count_agg);
+
+    auto result =
+      cudf::detail::binary_operation(sum_result,
+                                     count_result,
+                                     binary_operator::DIV,
+                                     cudf::detail::target_type(col.type(), aggregation::MEAN),
+                                     mr,
+                                     stream);
+    dense_results->add_result(col_idx, agg, std::move(result));
   }
 
   void visit(cudf::detail::std_var_aggregation& agg) override
   {
+    if (dense_results->has_result(col_idx, agg)) return;
+
+    auto sum_agg   = make_sum_aggregation();
+    auto count_agg = make_count_aggregation();
+    this->visit(*sum_agg);
+    this->visit(*count_agg);
+    column_view sum_result   = sparse_results->get_result(col_idx, *sum_agg);
+    column_view count_result = sparse_results->get_result(col_idx, *count_agg);
+
+    auto mean_result =
+      cudf::detail::binary_operation(sum_result,
+                                     count_result,
+                                     binary_operator::DIV,
+                                     cudf::detail::target_type(col.type(), aggregation::MEAN),
+                                     mr,
+                                     stream);
+
+    auto values_view = column_device_view::create(col);
+    auto sum_view    = column_device_view::create(sum_result);
+    auto count_view  = column_device_view::create(count_result);
+
+    auto var_result = make_fixed_width_column(
+      cudf::detail::target_type(col.type(), agg.kind), col.size(), mask_state::ALL_NULL, stream);
+    auto var_result_view = mutable_column_device_view::create(var_result->mutable_view());
+    dispatch_type_and_aggregation(col.type(),
+                                  agg.kind,
+                                  cudf::detail::identity_initializer{},
+                                  var_result->mutable_view(),
+                                  stream);
+    thrust::for_each_n(
+      rmm::exec_policy(stream)->on(stream),
+      thrust::make_counting_iterator(0),
+      col.size(),
+      ::cudf::detail::var_hash_functor<Map>{
+        map, row_bitmask, *var_result_view, *values_view, *sum_view, *count_view, agg._ddof});
+    sparse_results->add_result(col_idx, agg, std::move(var_result));
+
     auto result = [&]() {
-      auto variance = to_dense_agg_result(aggregation{agg.kind});
+      auto variance = to_dense_agg_result(agg);
       if (agg.kind == aggregation::VARIANCE)
         return variance;
       else
         return cudf::detail::unary_operation(*variance, unary_op::SQRT, mr, stream);
     }();
-    dense_results->add_result(i, agg, std::move(result));
+    dense_results->add_result(col_idx, agg, std::move(result));
   }
 };
 
@@ -297,22 +361,40 @@ auto flatten_second_pass_aggs(std::vector<aggregation_request> const& requests,
  *
  * @see groupby_null_templated()
  */
-void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
-                             cudf::detail::result_cache& sparse_results,
+template <typename Map>
+void sparse_to_dense_results(table_view const& keys,
+                             std::vector<aggregation_request> const& requests,
+                             cudf::detail::result_cache* sparse_results,
                              cudf::detail::result_cache* dense_results,
                              rmm::device_vector<size_type> const& gather_map,
                              size_type map_size,
+                             Map& map,
+                             bool keys_have_nulls,
+                             null_policy include_null_keys,
                              cudaStream_t stream,
                              rmm::mr::device_memory_resource* mr)
 {
+  auto row_bitmask{bitmask_and(keys, rmm::mr::get_current_device_resource(), stream)};
+  bool skip_key_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
+  bitmask_type const* row_bitmask_ptr =
+    skip_key_rows_with_nulls ? static_cast<bitmask_type*>(row_bitmask.data()) : nullptr;
+
   for (size_t i = 0; i < requests.size(); i++) {
     auto const& agg_v = requests[i].aggregations;
     auto const& col   = requests[i].values;
 
     // Given an aggregation, this will get the result from sparse_results and
     // convert and return dense, compacted result
-    auto finalizer = hash_compound_agg_finalizer(
-      i, col, sparse_results, dense_results, gather_map, map_size, stream, mr);
+    auto finalizer = hash_compound_agg_finalizer<Map>(i,
+                                                      col,
+                                                      sparse_results,
+                                                      dense_results,
+                                                      gather_map,
+                                                      map_size,
+                                                      map,
+                                                      row_bitmask_ptr,
+                                                      stream,
+                                                      mr);
     for (auto&& agg : agg_v) { agg->finalize(finalizer); }
   }
 }
@@ -355,6 +437,7 @@ auto create_sparse_results_table(table_view const& flattened_values,
                                  std::vector<aggregation::Kind> aggs,
                                  cudaStream_t stream)
 {
+  // TODO single allocation - room for performance improvement
   std::vector<std::unique_ptr<column>> sparse_columns;
   std::transform(
     flattened_values.begin(),
@@ -586,11 +669,11 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
     keys, requests, &sparse_results, *map, include_null_keys, stream);
 
   // Debug code, will be removed.
-  std::cout << "requests.size()=" << requests.size() << "\n";
-  std::cout << "aggregations[" << 0 << "].size()=" << requests[0].aggregations.size() << "\n";
+  // std::cout << "requests.size()=" << requests.size() << "\n";
+  // std::cout << "aggregations[" << 0 << "].size()=" << requests[0].aggregations.size() << "\n";
 
-  compute_second_pass_aggs<keys_have_nulls>(
-    keys, requests, &sparse_results, *map, include_null_keys, stream);
+  // compute_second_pass_aggs<keys_have_nulls>(
+  //  keys, requests, &sparse_results, *map, include_null_keys, stream);
 
   // Extract the populated indices from the hash map and create a gather map.
   // Gathering using this map from sparse results will give dense results.
@@ -599,7 +682,17 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
   std::tie(gather_map, map_size) = extract_populated_keys(*map, keys.num_rows(), stream);
 
   // Compact all results from sparse_results and insert into cache
-  sparse_to_dense_results(requests, sparse_results, cache, gather_map, map_size, stream, mr);
+  sparse_to_dense_results(keys,
+                          requests,
+                          &sparse_results,
+                          cache,
+                          gather_map,
+                          map_size,
+                          *map,
+                          keys_have_nulls,
+                          include_null_keys,
+                          stream,
+                          mr);
 
   return cudf::detail::gather(
     keys, gather_map.begin(), gather_map.begin() + map_size, false, mr, stream);
