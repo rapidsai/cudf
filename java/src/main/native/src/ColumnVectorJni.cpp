@@ -17,7 +17,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/filling.hpp>
+#include <cudf/hashing.hpp>
 #include <cudf/utilities/bit.hpp>
+#include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 
@@ -77,6 +79,51 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
       JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
     }
     return reinterpret_cast<jlong>(col.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv *env, jclass clazz,
+                                                                   jlongArray column_handles) {
+  JNI_NULL_CHECK(env, column_handles, "input columns are null", 0);
+  using cudf::column;
+  using cudf::column_view;
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::jni::native_jpointerArray<column_view> columns(env, column_handles);
+    std::vector<column_view> columns_vector(columns.size());
+    for (int i = 0; i < columns.size(); ++i) {
+      JNI_NULL_CHECK(env, columns[i], "column to concat is null", 0);
+      columns_vector[i] = *columns[i];
+    }
+    std::unique_ptr<column> result;
+    if (columns_vector[0].type().id() == cudf::type_id::LIST) {
+      result = cudf::lists::detail::concatenate(columns_vector);
+    } else {
+      result = cudf::concatenate(columns_vector);
+    }
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env,
+                                                            jobject j_object,
+                                                            jlongArray column_handles,
+                                                            jint hash_function_id) {
+  JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
+
+  try {
+    cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
+    std::vector<cudf::column_view> column_views;
+    std::transform(n_cudf_columns.data(), n_cudf_columns.data() + n_cudf_columns.size(),
+                   std::back_inserter(column_views),
+                   [](auto const &p_column) { return *p_column; });
+    cudf::table_view *input_table = new cudf::table_view(column_views);
+
+    std::unique_ptr<cudf::column> result = cudf::hash(*input_table, static_cast<cudf::hash_id>(hash_function_id));
+    return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
 }

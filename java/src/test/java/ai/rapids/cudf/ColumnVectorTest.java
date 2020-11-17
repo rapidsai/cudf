@@ -3301,7 +3301,7 @@ public class ColumnVectorTest extends CudfTestBase {
     try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ListType(true,
         new HostColumnVector.BasicType(true, DType.INT32)), list1, list2, list3);
         ColumnView childColumnView = res.getChildColumnView(0);
-        ColumnVector copiedChildCv = ColumnVector.fromColumnView(childColumnView.viewHandle);
+        ColumnVector copiedChildCv = ColumnVector.fromColumnView(childColumnView);
         ColumnVector expected =
             ColumnVector.fromInts(10, 11, 12, 13, 16, 12, 14, 15, 0, 7, 3, 4, 2)) {
       assertColumnsAreEqual(expected, copiedChildCv);

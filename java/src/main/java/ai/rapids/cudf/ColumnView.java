@@ -24,37 +24,29 @@ import java.util.Optional;
 
 import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
 
-/** This class represents the column_view of a column analogous to its cudf cpp counterpart.
+/**
+ * This class represents the column_view of a column analogous to its cudf cpp counterpart.
  * It holds view information like the native handle and other metadata for a column_view. It also
  * exposes APIs that would allow operations on a view.
- *
  */
 public class ColumnView implements AutoCloseable, BinaryOperable {
 
   public static final long UNKNOWN_NULL_COUNT = -1;
 
-  protected long viewHandle = 0;
-  protected DType type;
-  protected long rows;
-  protected Optional<Long> nullCount = Optional.empty();
+  protected long viewHandle;
+  protected final DType type;
+  protected final long rows;
+  protected final long nullCount;
 
-
-  //TODO can we make this better
+  /**
+   * Constructs a Column View given a native view address
+   * @param address the view handle
+   */
   protected ColumnView(long address) {
     this.viewHandle = address;
-    this.type = DType.fromNative(ColumnView.getNativeTypeId(getNativeView()), ColumnView.getNativeTypeScale(getNativeView()));
-    this.rows = ColumnView.getNativeRowCount(getNativeView());
-    this.nullCount = Optional.of((long)ColumnView.getNativeNullCount(getNativeView()));
-  }
-
-  protected static long viewHandleFromColumnHandle(long columnHandle) {
-    try {
-      long res = ColumnVector.getNativeColumnView(columnHandle);
-      return res;
-    } catch (CudfException e) {
-      ColumnVector.deleteCudfColumn(columnHandle);
-    }
-    return 0;
+    this.type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
+    this.rows = ColumnView.getNativeRowCount(viewHandle);
+    this.nullCount = ColumnView.getNativeNullCount(viewHandle);
   }
 
   /**
@@ -76,7 +68,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns the choild column view at a given index.
+   * Returns the child column view at a given index.
    * Please note that it is the responsibility of the caller to close this view.
    * @param childIndex the index of the child
    * @return a column view
@@ -115,7 +107,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * known it will be calculated.
    */
   public long getNullCount() {
-    return getNativeNullCount(viewHandle);
+    return nullCount;
   }
 
   /**
@@ -135,6 +127,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   @Override
   public void close() {
     ColumnView.deleteColumnView(viewHandle);
+    viewHandle = 0;
   }
 
   /**
@@ -484,21 +477,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Create a new vector by concatenating multiple columns together.
-   * Note that all columns must have the same type.
-   */
-  public static ColumnVector concatenate(ColumnVector... columns) {
-    if (columns.length < 2) {
-      throw new IllegalArgumentException("Concatenate requires 2 or more columns");
-    }
-    long[] columnHandles = new long[columns.length];
-    for (int i = 0; i < columns.length; ++i) {
-      columnHandles[i] = columns[i].getNativeView();
-    }
-    return new ColumnVector(concatenate(columnHandles));
-  }
-
-  /**
    * Create a new vector of "normalized" values, where:
    *  1. All representations of NaN (and -NaN) are replaced with the normalized NaN value
    *  2. All elements equivalent to 0.0 (including +0.0 and -0.0) are replaced with +0.0.
@@ -537,31 +515,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
 
     return new ColumnVector(bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId));
-  }
-
-  /**
-   * Create a new vector containing the MD5 hash of each row in the table.
-   *
-   * @param columns array of columns to hash, must have identical number of rows.
-   * @return the new ColumnVector of 32 character hex strings representing each row's hash value.
-   */
-  public static ColumnVector md5Hash(ColumnView... columns) {
-    if (columns.length < 1) {
-      throw new IllegalArgumentException("MD5 hashing requires at least 1 column of input");
-    }
-    long[] columnViews = new long[columns.length];
-    long size = columns[0].getRowCount();
-
-    for(int i = 0; i < columns.length; i++) {
-      assert columns[i] != null : "Column vectors passed may not be null";
-      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
-      assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
-      assert !columns[i].getType().isTimestamp() : "Unsupported column type Timestamp";
-      assert !columns[i].getType().isNestedType() || columns[i].getType() == DType.LIST :
-          "Unsupported nested type column";
-      columnViews[i] = columns[i].getNativeView();
-    }
-    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -2549,17 +2502,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
                                                         int nullConfig) throws CudfException;
 
   /**
-   * Native method to hash each row of the given table. Hashing function dispatched on the
-   * native side using the hashId.
-   *
-   * @param viewHandles array of native handles to the cudf::column_view columns being operated on.
-   * @param hashId integer native ID of the hashing function identifier HashType
-   * @return native handle of the resulting cudf column containing the hex-string hashing results.
-   */
-  private static native long hash(long[] viewHandles, int hashId) throws CudfException;
-
-  private static native long concatenate(long[] viewHandles) throws CudfException;
-  /**
    * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
    */
   static native long getNativeValidPointerSize(int size);
@@ -2627,7 +2569,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
     /**
      * Returns a LIST ColumnVector, for now, after constructing the NestedColumnVector from the host side
-     * nested Column Vector - children. This is used
+     * nested Column Vector - children. This is used for host side to device side copying internally.
      * @param type top level dtype, which is LIST currently
      * @param rows top level number of rows in the LIST column
      * @param valid validity buffer
@@ -2885,7 +2827,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
             hostDataBuffer = HostMemoryBuffer.allocate(data.length);
             hostDataBuffer.copyFromDeviceBuffer(data);
           }
-          HostColumnVector ret = new HostColumnVector(type, rows, nullCount,
+          HostColumnVector ret = new HostColumnVector(type, rows, Optional.of(nullCount),
               hostDataBuffer, hostValidityBuffer, hostOffsetsBuffer);
           needsCleanup = false;
           return ret;
@@ -2912,7 +2854,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
               children.add(copyToHostNestedHelper(childDevPtr));
             }
           }
-          HostColumnVector ret = new HostColumnVector(type, rows, nullCount,
+          HostColumnVector ret = new HostColumnVector(type, rows, Optional.of(nullCount),
               hData, hValid, hOffset, children);
           return ret;
         }

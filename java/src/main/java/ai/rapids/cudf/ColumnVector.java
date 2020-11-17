@@ -55,7 +55,7 @@ public final class ColumnVector extends ColumnView {
    *                      owned by this instance.
    */
   public ColumnVector(long nativePointer) {
-    super(viewHandleFromColumnHandle(nativePointer));
+    super(ColumnVector.getNativeColumnView(nativePointer));
     assert nativePointer != 0;
     offHeap = new OffHeapState(nativePointer);
     MemoryCleaner.register(this, offHeap);
@@ -150,9 +150,8 @@ public final class ColumnVector extends ColumnView {
   /** Creates a ColumnVector from a column view handle
    * @return a new ColumnVector
    */
-  public static ColumnVector fromColumnView(long columnViewHandle) {
-    long mainCvHandle = ColumnView.copyColumnViewToCV(columnViewHandle);
-    return new ColumnVector(mainCvHandle);
+  public static ColumnVector fromColumnView(ColumnView columnView) {
+    return new ColumnVector(ColumnView.copyColumnViewToCV(columnView.getNativeView()));
   }
 
 
@@ -349,8 +348,15 @@ public final class ColumnVector extends ColumnView {
    * Create a new vector by concatenating multiple columns together.
    * Note that all columns must have the same type.
    */
-  public static ColumnVector concatenate(ColumnVector... columns) {
-    return ColumnView.concatenate(columns);
+  public static ColumnVector concatenate(ColumnView... columns) {
+    if (columns.length < 2) {
+      throw new IllegalArgumentException("Concatenate requires 2 or more columns");
+    }
+    long[] columnHandles = new long[columns.length];
+    for (int i = 0; i < columns.length; ++i) {
+      columnHandles[i] = columns[i].getNativeView();
+    }
+    return new ColumnVector(concatenate(columnHandles));
   }
 
   /**
@@ -360,7 +366,7 @@ public final class ColumnVector extends ColumnView {
    * @param columns array of columns containing strings.
    * @return A new java column vector containing the concatenated strings.
    */
-  public final ColumnVector stringConcatenate(ColumnVector[] columns) {
+  public static ColumnVector stringConcatenate(ColumnView[] columns) {
     try (Scalar emptyString = Scalar.fromString("");
          Scalar nullString = Scalar.fromString(null)) {
       return stringConcatenate(emptyString, nullString, columns);
@@ -377,7 +383,7 @@ public final class ColumnVector extends ColumnView {
    * @param columns array of columns containing strings, must be more than 2 columns
    * @return A new java column vector containing the concatenated strings.
    */
-  public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnVector[] columns) {
+  public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnView[] columns) {
     assert columns.length >= 2 : ".stringConcatenate() operation requires at least 2 columns";
     assert separator != null : "separator scalar provided may not be null";
     assert separator.getType() == DType.STRING : "separator scalar must be a string scalar";
@@ -402,8 +408,23 @@ public final class ColumnVector extends ColumnView {
    * @param columns array of columns to hash, must have identical number of rows.
    * @return the new ColumnVector of 32 character hex strings representing each row's hash value.
    */
-  public static ColumnVector md5Hash(ColumnVector... columns) {
-    return ColumnView.md5Hash(columns);
+  public static ColumnVector md5Hash(ColumnView... columns) {
+    if (columns.length < 1) {
+      throw new IllegalArgumentException("MD5 hashing requires at least 1 column of input");
+    }
+    long[] columnViews = new long[columns.length];
+    long size = columns[0].getRowCount();
+
+    for(int i = 0; i < columns.length; i++) {
+      assert columns[i] != null : "Column vectors passed may not be null";
+      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
+      assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
+      assert !columns[i].getType().isTimestamp() : "Unsupported column type Timestamp";
+      assert !columns[i].getType().isNestedType() || columns[i].getType() == DType.LIST :
+          "Unsupported nested type column";
+      columnViews[i] = columns[i].getNativeView();
+    }
+    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId()));
   }
 
   /**
@@ -443,6 +464,18 @@ public final class ColumnVector extends ColumnView {
   private static native long sequence(long initialValue, long step, int rows);
 
   private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
+
+  private static native long concatenate(long[] viewHandles) throws CudfException;
+
+  /**
+   * Native method to hash each row of the given table. Hashing function dispatched on the
+   * native side using the hashId.
+   *
+   * @param viewHandles array of native handles to the cudf::column_view columns being operated on.
+   * @param hashId integer native ID of the hashing function identifier HashType
+   * @return native handle of the resulting cudf column containing the hex-string hashing results.
+   */
+  private static native long hash(long[] viewHandles, int hashId) throws CudfException;
 
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
@@ -583,7 +616,7 @@ public final class ColumnVector extends ColumnView {
       if (viewHandle != 0) {
         return ColumnView.getNativeNullCount(getViewHandle());
       }
-      return ColumnVector.getNativeNullCountColumn(columnHandle);
+      return getNativeNullCountColumn(columnHandle);
     }
 
     private void setNativeNullCount(int nullCount) throws CudfException {
