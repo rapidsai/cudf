@@ -141,18 +141,26 @@ public class DecimalColumnVectorTest extends CudfTestBase {
     // precision overflow
     assertThrows(IllegalArgumentException.class, () -> HostColumnVector.fromDecimals(overflowDecimal64));
     assertThrows(IllegalArgumentException.class, () -> {
-      ColumnVector.decimalFromInts(-(DType.DECIMAL32_MAX_PRECISION + 1), unscaledDec32Zoo);
+      try (ColumnVector ignored = ColumnVector.decimalFromInts(
+          -(DType.DECIMAL32_MAX_PRECISION + 1), unscaledDec32Zoo)) {
+      }
     });
     assertThrows(IllegalArgumentException.class, () -> {
-      ColumnVector.decimalFromLongs(-(DType.DECIMAL64_MAX_PRECISION + 1), unscaledDec64Zoo);
+      try (ColumnVector ignored = ColumnVector.decimalFromLongs(
+          -(DType.DECIMAL64_MAX_PRECISION + 1), unscaledDec64Zoo)) {
+      }
     });
     // precision overflow due to rescaling by min scale
     assertThrows(IllegalArgumentException.class, () -> {
-      ColumnVector.fromDecimals(BigDecimal.valueOf(1.23e10), BigDecimal.valueOf(1.2e-7));
+      try (ColumnVector ignored = ColumnVector.fromDecimals(
+          BigDecimal.valueOf(1.23e10), BigDecimal.valueOf(1.2e-7))) {
+      }
     });
     // exactly hit the MAX_PRECISION_DECIMAL64 after rescaling
     assertDoesNotThrow(() -> {
-      ColumnVector.fromDecimals(BigDecimal.valueOf(1.23e10), BigDecimal.valueOf(1.2e-6));
+      try (ColumnVector ignored = ColumnVector.fromDecimals(
+          BigDecimal.valueOf(1.23e10), BigDecimal.valueOf(1.2e-6))) {
+      }
     });
   }
 
@@ -324,6 +332,34 @@ public class DecimalColumnVectorTest extends CudfTestBase {
                 }
               }
             }
+          }
+        }
+      }
+    }
+  }
+
+  @Test
+  public void testColumnVectorFromScalar() {
+    try (Scalar s = Scalar.fromDecimal(-3, 1233456)) {
+      try (ColumnVector cv = ColumnVector.fromScalar(s, 10)) {
+        assertEquals(s.getType(), cv.getDataType());
+        assertEquals(10L, cv.getRowCount());
+        try (HostColumnVector hcv = cv.copyToHost()) {
+          for (int i = 0; i < cv.getRowCount(); i++) {
+            assertEquals(s.getInt(), hcv.getInt(i));
+            assertEquals(s.getBigDecimal(), hcv.getBigDecimal(i));
+          }
+        }
+      }
+    }
+    try (Scalar s = Scalar.fromDecimal(-6, 123456789098L)) {
+      try (ColumnVector cv = ColumnVector.fromScalar(s, 10)) {
+        assertEquals(s.getType(), cv.getDataType());
+        assertEquals(10L, cv.getRowCount());
+        try (HostColumnVector hcv = cv.copyToHost()) {
+          for (int i = 0; i < cv.getRowCount(); i++) {
+            assertEquals(s.getLong(), hcv.getLong(i));
+            assertEquals(s.getBigDecimal(), hcv.getBigDecimal(i));
           }
         }
       }

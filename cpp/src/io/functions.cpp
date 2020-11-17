@@ -222,7 +222,7 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
   orc::ProtobufReader pb;
   orc::PostScript ps;
   pb.init(ps_data, ps_length);
-  CUDF_EXPECTS(pb.read(&ps, ps_length), "Cannot read postscript");
+  CUDF_EXPECTS(pb.read(ps, ps_length), "Cannot read postscript");
   CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
 
   // If compression is used, all the rest of the metadata is compressed
@@ -236,7 +236,7 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
   auto ff_data     = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
   orc::FileFooter ff;
   pb.init(ff_data, ff_length);
-  CUDF_EXPECTS(pb.read(&ff, ff_length), "Cannot read filefooter");
+  CUDF_EXPECTS(pb.read(ff, ff_length), "Cannot read filefooter");
   CUDF_EXPECTS(ff.types.size() > 0, "No columns found");
 
   // Read compressed metadata section
@@ -246,7 +246,7 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
   auto md_data     = decompressor->Decompress(buffer->data(), ps.metadataLength, &md_length);
   orc::Metadata md;
   pb.init(md_data, md_length);
-  CUDF_EXPECTS(pb.read(&md, md_length), "Cannot read metadata");
+  CUDF_EXPECTS(pb.read(md, md_length), "Cannot read metadata");
 
   // Initialize statistics to return
   std::vector<std::vector<std::string>> statistics_blobs;

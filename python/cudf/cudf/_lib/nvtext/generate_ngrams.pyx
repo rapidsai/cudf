@@ -12,13 +12,14 @@ from cudf._lib.cpp.nvtext.generate_ngrams cimport (
     generate_character_ngrams as cpp_generate_character_ngrams
 )
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 
 
-def generate_ngrams(Column strings, int ngrams, Scalar separator):
+def generate_ngrams(Column strings, int ngrams, DeviceScalar separator):
     cdef column_view c_strings = strings.view()
     cdef size_type c_ngrams = ngrams
-    cdef string_scalar* c_separator = <string_scalar*>separator.c_value.get()
+    cdef const string_scalar* c_separator = <const string_scalar*>separator\
+        .get_raw_ptr()
     cdef unique_ptr[column] c_result
 
     with nogil:

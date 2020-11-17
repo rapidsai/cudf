@@ -279,7 +279,7 @@ cpdef write_parquet(
         object path,
         object index=None,
         object compression=None,
-        str statistics="ROWGROUP",
+        object statistics="ROWGROUP",
         object metadata_file_path=None,
         object int96_timestamps=False):
     """
@@ -475,8 +475,8 @@ cpdef merge_filemetadata(object filemetadata_list):
     return np.asarray(out_metadata_py)
 
 
-cdef cudf_io_types.statistics_freq _get_stat_freq(str statistics):
-    statistics = statistics.upper()
+cdef cudf_io_types.statistics_freq _get_stat_freq(object statistics):
+    statistics = str(statistics).upper()
     if statistics == "NONE":
         return cudf_io_types.statistics_freq.STATISTICS_NONE
     elif statistics == "ROWGROUP":

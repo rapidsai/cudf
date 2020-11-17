@@ -16,10 +16,10 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/fill.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/fill.hpp>
@@ -36,6 +36,7 @@ struct size_of_helper {
   constexpr int operator()() const
   {
     CUDF_FAIL("Invalid, non fixed-width element type.");
+    return 0;
   }
 
   template <typename T,
@@ -81,7 +82,7 @@ std::unique_ptr<column> make_numeric_column(data_type type,
   return std::make_unique<column>(type,
                                   size,
                                   rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                                  create_null_mask(size, state, stream, mr),
+                                  detail::create_null_mask(size, state, stream, mr),
                                   state_null_count(state, size),
                                   std::vector<std::unique_ptr<column>>{});
 }
@@ -99,7 +100,7 @@ std::unique_ptr<column> make_fixed_point_column(data_type type,
   return std::make_unique<column>(type,
                                   size,
                                   rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                                  create_null_mask(size, state, stream, mr),
+                                  detail::create_null_mask(size, state, stream, mr),
                                   state_null_count(state, size),
                                   std::vector<std::unique_ptr<column>>{});
 }
@@ -117,7 +118,7 @@ std::unique_ptr<column> make_timestamp_column(data_type type,
   return std::make_unique<column>(type,
                                   size,
                                   rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                                  create_null_mask(size, state, stream, mr),
+                                  detail::create_null_mask(size, state, stream, mr),
                                   state_null_count(state, size),
                                   std::vector<std::unique_ptr<column>>{});
 }
@@ -135,7 +136,7 @@ std::unique_ptr<column> make_duration_column(data_type type,
   return std::make_unique<column>(type,
                                   size,
                                   rmm::device_buffer{size * cudf::size_of(type), stream, mr},
-                                  create_null_mask(size, state, stream, mr),
+                                  detail::create_null_mask(size, state, stream, mr),
                                   state_null_count(state, size),
                                   std::vector<std::unique_ptr<column>>{});
 }
@@ -182,17 +183,18 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream) const
 {
+  auto null_mask = detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
+
   if (!value.is_valid())
     return std::make_unique<column>(value.type(),
                                     size,
                                     rmm::device_buffer{0, stream, mr},
-                                    create_null_mask(size, mask_state::ALL_NULL, stream, mr),
+                                    null_mask,
                                     size);
 
   // Create a strings column_view with all nulls and no children.
   // Since we are setting every row to the scalar, the fill() never needs to access
   // any of the children in the strings column which would otherwise cause an exception.
-  auto null_mask = create_null_mask(size, mask_state::ALL_NULL, stream);
   column_view sc{
     data_type{type_id::STRING}, size, nullptr, static_cast<bitmask_type*>(null_mask.data()), size};
   auto sv = static_cast<scalar_type_t<cudf::string_view> const&>(value);

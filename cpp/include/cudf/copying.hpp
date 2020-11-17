@@ -287,6 +287,46 @@ std::unique_ptr<column> copy_range(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Creates a new column by shifting all values by an offset.
+ *
+ * @ingroup copy_shift
+ *
+ * Elements will be determined by `output[idx] = input[idx - offset]`.
+ * Some elements in the output may be indeterminable from the input. For those
+ * elements, the value will be determined by `fill_values`.
+ *
+ * @code{.pseudo}
+ * Examples
+ * -------------------------------------------------
+ * input       = [0, 1, 2, 3, 4]
+ * offset      = 3
+ * fill_values = @
+ * return      = [@, @, @, 0, 1]
+ * -------------------------------------------------
+ * input       = [5, 4, 3, 2, 1]
+ * offset      = -2
+ * fill_values = 7
+ * return      = [3, 2, 1, 7, 7]
+ * @endcode
+ *
+ * @note if the input is nullable, the output will be nullable.
+ * @note if the fill value is null, the output will be nullable.
+ *
+ * @param input      Column to be shifted.
+ * @param offset     The offset by which to shift the input.
+ * @param fill_value Fill value for indeterminable outputs.
+ * @param mr         Device memory resource used to allocate the returned result's device memory
+ *
+ * @throw cudf::logic_error if @p input dtype is not fixed-with.
+ * @throw cudf::logic_error if @p fill_value dtype does not match @p input dtype.
+ */
+std::unique_ptr<column> shift(
+  column_view const& input,
+  size_type offset,
+  scalar const& fill_value,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Slices a `column_view` into a set of `column_view`s according to a set of indices.
  *
  * @ingroup copy_slice
@@ -479,7 +519,6 @@ struct contiguous_split_result {
  * @param input View of a table to split
  * @param splits A vector of indices where the view will be split
  * @param[in] mr Device memory resource used to allocate the returned result's device memory
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @return The set of requested views of `input` indicated by the `splits` and the viewed memory
  * buffer.
  */
@@ -512,46 +551,6 @@ std::unique_ptr<column> copy_if_else(
   column_view const& rhs,
   column_view const& boolean_mask,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Creates a new column by shifting all values by an offset.
- *
- * @ingroup copy_shift
- *
- * Elements will be determined by `output[idx] = input[idx - offset]`.
- * Some elements in the output may be indeterminable from the input. For those
- * elements, the value will be determined by `fill_values`.
- *
- * @code{.pseudo}
- * Examples
- * -------------------------------------------------
- * input       = [0, 1, 2, 3, 4]
- * offset      = 3
- * fill_values = @
- * return      = [@, @, @, 0, 1]
- * -------------------------------------------------
- * input       = [5, 4, 3, 2, 1]
- * offset      = -2
- * fill_values = 7
- * return      = [3, 2, 1, 7, 7]
- * @endcode
- *
- * @note if the input is nullable, the output will be nullable.
- * @note if the fill value is null, the output will be nullable.
- *
- * @param input      Column to be shifted.
- * @param offset     The offset by which to shift the input.
- * @param fill_value Fill value for indeterminable outputs.
- *
- * @throw cudf::logic_error if @p input dtype is not fixed-with.
- * @throw cudf::logic_error if @p fill_value dtype does not match @p input dtype.
- */
-std::unique_ptr<column> shift(
-  column_view const& input,
-  size_type offset,
-  scalar const& fill_value,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
 
 /**
  * @brief   Returns a new column, where each element is selected from either @p lhs or

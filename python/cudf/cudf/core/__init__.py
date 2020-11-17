@@ -22,4 +22,5 @@ from cudf.core.index import (
     UInt64Index,
 )
 from cudf.core.multiindex import MultiIndex
+from cudf.core.scalar import NA, Scalar
 from cudf.core.series import Series
