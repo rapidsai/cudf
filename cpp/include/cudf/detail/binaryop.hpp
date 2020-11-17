@@ -22,7 +22,7 @@ namespace cudf {
 //! Inner interfaces and implementations
 namespace detail {
 /**
- * @copydoc cudf::binary_operation(scalar const&, column_view const&, binary_operator,
+ * @copydoc cudf::binary_operation(scalar const&, column_view const&, binary_op,
  * data_type, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -30,13 +30,13 @@ namespace detail {
 std::unique_ptr<column> binary_operation(
   scalar const& lhs,
   column_view const& rhs,
-  binary_operator op,
+  binary_op op,
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
- * @copydoc cudf::binary_operation(column_view const&, scalar const&, binary_operator,
+ * @copydoc cudf::binary_operation(column_view const&, scalar const&, binary_op,
  * data_type, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -44,21 +44,21 @@ std::unique_ptr<column> binary_operation(
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
   scalar const& rhs,
-  binary_operator op,
+  binary_op op,
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
 /**
  * @copydoc cudf::binary_operation(column_view const&, column_view const&,
- * binary_operator, data_type, rmm::mr::device_memory_resource *)
+ * binary_op, data_type, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
   column_view const& rhs,
-  binary_operator op,
+  binary_op op,
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);

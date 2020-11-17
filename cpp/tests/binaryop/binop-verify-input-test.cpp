@@ -35,7 +35,7 @@ TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorType)
   auto rhs = make_random_wrapped_column<TypeRhs>(10);
 
   EXPECT_THROW(
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_id::NUM_TYPE_IDS)),
+    cudf::binary_operation(lhs, rhs, cudf::binary_op::ADD, data_type(type_id::NUM_TYPE_IDS)),
     cudf::logic_error);
 }
 
@@ -49,7 +49,7 @@ TEST_F(BinopVerifyInputTest, Vector_Vector_ErrorSecondOperandVectorZeroSize)
   auto rhs = make_random_wrapped_column<TypeRhs>(10);
 
   EXPECT_THROW(
-    cudf::binary_operation(lhs, rhs, cudf::binary_operator::ADD, data_type(type_to_id<TypeOut>())),
+    cudf::binary_operation(lhs, rhs, cudf::binary_op::ADD, data_type(type_to_id<TypeOut>())),
     cudf::logic_error);
 }
 

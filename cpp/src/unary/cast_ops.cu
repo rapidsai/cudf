@@ -179,11 +179,11 @@ std::unique_ptr<column> rescale(column_view input,
 
   if (input.type().scale() > scale) {
     auto const scalar = make_fixed_point_scalar<T>(0, scale_type{scale});
-    return detail::binary_operation(input, *scalar, binary_operator::ADD, {}, mr, stream);
+    return detail::binary_operation(input, *scalar, binary_op::ADD, {}, mr, stream);
   } else {
     auto const diff   = input.type().scale() - scale;
     auto const scalar = make_fixed_point_scalar<T>(std::pow(10, -diff), scale_type{diff});
-    return detail::binary_operation(input, *scalar, binary_operator::DIV, {}, mr, stream);
+    return detail::binary_operation(input, *scalar, binary_op::DIV, {}, mr, stream);
   }
 };
 

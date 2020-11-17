@@ -71,7 +71,7 @@ static void BM_binaryop_transform(benchmark::State& state)
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     // Execute tree that chains additions like (((a + b) + c) + d)
-    auto const op         = cudf::binary_operator::ADD;
+    auto const op         = cudf::binary_op::ADD;
     auto result_data_type = cudf::data_type(cudf::type_to_id<key_type>());
     if (reuse_columns) {
       auto result = cudf::binary_operation(columns.at(0), columns.at(0), op, result_data_type);

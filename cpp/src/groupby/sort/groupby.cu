@@ -267,7 +267,7 @@ void store_result_functor::operator()<aggregation::MEAN>(aggregation const& agg)
   auto result =
     cudf::detail::binary_operation(sum_result,
                                    count_result,
-                                   binary_operator::DIV,
+                                   binary_op::DIV,
                                    cudf::detail::target_type(values.type(), aggregation::MEAN),
                                    mr,
                                    stream);

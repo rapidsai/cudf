@@ -99,11 +99,11 @@ TYPED_TEST(ChronoColumnTest, ChronoDurationsMatchPrimitiveRepresentation)
 
 template <typename ChronoT>
 struct compare_chrono_elements {
-  cudf::binary_operator comp;
+  cudf::binary_op comp;
   cudf::column_device_view lhs;
   cudf::column_device_view rhs;
 
-  compare_chrono_elements(cudf::binary_operator _comp,
+  compare_chrono_elements(cudf::binary_op _comp,
                           cudf::column_device_view& _lhs,
                           cudf::column_device_view& _rhs)
     : comp(_comp), lhs(_lhs), rhs(_rhs)
@@ -115,10 +115,10 @@ struct compare_chrono_elements {
     auto lhs_elt = lhs.element<ChronoT>(element_index);
     auto rhs_elt = rhs.element<ChronoT>(element_index);
     switch (comp) {
-      case cudf::binary_operator::LESS: return lhs_elt < rhs_elt;
-      case cudf::binary_operator::GREATER: return lhs_elt > rhs_elt;
-      case cudf::binary_operator::LESS_EQUAL: return lhs_elt <= rhs_elt;
-      case cudf::binary_operator::GREATER_EQUAL: return lhs_elt >= rhs_elt;
+      case cudf::binary_op::LESS: return lhs_elt < rhs_elt;
+      case cudf::binary_op::GREATER: return lhs_elt > rhs_elt;
+      case cudf::binary_op::LESS_EQUAL: return lhs_elt <= rhs_elt;
+      case cudf::binary_op::GREATER_EQUAL: return lhs_elt >= rhs_elt;
       default: return false;
     }
   }
@@ -147,28 +147,28 @@ TYPED_TEST(ChronoColumnTest, ChronosCanBeComparedInDeviceCode)
   EXPECT_TRUE(thrust::all_of(
     indices.begin(),
     indices.end(),
-    compare_chrono_elements<TypeParam>{cudf::binary_operator::LESS,
+    compare_chrono_elements<TypeParam>{cudf::binary_op::LESS,
                                        *cudf::column_device_view::create(chrono_lhs_col),
                                        *cudf::column_device_view::create(chrono_rhs_col)}));
 
   EXPECT_TRUE(thrust::all_of(
     indices.begin(),
     indices.end(),
-    compare_chrono_elements<TypeParam>{cudf::binary_operator::GREATER,
+    compare_chrono_elements<TypeParam>{cudf::binary_op::GREATER,
                                        *cudf::column_device_view::create(chrono_rhs_col),
                                        *cudf::column_device_view::create(chrono_lhs_col)}));
 
   EXPECT_TRUE(thrust::all_of(
     indices.begin(),
     indices.end(),
-    compare_chrono_elements<TypeParam>{cudf::binary_operator::LESS_EQUAL,
+    compare_chrono_elements<TypeParam>{cudf::binary_op::LESS_EQUAL,
                                        *cudf::column_device_view::create(chrono_lhs_col),
                                        *cudf::column_device_view::create(chrono_lhs_col)}));
 
   EXPECT_TRUE(thrust::all_of(
     indices.begin(),
     indices.end(),
-    compare_chrono_elements<TypeParam>{cudf::binary_operator::GREATER_EQUAL,
+    compare_chrono_elements<TypeParam>{cudf::binary_op::GREATER_EQUAL,
                                        *cudf::column_device_view::create(chrono_rhs_col),
                                        *cudf::column_device_view::create(chrono_rhs_col)}));
 }
