@@ -375,7 +375,7 @@ extern "C" __global__ void __launch_bounds__(128)
     num_dict_pages = bs->ck.num_dict_pages;
     max_num_pages  = (page_info) ? bs->ck.max_num_pages : 0;
     values_found   = 0;
-    SYNCWARP();
+    __syncwarp();
     while (values_found < num_values && bs->cur < bs->end) {
       int index_out = -1;
 
@@ -411,7 +411,7 @@ extern "C" __global__ void __launch_bounds__(128)
           bs->cur = bs->end;
         }
       }
-      index_out = SHFL0(index_out);
+      index_out = shuffle0(index_out);
       if (index_out >= 0 && index_out < max_num_pages) {
         // NOTE: Assumes that sizeof(PageInfo) <= 128
         if (t < sizeof(PageInfo) / sizeof(uint32_t)) {
@@ -419,8 +419,8 @@ extern "C" __global__ void __launch_bounds__(128)
             reinterpret_cast<const uint32_t *>(&bs->page)[t];
         }
       }
-      num_values = SHFL0(num_values);
-      SYNCWARP();
+      num_values = shuffle0(num_values);
+      __syncwarp();
     }
     if (t == 0) {
       chunks[chunk].num_data_pages = data_page_count;

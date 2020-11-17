@@ -703,7 +703,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         chunk.type_kind     = _metadata->ff.types[_selected_columns[j]].kind;
         if (_decimals_as_float64) {
           chunk.decimal_scale =
-            _metadata->ff.types[_selected_columns[j]].scale | ORC_DECIMAL2FLOAT64_SCALE;
+            _metadata->ff.types[_selected_columns[j]].scale | orc::gpu::orc_decimal2float64_scale;
         } else if (_decimals_as_int_scale < 0) {
           chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale;
         } else {

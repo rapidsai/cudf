@@ -27,11 +27,11 @@ using cudf::detail::host_span;
 
 namespace cudf {
 namespace io {
-#define GZ_FLG_FTEXT 0x01     // ASCII text hint
-#define GZ_FLG_FHCRC 0x02     // Header CRC present
-#define GZ_FLG_FEXTRA 0x04    // Extra fields present
-#define GZ_FLG_FNAME 0x08     // Original file name present
-#define GZ_FLG_FCOMMENT 0x10  // Comment present
+constexpr uint8_t gz_flg_ftext    = 0x01;  // ASCII text hint
+constexpr uint8_t gz_flg_fhcrc    = 0x02;  // Header CRC present
+constexpr uint8_t gz_flg_fextra   = 0x04;  // Extra fields present
+constexpr uint8_t gz_flg_fname    = 0x08;  // Original file name present
+constexpr uint8_t gz_flg_fcomment = 0x10;  // Comment present
 
 #pragma pack(push, 1)
 
@@ -138,7 +138,7 @@ bool ParseGZArchive(gz_archive_s *dst, const uint8_t *raw, size_t len)
   dst->fhdr = fhdr;
   raw += sizeof(gz_file_header_s);
   len -= sizeof(gz_file_header_s);
-  if (fhdr->flags & GZ_FLG_FEXTRA) {
+  if (fhdr->flags & gz_flg_fextra) {
     uint32_t xlen;
 
     if (len < 2) return false;
@@ -151,7 +151,7 @@ bool ParseGZArchive(gz_archive_s *dst, const uint8_t *raw, size_t len)
     raw += xlen;
     len -= xlen;
   }
-  if (fhdr->flags & GZ_FLG_FNAME) {
+  if (fhdr->flags & gz_flg_fname) {
     size_t l = 0;
     uint8_t c;
     do {
@@ -163,7 +163,7 @@ bool ParseGZArchive(gz_archive_s *dst, const uint8_t *raw, size_t len)
     raw += l;
     len -= l;
   }
-  if (fhdr->flags & GZ_FLG_FCOMMENT) {
+  if (fhdr->flags & gz_flg_fcomment) {
     size_t l = 0;
     uint8_t c;
     do {
@@ -175,7 +175,7 @@ bool ParseGZArchive(gz_archive_s *dst, const uint8_t *raw, size_t len)
     raw += l;
     len -= l;
   }
-  if (fhdr->flags & GZ_FLG_FHCRC) {
+  if (fhdr->flags & gz_flg_fhcrc) {
     if (len < 2) return false;
     dst->hcrc16 = raw[0] | (raw[1] << 8);
     raw += 2;

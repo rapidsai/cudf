@@ -20,8 +20,8 @@ namespace cudf {
 namespace io {
 namespace avro {
 namespace gpu {
-#define NWARPS 16
-#define MAX_SHARED_SCHEMA_LEN 1000
+constexpr int nwarps = 16;
+constexpr int max_shared_schema_len = 1000;
 
 /*
  * Avro varint encoding - see
@@ -225,8 +225,8 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
  * @param[in] first_row Crop all rows below first_row
  *
  **/
-// blockDim {32,NWARPS,1}
-extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
+// blockDim {32,nwarps,1}
+extern "C" __global__ void __launch_bounds__(nwarps * 32, 2)
   gpuDecodeAvroColumnData(block_desc_s *blocks,
                           schemadesc_s *schema_g,
                           nvstrdesc_s *global_dictionary,
@@ -238,21 +238,21 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
                           size_t max_rows,
                           size_t first_row)
 {
-  __shared__ __align__(8) schemadesc_s g_shared_schema[MAX_SHARED_SCHEMA_LEN];
-  __shared__ __align__(8) block_desc_s blk_g[NWARPS];
+  __shared__ __align__(8) schemadesc_s g_shared_schema[max_shared_schema_len];
+  __shared__ __align__(8) block_desc_s blk_g[nwarps];
 
   schemadesc_s *schema;
   block_desc_s *const blk = &blk_g[threadIdx.y];
-  uint32_t block_id       = blockIdx.x * NWARPS + threadIdx.y;
+  uint32_t block_id       = blockIdx.x * nwarps + threadIdx.y;
   size_t cur_row;
   uint32_t rows_remaining;
   const uint8_t *cur, *end;
 
   // Fetch schema into shared mem if possible
-  if (schema_len <= MAX_SHARED_SCHEMA_LEN) {
+  if (schema_len <= max_shared_schema_len) {
     for (int i = threadIdx.y * 32 + threadIdx.x;
          i < schema_len * sizeof(schemadesc_s) / sizeof(uint32_t);
-         i += NWARPS * 32) {
+         i += nwarps * 32) {
       reinterpret_cast<uint32_t *>(&g_shared_schema)[i] =
         reinterpret_cast<const uint32_t *>(schema_g)[i];
     }
@@ -295,11 +295,11 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
                             num_dictionary_entries);
     }
     if (nrows <= 1) {
-      cur = start + SHFL0(static_cast<uint32_t>(cur - start));
+      cur = start + shuffle0(static_cast<uint32_t>(cur - start));
     } else {
       cur = start + nrows * min_row_size;
     }
-    SYNCWARP();
+    __syncwarp();
     cur_row += nrows;
     rows_remaining -= nrows;
   }
@@ -334,9 +334,9 @@ cudaError_t __host__ DecodeAvroColumnData(block_desc_s *blocks,
                                           uint32_t min_row_size,
                                           cudaStream_t stream)
 {
-  dim3 dim_block(32, NWARPS);  // NWARPS warps per threadblock
-  dim3 dim_grid((num_blocks + NWARPS - 1) / NWARPS,
-                1);  // 1 warp per datablock, NWARPS datablocks per threadblock
+  dim3 dim_block(32, nwarps);  // nwarps warps per threadblock
+  dim3 dim_grid((num_blocks + nwarps - 1) / nwarps,
+                1);  // 1 warp per datablock, nwarps datablocks per threadblock
   gpuDecodeAvroColumnData<<<dim_grid, dim_block, 0, stream>>>(blocks,
                                                               schema,
                                                               global_dictionary,
