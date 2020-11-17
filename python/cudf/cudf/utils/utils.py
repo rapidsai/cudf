@@ -469,7 +469,7 @@ def search_range(start, stop, x, step=1, side="left"):
 
 
 # Utils for using appropiate dispatch for array functions
-def get_appropiate_dispatched_func(
+def get_appropriate_dispatched_func(
     cudf_submodule, cupy_submodule, func, args, kwargs
 ):
     fname = func.__name__
@@ -486,12 +486,12 @@ def get_appropiate_dispatched_func(
 
         cupy_compatible_args = get_cupy_compatible_args(args)
         cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
-        return cast_to_appropitate_cudf_type(cupy_output)
+        return cast_to_appropriate_cudf_type(cupy_output)
     else:
         return NotImplemented
 
 
-def cast_to_appropitate_cudf_type(val):
+def cast_to_appropriate_cudf_type(val):
     # TODO Handle scalar
     if val.ndim == 0:
         return cudf.Scalar(val).value

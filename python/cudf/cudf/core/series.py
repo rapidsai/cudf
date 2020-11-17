@@ -51,7 +51,7 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import get_relevant_submodule
-from cudf.utils.utils import get_appropiate_dispatched_func
+from cudf.utils.utils import get_appropriate_dispatched_func
 
 class Series(Frame, Serializable):
     @property
@@ -785,7 +785,7 @@ class Series(Frame, Serializable):
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         if method == "__call__":
-            return get_appropiate_dispatched_func(
+            return get_appropriate_dispatched_func(
                 Series, cupy, ufunc, inputs, kwargs
             )
         else:
@@ -800,7 +800,7 @@ class Series(Frame, Serializable):
         cudf_submodule = get_relevant_submodule(func, Series)
         cupy_submodule = get_relevant_submodule(func, cupy)
 
-        return get_appropiate_dispatched_func(
+        return get_appropriate_dispatched_func(
             cudf_submodule, cupy_submodule, func, args, kwargs
         )
 
