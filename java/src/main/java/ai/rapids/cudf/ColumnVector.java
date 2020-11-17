@@ -511,9 +511,9 @@ public final class ColumnVector extends ColumnView {
    */
   static native void deleteCudfColumn(long cudfColumnHandle) throws CudfException;
 
-  static native int getNativeNullCountColumn(long cudfColumnHandle) throws CudfException;
+  private static native int getNativeNullCountColumn(long cudfColumnHandle) throws CudfException;
 
-  static native void setNativeNullCountColumn(long cudfColumnHandle, int nullCount) throws CudfException;
+  private static native void setNativeNullCountColumn(long cudfColumnHandle, int nullCount) throws CudfException;
 
   /**
    * Create a cudf::column_view from a cudf::column.
@@ -599,10 +599,6 @@ public final class ColumnVector extends ColumnView {
       return viewHandle;
     }
 
-    public long getNativeRowCount() {
-      return ColumnView.getNativeRowCount(getViewHandle());
-    }
-
     public long getNativeNullCount() {
       if (viewHandle != 0) {
         return ColumnView.getNativeNullCount(getViewHandle());
@@ -613,16 +609,7 @@ public final class ColumnVector extends ColumnView {
     private void setNativeNullCount(int nullCount) throws CudfException {
       assert viewHandle == 0 : "Cannot set the null count if a view has already been created";
       assert columnHandle != 0;
-      ColumnVector.setNativeNullCountColumn(columnHandle, nullCount);
-    }
-
-    public DType getNativeType() {
-      return DType.fromNative(ColumnView.getNativeTypeId(getViewHandle()),
-          ColumnView.getNativeTypeScale(getViewHandle()));
-    }
-
-    public int getNativeScale() {
-      return ColumnView.getNativeTypeScale(getViewHandle());
+      setNativeNullCountColumn(columnHandle, nullCount);
     }
 
     public BaseDeviceMemoryBuffer getData() {
