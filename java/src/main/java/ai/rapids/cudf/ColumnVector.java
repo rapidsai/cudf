@@ -55,7 +55,7 @@ public final class ColumnVector extends ColumnView {
    *                      owned by this instance.
    */
   public ColumnVector(long nativePointer) {
-    super(ColumnVector.getNativeColumnView(nativePointer));
+    super(getColumnViewFromColumn(nativePointer));
     assert nativePointer != 0;
     offHeap = new OffHeapState(nativePointer);
     MemoryCleaner.register(this, offHeap);
@@ -150,6 +150,21 @@ public final class ColumnVector extends ColumnView {
 
     this.refCount = 0;
     incRefCountInternal(true);
+  }
+
+  /**
+   * Retrieves the column_view for a cudf::column and if it fails to do so, the column is deleted
+   * and the exception is thrown to the caller.
+   * @param nativePointer the cudf::column handle
+   * @return the column_view handle
+   */
+  private static long getColumnViewFromColumn(long nativePointer) {
+    try {
+      return ColumnVector.getNativeColumnView(nativePointer);
+    } catch (CudfException ce) {
+      deleteCudfColumn(nativePointer);
+      throw ce;
+    }
   }
 
   /** Creates a ColumnVector from a column view handle
