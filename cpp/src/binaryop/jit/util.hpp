@@ -39,45 +39,44 @@ enum class OperatorType {
  */
 std::string inline get_operator_name(binary_op op, OperatorType type)
 {
-  std::string operator_name;
-  switch (op) {
-    case binary_op::ADD: operator_name = "Add"; break;
-    case binary_op::SUB: operator_name = "Sub"; break;
-    case binary_op::MUL: operator_name = "Mul"; break;
-    case binary_op::DIV: operator_name = "Div"; break;
-    case binary_op::TRUE_DIV: operator_name = "TrueDiv"; break;
-    case binary_op::FLOOR_DIV: operator_name = "FloorDiv"; break;
-    case binary_op::MOD: operator_name = "Mod"; break;
-    case binary_op::PYMOD: operator_name = "PyMod"; break;
-    case binary_op::POW: operator_name = "Pow"; break;
-    case binary_op::EQUAL: operator_name = "Equal"; break;
-    case binary_op::NOT_EQUAL: operator_name = "NotEqual"; break;
-    case binary_op::LESS: operator_name = "Less"; break;
-    case binary_op::GREATER: operator_name = "Greater"; break;
-    case binary_op::LESS_EQUAL: operator_name = "LessEqual"; break;
-    case binary_op::GREATER_EQUAL: operator_name = "GreaterEqual"; break;
-    case binary_op::BITWISE_AND: operator_name = "BitwiseAnd"; break;
-    case binary_op::BITWISE_OR: operator_name = "BitwiseOr"; break;
-    case binary_op::BITWISE_XOR: operator_name = "BitwiseXor"; break;
-    case binary_op::LOGICAL_AND: operator_name = "LogicalAnd"; break;
-    case binary_op::LOGICAL_OR: operator_name = "LogicalOr"; break;
-    case binary_op::GENERIC_BINARY: operator_name = "UserDefinedOp"; break;
-    case binary_op::SHIFT_LEFT: operator_name = "ShiftLeft"; break;
-    case binary_op::SHIFT_RIGHT: operator_name = "ShiftRight"; break;
-    case binary_op::SHIFT_RIGHT_UNSIGNED: operator_name = "ShiftRightUnsigned"; break;
-    case binary_op::LOG_BASE: operator_name = "LogBase"; break;
-    case binary_op::ATAN2: operator_name = "ATan2"; break;
-    case binary_op::PMOD: operator_name = "PMod"; break;
-    case binary_op::NULL_EQUALS: operator_name = "NullEquals"; break;
-    case binary_op::NULL_MAX: operator_name = "NullMax"; break;
-    case binary_op::NULL_MIN: operator_name = "NullMin"; break;
-    default: operator_name = "None"; break;
-  }
-  if (type == OperatorType::Direct) {
-    return operator_name;
-  } else {
-    return 'R' + operator_name;
-  }
+  std::string const operator_name = [op] {
+    // clang-format off
+    switch (op) {
+      case binary_op::ADD:                  return "Add";
+      case binary_op::SUB:                  return "Sub";
+      case binary_op::MUL:                  return "Mul";
+      case binary_op::DIV:                  return "Div";
+      case binary_op::TRUE_DIV:             return "TrueDiv";
+      case binary_op::FLOOR_DIV:            return "FloorDiv";
+      case binary_op::MOD:                  return "Mod";
+      case binary_op::PYMOD:                return "PyMod";
+      case binary_op::POW:                  return "Pow";
+      case binary_op::EQUAL:                return "Equal";
+      case binary_op::NOT_EQUAL:            return "NotEqual";
+      case binary_op::LESS:                 return "Less";
+      case binary_op::GREATER:              return "Greater";
+      case binary_op::LESS_EQUAL:           return "LessEqual";
+      case binary_op::GREATER_EQUAL:        return "GreaterEqual";
+      case binary_op::BITWISE_AND:          return "BitwiseAnd";
+      case binary_op::BITWISE_OR:           return "BitwiseOr";
+      case binary_op::BITWISE_XOR:          return "BitwiseXor";
+      case binary_op::LOGICAL_AND:          return "LogicalAnd";
+      case binary_op::LOGICAL_OR:           return "LogicalOr";
+      case binary_op::GENERIC_BINARY:       return "UserDefinedOp";
+      case binary_op::SHIFT_LEFT:           return "ShiftLeft";
+      case binary_op::SHIFT_RIGHT:          return "ShiftRight";
+      case binary_op::SHIFT_RIGHT_UNSIGNED: return "ShiftRightUnsigned";
+      case binary_op::LOG_BASE:             return "LogBase";
+      case binary_op::ATAN2:                return "ATan2";
+      case binary_op::PMOD:                 return "PMod";
+      case binary_op::NULL_EQUALS:          return "NullEquals";
+      case binary_op::NULL_MAX:             return "NullMax";
+      case binary_op::NULL_MIN:             return "NullMin";
+      default:                              return "None";
+    }
+    // clang-format on
+  }();
+  return type == OperatorType::Direct ? operator_name : 'R' + operator_name;
 }
 
 }  // namespace jit
