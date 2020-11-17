@@ -175,6 +175,39 @@ TYPED_TEST(HashTestFloatTyped, TestExtremes)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view(), true);
 }
 
+class SerialMurmurHash3Test : public cudf::test::BaseFixture {
+};
+
+TEST_F(SerialMurmurHash3Test, MultiValue)
+{
+
+  fixed_width_column_wrapper<int32_t> const strings_col_result({0,1621279277,679900975,1756639373,621228066});
+  fixed_width_column_wrapper<int32_t> const ints_col_result({933211791, 751823303, -1080202046, 723455942, 133916647});
+  fixed_width_column_wrapper<int32_t> const mixed_col_result({873888793,217063341,-870389105,-816623351,1839385906});
+
+  strings_column_wrapper const strings_col({"",
+                                            "The quick brown fox",
+                                            "jumps over the lazy dog.",
+                                            "All work and no play makes Jack a dull boy",
+                                            "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
+
+  using limits = std::numeric_limits<int32_t>;
+  fixed_width_column_wrapper<int32_t> const ints_col({0, 100, -100, limits::min(), limits::max()});
+  fixed_width_column_wrapper<bool> const bools_col({0, 1, 1, 1, 0});
+
+  auto const input1      = cudf::table_view({strings_col});
+  auto const input2      = cudf::table_view({ints_col});
+  auto const input3      = cudf::table_view({strings_col, ints_col, bools_col});
+
+  auto const hashed_output1 = cudf::hash(input1, cudf::hash_id::HASH_SERIAL_MURMUR3, {}, 0);
+  auto const hashed_output2 = cudf::hash(input2, cudf::hash_id::HASH_SERIAL_MURMUR3, {}, 42);
+  auto const hashed_output3 = cudf::hash(input3, cudf::hash_id::HASH_SERIAL_MURMUR3, {}, 0);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(hashed_output1->view(), strings_col_result, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(hashed_output2->view(), ints_col_result, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(hashed_output3->view(), mixed_col_result, true);
+}
+
 class MD5HashTest : public cudf::test::BaseFixture {
 };
 

@@ -370,6 +370,7 @@ struct MurmurHash3_32 {
   using result_type   = hash_value_type;
 
   CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32() : m_seed(0) {}
+  CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
   CUDA_HOST_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
   {

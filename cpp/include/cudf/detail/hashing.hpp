@@ -40,6 +40,7 @@ std::unique_ptr<column> hash(
   table_view const& input,
   hash_id hash_function                     = hash_id::HASH_MURMUR3,
   std::vector<uint32_t> const& initial_hash = {},
+  uint32_t seed = 0,
   rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                       = 0);
 
@@ -51,6 +52,12 @@ std::unique_ptr<column> murmur_hash3_32(
 
 std::unique_ptr<column> md5_hash(
   table_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0);
+
+std::unique_ptr<column> serial_murmur_hash3_32(
+  table_view const& input,
+  uint32_t seed = 0,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 

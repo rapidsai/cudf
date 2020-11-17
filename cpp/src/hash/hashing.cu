@@ -642,12 +642,14 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
                              std::vector<uint32_t> const& initial_hash,
+                             uint32_t seed,
                              rmm::mr::device_memory_resource* mr,
                              cudaStream_t stream)
 {
   switch (hash_function) {
     case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, initial_hash, mr, stream);
     case (hash_id::HASH_MD5): return md5_hash(input, mr, stream);
+    case (hash_id::HASH_SERIAL_MURMUR3): return serial_murmur_hash3_32(input, seed, mr, stream);
     default: return nullptr;
   }
 }
@@ -716,6 +718,56 @@ std::unique_ptr<column> md5_hash(table_view const& input,
                              mr);
 }
 
+std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
+                                                  uint32_t seed,
+                                                  rmm::mr::device_memory_resource* mr,
+                                                  cudaStream_t stream)
+{
+  auto output = make_numeric_column(
+    data_type(type_id::INT32), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
+
+  if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }
+
+  bool const nullable     = has_nulls(input);
+  auto const device_input = table_device_view::create(input, stream);
+  auto output_view        = output->mutable_view();
+  auto d_hashes = output_view.data<hash_value_type>();
+
+  if(nullable) {
+    thrust::for_each(rmm::exec_policy(stream)->on(stream),
+                     thrust::make_counting_iterator(0),
+                     thrust::make_counting_iterator(input.num_rows()),
+                     [d_hashes, device_input = *device_input, original_seed = seed] __device__(auto row_index) {
+                        uint32_t hash_result = original_seed;
+                        for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
+                          hash_result = cudf::type_dispatcher(device_input.column(col_index).type(),
+                                                element_hasher_with_seed<MurmurHash3_32, true>{hash_result, hash_result},
+                                                device_input.column(col_index),
+                                                row_index);
+                        }
+                        d_hashes[row_index] = hash_result;
+                     });
+  } else {
+    thrust::for_each(rmm::exec_policy(stream)->on(stream),
+                     thrust::make_counting_iterator(0),
+                     thrust::make_counting_iterator(input.num_rows()),
+                     [d_hashes, device_input = *device_input, original_seed = seed] __device__(auto row_index) {
+                       uint32_t hash_result = original_seed;
+                       for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
+                         if (device_input.column(col_index).is_valid(row_index)) {
+                          hash_result = cudf::type_dispatcher(device_input.column(col_index).type(),
+                                                 element_hasher_with_seed<MurmurHash3_32, false>{hash_result, hash_result},
+                                                 device_input.column(col_index),
+                                                 row_index);
+                         }
+                       }
+                       d_hashes[row_index] = hash_result;
+                     });
+  }
+
+  return output;
+}
+
 std::unique_ptr<column> murmur_hash3_32(table_view const& input,
                                         std::vector<uint32_t> const& initial_hash,
                                         rmm::mr::device_memory_resource* mr,
@@ -773,10 +825,11 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
                              std::vector<uint32_t> const& initial_hash,
+                             uint32_t seed,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hash(input, hash_function, initial_hash, mr);
+  return detail::hash(input, hash_function, initial_hash, seed, mr);
 }
 
 std::unique_ptr<column> murmur_hash3_32(table_view const& input,
