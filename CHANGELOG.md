@@ -2,11 +2,13 @@
 
 ## New Features
 
+- PR #6116 Add `filters` parameter to Python `read_orc` function or filtering
 - PR #6460 Add is_timestamp format check API
 - PR #6647 Implement `cudf::round` floating point and integer types (`HALF_EVEN`)
 - PR #6562 Implement `cudf::round` floating point and integer types (`HALF_UP`)
 - PR #6685 Implement `cudf::round` `decimal32` & `decimal64` (`HALF_UP` and `HALF_EVEN`)
 - PR #6711 Implement `cudf::cast` for `decimal32/64` to/from integer and floating point
+- PR #6729 Implement `cudf::cast` for `decimal32/64` to/from different `type_id`
 - PR #6528 Enable `fixed_point` binary operations
 - PR #6460 Add is_timestamp format check API
 - PR #6568 Add function to create hashed vocabulary file from raw vocabulary
@@ -15,6 +17,7 @@
 - PR #6592 Add `cudf.to_numeric` function
 - PR #6598 Add strings::contains API with target column parameter
 - PR #6638 Add support for `pipe` API
+- PR #6652 Add support for struct columns in concatenate
 - PR #6675 Add DecimalDtype to cuDF
 - PR #6739 Add Java bindings for is_timestamp
 
@@ -77,6 +80,9 @@
 - PR #6727 Remove 2nd type-dispatcher call from cudf::reduce
 - PR #6749 Update nested JNI builder so we can do it incrementally
 - PR #6748 Add Java API to concatenate serialized tables to ContiguousTable
+- PR #6734 Binary operations support for decimal type in cudf Java
+- PR #6761 Add Java/JNI bindings for round
+- PR #6780 Move `cudf::cast` tests to separate test file
 
 ## Bug Fixes
 
@@ -105,6 +111,7 @@
 - PR #6710 Fix an out-of-bounds indexing error in gather() for lists
 - PR #6670 Fix a bug where PTX parser fails to correctly parse a python lambda generated UDF
 - PR #6687 Fix issue where index name of caller object is being modified in csv writer
+- PR #6735 Fix hash join where row hash values would end up equal to the reserved empty key value
 - PR #6696 Fix release_assert.
 - PR #6692 Fix handling of empty column name in csv writer
 - PR #6693 Fix issue related to `na_values` input in `read_csv`
@@ -119,6 +126,7 @@
 - PR #6732 Fix cuDF benchmarks build with static Arrow lib and fix rapids-compose cuDF JNI build
 - PR #6742 Fix concat bug in dask_cudf Series/Index creation
 - PR #6632 Fix DataFrame initialization from list of dicts
+- PR #6767 Fix sort order of parameters in `test_scalar_invalid_implicit_conversion` pytest
 
 
 # cuDF 0.16.0 (21 Oct 2020)
@@ -153,6 +161,7 @@
 - PR #6328 Java and JNI bindings for getMapValue/map_lookup
 - PR #6371 Use ColumnViewAccess on Host side
 - PR #6297 cuDF Python Scalars
+- PR #6723 Support creating decimal vectors from scalar
 
 ## Improvements
 

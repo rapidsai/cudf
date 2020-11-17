@@ -24,6 +24,7 @@
 #include <cudf/dictionary/detail/concatenate.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
+#include <cudf/structs/detail/concatenate.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 
@@ -322,6 +323,12 @@ template <>
 std::unique_ptr<column> concatenate_dispatch::operator()<cudf::list_view>()
 {
   return cudf::lists::detail::concatenate(views, stream, mr);
+}
+
+template <>
+std::unique_ptr<column> concatenate_dispatch::operator()<cudf::struct_view>()
+{
+  return cudf::structs::detail::concatenate(views, stream, mr);
 }
 
 // Concatenates the elements from a vector of column_views
