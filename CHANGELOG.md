@@ -264,6 +264,7 @@
 - PR #6498 Add helper method to ColumnBuilder with some nits
 - PR #6653 Replaced SHFL_XOR calls with cub::WarpReduce
 - PR #6698 Remove macros from ORC reader and writer
+- PR #6782 Replace cuio macros with constexpr and inline functions
 
 ## Bug Fixes
 
