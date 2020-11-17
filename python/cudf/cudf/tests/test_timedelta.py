@@ -495,6 +495,108 @@ def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
         [1000000, 200000, 3000000],
         [1000000, 200000, None],
         [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        np.array([10, 20, 30, None, 100]),
+        cp.asarray([10, 20, 30, 100]),
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [1],
+        [12, 11, 232, 223432411, 2343241, 234324, 23234],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        pytest.param(
+            [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/5938"
+            ),
+        ),
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ],
+)
+@pytest.mark.parametrize(
+    "cpu_scalar",
+    [
+        datetime.timedelta(seconds=768),
+        datetime.timedelta(microseconds=7),
+        np.timedelta64(4, "s"),
+        pytest.param(
+            np.timedelta64("nat"),
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/35529"
+            ),
+        ),
+        np.timedelta64(1, "s"),
+        np.timedelta64(1, "ms"),
+        np.timedelta64(1, "us"),
+        np.timedelta64(1, "ns"),
+    ],
+)
+@pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
+@pytest.mark.parametrize(
+    "op",
+    [
+        "add",
+        "sub",
+        "truediv",
+        "mod",
+        pytest.param(
+            "floordiv",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/35529"
+            ),
+        ),
+    ],
+)
+def test_timedelta_series_ops_with_cudf_scalars(data, cpu_scalar, dtype, op):
+    gpu_scalar = cudf.Scalar(cpu_scalar)
+
+    gsr = cudf.Series(data=data, dtype=dtype)
+    psr = gsr.to_pandas()
+
+    if op == "add":
+        expected = psr + cpu_scalar
+        actual = gsr + gpu_scalar
+    elif op == "sub":
+        expected = psr - cpu_scalar
+        actual = gsr - gpu_scalar
+    elif op == "truediv":
+        expected = psr / cpu_scalar
+        actual = gsr / gpu_scalar
+    elif op == "floordiv":
+        expected = psr // cpu_scalar
+        actual = gsr // gpu_scalar
+    elif op == "mod":
+        expected = psr % cpu_scalar
+        actual = gsr % gpu_scalar
+
+    assert_eq(expected, actual)
+
+    if op == "add":
+        expected = cpu_scalar + psr
+        actual = gpu_scalar + gsr
+    elif op == "sub":
+        expected = cpu_scalar - psr
+        actual = gpu_scalar - gsr
+    elif op == "truediv":
+        expected = cpu_scalar / psr
+        actual = gpu_scalar / gsr
+    elif op == "floordiv":
+        expected = cpu_scalar // psr
+        actual = gpu_scalar // gsr
+    elif op == "mod":
+        expected = cpu_scalar % psr
+        actual = gpu_scalar % gsr
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
         pytest.param(
             [None],
             marks=pytest.mark.xfail(
@@ -743,6 +845,71 @@ def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
     elif op == "floordiv":
         expected = other_scalars // ptdi
         actual = other_scalars // gtdi
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("data", _TIMEDELTA_DATA_NON_OVERFLOW)
+@pytest.mark.parametrize(
+    "cpu_scalar",
+    [
+        pd.Timedelta(1513393355.5, unit="s"),
+        datetime.timedelta(seconds=768),
+        datetime.timedelta(microseconds=7),
+        np.timedelta64(1, "s"),
+        np.timedelta64(1, "ms"),
+        np.timedelta64(1, "us"),
+        np.timedelta64(1, "ns"),
+    ],
+)
+@pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
+@pytest.mark.parametrize(
+    "op",
+    [
+        "add",
+        "sub",
+        "truediv",
+        pytest.param(
+            "floordiv",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/35529"
+            ),
+        ),
+    ],
+)
+def test_timedelta_index_ops_with_cudf_scalars(data, cpu_scalar, dtype, op):
+    gtdi = cudf.Index(data=data, dtype=dtype)
+    ptdi = gtdi.to_pandas()
+
+    gpu_scalar = cudf.Scalar(cpu_scalar)
+
+    if op == "add":
+        expected = ptdi + cpu_scalar
+        actual = gtdi + gpu_scalar
+    elif op == "sub":
+        expected = ptdi - cpu_scalar
+        actual = gtdi - gpu_scalar
+    elif op == "truediv":
+        expected = ptdi / cpu_scalar
+        actual = gtdi / gpu_scalar
+    elif op == "floordiv":
+        expected = ptdi // cpu_scalar
+        actual = gtdi // gpu_scalar
+
+    assert_eq(expected, actual)
+
+    if op == "add":
+        expected = cpu_scalar + ptdi
+        actual = gpu_scalar + gtdi
+    elif op == "sub":
+        expected = cpu_scalar - ptdi
+        actual = gpu_scalar - gtdi
+    elif op == "truediv":
+        expected = cpu_scalar / ptdi
+        actual = gpu_scalar / gtdi
+    elif op == "floordiv":
+        expected = cpu_scalar // ptdi
+        actual = gpu_scalar // gtdi
 
     assert_eq(expected, actual)
 

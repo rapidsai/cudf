@@ -9,9 +9,10 @@ from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.scalar import Scalar, as_scalar
+from cudf._lib.scalar import as_device_scalar
 from cudf.core.column import column, string
 from cudf.utils.dtypes import is_scalar
+from cudf.utils.utils import _fillna_natwise
 
 # nanoseconds per time_unit
 _numpy_to_pandas_conversion = {
@@ -126,7 +127,9 @@ class DatetimeColumn(column.ColumnBase):
         return libcudf.datetime.extract_datetime_component(self, field)
 
     def normalize_binop_value(self, other):
-        if isinstance(other, dt.datetime):
+        if isinstance(other, cudf.Scalar):
+            return other
+        elif isinstance(other, dt.datetime):
             other = np.datetime64(other)
         elif isinstance(other, dt.timedelta):
             other = np.timedelta64(other)
@@ -134,13 +137,12 @@ class DatetimeColumn(column.ColumnBase):
             other = other.to_datetime64()
         elif isinstance(other, pd.Timedelta):
             other = other.to_timedelta64()
-
         if isinstance(other, np.datetime64):
             if np.isnat(other):
-                return as_scalar(val=None, dtype=self.dtype)
+                return cudf.Scalar(None, dtype=self.dtype)
 
             other = other.astype(self.dtype)
-            return as_scalar(other)
+            return cudf.Scalar(other)
         elif isinstance(other, np.timedelta64):
             other_time_unit = cudf.utils.dtypes.get_time_unit(other)
 
@@ -148,9 +150,9 @@ class DatetimeColumn(column.ColumnBase):
                 other = other.astype("timedelta64[s]")
 
             if np.isnat(other):
-                return as_scalar(val=None, dtype=other.dtype)
+                return cudf.Scalar(None, dtype=other.dtype)
 
-            return as_scalar(other)
+            return cudf.Scalar(other)
         else:
             raise TypeError(f"cannot normalize {type(other)}")
 
@@ -210,7 +212,7 @@ class DatetimeColumn(column.ColumnBase):
         if isinstance(q, Number):
             return pd.Timestamp(result, unit=self.time_unit)
 
-        result = result * as_scalar(
+        result = result * as_device_scalar(
             _numpy_to_pandas_conversion[self.time_unit]
         )
 
@@ -249,28 +251,15 @@ class DatetimeColumn(column.ColumnBase):
         return binop(lhs, rhs, op=op, out_dtype=out_dtype)
 
     def fillna(self, fill_value):
+        if cudf.utils.utils.isnat(fill_value):
+            return _fillna_natwise(self)
         if is_scalar(fill_value):
-            if not isinstance(fill_value, Scalar):
-                fill_value = np.datetime64(fill_value, self.time_unit)
+            if not isinstance(fill_value, cudf.Scalar):
+                fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
 
         result = libcudf.replace.replace_nulls(self, fill_value)
-        if isinstance(fill_value, np.datetime64) and np.isnat(fill_value):
-            # If the value we are filling is np.datetime64("NAT")
-            # we set the same mask as current column.
-            # However where there are "<NA>" in the
-            # columns, their corresponding locations
-            # in base_data will contain min(int64) values.
-
-            return column.build_column(
-                data=result.base_data,
-                dtype=result.dtype,
-                mask=self.base_mask,
-                size=result.size,
-                offset=result.offset,
-                children=result.base_children,
-            )
         return result
 
     def find_first_value(self, value, closest=False):

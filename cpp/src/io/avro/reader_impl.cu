@@ -23,12 +23,16 @@
 
 #include <io/comp/gpuinflate.h>
 
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
+
+using cudf::detail::device_span;
 
 namespace cudf {
 namespace io {
@@ -239,8 +243,7 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_
 
 void reader::impl::decode_data(const rmm::device_buffer &block_data,
                                const std::vector<std::pair<uint32_t, uint32_t>> &dict,
-                               hostdevice_vector<uint8_t> &global_dictionary,
-                               size_t total_dictionary_entries,
+                               device_span<gpu::nvstrdesc_s> global_dictionary,
                                size_t num_rows,
                                std::vector<std::pair<int, std::string>> selection,
                                std::vector<column_buffer> &out_buffers,
@@ -300,7 +303,7 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
       schema_desc[schema_data_idx].count = dict[i].first;
     }
     if (out_buffers[i].null_mask_size()) {
-      set_null_mask(out_buffers[i].null_mask(), 0, num_rows, true, stream);
+      cudf::detail::set_null_mask(out_buffers[i].null_mask(), 0, num_rows, true, stream);
     }
   }
   rmm::device_buffer block_list(
@@ -311,18 +314,16 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
                            cudaMemcpyHostToDevice,
                            stream));
 
-  CUDA_TRY(
-    gpu::DecodeAvroColumnData(static_cast<block_desc_s *>(block_list.data()),
-                              schema_desc.device_ptr(),
-                              reinterpret_cast<gpu::nvstrdesc_s *>(global_dictionary.device_ptr()),
-                              static_cast<const uint8_t *>(block_data.data()),
-                              static_cast<uint32_t>(_metadata->block_list.size()),
-                              static_cast<uint32_t>(schema_desc.size()),
-                              static_cast<uint32_t>(total_dictionary_entries),
-                              _metadata->num_rows,
-                              _metadata->skip_rows,
-                              min_row_data_size,
-                              stream));
+  gpu::DecodeAvroColumnData(static_cast<block_desc_s *>(block_list.data()),
+                            schema_desc.device_ptr(),
+                            global_dictionary,
+                            static_cast<const uint8_t *>(block_data.data()),
+                            static_cast<uint32_t>(_metadata->block_list.size()),
+                            static_cast<uint32_t>(schema_desc.size()),
+                            _metadata->num_rows,
+                            _metadata->skip_rows,
+                            min_row_data_size,
+                            stream);
 
   // Copy valid bits that are shared between columns
   for (size_t i = 0; i < out_buffers.size(); i++) {
@@ -407,29 +408,39 @@ table_with_metadata reader::impl::read(avro_reader_options const &options, cudaS
         for (const auto &sym : col_schema.symbols) { dictionary_data_size += sym.length(); }
       }
 
-      hostdevice_vector<uint8_t> global_dictionary(
-        total_dictionary_entries * sizeof(gpu::nvstrdesc_s) + dictionary_data_size);
+      rmm::device_uvector<gpu::nvstrdesc_s> d_global_dict(total_dictionary_entries, stream);
+      rmm::device_uvector<char> d_global_dict_data(dictionary_data_size, stream);
       if (total_dictionary_entries > 0) {
-        size_t dict_pos = total_dictionary_entries * sizeof(gpu::nvstrdesc_s);
+        std::vector<gpu::nvstrdesc_s> h_global_dict(total_dictionary_entries);
+        std::vector<char> h_global_dict_data(dictionary_data_size);
+        size_t dict_pos = 0;
         for (size_t i = 0; i < column_types.size(); ++i) {
-          auto col_idx     = selected_columns[i].first;
-          auto &col_schema = _metadata->schema[_metadata->columns[col_idx].schema_data_idx];
-          auto index =
-            &(reinterpret_cast<gpu::nvstrdesc_s *>(global_dictionary.host_ptr()))[dict[i].first];
+          auto const col_idx     = selected_columns[i].first;
+          auto const &col_schema = _metadata->schema[_metadata->columns[col_idx].schema_data_idx];
+          auto const col_dict_entries = &(h_global_dict[dict[i].first]);
           for (size_t j = 0; j < dict[i].second; j++) {
-            size_t len     = col_schema.symbols[j].length();
-            char *ptr      = reinterpret_cast<char *>(global_dictionary.device_ptr() + dict_pos);
-            index[j].ptr   = ptr;
-            index[j].count = len;
-            memcpy(global_dictionary.host_ptr() + dict_pos, col_schema.symbols[j].c_str(), len);
+            auto const &symbols = col_schema.symbols[j];
+
+            auto const data_dst       = h_global_dict_data.data() + dict_pos;
+            auto const len            = symbols.length();
+            col_dict_entries[j].ptr   = data_dst;
+            col_dict_entries[j].count = len;
+
+            std::copy(symbols.c_str(), symbols.c_str() + len, data_dst);
             dict_pos += len;
           }
         }
-        CUDA_TRY(cudaMemcpyAsync(global_dictionary.device_ptr(),
-                                 global_dictionary.host_ptr(),
-                                 global_dictionary.memory_size(),
-                                 cudaMemcpyHostToDevice,
+        CUDA_TRY(cudaMemcpyAsync(d_global_dict.data(),
+                                 h_global_dict.data(),
+                                 h_global_dict.size() * sizeof(gpu::nvstrdesc_s),
+                                 cudaMemcpyDefault,
                                  stream));
+        CUDA_TRY(cudaMemcpyAsync(d_global_dict_data.data(),
+                                 h_global_dict_data.data(),
+                                 h_global_dict_data.size() * sizeof(char),
+                                 cudaMemcpyDefault,
+                                 stream));
+        CUDA_TRY(cudaStreamSynchronize(stream));
       }
 
       std::vector<column_buffer> out_buffers;
@@ -439,14 +450,7 @@ table_with_metadata reader::impl::read(avro_reader_options const &options, cudaS
         out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
       }
 
-      decode_data(block_data,
-                  dict,
-                  global_dictionary,
-                  total_dictionary_entries,
-                  num_rows,
-                  selected_columns,
-                  out_buffers,
-                  stream);
+      decode_data(block_data, dict, d_global_dict, num_rows, selected_columns, out_buffers, stream);
 
       for (size_t i = 0; i < column_types.size(); ++i) {
         out_columns.emplace_back(make_column(out_buffers[i], stream, _mr));

@@ -27,7 +27,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.Optional;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 
 /**
  * Serialize and deserialize CUDF tables and columns using a custom format.  The goal of this is
@@ -66,19 +67,13 @@ public class JCudfSerialization {
 
   private static final class ColumnOffsets {
     private final long validity;
-    private final long validityLen;
     private final long offsets;
-    private final long offsetsLen;
     private final long data;
     private final long dataLen;
 
-    public ColumnOffsets(long validity, long validityLen,
-                         long offsets, long offsetsLen,
-                         long data, long dataLen) {
+    public ColumnOffsets(long validity, long offsets, long data, long dataLen) {
       this.validity = validity;
-      this.validityLen = validityLen;
       this.offsets = offsets;
-      this.offsetsLen = offsetsLen;
       this.data = data;
       this.dataLen = dataLen;
     }
@@ -91,12 +86,9 @@ public class JCudfSerialization {
    * there was no data to be read.
    */
   public static final class SerializedTableHeader {
-    private int numColumns;
-    int numRows;
-
-    private DType[] types;
-    private long[] nullCounts;
-    long dataLen;
+    private SerializedColumnHeader[] columns;
+    private int numRows;
+    private long dataLen;
 
     private boolean initialized = false;
     private boolean dataRead = false;
@@ -105,22 +97,22 @@ public class JCudfSerialization {
       readFrom(din);
     }
 
-    SerializedTableHeader(int numRows, DType[] types, long[] nullCounts, long dataLen) {
+    SerializedTableHeader(SerializedColumnHeader[] columns, int numRows, long dataLen) {
+      this.columns = columns;
       this.numRows = numRows;
-      if (types != null) {
-        numColumns = types.length;
-      } else {
-        numColumns = 0;
-      }
-      this.types = types;
-      this.nullCounts = nullCounts;
       this.dataLen = dataLen;
       initialized = true;
       dataRead = true;
     }
 
-    public DType getColumnType(int columnIndex) {
-      return types[columnIndex];
+    /** Constructor for a row-count only table (no columns) */
+    SerializedTableHeader(int numRows) {
+      this(new SerializedColumnHeader[0], numRows, 0);
+    }
+
+    /** Get the column header for the corresponding column index */
+    public SerializedColumnHeader getColumnHeader(int columnIndex) {
+      return columns[columnIndex];
     }
 
     /**
@@ -149,7 +141,7 @@ public class JCudfSerialization {
      * Returns the number of columns stored in this table
      */
     public int getNumColumns() {
-      return numColumns;
+      return columns != null ? columns.length : 0;
     }
 
     /**
@@ -158,6 +150,30 @@ public class JCudfSerialization {
      */
     public boolean wasInitialized() {
       return initialized;
+    }
+
+    /**
+     * Returns the number of bytes needed to serialize this table header.
+     * Note that this is only the metadata for the table (i.e.: column types, row counts, etc.)
+     * and does not include the bytes needed to serialize the table data.
+     */
+    public long getSerializedHeaderSizeInBytes() {
+      // table header always has:
+      // - 4-byte magic number
+      // - 2-byte version number
+      // - 4-byte column count
+      // - 4-byte row count
+      // - 8-byte data buffer length
+      long total = 4 + 2 + 4 + 4 + 8;
+      for (SerializedColumnHeader column : columns) {
+        total += column.getSerializedHeaderSizeInBytes();
+      }
+      return total;
+    }
+
+    /** Returns the number of bytes needed to serialize this table header and the table data. */
+    public long getTotalSerializedSizeInBytes() {
+      return getSerializedHeaderSizeInBytes() + dataLen;
     }
 
     private void readFrom(DataInputStream din) throws IOException {
@@ -177,14 +193,12 @@ public class JCudfSerialization {
         throw new IllegalStateException("READING THE WRONG SERIALIZATION FORMAT VERSION FOUND "
             + version + " EXPECTED " + VERSION_NUMBER);
       }
-      numColumns = din.readInt();
+      int numColumns = din.readInt();
       numRows = din.readInt();
 
-      types = new DType[numColumns];
-      nullCounts = new long[numColumns];
+      columns = new SerializedColumnHeader[numColumns];
       for (int i = 0; i < numColumns; i++) {
-        types[i] = DType.fromNative(din.readInt(), din.readInt());
-        nullCounts[i] = din.readInt();
+        columns[i] = SerializedColumnHeader.readFrom(din, numRows);
       }
 
       dataLen = din.readLong();
@@ -195,16 +209,147 @@ public class JCudfSerialization {
       // Now write out the data
       dout.writeInt(SER_FORMAT_MAGIC_NUMBER);
       dout.writeShort(VERSION_NUMBER);
-      dout.writeInt(numColumns);
+      dout.writeInt(columns.length);
       dout.writeInt(numRows);
 
       // Header for each column...
-      for (int i = 0; i < numColumns; i++) {
-        dout.writeInt(types[i].typeId.getNativeId());
-        dout.writeInt(types[i].getScale());
-        dout.writeInt((int) nullCounts[i]);
+      for (SerializedColumnHeader column : columns) {
+        column.writeTo(dout);
       }
       dout.writeLong(dataLen);
+    }
+  }
+
+  /** Holds the metadata about a serialized column. */
+  public static final class SerializedColumnHeader {
+    public final DType dtype;
+    public final long nullCount;
+    public final long rowCount;
+    public final SerializedColumnHeader[] children;
+
+    SerializedColumnHeader(DType dtype, long rowCount, long nullCount,
+                           SerializedColumnHeader[] children) {
+      this.dtype = dtype;
+      this.rowCount = rowCount;
+      this.nullCount = nullCount;
+      this.children = children;
+    }
+
+    SerializedColumnHeader(ColumnBufferProvider column, long rowOffset, long numRows) {
+      this.dtype = column.getType();
+      this.rowCount = numRows;
+      this.nullCount = Math.min(column.getNullCount(), numRows);
+      ColumnBufferProvider[] childProviders = column.getChildProviders();
+      if (childProviders != null) {
+        children = new SerializedColumnHeader[childProviders.length];
+        long childRowOffset = rowOffset;
+        long childNumRows = numRows;
+        if (dtype == DType.LIST) {
+          if (numRows > 0) {
+            childRowOffset = column.getOffset(rowOffset);
+            childNumRows = column.getOffset(rowOffset + numRows) - childRowOffset;
+          }
+        }
+        for (int i = 0; i < children.length; i++) {
+          children[i] = new SerializedColumnHeader(childProviders[i], childRowOffset, childNumRows);
+        }
+      } else {
+        children = null;
+      }
+    }
+
+    /** Get the data type of the column */
+    public DType getType() {
+      return dtype;
+    }
+
+    /** Get the row count of the column */
+    public long getRowCount() {
+      return rowCount;
+    }
+
+    /** Get the null count of the column */
+    public long getNullCount() {
+      return nullCount;
+    }
+
+    /** Get the metadata for any child columns or null if there are no children */
+    public SerializedColumnHeader[] getChildren() {
+      return children;
+    }
+
+    /** Get the number of child columns */
+    public int getNumChildren() {
+      return children != null ? children.length : 0;
+    }
+
+    /** Return the number of bytes needed to store this column header in serialized form. */
+    public long getSerializedHeaderSizeInBytes() {
+      // column header always has:
+      // - 4-byte type ID
+      // - 4-byte type scale
+      // - 4-byte null count
+      long total = 4 + 4 + 4;
+
+      if (dtype.isNestedType()) {
+        assert children != null;
+        if (dtype == DType.LIST) {
+          total += 4;  // 4-byte child row count
+        } else if (dtype == DType.STRUCT) {
+          total += 4;  // 4-byte child count
+        } else {
+          throw new IllegalStateException("Unexpected nested type: " + dtype);
+        }
+        for (SerializedColumnHeader child : children) {
+          total += child.getSerializedHeaderSizeInBytes();
+        }
+      }
+
+      return total;
+    }
+
+    /** Write this column header to the specified writer */
+    public void writeTo(DataWriter dout) throws IOException {
+      dout.writeInt(dtype.typeId.getNativeId());
+      dout.writeInt(dtype.getScale());
+      dout.writeInt((int) nullCount);
+      if (dtype.isNestedType()) {
+        assert children != null;
+        if (dtype == DType.LIST) {
+          dout.writeInt((int) children[0].getRowCount());
+        } else if (dtype == DType.STRUCT) {
+          dout.writeInt(getNumChildren());
+        } else {
+          throw new IllegalStateException("Unexpected nested type: " + dtype);
+        }
+        for (SerializedColumnHeader child : children) {
+          child.writeTo(dout);
+        }
+      }
+    }
+
+    static SerializedColumnHeader readFrom(DataInputStream din, long rowCount) throws IOException {
+      DType dtype = DType.fromNative(din.readInt(), din.readInt());
+      long nullCount = din.readInt();
+      SerializedColumnHeader[] children = null;
+      if (dtype.isNestedType()) {
+        int numChildren;
+        long childRowCount;
+        if (dtype == DType.LIST) {
+          numChildren = 1;
+          childRowCount = din.readInt();
+        } else if (dtype == DType.STRUCT) {
+          numChildren = din.readInt();
+          childRowCount = rowCount;
+        } else {
+          throw new IllegalStateException("Unexpected nested type: " + dtype);
+        }
+        children = new SerializedColumnHeader[numChildren];
+        for (int i = 0; i < numChildren; i++) {
+          children[i] = readFrom(din, childRowCount);
+        }
+      }
+      return new SerializedColumnHeader(dtype, rowCount, nullCount, children);
     }
   }
 
@@ -217,9 +362,7 @@ public class JCudfSerialization {
 
     public abstract long getNullCount();
 
-    public abstract long getStartStringOffset(long index);
-
-    public abstract long getEndStringOffset(long index);
+    public abstract long getOffset(long index);
 
     public abstract long getRowCount();
 
@@ -227,11 +370,7 @@ public class JCudfSerialization {
 
     public abstract long getBufferStartOffset(BufferType buffType);
 
-    public void copyBytesToArray(byte[] dest, int destOffset, BufferType srcType, long srcOffset, int length) {
-      HostMemoryBuffer buff = getHostBufferFor(srcType);
-      srcOffset = srcOffset + getBufferStartOffset(srcType);
-      buff.getBytes(dest, destOffset, srcOffset, length);
-    }
+    public abstract ColumnBufferProvider[] getChildProviders();
 
     @Override
     public abstract void close();
@@ -241,17 +380,27 @@ public class JCudfSerialization {
    * Visible for testing
    */
   static class ColumnProvider extends ColumnBufferProvider {
-    private final HostColumnVector column;
+    private final ColumnViewAccess<HostMemoryBuffer> column;
     private final boolean closeAtEnd;
+    private final ColumnBufferProvider[] childProviders;
 
-    ColumnProvider(HostColumnVector column, boolean closeAtEnd) {
+    ColumnProvider(ColumnViewAccess<HostMemoryBuffer> column, boolean closeAtEnd) {
       this.column = column;
       this.closeAtEnd = closeAtEnd;
+      if (getType().isNestedType()) {
+        int numChildren = column.getNumChildren();
+        childProviders = new ColumnBufferProvider[numChildren];
+        for (int i = 0; i < numChildren; i++) {
+          childProviders[i] = new ColumnProvider(column.getChildColumnViewAccess(i), false);
+        }
+      } else {
+        childProviders = null;
+      }
     }
 
     @Override
     public DType getType() {
-      return column.getType();
+      return column.getDataType();
     }
 
     @Override
@@ -260,13 +409,8 @@ public class JCudfSerialization {
     }
 
     @Override
-    public long getStartStringOffset(long index) {
-      return column.getStartStringOffset(index);
-    }
-
-    @Override
-    public long getEndStringOffset(long index) {
-      return column.getEndStringOffset(index);
+    public long getOffset(long index) {
+      return column.getOffsetBuffer().getInt(index * Integer.BYTES);
     }
 
     @Override
@@ -276,13 +420,23 @@ public class JCudfSerialization {
 
     @Override
     public HostMemoryBuffer getHostBufferFor(BufferType buffType) {
-      return column.getHostBufferFor(buffType);
+      switch (buffType) {
+        case VALIDITY: return column.getValidityBuffer();
+        case OFFSET: return column.getOffsetBuffer();
+        case DATA: return column.getDataBuffer();
+        default: throw new IllegalStateException("Unexpected buffer type: " + buffType);
+      }
     }
 
     @Override
     public long getBufferStartOffset(BufferType buffType) {
       // All of the buffers start at 0 for this.
       return 0;
+    }
+
+    @Override
+    public ColumnBufferProvider[] getChildProviders() {
+      return childProviders;
     }
 
     @Override
@@ -294,34 +448,34 @@ public class JCudfSerialization {
   }
 
   private static class BufferOffsetProvider extends ColumnBufferProvider {
-    private final SerializedTableHeader header;
-    private final int columnIndex;
+    private final SerializedColumnHeader header;
     private final ColumnOffsets offsets;
     private final HostMemoryBuffer buffer;
+    private final ColumnBufferProvider[] childProviders;
 
-    private BufferOffsetProvider(SerializedTableHeader header,
-                                 int columnIndex,
+    private BufferOffsetProvider(SerializedColumnHeader header,
                                  ColumnOffsets offsets,
-                                 HostMemoryBuffer buffer) {
+                                 HostMemoryBuffer buffer,
+                                 ColumnBufferProvider[] childProviders) {
       this.header = header;
-      this.columnIndex = columnIndex;
       this.offsets = offsets;
       this.buffer = buffer;
+      this.childProviders = childProviders;
     }
 
     @Override
     public DType getType() {
-      return header.types[columnIndex];
+      return header.getType();
     }
 
     @Override
     public long getNullCount() {
-      return header.nullCounts[columnIndex];
+      return header.getNullCount();
     }
 
     @Override
     public long getRowCount() {
-      return header.numRows;
+      return header.getRowCount();
     }
 
     @Override
@@ -344,18 +498,15 @@ public class JCudfSerialization {
     }
 
     @Override
-    public long getStartStringOffset(long index) {
-      assert getType() == DType.STRING;
-      assert (index >= 0 && index < getRowCount()) : "index is out of range 0 <= " + index + " < " + getRowCount();
-      return buffer.getInt(offsets.offsets + (index * 4));
+    public long getOffset(long index) {
+      assert getType().hasOffsets();
+      assert (index >= 0 && index <= getRowCount()) : "index is out of range 0 <= " + index + " <= " + getRowCount();
+      return buffer.getInt(offsets.offsets + (index * Integer.BYTES));
     }
 
     @Override
-    public long getEndStringOffset(long index) {
-      assert getType() == DType.STRING;
-      assert (index >= 0 && index < getRowCount()) : "index is out of range 0 <= " + index + " < " + getRowCount();
-      // The offsets has one more entry than there are rows.
-      return buffer.getInt(offsets.offsets + ((index + 1) * 4));
+    public ColumnBufferProvider[] getChildProviders() {
+      return childProviders;
     }
 
     @Override
@@ -543,58 +694,50 @@ public class JCudfSerialization {
     if (numRows <= 0) {
       return 0;
     }
-    long start = column.getStartStringOffset(rowOffset);
-    long end = column.getEndStringOffset(rowOffset + numRows - 1);
+    long start = column.getOffset(rowOffset);
+    long end = column.getOffset(rowOffset + numRows);
     return end - start;
   }
 
   private static long getSlicedSerializedDataSizeInBytes(ColumnBufferProvider[] columns, long rowOffset, long numRows) {
     long totalDataSize = 0;
     for (ColumnBufferProvider column: columns) {
-      DType type = column.getType();
-      if (column.getNullCount() > 0) {
-        totalDataSize += padFor64byteAlignment(BitVectorHelper.getValidityLengthInBytes(numRows));
-      }
-      if (type == DType.STRING) {
-        // offsets
-        if (numRows > 0) {
-          // The size of an empty string array is empty.
-          totalDataSize += padFor64byteAlignment((numRows + 1) * 4);
-
-          // data
-          totalDataSize += padFor64byteAlignment(getRawStringDataLength(column, rowOffset, numRows));
-        }
-      } else {
-        totalDataSize += padFor64byteAlignment(column.getType().getSizeInBytes() * numRows);
-      }
+      totalDataSize += getSlicedSerializedDataSizeInBytes(column, rowOffset, numRows);
     }
     return totalDataSize;
   }
 
-  private static long getConcatedSerializedDataSizeInBytes(int numColumns, long[] nullCounts,
-                                                           int numRows, DType[] types,
-                                                           ColumnBufferProvider[][] columnsForEachBatch) {
+  private static long getSlicedSerializedDataSizeInBytes(ColumnBufferProvider column, long rowOffset, long numRows) {
     long totalDataSize = 0;
-    for (int col = 0; col < numColumns; col++) {
-      DType type = types[col];
-      if (nullCounts[col] > 0) {
-        totalDataSize += padFor64byteAlignment(BitVectorHelper.getValidityLengthInBytes(numRows));
-      }
-      if (type == DType.STRING) {
-        // offsets
-        if (numRows > 0) {
-          totalDataSize += padFor64byteAlignment((numRows + 1) * 4);
-        }
+    DType type = column.getType();
+    if (column.getNullCount() > 0) {
+      totalDataSize += padFor64byteAlignment(BitVectorHelper.getValidityLengthInBytes(numRows));
+    }
 
-        long stringDataLen = 0;
-        for (int batchNumber = 0; batchNumber < columnsForEachBatch.length; batchNumber++) {
-          ColumnBufferProvider provider = columnsForEachBatch[batchNumber][col];
-          long numRowsInSubColumn = provider.getRowCount();
-          stringDataLen += getRawStringDataLength(provider, 0, numRowsInSubColumn);
+    if (type.hasOffsets()) {
+      if (numRows > 0) {
+        // Add in size of offsets vector
+        totalDataSize += padFor64byteAlignment((numRows + 1) * Integer.BYTES);
+        if (type == DType.STRING) {
+          totalDataSize += padFor64byteAlignment(getRawStringDataLength(column, rowOffset, numRows));
         }
-        totalDataSize += padFor64byteAlignment(stringDataLen);
+      }
+    } else if (type.getSizeInBytes() > 0) {
+      totalDataSize += padFor64byteAlignment(column.getType().getSizeInBytes() * numRows);
+    }
+
+    if (numRows > 0 && type.isNestedType()) {
+      if (type == DType.LIST) {
+        ColumnBufferProvider child = column.getChildProviders()[0];
+        long childStartRow = column.getOffset(rowOffset);
+        long childNumRows = column.getOffset(rowOffset + numRows) - childStartRow;
+        totalDataSize += getSlicedSerializedDataSizeInBytes(child, childStartRow, childNumRows);
+      } else if (type == DType.STRUCT) {
+        for (ColumnBufferProvider childProvider : column.getChildProviders()) {
+          totalDataSize += getSlicedSerializedDataSizeInBytes(childProvider, rowOffset, numRows);
+        }
       } else {
-        totalDataSize += padFor64byteAlignment(types[col].getSizeInBytes() * numRows);
+        throw new IllegalStateException("Unexpected nested type: " + type);
       }
     }
     return totalDataSize;
@@ -611,7 +754,14 @@ public class JCudfSerialization {
   public static long getSerializedSizeInBytes(HostColumnVector[] columns, long rowOffset, long numRows) {
     ColumnBufferProvider[] providers = providersFrom(columns, false);
     try {
-      return getSlicedSerializedDataSizeInBytes(providers, rowOffset, numRows) + (4 * 3) + 2; // The header size
+      SerializedColumnHeader[] columnHeaders = new SerializedColumnHeader[providers.length];
+      for (int i = 0; i < columnHeaders.length; i++) {
+        columnHeaders[i] = new SerializedColumnHeader(providers[i], rowOffset, numRows);
+      }
+      long dataLen = getSlicedSerializedDataSizeInBytes(providers, rowOffset, numRows);
+      SerializedTableHeader tableHeader = new SerializedTableHeader(columnHeaders,
+          (int) numRows, dataLen);
+      return tableHeader.getTotalSerializedSizeInBytes();
     } finally {
       closeAll(providers);
     }
@@ -621,52 +771,69 @@ public class JCudfSerialization {
   // HELPER METHODS buildIndex
   /////////////////////////////////////////////
 
-  static ColumnOffsets[] buildIndex(SerializedTableHeader header,
-                                    HostMemoryBuffer buffer) {
+  /** Build a list of column offset descriptors using a pre-order traversal of the columns */
+  static ArrayDeque<ColumnOffsets> buildIndex(SerializedTableHeader header,
+                                              HostMemoryBuffer buffer) {
+    int numTopColumns = header.getNumColumns();
+    ArrayDeque<ColumnOffsets> offsetsList = new ArrayDeque<>();
     long bufferOffset = 0;
-    DType[] dataTypes = header.types;
-    int numColumns = dataTypes.length;
-    long[] nullCounts = header.nullCounts;
-    long numRows = header.getNumRows();
-    ColumnOffsets[] ret = new ColumnOffsets[numColumns];
-    for (int column = 0; column < numColumns; column++) {
-      DType type = dataTypes[column];
-      long nullCount = nullCounts[column];
+    for (int i = 0; i < numTopColumns; i++) {
+      SerializedColumnHeader column = header.getColumnHeader(i);
+      bufferOffset = buildIndex(column, buffer, offsetsList, bufferOffset);
+    }
+    return offsetsList;
+  }
 
-      long validity = 0;
-      long validityLen = 0;
-      long offsets = 0;
-      long offsetsLen = 0;
-      long data = 0;
-      long dataLen = 0;
-      if (nullCount > 0) {
-        validityLen = padFor64byteAlignment(BitVectorHelper.getValidityLengthInBytes(numRows));
-        validity = bufferOffset;
-        bufferOffset += validityLen;
-      }
+  /**
+   * Append a list of column offset descriptors using a pre-order traversal of the column
+   * @param column column offset descriptors will be built for this column and its child columns
+   * @param buffer host buffer backing the column data
+   * @param offsetsList list where column offset descriptors will be appended during traversal
+   * @param bufferOffset offset in the host buffer where the column data begins
+   * @return buffer offset at the end of this column's data including all child columns
+   */
+  private static long buildIndex(SerializedColumnHeader column, HostMemoryBuffer buffer,
+                                 ArrayDeque<ColumnOffsets> offsetsList, long bufferOffset) {
+    long validity = 0;
+    long offsets = 0;
+    long data = 0;
+    long dataLen = 0;
+    long rowCount = column.getRowCount();
+    if (column.getNullCount() > 0) {
+      long validityLen = padFor64byteAlignment(BitVectorHelper.getValidityLengthInBytes(rowCount));
+      validity = bufferOffset;
+      bufferOffset += validityLen;
+    }
 
-      if (type == DType.STRING) {
-        if (numRows > 0) {
-          offsetsLen = (numRows + 1) * 4;
-          offsets = bufferOffset;
-          int startStringOffset = buffer.getInt(bufferOffset);
-          int endStringOffset = buffer.getInt(bufferOffset + (numRows * 4));
-          bufferOffset += padFor64byteAlignment(offsetsLen);
-
-          dataLen = endStringOffset - startStringOffset;
+    DType dtype = column.getType();
+    if (dtype.hasOffsets()) {
+      if (rowCount > 0) {
+        long offsetsLen = (rowCount + 1) * Integer.BYTES;
+        offsets = bufferOffset;
+        int startOffset = buffer.getInt(bufferOffset);
+        int endOffset = buffer.getInt(bufferOffset + (rowCount * Integer.BYTES));
+        bufferOffset += padFor64byteAlignment(offsetsLen);
+        if (dtype == DType.STRING) {
+          dataLen = endOffset - startOffset;
           data = bufferOffset;
           bufferOffset += padFor64byteAlignment(dataLen);
         }
-      } else {
-        dataLen = type.getSizeInBytes() * numRows;
-        data = bufferOffset;
-        bufferOffset += padFor64byteAlignment(dataLen);
       }
-      ret[column] = new ColumnOffsets(validity, validityLen,
-          offsets, offsetsLen,
-          data, dataLen);
+    } else if (dtype.getSizeInBytes() > 0) {
+      dataLen = dtype.getSizeInBytes() * rowCount;
+      data = bufferOffset;
+      bufferOffset += padFor64byteAlignment(dataLen);
     }
-    return ret;
+    offsetsList.add(new ColumnOffsets(validity, offsets, data, dataLen));
+
+    SerializedColumnHeader[] children = column.getChildren();
+    if (children != null) {
+      for (SerializedColumnHeader child : children) {
+        bufferOffset = buildIndex(child, buffer, offsetsList, bufferOffset);
+      }
+    }
+
+    return bufferOffset;
   }
 
   /////////////////////////////////////////////
@@ -717,48 +884,99 @@ public class JCudfSerialization {
     return providers;
   }
 
+  /**
+   * For a batch of tables described by a header and corresponding buffer, return a mapping of
+   * top column index to the corresponding column providers for that column across all tables.
+   */
   private static ColumnBufferProvider[][] providersFrom(SerializedTableHeader[] headers,
                                                         HostMemoryBuffer[] dataBuffers) {
-    // Filter out empty tables, to make things simpler...
-    int validCount = 0;
-    for (int i = 0; i < headers.length; i++) {
-      if (headers[i].numRows > 0) {
-        validCount++;
-      } else {
-        assert headers[i].dataLen == 0;
-      }
-    }
-
-    if (validCount > 0 && validCount < headers.length) {
-      SerializedTableHeader[] filteredHeaders = new SerializedTableHeader[validCount];
-      HostMemoryBuffer[] filteredBuffers = new HostMemoryBuffer[validCount];
-      int at = 0;
-      for (int i = 0; i < headers.length; i++) {
-        if (headers[i].numRows > 0) {
-          filteredHeaders[at] = headers[i];
-          filteredBuffers[at] = dataBuffers[i];
-          at++;
+    int numColumns = 0;
+    int numTables = headers.length;
+    int numNonEmptyTables = 0;
+    ArrayList<ArrayList<ColumnBufferProvider>> providersPerColumn = null;
+    for (int tableIdx = 0; tableIdx < numTables; tableIdx++) {
+      SerializedTableHeader header = headers[tableIdx];
+      if (tableIdx == 0) {
+        numColumns = header.getNumColumns();
+        providersPerColumn = new ArrayList<>(numColumns);
+        for (int i = 0; i < numColumns; i++) {
+          providersPerColumn.add(new ArrayList<>(numTables));
         }
+      } else {
+        checkCompatibleTypes(headers[0], header, tableIdx);
       }
-      headers = filteredHeaders;
-      dataBuffers = filteredBuffers;
+      // filter out empty tables but keep at least one if all were empty
+      if (headers[tableIdx].getNumRows() > 0 ||
+          (numNonEmptyTables == 0 && tableIdx == numTables - 1)) {
+        numNonEmptyTables++;
+        HostMemoryBuffer dataBuffer = dataBuffers[tableIdx];
+        ArrayDeque<ColumnOffsets> offsets = buildIndex(header, dataBuffer);
+        for (int columnIdx = 0; columnIdx < numColumns; columnIdx++) {
+          ColumnBufferProvider provider = buildBufferOffsetProvider(
+              header.getColumnHeader(columnIdx), offsets, dataBuffer);
+          providersPerColumn.get(columnIdx).add(provider);
+        }
+        assert offsets.isEmpty();
+      } else {
+        assert headers[tableIdx].dataLen == 0;
+      }
     }
 
-    ColumnBufferProvider [][] ret = new ColumnBufferProvider[headers.length][];
-    for (int batchNum = 0; batchNum < headers.length; batchNum++) {
-      SerializedTableHeader header = headers[batchNum];
-      HostMemoryBuffer dataBuffer = dataBuffers[batchNum];
-      ColumnOffsets[] offsets = buildIndex(header, dataBuffer);
-
-      ColumnBufferProvider [] parts = new ColumnBufferProvider[offsets.length];
-      for (int columnIndex = 0; columnIndex < offsets.length; columnIndex++) {
-        parts[columnIndex] = new BufferOffsetProvider(header, columnIndex,
-            offsets[columnIndex], dataBuffer);
-      }
-      ret[batchNum] = parts;
+    ColumnBufferProvider[][] result = new ColumnBufferProvider[numColumns][];
+    for (int i = 0; i < numColumns; i++) {
+      result[i] = providersPerColumn.get(i).toArray(new ColumnBufferProvider[0]);
     }
+    return result;
+  }
 
-    return ret;
+  private static void checkCompatibleTypes(SerializedTableHeader expected,
+                                           SerializedTableHeader other,
+                                           int tableIdx) {
+    int numColumns = expected.getNumColumns();
+    if (other.getNumColumns() != numColumns) {
+      throw new IllegalArgumentException("The number of columns did not match " + tableIdx
+          + " " + other.getNumColumns() + " != " + numColumns);
+    }
+    for (int i = 0; i < numColumns; i++) {
+      checkCompatibleTypes(expected.getColumnHeader(i), other.getColumnHeader(i), tableIdx, i);
+    }
+  }
+
+  private static void checkCompatibleTypes(SerializedColumnHeader expected,
+                                           SerializedColumnHeader other,
+                                           int tableIdx, int columnIdx) {
+    DType dtype = expected.getType();
+    if (!dtype.equals(other.getType())) {
+      throw new IllegalArgumentException("Type mismatch at table " + tableIdx +
+          "column " + columnIdx + " expected " + dtype + " but found " + other.getType());
+    }
+    if (dtype.isNestedType()) {
+      SerializedColumnHeader[] expectedChildren = expected.getChildren();
+      SerializedColumnHeader[] otherChildren = other.getChildren();
+      if (expectedChildren.length != otherChildren.length) {
+        throw new IllegalArgumentException("Child count mismatch at table " + tableIdx +
+            "column " + columnIdx + " expected " + expectedChildren.length + " but found " +
+            otherChildren.length);
+      }
+      for (int i = 0; i < expectedChildren.length; i++) {
+        checkCompatibleTypes(expectedChildren[i], otherChildren[i], tableIdx, columnIdx);
+      }
+    }
+  }
+
+  private static BufferOffsetProvider buildBufferOffsetProvider(SerializedColumnHeader header,
+                                                                ArrayDeque<ColumnOffsets> offsets,
+                                                                HostMemoryBuffer dataBuffer) {
+    ColumnOffsets columnOffsets = offsets.remove();
+    ColumnBufferProvider[] childProviders = null;
+    SerializedColumnHeader[] children = header.getChildren();
+    if (children != null) {
+      childProviders = new ColumnBufferProvider[children.length];
+      for (int i = 0; i < children.length; i++) {
+        childProviders[i] = buildBufferOffsetProvider(children[i], offsets, dataBuffer);
+      }
+    }
+    return new BufferOffsetProvider(header, columnOffsets, dataBuffer, childProviders);
   }
 
   /////////////////////////////////////////////
@@ -768,78 +986,95 @@ public class JCudfSerialization {
   private static SerializedTableHeader calcHeader(ColumnBufferProvider[] columns,
                                                   long rowOffset,
                                                   int numRows) {
-    DType[] types = new DType[columns.length];
-    long[] nullCount = new long[columns.length];
-    for (int i = 0; i < columns.length; i++) {
-      types[i] = columns[i].getType();
-      nullCount[i] = columns[i].getNullCount();
+    SerializedColumnHeader[] headers = new SerializedColumnHeader[columns.length];
+    for (int i = 0; i < headers.length; i++) {
+      headers[i] = new SerializedColumnHeader(columns[i], rowOffset, numRows);
     }
-
     long dataLength = getSlicedSerializedDataSizeInBytes(columns, rowOffset, numRows);
-    return new SerializedTableHeader(numRows, types, nullCount, dataLength);
-  }
-
-  /**
-   * Write an empty columns header with a valid row count
-   */
-  private static SerializedTableHeader calcEmptyHeader(int numRows) {
-    return new SerializedTableHeader(numRows, null, null, 0);
+    return new SerializedTableHeader(headers, numRows, dataLength);
   }
 
   /**
    * Calculate the new header for a concatenated set of columns.
-   * @param columnsForEachBatch first index is the batch, second index is the column.
+   * @param providersPerColumn first index is the column, second index is the table.
    * @return the new header.
    */
-  private static SerializedTableHeader calcConcatedHeader(ColumnBufferProvider[][] columnsForEachBatch) {
+  private static SerializedTableHeader calcConcatHeader(ColumnBufferProvider[][] providersPerColumn) {
+    int numColumns = providersPerColumn.length;
+    long rowCount = 0;
+    long totalDataSize = 0;
+    ArrayList<SerializedColumnHeader> headers = new ArrayList<>(numColumns);
+    for (int columnIdx = 0; columnIdx < numColumns; columnIdx++) {
+      totalDataSize += calcConcatColumnHeaderAndSize(headers, providersPerColumn[columnIdx]);
+      if (columnIdx == 0) {
+        rowCount = headers.get(0).getRowCount();
+      } else {
+        assert rowCount == headers.get(columnIdx).getRowCount();
+      }
+    }
+    SerializedColumnHeader[] columnHeaders = headers.toArray(new SerializedColumnHeader[0]);
+    return new SerializedTableHeader(columnHeaders, (int)rowCount, totalDataSize);
+  }
 
-    // verify that all of the columns can be concated, we also need to verify that the sizes are going to work....
-    int numColumns = 0;
-    DType[] types;
-    long[] nullCounts;
-    long numRows = 0;
-    if (columnsForEachBatch.length > 0) {
-      ColumnBufferProvider[] providers = columnsForEachBatch[0];
-      numColumns = providers.length;
-      types = new DType[numColumns];
-      nullCounts = new long[numColumns];
-      for (int i = 0; i < providers.length; i++) {
-        types[i] = providers[i].getType();
-        nullCounts[i] = providers[i].getNullCount();
-      }
-      if (numColumns > 0) {
-        numRows = providers[0].getRowCount();
-      }
-    } else {
-      types = new DType[0];
-      nullCounts = new long[0];
+  /**
+   * Calculate a column header describing all of the columns concatenated together
+   * @param outHeaders list that will be appended with the new column header
+   * @param providers columns to be concatenated
+   * @return total bytes needed to store the data for the result column and its children
+   */
+  private static long calcConcatColumnHeaderAndSize(ArrayList<SerializedColumnHeader> outHeaders,
+                                                    ColumnBufferProvider[] providers) {
+    long totalSize = 0;
+    int numTables = providers.length;
+    long rowCount = 0;
+    long nullCount = 0;
+    for (ColumnBufferProvider provider : providers) {
+      rowCount += provider.getRowCount();
+      nullCount += provider.getNullCount();
     }
 
-    for (int batchNum = 1; batchNum < columnsForEachBatch.length; batchNum++) {
-      ColumnBufferProvider[] providers = columnsForEachBatch[batchNum];
-      if (providers.length != numColumns) {
-        throw new IllegalArgumentException("The number of columns did not match " + batchNum
-            + " " + providers.length + " != " + numColumns);
-      }
-      for (int col = 0; col < numColumns; col++) {
-        if (providers[col].getType() != types[col]) {
-          throw new IllegalArgumentException("Type mismatch for column " + col);
+    if (rowCount > Integer.MAX_VALUE) {
+      throw new IllegalArgumentException("Cannot build a batch larger than " + Integer.MAX_VALUE + " rows");
+    }
+
+    if (nullCount > 0) {
+      totalSize += padFor64byteAlignment(BitVectorHelper.getValidityLengthInBytes(rowCount));
+    }
+
+    ColumnBufferProvider firstProvider = providers[0];
+    DType dtype = firstProvider.getType();
+    if (dtype.hasOffsets()) {
+      if (rowCount > 0) {
+        totalSize += padFor64byteAlignment((rowCount + 1) * Integer.BYTES);
+        if (dtype == DType.STRING) {
+          long stringDataLen = 0;
+          for (ColumnBufferProvider provider : providers) {
+            stringDataLen += getRawStringDataLength(provider, 0, provider.getRowCount());
+          }
+          totalSize += padFor64byteAlignment(stringDataLen);
         }
-
-        nullCounts[col] += providers[col].getNullCount();
       }
-      if (numColumns > 0) {
-        numRows += providers[0].getRowCount();
-      }
+    } else if (dtype.getSizeInBytes() > 0) {
+      totalSize += padFor64byteAlignment(dtype.getSizeInBytes() * rowCount);
     }
 
-    if (numRows > Integer.MAX_VALUE) {
-      throw new IllegalArgumentException("CANNOT BUILD A BATCH LARGER THAN " + Integer.MAX_VALUE + " rows");
+    SerializedColumnHeader[] children = null;
+    if (dtype.isNestedType()) {
+      int numChildren = firstProvider.getChildProviders().length;
+      ArrayList<SerializedColumnHeader> childHeaders = new ArrayList<>(numChildren);
+      ColumnBufferProvider[] childColumnProviders = new ColumnBufferProvider[numTables];
+      for (int childIdx = 0; childIdx < numChildren; childIdx++) {
+        // collect all the providers for the current child and build the child's header
+        for (int tableIdx = 0; tableIdx < numTables; tableIdx++) {
+          childColumnProviders[tableIdx] = providers[tableIdx].getChildProviders()[childIdx];
+        }
+        totalSize += calcConcatColumnHeaderAndSize(childHeaders, childColumnProviders);
+      }
+      children = childHeaders.toArray(new SerializedColumnHeader[0]);
     }
 
-    long totalDataSize = getConcatedSerializedDataSizeInBytes(numColumns, nullCounts, (int)numRows, types,
-        columnsForEachBatch);
-    return new SerializedTableHeader((int)numRows, types, nullCounts, totalDataSize);
+    outHeaders.add(new SerializedColumnHeader(dtype, rowCount, nullCount, children));
+    return totalSize;
   }
 
   /////////////////////////////////////////////
@@ -1018,15 +1253,12 @@ public class JCudfSerialization {
     return Math.min(totalCopied, lengthBits);
   }
 
-  private static long concatValidity(DataWriter out,
-                                     int columnIndex,
-                                     int numRows,
-                                     ColumnBufferProvider[][] providers) throws IOException {
+  private static long concatValidity(DataWriter out, long numRows,
+                                     ColumnBufferProvider[] providers) throws IOException {
     long validityLen = BitVectorHelper.getValidityLengthInBytes(numRows);
     byte[] arrayBuffer = new byte[128 * 1024];
     int rowsStoredInArray = 0;
-    for (int batchIndex = 0; batchIndex < providers.length; batchIndex++) {
-      ColumnBufferProvider provider = providers[batchIndex][columnIndex];
+    for (ColumnBufferProvider provider : providers) {
       int rowsLeftInBatch = (int) provider.getRowCount();
       int validityBitOffset = 0;
       while(rowsLeftInBatch > 0) {
@@ -1062,8 +1294,8 @@ public class JCudfSerialization {
   private static long copySlicedStringData(DataWriter out, ColumnBufferProvider column, long rowOffset,
                                            long numRows) throws IOException {
     if (numRows > 0) {
-      long startByteOffset = column.getStartStringOffset(rowOffset);
-      long endByteOffset = column.getEndStringOffset(rowOffset + numRows - 1);
+      long startByteOffset = column.getOffset(rowOffset);
+      long endByteOffset = column.getOffset(rowOffset + numRows);
       long bytesToCopy = endByteOffset - startByteOffset;
       long srcOffset = startByteOffset;
       return copySlicedAndPad(out, column, BufferType.DATA, srcOffset, bytesToCopy);
@@ -1071,19 +1303,19 @@ public class JCudfSerialization {
     return 0;
   }
 
-  private static void copyConcateStringData(DataWriter out,
-                                            int columnIndex,
-                                            int[] dataLengths,
-                                            ColumnBufferProvider[][] providers) throws IOException {
+  private static void copyConcatStringData(DataWriter out,
+                                           ColumnBufferProvider[] providers) throws IOException {
     long totalCopied = 0;
 
-    for (int batchIndex = 0; batchIndex < providers.length; batchIndex++) {
-      ColumnBufferProvider provider = providers[batchIndex][columnIndex];
-      HostMemoryBuffer dataBuffer = provider.getHostBufferFor(BufferType.DATA);
-      long currentOffset = provider.getBufferStartOffset(BufferType.DATA);
-      int dataLeft = dataLengths[batchIndex];
-      out.copyDataFrom(dataBuffer, currentOffset, dataLeft);
-      totalCopied += dataLeft;
+    for (ColumnBufferProvider provider : providers) {
+      long rowCount = provider.getRowCount();
+      if (rowCount > 0) {
+        HostMemoryBuffer dataBuffer = provider.getHostBufferFor(BufferType.DATA);
+        long currentOffset = provider.getBufferStartOffset(BufferType.DATA);
+        long dataLeft = provider.getOffset(rowCount);
+        out.copyDataFrom(dataBuffer, currentOffset, dataLeft);
+        totalCopied += dataLeft;
+      }
     }
     padFor64byteAlignment(out, totalCopied);
   }
@@ -1094,8 +1326,8 @@ public class JCudfSerialization {
       // Don't copy anything, there are no rows
       return 0;
     }
-    long bytesToCopy = (numRows + 1) * 4;
-    long srcOffset = rowOffset * 4;
+    long bytesToCopy = (numRows + 1) * Integer.BYTES;
+    long srcOffset = rowOffset * Integer.BYTES;
     if (rowOffset == 0) {
       return copySlicedAndPad(out, column, BufferType.OFFSET, srcOffset, bytesToCopy);
     }
@@ -1107,59 +1339,45 @@ public class JCudfSerialization {
     ByteBuffer bb = buff.asByteBuffer(startOffset, (int)bytesToCopy);
     int start = bb.getInt();
     out.writeIntNativeOrder(0);
-    long total = 4;
+    long total = Integer.BYTES;
     for (int i = 1; i < (numRows + 1); i++) {
       int offset = bb.getInt();
       out.writeIntNativeOrder(offset - start);
-      total += 4;
+      total += Integer.BYTES;
     }
     assert total == bytesToCopy;
     long ret = padFor64byteAlignment(out, total);
     return ret;
   }
 
-  private static int[] copyConcatOffsets(DataWriter out,
-                                         int columnIndex,
-                                         ColumnBufferProvider[][] providers) throws IOException {
-    int dataLens[] = new int[providers.length];
+  private static void copyConcatOffsets(DataWriter out,
+                                        ColumnBufferProvider[] providers) throws IOException {
     long totalCopied = 0;
     int offsetToAdd = 0;
-
-    // First offset is always 0
-    out.writeIntNativeOrder(0);
-    totalCopied += 4;
-
-    for (int batchIndex = 0; batchIndex < providers.length; batchIndex++) {
-      ColumnBufferProvider provider = providers[batchIndex][columnIndex];
-      HostMemoryBuffer dataBuffer = provider.getHostBufferFor(BufferType.OFFSET);
-      long currentOffset = provider.getBufferStartOffset(BufferType.OFFSET);
-      int numRowsForHeader = (int) provider.getRowCount();
-
-      // We already output the first row
-      int dataLeft = numRowsForHeader * 4;
-      // fix up the offsets for the data
-      int startStringOffset = dataBuffer.getInt(currentOffset);
-      int endStringOffset = dataBuffer.getInt(currentOffset + (numRowsForHeader * 4));
-      dataLens[batchIndex] = endStringOffset - startStringOffset;
-      // The first index should always be 0, but that is not always true because we fix it up
-      // on the receiving side, which is here...
-      // But if this ever is written out twice we need to make sure
-      // we fix up the 0 entry too.
-      dataBuffer.setInt(currentOffset, offsetToAdd);
-      for (int i = 1; i < (numRowsForHeader + 1); i++) {
-        long at = currentOffset + (i * 4);
-        int orig = dataBuffer.getInt(at);
-        int o = orig + offsetToAdd - startStringOffset;
-        dataBuffer.setInt(at, o);
+    for (ColumnBufferProvider provider : providers) {
+      long rowCount = provider.getRowCount();
+      if (rowCount > 0) {
+        HostMemoryBuffer offsetsBuffer = provider.getHostBufferFor(BufferType.OFFSET);
+        long currentOffset = provider.getBufferStartOffset(BufferType.OFFSET);
+        if (totalCopied == 0) {
+          // first chunk of offsets can be copied verbatim
+          totalCopied = (rowCount + 1) * Integer.BYTES;
+          out.copyDataFrom(offsetsBuffer, currentOffset, totalCopied);
+          offsetToAdd = offsetsBuffer.getInt(currentOffset + (rowCount * Integer.BYTES));
+        } else {
+          int localOffset = 0;
+          // first row's offset has already been written when processing the previous table
+          for (int row = 1; row < rowCount + 1; row++) {
+            localOffset = offsetsBuffer.getInt(currentOffset + (row * Integer.BYTES));
+            out.writeIntNativeOrder(localOffset + offsetToAdd);
+          }
+          // last local offset of this chunk is the length of data referenced by offsets
+          offsetToAdd += localOffset;
+          totalCopied += rowCount * Integer.BYTES;
+        }
       }
-      offsetToAdd += dataLens[batchIndex];
-
-      currentOffset += 4; // Skip the first entry that is always 0
-      out.copyDataFrom(dataBuffer, currentOffset, dataLeft);
-      totalCopied += dataLeft;
     }
     padFor64byteAlignment(out, totalCopied);
-    return dataLens;
   }
 
   /////////////////////////////////////////////
@@ -1177,19 +1395,18 @@ public class JCudfSerialization {
   }
 
   private static void concatBasicData(DataWriter out,
-                                      int columnIndex,
                                       DType type,
-                                      ColumnBufferProvider[][] providers) throws IOException {
+                                      ColumnBufferProvider[] providers) throws IOException {
     long totalCopied = 0;
-    for (int batchIndex = 0; batchIndex < providers.length; batchIndex++) {
-      ColumnBufferProvider provider = providers[batchIndex][columnIndex];
-      HostMemoryBuffer dataBuffer = provider.getHostBufferFor(BufferType.DATA);
-      long currentOffset = provider.getBufferStartOffset(BufferType.DATA);
-      int numRowsForBatch = (int) provider.getRowCount();
-
-      int dataLeft = numRowsForBatch * type.getSizeInBytes();
-      out.copyDataFrom(dataBuffer, currentOffset, dataLeft);
-      totalCopied += dataLeft;
+    for (ColumnBufferProvider provider : providers) {
+      long rowCount = provider.getRowCount();
+      if (rowCount > 0) {
+        HostMemoryBuffer dataBuffer = provider.getHostBufferFor(BufferType.DATA);
+        long currentOffset = provider.getBufferStartOffset(BufferType.DATA);
+        long dataLeft = rowCount * type.getSizeInBytes();
+        out.copyDataFrom(dataBuffer, currentOffset, dataLeft);
+        totalCopied += dataLeft;
+      }
     }
     padFor64byteAlignment(out, totalCopied);
   }
@@ -1198,23 +1415,34 @@ public class JCudfSerialization {
   // COLUMN AND TABLE WRITE
   /////////////////////////////////////////////
 
-  private static void writeConcat(DataWriter out,
-                                  int columnIndex,
-                                  SerializedTableHeader combinedHeader,
-                                  ColumnBufferProvider[][] providers) throws IOException {
-    long nullCount = combinedHeader.nullCounts[columnIndex];
-    if (nullCount > 0) {
-      concatValidity(out, columnIndex, combinedHeader.numRows, providers);
+  private static void writeConcat(DataWriter out, SerializedColumnHeader header,
+                                  ColumnBufferProvider[] providers) throws IOException {
+    if (header.getNullCount() > 0) {
+      concatValidity(out, header.getRowCount(), providers);
     }
 
-    if (combinedHeader.numRows > 0) {
-      DType type = combinedHeader.types[columnIndex];
-      if (type == DType.STRING) {
-        // Get the actual lengths for each section...
-        int dataLens[] = copyConcatOffsets(out, columnIndex, providers);
-        copyConcateStringData(out, columnIndex, dataLens, providers);
-      } else {
-        concatBasicData(out, columnIndex, type, providers);
+    DType dtype = header.getType();
+    if (dtype.hasOffsets()) {
+      if (header.getRowCount() > 0) {
+        copyConcatOffsets(out, providers);
+        if (dtype == DType.STRING) {
+          copyConcatStringData(out, providers);
+        }
+      }
+    } else if (dtype.getSizeInBytes() > 0) {
+      concatBasicData(out, dtype, providers);
+    }
+
+    if (dtype.isNestedType()) {
+      int numTables = providers.length;
+      SerializedColumnHeader[] childHeaders = header.getChildren();
+      ColumnBufferProvider[] childColumnProviders = new ColumnBufferProvider[numTables];
+      for (int childIdx = 0; childIdx < childHeaders.length; childIdx++) {
+        // collect all the providers for the current child column
+        for (int tableIdx = 0; tableIdx < numTables; tableIdx++) {
+          childColumnProviders[tableIdx] = providers[tableIdx].getChildProviders()[childIdx];
+        }
+        writeConcat(out, childHeaders[childIdx], childColumnProviders);
       }
     }
   }
@@ -1223,7 +1451,6 @@ public class JCudfSerialization {
                                   ColumnBufferProvider column,
                                   long rowOffset,
                                   long numRows) throws IOException {
-
     if (column.getNullCount() > 0) {
       try (NvtxRange range = new NvtxRange("Write Validity", NvtxColor.DARK_GREEN)) {
         copySlicedValidity(out, column, rowOffset, numRows);
@@ -1231,14 +1458,39 @@ public class JCudfSerialization {
     }
 
     DType type = column.getType();
-    if (type == DType.STRING) {
-      try (NvtxRange range = new NvtxRange("Write String Data", NvtxColor.RED)) {
-        copySlicedOffsets(out, column, rowOffset, numRows);
-        copySlicedStringData(out, column, rowOffset, numRows);
+    if (type.hasOffsets()) {
+      if (numRows > 0) {
+        try (NvtxRange offsetRange = new NvtxRange("Write Offset Data", NvtxColor.ORANGE)) {
+          copySlicedOffsets(out, column, rowOffset, numRows);
+          if (type == DType.STRING) {
+            try (NvtxRange dataRange = new NvtxRange("Write String Data", NvtxColor.RED)) {
+              copySlicedStringData(out, column, rowOffset, numRows);
+            }
+          }
+        }
       }
-    } else {
+    } else if (type.getSizeInBytes() > 0){
       try (NvtxRange range = new NvtxRange("Write Data", NvtxColor.BLUE)) {
         sliceBasicData(out, column, rowOffset, numRows);
+      }
+    }
+
+    if (numRows > 0 && type.isNestedType()) {
+      if (type == DType.LIST) {
+        try (NvtxRange range = new NvtxRange("Write List Child", NvtxColor.PURPLE)) {
+          ColumnBufferProvider child = column.getChildProviders()[0];
+          long childStartRow = column.getOffset(rowOffset);
+          long childNumRows = column.getOffset(rowOffset + numRows) - childStartRow;
+          writeSliced(out, child, childStartRow, childNumRows);
+        }
+      } else if (type == DType.STRUCT) {
+        try (NvtxRange range = new NvtxRange("Write Struct Children", NvtxColor.PURPLE)) {
+          for (ColumnBufferProvider child : column.getChildProviders()) {
+            writeSliced(out, child, rowOffset, numRows);
+          }
+        }
+      } else {
+        throw new IllegalStateException("Unexpected nested type: " + type);
       }
     }
   }
@@ -1326,7 +1578,7 @@ public class JCudfSerialization {
    */
   public static void writeRowsToStream(OutputStream out, long numRows) throws IOException {
     DataWriter writer = writerFrom(out);
-    SerializedTableHeader header = calcEmptyHeader((int) numRows);
+    SerializedTableHeader header = new SerializedTableHeader((int) numRows);
     header.writeTo(writer);
     writer.flush();
   }
@@ -1342,19 +1594,21 @@ public class JCudfSerialization {
   public static void writeConcatedStream(SerializedTableHeader[] headers,
                                          HostMemoryBuffer[] dataBuffers,
                                          OutputStream out) throws IOException {
-    ColumnBufferProvider[][] providers = providersFrom(headers, dataBuffers);
+    ColumnBufferProvider[][] providersPerColumn = providersFrom(headers, dataBuffers);
     try {
-      SerializedTableHeader combined = calcConcatedHeader(providers);
+      SerializedTableHeader combined = calcConcatHeader(providersPerColumn);
       DataWriter writer = writerFrom(out);
       combined.writeTo(writer);
       try (NvtxRange range = new NvtxRange("Concat Host Side", NvtxColor.GREEN)) {
-        for (int columnIndex = 0; columnIndex < combined.numColumns; columnIndex++) {
-          writeConcat(writer, columnIndex, combined, providers);
+        int numColumns = combined.getNumColumns();
+        for (int columnIdx = 0; columnIdx < numColumns; columnIdx++) {
+          ColumnBufferProvider[] providers = providersPerColumn[columnIdx];
+          writeConcat(writer, combined.getColumnHeader(columnIdx), providersPerColumn[columnIdx]);
         }
       }
       writer.flush();
     } finally {
-      closeAll(providers);
+      closeAll(providersPerColumn);
     }
   }
 
@@ -1362,58 +1616,55 @@ public class JCudfSerialization {
   // COLUMN AND TABLE READ
   /////////////////////////////////////////////
 
+  private static long buildColumnView(SerializedColumnHeader column,
+                                      ArrayDeque<ColumnOffsets> columnOffsets,
+                                      DeviceMemoryBuffer combinedBuffer) {
+    ColumnOffsets offsetsInfo = columnOffsets.remove();
+    long[] childViews = null;
+    try {
+      SerializedColumnHeader[] children = column.getChildren();
+      if (children != null) {
+        childViews = new long[children.length];
+        for (int i = 0; i < childViews.length; i++) {
+          childViews[i] = buildColumnView(children[i], columnOffsets, combinedBuffer);
+        }
+      }
+      DType dtype = column.getType();
+      long bufferAddress = combinedBuffer.getAddress();
+      long dataAddress = dtype.isNestedType() ? 0 : bufferAddress + offsetsInfo.data;
+      long validityAddress = column.getNullCount() > 0 ? bufferAddress + offsetsInfo.validity : 0;
+      long offsetsAddress = dtype.hasOffsets() ? bufferAddress + offsetsInfo.offsets : 0;
+      return ColumnVector.makeCudfColumnView(
+          dtype.typeId.getNativeId(), dtype.getScale(),
+          dataAddress, offsetsInfo.dataLen,
+          offsetsAddress, validityAddress,
+          (int) column.getNullCount(), (int) column.getRowCount(),
+          childViews);
+    } finally {
+      if (childViews != null) {
+        for (long childView : childViews) {
+          ColumnVector.deleteColumnView(childView);
+        }
+      }
+    }
+  }
+
   private static Table sliceUpColumnVectors(SerializedTableHeader header,
                                             DeviceMemoryBuffer combinedBuffer,
                                             HostMemoryBuffer combinedBufferOnHost) {
     try (NvtxRange range = new NvtxRange("bufferToTable", NvtxColor.PURPLE)) {
-      ColumnOffsets[] columnOffsets = buildIndex(header, combinedBufferOnHost);
-      DType[] dataTypes = header.types;
-      long[] nullCounts = header.nullCounts;
-      long numRows = header.getNumRows();
-      int numColumns = dataTypes.length;
+      ArrayDeque<ColumnOffsets> columnOffsets = buildIndex(header, combinedBufferOnHost);
+      int numColumns = header.getNumColumns();
       ColumnVector[] vectors = new ColumnVector[numColumns];
-      DeviceMemoryBuffer validity = null;
-      DeviceMemoryBuffer data = null;
-      DeviceMemoryBuffer offsets = null;
       try {
-        for (int column = 0; column < numColumns; column++) {
-          DType type = dataTypes[column];
-          long nullCount = nullCounts[column];
-          ColumnOffsets offsetInfo = columnOffsets[column];
-
-          if (nullCount > 0) {
-            validity = combinedBuffer.slice(offsetInfo.validity, offsetInfo.validityLen);
-          }
-
-          if (type == DType.STRING) {
-            offsets = combinedBuffer.slice(offsetInfo.offsets, offsetInfo.offsetsLen);
-          }
-
-          // The vector is possibly full of null strings. This is a rare corner case, but we let
-          // data buffer stay null.
-          if (offsetInfo.dataLen > 0) {
-            data = combinedBuffer.slice(offsetInfo.data, offsetInfo.dataLen);
-          }
-
-          vectors[column] = new ColumnVector(type, numRows, Optional.of(nullCount), data, validity, offsets);
-          validity = null;
-          data = null;
-          offsets = null;
+        for (int i = 0; i < numColumns; i++) {
+          SerializedColumnHeader column = header.getColumnHeader(i);
+          long columnView = buildColumnView(column, columnOffsets, combinedBuffer);
+          vectors[i] = ColumnVector.fromViewWithContiguousAllocation(columnView, combinedBuffer);
         }
+        assert columnOffsets.isEmpty();
         return new Table(vectors);
       } finally {
-        if (validity != null) {
-          validity.close();
-        }
-
-        if (data != null) {
-          data.close();
-        }
-
-        if (offsets != null) {
-          offsets.close();
-        }
-
         for (ColumnVector cv: vectors) {
           if (cv != null) {
             cv.close();
@@ -1425,29 +1676,48 @@ public class JCudfSerialization {
 
   public static Table readAndConcat(SerializedTableHeader[] headers,
                                     HostMemoryBuffer[] dataBuffers) throws IOException {
+    ContiguousTable ct = concatToContiguousTable(headers, dataBuffers);
+    ct.getBuffer().close();
+    return ct.getTable();
+  }
 
-    ColumnBufferProvider[][] providers = providersFrom(headers, dataBuffers);
+  public static ContiguousTable concatToContiguousTable(SerializedTableHeader[] headers,
+                                                        HostMemoryBuffer[] dataBuffers) throws IOException {
+    ColumnBufferProvider[][] providersPerColumn = providersFrom(headers, dataBuffers);
+    DeviceMemoryBuffer devBuffer = null;
+    Table table = null;
     try {
-      SerializedTableHeader combined = calcConcatedHeader(providers);
+      SerializedTableHeader combined = calcConcatHeader(providersPerColumn);
 
-      try (HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(combined.dataLen);
-           DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length)) {
+      try (HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(combined.dataLen)) {
         try (NvtxRange range = new NvtxRange("Concat Host Side", NvtxColor.GREEN)) {
           DataWriter writer = writerFrom(hostBuffer);
-          for (int columnIndex = 0; columnIndex < combined.numColumns; columnIndex++) {
-            writeConcat(writer, columnIndex, combined, providers);
+          int numColumns = combined.getNumColumns();
+          for (int columnIdx = 0; columnIdx < numColumns; columnIdx++) {
+            writeConcat(writer, combined.getColumnHeader(columnIdx), providersPerColumn[columnIdx]);
           }
         }
 
+        devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length);
         if (hostBuffer.length > 0) {
           try (NvtxRange range = new NvtxRange("Copy Data To Device", NvtxColor.WHITE)) {
             devBuffer.copyFromHostBuffer(hostBuffer);
           }
         }
-        return sliceUpColumnVectors(combined, devBuffer, hostBuffer);
+        table = sliceUpColumnVectors(combined, devBuffer, hostBuffer);
+        ContiguousTable result = new ContiguousTable(table, devBuffer);
+        table = null;
+        devBuffer = null;
+        return result;
       }
     } finally {
-      closeAll(providers);
+      closeAll(providersPerColumn);
+      if (table != null) {
+        table.close();
+      }
+      if (devBuffer != null) {
+        devBuffer.close();
+      }
     }
   }
 

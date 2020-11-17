@@ -42,25 +42,29 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * If the column is empty, the member `is_valid()` of the output scalar
  * will contain `false`.
  *
- * @throws cudf::logic_error if reduction is called for non-arithmetic output
+ * @throw cudf::logic_error if reduction is called for non-arithmetic output
  * type and operator other than `min` and `max`.
- * @throws cudf::logic_error if input column data type is not convertible to
+ * @throw cudf::logic_error if input column data type is not convertible to
  * output data type.
+ * @throw cudf::logic_error if `min` or `max` reduction is called and the
+ * output type does not match the input column data type.
+ *
  * If the input column has arithmetic type, output_dtype can be any arithmetic
  * type. For `mean`, `var` and `std` ops, a floating point output type must be
  * specified. If the input column has non-arithmetic type
  *   eg.(timestamp, string...), the same type must be specified.
  *
- * @param[in] col Input column view
- * @param[in] agg unique_ptr of the aggregation operator applied by the reduction
- * @param[in] output_dtype  The computation and output precision.
- * @param[in] mr Device memory resource used to allocate the returned scalar's device memory
- * @returns  cudf::scalar the result value
  * If the reduction fails, the member is_valid of the output scalar
  * will contain `false`.
+ *
+ * @param col Input column view
+ * @param agg Aggregation operator applied by the reduction
+ * @param output_dtype  The computation and output precision.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @returns Output scalar with reduce result.
  */
 std::unique_ptr<scalar> reduce(
-  const column_view &col,
+  column_view const &col,
   std::unique_ptr<aggregation> const &agg,
   data_type output_dtype,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
