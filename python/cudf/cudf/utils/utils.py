@@ -1,7 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import functools
 from collections import OrderedDict
-from collections.abc import Sequence 
+from collections.abc import Sequence
 from math import floor, isinf, isnan
 import warnings
 
@@ -468,6 +468,8 @@ def search_range(start, stop, x, step=1, side="left"):
 
     length = (stop - start) // step
     return max(min(length, i), 0)
+
+
 # Utils for using appropiate dispatch for array functions
 def get_appropiate_dispatched_func(
     cudf_submodule, cupy_submodule, func, args, kwargs
@@ -492,9 +494,9 @@ def get_appropiate_dispatched_func(
 
 
 def cast_to_appropitate_cudf_type(val):
-    # TODO Handle scaler
+    # TODO Handle scalar
     if val.ndim == 0:
-        return cudf.Scalar(val)
+        return cudf.Scalar(val).value
     # 1D array
     elif (val.ndim == 1) or (val.ndim == 2 and val.shape[1] == 1):
         return cudf.Series(val)
@@ -509,8 +511,9 @@ def get_cupy_compatible_args(args):
             casted_ls.append(arg)
         elif isinstance(arg, cudf.Series):
             casted_ls.append(arg.values)
-        # handle list of arguments
         elif isinstance(arg, Sequence):
+            # handle list of inputs for functions like
+            # np.concatenate
             casted_arg = get_cupy_compatible_args(arg)
             casted_ls.append(casted_arg)
         else:
