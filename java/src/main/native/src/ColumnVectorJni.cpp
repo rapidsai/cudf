@@ -85,7 +85,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
 
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv *env, jclass clazz,
-                                                                   jlongArray column_handles) {
+                                                                     jlongArray column_handles) {
   JNI_NULL_CHECK(env, column_handles, "input columns are null", 0);
   using cudf::column;
   using cudf::column_view;
@@ -109,9 +109,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv *env
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env,
-                                                            jobject j_object,
-                                                            jlongArray column_handles,
-                                                            jint hash_function_id) {
+                                                              jobject j_object,
+                                                              jlongArray column_handles,
+                                                              jint hash_function_id) {
   JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
 
   try {
