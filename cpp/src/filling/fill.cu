@@ -64,7 +64,7 @@ struct in_place_fill_range_dispatch {
 
   template <typename T>
   std::enable_if_t<cudf::is_fixed_width<T>() && not cudf::is_fixed_point<T>(), void> operator()(
-    cudf::size_type begin, cudf::size_type end, cudaStream_t stream = 0)
+    cudf::size_type begin, cudf::size_type end, rmm::cuda_stream_view stream)
   {
     in_place_fill<T>(destination, begin, end, value, stream);
   }
