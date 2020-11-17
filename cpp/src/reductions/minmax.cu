@@ -144,8 +144,8 @@ struct minmax_functor {
   template <typename T>
   static constexpr bool is_supported()
   {
-    return !(cudf::is_fixed_point<T>() ||  // cudf::is_dictionary<T>()
-             std::is_same<T, cudf::list_view>::value || std::is_same<T, cudf::struct_view>::value);
+    return !(cudf::is_fixed_point<T>() || std::is_same<T, cudf::list_view>::value ||
+             std::is_same<T, cudf::struct_view>::value);
   }
 
   template <typename T>
@@ -165,8 +165,7 @@ struct minmax_functor {
   }
 
   /**
-   * @brief Functor to copy a minmax_pair result to individual
-   * scalar instances.
+   * @brief Functor to copy a minmax_pair result to individual scalar instances.
    */
   template <typename T, typename ResultType = minmax_pair<T>>
   struct assign_min_max {
@@ -199,6 +198,9 @@ struct minmax_functor {
     return {std::unique_ptr<scalar>(minimum), std::unique_ptr<scalar>(maximum)};
   }
 
+  /**
+   * @brief Specialization for strings column.
+   */
   template <typename T, std::enable_if_t<std::is_same<T, cudf::string_view>::value> * = nullptr>
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
     cudf::column_view const &col, rmm::mr::device_memory_resource *mr, cudaStream_t stream)
@@ -215,13 +217,16 @@ struct minmax_functor {
             std::make_unique<string_scalar>(host_result.max_val, true, stream, mr)};
   }
 
+  /**
+   * @brief Specialization for dictionary column.
+   */
   template <typename T, std::enable_if_t<cudf::is_dictionary<T>()> * = nullptr>
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
     cudf::column_view const &col, rmm::mr::device_memory_resource *mr, cudaStream_t stream)
   {
     // compute minimum and maximum values
     auto dev_result = reduce<T>(col, stream);
-    // copy the minmax_pair to the host; does not copy the strings
+    // copy the minmax_pair to the host to call get_element
     using OutputType = minmax_pair<T>;
     OutputType host_result;
     CUDA_TRY(cudaMemcpyAsync(
@@ -234,9 +239,9 @@ struct minmax_functor {
 
   template <typename T, std::enable_if_t<!is_supported<T>()> * = nullptr>
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
-    cudf::column_view const &col, rmm::mr::device_memory_resource *mr, cudaStream_t stream)
+    cudf::column_view const &, rmm::mr::device_memory_resource *, cudaStream_t)
   {
-    CUDF_FAIL("type not supported for minmax() op");
+    CUDF_FAIL("type not supported for minmax() operation");
   }
 };
 

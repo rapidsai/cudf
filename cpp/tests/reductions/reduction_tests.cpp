@@ -862,8 +862,6 @@ TEST_P(StringReductionTest, MinMax)
             expected_max_null_result);
 }
 
-#include <cudf/dictionary/update_keys.hpp>
-
 TEST_P(StringReductionTest, DictionaryMinMax)
 {
   // data and valid arrays
@@ -899,19 +897,15 @@ TEST_P(StringReductionTest, DictionaryMinMax)
   EXPECT_EQ(static_cast<cudf::string_scalar *>(result.second.get())->to_string(),
             expected_max_result);
 
-  cudf::test::print(col_nulls);
-  auto sliced = cudf::slice(col_nulls, {3, 7}).front();
-  cudf::test::print(sliced);
-  result = cudf::minmax(sliced);
-  for (auto str : r_strings) printf("[%s] ", str.c_str());
-  printf("-> ([%s],[%s])",
-         static_cast<cudf::string_scalar *>(result.first.get())->to_string().c_str(),
-         static_cast<cudf::string_scalar *>(result.second.get())->to_string().c_str());
-
-  // std::sort(r_strings.begin(), r_strings.end());
+  // test sliced column
+  result = cudf::minmax(cudf::slice(col_nulls, {3, 7}).front());
+  // 3->2 and 7->5 because r_strings contains no null entries
   expected_min_result = *(std::min_element(r_strings.begin() + 2, r_strings.begin() + 5));
   expected_max_result = *(std::max_element(r_strings.begin() + 2, r_strings.begin() + 5));
-  printf(":([%s],[%s])\n", expected_min_result.c_str(), expected_max_result.c_str());
+  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.first.get())->to_string(),
+            expected_min_result);
+  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.second.get())->to_string(),
+            expected_max_result);
 }
 
 TEST_F(StringReductionTest, AllNull)
