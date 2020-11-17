@@ -112,51 +112,6 @@ struct compute_single_pass_aggs {
   }
 };
 
-template <bool skip_rows_with_nulls, typename Map>
-struct compute_second_pass_aggs : compute_single_pass_aggs<skip_rows_with_nulls, Map> {
-  table_device_view dependent_values;
-  size_t const* dependent_offset;
-  size_type const* ddofs;
-  compute_second_pass_aggs(Map map,
-                           size_type num_keys,
-                           table_device_view input_values,
-                           mutable_table_device_view output_values,
-                           aggregation::Kind const* aggs,
-                           bitmask_type const* row_bitmask,
-                           table_device_view dependent_values,
-                           size_t const* dependent_offset,
-                           size_type const* ddofs)
-    : compute_single_pass_aggs<skip_rows_with_nulls, Map>(
-        map, num_keys, input_values, output_values, aggs, row_bitmask),
-      dependent_values(dependent_values),
-      dependent_offset(dependent_offset),
-      ddofs(ddofs)
-  {
-  }
-  using baseClass = compute_single_pass_aggs<skip_rows_with_nulls, Map>;
-  using baseClass::aggs;
-  using baseClass::input_values;
-  using baseClass::map;
-  using baseClass::output_values;
-  using baseClass::row_bitmask;
-
-  __device__ void operator()(size_type i)
-  {
-    if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, i)) {
-      auto result = map.find(i);
-
-      cudf::detail::aggregate_row_pass2<true, true>(output_values,
-                                                    result->second,
-                                                    input_values,
-                                                    i,
-                                                    aggs,
-                                                    dependent_values,
-                                                    dependent_offset,
-                                                    ddofs);
-    }
-  }
-};
-
 }  // namespace hash
 }  // namespace detail
 }  // namespace groupby
