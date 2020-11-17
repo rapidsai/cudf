@@ -468,7 +468,7 @@ def search_range(start, stop, x, step=1, side="left"):
     return max(min(length, i), 0)
 
 
-# Utils for using appropiate dispatch for array functions
+# Utils for using appropriate dispatch for array functions
 def get_appropriate_dispatched_func(
     cudf_submodule, cupy_submodule, func, args, kwargs
 ):
