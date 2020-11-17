@@ -124,6 +124,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return ColumnView.getNativeNumChildren(viewHandle);
   }
 
+
+  /**
+   * Returns the amount of device memory used.
+   */
+  public long getDeviceMemorySize() {
+    return getDeviceMemorySize(getNativeView());
+  }
+
   @Override
   public void close() {
     ColumnView.deleteColumnView(viewHandle);
@@ -629,6 +637,52 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(dayOfYear(getNativeView()));
   }
 
+  /**
+   * Rounds all the values in a column to the specified number of decimal places.
+   *
+   * @param decimalPlaces Number of decimal places to round to. If negative, this
+   *                      specifies the number of positions to the left of the decimal point.
+   * @param mode          Rounding method(either HALF_UP or HALF_EVEN)
+   * @return a new ColumnVector with rounded values.
+   */
+  public ColumnVector round(int decimalPlaces, RoundMode mode) {
+    return new ColumnVector(round(this.getNativeView(), decimalPlaces, mode.nativeId));
+  }
+
+  /**
+   * Rounds all the values in a column with decimal places = 0. Default number of decimal places
+   * to round to is 0.
+   *
+   * @param round Rounding method(either HALF_UP or HALF_EVEN)
+   * @return a new ColumnVector with rounded values.
+   */
+  public ColumnVector round(RoundMode round) {
+    return round(0, round);
+  }
+
+  /**
+   * Rounds all the values in a column to the specified number of decimal places with HALF_UP
+   * (default) as Rounding method.
+   *
+   * @param decimalPlaces Number of decimal places to round to. If negative, this
+   *                      specifies the number of positions to the left of the decimal point.
+   * @return a new ColumnVector with rounded values.
+   */
+  public ColumnVector round(int decimalPlaces) {
+    return round(decimalPlaces, RoundMode.HALF_UP);
+  }
+
+  /**
+   * Rounds all the values in a column with these default values:
+   * decimalPlaces = 0
+   * Rounding method = RoundMode.HALF_UP
+   *
+   * @return a new ColumnVector with rounded values.
+   */
+  public ColumnVector round() {
+    return round(0, RoundMode.HALF_UP);
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // ARITHMETIC
   /////////////////////////////////////////////////////////////////////////////
@@ -871,14 +925,23 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * of the same type as this column.
    */
   public Scalar min() {
-    return min(type);
+    return reduce(Aggregation.min(), type);
   }
 
   /**
    * Returns the minimum of all values in the column, returning a scalar
    * of the specified type.
+   * @deprecated the min reduction no longer internally allows for setting the output type, as a
+   * work around this API will cast the input type to the output type for you, but this may not
+   * work in all cases.
    */
+  @Deprecated
   public Scalar min(DType outType) {
+    if (!outType.equals(type)) {
+      try (ColumnVector tmp = this.castTo(outType)) {
+        return tmp.min(outType);
+      }
+    }
     return reduce(Aggregation.min(), outType);
   }
 
@@ -887,14 +950,23 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * of the same type as this column.
    */
   public Scalar max() {
-    return max(type);
+    return reduce(Aggregation.max(), type);
   }
 
   /**
    * Returns the maximum of all values in the column, returning a scalar
    * of the specified type.
+   * @deprecated the max reduction no longer internally allows for setting the output type, as a
+   * work around this API will cast the input type to the output type for you, but this may not
+   * work in all cases.
    */
+  @Deprecated
   public Scalar max(DType outType) {
+    if (!outType.equals(type)) {
+      try (ColumnVector tmp = this.castTo(outType)) {
+        return tmp.max(outType);
+      }
+    }
     return reduce(Aggregation.max(), outType);
   }
 
@@ -937,7 +1009,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public Scalar mean() {
     DType outType = DType.FLOAT64;
-    if (type == DType.FLOAT32) {
+    if (type.equals(DType.FLOAT32)) {
       outType = type;
     }
     return mean(outType);
@@ -947,6 +1019,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the arithmetic mean of all values in the column, returning a
    * scalar of the specified type.
    * Null values are skipped.
+   * @param outType the output type to return.  Note that only floating point
+   *                types are currently supported.
    */
   public Scalar mean(DType outType) {
     return reduce(Aggregation.mean(), outType);
@@ -959,7 +1033,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public Scalar variance() {
     DType outType = DType.FLOAT64;
-    if (type == DType.FLOAT32) {
+    if (type.equals(DType.FLOAT32)) {
       outType = type;
     }
     return variance(outType);
@@ -969,6 +1043,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the variance of all values in the column, returning a
    * scalar of the specified type.
    * Null values are skipped.
+   * @param outType the output type to return.  Note that only floating point
+   *                types are currently supported.
    */
   public Scalar variance(DType outType) {
     return reduce(Aggregation.variance(), outType);
@@ -982,7 +1058,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public Scalar standardDeviation() {
     DType outType = DType.FLOAT64;
-    if (type == DType.FLOAT32) {
+    if (type.equals(DType.FLOAT32)) {
       outType = type;
     }
     return standardDeviation(outType);
@@ -992,6 +1068,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the sample standard deviation of all values in the column,
    * returning a scalar of the specified type. Null's are not counted as
    * an element of the column when calculating the standard deviation.
+   * @param outType the output type to return.  Note that only floating point
+   *                types are currently supported.
    */
   public Scalar standardDeviation(DType outType) {
     return reduce(Aggregation.standardDeviation(), outType);
@@ -1020,7 +1098,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a boolean scalar that is true if all of the elements in
    * the column are true or non-zero otherwise false.
    * Null values are skipped.
+   * @deprecated the only output type supported is BOOL8.
    */
+  @Deprecated
   public Scalar all() {
     return all(DType.BOOL8);
   }
@@ -1056,7 +1136,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * supported for reduction of non-arithmetic types (TIMESTAMP...)
    * The null values are skipped for the operation.
    * @param aggregation The reduction aggregation to perform
-   * @param outType The type of scalar value to return
+   * @param outType The type of scalar value to return. Not all output types are supported
+   *                by all aggregation operations.
    * @return The scalar result of the reduction operation. If the column is
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
@@ -2391,6 +2472,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long findAndReplaceAll(long valuesHandle, long replaceHandle, long myself) throws CudfException;
 
+  private static native long round(long nativeHandle, int decimalPlaces, int roundingMethod) throws CudfException;
   /**
    * Native method to switch all characters in a column of strings to lowercase characters.
    * @param cudfViewHandle native handle of the cudf::column_view being operated on.
@@ -2537,6 +2619,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   static native long getChildCvPointer(long viewHandle, int childIndex) throws CudfException;
 
   static native int getNativeNumChildren(long viewHandle) throws CudfException;
+
+  // calculate the amount of device memory used by this column including any child columns
+  static native long getDeviceMemorySize(long viewHandle) throws CudfException;
 
   static native long copyColumnViewToCV(long viewHandle) throws CudfException;
 

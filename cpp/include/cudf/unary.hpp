@@ -97,8 +97,7 @@ std::unique_ptr<cudf::column> is_valid(
 /**
  * @brief  Casts data from dtype specified in input to dtype specified in output.
  *
- * Supports only fixed-width types. For `decimal32` and `decimal64`, casting to and from
- * floating point and integral types is supported.
+ * Supports only fixed-width types.
  *
  * @param column_view Input column
  * @param out_type Desired datatype of output column

@@ -1,18 +1,33 @@
+/*
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/detail/nvtx/ranges.hpp>
-
-#include <cudf/null_mask.hpp>
-#include <cudf/utilities/error.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
-
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/reduction.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {
@@ -47,9 +62,11 @@ struct ScanDispatcher {
   {
     const size_type size = input_view.size();
     auto output_column =
-      detail::allocate_like(input_view, size, mask_allocation_policy::NEVER, mr, stream);
+      detail::allocate_like(input_view, size, mask_allocation_policy::NEVER, stream, mr);
     if (null_handling == null_policy::EXCLUDE) {
-      output_column->set_null_mask(copy_bitmask(input_view, stream, mr), input_view.null_count());
+      output_column->set_null_mask(
+        detail::copy_bitmask(input_view, rmm::cuda_stream_view{stream}, mr),
+        input_view.null_count());
     }
     mutable_column_view output = output_column->mutable_view();
     auto d_input               = column_device_view::create(input_view, stream);
@@ -91,7 +108,7 @@ struct ScanDispatcher {
                                          cudaStream_t stream)
   {
     rmm::device_buffer mask =
-      create_null_mask(input_view.size(), mask_state::UNINITIALIZED, stream, mr);
+      detail::create_null_mask(input_view.size(), mask_state::UNINITIALIZED, stream, mr);
     auto d_input = column_device_view::create(input_view, stream);
     auto v       = detail::make_validity_iterator(*d_input);
     auto first_null_position =
@@ -114,9 +131,11 @@ struct ScanDispatcher {
   {
     const size_type size = input_view.size();
     auto output_column =
-      detail::allocate_like(input_view, size, mask_allocation_policy::NEVER, mr, stream);
+      detail::allocate_like(input_view, size, mask_allocation_policy::NEVER, stream, mr);
     if (null_handling == null_policy::EXCLUDE) {
-      output_column->set_null_mask(copy_bitmask(input_view, stream, mr), input_view.null_count());
+      output_column->set_null_mask(
+        detail::copy_bitmask(input_view, rmm::cuda_stream_view{stream}, mr),
+        input_view.null_count());
     } else {
       if (input_view.nullable()) {
         output_column->set_null_mask(mask_inclusive_scan(input_view, mr, stream),
@@ -166,7 +185,9 @@ struct ScanDispatcher {
 
     auto output_column = make_strings_column(result, Op::template identity<T>(), stream, mr);
     if (null_handling == null_policy::EXCLUDE) {
-      output_column->set_null_mask(copy_bitmask(input_view, stream, mr), input_view.null_count());
+      output_column->set_null_mask(
+        detail::copy_bitmask(input_view, rmm::cuda_stream_view{stream}, mr),
+        input_view.null_count());
     } else {
       if (input_view.nullable()) {
         output_column->set_null_mask(mask_inclusive_scan(input_view, mr, stream),

@@ -1676,13 +1676,20 @@ public class JCudfSerialization {
 
   public static Table readAndConcat(SerializedTableHeader[] headers,
                                     HostMemoryBuffer[] dataBuffers) throws IOException {
+    ContiguousTable ct = concatToContiguousTable(headers, dataBuffers);
+    ct.getBuffer().close();
+    return ct.getTable();
+  }
 
+  public static ContiguousTable concatToContiguousTable(SerializedTableHeader[] headers,
+                                                        HostMemoryBuffer[] dataBuffers) throws IOException {
     ColumnBufferProvider[][] providersPerColumn = providersFrom(headers, dataBuffers);
+    DeviceMemoryBuffer devBuffer = null;
+    Table table = null;
     try {
       SerializedTableHeader combined = calcConcatHeader(providersPerColumn);
 
-      try (HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(combined.dataLen);
-           DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length)) {
+      try (HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(combined.dataLen)) {
         try (NvtxRange range = new NvtxRange("Concat Host Side", NvtxColor.GREEN)) {
           DataWriter writer = writerFrom(hostBuffer);
           int numColumns = combined.getNumColumns();
@@ -1691,15 +1698,26 @@ public class JCudfSerialization {
           }
         }
 
+        devBuffer = DeviceMemoryBuffer.allocate(hostBuffer.length);
         if (hostBuffer.length > 0) {
           try (NvtxRange range = new NvtxRange("Copy Data To Device", NvtxColor.WHITE)) {
             devBuffer.copyFromHostBuffer(hostBuffer);
           }
         }
-        return sliceUpColumnVectors(combined, devBuffer, hostBuffer);
+        table = sliceUpColumnVectors(combined, devBuffer, hostBuffer);
+        ContiguousTable result = new ContiguousTable(table, devBuffer);
+        table = null;
+        devBuffer = null;
+        return result;
       }
     } finally {
       closeAll(providersPerColumn);
+      if (table != null) {
+        table.close();
+      }
+      if (devBuffer != null) {
+        devBuffer.close();
+      }
     }
   }
 

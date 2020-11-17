@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,8 +36,9 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <algorithm>
 #include <cub/cub.cuh>
+
+#include <algorithm>
 
 namespace {
 // Compute the count of elements that pass the mask within each block
@@ -213,7 +214,7 @@ struct scatter_gather_functor {
     cudaStream_t stream                 = 0)
   {
     auto output_column = cudf::detail::allocate_like(
-      input, output_size, cudf::mask_allocation_policy::RETAIN, mr, stream);
+      input, output_size, cudf::mask_allocation_policy::RETAIN, stream, mr);
     auto output = output_column->mutable_view();
 
     bool has_valid = input.nullable();

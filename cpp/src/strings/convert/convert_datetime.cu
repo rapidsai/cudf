@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/detail/converters.hpp>
@@ -28,9 +29,12 @@
 #include <cudf/wrappers/timestamps.hpp>
 #include <strings/utilities.cuh>
 
-#include <thrust/logical.h>
-#include <map>
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <thrust/logical.h>
+
+#include <map>
 #include <vector>
 
 namespace cudf {
@@ -414,12 +418,13 @@ std::unique_ptr<cudf::column> to_timestamps(strings_column_view const& strings,
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
 
-  auto results      = make_timestamp_column(timestamp_type,
-                                       strings_count,
-                                       copy_bitmask(strings.parent(), stream, mr),
-                                       strings.null_count(),
-                                       stream,
-                                       mr);
+  auto results = make_timestamp_column(
+    timestamp_type,
+    strings_count,
+    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
+    strings.null_count(),
+    stream,
+    mr);
   auto results_view = results->mutable_view();
   cudf::type_dispatcher(
     timestamp_type, dispatch_to_timestamps_fn(), d_column, format, units, results_view, stream);
@@ -564,12 +569,13 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& strings,
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
 
-  auto results   = make_numeric_column(data_type{type_id::BOOL8},
-                                     strings_count,
-                                     copy_bitmask(strings.parent(), stream, mr),
-                                     strings.null_count(),
-                                     stream,
-                                     mr);
+  auto results = make_numeric_column(
+    data_type{type_id::BOOL8},
+    strings_count,
+    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
+    strings.null_count(),
+    stream,
+    mr);
   auto d_results = results->mutable_view().data<bool>();
 
   format_compiler compiler(format.c_str(), stream);
@@ -886,7 +892,8 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
   auto d_column = *column;
 
   // copy null mask
-  rmm::device_buffer null_mask = copy_bitmask(timestamps, stream, mr);
+  rmm::device_buffer null_mask =
+    cudf::detail::copy_bitmask(timestamps, rmm::cuda_stream_view{stream}, mr);
   // Each string will be the same number of bytes which can be determined
   // directly from the format string.
   auto d_str_bytes = compiler.template_bytes();  // size in bytes of each string

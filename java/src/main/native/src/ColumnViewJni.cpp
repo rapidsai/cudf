@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <numeric>
+
 #include <cudf/aggregation.hpp>
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -24,10 +26,12 @@
 #include <cudf/datetime.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/quantiles.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/rolling.hpp>
+#include <cudf/round.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/search.hpp>
 #include <cudf/strings/attributes.hpp>
@@ -58,6 +62,28 @@
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
 
+namespace {
+
+std::size_t calc_device_memory_size(cudf::column_view const &view) {
+  std::size_t total = 0;
+  auto row_count = view.size();
+
+  if (view.nullable()) {
+    total += cudf::bitmask_allocation_size_bytes(row_count);
+  }
+
+  auto dtype = view.type();
+  if (cudf::is_fixed_width(dtype)) {
+    total += cudf::size_of(dtype) * view.size();
+  }
+
+  return std::accumulate(view.child_begin(), view.child_end(), total,
+                         [](std::size_t t, cudf::column_view const &v) {
+                           return t + calc_device_memory_size(v);
+                         });
+}
+
+} // anonymous namespace
 
 extern "C" {
 
@@ -480,6 +506,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_unaryOperation(JNIEnv *en
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
+}
+
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_round(JNIEnv *env, jclass,
+                                                               jlong input_ptr, jint decimal_places,
+                                                               jint rounding_method) {
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+   try {
+     cudf::jni::auto_set_device(env);
+     cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_ptr);
+     cudf::rounding_method method = static_cast<cudf::rounding_method>(rounding_method);
+     std::unique_ptr<cudf::column> ret = cudf::round(*input, decimal_places, method);
+     return reinterpret_cast<jlong>(ret.release());
+   }
+   CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_year(JNIEnv *env, jclass,
@@ -1498,6 +1539,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidPointerSize
     return static_cast<jlong>(cudf::bitmask_allocation_size_bytes(size));
   }
   CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getDeviceMemorySize(JNIEnv *env, jclass,
+                                                                             jlong handle) {
+    JNI_NULL_CHECK(env, handle, "native handle is null", 0);
+    try {
+      cudf::jni::auto_set_device(env);
+      auto view = reinterpret_cast<cudf::column_view const *>(handle);
+      return calc_device_memory_size(*view);
+    }
+    CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_clamper(JNIEnv *env, jobject j_object,

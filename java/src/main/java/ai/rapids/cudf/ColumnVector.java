@@ -229,13 +229,6 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * Returns the amount of device memory used.
-   */
-  public long getDeviceMemorySize() {
-    return offHeap != null ? offHeap.getDeviceMemorySize() : 0;
-  }
-
-  /**
    * Returns the number of nulls in the data. Note that this might end up
    * being a very expensive operation because if the null count is not
    * known it will be calculated.
@@ -734,20 +727,6 @@ public final class ColumnVector extends ColumnView {
     @Override
     public boolean isClean() {
       return viewHandle == 0 && columnHandle == 0 && toClose.isEmpty();
-    }
-
-    /**
-     * This returns total memory allocated in device for the ColumnVector.
-     * @return number of device bytes allocated for this column
-     */
-    public long getDeviceMemorySize() {
-      BaseDeviceMemoryBuffer valid = getValid();
-      BaseDeviceMemoryBuffer data = getData();
-      BaseDeviceMemoryBuffer offsets = getOffsets();
-      long size = valid != null ? valid.getLength() : 0;
-      size += offsets != null ? offsets.getLength() : 0;
-      size += data != null ? data.getLength() : 0;
-      return size;
     }
   }
 
