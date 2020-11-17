@@ -423,6 +423,10 @@ class GroupBy(Serializable):
             result = cudf.Series(
                 chunk_results, index=self.grouping.keys.unique()
             )
+        elif len(chunk_results) > 0 and isinstance(
+            chunk_results[0], cudf.Series
+        ):
+            result = cudf.concat(chunk_results, axis=1).T
         else:
             result = cudf.concat(chunk_results)
 
