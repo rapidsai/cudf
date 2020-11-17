@@ -322,7 +322,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    * Returns the amount of device memory used.
    */
   public long getDeviceMemorySize() {
-    return offHeap != null ? offHeap.getDeviceMemorySize() : 0;
+    return getDeviceMemorySize(getNativeView());
   }
 
   /**
@@ -3174,6 +3174,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   private static native int getNativeNumChildren(long viewHandle) throws CudfException;
 
+  // calculate the amount of device memory used by this column including any child columns
+  private static native long getDeviceMemorySize(long viewHandle) throws CudfException;
+
   ////////
   // Native methods specific to cudf::column. These either take or create a cudf::column
   // instead of a cudf::column_view so they need to be used with caution. These should
@@ -3503,20 +3506,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     @Override
     public boolean isClean() {
       return viewHandle == 0 && columnHandle == 0 && toClose.isEmpty();
-    }
-
-    /**
-     * This returns total memory allocated in device for the ColumnVector.
-     * @return number of device bytes allocated for this column
-     */
-    public long getDeviceMemorySize() {
-      BaseDeviceMemoryBuffer valid = getValid();
-      BaseDeviceMemoryBuffer data = getData();
-      BaseDeviceMemoryBuffer offsets = getOffsets();
-      long size = valid != null ? valid.getLength() : 0;
-      size += offsets != null ? offsets.getLength() : 0;
-      size += data != null ? data.getLength() : 0;
-      return size;
     }
   }
 
