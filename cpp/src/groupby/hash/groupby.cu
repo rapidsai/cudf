@@ -141,7 +141,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
     auto s                  = sparse_results->get_result(col_idx, agg);
     auto dense_result_table = cudf::detail::gather(
       table_view({s}), gather_map.begin(), gather_map.begin() + map_size, false, mr, stream);
-    return dense_result_table->release()[0];
+    return std::move(dense_result_table->release()[0]);
   }
 
   // Enables conversion of ARGMIN/ARGMAX into MIN/MAX
@@ -166,7 +166,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
                            cudf::detail::negative_index_policy::NOT_ALLOWED,
                            mr,
                            stream);
-    return gather_argminmax->release()[0];
+    return std::move(gather_argminmax->release()[0]);
   };
 
   // Declare overloads for each kind of aggregation to dispatch
@@ -226,14 +226,6 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
     this->visit(*count_agg);
     column_view sum_result   = sparse_results->get_result(col_idx, *sum_agg);
     column_view count_result = sparse_results->get_result(col_idx, *count_agg);
-
-    auto mean_result =
-      cudf::detail::binary_operation(sum_result,
-                                     count_result,
-                                     binary_operator::DIV,
-                                     cudf::detail::target_type(col.type(), aggregation::MEAN),
-                                     mr,
-                                     stream);
 
     auto values_view = column_device_view::create(col);
     auto sum_view    = column_device_view::create(sum_result);
@@ -314,7 +306,7 @@ void sparse_to_dense_results(table_view const& keys,
                              cudaStream_t stream,
                              rmm::mr::device_memory_resource* mr)
 {
-  auto row_bitmask{bitmask_and(keys, rmm::mr::get_current_device_resource(), stream)};
+  auto row_bitmask{bitmask_and(keys, stream, rmm::mr::get_current_device_resource())};
   bool skip_key_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
   bitmask_type const* row_bitmask_ptr =
     skip_key_rows_with_nulls ? static_cast<bitmask_type*>(row_bitmask.data()) : nullptr;
