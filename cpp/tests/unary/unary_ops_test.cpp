@@ -817,9 +817,55 @@ TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryCeil)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto const input    = fp_wrapper{{-1234, -3456, -6789, 1234, 3456, 6789}, scale_type{-3}};
-  auto const expected = fp_wrapper{{-1000, -3000, -6000, 2000, 4000, 7000}, scale_type{-3}};
+  auto const input    = fp_wrapper{{-1234, -3456, -6789, 1234, 3456, 7000, 0}, scale_type{-3}};
+  auto const expected = fp_wrapper{{-1000, -3000, -6000, 2000, 4000, 7000, 0}, scale_type{-3}};
   auto const result   = cudf::unary_operation(input, cudf::unary_op::CEIL);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryCeilLarge)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto a = thrust::make_counting_iterator(-5000);
+  auto b = cudf::test::make_counting_transform_iterator(-5000, [](int e) { return (e / 10) * 10; });
+  auto const input    = fp_wrapper{a, a + 4000, scale_type{-1}};
+  auto const expected = fp_wrapper{b, b + 4000, scale_type{-1}};
+  auto const result   = cudf::unary_operation(input, cudf::unary_op::CEIL);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryFloor)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const input    = fp_wrapper{{-1234, -3456, -6789, 1234, 3456, 6000, 0}, scale_type{-3}};
+  auto const expected = fp_wrapper{{-2000, -4000, -7000, 1000, 3000, 6000, 0}, scale_type{-3}};
+  auto const result   = cudf::unary_operation(input, cudf::unary_op::FLOOR);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryFloorLarge)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto a = thrust::make_counting_iterator(100);
+  auto b = cudf::test::make_counting_transform_iterator(100, [](auto e) { return (e / 10) * 10; });
+  auto const input    = fp_wrapper{a, a + 4000, scale_type{-1}};
+  auto const expected = fp_wrapper{b, b + 4000, scale_type{-1}};
+  auto const result   = cudf::unary_operation(input, cudf::unary_op::FLOOR);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }

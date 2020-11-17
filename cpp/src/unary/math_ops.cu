@@ -230,6 +230,58 @@ struct DeviceNot {
   }
 };
 
+template <typename T>
+struct fixed_point_ceil {
+  T n;
+  __device__ T operator()(T data)
+  {
+    T const a = (data / n) * n;                  // result of integer division
+    return a + (data > 0 && a != data ? n : 0);  // add 1 if positive and not round number
+  }
+};
+
+template <typename T>
+struct fixed_point_floor {
+  T n;
+  __device__ T operator()(T data)
+  {
+    T const a = (data / n) * n;                  // result of integer division
+    return a - (data < 0 && a != data ? n : 0);  // subtract 1 if negative and not round number
+  }
+};
+
+template <typename T>
+struct fixed_point_abs {
+  T n;
+  __device__ T operator()(T data) { return std::abs(data); }
+};
+
+template <typename T, template <typename> typename FixedPointFunctor>
+std::unique_ptr<column> unary_op_with(column_view const& input,
+                                      cudaStream_t stream,
+                                      rmm::mr::device_memory_resource* mr)
+{
+  using namespace numeric;
+  using Type                     = device_storage_type_t<T>;
+  using FixedPointUnaryOpFunctor = FixedPointFunctor<Type>;
+
+  if (input.type().scale() >= 0) return std::make_unique<cudf::column>(input, stream, mr);
+
+  auto result = cudf::make_fixed_width_column(
+    input.type(), input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);
+
+  auto out_view = result->mutable_view();
+  Type const n  = std::pow(10, -input.type().scale());
+
+  thrust::transform(rmm::exec_policy(stream)->on(stream),
+                    input.begin<Type>(),
+                    input.end<Type>(),
+                    out_view.begin<Type>(),
+                    FixedPointUnaryOpFunctor{n});
+
+  return result;
+}
+
 template <typename OutputType, typename UFN, typename InputIterator>
 std::unique_ptr<cudf::column> transform_fn(InputIterator begin,
                                            InputIterator end,
@@ -292,23 +344,6 @@ struct MathOpDispatcher {
       stream);
   }
 
-  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
-  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
-                                           rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream)
-  {
-    using Type = device_storage_type_t<T>;
-
-    return transform_fn<T, UFN>(
-      input.begin<Type>(),
-      input.end<Type>(),
-      input.type(),
-      cudf::detail::copy_bitmask(input, rmm::cuda_stream_view{stream}, mr),
-      input.null_count(),
-      mr,
-      stream);
-  }
-
   struct dictionary_dispatch {
     template <typename T, typename std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
     std::unique_ptr<cudf::column> operator()(cudf::dictionary_column_view const& input,
@@ -342,8 +377,7 @@ struct MathOpDispatcher {
 
   template <typename T,
             typename std::enable_if_t<!std::is_arithmetic<T>::value and
-                                      !std::is_same<T, dictionary32>::value and
-                                      !cudf::is_fixed_point<T>()>* = nullptr>
+                                      !std::is_same<T, dictionary32>::value>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream)
@@ -488,6 +522,33 @@ struct LogicalOpDispatcher {
   }
 };
 
+struct FixedPointOpDispatcher {
+  template <typename T, typename... Args>
+  std::enable_if_t<not cudf::is_fixed_point<T>(), std::unique_ptr<column>> operator()(
+    Args&&... args)
+  {
+    CUDF_FAIL("FixedPointOpDispatcher only for fixed_point");
+  }
+
+  template <typename T>
+  std::enable_if_t<cudf::is_fixed_point<T>(), std::unique_ptr<column>> operator()(
+    column_view const& input,
+    cudf::unary_op op,
+    cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr)
+  {
+    // clang-format off
+    switch (op) {
+      case cudf::unary_op::CEIL:  return unary_op_with<T, detail::fixed_point_ceil> (input, stream, mr);
+      case cudf::unary_op::FLOOR: return unary_op_with<T, fixed_point_floor>(input, stream, mr);
+      // case cudf::unary_op::RINT:  return unary_op_with<T, fixed_point_rint> (input, stream, mr);
+      case cudf::unary_op::ABS:   return unary_op_with<T, fixed_point_abs>  (input, stream, mr);
+      default: CUDF_FAIL("Unsupported fixed_point unary operation");
+    }
+    // clang-format on
+  }
+};
+
 }  // namespace
 
 std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
@@ -495,6 +556,9 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
                                               rmm::mr::device_memory_resource* mr,
                                               cudaStream_t stream)
 {
+  if (cudf::is_fixed_point(input.type()))
+    return type_dispatcher(input.type(), detail::FixedPointOpDispatcher{}, input, op, stream, mr);
+
   switch (op) {
     case cudf::unary_op::SIN:
       return cudf::type_dispatcher(
