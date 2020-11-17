@@ -195,6 +195,7 @@ public class TableTest extends CudfTestBase {
           case UINT32: // fall through
           case TIMESTAMP_DAYS:
           case DURATION_DAYS:
+          case DECIMAL32:
             assertEquals(expected.getInt(expectedRow), cv.getInt(tableRow),
                 "Column " + colName + " Row " + tableRow);
             break;
@@ -208,6 +209,7 @@ public class TableTest extends CudfTestBase {
           case TIMESTAMP_MILLISECONDS: // fall through
           case TIMESTAMP_NANOSECONDS: // fall through
           case TIMESTAMP_SECONDS:
+          case DECIMAL64:
             assertEquals(expected.getLong(expectedRow), cv.getLong(tableRow),
                 "Column " + colName + " Row " + tableRow);
             break;

@@ -239,6 +239,29 @@ def test_orc_read_statistics(datadir):
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
+@pytest.mark.parametrize(
+    "predicate,expected_len",
+    [
+        ([[("int1", "==", 1)]], 5000),
+        ([[("int1", "<=", 2)]], 10000),
+        ([[("int1", "==", -1)]], 0),
+        ([[("int1", "in", range(3))]], 10000),
+        ([[("int1", "in", {1, 3})]], 6000),
+        ([[("int1", "not in", {1, 3})]], 5000),
+    ],
+)
+def test_orc_read_filtered(datadir, engine, predicate, expected_len):
+    path = datadir / "TestOrcFile.testStripeLevelStats.orc"
+    try:
+        df_filtered = cudf.read_orc(path, engine=engine, filters=predicate)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+
+    # Assert # of rows after filtering
+    assert len(df_filtered) == expected_len
+
+
+@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 def test_orc_read_stripes(datadir, engine):
     path = datadir / "TestOrcFile.testDate1900.orc"
     try:

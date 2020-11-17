@@ -13,7 +13,7 @@ from pandas.core.dtypes.common import infer_dtype_from_object
 from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 import cudf
-from cudf._lib.scalar import Scalar
+from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
 
 _NA_REP = "<NA>"
 _np_pa_dtypes = {
@@ -92,6 +92,8 @@ TIMEDELTA_TYPES = {
     "timedelta64[ns]",
 }
 OTHER_TYPES = {"bool", "category", "str"}
+STRING_TYPES = {"object"}
+BOOL_TYPES = {"bool"}
 ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
 
 
@@ -278,7 +280,8 @@ def cudf_dtype_from_pa_type(typ):
 def is_scalar(val):
     return (
         val is None
-        or isinstance(val, Scalar)
+        or isinstance(val, DeviceScalar)
+        or isinstance(val, cudf.Scalar)
         or isinstance(val, str)
         or isinstance(val, numbers.Number)
         or np.isscalar(val)
@@ -299,7 +302,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
 
     If `val` is None, returns None.
     """
-    if val is None:
+    if _is_null_host_scalar(val) or isinstance(val, cudf.Scalar):
         return val
 
     if not is_scalar(val):
@@ -538,6 +541,41 @@ def _get_nan_for_dtype(dtype):
         return np.float64("nan")
 
 
+def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
+    error = TypeError(
+        f"{op} not supported between {dtype_l} and {dtype_r} scalars"
+    )
+
+    to_numpy_ops = {
+        "__add__": _ADD_TYPES,
+        "__sub__": _SUB_TYPES,
+        "__mul__": _MUL_TYPES,
+        "__floordiv__": _FLOORDIV_TYPES,
+        "__truediv__": _TRUEDIV_TYPES,
+        "__mod__": _MOD_TYPES,
+        "__pow__": _POW_TYPES,
+    }
+    allowed = to_numpy_ops.get(op, op)
+
+    # special rules for string
+    if dtype_l == "object" or dtype_r == "object":
+        if (dtype_l == dtype_r == "object") and op == "__add__":
+            return "str"
+        else:
+            raise error
+
+    # Check if we can directly operate
+
+    for valid_combo in allowed:
+        ltype, rtype, outtype = valid_combo
+        if np.can_cast(dtype_l.char, ltype) and np.can_cast(
+            dtype_r.char, rtype
+        ):
+            return outtype
+
+    raise error
+
+
 def find_common_type(dtypes):
     """
     Wrapper over np.find_common_type to handle special cases
@@ -577,3 +615,110 @@ def find_common_type(dtypes):
         dtypes.add(np.result_type(*td_dtypes))
 
     return np.find_common_type(list(dtypes), [])
+
+
+# Type dispatch loops similar to what are found in `np.add.types`
+# In NumPy, whether or not an op can be performed between two
+# operands is determined by checking to see if NumPy has a c/c++
+# loop specifically for adding those two operands built in. If
+# not it will search lists like these for a loop for types that
+# the operands can be safely cast to. These are those lookups,
+# modified slightly for cuDF's rules
+_ADD_TYPES = [
+    "???",
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "bbb",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "mMM",
+    "MmM",
+    "mmm",
+    "LMM",
+    "MLM",
+    "Lmm",
+    "mLm",
+]
+_SUB_TYPES = [
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "bbb",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "???",
+    "MMm",
+    "mmm",
+    "MmM",
+    "MLM",
+    "mLm",
+    "Lmm",
+]
+_MUL_TYPES = [
+    "???",
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "bbb",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "mLm",
+    "Lmm",
+    "mlm",
+    "lmm",
+]
+_FLOORDIV_TYPES = [
+    "bbb",
+    "BBB",
+    "HHH",
+    "III",
+    "LLL",
+    "hhh",
+    "iii",
+    "lll",
+    "fff",
+    "ddd",
+    "???",
+    "mqm",
+    "mdm",
+    "mmq",
+]
+_TRUEDIV_TYPES = ["fff", "ddd", "mqm", "mmd", "mLm"]
+_MOD_TYPES = [
+    "bbb",
+    "BBB",
+    "hhh",
+    "HHH",
+    "iii",
+    "III",
+    "lll",
+    "LLL",
+    "fff",
+    "ddd",
+    "mmm",
+]
+_POW_TYPES = [
+    "bbb",
+    "BBB",
+    "hhh",
+    "HHH",
+    "iii",
+    "III",
+    "lll",
+    "LLL",
+    "fff",
+    "ddd",
+]

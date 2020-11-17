@@ -28,6 +28,7 @@
 #include <cudf/reduction.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/rolling.hpp>
+#include <cudf/round.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/search.hpp>
 #include <cudf/strings/attributes.hpp>
@@ -141,16 +142,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
   try {
     cudf::jni::auto_set_device(env);
     auto scalar_val = reinterpret_cast<cudf::scalar const *>(j_scalar);
-    auto dtype = scalar_val->type();
-    cudf::mask_state mask_state =
+    const auto dtype = scalar_val->type();
+    const auto mask_state =
         scalar_val->is_valid() ? cudf::mask_state::UNALLOCATED : cudf::mask_state::ALL_NULL;
     std::unique_ptr<cudf::column> col;
     if (row_count == 0) {
       col = cudf::make_empty_column(dtype);
     } else if (cudf::is_fixed_width(dtype)) {
-      col = cudf::make_fixed_width_column(dtype, row_count, mask_state);
-      auto mut_view = col->mutable_view();
-      cudf::fill_in_place(mut_view, 0, row_count, *scalar_val);
+      col = cudf::make_column_from_scalar(*scalar_val, row_count);
     } else if (dtype.id() == cudf::type_id::STRING) {
       // create a string column of all empty strings to fill (cheapest string column to create)
       auto offsets = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, row_count + 1,
@@ -558,6 +557,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_unaryOperation(JNIEnv *
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_round(JNIEnv *env, jclass,
+                                                               jlong input_ptr, jint decimal_places,
+                                                               jint rounding_method) {
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+   try {
+     cudf::jni::auto_set_device(env);
+     cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_ptr);
+     cudf::rounding_method method = static_cast<cudf::rounding_method>(rounding_method);
+     std::unique_ptr<cudf::column> ret = cudf::round(*input, decimal_places, method);
+     return reinterpret_cast<jlong>(ret.release());
+   }
+   CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_year(JNIEnv *env, jclass,

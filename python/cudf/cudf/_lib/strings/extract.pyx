@@ -4,7 +4,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.table cimport Table
 

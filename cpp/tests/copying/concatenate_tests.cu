@@ -289,6 +289,207 @@ TEST_F(TableTest, ConcatenateTablesWithOffsetsAndNulls)
   }
 }
 
+struct StructsColumnTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(StructsColumnTest, ConcatenateStructs)
+{
+  using namespace cudf::test;
+
+  auto count_iter = thrust::make_counting_iterator(0);
+
+  // 1. String "names" column.
+  std::vector<std::vector<std::string>> names(
+    {{"Vimes", "Carrot"}, {"Angua", "Cheery"}, {}, {"Detritus", "Slant"}});
+  std::vector<std::vector<bool>> names_validity({{1, 1}, {1, 1}, {}, {1, 1}});
+  std::vector<strings_column_wrapper> name_cols;
+  std::transform(count_iter, count_iter + names.size(), std::back_inserter(name_cols), [&](int i) {
+    return strings_column_wrapper(names[i].begin(), names[i].end(), names_validity[i].begin());
+  });
+
+  // 2. Numeric "ages" column.
+  std::vector<std::vector<int>> ages({{5, 10}, {15, 20}, {}, {25, 30}});
+  std::vector<std::vector<bool>> ages_validity({{1, 1}, {1, 1}, {}, {0, 1}});
+  std::vector<fixed_width_column_wrapper<int>> age_cols;
+  std::transform(count_iter, count_iter + ages.size(), std::back_inserter(age_cols), [&](int i) {
+    return fixed_width_column_wrapper<int>(
+      ages[i].begin(), ages[i].end(), ages_validity[i].begin());
+  });
+
+  // 3. Boolean "is_human" column.
+  std::vector<std::vector<bool>> is_human({{true, true}, {false, false}, {}, {false, false}});
+  std::vector<std::vector<bool>> is_human_validity({{1, 1}, {1, 0}, {}, {1, 1}});
+  std::vector<fixed_width_column_wrapper<bool>> is_human_cols;
+  std::transform(
+    count_iter, count_iter + is_human.size(), std::back_inserter(is_human_cols), [&](int i) {
+      return fixed_width_column_wrapper<bool>(
+        is_human[i].begin(), is_human[i].end(), is_human_validity[i].begin());
+    });
+
+  // build expected output
+  std::vector<std::unique_ptr<column>> expected_children;
+  expected_children.push_back(
+    cudf::concatenate({name_cols[0], name_cols[1], name_cols[2], name_cols[3]}));
+  expected_children.push_back(
+    cudf::concatenate({age_cols[0], age_cols[1], age_cols[2], age_cols[3]}));
+  expected_children.push_back(
+    cudf::concatenate({is_human_cols[0], is_human_cols[1], is_human_cols[2], is_human_cols[3]}));
+  std::vector<bool> struct_validity({1, 0, 1, 1, 1, 0});
+  auto expected = make_structs_column(
+    6,
+    std::move(expected_children),
+    2,
+    cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end()));
+
+  // concatenate as structs
+  std::vector<structs_column_wrapper> src;
+  src.push_back(structs_column_wrapper({name_cols[0], age_cols[0], is_human_cols[0]}, {1, 0}));
+  src.push_back(structs_column_wrapper({name_cols[1], age_cols[1], is_human_cols[1]}, {1, 1}));
+  src.push_back(structs_column_wrapper({name_cols[2], age_cols[2], is_human_cols[2]}, {}));
+  src.push_back(structs_column_wrapper({name_cols[3], age_cols[3], is_human_cols[3]}, {1, 0}));
+
+  // concatenate
+  auto result = cudf::concatenate({src[0], src[1], src[2], src[3]});
+  cudf::test::expect_columns_equivalent(*result, *expected);
+}
+
+TEST_F(StructsColumnTest, ConcatenateSplitStructs)
+{
+  using namespace cudf::test;
+
+  auto count_iter = thrust::make_counting_iterator(0);
+
+  std::vector<int> splits({2});
+
+  // 1. String "names" column.
+  std::vector<std::vector<std::string>> names(
+    {{"Vimes", "Carrot", "Angua", "Cheery", "Detritus", "Slant"},
+     {"Bill", "Bob", "Sam", "Fred", "Tom"}});
+  std::vector<std::vector<bool>> names_validity({{1, 1, 1, 1, 1, 1}, {0, 1, 0, 1, 0}});
+  std::vector<strings_column_wrapper> name_cols;
+  std::transform(count_iter, count_iter + names.size(), std::back_inserter(name_cols), [&](int i) {
+    return strings_column_wrapper(names[i].begin(), names[i].end(), names_validity[i].begin());
+  });
+
+  // 2. Numeric "ages" column.
+  std::vector<std::vector<int>> ages({{5, 10, 15, 20, 25, 30}, {11, 16, 17, 41, 42}});
+  std::vector<std::vector<bool>> ages_validity({{1, 1, 1, 1, 0, 1}, {1, 1, 1, 0, 0}});
+  std::vector<fixed_width_column_wrapper<int>> age_cols;
+  std::transform(count_iter, count_iter + ages.size(), std::back_inserter(age_cols), [&](int i) {
+    return fixed_width_column_wrapper<int>(
+      ages[i].begin(), ages[i].end(), ages_validity[i].begin());
+  });
+
+  // 3. Boolean "is_human" column.
+  std::vector<std::vector<bool>> is_human(
+    {{true, true, false, false, false, false}, {true, true, true, false, true}});
+  std::vector<std::vector<bool>> is_human_validity({{1, 1, 1, 0, 1, 1}, {0, 0, 0, 1, 1}});
+  std::vector<fixed_width_column_wrapper<bool>> is_human_cols;
+  std::transform(
+    count_iter, count_iter + is_human.size(), std::back_inserter(is_human_cols), [&](int i) {
+      return fixed_width_column_wrapper<bool>(
+        is_human[i].begin(), is_human[i].end(), is_human_validity[i].begin());
+    });
+
+  // split the columns, keep the one on the end
+  std::vector<column_view> split_names_cols(
+    {cudf::split(name_cols[0], splits)[1], cudf::split(name_cols[1], splits)[1]});
+  std::vector<column_view> split_ages_cols(
+    {cudf::split(age_cols[0], splits)[1], cudf::split(age_cols[1], splits)[1]});
+  std::vector<column_view> split_is_human_cols(
+    {cudf::split(is_human_cols[0], splits)[1], cudf::split(is_human_cols[1], splits)[1]});
+
+  // build expected output
+  std::vector<std::unique_ptr<column>> expected_children;
+  expected_children.push_back(cudf::concatenate({split_names_cols[0], split_names_cols[1]}));
+  expected_children.push_back(cudf::concatenate({split_ages_cols[0], split_ages_cols[1]}));
+  expected_children.push_back(cudf::concatenate({split_is_human_cols[0], split_is_human_cols[1]}));
+  auto expected = make_structs_column(7, std::move(expected_children), 0, rmm::device_buffer{});
+
+  // concatenate as structs
+  std::vector<structs_column_wrapper> src;
+  for (size_t idx = 0; idx < split_names_cols.size(); idx++) {
+    std::vector<std::unique_ptr<column>> inputs;
+    inputs.push_back(std::make_unique<column>(split_names_cols[idx]));
+    inputs.push_back(std::make_unique<column>(split_ages_cols[idx]));
+    inputs.push_back(std::make_unique<column>(split_is_human_cols[idx]));
+    src.push_back(structs_column_wrapper(std::move(inputs)));
+  }
+
+  // concatenate
+  auto result = cudf::concatenate({src[0], src[1]});
+  cudf::test::expect_columns_equivalent(*result, *expected);
+}
+
+TEST_F(StructsColumnTest, ConcatenateStructsNested)
+{
+  // includes Struct<Struct> and Struct<List>
+  using namespace cudf::test;
+
+  auto count_iter = thrust::make_counting_iterator(0);
+
+  // inner structs
+  std::vector<structs_column_wrapper> inner_structs;
+  {
+    // 1. String "names" column.
+    std::vector<std::vector<std::string>> names(
+      {{"Vimes", "Carrot", "Angua", "Cheery", "Detritus", "Slant"},
+       {"Bill", "Bob", "Sam", "Fred", "Tom"}});
+    std::vector<std::vector<bool>> names_validity({{1, 1, 1, 1, 1, 1}, {0, 1, 0, 1, 0}});
+    std::vector<strings_column_wrapper> name_cols;
+    std::transform(
+      count_iter, count_iter + names.size(), std::back_inserter(name_cols), [&](int i) {
+        return strings_column_wrapper(names[i].begin(), names[i].end(), names_validity[i].begin());
+      });
+
+    // 2. Numeric "ages" column.
+    std::vector<std::vector<int>> ages({{5, 10, 15, 20, 25, 30}, {11, 16, 17, 41, 42}});
+    std::vector<std::vector<bool>> ages_validity({{1, 1, 1, 1, 0, 1}, {1, 1, 1, 0, 0}});
+    std::vector<fixed_width_column_wrapper<int>> age_cols;
+    std::transform(count_iter, count_iter + ages.size(), std::back_inserter(age_cols), [&](int i) {
+      return fixed_width_column_wrapper<int>(
+        ages[i].begin(), ages[i].end(), ages_validity[i].begin());
+    });
+
+    for (size_t idx = 0; idx < names.size(); idx++) {
+      std::vector<std::unique_ptr<column>> children;
+      children.push_back(name_cols[idx].release());
+      children.push_back(age_cols[idx].release());
+      inner_structs.push_back(structs_column_wrapper(std::move(children)));
+    }
+  }
+
+  // inner lists
+  using LCW = lists_column_wrapper<cudf::string_view>;
+  std::vector<lists_column_wrapper<cudf::string_view>> inner_lists;
+  {
+    inner_lists.push_back(lists_column_wrapper<cudf::string_view>{
+      {"abc", "d"}, {"ef", "ghi", "j"}, {"klm", "no"}, LCW{}, LCW{"whee"}, {"xyz", "ab", "g"}});
+
+    inner_lists.push_back(lists_column_wrapper<cudf::string_view>{
+      {"er", "hyj"}, {"", "", "uvw"}, LCW{}, LCW{"oipq", "te"}, LCW{"yay", "bonk"}});
+  }
+
+  // build expected output
+  std::vector<std::unique_ptr<column>> expected_children;
+  expected_children.push_back(cudf::concatenate({inner_structs[0], inner_structs[1]}));
+  expected_children.push_back(cudf::concatenate({inner_lists[0], inner_lists[1]}));
+  auto expected = make_structs_column(11, std::move(expected_children), 0, rmm::device_buffer{});
+
+  // concatenate as structs
+  std::vector<structs_column_wrapper> src;
+  for (size_t idx = 0; idx < inner_structs.size(); idx++) {
+    std::vector<std::unique_ptr<column>> inputs;
+    inputs.push_back(std::make_unique<column>(inner_structs[idx]));
+    inputs.push_back(std::make_unique<column>(inner_lists[idx]));
+    src.push_back(structs_column_wrapper(std::move(inputs)));
+  }
+
+  // concatenate
+  auto result = cudf::concatenate({src[0], src[1]});
+  cudf::test::expect_columns_equivalent(*result, *expected);
+}
+
 struct ListsColumnTest : public cudf::test::BaseFixture {
 };
 
@@ -761,6 +962,72 @@ TEST_F(ListsColumnTest, SlicedColumnsWithNulls)
     auto result3 = cudf::concatenate({split_a[1], split_b[1]});
     cudf::test::expect_columns_equivalent(*result3, expected3);
   }
+}
+
+TEST_F(ListsColumnTest, ListOfStructs)
+{
+  using namespace cudf::test;
+
+  auto count_iter = thrust::make_counting_iterator(0);
+
+  // inner structs
+  std::vector<structs_column_wrapper> inner_structs;
+  {
+    // 1. String "names" column.
+    std::vector<std::vector<std::string>> names(
+      {{"Vimes", "Carrot", "Angua", "Cheery", "Detritus", "Slant"},
+       {},
+       {},
+       {"Bill", "Bob", "Sam", "Fred", "Tom"}});
+    std::vector<std::vector<bool>> names_validity({{1, 1, 1, 1, 1, 1}, {}, {}, {0, 1, 0, 1, 0}});
+    std::vector<strings_column_wrapper> name_cols;
+    std::transform(
+      count_iter, count_iter + names.size(), std::back_inserter(name_cols), [&](int i) {
+        return strings_column_wrapper(names[i].begin(), names[i].end(), names_validity[i].begin());
+      });
+
+    // 2. Numeric "ages" column.
+    std::vector<std::vector<int>> ages({{5, 10, 15, 20, 25, 30}, {}, {}, {11, 16, 17, 41, 42}});
+    std::vector<std::vector<bool>> ages_validity({{1, 1, 1, 1, 0, 1}, {}, {}, {1, 1, 1, 0, 0}});
+    std::vector<fixed_width_column_wrapper<int>> age_cols;
+    std::transform(count_iter, count_iter + ages.size(), std::back_inserter(age_cols), [&](int i) {
+      return fixed_width_column_wrapper<int>(
+        ages[i].begin(), ages[i].end(), ages_validity[i].begin());
+    });
+
+    for (size_t idx = 0; idx < names.size(); idx++) {
+      std::vector<std::unique_ptr<column>> children;
+      children.push_back(name_cols[idx].release());
+      children.push_back(age_cols[idx].release());
+      inner_structs.push_back(structs_column_wrapper(std::move(children)));
+    }
+  }
+
+  // build expected output
+  auto expected_child =
+    cudf::concatenate({inner_structs[0], inner_structs[1], inner_structs[2], inner_structs[3]});
+  fixed_width_column_wrapper<int> offsets_w{0, 1, 1, 1, 1, 4, 6, 6, 6, 10, 11};
+  auto expected = make_lists_column(
+    10, std::move(offsets_w.release()), std::move(expected_child), 0, rmm::device_buffer{});
+
+  // lists
+  std::vector<fixed_width_column_wrapper<int>> offsets;
+  offsets.push_back({0, 1, 1, 1, 1, 4, 6, 6});
+  offsets.push_back({0});
+  offsets.push_back({0});
+  offsets.push_back({0, 0, 4, 5});
+
+  // concatenate as lists
+  std::vector<std::unique_ptr<cudf::column>> src;
+  for (size_t idx = 0; idx < inner_structs.size(); idx++) {
+    int size = static_cast<column_view>(offsets[idx]).size() - 1;
+    src.push_back(make_lists_column(
+      size, offsets[idx].release(), inner_structs[idx].release(), 0, rmm::device_buffer{}));
+  }
+
+  // concatenate
+  auto result = cudf::concatenate({*src[0], *src[1], *src[2], *src[3]});
+  cudf::test::expect_columns_equivalent(*result, *expected);
 }
 
 template <typename T>

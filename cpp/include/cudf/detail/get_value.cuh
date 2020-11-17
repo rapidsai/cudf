@@ -26,7 +26,8 @@ namespace detail {
 /**
  * @brief Return a fixed-width value from column.
  *
- * This will retrieve the specified value from device memory.
+ * Retrieves the specified value from device memory. This function
+ * synchronizes the stream.
  *
  * @throw cudf::logic_error if `col_view` is not a fixed-width column
  * @throw cudf::logic_error if `element_index < 0 or >= col_view.size()`
@@ -47,6 +48,7 @@ T get_value(column_view const& col_view, size_type element_index, cudaStream_t s
   T result;
   CUDA_TRY(cudaMemcpyAsync(
     &result, col_view.data<T>() + element_index, sizeof(T), cudaMemcpyDeviceToHost, stream));
+  CUDA_TRY(cudaStreamSynchronize(stream));
   return result;
 }
 
