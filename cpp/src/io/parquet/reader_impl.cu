@@ -114,6 +114,8 @@ type_id to_type_id(SchemaElement const &schema,
   // is superceded by 'logical' type whenever available.
   auto inferred_converted_type = logical_type_to_converted_type(schema.logical_type);
   if (inferred_converted_type != parquet::UNKNOWN) converted_type = inferred_converted_type;
+  if (inferred_converted_type == parquet::DECIMAL && decimal_scale == 0)
+    decimal_scale = schema.logical_type.DECIMAL.scale;
 
   std::cout << ",inferred_converted_type=" << int(inferred_converted_type);
   std::cout << "\n";
