@@ -2608,7 +2608,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         mainOffsetsDevBuff.copyFromHostBuffer(mainColOffsets, 0, offsetsLen);
       }
       List<DeviceMemoryBuffer> toClose = new ArrayList<>();
-      long[] childHandles = new long[devChildren.size()];
+      long[] childHandles = (devChildren.isEmpty()) ? null : new long[devChildren.size()];
       for (ColumnView.NestedColumnVector ncv : devChildren) {
         toClose.addAll(ncv.getBuffersToClose());
       }
@@ -2640,14 +2640,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
 
     long getViewHandle() {
-      long[] childrenColViews;
+      long[] childrenColViews = null;
       if (children != null) {
         childrenColViews = new long[children.size()];
         for (int i = 0; i < children.size(); i++) {
           childrenColViews[i] = children.get(i).getViewHandle();
         }
-      } else {
-        childrenColViews = new long[] {};
       }
       long dataAddr = data == null ? 0 : data.address;
       long dataLen = data == null ? 0 : data.length;

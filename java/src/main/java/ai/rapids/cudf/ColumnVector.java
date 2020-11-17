@@ -82,12 +82,13 @@ public final class ColumnVector extends ColumnView {
       DeviceMemoryBuffer offsetBuffer) {
     super(ColumnVector.initViewHandle(
         type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
-        dataBuffer, validityBuffer, offsetBuffer, new long[] {}));
+        dataBuffer, validityBuffer, offsetBuffer, null));
     assert type != DType.LIST : "This constructor should not be used for list type";
     if (type != DType.STRING) {
       assert offsetBuffer == null : "offsets are only supported for STRING";
     }
-    offHeap = new OffHeapState(type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer, null, new long[] {});
+    offHeap = new OffHeapState(type, (int) rows, nullCount, dataBuffer, validityBuffer,
+        offsetBuffer, null, viewHandle);
     MemoryCleaner.register(this, offHeap);
     this.nullCount = nullCount;
 
@@ -121,7 +122,7 @@ public final class ColumnVector extends ColumnView {
       assert offsetBuffer == null : "offsets are only supported for STRING, LISTS";
     }
     offHeap = new OffHeapState(type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer,
-            toClose, childHandles);
+            toClose, viewHandle);
     MemoryCleaner.register(this, offHeap);
 
     this.refCount = 0;
@@ -156,7 +157,8 @@ public final class ColumnVector extends ColumnView {
 
 
   private static long initViewHandle(DType type, int rows, int nc, DeviceMemoryBuffer dataBuffer,
-                                     DeviceMemoryBuffer validityBuffer, DeviceMemoryBuffer offsetBuffer, long[] childHandles) {
+                                     DeviceMemoryBuffer validityBuffer,
+                                     DeviceMemoryBuffer offsetBuffer, long[] childHandles) {
     long cd = dataBuffer == null ? 0 : dataBuffer.address;
     long cdSize = dataBuffer == null ? 0 : dataBuffer.length;
     long od = offsetBuffer == null ? 0 : offsetBuffer.address;
@@ -557,7 +559,7 @@ public final class ColumnVector extends ColumnView {
     public OffHeapState(DType type, int rows, Optional<Long> nullCount,
                         DeviceMemoryBuffer data, DeviceMemoryBuffer valid, DeviceMemoryBuffer offsets,
                         List<DeviceMemoryBuffer> buffers,
-                        long[] childColumnViewHandles) {
+                        long viewHandle) {
       assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
           || !nullCount.isPresent();
       int nc = nullCount.orElse(UNKNOWN_NULL_COUNT).intValue();
@@ -576,12 +578,7 @@ public final class ColumnVector extends ColumnView {
       if (rows == 0 && !type.isNestedType()) {
         this.columnHandle = makeEmptyCudfColumn(type.typeId.getNativeId(), type.getScale());
       } else {
-        long cd = data == null ? 0 : data.address;
-        long cdSize = data == null ? 0 : data.length;
-        long od = offsets == null ? 0 : offsets.address;
-        long vd = valid == null ? 0 : valid.address;
-        this.viewHandle = ColumnView.makeCudfColumnView(type.typeId.getNativeId(), type.getScale(),
-            cd, cdSize, od, vd, nc, rows, childColumnViewHandles) ;
+        this.viewHandle = viewHandle;
       }
     }
 
