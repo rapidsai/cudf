@@ -32,7 +32,6 @@ def test_array_func_cudf_series(np_ar, func):
     expect = func(np_ar)
     got = func(cudf_ser)
     if np.isscalar(expect):
-        ## TODO: handle this
         assert_eq(expect, got)
     else:
         assert_eq(expect, got.to_array())
