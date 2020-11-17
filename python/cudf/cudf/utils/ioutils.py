@@ -1,5 +1,6 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
+import datetime
 import os
 import urllib
 import warnings
@@ -7,6 +8,7 @@ from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 
 import fsspec
 import fsspec.implementations.local
+import pandas as pd
 
 from cudf.utils.docutils import docfmt_partial
 
@@ -263,6 +265,9 @@ filepath_or_buffer : str, path object, bytes, or file-like object
     `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
     Python bytes of raw binary data, or any object with a `read()` method
     (such as builtin `open()` file handler function or `BytesIO`).
+columns : list, default None
+    If not None, statistics for only these columns will be read from the file.
+
 
 Returns
 -------
@@ -291,6 +296,20 @@ engine : {{ 'cudf', 'pyarrow' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read from the file.
+filters : list of tuple, list of lists of tuples default None
+    If not None, specifies a filter predicate used to filter out row groups
+    using statistics stored for each row group as Parquet metadata. Row groups
+    that do not match the given filter predicate are not read. The
+    predicate is expressed in disjunctive normal form (DNF) like
+    `[[('x', '=', 0), ...], ...]`. DNF allows arbitrary boolean logical
+    combinations of single column predicates. The innermost tuples each
+    describe a single column predicate. The list of inner predicates is
+    interpreted as a conjunction (AND), forming a more selective and
+    multiple column predicate. Finally, the outermost list combines
+    these filters as a disjunction (OR). Predicates may also be passed
+    as a list of tuples. This form is interpreted as a single conjunction.
+    To express OR in predicates, one must use the (preferred) notation of
+    list of lists of tuples.
 stripes: list, default None
     If not None, only these stripe will be read from the file. Stripes are
     concatenated with index ignored.
@@ -1145,3 +1164,117 @@ def buffer_write_lines(buf, lines):
     if any(isinstance(x, str) for x in lines):
         lines = [str(x) for x in lines]
     buf.write("\n".join(lines))
+
+
+def _apply_filter_bool_eq(val, col_stats):
+    if "true_count" in col_stats and "false_count" in col_stats:
+        if val is True:
+            if (col_stats["true_count"] == 0) or (
+                col_stats["false_count"] == col_stats["number_of_values"]
+            ):
+                return False
+        elif val is False:
+            if (col_stats["false_count"] == 0) or (
+                col_stats["true_count"] == col_stats["number_of_values"]
+            ):
+                return False
+    return True
+
+
+def _apply_filter_not_eq(val, col_stats):
+    return ("minimum" in col_stats and val < col_stats["minimum"]) or (
+        "maximum" in col_stats and val > col_stats["maximum"]
+    )
+
+
+def _apply_predicate(op, val, col_stats):
+    # Sanitize operator
+    if op not in {"=", "==", "!=", "<", "<=", ">", ">=", "in", "not in"}:
+        raise ValueError(f"'{op}' is not a valid operator in predicates.")
+
+    col_min = col_stats.get("minimum", None)
+    col_max = col_stats.get("maximum", None)
+    col_sum = col_stats.get("sum", None)
+
+    # Apply operator
+    if op == "=" or op == "==":
+        if _apply_filter_not_eq(val, col_stats):
+            return False
+        # TODO: Replace pd.isnull with
+        # cudf.isnull once it is implemented
+        if pd.isnull(val) and not col_stats["has_null"]:
+            return False
+        if not _apply_filter_bool_eq(val, col_stats):
+            return False
+    elif op == "!=":
+        if (
+            col_min is not None
+            and col_max is not None
+            and val == col_min
+            and val == col_max
+        ):
+            return False
+        if _apply_filter_bool_eq(val, col_stats):
+            return False
+    elif col_min is not None and (
+        (op == "<" and val <= col_min) or (op == "<=" and val < col_min)
+    ):
+        return False
+    elif col_max is not None and (
+        (op == ">" and val >= col_max) or (op == ">=" and val > col_max)
+    ):
+        return False
+    elif (
+        col_sum is not None
+        and op == ">"
+        and (
+            (col_min is not None and col_min >= 0 and col_sum <= val)
+            or (col_max is not None and col_max <= 0 and col_sum >= val)
+        )
+    ):
+        return False
+    elif (
+        col_sum is not None
+        and op == ">="
+        and (
+            (col_min is not None and col_min >= 0 and col_sum < val)
+            or (col_max is not None and col_max <= 0 and col_sum > val)
+        )
+    ):
+        return False
+    elif op == "in":
+        if (col_max is not None and col_max < min(val)) or (
+            col_min is not None and col_min > max(val)
+        ):
+            return False
+        if all(_apply_filter_not_eq(elem, col_stats) for elem in val):
+            return False
+    elif op == "not in" and col_min is not None and col_max is not None:
+        if any(elem == col_min == col_max for elem in val):
+            return False
+        col_range = None
+        if isinstance(col_min, int):
+            col_range = range(col_min, col_max)
+        elif isinstance(col_min, datetime.datetime):
+            col_range = pd.date_range(col_min, col_max)
+        if col_range and all(elem in val for elem in col_range):
+            return False
+    return True
+
+
+def _apply_filters(filters, stats):
+    for conjunction in filters:
+        if all(
+            _apply_predicate(op, val, stats[col])
+            for col, op, val in conjunction
+        ):
+            return True
+    return False
+
+
+def _prepare_filters(filters):
+    # Coerce filters into list of lists of tuples
+    if isinstance(filters[0][0], str):
+        filters = [filters]
+
+    return filters

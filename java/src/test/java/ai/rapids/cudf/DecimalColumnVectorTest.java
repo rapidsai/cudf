@@ -337,4 +337,32 @@ public class DecimalColumnVectorTest extends CudfTestBase {
       }
     }
   }
+
+  @Test
+  public void testColumnVectorFromScalar() {
+    try (Scalar s = Scalar.fromDecimal(-3, 1233456)) {
+      try (ColumnVector cv = ColumnVector.fromScalar(s, 10)) {
+        assertEquals(s.getType(), cv.getDataType());
+        assertEquals(10L, cv.getRowCount());
+        try (HostColumnVector hcv = cv.copyToHost()) {
+          for (int i = 0; i < cv.getRowCount(); i++) {
+            assertEquals(s.getInt(), hcv.getInt(i));
+            assertEquals(s.getBigDecimal(), hcv.getBigDecimal(i));
+          }
+        }
+      }
+    }
+    try (Scalar s = Scalar.fromDecimal(-6, 123456789098L)) {
+      try (ColumnVector cv = ColumnVector.fromScalar(s, 10)) {
+        assertEquals(s.getType(), cv.getDataType());
+        assertEquals(10L, cv.getRowCount());
+        try (HostColumnVector hcv = cv.copyToHost()) {
+          for (int i = 0; i < cv.getRowCount(); i++) {
+            assertEquals(s.getLong(), hcv.getLong(i));
+            assertEquals(s.getBigDecimal(), hcv.getBigDecimal(i));
+          }
+        }
+      }
+    }
+  }
 }
