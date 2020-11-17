@@ -18,6 +18,12 @@
 
 package ai.rapids.cudf;
 
+import ai.rapids.cudf.HostColumnVector.BasicType;
+import ai.rapids.cudf.HostColumnVector.DataType;
+import ai.rapids.cudf.HostColumnVector.ListType;
+import ai.rapids.cudf.HostColumnVector.StructData;
+import ai.rapids.cudf.HostColumnVector.StructType;
+
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -25,6 +31,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -36,9 +43,14 @@ import static ai.rapids.cudf.QuantileMethod.LOWER;
 import static ai.rapids.cudf.QuantileMethod.MIDPOINT;
 import static ai.rapids.cudf.QuantileMethod.NEAREST;
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
-import static ai.rapids.cudf.TableTest.assertTablesAreEqual;
 import static ai.rapids.cudf.TableTest.assertStructColumnsAreEqual;
-import static org.junit.jupiter.api.Assertions.*;
+import static ai.rapids.cudf.TableTest.assertTablesAreEqual;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class ColumnVectorTest extends CudfTestBase {
@@ -692,6 +704,61 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector v1 = ColumnVector.fromStrings("onetwothree", "four", null, "five")) {
       assertEquals(35, v0.getDeviceMemorySize()); //19B data + 4*4B offsets = 35
       assertEquals(103, v1.getDeviceMemorySize()); //19B data + 5*4B + 64B validity vector = 103B
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  @Test
+  void testGetDeviceMemorySizeLists() {
+    DataType svType = new ListType(true, new BasicType(true, DType.STRING));
+    DataType ivType = new ListType(false, new BasicType(false, DType.INT32));
+    try (ColumnVector sv = ColumnVector.fromLists(svType,
+        Arrays.asList("first", "second", "third"),
+        Arrays.asList("fourth", null),
+        null);
+         ColumnVector iv = ColumnVector.fromLists(ivType,
+             Arrays.asList(1, 2, 3),
+             Collections.singletonList(4),
+             Arrays.asList(5, 6),
+             Collections.singletonList(7))) {
+      // 64 bytes for validity of list column
+      // 16 bytes for offsets of list column
+      // 64 bytes for validity of string column
+      // 24 bytes for offsets of of string column
+      // 22 bytes of string character size
+      assertEquals(64+16+64+24+22, sv.getDeviceMemorySize());
+
+      // 20 bytes for offsets of list column
+      // 28 bytes for data of INT32 column
+      assertEquals(20+28, iv.getDeviceMemorySize());
+    }
+  }
+
+  @Test
+  void testGetDeviceMemorySizeStructs() {
+    DataType structType = new StructType(true,
+        new ListType(true, new BasicType(true, DType.STRING)),
+        new BasicType(true, DType.INT64));
+    try (ColumnVector v = ColumnVector.fromStructs(structType,
+        new StructData(
+            Arrays.asList("first", "second", "third"),
+            10L),
+        new StructData(
+            Arrays.asList("fourth", null),
+            20L),
+        new StructData(
+            null,
+            null),
+        null)) {
+      // 64 bytes for validity of the struct column
+      // 64 bytes for validity of list column
+      // 20 bytes for offsets of list column
+      // 64 bytes for validity of string column
+      // 28 bytes for offsets of of string column
+      // 22 bytes of string character size
+      // 64 bytes for validity of int64 column
+      // 28 bytes for data of the int64 column
+      assertEquals(64+64+20+64+28+22+64+28, v.getDeviceMemorySize());
     }
   }
 
