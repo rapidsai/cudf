@@ -892,4 +892,78 @@ TYPED_TEST(OrcReaderTest, SingleColumnSkipRows)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
 }
 
+TYPED_TEST(OrcReaderTest, SingleColumnSkipRowsValidNumRows)
+{
+  auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  constexpr auto input_num_rows = 100;
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> input_col(
+    sequence, sequence + input_num_rows, validity);
+
+  std::vector<std::unique_ptr<column>> input_cols;
+  input_cols.push_back(input_col.release());
+  auto input_table = std::make_unique<table>(std::move(input_cols));
+  EXPECT_EQ(1, input_table->num_columns());
+
+  auto filepath = temp_env->get_temp_filepath("OrcSingleColumnSkipRowsValidNumRows.orc");
+  cudf_io::orc_writer_options out_opts =
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, input_table->view());
+  cudf_io::write_orc(out_opts);
+
+  constexpr auto skip_rows         = 2;
+  constexpr auto expected_num_rows = 50;
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> output_col(
+    sequence + skip_rows, sequence + skip_rows + expected_num_rows, validity);
+  std::vector<std::unique_ptr<column>> output_cols;
+  output_cols.push_back(output_col.release());
+  auto expected = std::make_unique<table>(std::move(output_cols));
+  EXPECT_EQ(1, expected->num_columns());
+
+  cudf_io::orc_reader_options in_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+      .use_index(false)
+      .skip_rows(skip_rows)
+      .num_rows(expected_num_rows);
+  auto result = cudf_io::read_orc(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
+}
+
+TYPED_TEST(OrcReaderTest, SingleColumnSkipRowsInValidNumRows)
+{
+  auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  constexpr auto input_num_rows = 100;
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> input_col(
+    sequence, sequence + input_num_rows, validity);
+
+  std::vector<std::unique_ptr<column>> input_cols;
+  input_cols.push_back(input_col.release());
+  auto input_table = std::make_unique<table>(std::move(input_cols));
+  EXPECT_EQ(1, input_table->num_columns());
+
+  auto filepath = temp_env->get_temp_filepath("OrcSingleColumnSkipRowsInValidNumRows.orc");
+  cudf_io::orc_writer_options out_opts =
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, input_table->view());
+  cudf_io::write_orc(out_opts);
+
+  constexpr auto skip_rows         = 2;
+  constexpr auto expected_num_rows = input_num_rows + 50;
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> output_col(
+    sequence + skip_rows, sequence + skip_rows + expected_num_rows, validity);
+  std::vector<std::unique_ptr<column>> output_cols;
+  output_cols.push_back(output_col.release());
+  auto expected = std::make_unique<table>(std::move(output_cols));
+  EXPECT_EQ(1, expected->num_columns());
+
+  cudf_io::orc_reader_options in_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+      .use_index(false)
+      .skip_rows(skip_rows)
+      .num_rows(expected_num_rows);
+  EXPECT_THROW(cudf_io::read_orc(in_opts), cudf::logic_error);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
