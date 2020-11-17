@@ -246,7 +246,7 @@ std::unique_ptr<column> round_with(column_view const& input,
     auto const diff   = input.type().scale() - (-decimal_places);
     auto const scalar = cudf::make_fixed_point_scalar<T>(std::pow(10, diff), scale_type{-diff});
     return cudf::detail::binary_operation(
-      input, *scalar, cudf::binary_operator::MUL, {}, mr, stream);
+      input, *scalar, cudf::binary_operator::MUL, {}, stream, mr);
   }
 
   auto const result_type = data_type{input.type().id(), scale_type{-decimal_places}};
