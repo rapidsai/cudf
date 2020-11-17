@@ -261,11 +261,12 @@ std::unique_ptr<column> unary_op_with(column_view const& input,
                                       cudaStream_t stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  using namespace numeric;
   using Type                     = device_storage_type_t<T>;
   using FixedPointUnaryOpFunctor = FixedPointFunctor<Type>;
 
-  if (input.type().scale() >= 0) return std::make_unique<cudf::column>(input, stream, mr);
+  if (input.type().scale() >= 0 &&
+      not std::is_same<FixedPointUnaryOpFunctor, fixed_point_abs<Type>>::value)
+    return std::make_unique<cudf::column>(input, stream, mr);
 
   auto result = cudf::make_fixed_width_column(
     input.type(), input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);
