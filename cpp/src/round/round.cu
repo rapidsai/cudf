@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/round.hpp>
@@ -243,7 +243,8 @@ std::unique_ptr<column> round_with(column_view const& input,
     // TODO replace this cudf::binary_operation with a cudf::cast or cudf::rescale when available
     auto const diff   = input.type().scale() - (-decimal_places);
     auto const scalar = cudf::make_fixed_point_scalar<T>(std::pow(10, diff), scale_type{-diff});
-    return cudf::binary_operation(input, *scalar, cudf::binary_operator::MUL, {}, mr);
+    return cudf::detail::binary_operation(
+      input, *scalar, cudf::binary_operator::MUL, {}, mr, stream);
   }
 
   auto const result_type = data_type{input.type().id(), scale_type{-decimal_places}};

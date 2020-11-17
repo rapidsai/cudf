@@ -8,6 +8,7 @@
 - PR #6562 Implement `cudf::round` floating point and integer types (`HALF_UP`)
 - PR #6685 Implement `cudf::round` `decimal32` & `decimal64` (`HALF_UP` and `HALF_EVEN`)
 - PR #6711 Implement `cudf::cast` for `decimal32/64` to/from integer and floating point
+- PR #6729 Implement `cudf::cast` for `decimal32/64` to/from different `type_id`
 - PR #6528 Enable `fixed_point` binary operations
 - PR #6460 Add is_timestamp format check API
 - PR #6568 Add function to create hashed vocabulary file from raw vocabulary
