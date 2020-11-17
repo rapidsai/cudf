@@ -87,7 +87,9 @@ public final class ColumnVector extends ColumnView {
     if (type != DType.STRING) {
       assert offsetBuffer == null : "offsets are only supported for STRING";
     }
-    offHeap = new OffHeapState(type, (int) rows, nullCount, dataBuffer, validityBuffer,
+    assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
+        || !nullCount.isPresent();
+    offHeap = new OffHeapState(type, (int) rows, dataBuffer, validityBuffer,
         offsetBuffer, null, viewHandle);
     MemoryCleaner.register(this, offHeap);
     this.nullCount = nullCount;
@@ -121,7 +123,9 @@ public final class ColumnVector extends ColumnView {
     if (type != DType.STRING && type != DType.LIST) {
       assert offsetBuffer == null : "offsets are only supported for STRING, LISTS";
     }
-    offHeap = new OffHeapState(type, (int) rows, nullCount, dataBuffer, validityBuffer, offsetBuffer,
+    assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
+        || !nullCount.isPresent();
+    offHeap = new OffHeapState(type, (int) rows, dataBuffer, validityBuffer, offsetBuffer,
             toClose, viewHandle);
     MemoryCleaner.register(this, offHeap);
 
@@ -549,13 +553,10 @@ public final class ColumnVector extends ColumnView {
     /**
      * Create a cudf::column_view from device side data.
      */
-    public OffHeapState(DType type, int rows, Optional<Long> nullCount,
+    public OffHeapState(DType type, int rows,
                         DeviceMemoryBuffer data, DeviceMemoryBuffer valid, DeviceMemoryBuffer offsets,
                         List<DeviceMemoryBuffer> buffers,
                         long viewHandle) {
-      assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
-          || !nullCount.isPresent();
-      int nc = nullCount.orElse(UNKNOWN_NULL_COUNT).intValue();
       if (data != null) {
         this.toClose.add(data);
       }
