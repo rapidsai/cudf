@@ -415,7 +415,17 @@ class GroupBy(Serializable):
         chunks = [
             grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
         ]
-        result = cudf.concat([function(chk) for chk in chunks])
+        chunk_results = [function(chk) for chk in chunks]
+
+        if len(chunk_results) > 0 and cudf.utils.dtypes.is_scalar(
+            chunk_results[0]
+        ):
+            result = cudf.Series(
+                chunk_results, index=self.grouping.keys.unique()
+            )
+        else:
+            result = cudf.concat(chunk_results)
+
         if self._sort:
             result = result.sort_index()
         return result
