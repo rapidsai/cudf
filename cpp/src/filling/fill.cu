@@ -27,6 +27,7 @@
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/fill.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -59,11 +60,22 @@ struct in_place_fill_range_dispatch {
   cudf::mutable_column_view& destination;
 
   template <typename T>
-  std::enable_if_t<cudf::is_fixed_width<T>(), void> operator()(cudf::size_type begin,
+  std::enable_if_t<cudf::is_fixed_width<T>() && not cudf::is_fixed_point<T>(), void> operator()(
+    cudf::size_type begin, cudf::size_type end, cudaStream_t stream = 0)
+  {
+    in_place_fill<T>(destination, begin, end, value, stream);
+  }
+
+  template <typename T>
+  std::enable_if_t<cudf::is_fixed_point<T>(), void> operator()(cudf::size_type begin,
                                                                cudf::size_type end,
                                                                cudaStream_t stream = 0)
   {
-    in_place_fill<T>(destination, begin, end, value, stream);
+    auto unscaled = static_cast<cudf::fixed_point_scalar<T> const&>(value).value();
+    using RepType = typename T::rep;
+    auto s        = cudf::numeric_scalar<RepType>(unscaled, value.is_valid());
+    auto view     = cudf::logical_cast(destination, s.type());
+    in_place_fill<RepType>(view, begin, end, s, stream);
   }
 
   template <typename T>
