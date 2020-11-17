@@ -16,7 +16,9 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/minmax.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -142,7 +144,7 @@ struct minmax_functor {
   template <typename T>
   static constexpr bool is_supported()
   {
-    return !(cudf::is_fixed_point<T>() || cudf::is_dictionary<T>() ||
+    return !(cudf::is_fixed_point<T>() ||  // cudf::is_dictionary<T>()
              std::is_same<T, cudf::list_view>::value || std::is_same<T, cudf::struct_view>::value);
   }
 
@@ -179,9 +181,9 @@ struct minmax_functor {
     T *max_data;
   };
 
-  template <
-    typename T,
-    std::enable_if_t<is_supported<T>() and !std::is_same<T, cudf::string_view>::value> * = nullptr>
+  template <typename T,
+            std::enable_if_t<is_supported<T>() and !std::is_same<T, cudf::string_view>::value and
+                             !cudf::is_dictionary<T>()> * = nullptr>
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
     cudf::column_view const &col, rmm::mr::device_memory_resource *mr, cudaStream_t stream)
   {
@@ -201,17 +203,33 @@ struct minmax_functor {
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
     cudf::column_view const &col, rmm::mr::device_memory_resource *mr, cudaStream_t stream)
   {
-    using OutputType = minmax_pair<cudf::string_view>;
-
     // compute minimum and maximum values
     auto dev_result = reduce<cudf::string_view>(col, stream);
     // copy the minmax_pair to the host; does not copy the strings
+    using OutputType = minmax_pair<cudf::string_view>;
     OutputType host_result;
     CUDA_TRY(cudaMemcpyAsync(
       &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDeviceToHost, stream));
     // strings are copied to create the scalars here
     return {std::make_unique<string_scalar>(host_result.min_val, true, stream, mr),
             std::make_unique<string_scalar>(host_result.max_val, true, stream, mr)};
+  }
+
+  template <typename T, std::enable_if_t<cudf::is_dictionary<T>()> * = nullptr>
+  std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
+    cudf::column_view const &col, rmm::mr::device_memory_resource *mr, cudaStream_t stream)
+  {
+    // compute minimum and maximum values
+    auto dev_result = reduce<T>(col, stream);
+    // copy the minmax_pair to the host; does not copy the strings
+    using OutputType = minmax_pair<T>;
+    OutputType host_result;
+    CUDA_TRY(cudaMemcpyAsync(
+      &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDeviceToHost, stream));
+    // get the keys for those indexes
+    auto const keys = dictionary_column_view(col).keys();
+    return {get_element(keys, static_cast<size_type>(host_result.min_val), stream, mr),
+            get_element(keys, static_cast<size_type>(host_result.max_val), stream, mr)};
   }
 
   template <typename T, std::enable_if_t<!is_supported<T>()> * = nullptr>
@@ -225,9 +243,7 @@ struct minmax_functor {
 }  // namespace
 
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
-  cudf::column_view const &col,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  cudf::column_view const &col, cudaStream_t stream, rmm::mr::device_memory_resource *mr)
 {
   if (col.null_count() == col.size()) {
     // this handles empty and all-null columns
@@ -235,9 +251,8 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
     return {make_default_constructed_scalar(col.type()),
             make_default_constructed_scalar(col.type())};
   }
-  // if dictionary, we can run minmax on just the keys
-  auto const input_col = cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys() : col;
-  return type_dispatcher(input_col.type(), minmax_functor{}, input_col, mr, stream);
+
+  return type_dispatcher(col.type(), minmax_functor{}, col, mr, stream);
 }
 }  // namespace detail
 
@@ -247,7 +262,7 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
   const cudf::column_view &col, rmm::mr::device_memory_resource *mr)
 {
-  return cudf::detail::minmax(col, mr);
+  return cudf::detail::minmax(col, 0, mr);
 }
 
 }  // namespace cudf
