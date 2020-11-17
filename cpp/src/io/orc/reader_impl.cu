@@ -179,6 +179,7 @@ class metadata {
       }
       // row_start is 0 if stripes are set. If this is not true anymore, then
       // row_start needs to be subtracted to get the correct row_count
+      CUDF_EXPECTS(row_start == 0, "Start row index should be 0");
       row_count = static_cast<size_type>(stripe_rows);
     } else {
       row_start = std::max(row_start, 0);

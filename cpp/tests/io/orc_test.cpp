@@ -115,13 +115,8 @@ struct OrcChunkedWriterNumericTypeTest : public OrcChunkedWriterTest {
 TYPED_TEST_CASE(OrcChunkedWriterNumericTypeTest, SupportedTypes);
 
 // Test fixture for reader tests
-template <typename T>
 struct OrcReaderTest : public cudf::test::BaseFixture {
-  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
-
-// Declare typed test cases
-TYPED_TEST_CASE(OrcReaderTest, SupportedTypes);
 
 namespace {
 // Generates a vector of uniform random values of type T
@@ -154,6 +149,71 @@ void CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view const& lhs, cudf::table_view
   auto result   = rhs.begin();
   while (result != rhs.end()) { CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected++, *result++); }
 }
+
+struct SkipRowTest {
+  int test_calls;
+  SkipRowTest(void) : test_calls(0) {}
+
+  std::unique_ptr<table> get_expected_result(const std::string& filepath,
+                                             int skip_rows,
+                                             int file_num_rows,
+                                             int read_num_rows)
+  {
+    auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
+    auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+    column_wrapper<int32_t, typename decltype(sequence)::value_type> input_col(
+      sequence, sequence + file_num_rows, validity);
+
+    std::vector<std::unique_ptr<column>> input_cols;
+    input_cols.push_back(input_col.release());
+    auto input_table = std::make_unique<table>(std::move(input_cols));
+    EXPECT_EQ(1, input_table->num_columns());
+
+    cudf_io::orc_writer_options out_opts =
+      cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, input_table->view());
+    cudf_io::write_orc(out_opts);
+
+    column_wrapper<int32_t, typename decltype(sequence)::value_type> output_col(
+      sequence + skip_rows, sequence + skip_rows + read_num_rows, validity);
+    std::vector<std::unique_ptr<column>> output_cols;
+    output_cols.push_back(output_col.release());
+    auto expected = std::make_unique<table>(std::move(output_cols));
+    EXPECT_EQ(1, expected->num_columns());
+    return expected;
+  }
+
+  void test(int skip_rows, int file_num_rows, int read_num_rows)
+  {
+    auto filepath =
+      temp_env->get_temp_filepath("SkipRowTest" + std::to_string(test_calls++) + ".orc");
+    auto expected_result = get_expected_result(filepath, skip_rows, file_num_rows, read_num_rows);
+    cudf_io::orc_reader_options in_opts =
+      cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+        .use_index(false)
+        .skip_rows(skip_rows)
+        .num_rows(read_num_rows);
+    if (skip_rows + read_num_rows <= file_num_rows) {
+      auto result = cudf_io::read_orc(in_opts);
+      CUDF_TEST_EXPECT_TABLES_EQUAL(expected_result->view(), result.tbl->view());
+    } else {
+      EXPECT_THROW(cudf_io::read_orc(in_opts), cudf::logic_error);
+    }
+  }
+
+  void test(int skip_rows, int file_num_rows)
+  {
+    auto filepath =
+      temp_env->get_temp_filepath("SkipRowTest" + std::to_string(test_calls++) + ".orc");
+    auto expected_result =
+      get_expected_result(filepath, skip_rows, file_num_rows, file_num_rows - skip_rows);
+    cudf_io::orc_reader_options in_opts =
+      cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+        .use_index(false)
+        .skip_rows(skip_rows);
+    auto result = cudf_io::read_orc(in_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_result->view(), result.tbl->view());
+  }
+};
 
 }  // namespace
 
@@ -856,10 +916,11 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize2)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
-TYPED_TEST(OrcReaderTest, SingleColumnSkipRows)
+TEST_F(OrcReaderTest, SingleColumnSkipRows)
 {
-  auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  using TypeParam = int32_t;
+  auto sequence   = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto validity   = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   constexpr auto num_rows = 100;
   column_wrapper<TypeParam, typename decltype(sequence)::value_type> input_col(
@@ -892,10 +953,11 @@ TYPED_TEST(OrcReaderTest, SingleColumnSkipRows)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
 }
 
-TYPED_TEST(OrcReaderTest, SingleColumnSkipRowsValidNumRows)
+TEST_F(OrcReaderTest, SingleColumnSkipRowsValidNumRows)
 {
-  auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  using TypeParam = int32_t;
+  auto sequence   = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto validity   = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   constexpr auto input_num_rows = 100;
   column_wrapper<TypeParam, typename decltype(sequence)::value_type> input_col(
@@ -930,11 +992,12 @@ TYPED_TEST(OrcReaderTest, SingleColumnSkipRowsValidNumRows)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
 }
 
-TYPED_TEST(OrcReaderTest, SingleColumnSkipRowsInValidNumRows)
+TEST_F(OrcReaderTest, SingleColumnSkipRowsInValidNumRows)
 {
   auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
   auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
 
+  using TypeParam               = int32_t;
   constexpr auto input_num_rows = 100;
   column_wrapper<TypeParam, typename decltype(sequence)::value_type> input_col(
     sequence, sequence + input_num_rows, validity);
@@ -964,6 +1027,18 @@ TYPED_TEST(OrcReaderTest, SingleColumnSkipRowsInValidNumRows)
       .skip_rows(skip_rows)
       .num_rows(expected_num_rows);
   EXPECT_THROW(cudf_io::read_orc(in_opts), cudf::logic_error);
+}
+
+TEST_F(OrcReaderTest, CombinedSkipRowTest)
+{
+  SkipRowTest skip_row;
+  skip_row.test(50, 75);
+  skip_row.test(2, 100);
+  skip_row.test(2, 100, 50);
+  skip_row.test(2, 100, 98);
+  skip_row.test(2, 100, 99);
+  skip_row.test(2, 100, 100);
+  skip_row.test(2, 100, 110);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
