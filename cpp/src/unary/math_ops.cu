@@ -537,7 +537,6 @@ struct FixedPointOpDispatcher {
     switch (op) {
       case cudf::unary_op::CEIL:  return unary_op_with<T, detail::fixed_point_ceil> (input, stream, mr);
       case cudf::unary_op::FLOOR: return unary_op_with<T, fixed_point_floor>(input, stream, mr);
-      // case cudf::unary_op::RINT:  return unary_op_with<T, fixed_point_rint> (input, stream, mr);
       case cudf::unary_op::ABS:   return unary_op_with<T, fixed_point_abs>  (input, stream, mr);
       default: CUDF_FAIL("Unsupported fixed_point unary operation");
     }
