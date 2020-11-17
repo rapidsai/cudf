@@ -62,7 +62,7 @@
 extern "C" {
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_upperStrings(JNIEnv *env, jobject j_object,
-                                                                      jlong handle) {
+                                                                    jlong handle) {
   JNI_NULL_CHECK(env, handle, "column is null", 0);
 
   try {
@@ -77,7 +77,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_upperStrings(JNIEnv *env,
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_lowerStrings(JNIEnv *env, jobject j_object,
-                                                                      jlong handle) {
+                                                                    jlong handle) {
   JNI_NULL_CHECK(env, handle, "column is null", 0);
 
   try {
@@ -92,7 +92,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_lowerStrings(JNIEnv *env,
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_concatenate(JNIEnv *env, jclass clazz,
-                                                                     jlongArray column_handles) {
+                                                                   jlongArray column_handles) {
   JNI_NULL_CHECK(env, column_handles, "input columns are null", 0);
   using cudf::column;
   using cudf::column_view;
@@ -116,7 +116,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_concatenate(JNIEnv *env, 
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceNulls(JNIEnv *env, jclass,
-                                                                      jlong j_col, jlong j_scalar) {
+                                                                    jlong j_col, jlong j_scalar) {
   JNI_NULL_CHECK(env, j_col, "column is null", 0);
   JNI_NULL_CHECK(env, j_scalar, "scalar is null", 0);
   try {
@@ -130,9 +130,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceNulls(JNIEnv *env,
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_ifElseVV(JNIEnv *env, jclass,
-                                                                  jlong j_pred_vec,
-                                                                  jlong j_true_vec,
-                                                                  jlong j_false_vec) {
+                                                                jlong j_pred_vec,
+                                                                jlong j_true_vec,
+                                                                jlong j_false_vec) {
   JNI_NULL_CHECK(env, j_pred_vec, "predicate column is null", 0);
   JNI_NULL_CHECK(env, j_true_vec, "true column is null", 0);
   JNI_NULL_CHECK(env, j_false_vec, "false column is null", 0);
@@ -148,9 +148,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_ifElseVV(JNIEnv *env, jcl
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_ifElseVS(JNIEnv *env, jclass,
-                                                                  jlong j_pred_vec,
-                                                                  jlong j_true_vec,
-                                                                  jlong j_false_scalar) {
+                                                                jlong j_pred_vec,
+                                                                jlong j_true_vec,
+                                                                jlong j_false_scalar) {
   JNI_NULL_CHECK(env, j_pred_vec, "predicate column is null", 0);
   JNI_NULL_CHECK(env, j_true_vec, "true column is null", 0);
   JNI_NULL_CHECK(env, j_false_scalar, "false scalar is null", 0);
@@ -166,9 +166,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_ifElseVS(JNIEnv *env, jcl
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_ifElseSV(JNIEnv *env, jclass,
-                                                                  jlong j_pred_vec,
-                                                                  jlong j_true_scalar,
-                                                                  jlong j_false_vec) {
+                                                                jlong j_pred_vec,
+                                                                jlong j_true_scalar,
+                                                                jlong j_false_vec) {
   JNI_NULL_CHECK(env, j_pred_vec, "predicate column is null", 0);
   JNI_NULL_CHECK(env, j_true_scalar, "true scalar is null", 0);
   JNI_NULL_CHECK(env, j_false_vec, "false column is null", 0);
@@ -184,9 +184,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_ifElseSV(JNIEnv *env, jcl
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_ifElseSS(JNIEnv *env, jclass,
-                                                                  jlong j_pred_vec,
-                                                                  jlong j_true_scalar,
-                                                                  jlong j_false_scalar) {
+                                                                jlong j_pred_vec,
+                                                                jlong j_true_scalar,
+                                                                jlong j_false_scalar) {
   JNI_NULL_CHECK(env, j_pred_vec, "predicate column is null", 0);
   JNI_NULL_CHECK(env, j_true_scalar, "true scalar is null", 0);
   JNI_NULL_CHECK(env, j_false_scalar, "false scalar is null", 0);
@@ -203,9 +203,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_ifElseSS(JNIEnv *env, jcl
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_reduce(JNIEnv *env, jclass,
-                                                                jlong j_col_view,
-                                                                jlong j_agg,
-                                                                jint j_dtype, jint scale) {
+                                                              jlong j_col_view,
+                                                              jlong j_agg,
+                                                              jint j_dtype, jint scale) {
   JNI_NULL_CHECK(env, j_col_view, "column view is null", 0);
   JNI_NULL_CHECK(env, j_agg, "aggregation is null", 0);
   try {
@@ -221,9 +221,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_reduce(JNIEnv *env, jclas
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_quantile(JNIEnv *env, jclass clazz,
-                                                                  jlong input_column,
-                                                                  jint quantile_method,
-                                                                  jdoubleArray jquantiles) {
+                                                                jlong input_column,
+                                                                jint quantile_method,
+                                                                jdoubleArray jquantiles) {
   JNI_NULL_CHECK(env, input_column, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -281,8 +281,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_rollingWindow(
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_slice(JNIEnv *env, jclass clazz,
-                                                                    jlong input_column,
-                                                                    jintArray slice_indices) {
+                                                                  jlong input_column,
+                                                                  jintArray slice_indices) {
   JNI_NULL_CHECK(env, input_column, "native handle is null", 0);
   JNI_NULL_CHECK(env, slice_indices, "slice indices are null", 0);
 
@@ -312,8 +312,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_slice(JNIEnv *env, j
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractListElement(JNIEnv *env, jclass,
-                                                                            jlong column_view,
-                                                                            jint index) {
+                                                                          jlong column_view,
+                                                                          jint index) {
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -327,8 +327,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractListElement(JNIEnv
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *env, jclass,
-                                                                          jlong column_view,
-                                                                          jlong delimiter) {
+                                                                        jlong column_view,
+                                                                        jlong delimiter) {
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   JNI_NULL_CHECK(env, delimiter, "string scalar delimiter is null", 0);
   try {
@@ -344,9 +344,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(JNIEnv *
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(JNIEnv *env, jclass,
-                                                                           jlong column_view,
-                                                                           jlong delimiter,
-                                                                           jint max_split) {
+                                                                         jlong column_view,
+                                                                         jlong delimiter,
+                                                                         jint max_split) {
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   JNI_NULL_CHECK(env, delimiter, "string scalar delimiter is null", 0);
   try {
@@ -362,8 +362,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(JNIEnv 
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_split(JNIEnv *env, jclass clazz,
-                                                                    jlong input_column,
-                                                                    jintArray split_indices) {
+                                                                  jlong input_column,
+                                                                  jintArray split_indices) {
   JNI_NULL_CHECK(env, input_column, "native handle is null", 0);
   JNI_NULL_CHECK(env, split_indices, "split indices are null", 0);
 
@@ -393,7 +393,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_split(JNIEnv *env, j
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_charLengths(JNIEnv *env, jclass clazz,
-                                                                     jlong view_handle) {
+                                                                   jlong view_handle) {
   JNI_NULL_CHECK(env, view_handle, "input column is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -406,7 +406,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_charLengths(JNIEnv *env, 
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_byteCount(JNIEnv *env, jclass clazz,
-                                                                   jlong view_handle) {
+                                                                 jlong view_handle) {
   JNI_NULL_CHECK(env, view_handle, "input column is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -419,10 +419,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_byteCount(JNIEnv *env, jc
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_findAndReplaceAll(JNIEnv *env,
-                                                                           jclass clazz,
-                                                                           jlong old_values_handle,
-                                                                           jlong new_values_handle,
-                                                                           jlong input_handle) {
+                                                                         jclass clazz,
+                                                                         jlong old_values_handle,
+                                                                         jlong new_values_handle,
+                                                                         jlong input_handle) {
   JNI_NULL_CHECK(env, old_values_handle, "values column is null", 0);
   JNI_NULL_CHECK(env, new_values_handle, "replace column is null", 0);
   JNI_NULL_CHECK(env, input_handle, "input column is null", 0);
@@ -445,7 +445,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_findAndReplaceAll(JNIEnv 
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isNullNative(JNIEnv *env, jclass,
-                                                                      jlong handle) {
+                                                                    jlong handle) {
   JNI_NULL_CHECK(env, handle, "input column is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -457,7 +457,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isNullNative(JNIEnv *env,
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isNotNullNative(JNIEnv *env, jclass,
-                                                                         jlong handle) {
+                                                                       jlong handle) {
   JNI_NULL_CHECK(env, handle, "input column is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -469,7 +469,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isNotNullNative(JNIEnv *e
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isNanNative(JNIEnv *env, jclass,
-                                                                     jlong handle) {
+                                                                   jlong handle) {
   JNI_NULL_CHECK(env, handle, "input column is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -481,7 +481,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isNanNative(JNIEnv *env, 
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isNotNanNative(JNIEnv *env, jclass,
-                                                                        jlong handle) {
+                                                                      jlong handle) {
   JNI_NULL_CHECK(env, handle, "input column is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -493,8 +493,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isNotNanNative(JNIEnv *en
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_unaryOperation(JNIEnv *env, jclass,
-                                                                        jlong input_ptr,
-                                                                        jint int_op) {
+                                                                      jlong input_ptr,
+                                                                      jint int_op) {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -507,7 +507,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_unaryOperation(JNIEnv *en
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_year(JNIEnv *env, jclass,
-                                                              jlong input_ptr) {
+                                                            jlong input_ptr) {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -519,7 +519,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_year(JNIEnv *env, jclass,
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_month(JNIEnv *env, jclass,
-                                                               jlong input_ptr) {
+                                                             jlong input_ptr) {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -542,7 +542,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_day(JNIEnv *env, jclass, 
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_hour(JNIEnv *env, jclass,
-                                                              jlong input_ptr) {
+                                                            jlong input_ptr) {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -554,7 +554,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_hour(JNIEnv *env, jclass,
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_minute(JNIEnv *env, jclass,
-                                                                jlong input_ptr) {
+                                                              jlong input_ptr) {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -566,7 +566,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_minute(JNIEnv *env, jclas
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_second(JNIEnv *env, jclass,
-                                                                jlong input_ptr) {
+                                                              jlong input_ptr) {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -578,7 +578,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_second(JNIEnv *env, jclas
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_weekDay(JNIEnv *env, jclass,
-                                                                 jlong input_ptr) {
+                                                               jlong input_ptr) {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -590,7 +590,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_weekDay(JNIEnv *env, jcla
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_lastDayOfMonth(JNIEnv *env, jclass,
-                                                                        jlong input_ptr) {
+                                                                      jlong input_ptr) {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -602,7 +602,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_lastDayOfMonth(JNIEnv *en
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dayOfYear(JNIEnv *env, jclass,
-                                                                   jlong input_ptr) {
+                                                                 jlong input_ptr) {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -614,8 +614,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dayOfYear(JNIEnv *env, jc
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclass,
-                                                                jlong handle, jint type,
-                                                                jint scale) {
+                                                              jlong handle, jint type,
+                                                              jint scale) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -704,7 +704,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_byteListCast(JNIEnv *env, jobject j_object,
-                                                                jlong handle, jboolean endianness_config) {
+                                                                    jlong handle,
+                                                                    jboolean endianness_config) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -734,8 +735,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringTimestampToTimestam
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isTimestamp(
-    JNIEnv *env, jclass, jlong handle, jstring formatObj) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isTimestamp(JNIEnv *env, jclass,
+                                                                   jlong handle, jstring formatObj) {
   JNI_NULL_CHECK(env, handle, "column is null", 0);
   JNI_NULL_CHECK(env, formatObj, "format is null", 0);
 
@@ -769,9 +770,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_timestampToStringTimestam
 }
 
 JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_ColumnView_containsScalar(JNIEnv *env,
-                                                                           jobject j_object,
-                                                                           jlong j_view_handle,
-                                                                           jlong j_scalar_handle) {
+                                                                         jobject j_object,
+                                                                         jlong j_view_handle,
+                                                                         jlong j_scalar_handle) {
   JNI_NULL_CHECK(env, j_view_handle, "haystack vector is null", false);
   JNI_NULL_CHECK(env, j_scalar_handle, "scalar needle is null", false);
   try {
@@ -785,9 +786,9 @@ JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_ColumnView_containsScalar(JNIEnv 
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_containsVector(JNIEnv *env,
-                                                                        jobject j_object,
-                                                                        jlong j_haystack_handle,
-                                                                        jlong j_needle_handle) {
+                                                                      jobject j_object,
+                                                                      jlong j_haystack_handle,
+                                                                      jlong j_needle_handle) {
   JNI_NULL_CHECK(env, j_haystack_handle, "haystack vector is null", false);
   JNI_NULL_CHECK(env, j_needle_handle, "needle vector is null", false);
   try {
@@ -802,8 +803,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_containsVector(JNIEnv *en
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_transform(JNIEnv *env, jobject j_object,
-                                                                   jlong handle, jstring j_udf,
-                                                                   jboolean j_is_ptx) {
+                                                                 jlong handle, jstring j_udf,
+                                                                 jboolean j_is_ptx) {
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
@@ -817,9 +818,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_transform(JNIEnv *env, jo
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringStartWith(JNIEnv *env,
-                                                                         jobject j_object,
-                                                                         jlong j_view_handle,
-                                                                         jlong comp_string) {
+                                                                       jobject j_object,
+                                                                       jlong j_view_handle,
+                                                                       jlong comp_string) {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", false);
   JNI_NULL_CHECK(env, comp_string, "comparison string scalar is null", false);
 
@@ -836,9 +837,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringStartWith(JNIEnv *e
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringEndWith(JNIEnv *env,
-                                                                       jobject j_object,
-                                                                       jlong j_view_handle,
-                                                                       jlong comp_string) {
+                                                                     jobject j_object,
+                                                                     jlong j_view_handle,
+                                                                     jlong comp_string) {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", false);
   JNI_NULL_CHECK(env, comp_string, "comparison string scalar is null", false);
 
@@ -855,9 +856,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringEndWith(JNIEnv *env
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringContains(JNIEnv *env,
-                                                                        jobject j_object,
-                                                                        jlong j_view_handle,
-                                                                        jlong comp_string) {
+                                                                      jobject j_object,
+                                                                      jlong j_view_handle,
+                                                                      jlong comp_string) {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", false);
   JNI_NULL_CHECK(env, comp_string, "comparison string scalar is null", false);
 
@@ -874,8 +875,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringContains(JNIEnv *en
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_matchesRe(JNIEnv *env, jobject j_object,
-                                                                   jlong j_view_handle,
-                                                                   jstring patternObj) {
+                                                                 jlong j_view_handle,
+                                                                 jstring patternObj) {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", false);
   JNI_NULL_CHECK(env, patternObj, "pattern is null", false);
 
@@ -892,8 +893,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_matchesRe(JNIEnv *env, jo
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_containsRe(JNIEnv *env, jobject j_object,
-                                                                    jlong j_view_handle,
-                                                                    jstring patternObj) {
+                                                                  jlong j_view_handle,
+                                                                  jstring patternObj) {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", false);
   JNI_NULL_CHECK(env, patternObj, "pattern is null", false);
 
@@ -934,9 +935,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringConcatenation(
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVV(JNIEnv *env, jclass,
-                                                                    jlong lhs_view, jlong rhs_view,
-                                                                    jint int_op, jint out_dtype,
-                                                                    jint scale) {
+                                                                  jlong lhs_view, jlong rhs_view,
+                                                                  jint int_op, jint out_dtype,
+                                                                  jint scale) {
   JNI_NULL_CHECK(env, lhs_view, "lhs is null", 0);
   JNI_NULL_CHECK(env, rhs_view, "rhs is null", 0);
   try {
@@ -954,9 +955,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVV(JNIEnv *env, j
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVS(JNIEnv *env, jclass,
-                                                                    jlong lhs_view, jlong rhs_ptr,
-                                                                    jint int_op, jint out_dtype,
-                                                                    jint scale) {
+                                                                  jlong lhs_view, jlong rhs_ptr,
+                                                                  jint int_op, jint out_dtype,
+                                                                  jint scale) {
   JNI_NULL_CHECK(env, lhs_view, "lhs is null", 0);
   JNI_NULL_CHECK(env, rhs_ptr, "rhs is null", 0);
   try {
@@ -974,8 +975,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVS(JNIEnv *env, j
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_substring(JNIEnv *env, jclass,
-                                                                   jlong column_view, jint start,
-                                                                   jint end) {
+                                                                 jlong column_view, jint start,
+                                                                 jint end) {
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -991,9 +992,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_substring(JNIEnv *env, jc
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_substringColumn(JNIEnv *env, jclass,
-                                                                         jlong column_view,
-                                                                         jlong start_column,
-                                                                         jlong end_column) {
+                                                                       jlong column_view,
+                                                                       jlong start_column,
+                                                                       jlong end_column) {
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   JNI_NULL_CHECK(env, start_column, "column is null", 0);
   JNI_NULL_CHECK(env, end_column, "column is null", 0);
@@ -1011,9 +1012,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_substringColumn(JNIEnv *e
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_substringLocate(JNIEnv *env, jclass,
-                                                                         jlong column_view,
-                                                                         jlong substring,
-                                                                         jint start, jint end) {
+                                                                       jlong column_view,
+                                                                       jlong substring,
+                                                                       jint start, jint end) {
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   JNI_NULL_CHECK(env, substring, "target string scalar is null", 0);
   try {
@@ -1029,9 +1030,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_substringLocate(JNIEnv *e
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringReplace(JNIEnv *env, jclass,
-                                                                       jlong column_view,
-                                                                       jlong target,
-                                                                       jlong replace) {
+                                                                     jlong column_view,
+                                                                     jlong target,
+                                                                     jlong replace) {
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   JNI_NULL_CHECK(env, target, "target string scalar is null", 0);
   JNI_NULL_CHECK(env, replace, "replace string scalar is null", 0);
@@ -1049,8 +1050,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringReplace(JNIEnv *env
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapLookup(JNIEnv *env, jclass,
-                                                                       jlong map_column_view,
-                                                                       jlong lookup_key) {
+                                                                 jlong map_column_view,
+                                                                 jlong lookup_key) {
   JNI_NULL_CHECK(env, map_column_view, "column is null", 0);
   JNI_NULL_CHECK(env, lookup_key, "target string scalar is null", 0);
   try {
@@ -1064,12 +1065,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapLookup(JNIEnv *env, jc
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringReplaceWithBackrefs(
-    JNIEnv *env,
-    jclass,
-    jlong column_view,
-    jstring patternObj,
-    jstring replaceObj) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringReplaceWithBackrefs(JNIEnv *env,
+                                                                                 jclass,
+                                                                                 jlong column_view,
+                                                                                 jstring patternObj,
+                                                                                 jstring replaceObj) {
 
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   JNI_NULL_CHECK(env, patternObj, "pattern string is null", 0);
@@ -1088,11 +1088,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringReplaceWithBackrefs
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_zfill(
-    JNIEnv *env,
-    jclass,
-    jlong column_view,
-    jint j_width) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_zfill(JNIEnv *env, jclass, jlong column_view,
+                                                             jint j_width) {
 
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   try {
@@ -1107,13 +1104,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_zfill(
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_pad(
-    JNIEnv *env,
-    jclass,
-    jlong column_view,
-    jint j_width,
-    jint j_side,
-    jstring fill_char) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_pad(JNIEnv *env,
+                                                           jclass,
+                                                           jlong column_view,
+                                                           jint j_width,
+                                                           jint j_side,
+                                                           jstring fill_char) {
 
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   JNI_NULL_CHECK(env, fill_char, "fill_char is null", 0);
@@ -1132,9 +1128,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_pad(
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringStrip(JNIEnv *env, jclass,
-                                                                     jlong column_view,
-                                                                     jint strip_type,
-                                                                     jlong to_strip) {
+                                                                   jlong column_view,
+                                                                   jint strip_type,
+                                                                   jlong to_strip) {
   JNI_NULL_CHECK(env, column_view, "column is null", 0);
   JNI_NULL_CHECK(env, to_strip, "to_strip scalar is null", 0);
   try {
@@ -1151,9 +1147,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringStrip(JNIEnv *env, 
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_extractRe(JNIEnv *env,
-                                                                        jobject j_object,
-                                                                        jlong j_view_handle,
-                                                                        jstring patternObj) {
+                                                                      jobject j_object,
+                                                                      jlong j_view_handle,
+                                                                      jstring patternObj) {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", nullptr);
   JNI_NULL_CHECK(env, patternObj, "pattern is null", nullptr);
 
@@ -1171,8 +1167,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_extractRe(JNIEnv *en
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_normalizeNANsAndZeros(JNIEnv *env,
-                                                                               jclass clazz,
-                                                                               jlong input_column) {
+                                                                             jclass clazz,
+                                                                             jlong input_column) {
   using cudf::column_view;
 
   JNI_NULL_CHECK(env, input_column, "Input column is null", 0);
@@ -1184,7 +1180,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_normalizeNANsAndZeros(JNI
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidity(JNIEnv *env, jobject j_object, jlong base_column, jlongArray column_handles, jint bin_op) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidity(JNIEnv *env,
+                                                                                  jobject j_object,
+                                                                                  jlong base_column,
+                                                                                  jlongArray column_handles,
+                                                                                  jint bin_op) {
   JNI_NULL_CHECK(env, base_column, "base column native handle is null", 0);
   JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
   try {
@@ -1215,9 +1215,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_hash(JNIEnv *env,
-                                                                  jobject j_object,
-                                                                  jlongArray column_handles,
-                                                                  jint hash_function_id) {
+                                                            jobject j_object,
+                                                            jlongArray column_handles,
+                                                            jint hash_function_id) {
   JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
 
   try {
@@ -1239,8 +1239,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_hash(JNIEnv *env,
 // should typically only be called from the CudfColumn inner class.
 ////////
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeCudfColumnView(
-    JNIEnv *env, jclass, jint j_type, jint scale, jlong j_data, jlong j_data_size, jlong j_offset,
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeCudfColumnView(JNIEnv *env,
+                                                                          jclass, jint j_type,
+                                                                          jint scale, jlong j_data,
+                                                                          jlong j_data_size,
+                                                                          jlong j_offset,
     jlong j_valid, jint j_null_count, jint size, jlongArray j_children) {
 
   try {
@@ -1304,8 +1307,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeCudfColumnView(
 }
 
 JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnView_getNativeTypeId(JNIEnv *env,
-                                                                        jobject j_object,
-                                                                        jlong handle) {
+                                                                      jobject j_object,
+                                                                      jlong handle) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -1316,8 +1319,8 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnView_getNativeTypeId(JNIEnv *en
 }
 
 JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnView_getNativeTypeScale(JNIEnv *env,
-                                                                           jclass,
-                                                                           jlong handle) {
+                                                                         jclass,
+                                                                         jlong handle) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -1328,8 +1331,8 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnView_getNativeTypeScale(JNIEnv 
 }
 
 JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnView_getNativeRowCount(JNIEnv *env,
-                                                                          jclass,
-                                                                          jlong handle) {
+                                                                        jclass,
+                                                                        jlong handle) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -1340,8 +1343,8 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnView_getNativeRowCount(JNIEnv *
 }
 
 JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnView_getNativeNullCount(JNIEnv *env,
-                                                                           jobject j_object,
-                                                                           jlong handle) {
+                                                                         jobject j_object,
+                                                                         jlong handle) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -1352,8 +1355,8 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnView_getNativeNullCount(JNIEnv 
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnView_deleteColumnView(JNIEnv *env,
-                                                                         jobject j_object,
-                                                                         jlong handle) {
+                                                                       jobject j_object,
+                                                                       jlong handle) {
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *view = reinterpret_cast<cudf::column_view *>(handle);
@@ -1363,7 +1366,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnView_deleteColumnView(JNIEnv *e
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeDataAddress(JNIEnv *env, jclass,
-                                                                              jlong handle) {
+                                                                            jlong handle) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -1384,7 +1387,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeDataAddress(JNIE
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeDataLength(JNIEnv *env, jclass,
-                                                                             jlong handle) {
+                                                                           jlong handle) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -1429,8 +1432,8 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_ColumnView_getNativeNumChildren(JNIEn
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getChildCvPointer(JNIEnv *env,
-                                                                           jobject j_object,
-                                                                           jlong handle, jint child_index) {
+                                                                         jobject j_object,
+                                                                         jlong handle, jint child_index) {
     JNI_NULL_CHECK(env, handle, "native handle is null", 0);
     try {
       cudf::jni::auto_set_device(env);
@@ -1450,7 +1453,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getChildCvPointer(JNIEnv 
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeOffsetsAddress(JNIEnv *env, jclass,
-                                                                                 jlong handle) {
+                                                                               jlong handle) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -1475,7 +1478,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeOffsetsAddress(J
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeOffsetsLength(JNIEnv *env, jclass,
-                                                                                jlong handle) {
+                                                                              jlong handle) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -1500,8 +1503,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeOffsetsLength(JN
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidityAddress(JNIEnv *env,
-                                                                                  jclass,
-                                                                                  jlong handle) {
+                                                                                jclass,
+                                                                                jlong handle) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -1512,8 +1515,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidityAddress(
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidityLength(JNIEnv *env,
-                                                                                 jclass,
-                                                                                 jlong handle) {
+                                                                               jclass,
+                                                                               jlong handle) {
   JNI_NULL_CHECK(env, handle, "native handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -1528,8 +1531,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidityLength(J
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidPointerSize(JNIEnv *env,
-                                                                                   jobject j_object,
-                                                                                   jint size) {
+                                                                                 jobject j_object,
+                                                                                 jint size) {
   try {
     cudf::jni::auto_set_device(env);
     return static_cast<jlong>(cudf::bitmask_allocation_size_bytes(size));
@@ -1538,10 +1541,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidPointerSize
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_clamper(JNIEnv *env, jobject j_object,
-                                                                 jlong handle, jlong j_lo_scalar,
-                                                                 jlong j_lo_replace_scalar,
-                                                                 jlong j_hi_scalar,
-                                                                 jlong j_hi_replace_scalar) {
+                                                               jlong handle, jlong j_lo_scalar,
+                                                               jlong j_lo_replace_scalar,
+                                                               jlong j_hi_scalar,
+                                                               jlong j_hi_replace_scalar) {
 
   JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
   JNI_NULL_CHECK(env, j_lo_scalar, "lo scalar is null", 0)
@@ -1566,7 +1569,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_clamper(JNIEnv *env, jobj
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_title(JNIEnv *env, jobject j_object,
-                                                               jlong handle) {
+                                                             jlong handle) {
 
   JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
 
@@ -1580,7 +1583,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_title(JNIEnv *env, jobjec
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_nansToNulls(JNIEnv *env, jobject j_object,
-                                                                     jlong handle) {
+                                                                   jlong handle) {
 
   JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
 
@@ -1604,7 +1607,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_nansToNulls(JNIEnv *env, 
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isFloat(JNIEnv *env, jobject j_object,
-                                                                 jlong handle) {
+                                                               jlong handle) {
 
   JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
 
@@ -1618,7 +1621,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isFloat(JNIEnv *env, jobj
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isInteger(JNIEnv *env, jobject j_object,
-                                                                   jlong handle) {
+                                                                 jlong handle) {
 
   JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
 
@@ -1632,7 +1635,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isInteger(JNIEnv *env, jo
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_copyColumnViewToCV(JNIEnv *env, jobject j_object,
-                                                                   jlong handle) {
+                                                                          jlong handle) {
 
   JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
 
