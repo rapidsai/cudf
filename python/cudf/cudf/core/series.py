@@ -53,6 +53,7 @@ from cudf.utils.dtypes import (
 from cudf.utils.utils import get_relevant_submodule
 from cudf.utils.utils import get_appropriate_dispatched_func
 
+
 class Series(Frame, Serializable):
     @property
     def _constructor(self):
