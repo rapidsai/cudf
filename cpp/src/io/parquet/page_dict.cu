@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,10 +83,7 @@ __device__ void FetchDictionaryFragment(dict_state_s *s,
                                         uint32_t frag_start_row,
                                         uint32_t t)
 {
-  if (t < sizeof(PageFragment) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->frag)[t] =
-      reinterpret_cast<const uint32_t *>(s->cur_fragment)[t];
-  }
+  if (t == 0) s->frag = *s->cur_fragment;
   __syncthreads();
   // Store the row values in shared mem and set the corresponding dict_data to zero (end-of-list)
   // It's easiest to do this here since we're only dealing with values all within a 5K-row window
@@ -157,17 +154,14 @@ __global__ void __launch_bounds__(block_size, 1)
   uint32_t t            = threadIdx.x;
   uint32_t dtype, dtype_len, dtype_len_in;
 
-  if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->ck)[t] =
-      reinterpret_cast<const uint32_t *>(&chunks[blockIdx.x])[t];
-  }
+  if (t == 0) s->ck = chunks[blockIdx.x];
   __syncthreads();
+
   if (!s->ck.has_dictionary) { return; }
-  if (t < sizeof(EncColumnDesc) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->col)[t] =
-      reinterpret_cast<const uint32_t *>(s->ck.col_desc)[t];
-  }
+
+  if (t == 0) s->col = *s->ck.col_desc;
   __syncthreads();
+
   if (!t) {
     s->hashmap               = dev_scratch + s->ck.dictionary_id * (size_t)(1 << kDictHashBits);
     s->row_cnt               = 0;

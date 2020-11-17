@@ -1142,9 +1142,7 @@ __global__ void __launch_bounds__(block_size)
   uint32_t chunk_id       = stripe * num_columns + column;
   int t                   = threadIdx.x;
 
-  if (t < sizeof(ColumnDesc) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&s->chunk)[t] = ((const uint32_t *)&chunks[chunk_id])[t];
-  }
+  if (t == 0) s->chunk = chunks[chunk_id];
   __syncthreads();
   if (is_nulldec) {
     uint32_t null_count = 0;
@@ -1420,18 +1418,14 @@ __global__ void __launch_bounds__(block_size)
   int t = threadIdx.x;
 
   if (num_rowgroups > 0) {
-    if (t < sizeof(RowGroup) / sizeof(uint32_t)) {
-      ((volatile uint32_t *)&s->top.data.index)[t] =
-        ((const uint32_t *)&row_groups[blockIdx.y * num_columns + blockIdx.x])[t];
-    }
+    if (t == 0) s->top.data.index = row_groups[blockIdx.y * num_columns + blockIdx.x];
     __syncthreads();
     chunk_id = s->top.data.index.chunk_id;
   } else {
     chunk_id = blockIdx.x;
   }
-  if (t < sizeof(ColumnDesc) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&s->chunk)[t] = ((const uint32_t *)&chunks[chunk_id])[t];
-  }
+  if (t == 0) s->chunk = chunks[chunk_id];
+
   __syncthreads();
   if (t == 0) {
     // If we have an index, seek to the initial run and update row positions
@@ -1576,12 +1570,19 @@ __global__ void __launch_bounds__(block_size)
           s->top.data.max_vals       = min(s->top.data.max_vals, blockDim.x);
         }
         __syncthreads();
-        n = numvals - ((s->top.data.max_vals + 7) >> 3);
+        // If the condition is false, then it means that s->top.data.max_vals is last set of values.
+        // And as numvals is considered to be min(`max_vals+s->top.data.index.run_pos[CI_DATA]`,
+        // blockDim.x*2) we have to return numvals >= s->top.data.index.run_pos[CI_DATA].
+        auto const is_last_set = (s->top.data.max_vals >= s->top.data.index.run_pos[CI_DATA]);
+        auto const max_vals    = (is_last_set ? s->top.data.max_vals + 7 : blockDim.x) / 8;
+        n                      = numvals - max_vals;
         if (t < n) {
-          secondary_val = s->vals.u8[((s->top.data.max_vals + 7) >> 3) + t];
+          secondary_val = s->vals.u8[max_vals + t];
           if (t == 0) { s->top.data.buffered_count = n; }
         }
-        numvals = min(numvals << 3u, s->top.data.max_vals);
+
+        numvals = min(numvals * 8, is_last_set ? s->top.data.max_vals : blockDim.x);
+
       } else if (s->chunk.type_kind == LONG || s->chunk.type_kind == TIMESTAMP ||
                  s->chunk.type_kind == DECIMAL) {
         orc_bytestream_s *bs = (s->chunk.type_kind == DECIMAL) ? &s->bs2 : &s->bs;

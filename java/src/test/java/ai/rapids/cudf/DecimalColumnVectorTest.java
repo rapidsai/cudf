@@ -141,18 +141,26 @@ public class DecimalColumnVectorTest extends CudfTestBase {
     // precision overflow
     assertThrows(IllegalArgumentException.class, () -> HostColumnVector.fromDecimals(overflowDecimal64));
     assertThrows(IllegalArgumentException.class, () -> {
-      ColumnVector.decimalFromInts(-(DType.DECIMAL32_MAX_PRECISION + 1), unscaledDec32Zoo);
+      try (ColumnVector ignored = ColumnVector.decimalFromInts(
+          -(DType.DECIMAL32_MAX_PRECISION + 1), unscaledDec32Zoo)) {
+      }
     });
     assertThrows(IllegalArgumentException.class, () -> {
-      ColumnVector.decimalFromLongs(-(DType.DECIMAL64_MAX_PRECISION + 1), unscaledDec64Zoo);
+      try (ColumnVector ignored = ColumnVector.decimalFromLongs(
+          -(DType.DECIMAL64_MAX_PRECISION + 1), unscaledDec64Zoo)) {
+      }
     });
     // precision overflow due to rescaling by min scale
     assertThrows(IllegalArgumentException.class, () -> {
-      ColumnVector.fromDecimals(BigDecimal.valueOf(1.23e10), BigDecimal.valueOf(1.2e-7));
+      try (ColumnVector ignored = ColumnVector.fromDecimals(
+          BigDecimal.valueOf(1.23e10), BigDecimal.valueOf(1.2e-7))) {
+      }
     });
     // exactly hit the MAX_PRECISION_DECIMAL64 after rescaling
     assertDoesNotThrow(() -> {
-      ColumnVector.fromDecimals(BigDecimal.valueOf(1.23e10), BigDecimal.valueOf(1.2e-6));
+      try (ColumnVector ignored = ColumnVector.fromDecimals(
+          BigDecimal.valueOf(1.23e10), BigDecimal.valueOf(1.2e-6))) {
+      }
     });
   }
 

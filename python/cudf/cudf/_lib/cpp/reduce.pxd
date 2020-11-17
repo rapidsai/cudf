@@ -4,7 +4,7 @@ from cudf._lib.cpp.types cimport data_type
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.aggregation cimport aggregation
 from libcpp.memory cimport unique_ptr
 
