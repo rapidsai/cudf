@@ -49,10 +49,10 @@ Mark Adler    madler@alumni.caltech.edu
 namespace cudf {
 namespace io {
 
-constexpr int maxbits   = 15;                       // maximum bits in a code
-constexpr int maxlcodes = 286;                      // maximum number of literal/length codes
-constexpr int maxdcodes = 30;                       // maximum number of distance codes
-constexpr int fixlcodes = 288;                      // number of fixed literal/length codes
+constexpr int maxbits   = 15;   // maximum bits in a code
+constexpr int maxlcodes = 286;  // maximum number of literal/length codes
+constexpr int maxdcodes = 30;   // maximum number of distance codes
+constexpr int fixlcodes = 288;  // number of fixed literal/length codes
 
 constexpr int log2lenlut  = 10;
 constexpr int log2distlut = 8;
@@ -62,7 +62,7 @@ constexpr int log2distlut = 8;
  **/
 struct scratch_arr {
   int16_t lengths[maxlcodes + maxdcodes];  ///< descriptor code lengths
-  int16_t offs[maxbits + 1];  ///< offset in symbol table for each length (scratch)
+  int16_t offs[maxbits + 1];               ///< offset in symbol table for each length (scratch)
 };
 
 /**
@@ -75,9 +75,9 @@ struct lut_arr {
 
 /// 4 batches of 32 symbols
 constexpr int log2_batch_count = 2;  // 1..5
-constexpr int log2_batch_size = 5;
-constexpr int batch_count = (1 << log2_batch_count);
-constexpr int batch_size  = (1 << log2_batch_size);
+constexpr int log2_batch_size  = 5;
+constexpr int batch_count      = (1 << log2_batch_count);
+constexpr int batch_size       = (1 << log2_batch_size);
 
 /**
  * @brief Inter-warp communication queue
@@ -94,7 +94,7 @@ struct xwarp_s {
 
 #if ENABLE_PREFETCH
 constexpr int log2_prefetch_size = 9;  // Must be at least LOG2_BATCH_SIZE+3
-constexpr int prefetch_size = (1 << log2_prefetch_size);
+constexpr int prefetch_size      = (1 << log2_prefetch_size);
 
 /// @brief Prefetcher state
 struct prefetch_queue_s {
@@ -976,11 +976,11 @@ __device__ int parse_gzip_header(const uint8_t *src, size_t src_size)
    * See https://tools.ietf.org/html/rfc1952
    **/
   enum class GZIPHeaderFlag : uint8_t {
-    ftext = 0x01,     // ASCII text hint
-    fhcrc = 0x02,     // Header CRC present
-    fextra = 0x04,    // Extra fields present
-    fname = 0x08,     // Original file name present
-    fcomment = 0x10  // Comment present
+    ftext    = 0x01,  // ASCII text hint
+    fhcrc    = 0x02,  // Header CRC present
+    fextra   = 0x04,  // Extra fields present
+    fname    = 0x08,  // Original file name present
+    fcomment = 0x10   // Comment present
   };
 
   int hdr_len = -1;
@@ -1209,7 +1209,9 @@ cudaError_t __host__ gpuinflate(gpu_inflate_input_s *inputs,
                                 cudaStream_t stream)
 {
   constexpr int num_threads = 128;  // Threads per block
-  if (count > 0) { inflate_kernel<num_threads><<<count, num_threads, 0, stream>>>(inputs, outputs, parse_hdr); }
+  if (count > 0) {
+    inflate_kernel<num_threads><<<count, num_threads, 0, stream>>>(inputs, outputs, parse_hdr);
+  }
   return cudaSuccess;
 }
 

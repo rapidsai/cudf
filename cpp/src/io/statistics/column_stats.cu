@@ -63,8 +63,9 @@ struct IgnoreNaNSum {
  **/
 inline __device__ string_stats WarpReduceMinString(const char *smin, uint32_t lmin)
 {
-  uint32_t len    = shuffle_xor(lmin, 1);
-  const char *ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smin), 1));
+  uint32_t len = shuffle_xor(lmin, 1);
+  const char *ptr =
+    reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smin), 1));
   if (!smin || (ptr && nvstr_is_lesser(ptr, len, smin, lmin))) {
     smin = ptr;
     lmin = len;
@@ -101,8 +102,9 @@ inline __device__ string_stats WarpReduceMinString(const char *smin, uint32_t lm
  **/
 inline __device__ string_stats WarpReduceMaxString(const char *smax, uint32_t lmax)
 {
-  uint32_t len    = shuffle_xor(lmax, 1);
-  const char *ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smax), 1));
+  uint32_t len = shuffle_xor(lmax, 1);
+  const char *ptr =
+    reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smax), 1));
   if (!smax || (ptr && nvstr_is_greater(ptr, len, smax, lmax))) {
     smax = ptr;
     lmax = len;

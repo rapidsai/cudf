@@ -28,7 +28,7 @@ namespace io {
 namespace orc {
 namespace gpu {
 constexpr uint32_t max_dict_entries = default_row_index_stride;
-constexpr int init_hash_bits = 12;
+constexpr int init_hash_bits        = 12;
 
 struct dictinit_state_s {
   uint32_t nnz;

@@ -621,9 +621,7 @@ __global__ void __launch_bounds__(block_size)
     const uint8_t *cur = static_cast<const uint8_t *>(s->in.srcDevice);
     const uint8_t *end = cur + s->in.srcSize;
     s->error           = 0;
-    if (log_cyclecount) {
-      s->tstart = clock();
-    }
+    if (log_cyclecount) { s->tstart = clock(); }
     if (cur < end) {
       // Read uncompressed size (varint), limited to 32-bit
       uint32_t uncompressed_size = *cur++;

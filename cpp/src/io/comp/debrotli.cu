@@ -61,11 +61,11 @@ THE SOFTWARE.
 
 namespace cudf {
 namespace io {
-constexpr uint32_t hufftab_lut1_bits = 8;
+constexpr uint32_t hufftab_lut1_bits               = 8;
 constexpr int8_t brotli_code_length_codes          = 18;
 constexpr uint32_t brotli_num_distance_short_codes = 16;
 constexpr uint32_t brotli_max_allowed_distance     = 0x7FFFFFFC;
-constexpr int numthreads = 256;
+constexpr int numthreads                           = 256;
 
 template <typename T0, typename T1>
 inline __device__ uint16_t huffcode(T0 len, T1 sym)

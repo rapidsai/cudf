@@ -33,8 +33,8 @@ constexpr bool enable_bool_rle = true;
 constexpr bool enable_bool_rle = false;
 #endif
 
-constexpr int init_hash_bits  = 12;
-constexpr uint32_t rle_bfrsz  = (1 << 9);
+constexpr int init_hash_bits = 12;
+constexpr uint32_t rle_bfrsz = (1 << 9);
 
 struct frag_init_state_s {
   EncColumnDesc col;

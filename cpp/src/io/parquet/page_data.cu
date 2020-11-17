@@ -74,8 +74,8 @@ struct page_state_s {
   int32_t input_value_count;                  // how many values of the input we've processed
   int32_t input_row_count;                    // how many rows of the input we've processed
   int32_t input_leaf_count;                   // how many leaf values of the input we've processed
-  uint32_t rep[non_zero_buffer_size];                     // circular buffer of repetition level values
-  uint32_t def[non_zero_buffer_size];                     // circular buffer of definition level values
+  uint32_t rep[non_zero_buffer_size];         // circular buffer of repetition level values
+  uint32_t def[non_zero_buffer_size];         // circular buffer of definition level values
   const uint8_t *lvl_start[NUM_LEVEL_TYPES];  // [def,rep]
   int32_t lvl_count[NUM_LEVEL_TYPES];         // how many of each of the streams we've decoded
   int32_t row_index_lower_bound;              // lower bound of row indices we should process
@@ -297,7 +297,7 @@ __device__ void gpuDecodeStream(
       level_run -= batch_len * 2;
     }
     if (t < batch_len) {
-      int idx                      = value_count + t;
+      int idx                                  = value_count + t;
       output[idx & (non_zero_buffer_size - 1)] = level_val;
     }
     batch_coded_count += batch_len;
@@ -514,8 +514,9 @@ inline __device__ void gpuOutputString(volatile page_state_s *s, int src_pos, vo
 
   if (s->dict_base) {
     // String dictionary
-    uint32_t dict_pos =
-      (s->dict_bits > 0) ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] * sizeof(nvstrdesc_s) : 0;
+    uint32_t dict_pos = (s->dict_bits > 0)
+                          ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] * sizeof(nvstrdesc_s)
+                          : 0;
     if (dict_pos < (uint32_t)s->dict_size) {
       const nvstrdesc_s *src = reinterpret_cast<const nvstrdesc_s *>(s->dict_base + dict_pos);
       ptr                    = src->ptr;

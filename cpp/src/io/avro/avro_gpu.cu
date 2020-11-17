@@ -20,7 +20,7 @@ namespace cudf {
 namespace io {
 namespace avro {
 namespace gpu {
-constexpr int nwarps = 16;
+constexpr int nwarps                = 16;
 constexpr int max_shared_schema_len = 1000;
 
 /*

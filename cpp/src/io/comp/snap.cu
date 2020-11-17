@@ -186,9 +186,9 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s *s,
   constexpr int max_literal_length = 256;
   // Matches encoder limit as described in snappy format description
   constexpr int max_copy_distance = 32768;
-  uint32_t len    = s->src_len;
-  uint32_t pos    = pos0;
-  uint32_t maxpos = pos0 + max_literal_length - 31;
+  uint32_t len                    = s->src_len;
+  uint32_t pos                    = pos0;
+  uint32_t maxpos                 = pos0 + max_literal_length - 31;
   uint32_t match_mask, literal_cnt;
   if (t == 0) { s->copy_length = 0; }
   do {

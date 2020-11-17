@@ -24,7 +24,7 @@ namespace io {
 namespace orc {
 namespace gpu {
 
-constexpr int bytestream_bfrsz     = (1 << 13); // Must be able to handle 512x 8-byte values
+constexpr int bytestream_bfrsz     = (1 << 13);  // Must be able to handle 512x 8-byte values
 constexpr int bytestream_bfrmask32 = (bytestream_bfrsz - 1) >> 2;
 
 // TODO: Should be more efficient with 512 threads per block and circular queue for values
