@@ -42,7 +42,6 @@
 #include <cudf/utilities/traits.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 
-#include <thrust/scan.h>
 #include <memory>
 #include <unordered_set>
 #include <utility>
@@ -234,11 +233,9 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
     auto var_result = make_fixed_width_column(
       cudf::detail::target_type(col.type(), agg.kind), col.size(), mask_state::ALL_NULL, stream);
     auto var_result_view = mutable_column_device_view::create(var_result->mutable_view());
-    dispatch_type_and_aggregation(col.type(),
-                                  agg.kind,
-                                  cudf::detail::identity_initializer{},
-                                  var_result->mutable_view(),
-                                  stream);
+    mutable_table_view var_table_view{{var_result->mutable_view()}};
+    cudf::detail::initialize_with_identity(var_table_view, {agg.kind}, stream);
+
     thrust::for_each_n(
       rmm::exec_policy(stream)->on(stream),
       thrust::make_counting_iterator(0),

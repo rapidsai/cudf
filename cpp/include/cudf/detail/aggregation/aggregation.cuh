@@ -69,10 +69,6 @@ struct corresponding_operator<aggregation::SUM_OF_SQUARES> {
   using type = DeviceSum;
 };
 template <>
-struct corresponding_operator<aggregation::MEAN> {
-  using type = DeviceSum;
-};
-template <>
 struct corresponding_operator<aggregation::STD> {
   using type = DeviceSum;
 };
@@ -398,7 +394,7 @@ struct identity_initializer {
     return cudf::is_fixed_width<T>() && !is_fixed_point<T>() and
            (k == aggregation::SUM or k == aggregation::MIN or k == aggregation::MAX or
             k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
-            k == aggregation::ARGMAX or k == aggregation::ARGMIN or k == aggregation::MEAN or
+            k == aggregation::ARGMAX or k == aggregation::ARGMIN or
             k == aggregation::SUM_OF_SQUARES or k == aggregation::STD or
             k == aggregation::VARIANCE);
   }
