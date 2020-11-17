@@ -28,6 +28,7 @@
 #include <cudf/reduction.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/rolling.hpp>
+#include <cudf/round.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/search.hpp>
 #include <cudf/strings/attributes.hpp>
@@ -141,16 +142,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
   try {
     cudf::jni::auto_set_device(env);
     auto scalar_val = reinterpret_cast<cudf::scalar const *>(j_scalar);
-    auto dtype = scalar_val->type();
-    cudf::mask_state mask_state =
+    const auto dtype = scalar_val->type();
+    const auto mask_state =
         scalar_val->is_valid() ? cudf::mask_state::UNALLOCATED : cudf::mask_state::ALL_NULL;
     std::unique_ptr<cudf::column> col;
     if (row_count == 0) {
       col = cudf::make_empty_column(dtype);
     } else if (cudf::is_fixed_width(dtype)) {
-      col = cudf::make_fixed_width_column(dtype, row_count, mask_state);
-      auto mut_view = col->mutable_view();
-      cudf::fill_in_place(mut_view, 0, row_count, *scalar_val);
+      col = cudf::make_column_from_scalar(*scalar_val, row_count);
     } else if (dtype.id() == cudf::type_id::STRING) {
       // create a string column of all empty strings to fill (cheapest string column to create)
       auto offsets = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, row_count + 1,
@@ -560,6 +559,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_unaryOperation(JNIEnv *
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_round(JNIEnv *env, jclass,
+                                                               jlong input_ptr, jint decimal_places,
+                                                               jint rounding_method) {
+  JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
+   try {
+     cudf::jni::auto_set_device(env);
+     cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_ptr);
+     cudf::rounding_method method = static_cast<cudf::rounding_method>(rounding_method);
+     std::unique_ptr<cudf::column> ret = cudf::round(*input, decimal_places, method);
+     return reinterpret_cast<jlong>(ret.release());
+   }
+   CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_year(JNIEnv *env, jclass,
                                                               jlong input_ptr) {
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
@@ -765,6 +778,24 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_byteListCast(JNIEnv *en
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
     cudf::flip_endianness config(static_cast<cudf::flip_endianness>(endianness_config));
     std::unique_ptr<cudf::column> result = byte_cast(*column, config);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_isTimestamp(
+    JNIEnv *env, jclass, jlong handle, jstring formatObj) {
+  JNI_NULL_CHECK(env, handle, "column is null", 0);
+  JNI_NULL_CHECK(env, formatObj, "format is null", 0);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::jni::native_jstring format(env, formatObj);
+    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
+    cudf::strings_column_view strings_column(*column);
+
+    std::unique_ptr<cudf::column> result = cudf::strings::is_timestamp(
+        strings_column, format.get());
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -1279,7 +1310,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeCudfColumnView(
     JNIEnv *env, jclass, jint j_type, jint scale, jlong j_data, jlong j_data_size, jlong j_offset,
     jlong j_valid, jint j_null_count, jint size, jlongArray j_children) {
 
-  JNI_ARG_CHECK(env, (size != 0), "size is 0", 0);
   try {
     using cudf::column_view;
     cudf::jni::auto_set_device(env);
@@ -1296,22 +1326,31 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeCudfColumnView(
     }
 
     if (n_type == cudf::type_id::STRING) {
-      JNI_NULL_CHECK(env, j_offset, "offset is null", 0);
-      // This must be kept in sync with how string columns are created
-      // offsets are always the first child
-      // data is the second child
+      if (size == 0) {
+        ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0));
+      } else {
+        JNI_NULL_CHECK(env, j_offset, "offset is null", 0);
+        // This must be kept in sync with how string columns are created
+        // offsets are always the first child
+        // data is the second child
 
-      cudf::size_type *offsets = reinterpret_cast<cudf::size_type *>(j_offset);
-      cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets);
-      cudf::column_view data_column(cudf::data_type{cudf::type_id::INT8}, j_data_size, data);
-      ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::STRING}, size, nullptr, valid,
-                                      j_null_count, 0, {offsets_column, data_column}));
+        cudf::size_type *offsets = reinterpret_cast<cudf::size_type *>(j_offset);
+        cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets);
+        cudf::column_view data_column(cudf::data_type{cudf::type_id::INT8}, j_data_size, data);
+        ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::STRING}, size, nullptr,
+                                        valid, j_null_count, 0, {offsets_column, data_column}));
+      }
     } else if (n_type == cudf::type_id::LIST) {
-      JNI_NULL_CHECK(env, j_offset, "offset is null", 0);
       cudf::jni::native_jpointerArray<cudf::column_view> children(env, j_children);
-      JNI_ARG_CHECK(env, (children.size() != 0), "LIST children size is 0", 0);
-      cudf::size_type *offsets = reinterpret_cast<cudf::size_type *>(j_offset);
-      cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, size + 1, offsets);
+      JNI_ARG_CHECK(env, (children.size() == 1), "LIST children size is not 1", 0);
+      cudf::size_type offsets_size = 0;
+      cudf::size_type *offsets = nullptr;
+      if (size != 0) {
+        JNI_NULL_CHECK(env, j_offset, "offset is null", 0);
+        offsets_size = size + 1;
+        offsets = reinterpret_cast<cudf::size_type *>(j_offset);
+      }
+      cudf::column_view offsets_column(cudf::data_type{cudf::type_id::INT32}, offsets_size, offsets);
       ret.reset(new cudf::column_view(cudf::data_type{cudf::type_id::LIST}, size, nullptr, valid,
         j_null_count, 0, {offsets_column, *children[0]}));
    } else if (n_type == cudf::type_id::STRUCT) {

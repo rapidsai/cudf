@@ -12,13 +12,13 @@ from cudf._lib.cpp.nvtext.replace cimport (
     filter_tokens as cpp_filter_tokens,
 )
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 
 
 def replace_tokens(Column strings,
                    Column targets,
                    Column replacements,
-                   Scalar delimiter):
+                   DeviceScalar delimiter):
     """
     The `targets` tokens are searched for within each `strings`
     in the Column and replaced with the corresponding `replacements`
@@ -30,7 +30,8 @@ def replace_tokens(Column strings,
     cdef column_view c_targets = targets.view()
     cdef column_view c_replacements = replacements.view()
 
-    cdef string_scalar* c_delimiter = <string_scalar*>delimiter.c_value.get()
+    cdef const string_scalar* c_delimiter = <const string_scalar*>delimiter\
+        .get_raw_ptr()
     cdef unique_ptr[column] c_result
 
     with nogil:
@@ -48,8 +49,8 @@ def replace_tokens(Column strings,
 
 def filter_tokens(Column strings,
                   size_type min_token_length,
-                  Scalar replacement,
-                  Scalar delimiter):
+                  DeviceScalar replacement,
+                  DeviceScalar delimiter):
     """
     Tokens smaller than `min_token_length` are removed from `strings`
     in the Column and optionally replaced with the corresponding
@@ -58,8 +59,10 @@ def filter_tokens(Column strings,
     """
 
     cdef column_view c_strings = strings.view()
-    cdef string_scalar* c_repl = <string_scalar*>replacement.c_value.get()
-    cdef string_scalar* c_delimiter = <string_scalar*>delimiter.c_value.get()
+    cdef const string_scalar* c_repl = <const string_scalar*>replacement\
+        .get_raw_ptr()
+    cdef const string_scalar* c_delimiter = <const string_scalar*>delimiter\
+        .get_raw_ptr()
     cdef unique_ptr[column] c_result
 
     with nogil:

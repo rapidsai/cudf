@@ -11,7 +11,7 @@ from cudf._lib.table cimport Table
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from libcpp.string cimport string
 
 from cudf._lib.cpp.strings.split.partition cimport (
@@ -21,14 +21,16 @@ from cudf._lib.cpp.strings.split.partition cimport (
 
 
 def partition(Column source_strings,
-              Scalar delimiter):
+              DeviceScalar delimiter):
     """
     Returns a Table by splitting the `source_strings`
     column at the first occurrence of the specified `delimiter`.
     """
     cdef unique_ptr[table] c_result
     cdef column_view source_view = source_strings.view()
-    cdef string_scalar* scalar_str = <string_scalar*>(delimiter.c_value.get())
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        delimiter.get_raw_ptr()
+    )
 
     with nogil:
         c_result = move(cpp_partition(
@@ -43,14 +45,16 @@ def partition(Column source_strings,
 
 
 def rpartition(Column source_strings,
-               Scalar delimiter):
+               DeviceScalar delimiter):
     """
     Returns a Column by splitting the `source_strings`
     column at the last occurrence of the specified `delimiter`.
     """
     cdef unique_ptr[table] c_result
     cdef column_view source_view = source_strings.view()
-    cdef string_scalar* scalar_str = <string_scalar*>(delimiter.c_value.get())
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        delimiter.get_raw_ptr()
+    )
 
     with nogil:
         c_result = move(cpp_rpartition(

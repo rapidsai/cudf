@@ -1127,6 +1127,52 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
     return new ColumnVector(dayOfYear(getNativeView()));
   }
 
+  /**
+   * Rounds all the values in a column to the specified number of decimal places.
+   *
+   * @param decimalPlaces Number of decimal places to round to. If negative, this
+   *                      specifies the number of positions to the left of the decimal point.
+   * @param mode          Rounding method(either HALF_UP or HALF_EVEN)
+   * @return a new ColumnVector with rounded values.
+   */
+  public ColumnVector round(int decimalPlaces, RoundMode mode) {
+    return new ColumnVector(round(this.getNativeView(), decimalPlaces, mode.nativeId));
+  }
+
+  /**
+   * Rounds all the values in a column with decimal places = 0. Default number of decimal places
+   * to round to is 0.
+   *
+   * @param round Rounding method(either HALF_UP or HALF_EVEN)
+   * @return a new ColumnVector with rounded values.
+   */
+  public ColumnVector round(RoundMode round) {
+    return round(0, round);
+  }
+
+  /**
+   * Rounds all the values in a column to the specified number of decimal places with HALF_UP
+   * (default) as Rounding method.
+   *
+   * @param decimalPlaces Number of decimal places to round to. If negative, this
+   *                      specifies the number of positions to the left of the decimal point.
+   * @return a new ColumnVector with rounded values.
+   */
+  public ColumnVector round(int decimalPlaces) {
+    return round(decimalPlaces, RoundMode.HALF_UP);
+  }
+
+  /**
+   * Rounds all the values in a column with these default values:
+   * decimalPlaces = 0
+   * Rounding method = RoundMode.HALF_UP
+   *
+   * @return a new ColumnVector with rounded values.
+   */
+  public ColumnVector round() {
+    return round(0, RoundMode.HALF_UP);
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // ARITHMETIC
   /////////////////////////////////////////////////////////////////////////////
@@ -1850,6 +1896,44 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    */
   public ColumnVector asDoubles() {
     return castTo(DType.FLOAT64);
+  }
+
+  /**
+   * Verifies that a string column can be parsed to timestamps using the provided format
+   * pattern.
+   *
+   * The format pattern can include the following specifiers: "%Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z"
+   *
+   * | Specifier | Description |
+   * | :-------: | ----------- |
+   * | \%d | Day of the month: 01-31 |
+   * | \%m | Month of the year: 01-12 |
+   * | \%y | Year without century: 00-99 |
+   * | \%Y | Year with century: 0001-9999 |
+   * | \%H | 24-hour of the day: 00-23 |
+   * | \%I | 12-hour of the day: 01-12 |
+   * | \%M | Minute of the hour: 00-59|
+   * | \%S | Second of the minute: 00-59 |
+   * | \%f | 6-digit microsecond: 000000-999999 |
+   * | \%z | UTC offset with format ±HHMM Example +0500 |
+   * | \%j | Day of the year: 001-366 |
+   * | \%p | Only 'AM', 'PM' or 'am', 'pm' are recognized |
+   *
+   * Other specifiers are not currently supported.
+   * The "%f" supports a precision value to read the numeric digits. Specify the
+   * precision with a single integer value (1-9) as follows:
+   * use "%3f" for milliseconds, "%6f" for microseconds and "%9f" for nanoseconds.
+   *
+   * Any null string entry will result in a corresponding null row in the output column.
+   *
+   * This will return a column of type boolean where a `true` row indicates the corresponding
+   * input string can be parsed correctly with the given format.
+   *
+   * @param format String specifying the timestamp format in strings.
+   * @return New boolean ColumnVector.
+   */
+  public ColumnVector isTimestamp(String format) {
+    return new ColumnVector(isTimestamp(getNativeView(), format));
   }
 
   /**
@@ -2889,6 +2973,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   private static native long extractListElement(long nativeView, int index);
 
+  private static native long isTimestamp(long nativeView, String format);
+
   private static native long castTo(long nativeHandle, int type, int scale);
 
   private static native long byteListCast(long nativeHandle, boolean config);
@@ -2898,6 +2984,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   private static native long[] split(long nativeHandle, int[] indices) throws CudfException;
 
   private static native long findAndReplaceAll(long valuesHandle, long replaceHandle, long myself) throws CudfException;
+
+  private static native long round(long nativeHandle, int decimalPlaces, int roundingMethod) throws CudfException;
 
   /**
    * Native method to switch all characters in a column of strings to lowercase characters.
@@ -3038,7 +3126,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
 
   private static native int getNativeNullCount(long viewHandle) throws CudfException;
 
-  private static native void deleteColumnView(long viewHandle) throws CudfException;
+  static native void deleteColumnView(long viewHandle) throws CudfException;
 
   private static native long getNativeDataAddress(long viewHandle) throws CudfException;
   private static native long getNativeDataLength(long viewHandle) throws CudfException;
@@ -3049,7 +3137,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
   private static native long getNativeValidityAddress(long viewHandle) throws CudfException;
   private static native long getNativeValidityLength(long viewHandle) throws CudfException;
 
-  private static native long makeCudfColumnView(int type, int scale, long data, long dataSize, long offsets,
+  static native long makeCudfColumnView(int type, int scale, long data, long dataSize, long offsets,
       long valid, int nullCount, int size, long[] childHandle);
 
 
@@ -3224,7 +3312,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
       if (buffers != null) {
         toClose.addAll(buffers);
       }
-      if (rows == 0) {
+      if (rows == 0 && !type.isNestedType()) {
         this.columnHandle = makeEmptyCudfColumn(type.typeId.getNativeId(), type.getScale());
       } else {
         long cd = data == null ? 0 : data.address;
@@ -3620,6 +3708,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable, Column
    */
   public static ColumnVector fromStructs(HostColumnVector.DataType dataType,
                                          List<HostColumnVector.StructData> lists) {
+    try (HostColumnVector host = HostColumnVector.fromStructs(dataType, lists)) {
+      return host.copyToDevice();
+    }
+  }
+
+  /**
+   * This method is evolving, unstable and currently test only.
+   * Please use with caution and expect it to change in the future.
+   */
+  public static ColumnVector fromStructs(HostColumnVector.DataType dataType,
+                                         HostColumnVector.StructData... lists) {
     try (HostColumnVector host = HostColumnVector.fromStructs(dataType, lists)) {
       return host.copyToDevice();
     }

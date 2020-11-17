@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,16 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-// The translation unit for reduction `min`
 
 #include <cudf/detail/reduction_functions.hpp>
-#include "simple.cuh"
+#include <reductions/simple.cuh>
 
-std::unique_ptr<cudf::scalar> cudf::reduction::min(column_view const& col,
-                                                   data_type const output_dtype,
-                                                   rmm::mr::device_memory_resource* mr,
-                                                   cudaStream_t stream)
+namespace cudf {
+namespace reduction {
+
+std::unique_ptr<cudf::scalar> min(column_view const& col,
+                                  data_type const output_dtype,
+                                  rmm::mr::device_memory_resource* mr,
+                                  cudaStream_t stream)
 {
-  using reducer = cudf::reduction::simple::element_type_dispatcher<cudf::reduction::op::min>;
-  return cudf::type_dispatcher(col.type(), reducer(), col, output_dtype, mr, stream);
+  CUDF_EXPECTS(col.type() == output_dtype, "min() operation requires matching output type");
+  return cudf::type_dispatcher(
+    col.type(), simple::same_element_type_dispatcher<cudf::reduction::op::min>{}, col, mr, stream);
 }
+
+}  // namespace reduction
+}  // namespace cudf
