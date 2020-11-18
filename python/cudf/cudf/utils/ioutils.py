@@ -1006,7 +1006,12 @@ def _is_local_filesystem(fs):
 
 
 def get_filepath_or_buffer(
-    path_or_data, compression, mode="rb", iotypes=(BytesIO), **kwargs
+    path_or_data,
+    compression,
+    mode="rb",
+    iotypes=(BytesIO),
+    allow_multiple_files=False,
+    **kwargs,
 ):
     """Return either a filepath string to data, or a memory buffer of data.
     If filepath, then the source filepath is expanded to user's environment.
@@ -1025,7 +1030,7 @@ def get_filepath_or_buffer(
 
     Returns
     -------
-    filepath_or_buffer : str, bytes, BytesIO
+    filepath_or_buffer : str, bytes, BytesIO, list
         Filepath string or in-memory buffer of data
     compression : str
         Type of compression algorithm for the content
@@ -1047,7 +1052,7 @@ def get_filepath_or_buffer(
 
         if len(paths) == 0:
             raise IOError(f"{path_or_data} could not be resolved to any files")
-        elif len(paths) > 1:
+        elif len(paths) > 1 and not allow_multiple_files:
             warnings.warn(
                 f"`path_or_data` resolved to more than 1 file. "
                 f"Only the first file {paths[0]} will be read.",
@@ -1058,10 +1063,20 @@ def get_filepath_or_buffer(
             # Doing this as `read_json` accepts a json string
             # path_or_data need not be a filepath like string
             if os.path.exists(paths[0]):
-                path_or_data = paths[0]
+                if allow_multiple_files and len(paths) > 1:
+                    path_or_data = paths
+                else:
+                    path_or_data = paths[0]
         else:
-            with fs.open(paths[0]) as f:
-                path_or_data = BytesIO(f.read())
+            if allow_multiple_files and len(paths) > 1:
+                buffers = []
+                for fpath in paths:
+                    with fs.open(fpath) as f:
+                        buffers.append(BytesIO(f.read()))
+                path_or_data = buffers
+            else:
+                with fs.open(paths[0]) as f:
+                    path_or_data = BytesIO(f.read())
 
     elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
         if isinstance(path_or_data, TextIOWrapper):
