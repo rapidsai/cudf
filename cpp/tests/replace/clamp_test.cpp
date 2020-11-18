@@ -23,6 +23,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
+#include "cudf/utilities/error.hpp"
 
 #include <gtest/gtest.h>
 
@@ -607,6 +608,36 @@ TYPED_TEST(FixedPointTest, ZeroScale)
   auto const result   = cudf::clamp(input, *lo, *hi);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTest, MismatchedScalarScales)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const scale = scale_type{0};
+  auto const lo    = cudf::make_fixed_point_scalar<decimalXX>(2, scale_type{-1});
+  auto const hi    = cudf::make_fixed_point_scalar<decimalXX>(8, scale);
+  auto const input = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, scale};
+
+  EXPECT_THROW(cudf::clamp(input, *lo, *hi), cudf::logic_error);
+}
+
+TYPED_TEST(FixedPointTest, MismatchedColumnScalarScale)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const scale = scale_type{0};
+  auto const lo    = cudf::make_fixed_point_scalar<decimalXX>(2, scale);
+  auto const hi    = cudf::make_fixed_point_scalar<decimalXX>(8, scale);
+  auto const input = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, scale_type{-4}};
+
+  EXPECT_THROW(cudf::clamp(input, *lo, *hi), cudf::logic_error);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
