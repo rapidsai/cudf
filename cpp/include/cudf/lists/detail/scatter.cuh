@@ -492,12 +492,8 @@ struct list_child_constructor {
 
     // string_views should now have been populated with source and target references.
 
-    auto string_offsets =
-      cudf::strings::detail::child_offsets_from_string_iterator(
-        string_views.begin(), 
-        string_views.size(), 
-        mr, 
-        stream.value());
+    auto string_offsets = cudf::strings::detail::child_offsets_from_string_iterator(
+      string_views.begin(), string_views.size(), mr, stream.value());
 
     auto string_chars = cudf::strings::detail::child_chars_from_string_vector(
       string_views, string_offsets->view().template data<cudf::size_type>(), 0, mr, stream.value());
