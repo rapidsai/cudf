@@ -140,9 +140,7 @@ struct superstate {
    */
   inline constexpr superstate(Data data) : _data(data) {}
 
-  inline constexpr Data data() const {
-    return _data;
-  }
+  inline constexpr Data data() const { return _data; }
 
   /**
    * @brief converts to a single state using the least significant bits of the underlying data
