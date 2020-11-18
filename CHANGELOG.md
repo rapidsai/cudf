@@ -133,6 +133,7 @@
 - PR #6632 Fix DataFrame initialization from list of dicts
 - PR #6767 Fix sort order of parameters in `test_scalar_invalid_implicit_conversion` pytest
 - PR #6787 Update java reduction APIs to reflect C++ changes
+- PR #6794 Fix AVRO reader issues with empty input
 
 
 # cuDF 0.16.0 (21 Oct 2020)
