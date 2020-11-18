@@ -282,7 +282,7 @@ std::unique_ptr<column> unary_op_with(column_view const& input,
   using Type                     = device_storage_type_t<T>;
   using FixedPointUnaryOpFunctor = FixedPointFunctor<Type>;
 
-  // When scale is >= 0 and unary_op is CEIL or FLOOR, the unary_operation is a no-op
+  // When scale is >= 0 and unary_operator is CEIL or FLOOR, the unary_operation is a no-op
   if (input.type().scale() >= 0 &&
       (std::is_same<FixedPointUnaryOpFunctor, fixed_point_ceil<Type>>::value ||
        std::is_same<FixedPointUnaryOpFunctor, fixed_point_floor<Type>>::value))
@@ -550,7 +550,7 @@ struct FixedPointOpDispatcher {
   template <typename T>
   std::enable_if_t<cudf::is_fixed_point<T>(), std::unique_ptr<column>> operator()(
     column_view const& input,
-    cudf::unary_op op,
+    cudf::unary_operator op,
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr)
   {
