@@ -83,6 +83,7 @@
 - PR #6748 Add Java API to concatenate serialized tables to ContiguousTable
 - PR #6734 Binary operations support for decimal type in cudf Java
 - PR #6761 Add Java/JNI bindings for round
+- PR #6776 Use `void` return type for kernel wrapper functions instead of returning `cudaError_t`
 - PR #6786 Add nested type support to ColumnVector#getDeviceMemorySize
 - PR #6780 Move `cudf::cast` tests to separate test file
 - PR #6770 Support building decimal columns with Table.TestBuilder
