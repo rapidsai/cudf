@@ -23,7 +23,6 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
-#include "cudf/utilities/error.hpp"
 
 #include <gtest/gtest.h>
 
@@ -605,6 +604,27 @@ TYPED_TEST(FixedPointTest, ZeroScale)
   auto const hi       = cudf::make_fixed_point_scalar<decimalXX>(8, scale);
   auto const input    = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, scale};
   auto const expected = fp_wrapper{{2, 2, 2, 3, 4, 5, 6, 7, 8, 8, 8}, scale};
+  auto const result   = cudf::clamp(input, *lo, *hi);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTest, LargeTest)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const scale = scale_type{-3};
+  auto const lo    = cudf::make_fixed_point_scalar<decimalXX>(1000, scale);
+  auto const hi    = cudf::make_fixed_point_scalar<decimalXX>(2000, scale);
+
+  auto begin          = thrust::make_counting_iterator(-1000);
+  auto clamp          = [](int e) { return e < 1000 ? 1000 : e > 2000 ? 2000 : e; };
+  auto begin2         = cudf::test::make_counting_transform_iterator(-1000, clamp);
+  auto const input    = fp_wrapper{begin, begin + 5000, scale};
+  auto const expected = fp_wrapper{begin2, begin2 + 5000, scale};
   auto const result   = cudf::clamp(input, *lo, *hi);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
