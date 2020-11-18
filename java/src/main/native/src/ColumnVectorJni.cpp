@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <numeric>
+
 #include <cudf/aggregation.hpp>
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -24,6 +26,7 @@
 #include <cudf/datetime.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/quantiles.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/replace.hpp>
@@ -59,6 +62,28 @@
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
 
+namespace {
+
+std::size_t calc_device_memory_size(cudf::column_view const &view) {
+  std::size_t total = 0;
+  auto row_count = view.size();
+
+  if (view.nullable()) {
+    total += cudf::bitmask_allocation_size_bytes(row_count);
+  }
+
+  auto dtype = view.type();
+  if (cudf::is_fixed_width(dtype)) {
+    total += cudf::size_of(dtype) * view.size();
+  }
+
+  return std::accumulate(view.child_begin(), view.child_end(), total,
+                         [](std::size_t t, cudf::column_view const &v) {
+                           return t + calc_device_memory_size(v);
+                         });
+}
+
+} // anonymous namespace
 
 extern "C" {
 
@@ -1602,6 +1627,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_getNativeValidPointerSi
     return static_cast<jlong>(cudf::bitmask_allocation_size_bytes(size));
   }
   CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_getDeviceMemorySize(JNIEnv *env, jclass,
+                                                                             jlong handle) {
+    JNI_NULL_CHECK(env, handle, "native handle is null", 0);
+    try {
+      cudf::jni::auto_set_device(env);
+      auto view = reinterpret_cast<cudf::column_view const *>(handle);
+      return calc_device_memory_size(*view);
+    }
+    CATCH_STD(env, 0);
 }
 
 ////////
