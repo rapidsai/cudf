@@ -50,14 +50,14 @@ class UnaryOp(IntEnum):
     FLOOR = <underlying_type_t_unary_op> unary_operator.FLOOR
     ABS = <underlying_type_t_unary_op> unary_operator.ABS
     RINT = <underlying_type_t_unary_op> unary_operator.RINT
-    INVERT = 
-        <underlying_type_t_unary_op> unary_operator.BIT_INVERT
+    INVERT = <underlying_type_t_unary_op> unary_operator.BIT_INVERT
     NOT = <underlying_type_t_unary_op> unary_operator.NOT
 
 
 def unary_operation(Column input, object op):
     cdef column_view c_input = input.view()
-    cdef unary_operator c_op = <unary_operator>(<underlying_type_t_unary_op> op)
+    cdef unary_operator c_op = <unary_operator>(<underlying_type_t_unary_op>
+                op)
     cdef unique_ptr[column] c_result
 
     with nogil:
