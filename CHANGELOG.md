@@ -82,7 +82,7 @@
 - PR #6734 Binary operations support for decimal type in cudf Java
 - PR #6761 Add Java/JNI bindings for round
 - PR #6780 Move `cudf::cast` tests to separate test file
-- PR #6789 Rename `binary_operator` to `binary_op`
+- PR #6789 Rename `unary_op` to `unary_operator`
 
 ## Bug Fixes
 
