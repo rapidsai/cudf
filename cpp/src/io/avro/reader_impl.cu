@@ -23,6 +23,7 @@
 
 #include <io/comp/gpuinflate.h>
 
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -302,7 +303,7 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
       schema_desc[schema_data_idx].count = dict[i].first;
     }
     if (out_buffers[i].null_mask_size()) {
-      set_null_mask(out_buffers[i].null_mask(), 0, num_rows, true, stream);
+      cudf::detail::set_null_mask(out_buffers[i].null_mask(), 0, num_rows, true, stream);
     }
   }
   rmm::device_buffer block_list(

@@ -16,11 +16,14 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <cmath>
 #include <type_traits>
@@ -261,12 +264,13 @@ std::unique_ptr<cudf::column> transform_fn(cudf::dictionary_column_view const& i
   auto dictionary_itr  = dictionary::detail::make_dictionary_iterator<T>(*dictionary_view);
   auto default_mr      = rmm::mr::get_current_device_resource();
   // call unary-op using temporary output buffer
-  auto output = transform_fn<T, UFN>(dictionary_itr,
-                                     dictionary_itr + input.size(),
-                                     copy_bitmask(input.parent(), stream, default_mr),
-                                     input.null_count(),
-                                     default_mr,
-                                     stream);
+  auto output = transform_fn<T, UFN>(
+    dictionary_itr,
+    dictionary_itr + input.size(),
+    detail::copy_bitmask(input.parent(), rmm::cuda_stream_view{stream}, default_mr),
+    input.null_count(),
+    default_mr,
+    stream);
   return cudf::dictionary::detail::encode(
     output->view(), dictionary::detail::get_indices_type_for_size(output->size()), mr, stream);
 }
@@ -278,12 +282,13 @@ struct MathOpDispatcher {
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream)
   {
-    return transform_fn<T, UFN>(input.begin<T>(),
-                                input.end<T>(),
-                                copy_bitmask(input, stream, mr),
-                                input.null_count(),
-                                mr,
-                                stream);
+    return transform_fn<T, UFN>(
+      input.begin<T>(),
+      input.end<T>(),
+      cudf::detail::copy_bitmask(input, rmm::cuda_stream_view{stream}, mr),
+      input.null_count(),
+      mr,
+      stream);
   }
 
   struct dictionary_dispatch {
@@ -335,12 +340,13 @@ struct BitwiseOpDispatcher {
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream)
   {
-    return transform_fn<T, UFN>(input.begin<T>(),
-                                input.end<T>(),
-                                copy_bitmask(input, stream, mr),
-                                input.null_count(),
-                                mr,
-                                stream);
+    return transform_fn<T, UFN>(
+      input.begin<T>(),
+      input.end<T>(),
+      cudf::detail::copy_bitmask(input, rmm::cuda_stream_view{stream}, mr),
+      input.null_count(),
+      mr,
+      stream);
   }
 
   struct dictionary_dispatch {
@@ -400,12 +406,13 @@ struct LogicalOpDispatcher {
                                            rmm::mr::device_memory_resource* mr,
                                            cudaStream_t stream)
   {
-    return transform_fn<bool, UFN>(input.begin<T>(),
-                                   input.end<T>(),
-                                   copy_bitmask(input, stream, mr),
-                                   input.null_count(),
-                                   mr,
-                                   stream);
+    return transform_fn<bool, UFN>(
+      input.begin<T>(),
+      input.end<T>(),
+      cudf::detail::copy_bitmask(input, rmm::cuda_stream_view{stream}, mr),
+      input.null_count(),
+      mr,
+      stream);
   }
 
   struct dictionary_dispatch {
@@ -416,12 +423,13 @@ struct LogicalOpDispatcher {
     {
       auto dictionary_view = cudf::column_device_view::create(input.parent(), stream);
       auto dictionary_itr  = dictionary::detail::make_dictionary_iterator<T>(*dictionary_view);
-      return transform_fn<bool, UFN>(dictionary_itr,
-                                     dictionary_itr + input.size(),
-                                     copy_bitmask(input.parent(), stream, mr),
-                                     input.null_count(),
-                                     mr,
-                                     stream);
+      return transform_fn<bool, UFN>(
+        dictionary_itr,
+        dictionary_itr + input.size(),
+        cudf::detail::copy_bitmask(input.parent(), rmm::cuda_stream_view{stream}, mr),
+        input.null_count(),
+        mr,
+        stream);
     }
 
     template <typename T, typename std::enable_if_t<!is_supported<T>()>* = nullptr>
