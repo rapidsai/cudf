@@ -1757,14 +1757,14 @@ struct start_offset_output_iterator {
 /**
  * @copydoc cudf::io::parquet::gpu::PreprocessColumnData
  */
-cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
-                                 hostdevice_vector<ColumnChunkDesc> const &chunks,
-                                 std::vector<input_column_info> &input_columns,
-                                 std::vector<cudf::io::detail::column_buffer> &output_columns,
-                                 size_t num_rows,
-                                 size_t min_row,
-                                 cudaStream_t stream,
-                                 rmm::mr::device_memory_resource *mr)
+void PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
+                          hostdevice_vector<ColumnChunkDesc> const &chunks,
+                          std::vector<input_column_info> &input_columns,
+                          std::vector<cudf::io::detail::column_buffer> &output_columns,
+                          size_t num_rows,
+                          size_t min_row,
+                          cudaStream_t stream,
+                          rmm::mr::device_memory_resource *mr)
 {
   dim3 dim_block(NTHREADS, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
@@ -1879,26 +1879,22 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
                                                                  static_cast<int>(l_idx)});
     }
   }
-
-  return cudaSuccess;
 }
 
 /**
  * @copydoc cudf::io::parquet::gpu::DecodePageData
  */
-cudaError_t __host__ DecodePageData(hostdevice_vector<PageInfo> &pages,
-                                    hostdevice_vector<ColumnChunkDesc> const &chunks,
-                                    size_t num_rows,
-                                    size_t min_row,
-                                    cudaStream_t stream)
+void __host__ DecodePageData(hostdevice_vector<PageInfo> &pages,
+                             hostdevice_vector<ColumnChunkDesc> const &chunks,
+                             size_t num_rows,
+                             size_t min_row,
+                             cudaStream_t stream)
 {
   dim3 dim_block(NTHREADS, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   gpuDecodePageData<<<dim_grid, dim_block, 0, stream>>>(
     pages.device_ptr(), chunks.device_ptr(), min_row, num_rows, chunks.size());
-
-  return cudaSuccess;
 }
 
 }  // namespace gpu

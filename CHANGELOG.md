@@ -8,6 +8,7 @@
 - PR #6562 Implement `cudf::round` floating point and integer types (`HALF_UP`)
 - PR #6685 Implement `cudf::round` `decimal32` & `decimal64` (`HALF_UP` and `HALF_EVEN`)
 - PR #6711 Implement `cudf::cast` for `decimal32/64` to/from integer and floating point
+- PR #6777 Implement `cudf::unary_operation` for `decimal32` & `decimal64`
 - PR #6729 Implement `cudf::cast` for `decimal32/64` to/from different `type_id`
 - PR #6528 Enable `fixed_point` binary operations
 - PR #6460 Add is_timestamp format check API
@@ -67,6 +68,7 @@
 - PR #6622 Update `to_pandas` api docs
 - PR #6623 Add operator overloading to column and clean up error messages
 - PR #6644 Cover different CSV reader/writer options in benchmarks
+- PR #6741 Cover different ORC and Parquet reader/writer options in benchmarks
 - PR #6651 Add cudf::dictionary::make_dictionary_pair_iterator
 - PR #6635 Add cudf::test::dictionary_column_wrapper class
 - PR #6702 Fix orc read corruption on boolean column
@@ -82,8 +84,10 @@
 - PR #6748 Add Java API to concatenate serialized tables to ContiguousTable
 - PR #6734 Binary operations support for decimal type in cudf Java
 - PR #6761 Add Java/JNI bindings for round
+- PR #6776 Use `void` return type for kernel wrapper functions instead of returning `cudaError_t`
 - PR #6786 Add nested type support to ColumnVector#getDeviceMemorySize
 - PR #6780 Move `cudf::cast` tests to separate test file
+- PR #6770 Support building decimal columns with Table.TestBuilder
 
 ## Bug Fixes
 
@@ -268,6 +272,7 @@
 - PR #6379 Add list hashing functionality to MD5
 - PR #6498 Add helper method to ColumnBuilder with some nits
 - PR #6653 Replaced SHFL_XOR calls with cub::WarpReduce
+- PR #6751 Rework ColumnViewAccess and its usage
 - PR #6698 Remove macros from ORC reader and writer
 
 ## Bug Fixes
