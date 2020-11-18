@@ -865,28 +865,28 @@ class DataFrame(Frame, Serializable):
         """
         return len(self.index)
 
-    def __array_aggs__(self, aggs, method, *inputs, **kwargs):
+    def __array_ufunc__(self, aggs, method, *inputs, **kwargs):
         import cudf
 
-        if method == "__call__" and hasattr(cudf, aggs.__name__):
-            aggs = getattr(cudf, aggs.__name__)
-            return aggs(self)
+        if method == "__call__" and hasattr(cudf, ufunc.__name__):
+            func = getattr(cudf, ufunc.__name__)
+            return func(self)
         else:
             return NotImplemented
 
-    def __array_function__(self, aggs, types, args, kwargs):
+    def __array_function__(self, func, types, args, kwargs):
 
         cudf_df_module = DataFrame
         cudf_series_module = Series
 
-        for submodule in aggs.__module__.split(".")[1:]:
+        for submodule in func.__module__.split(".")[1:]:
             # point cudf to the correct submodule
             if hasattr(cudf_df_module, submodule):
                 cudf_df_module = getattr(cudf_df_module, submodule)
             else:
                 return NotImplemented
 
-        fname = aggs.__name__
+        fname = func.__name__
 
         handled_types = [cudf_df_module, cudf_series_module]
 
@@ -895,12 +895,12 @@ class DataFrame(Frame, Serializable):
                 return NotImplemented
 
         if hasattr(cudf_df_module, fname):
-            cudf_aggs = getattr(cudf_df_module, fname)
+            cudf_func = getattr(cudf_df_module, fname)
             # Handle case if cudf_aggs is same as numpy function
-            if cudf_aggs is aggs:
+            if cudf_func is func:
                 return NotImplemented
             else:
-                return cudf_aggs(*args, **kwargs)
+                return cudf_func(*args, **kwargs)
         else:
             return NotImplemented
 
@@ -3721,7 +3721,7 @@ class DataFrame(Frame, Serializable):
         )
 
     def agg(self, aggs, axis=None):
-        """ 
+        """
         Aggregate using one or more operations over the specified axis.
 
         Parameters
@@ -3733,13 +3733,12 @@ class DataFrame(Frame, Serializable):
                 dict of axis labels specified operations per column
                 function name: must pass to DataFrame or DataFrame.apply
 
-        axis : not yet supported 
-        
+        axis : not yet supported
+
         Returns 
         -------
-        Aggregation Result : scalar, ``Series`` or ``DataFrame``
-            When Series.agg is called with single aggregation, a scalar is returned. 
-            When DataFrame.agg is called with a single aggrgation, a ``Series`` is returned
+        Aggregation Result : ``Series`` or ``DataFrame``
+            When DataFrame.agg is called with a single aggregation, a ``Series`` is returned
             When DataFrame.agg is called with several aggregations, a ``DataFrame`` is returned
 
         Notes
@@ -3748,12 +3747,18 @@ class DataFrame(Frame, Serializable):
           * Not supporting: axis, *args, **kwargs
 
         """
+
+        from cudf.core.groupby.groupby import _is_multi_agg
+
         if axis is 0 or axis is not None:
             raise NotImplementedError("axis not implemented yet")
-
-        dtypes = [self[col].dtype for col in self._column_names]
-        common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
-        df_normalized = self.astype(common_dtype)
+        
+        if not _is_multi_agg(aggs):
+            dtypes = [self[col].dtype for col in self._column_names]
+            common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
+            df_normalized = self.astype(common_dtype)
+        else:
+            df_normalized = self
 
         if isinstance(aggs, Iterable) and not isinstance(aggs, (str, dict)):
             result = cudf.DataFrame() 
@@ -4259,7 +4264,7 @@ class DataFrame(Frame, Serializable):
     @applyutils.doc_apply()
     def apply_rows(
         self,
-        aggs,
+        func,
         incols,
         outcols,
         kwargs,
@@ -4279,7 +4284,7 @@ class DataFrame(Frame, Serializable):
         each row. Loop execution order is arbitrary, so each iteration of
         the loop **MUST** be independent of each other.
 
-        When ``aggs`` is invoked, the array args corresponding to the
+        When ``func`` is invoked, the array args corresponding to the
         input/output are strided so as to improve GPU parallelism.
         The loop in the function resembles serial code, but executes
         concurrently in multiple threads.
@@ -4326,7 +4331,7 @@ class DataFrame(Frame, Serializable):
                 )
         return applyutils.apply_rows(
             self,
-            aggs,
+            func,
             incols,
             outcols,
             kwargs,
@@ -4337,7 +4342,7 @@ class DataFrame(Frame, Serializable):
     @applyutils.doc_applychunks()
     def apply_chunks(
         self,
-        aggs,
+        func,
         incols,
         outcols,
         kwargs=None,
@@ -4357,7 +4362,7 @@ class DataFrame(Frame, Serializable):
         Examples
         --------
 
-        For ``tpb > 1``, ``aggs`` is executed by ``tpb`` number of threads
+        For ``tpb > 1``, ``func`` is executed by ``tpb`` number of threads
         concurrently.  To access the thread id and count,
         use ``numba.cuda.threadIdx.x`` and ``numba.cuda.blockDim.x``,
         respectively (See `numba CUDA kernel documentation`_).
@@ -4392,7 +4397,7 @@ class DataFrame(Frame, Serializable):
             raise ValueError("*chunks* must be defined")
         return applyutils.apply_chunks(
             self,
-            aggs,
+            func,
             incols,
             outcols,
             kwargs,
@@ -5345,9 +5350,9 @@ class DataFrame(Frame, Serializable):
         q : float or array-like
             0 <= q <= 1, the quantile(s) to compute
         axis : int
-            axis is a NON-aggsTIONAL parameter
+            axis is a NON-FUNCTIONAL parameter
         numeric_only : boolean
-            numeric_only is a NON-aggsTIONAL parameter
+            numeric_only is a NON-FUNCTIONAL parameter
         interpolation : {`linear`, `lower`, `higher`, `midpoint`, `nearest`}
             This parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.

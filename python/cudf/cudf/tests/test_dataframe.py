@@ -7967,6 +7967,7 @@ def test_dataframe_axis1_unsupported_ops(op):
     ):
         getattr(df, op)(axis=1)
 
+
 def test_dataframe_from_pandas_duplicate_columns():
     pdf = pd.DataFrame(columns=["a", "b", "c", "a"])
     pdf["a"] = [1, 2, 3]
@@ -7975,6 +7976,7 @@ def test_dataframe_from_pandas_duplicate_columns():
         ValueError, match="Duplicate column names are not allowed"
     ):
         gd.from_pandas(pdf)
+
 
 @pytest.mark.parametrize(
     "data",
@@ -8011,7 +8013,6 @@ def test_dataframe_from_pandas_duplicate_columns():
         {"a": {"sum", "min"}, "b": {"sum", "max"}, "c": {"min", "max"}},
     ],
 )
-
 def test_agg_for_dataframes(data, aggs):
     pdf = pd.DataFrame(data)
     gdf = gd.DataFrame(data)
@@ -8019,18 +8020,20 @@ def test_agg_for_dataframes(data, aggs):
     if aggs == {"a": np.sum, "b": np.min, "c": np.max}:
         with pytest.raises(NotImplementedError):
             got = gdf.agg(aggs)
-    elif aggs =="asdf":
+    elif aggs == "asdf":
         with pytest.raises(
-           AttributeError, match=f"{aggs} is not a valid function for 'DataFrame' object"
+            AttributeError,
+            match=f"{aggs} is not a valid function for 'DataFrame' object",
         ):
             got = gdf.agg(aggs)
-    elif aggs == {"a":"asdf"}:
+    elif aggs == {"a": "asdf"}:
         with pytest.raises(
-             AttributeError, match=f"{aggs['a']} is not a valid function for 'Series' object"
+            AttributeError,
+            match=f"{aggs['a']} is not a valid function for 'Series' object",
         ):
             got = gdf.agg(aggs)
     else:
-            expect = pdf.agg(aggs)
-            got = gdf.agg(aggs)
+        expect = pdf.agg(aggs)
+        got = gdf.agg(aggs)
 
-            assert_eq(expect, got, check_dtype=False)
+        assert_eq(expect, got, check_dtype=False)
