@@ -328,8 +328,7 @@ bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &
         state     = state_attrname;
         break;
       case ']':
-        if (depth == 0 ||
-            (state != state_nextattr && state != state_nextsymbol && state != state_attrname) ||
+        if (depth == 0 || (state != state_nextattr && state != state_nextsymbol) ||
             depthbuf[depth - 1] != '[')
           return false;
         --depth;
