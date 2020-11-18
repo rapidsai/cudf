@@ -103,8 +103,7 @@ TEST_F(DictionaryRemoveKeysTest, WithNull)
   {
     cudf::test::fixed_width_column_wrapper<int32_t> gather_map{0, 2, 3, 1};
     auto const table_result =
-      cudf::gather(
-        cudf::table_view{{dictionary->view()}}, gather_map)->release();
+      cudf::gather(cudf::table_view{{dictionary->view()}}, gather_map)->release();
     auto const result  = cudf::dictionary::remove_unused_keys(table_result.front()->view());
     auto const decoded = cudf::dictionary::decode(result->view());
     cudf::test::fixed_width_column_wrapper<int64_t> expected{{444, 333, 111, 0}};
