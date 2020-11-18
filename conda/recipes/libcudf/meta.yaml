@@ -20,6 +20,7 @@ build:
     - CUDAHOSTCXX
     - PARALLEL_LEVEL
     - VERSION_SUFFIX
+    - PROJECT_FLASH
   run_exports:
     - {{ pin_subpackage("libcudf", max_pin="x.x") }}
 
@@ -173,6 +174,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/wrap.hpp
     - test -f $PREFIX/include/cudf/structs/structs_column_view.hpp
     - test -f $PREFIX/include/cudf/structs/struct_view.hpp
+    - test -f $PREFIX/include/cudf/structs/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/table/table.hpp
     - test -f $PREFIX/include/cudf/table/table_view.hpp
     - test -f $PREFIX/include/cudf/transform.hpp

@@ -139,7 +139,7 @@ class metadata {
     const uint8_t *ps_data = &buffer->data()[max_ps_size - ps_length - 1];
     ProtobufReader pb;
     pb.init(ps_data, ps_length);
-    CUDF_EXPECTS(pb.read(&ps, ps_length), "Cannot read postscript");
+    CUDF_EXPECTS(pb.read(ps, ps_length), "Cannot read postscript");
     CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
 
     // If compression is used, all the rest of the metadata is compressed
@@ -151,7 +151,7 @@ class metadata {
     size_t ff_length = 0;
     auto ff_data     = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
     pb.init(ff_data, ff_length);
-    CUDF_EXPECTS(pb.read(&ff, ff_length), "Cannot read filefooter");
+    CUDF_EXPECTS(pb.read(ff, ff_length), "Cannot read filefooter");
     CUDF_EXPECTS(get_num_columns() > 0, "No columns found");
   }
 
@@ -218,7 +218,7 @@ class metadata {
         size_t sf_length  = 0;
         auto sf_data      = decompressor->Decompress(buffer->data(), sf_comp_length, &sf_length);
         pb.init(sf_data, sf_length);
-        CUDF_EXPECTS(pb.read(&stripefooters[i], sf_length), "Cannot read stripefooter");
+        CUDF_EXPECTS(pb.read(stripefooters[i], sf_length), "Cannot read stripefooter");
         selection[i].second = &stripefooters[i];
       }
     }
@@ -397,11 +397,11 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
                            compinfo.memory_size(),
                            cudaMemcpyHostToDevice,
                            stream));
-  CUDA_TRY(gpu::ParseCompressedStripeData(compinfo.device_ptr(),
-                                          compinfo.size(),
-                                          decompressor->GetBlockSize(),
-                                          decompressor->GetLog2MaxCompressionRatio(),
-                                          stream));
+  gpu::ParseCompressedStripeData(compinfo.device_ptr(),
+                                 compinfo.size(),
+                                 decompressor->GetBlockSize(),
+                                 decompressor->GetLog2MaxCompressionRatio(),
+                                 stream);
   CUDA_TRY(cudaMemcpyAsync(compinfo.host_ptr(),
                            compinfo.device_ptr(),
                            compinfo.memory_size(),
@@ -446,11 +446,11 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
                            compinfo.memory_size(),
                            cudaMemcpyHostToDevice,
                            stream));
-  CUDA_TRY(gpu::ParseCompressedStripeData(compinfo.device_ptr(),
-                                          compinfo.size(),
-                                          decompressor->GetBlockSize(),
-                                          decompressor->GetLog2MaxCompressionRatio(),
-                                          stream));
+  gpu::ParseCompressedStripeData(compinfo.device_ptr(),
+                                 compinfo.size(),
+                                 decompressor->GetBlockSize(),
+                                 decompressor->GetLog2MaxCompressionRatio(),
+                                 stream);
 
   // Dispatch batches of blocks to decompress
   if (num_compressed_blocks > 0) {
@@ -470,7 +470,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     CUDA_TRY(gpu_copy_uncompressed_blocks(
       inflate_in.data().get() + num_compressed_blocks, num_uncompressed_blocks, stream));
   }
-  CUDA_TRY(gpu::PostDecompressionReassemble(compinfo.device_ptr(), compinfo.size(), stream));
+  gpu::PostDecompressionReassemble(compinfo.device_ptr(), compinfo.size(), stream);
 
   // Update the stream information with the updated uncompressed info
   // TBD: We could update the value from the information we already
@@ -504,14 +504,14 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
                              chunks.memory_size(),
                              cudaMemcpyHostToDevice,
                              stream));
-    CUDA_TRY(gpu::ParseRowGroupIndex(row_groups.data().get(),
-                                     compinfo.device_ptr(),
-                                     chunks.device_ptr(),
-                                     num_columns,
-                                     num_stripes,
-                                     row_groups.size() / num_columns,
-                                     row_index_stride,
-                                     stream));
+    gpu::ParseRowGroupIndex(row_groups.data().get(),
+                            compinfo.device_ptr(),
+                            chunks.device_ptr(),
+                            num_columns,
+                            num_stripes,
+                            row_groups.size() / num_columns,
+                            row_index_stride,
+                            stream);
   }
 
   return decomp_data;
@@ -544,24 +544,24 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
 
   CUDA_TRY(cudaMemcpyAsync(
     chunks.device_ptr(), chunks.host_ptr(), chunks.memory_size(), cudaMemcpyHostToDevice, stream));
-  CUDA_TRY(gpu::DecodeNullsAndStringDictionaries(chunks.device_ptr(),
-                                                 global_dict.data().get(),
-                                                 num_columns,
-                                                 num_stripes,
-                                                 num_rows,
-                                                 skip_rows,
-                                                 stream));
-  CUDA_TRY(gpu::DecodeOrcColumnData(chunks.device_ptr(),
-                                    global_dict.data().get(),
-                                    num_columns,
-                                    num_stripes,
-                                    num_rows,
-                                    skip_rows,
-                                    tz_table.view(),
-                                    row_groups.data().get(),
-                                    row_groups.size() / num_columns,
-                                    row_index_stride,
-                                    stream));
+  gpu::DecodeNullsAndStringDictionaries(chunks.device_ptr(),
+                                        global_dict.data().get(),
+                                        num_columns,
+                                        num_stripes,
+                                        num_rows,
+                                        skip_rows,
+                                        stream);
+  gpu::DecodeOrcColumnData(chunks.device_ptr(),
+                           global_dict.data().get(),
+                           num_columns,
+                           num_stripes,
+                           num_rows,
+                           skip_rows,
+                           tz_table.view(),
+                           row_groups.data().get(),
+                           row_groups.size() / num_columns,
+                           row_index_stride,
+                           stream);
   CUDA_TRY(cudaMemcpyAsync(
     chunks.host_ptr(), chunks.device_ptr(), chunks.memory_size(), cudaMemcpyDeviceToHost, stream));
   CUDA_TRY(cudaStreamSynchronize(stream));
@@ -751,14 +751,14 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                    chunks.memory_size(),
                                    cudaMemcpyHostToDevice,
                                    stream));
-          CUDA_TRY(gpu::ParseRowGroupIndex(row_groups.data().get(),
-                                           nullptr,
-                                           chunks.device_ptr(),
-                                           num_columns,
-                                           selected_stripes.size(),
-                                           num_rowgroups,
-                                           _metadata->get_row_index_stride(),
-                                           stream));
+          gpu::ParseRowGroupIndex(row_groups.data().get(),
+                                  nullptr,
+                                  chunks.device_ptr(),
+                                  num_columns,
+                                  selected_stripes.size(),
+                                  num_rowgroups,
+                                  _metadata->get_row_index_stride(),
+                                  stream);
         }
       }
 

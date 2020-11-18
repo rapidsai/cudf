@@ -1145,9 +1145,7 @@ __global__ void __launch_bounds__(block_size)
   uint32_t chunk_id       = stripe * num_columns + column;
   int t                   = threadIdx.x;
 
-  if (t < sizeof(ColumnDesc) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&s->chunk)[t] = ((const uint32_t *)&chunks[chunk_id])[t];
-  }
+  if (t == 0) s->chunk = chunks[chunk_id];
   __syncthreads();
   if (is_nulldec) {
     uint32_t null_count = 0;
@@ -1423,18 +1421,14 @@ __global__ void __launch_bounds__(block_size)
   int t = threadIdx.x;
 
   if (num_rowgroups > 0) {
-    if (t < sizeof(RowGroup) / sizeof(uint32_t)) {
-      ((volatile uint32_t *)&s->top.data.index)[t] =
-        ((const uint32_t *)&row_groups[blockIdx.y * num_columns + blockIdx.x])[t];
-    }
+    if (t == 0) s->top.data.index = row_groups[blockIdx.y * num_columns + blockIdx.x];
     __syncthreads();
     chunk_id = s->top.data.index.chunk_id;
   } else {
     chunk_id = blockIdx.x;
   }
-  if (t < sizeof(ColumnDesc) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&s->chunk)[t] = ((const uint32_t *)&chunks[chunk_id])[t];
-  }
+  if (t == 0) s->chunk = chunks[chunk_id];
+
   __syncthreads();
   if (t == 0) {
     // If we have an index, seek to the initial run and update row positions
@@ -1579,12 +1573,19 @@ __global__ void __launch_bounds__(block_size)
           s->top.data.max_vals       = min(s->top.data.max_vals, blockDim.x);
         }
         __syncthreads();
-        n = numvals - ((s->top.data.max_vals + 7) >> 3);
+        // If the condition is false, then it means that s->top.data.max_vals is last set of values.
+        // And as numvals is considered to be min(`max_vals+s->top.data.index.run_pos[CI_DATA]`,
+        // blockDim.x*2) we have to return numvals >= s->top.data.index.run_pos[CI_DATA].
+        auto const is_last_set = (s->top.data.max_vals >= s->top.data.index.run_pos[CI_DATA]);
+        auto const max_vals    = (is_last_set ? s->top.data.max_vals + 7 : blockDim.x) / 8;
+        n                      = numvals - max_vals;
         if (t < n) {
-          secondary_val = s->vals.u8[((s->top.data.max_vals + 7) >> 3) + t];
+          secondary_val = s->vals.u8[max_vals + t];
           if (t == 0) { s->top.data.buffered_count = n; }
         }
-        numvals = min(numvals << 3u, s->top.data.max_vals);
+
+        numvals = min(numvals * 8, is_last_set ? s->top.data.max_vals : blockDim.x);
+
       } else if (s->chunk.type_kind == LONG || s->chunk.type_kind == TIMESTAMP ||
                  s->chunk.type_kind == DECIMAL) {
         orc_bytestream_s *bs = (s->chunk.type_kind == DECIMAL) ? &s->bs2 : &s->bs;
@@ -1770,22 +1771,19 @@ __global__ void __launch_bounds__(block_size)
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
-                                                      DictionaryEntry *global_dictionary,
-                                                      uint32_t num_columns,
-                                                      uint32_t num_stripes,
-                                                      size_t max_num_rows,
-                                                      size_t first_row,
-                                                      cudaStream_t stream)
+ */
+void __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
+                                               DictionaryEntry *global_dictionary,
+                                               uint32_t num_columns,
+                                               uint32_t num_stripes,
+                                               size_t max_num_rows,
+                                               size_t first_row,
+                                               cudaStream_t stream)
 {
   dim3 dim_block(NTHREADS, 1);
   dim3 dim_grid(num_columns, num_stripes * 2);  // 1024 threads per chunk
   gpuDecodeNullsAndStringDictionaries<NTHREADS><<<dim_grid, dim_block, 0, stream>>>(
     chunks, global_dictionary, num_columns, num_stripes, max_num_rows, first_row);
-  return cudaSuccess;
 }
 
 /**
@@ -1802,20 +1800,18 @@ cudaError_t __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
  * @param[in] num_rowgroups Number of row groups in row index data
  * @param[in] rowidx_stride Row index stride
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t __host__ DecodeOrcColumnData(ColumnDesc *chunks,
-                                         DictionaryEntry *global_dictionary,
-                                         uint32_t num_columns,
-                                         uint32_t num_stripes,
-                                         size_t max_num_rows,
-                                         size_t first_row,
-                                         timezone_table_view tz_table,
-                                         const RowGroup *row_groups,
-                                         uint32_t num_rowgroups,
-                                         uint32_t rowidx_stride,
-                                         cudaStream_t stream)
+ */
+void __host__ DecodeOrcColumnData(ColumnDesc *chunks,
+                                  DictionaryEntry *global_dictionary,
+                                  uint32_t num_columns,
+                                  uint32_t num_stripes,
+                                  size_t max_num_rows,
+                                  size_t first_row,
+                                  timezone_table_view tz_table,
+                                  const RowGroup *row_groups,
+                                  uint32_t num_rowgroups,
+                                  uint32_t rowidx_stride,
+                                  cudaStream_t stream)
 {
   uint32_t num_chunks = num_columns * num_stripes;
   dim3 dim_block(NTHREADS, 1);  // 1024 threads per chunk
@@ -1830,7 +1826,6 @@ cudaError_t __host__ DecodeOrcColumnData(ColumnDesc *chunks,
                                                                        num_columns,
                                                                        num_rowgroups,
                                                                        rowidx_stride);
-  return cudaSuccess;
 }
 
 }  // namespace gpu

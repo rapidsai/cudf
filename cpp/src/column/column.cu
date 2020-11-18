@@ -26,18 +26,19 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/copying.hpp>
+#include <cudf/structs/structs_column_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <iterator>
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
 #include <algorithm>
+#include <iterator>
 #include <numeric>
 #include <vector>
-#include "cudf/structs/structs_column_view.hpp"
-#include "cudf/types.hpp"
 
 namespace cudf {
 // Copy constructor
@@ -53,7 +54,9 @@ column::column(column const &other)
 }
 
 // Copy ctor w/ explicit stream/mr
-column::column(column const &other, cudaStream_t stream, rmm::mr::device_memory_resource *mr)
+column::column(column const &other,
+               rmm::cuda_stream_view stream,
+               rmm::mr::device_memory_resource *mr)
   : _type{other._type},
     _size{other._size},
     _data{other._data, stream, mr},
@@ -180,7 +183,7 @@ void column::set_null_count(size_type new_null_count)
 namespace {
 struct create_column_from_view {
   cudf::column_view view;
-  cudaStream_t stream;
+  rmm::cuda_stream_view stream{};
   rmm::mr::device_memory_resource *mr;
 
   template <typename ColumnType,
@@ -188,7 +191,7 @@ struct create_column_from_view {
   std::unique_ptr<column> operator()()
   {
     cudf::strings_column_view sview(view);
-    return cudf::strings::detail::copy_slice(sview, 0, view.size(), 1, stream, mr);
+    return cudf::strings::detail::copy_slice(sview, 0, view.size(), 1, stream.value(), mr);
   }
 
   template <typename ColumnType,
@@ -210,7 +213,7 @@ struct create_column_from_view {
     return std::make_unique<column>(view.type(),
                                     view.size(),
                                     rmm::device_buffer{0, stream, mr},
-                                    cudf::copy_bitmask(view, stream, mr),
+                                    cudf::detail::copy_bitmask(view, stream, mr),
                                     view.null_count(),
                                     std::move(children));
   }
@@ -231,7 +234,7 @@ struct create_column_from_view {
         view.size() * cudf::size_of(view.type()),
         stream,
         mr},
-      cudf::copy_bitmask(view, stream, mr),
+      cudf::detail::copy_bitmask(view, stream, mr),
       view.null_count(),
       std::move(children));
   }
@@ -241,7 +244,7 @@ struct create_column_from_view {
   std::unique_ptr<column> operator()()
   {
     auto lists_view = lists_column_view(view);
-    return cudf::lists::detail::copy_slice(lists_view, 0, view.size(), stream, mr);
+    return cudf::lists::detail::copy_slice(lists_view, 0, view.size(), stream.value(), mr);
   }
 
   template <typename ColumnType,
@@ -265,18 +268,19 @@ struct create_column_from_view {
 
     auto num_rows = children.empty() ? 0 : children.front()->size();
 
-    return make_structs_column(num_rows,
-                               std::move(children),
-                               view.null_count(),
-                               cudf::copy_bitmask(view.null_mask(), begin, end, stream, mr),
-                               stream,
-                               mr);
+    return make_structs_column(
+      num_rows,
+      std::move(children),
+      view.null_count(),
+      cudf::detail::copy_bitmask(view.null_mask(), begin, end, rmm::cuda_stream_view{stream}, mr),
+      stream.value(),
+      mr);
   }
 };
 }  // anonymous namespace
 
 // Copy from a view
-column::column(column_view view, cudaStream_t stream, rmm::mr::device_memory_resource *mr)
+column::column(column_view view, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource *mr)
   :  // Move is needed here because the dereference operator of unique_ptr returns
      // an lvalue reference, which would otherwise dispatch to the copy constructor
     column{std::move(*type_dispatcher(view.type(), create_column_from_view{view, stream, mr}))}

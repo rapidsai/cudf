@@ -115,6 +115,8 @@ def test_string_get_item(ps_gs, item):
         expect = pa.Array.from_pandas(expect)
         pa.Array.equals(expect, got)
     else:
+        if got is cudf.NA and expect is None:
+            return
         assert expect == got
 
 
@@ -160,10 +162,10 @@ def test_string_repr(ps_gs, item):
     expect = str(expect_out)
     got = str(got_out)
 
-    if got_out is not None and len(got_out) > 1:
+    if got_out is not cudf.NA and len(got_out) > 1:
         expect = expect.replace("None", "<NA>")
 
-    assert expect == got
+    assert expect == got or (expect == "None" and got == "<NA>")
 
 
 @pytest.mark.parametrize(

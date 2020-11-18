@@ -912,21 +912,13 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
   int chunk_idx;
 
   // Fetch page info
-  // NOTE: Assumes that sizeof(PageInfo) <= 256 (and is padded to 4 bytes)
-  if (t < sizeof(PageInfo) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->page)[t] = reinterpret_cast<const uint32_t *>(p)[t];
-  }
+  if (t == 0) s->page = *p;
   __syncthreads();
+
   if (s->page.flags & PAGEINFO_FLAGS_DICTIONARY) { return false; }
   // Fetch column chunk info
   chunk_idx = s->page.chunk_idx;
-  if ((uint32_t)chunk_idx < (uint32_t)num_chunks) {
-    // NOTE: Assumes that sizeof(ColumnChunkDesc) <= 256 (and is padded to 4 bytes)
-    if (t < sizeof(ColumnChunkDesc) / sizeof(uint32_t)) {
-      reinterpret_cast<uint32_t *>(&s->col)[t] =
-        reinterpret_cast<const uint32_t *>(&chunks[chunk_idx])[t];
-    }
-  }
+  if (t == 0) { s->col = chunks[chunk_idx]; }
 
   // zero nested value and valid counts
   int d = 0;
@@ -1127,7 +1119,7 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
         s->page.skipped_leaf_values = s->first_row;
       }
 
-      s->input_value_count = s->page.skipped_values;
+      s->input_value_count = s->page.skipped_values > -1 ? s->page.skipped_values : 0;
     } else {
       s->input_value_count        = 0;
       s->input_leaf_count         = 0;
@@ -1765,14 +1757,14 @@ struct start_offset_output_iterator {
 /**
  * @copydoc cudf::io::parquet::gpu::PreprocessColumnData
  */
-cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
-                                 hostdevice_vector<ColumnChunkDesc> const &chunks,
-                                 std::vector<input_column_info> &input_columns,
-                                 std::vector<cudf::io::detail::column_buffer> &output_columns,
-                                 size_t num_rows,
-                                 size_t min_row,
-                                 cudaStream_t stream,
-                                 rmm::mr::device_memory_resource *mr)
+void PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
+                          hostdevice_vector<ColumnChunkDesc> const &chunks,
+                          std::vector<input_column_info> &input_columns,
+                          std::vector<cudf::io::detail::column_buffer> &output_columns,
+                          size_t num_rows,
+                          size_t min_row,
+                          cudaStream_t stream,
+                          rmm::mr::device_memory_resource *mr)
 {
   dim3 dim_block(NTHREADS, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
@@ -1887,26 +1879,22 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
                                                                  static_cast<int>(l_idx)});
     }
   }
-
-  return cudaSuccess;
 }
 
 /**
  * @copydoc cudf::io::parquet::gpu::DecodePageData
  */
-cudaError_t __host__ DecodePageData(hostdevice_vector<PageInfo> &pages,
-                                    hostdevice_vector<ColumnChunkDesc> const &chunks,
-                                    size_t num_rows,
-                                    size_t min_row,
-                                    cudaStream_t stream)
+void __host__ DecodePageData(hostdevice_vector<PageInfo> &pages,
+                             hostdevice_vector<ColumnChunkDesc> const &chunks,
+                             size_t num_rows,
+                             size_t min_row,
+                             cudaStream_t stream)
 {
   dim3 dim_block(NTHREADS, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   gpuDecodePageData<<<dim_grid, dim_block, 0, stream>>>(
     pages.device_ptr(), chunks.device_ptr(), min_row, num_rows, chunks.size());
-
-  return cudaSuccess;
 }
 
 }  // namespace gpu

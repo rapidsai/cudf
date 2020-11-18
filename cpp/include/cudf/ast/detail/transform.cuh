@@ -25,6 +25,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <cstring>
 #include <numeric>
 
@@ -369,7 +371,7 @@ struct ast_plan {
 std::unique_ptr<column> compute_column(
   table_view const table,
   expression const& expr,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace detail
 
