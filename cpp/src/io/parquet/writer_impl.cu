@@ -789,22 +789,20 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
       desc->level_offsets   = col.level_offsets();
       desc->rep_values      = col.repetition_levels();
       desc->def_values      = col.definition_levels();
-      auto count_bits       = [](uint16_t number) {
-        int16_t nbits = 0;
-        while (number > 0) {
-          nbits++;
-          number = number >> 1;
-        }
-        return nbits;
-      };
-      desc->level_bits = count_bits(col.nesting_levels()) << 4 | count_bits(col.max_def_level());
-    } else {
-      desc->level_bits = (state.md.schema[1 + i].repetition_type == OPTIONAL) ? 1 : 0;
     }
     desc->num_values     = col.data_count();
     desc->num_rows       = col.row_count();
     desc->physical_type  = static_cast<uint8_t>(col.physical_type());
     desc->converted_type = static_cast<uint8_t>(col.converted_type());
+    auto count_bits      = [](uint16_t number) {
+      int16_t nbits = 0;
+      while (number > 0) {
+        nbits++;
+        number = number >> 1;
+      }
+      return nbits;
+    };
+    desc->level_bits = count_bits(col.nesting_levels()) << 4 | count_bits(col.max_def_level());
   }
 
   // Init page fragments
