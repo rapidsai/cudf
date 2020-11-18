@@ -871,7 +871,7 @@ class DataFrame(Frame, Serializable):
         """
         return len(self.index)
 
-    def __array_ufunc__(self, aggs, method, *inputs, **kwargs):
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         import cudf
 
         if method == "__call__" and hasattr(cudf, ufunc.__name__):
@@ -902,7 +902,7 @@ class DataFrame(Frame, Serializable):
 
         if hasattr(cudf_df_module, fname):
             cudf_func = getattr(cudf_df_module, fname)
-            # Handle case if cudf_aggs is same as numpy function
+            # Handle case if cudf_func is same as numpy function
             if cudf_func is func:
                 return NotImplemented
             else:
@@ -3244,7 +3244,7 @@ class DataFrame(Frame, Serializable):
     ):
         """Alter column and index labels.
 
-        function / dict values must be unique (1-to-1). Labels not contained in
+        Function / dict values must be unique (1-to-1). Labels not contained in
         a dict / Series will be left as-is. Extra labels listed don’t throw an
         error.
 
