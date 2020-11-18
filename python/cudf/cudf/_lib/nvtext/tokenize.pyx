@@ -16,22 +16,24 @@ from cudf._lib.cpp.nvtext.tokenize cimport (
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 
-
 def tokenize(Column strings, object delimiter):
-    if isinstance(delimiter, DeviceScalar):
+    from cudf import Scalar
+    if isinstance(delimiter, Scalar):
         return _tokenize_scalar(strings, delimiter)
 
     if isinstance(delimiter, Column):
         return _tokenize_column(strings, delimiter)
 
     raise TypeError(
-        "Expected a DeviceScalar or Column for delimiters, but got {}".format(
+        "Expected a Scalar or Column for delimiters, but got {}".format(
             type(delimiter)
         )
     )
 
 
-def _tokenize_scalar(Column strings, DeviceScalar delimiter):
+def _tokenize_scalar(Column strings, object py_delimiter):
+
+    cdef DeviceScalar delimiter = py_delimiter.device_value
 
     cdef column_view c_strings = strings.view()
     cdef const string_scalar* c_delimiter = <const string_scalar*>delimiter\
@@ -66,20 +68,24 @@ def _tokenize_column(Column strings, Column delimiters):
 
 
 def count_tokens(Column strings, object delimiter):
-    if isinstance(delimiter, DeviceScalar):
+    from cudf import Scalar
+    if isinstance(delimiter, Scalar):
         return _count_tokens_scalar(strings, delimiter)
 
     if isinstance(delimiter, Column):
         return _count_tokens_column(strings, delimiter)
 
     raise TypeError(
-        "Expected a DeviceScalar or Column for delimiters, but got {}".format(
+        "Expected a Scalar or Column for delimiters, but got {}".format(
             type(delimiter)
         )
     )
 
 
-def _count_tokens_scalar(Column strings, DeviceScalar delimiter):
+def _count_tokens_scalar(Column strings, object py_delimiter):
+
+    cdef DeviceScalar delimiter = py_delimiter.device_value
+
     cdef column_view c_strings = strings.view()
     cdef const string_scalar* c_delimiter = <const string_scalar*>delimiter\
         .get_raw_ptr()
@@ -123,7 +129,10 @@ def character_tokenize(Column strings):
     return Column.from_unique_ptr(move(c_result))
 
 
-def detokenize(Column strings, Column indices, DeviceScalar separator):
+def detokenize(Column strings, Column indices, object py_separator):
+
+    cdef DeviceScalar separator = py_separator.device_value
+
     cdef column_view c_strings = strings.view()
     cdef column_view c_indices = indices.view()
     cdef const string_scalar* c_separator = <const string_scalar*>separator\
