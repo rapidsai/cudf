@@ -389,7 +389,7 @@ def test_create_metadata_file(tmpdir, partition_on):
     else:
         fns = glob.glob(os.path.join(tmpdir, "*.parquet"))
     dask_cudf.io.parquet.create_metadata_file(
-        fns, tmpdir, split_every=3,  # Force tree reduction
+        fns, split_every=3,  # Force tree reduction
     )
 
     # Check that we can now read the ddf
@@ -434,9 +434,7 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     # Dask-CuDF can do this without requiring schema
     # consistency.  Once the _metadata file is avaible,
     # parsing metadata should no longer be a problem
-    dask_cudf.io.parquet.create_metadata_file(
-        [p0, p1], str(tmpdir),
-    )
+    dask_cudf.io.parquet.create_metadata_file([p0, p1])
 
     # Check that we can now read the ddf
     # with the _metadata file present
