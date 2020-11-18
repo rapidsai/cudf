@@ -177,16 +177,14 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
-    auto dict_target = dictionary::detail::add_keys(
-      dictionary_column_view(target),
-      make_column_from_scalar(source.get(), 1, stream, rmm::mr::get_current_device_resource())
-        ->view(),
-      mr,
-      stream.value());
+    auto dict_target =
+      dictionary::detail::add_keys(dictionary_column_view(target),
+                                   make_column_from_scalar(source.get(), 1, stream)->view(),
+                                   mr,
+                                   stream.value());
     auto dict_view    = dictionary_column_view(dict_target->view());
-    auto scalar_index = dictionary::detail::get_index(
-      dict_view, source.get(), stream, rmm::mr::get_current_device_resource());
-    auto scalar_iter = thrust::make_permutation_iterator(
+    auto scalar_index = dictionary::detail::get_index(dict_view, source.get(), stream);
+    auto scalar_iter  = thrust::make_permutation_iterator(
       indexalator_factory::make_input_iterator(*scalar_index), thrust::make_constant_iterator(0));
     auto new_indices = std::make_unique<column>(dict_view.get_indices_annotated(), stream, mr);
     auto target_iter = indexalator_factory::make_output_iterator(new_indices->mutable_view());
@@ -336,8 +334,8 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
                    0);
 
   // The scatter map is actually a table with only one column, which is scatter map.
-  auto scatter_map = detail::apply_boolean_mask(
-    table_view{{indices->view()}}, boolean_mask, stream, rmm::mr::get_current_device_resource());
+  auto scatter_map =
+    detail::apply_boolean_mask(table_view{{indices->view()}}, boolean_mask, stream);
   auto output_table = detail::scatter(table_view{{input}},
                                       scatter_map->get_column(0).view(),
                                       table_view{{target}},
