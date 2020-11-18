@@ -55,6 +55,8 @@ enum class unary_op : int32_t {
 /**
  * @brief Performs unary op on all values in column
  *
+ * Note: For `decimal32` and `decimal64`, only `ABS`, `CEIL` and `FLOOR` are supported.
+ *
  * @param input A `column_view` as input
  * @param op operation to perform
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -97,8 +99,7 @@ std::unique_ptr<cudf::column> is_valid(
 /**
  * @brief  Casts data from dtype specified in input to dtype specified in output.
  *
- * Supports only fixed-width types. For `decimal32` and `decimal64`, casting to and from
- * floating point and integral types is supported.
+ * Supports only fixed-width types.
  *
  * @param column_view Input column
  * @param out_type Desired datatype of output column
