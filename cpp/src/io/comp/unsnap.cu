@@ -60,7 +60,7 @@ struct unsnap_state_s {
   gpu_inflate_input_s in;      ///< input parameters for current block
 };
 
-inline __device__ volatile uint8_t &read_byte(unsnap_state_s *s, uint32_t pos)
+inline __device__ volatile uint8_t &byte_access(unsnap_state_s *s, uint32_t pos)
 {
   return s->q.buf[pos & (prefetch_size - 1)];
 }
@@ -99,7 +99,7 @@ __device__ void snappy_prefetch_bytestream(unsnap_state_s *s, int t)
       }
     }
     blen = shuffle(blen);
-    if (t < blen) { read_byte(s, pos + t) = base[pos + t]; }
+    if (t < blen) { byte_access(s, pos + t) = base[pos + t]; }
     pos += blen;
   } while (blen > 0);
 }
@@ -290,15 +290,15 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
       uint32_t b0;
       cur            = shuffle(cur);
       cur_t          = cur + t;
-      b0             = read_byte(s, cur_t);
+      b0             = byte_access(s, cur_t);
       v0             = ballot((b0 == 4) || (b0 & 2));
-      b0             = read_byte(s, cur_t + 32);
+      b0             = byte_access(s, cur_t + 32);
       v1             = ballot((b0 == 4) || (b0 & 2));
-      b0             = read_byte(s, cur_t + 64);
+      b0             = byte_access(s, cur_t + 64);
       v2             = ballot((b0 == 4) || (b0 & 2));
       len3_mask      = shuffle((t == 0) ? get_len3_mask(v0, v1, v2) : 0);
       cur_t          = cur + 2 * t + __popc(len3_mask & ((1 << t) - 1));
-      b0             = read_byte(s, cur_t);
+      b0             = byte_access(s, cur_t);
       is_long_sym    = ((b0 & ~4) != 0) && (((b0 + 1) & 2) == 0);
       short_sym_mask = ballot(is_long_sym);
       batch_len      = 0;
@@ -310,8 +310,8 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
           int32_t ofs   = 0;
           if (t < batch_len) {
             blen = (b0 & 1) ? ((b0 >> 2) & 7) + 4 : ((b0 >> 2) + 1);
-            ofs  = (b0 & 1) ? ((b0 & 0xe0) << 3) | read_byte(s, cur_t + 1)
-                           : (b0 & 2) ? read_byte(s, cur_t + 1) | (read_byte(s, cur_t + 2) << 8)
+            ofs  = (b0 & 1) ? ((b0 & 0xe0) << 3) | byte_access(s, cur_t + 1)
+                           : (b0 & 2) ? byte_access(s, cur_t + 1) | (byte_access(s, cur_t + 2) << 8)
                                       : -(int32_t)(cur_t + 1);
             b[t].len    = blen;
             b[t].offset = ofs;
@@ -339,7 +339,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
         do {
           uint32_t clen, mask_t;
           cur_t     = cur + t;
-          b0        = read_byte(s, cur_t);
+          b0        = byte_access(s, cur_t);
           clen      = (b0 & 3) ? (b0 & 2) ? 1 : 0 : (b0 >> 2);  // symbol length minus 2
           v0        = ballot(clen & 1);
           v1        = ballot((clen >> 1) & 1);
@@ -347,7 +347,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
           mask_t    = (1 << (2 * t)) - 1;
           cur_t     = cur + 2 * t + 2 * __popc((len3_mask & 0xaaaaaaaa) & mask_t) +
                   __popc((len3_mask & 0x55555555) & mask_t);
-          b0          = read_byte(s, cur_t);
+          b0          = byte_access(s, cur_t);
           is_long_sym = ((b0 & 3) ? ((b0 & 3) == 3) : (b0 > 3 * 4)) || (cur_t >= cur + 32) ||
                         (batch_len + t >= batch_size);
           batch_add = __ffs(ballot(is_long_sym)) - 1;
@@ -356,8 +356,8 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
             int32_t ofs   = 0;
             if (t < batch_add) {
               blen = (b0 & 1) ? ((b0 >> 2) & 7) + 4 : ((b0 >> 2) + 1);
-              ofs  = (b0 & 1) ? ((b0 & 0xe0) << 3) | read_byte(s, cur_t + 1)
-                             : (b0 & 2) ? read_byte(s, cur_t + 1) | (read_byte(s, cur_t + 2) << 8)
+              ofs  = (b0 & 1) ? ((b0 & 0xe0) << 3) | byte_access(s, cur_t + 1)
+                             : (b0 & 2) ? byte_access(s, cur_t + 1) | (byte_access(s, cur_t + 2) << 8)
                                         : -(int32_t)(cur_t + 1);
               b[batch_len + t].len    = blen;
               b[batch_len + t].offset = ofs;
@@ -384,9 +384,9 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
     if (t == 0) {
       while (bytes_left > 0 && batch_len < batch_size) {
         uint32_t blen, offset;
-        uint8_t b0 = read_byte(s, cur);
+        uint8_t b0 = byte_access(s, cur);
         if (b0 & 3) {
-          uint8_t b1 = read_byte(s, cur + 1);
+          uint8_t b1 = byte_access(s, cur + 1);
           if (!(b0 & 2)) {
             // xxxxxx01.oooooooo: copy with 3-bit length, 11-bit offset
             offset = ((b0 & 0xe0) << 3) | b1;
@@ -394,10 +394,10 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
             cur += 2;
           } else {
             // xxxxxx1x: copy with 6-bit length, 2-byte or 4-byte offset
-            offset = b1 | (read_byte(s, cur + 2) << 8);
+            offset = b1 | (byte_access(s, cur + 2) << 8);
             if (b0 & 1)  // 4-byte offset
             {
-              offset |= (read_byte(s, cur + 3) << 16) | (read_byte(s, cur + 4) << 24);
+              offset |= (byte_access(s, cur + 3) << 16) | (byte_access(s, cur + 4) << 24);
               cur += 5;
             } else {
               cur += 3;
@@ -420,12 +420,12 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
           blen = b0 >> 2;
           if (blen >= 60) {
             uint32_t num_bytes = blen - 59;
-            blen               = read_byte(s, cur + 1);
+            blen               = byte_access(s, cur + 1);
             if (num_bytes > 1) {
-              blen |= read_byte(s, cur + 2) << 8;
+              blen |= byte_access(s, cur + 2) << 8;
               if (num_bytes > 2) {
-                blen |= read_byte(s, cur + 3) << 16;
-                if (num_bytes > 3) { blen |= read_byte(s, cur + 4) << 24; }
+                blen |= byte_access(s, cur + 3) << 16;
+                if (num_bytes > 3) { blen |= byte_access(s, cur + 4) << 24; }
               }
             }
             cur += num_bytes;
