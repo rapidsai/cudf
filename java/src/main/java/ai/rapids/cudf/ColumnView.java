@@ -49,6 +49,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     this.nullCount = ColumnView.getNativeNullCount(viewHandle);
   }
 
+
+  /** Creates a ColumnVector from a column view handle
+   * @return a new ColumnVector
+   */
+  public ColumnVector copyToColumnVector() {
+    return new ColumnVector(ColumnView.copyColumnViewToCV(getNativeView()));
+  }
+
   /**
    * USE WITH CAUTION: This method exposes the address of the native cudf::column_view.  This allows
    * writing custom kernels or other cuda operations on the data.  DO NOT close this column

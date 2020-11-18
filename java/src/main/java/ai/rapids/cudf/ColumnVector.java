@@ -167,13 +167,6 @@ public final class ColumnVector extends ColumnView {
     }
   }
 
-  /** Creates a ColumnVector from a column view handle
-   * @return a new ColumnVector
-   */
-  public static ColumnVector fromColumnView(ColumnView columnView) {
-    return new ColumnVector(ColumnView.copyColumnViewToCV(columnView.getNativeView()));
-  }
-
 
   private static long initViewHandle(DType type, int rows, int nc, DeviceMemoryBuffer dataBuffer,
                                      DeviceMemoryBuffer validityBuffer,

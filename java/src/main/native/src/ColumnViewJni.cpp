@@ -1542,7 +1542,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getNativeValidPointerSize
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getDeviceMemorySize(JNIEnv *env, jclass,
-                                                                             jlong handle) {
+                                                                           jlong handle) {
     JNI_NULL_CHECK(env, handle, "native handle is null", 0);
     try {
       cudf::jni::auto_set_device(env);
