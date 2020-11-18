@@ -97,6 +97,6 @@ TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest)
     expect_data, expect_data + (source_size * 2), expect_valid);
 
   for (auto i = 0; i < source_table.num_columns(); ++i) {
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_column, result->view().column(i));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect_column, result->view().column(i));
   }
 }

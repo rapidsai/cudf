@@ -75,10 +75,10 @@ TEST_F(GatherTestStr, Gather)
   }
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(), h_expected.end(), expected_validity.begin());
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
 }
 
-TEST_F(GatherTestStr, GatherIgnoreOutOfBounds)
+TEST_F(GatherTestStr, GatherDontCheckOutOfBounds)
 {
   std::vector<const char*> h_strings{"eee", "bb", "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
@@ -92,14 +92,12 @@ TEST_F(GatherTestStr, GatherIgnoreOutOfBounds)
                                       cudf::detail::negative_index_policy::NOT_ALLOWED);
 
   std::vector<const char*> h_expected;
-  std::vector<int32_t> expected_validity;
   for (auto itr = h_map.begin(); itr != h_map.end(); ++itr) {
     h_expected.push_back(h_strings[*itr]);
-    expected_validity.push_back(1);
   }
   cudf::test::strings_column_wrapper expected(
-    h_expected.begin(), h_expected.end(), expected_validity.begin());
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view().column(0), expected);
+    h_expected.begin(), h_expected.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
 }
 
 TEST_F(GatherTestStr, GatherZeroSizeStringsColumn)

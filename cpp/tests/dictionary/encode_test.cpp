@@ -34,10 +34,10 @@ TEST_F(DictionaryEncodeTest, EncodeStringColumn)
   cudf::dictionary_column_view view(dictionary->view());
 
   cudf::test::strings_column_wrapper keys_expected({"aaa", "bbb", "ccc", "ddd", "eee"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(view.keys(), keys_expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.keys(), keys_expected);
 
   cudf::test::fixed_width_column_wrapper<uint32_t> indices_expected({4, 0, 3, 1, 2, 2, 2, 4, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(view.indices(), indices_expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.indices(), indices_expected);
 }
 
 TEST_F(DictionaryEncodeTest, EncodeFloat)
@@ -48,10 +48,10 @@ TEST_F(DictionaryEncodeTest, EncodeFloat)
   cudf::dictionary_column_view view(dictionary->view());
 
   cudf::test::fixed_width_column_wrapper<float> keys_expected{-11.75, 0.5, 4.25, 7.125};
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(view.keys(), keys_expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.keys(), keys_expected);
 
   cudf::test::fixed_width_column_wrapper<uint32_t> expected{2, 3, 1, 0, 3, 1};
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(view.indices(), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.indices(), expected);
 }
 
 TEST_F(DictionaryEncodeTest, EncodeWithNull)

@@ -203,8 +203,8 @@ void store_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
       auto transformed_result =
         cudf::detail::gather(table_view({values}),
                              null_removed_map,
-                             argmin_result.nullable() ? cudf::out_of_bounds_policy::DONT_CHECK
-                                                      : cudf::out_of_bounds_policy::NULLIFY,
+                             argmin_result.nullable() ? cudf::out_of_bounds_policy::NULLIFY
+                                                      : cudf::out_of_bounds_policy::DONT_CHECK,
                              cudf::detail::negative_index_policy::NOT_ALLOWED,
                              stream,
                              mr);
@@ -240,8 +240,8 @@ void store_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
       auto transformed_result =
         cudf::detail::gather(table_view({values}),
                              null_removed_map,
-                             argmax_result.nullable() ? cudf::out_of_bounds_policy::DONT_CHECK
-                                                      : cudf::out_of_bounds_policy::NULLIFY,
+                             argmax_result.nullable() ? cudf::out_of_bounds_policy::NULLIFY
+                                                      : cudf::out_of_bounds_policy::DONT_CHECK,
                              cudf::detail::negative_index_policy::NOT_ALLOWED,
                              stream,
                              mr);
