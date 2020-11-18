@@ -37,7 +37,6 @@ def test_ufunc_cudf_series(np_ar_tup, func):
         lambda x, y: np.greater(x, y),
         lambda x, y: np.less(x, y),
         lambda x, y: np.less_equal(x, y),
-        lambda x, y: np.subtract(x, y),
     ],
 )
 def test_ufunc_cudf_series_cupy_array(np_ar_tup, func):
@@ -59,7 +58,6 @@ def test_ufunc_cudf_series_cupy_array(np_ar_tup, func):
         lambda x, y: np.greater(x, y),
         lambda x, y: np.less(x, y),
         lambda x, y: np.less_equal(x, y),
-        lambda x, y: np.subtract(x, y),
     ],
 )
 def test_error_with_null_cudf_series(func):

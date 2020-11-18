@@ -787,7 +787,7 @@ class Series(Frame, Serializable):
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         if method == "__call__":
             return get_appropriate_dispatched_func(
-                Series, cupy, ufunc, inputs, kwargs
+                cudf, cupy, ufunc, inputs, kwargs
             )
         else:
             return NotImplemented
