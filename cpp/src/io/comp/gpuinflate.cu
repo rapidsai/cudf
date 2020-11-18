@@ -1201,13 +1201,14 @@ __global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_inp
     uint32_t const copy_cnt = min(len >> 2, 1024);
     if (t < copy_cnt) {
       uint32_t v;
-      memcpy(&v, src - src_align_bytes, sizeof(v));
+      auto const src32vals = src - src_align_bytes + t * sizeof(v);
+      memcpy(&v, src32vals, sizeof(v));
       if (src_align_bits != 0) {
         uint32_t v1;
-        memcpy(&v1, src - src_align_bytes, sizeof(v1));
+        memcpy(&v1, src32vals + sizeof(v), sizeof(v1));
         v = __funnelshift_r(v, v1, src_align_bits);
       }
-      memcpy(dst + 4 * t, &v, sizeof(v));
+      memcpy(dst + sizeof(v) * t, &v, sizeof(v));
     }
     src += copy_cnt * 4;
     dst += copy_cnt * 4;
