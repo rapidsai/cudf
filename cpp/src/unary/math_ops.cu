@@ -282,9 +282,10 @@ std::unique_ptr<column> unary_op_with(column_view const& input,
   using Type                     = device_storage_type_t<T>;
   using FixedPointUnaryOpFunctor = FixedPointFunctor<Type>;
 
-  // When scale is >= 0 and unary_op is CEIL or FLOOR, the unary_operation for is a no-op
+  // When scale is >= 0 and unary_op is CEIL or FLOOR, the unary_operation is a no-op
   if (input.type().scale() >= 0 &&
-      not std::is_same<FixedPointUnaryOpFunctor, fixed_point_abs<Type>>::value)
+      (std::is_same<FixedPointUnaryOpFunctor, fixed_point_ceil<Type>>::value ||
+       std::is_same<FixedPointUnaryOpFunctor, fixed_point_floor<Type>>::value))
     return std::make_unique<cudf::column>(input, stream, mr);
 
   auto result = cudf::make_fixed_width_column(
