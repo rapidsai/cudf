@@ -230,9 +230,19 @@ struct DeviceNot {
   }
 };
 
+// fixed_point ops
+
+/*
+ * Ceiling is calculated using integer division. When we divide by `n`, we get the integer part of
+ * the `fixed_point` number. For a negative number, this is all that is needed since the ceiling
+ * operation is defined as the least integer greater than the value. For a positive number, we may
+ * need to round up if the `fixed_point` number has a fractional part. This is handled by comparing
+ * the truncated value to the original value and if they are not equal, the result needs to be
+ * incremented by `n`.
+ */
 template <typename T>
 struct fixed_point_ceil {
-  T n;
+  T n;  // 10^-scale (value required to determine integer part of fixed_point number)
   __device__ T operator()(T data)
   {
     T const a = (data / n) * n;                  // result of integer division
@@ -240,9 +250,17 @@ struct fixed_point_ceil {
   }
 };
 
+/*
+ * Floor is calculated using integer division. When we divide by `n`, we get the integer part of
+ * the `fixed_point` number. For a positive number, this is all that is needed since the floor
+ * operation is defined as the greatest integer less than the value. For a negative number, we may
+ * need to round down if the `fixed_point` number has a fractional part. This is handled by
+ * comparing the truncated value to the original value and if they are not equal, the result needs
+ * to be decremented by `n`.
+ */
 template <typename T>
 struct fixed_point_floor {
-  T n;
+  T n;  // 10^-scale (value required to determine integer part of fixed_point number)
   __device__ T operator()(T data)
   {
     T const a = (data / n) * n;                  // result of integer division
@@ -264,6 +282,7 @@ std::unique_ptr<column> unary_op_with(column_view const& input,
   using Type                     = device_storage_type_t<T>;
   using FixedPointUnaryOpFunctor = FixedPointFunctor<Type>;
 
+  // When scale is >= 0 and unary_op is CEIL or FLOOR, the unary_operation for is a no-op
   if (input.type().scale() >= 0 &&
       not std::is_same<FixedPointUnaryOpFunctor, fixed_point_abs<Type>>::value)
     return std::make_unique<cudf::column>(input, stream, mr);
