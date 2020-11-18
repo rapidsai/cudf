@@ -406,10 +406,10 @@ extern "C" __global__ void __launch_bounds__(128)
           bs->cur = bs->end;
         }
       }
-      index_out = shuffle0(index_out);
+      index_out = shuffle(index_out);
       if (index_out >= 0 && index_out < max_num_pages && lane_id == 0)
         page_info[index_out] = bs->page;
-      num_values = shuffle0(num_values);
+      num_values = shuffle(num_values);
       __syncwarp();
     }
     if (lane_id == 0) {

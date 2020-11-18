@@ -263,9 +263,9 @@ __device__ void gpuDecodeStream(
         sym_len = (int32_t)(cur - cur_def);
         __threadfence_block();
       }
-      sym_len   = shuffle0(sym_len);
-      level_val = shuffle0(level_val);
-      level_run = shuffle0(level_run);
+      sym_len   = shuffle(sym_len);
+      level_val = shuffle(level_val);
+      level_run = shuffle(level_run);
       cur_def += sym_len;
     }
     if (s->error) { break; }
@@ -370,8 +370,8 @@ __device__ int gpuDecodeDictionaryIndices(volatile page_state_s *s, int target_p
       __threadfence_block();
     }
     __syncwarp();
-    is_literal = shuffle0(is_literal);
-    batch_len  = shuffle0(batch_len);
+    is_literal = shuffle(is_literal);
+    batch_len  = shuffle(batch_len);
     if (t < batch_len) {
       int dict_idx = s->dict_val;
       if (is_literal) {
@@ -445,8 +445,8 @@ __device__ int gpuDecodeRleBooleans(volatile page_state_s *s, int target_pos, in
       __threadfence_block();
     }
     __syncwarp();
-    is_literal = shuffle0(is_literal);
-    batch_len  = shuffle0(batch_len);
+    is_literal = shuffle(is_literal);
+    batch_len  = shuffle(batch_len);
     if (t < batch_len) {
       int dict_idx;
       if (is_literal) {

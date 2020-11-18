@@ -24,9 +24,6 @@ constexpr int hash_bits = 12;
 // TBD: Tentatively limits to 2-byte codes to prevent long copy search followed by long literal
 // encoding
 
-// TODO : For PR review - Should this info be preserved as a comment?
-//#define MAX_COPY_LENGTH 64       // Syntax limit
-
 /**
  * @brief snappy compressor state
  **/

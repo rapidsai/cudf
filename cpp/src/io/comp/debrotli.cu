@@ -1840,11 +1840,11 @@ static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_diction
         }
       }
     }
-    pos         = shuffle0(pos);
-    copy_length = shuffle0(copy_length);
+    pos         = shuffle(pos);
+    copy_length = shuffle(copy_length);
     if (copy_length > 0) {
       uint8_t b;
-      distance_code = shuffle0(distance_code);
+      distance_code = shuffle(distance_code);
       if (distance_code > 0) {
         // Copy
         for (uint32_t i = t; i < copy_length; i += 32) {

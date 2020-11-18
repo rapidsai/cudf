@@ -22,7 +22,7 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
-constexpr int scratch_bfrsz = 512 * 4;
+constexpr int scratch_buffer_size = 512 * 4;
 
 // Apache ORC reader does not handle zero-length patch lists for RLEv2 mode2
 // Workaround replaces zero-length patch lists by a dummy zero patch
@@ -75,8 +75,8 @@ struct orcenc_state_s {
     StripeDictionary dict_stripe;
   } u;
   union {
-    uint8_t u8[scratch_bfrsz];  // general scratch buffer
-    uint32_t u32[scratch_bfrsz / 4];
+    uint8_t u8[scratch_buffer_size];  // general scratch buffer
+    uint32_t u32[scratch_buffer_size / 4];
   } buf;
   union {
     uint8_t u8[2048];

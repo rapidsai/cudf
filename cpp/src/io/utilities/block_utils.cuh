@@ -21,13 +21,7 @@ namespace cudf {
 namespace io {
 
 template <typename T>
-inline __device__ T shuffle0(T var)
-{
-  return __shfl_sync(~0, var, 0);
-}
-
-template <typename T>
-inline __device__ T shuffle(T var, int lane)
+inline __device__ T shuffle(T var, int lane = 0)
 {
   return __shfl_sync(~0, var, lane);
 }

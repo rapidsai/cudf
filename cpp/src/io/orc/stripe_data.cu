@@ -790,11 +790,11 @@ static __device__ uint32_t Integer_RLEv2(
         }
       }
     }
-    base = shuffle0(base);
-    mode = shuffle0(mode);
-    pos  = shuffle0(pos);
-    n    = shuffle0(n);
-    w    = shuffle0(w);
+    base = shuffle(base);
+    mode = shuffle(mode);
+    pos  = shuffle(pos);
+    n    = shuffle(n);
+    w    = shuffle(w);
     for (uint32_t i = tr; i < n; i += 32) {
       if (sizeof(T) <= 4) {
         if (mode == 0) {

@@ -18,7 +18,7 @@
 
   Derived from zlib's contrib/puff.c, original copyright notice below
 
-**/
+*/
 
 /*
 Copyright (C) 2002-2013 Mark Adler, all rights reserved
@@ -45,6 +45,7 @@ Mark Adler    madler@alumni.caltech.edu
 
 #include <io/utilities/block_utils.cuh>
 #include "gpuinflate.h"
+#include "io_uncomp.h"
 
 namespace cudf {
 namespace io {
@@ -54,12 +55,12 @@ constexpr int maxlcodes = 286;  // maximum number of literal/length codes
 constexpr int maxdcodes = 30;   // maximum number of distance codes
 constexpr int fixlcodes = 288;  // number of fixed literal/length codes
 
-constexpr int log2lenlut  = 10;
-constexpr int log2distlut = 8;
+constexpr int log2_len_lut  = 10;
+constexpr int log2_dist_lut = 8;
 
 /**
  * @brief Intermediate arrays for building huffman tables
- **/
+ */
 struct scratch_arr {
   int16_t lengths[maxlcodes + maxdcodes];  ///< descriptor code lengths
   int16_t offs[maxbits + 1];               ///< offset in symbol table for each length (scratch)
@@ -67,10 +68,10 @@ struct scratch_arr {
 
 /**
  * @brief Huffman LUTs for length and distance codes
- **/
+ */
 struct lut_arr {
-  int32_t lenlut[1 << log2lenlut];    ///< LUT for length decoding
-  int32_t distlut[1 << log2distlut];  ///< LUT for fast distance decoding
+  int32_t lenlut[1 << log2_len_lut];    ///< LUT for length decoding
+  int32_t distlut[1 << log2_dist_lut];  ///< LUT for fast distance decoding
 };
 
 /// 4 batches of 32 symbols
@@ -81,7 +82,7 @@ constexpr int batch_size       = (1 << log2_batch_size);
 
 /**
  * @brief Inter-warp communication queue
- **/
+ */
 struct xwarp_s {
   int32_t batch_len[batch_count];  //< Length of each batch - <0:end, 0:not ready, >0:symbol count
   union {
@@ -104,16 +105,16 @@ struct prefetch_queue_s {
 };
 
 template <typename T>
-inline __device__ uint32_t *prefetch_addr32(volatile prefetch_queue_s &q, T *ptr)
+inline __device__ volatile uint32_t *prefetch_addr32(volatile prefetch_queue_s &q, T *ptr)
 {
-  return (uint32_t *)(&q.pref_data[(prefetch_size - 4) & (size_t)(ptr)]);
+  return reinterpret_cast<volatile uint32_t *>(&q.pref_data[(prefetch_size - 4) & (size_t)(ptr)]);
 }
 
 #endif  // ENABLE_PREFETCH
 
 /**
  * @brief Inflate decompressor state
- **/
+ */
 struct inflate_state_s {
   // output state
   uint8_t *out;      ///< output buffer
@@ -217,7 +218,7 @@ __device__ uint32_t getbits(inflate_state_s *s, uint32_t n)
  *
  * - Incomplete codes are handled by this decoder, since they are permitted
  *   in the deflate format.  See the format notes for fixed() and dynamic().
- **/
+ */
 __device__ int decode(inflate_state_s *s, const int16_t *counts, const int16_t *symbols)
 {
   unsigned int len;    // current number of bits in code
@@ -273,7 +274,7 @@ __device__ int decode(inflate_state_s *s, const int16_t *counts, const int16_t *
  *
  * - Within a given code length, the symbols are kept in ascending order for
  *   the code bits definition.
- **/
+ */
 __device__ int construct(
   inflate_state_s *s, int16_t *counts, int16_t *symbols, const int16_t *length, int n)
 {
@@ -399,7 +400,7 @@ __device__ int init_dynamic(inflate_state_s *s)
  *   in an error if received.  Since all of the distance codes are the same
  *   length, this can be implemented as an incomplete code.  Then the invalid
  *   codes are detected while decoding.
- **/
+ */
 __device__ int init_fixed(inflate_state_s *s)
 {
   int16_t *lengths = s->u.scratch.lengths;
@@ -475,7 +476,7 @@ __device__ int init_fixed(inflate_state_s *s)
  *   defined for overlapped arrays.  You should not use memmove() or bcopy()
  *   since though their behavior -is- defined for overlapping arrays, it is
  *   defined to do the wrong thing in this case.
- **/
+ */
 
 /// permutation of code length codes
 static const __device__ __constant__ uint16_t g_lens[29] = {  // Size base for length codes 257..285
@@ -526,7 +527,7 @@ __device__ void decode_symbols(inflate_state_s *s)
     do {
       uint32_t next32 = __funnelshift_rc(bitbuf.x, bitbuf.y, bitpos);  // nextbits32(s);
       uint32_t len;
-      sym = s->u.lut.lenlut[next32 & ((1 << log2lenlut) - 1)];
+      sym = s->u.lut.lenlut[next32 & ((1 << log2_len_lut) - 1)];
       if ((uint32_t)sym < (uint32_t)(0x100 << 5)) {
         // We can lookup a second symbol if this was a short literal
         len = sym & 0x1f;
@@ -534,7 +535,7 @@ __device__ void decode_symbols(inflate_state_s *s)
         b[batch_len++] = sym;
         next32 >>= len;
         bitpos += len;
-        sym = s->u.lut.lenlut[next32 & ((1 << log2lenlut) - 1)];
+        sym = s->u.lut.lenlut[next32 & ((1 << log2_len_lut) - 1)];
       }
       if (sym > 0)  // short symbol
       {
@@ -547,7 +548,7 @@ __device__ void decode_symbols(inflate_state_s *s)
         unsigned int first     = s->first_slow_len;
         int lext;
 #pragma unroll 1
-        for (len = log2lenlut + 1; len <= maxbits; len++) {
+        for (len = log2_len_lut + 1; len <= maxbits; len++) {
           unsigned int code  = (next32r >> (32 - len)) - first;
           unsigned int count = s->lencnt[len];
           if (code < count)  // if length len, return symbol
@@ -589,7 +590,7 @@ __device__ void decode_symbols(inflate_state_s *s)
         }
         // get distance
         next32 = __funnelshift_rc(bitbuf.x, bitbuf.y, bitpos);  // nextbits32(s);
-        dist   = s->u.lut.distlut[next32 & ((1 << log2distlut) - 1)];
+        dist   = s->u.lut.distlut[next32 & ((1 << log2_dist_lut) - 1)];
         if (dist > 0) {
           len  = dist & 0x1f;
           dext = bfe(dist, 20, 5);
@@ -601,7 +602,7 @@ __device__ void decode_symbols(inflate_state_s *s)
           const int16_t *symbols = &s->distsym[s->index_slow_dist];
           unsigned int first     = s->first_slow_dist;
 #pragma unroll 1
-          for (len = log2distlut + 1; len <= maxbits; len++) {
+          for (len = log2_dist_lut + 1; len <= maxbits; len++) {
             unsigned int code  = (next32r >> (32 - len)) - first;
             unsigned int count = s->distcnt[len];
             if (code < count)  // if length len, return symbol
@@ -670,19 +671,19 @@ __device__ void decode_symbols(inflate_state_s *s)
 /**
  * @brief Build lookup tables for faster decode
  * LUT format is symbols*16+length
- **/
+ */
 __device__ void init_length_lut(inflate_state_s *s, int t)
 {
   int32_t *lut = s->u.lut.lenlut;
 
-  for (uint32_t bits = t; bits < (1 << log2lenlut); bits += blockDim.x) {
+  for (uint32_t bits = t; bits < (1 << log2_len_lut); bits += blockDim.x) {
     const int16_t *cnt     = s->lencnt;
     const int16_t *symbols = s->lensym;
     int sym                = -10 << 5;
     unsigned int first     = 0;
-    unsigned int rbits     = __brev(bits) >> (32 - log2lenlut);
-    for (unsigned int len = 1; len <= log2lenlut; len++) {
-      unsigned int code  = (rbits >> (log2lenlut - len)) - first;
+    unsigned int rbits     = __brev(bits) >> (32 - log2_len_lut);
+    for (unsigned int len = 1; len <= log2_len_lut; len++) {
+      unsigned int code  = (rbits >> (log2_len_lut - len)) - first;
       unsigned int count = cnt[len];
       if (code < count) {
         sym = symbols[code];
@@ -704,7 +705,7 @@ __device__ void init_length_lut(inflate_state_s *s, int t)
     unsigned int first = 0;
     unsigned int index = 0;
     const int16_t *cnt = s->lencnt;
-    for (unsigned int len = 1; len <= log2lenlut; len++) {
+    for (unsigned int len = 1; len <= log2_len_lut; len++) {
       unsigned int count = cnt[len];
       index += count;
       first += count;
@@ -718,19 +719,19 @@ __device__ void init_length_lut(inflate_state_s *s, int t)
 /**
  * @brief Build lookup tables for faster decode of distance symbol
  * LUT format is symbols*16+length
- **/
+ */
 __device__ void init_distance_lut(inflate_state_s *s, int t)
 {
   int32_t *lut = s->u.lut.distlut;
 
-  for (uint32_t bits = t; bits < (1 << log2distlut); bits += blockDim.x) {
+  for (uint32_t bits = t; bits < (1 << log2_dist_lut); bits += blockDim.x) {
     const int16_t *cnt     = s->distcnt;
     const int16_t *symbols = s->distsym;
     int sym                = 0;
     unsigned int first     = 0;
-    unsigned int rbits     = __brev(bits) >> (32 - log2distlut);
-    for (unsigned int len = 1; len <= log2distlut; len++) {
-      unsigned int code  = (rbits >> (log2distlut - len)) - first;
+    unsigned int rbits     = __brev(bits) >> (32 - log2_dist_lut);
+    for (unsigned int len = 1; len <= log2_dist_lut; len++) {
+      unsigned int code  = (rbits >> (log2_dist_lut - len)) - first;
       unsigned int count = cnt[len];
       if (code < count) {
         int dist = symbols[code];
@@ -749,7 +750,7 @@ __device__ void init_distance_lut(inflate_state_s *s, int t)
     unsigned int first = 0;
     unsigned int index = 0;
     const int16_t *cnt = s->distcnt;
-    for (unsigned int len = 1; len <= log2distlut; len++) {
+    for (unsigned int len = 1; len <= log2_dist_lut; len++) {
       unsigned int count = cnt[len];
       index += count;
       first += count;
@@ -779,7 +780,7 @@ __device__ void process_symbols(inflate_state_s *s, int t)
     } else {
       batch_len = 0;
     }
-    batch_len = shuffle0(batch_len);
+    batch_len = shuffle(batch_len);
     if (batch_len < 0) { break; }
 
     symt     = (t < batch_len) ? b[t] : 256;
@@ -836,7 +837,7 @@ __device__ void process_symbols(inflate_state_s *s, int t)
  *
  * - A stored block can have zero length.  This is sometimes used to byte-align
  *   subsets of the compressed data for random access or partial recovery.
- **/
+ */
 __device__ int init_stored(inflate_state_s *s)
 {
   uint32_t len, nlen;  // length of stored block
@@ -944,10 +945,10 @@ __device__ void prefetch_warp(volatile inflate_state_s *s, int t)
 {
   const uint8_t *cur_p = s->pref.cur_p;
   const uint8_t *end   = s->end;
-  while (shuffle0((t == 0) ? s->pref.run : 0)) {
+  while (shuffle((t == 0) ? s->pref.run : 0)) {
     int32_t cur_lo = (int32_t)(size_t)cur_p;
     int do_pref =
-      shuffle0((t == 0) ? (cur_lo - *(volatile int32_t *)&s->cur < prefetch_size - 32 * 4 - 4) : 0);
+      shuffle((t == 0) ? (cur_lo - *(volatile int32_t *)&s->cur < prefetch_size - 32 * 4 - 4) : 0);
     if (do_pref) {
       const uint8_t *p             = cur_p + 4 * t;
       *prefetch_addr32(s->pref, p) = (p < end) ? *reinterpret_cast<const uint32_t *>(p) : 0;
@@ -968,50 +969,38 @@ __device__ void prefetch_warp(volatile inflate_state_s *s, int t)
 /**
  * @brief Parse GZIP header
  * See https://tools.ietf.org/html/rfc1952
- **/
+ */
 __device__ int parse_gzip_header(const uint8_t *src, size_t src_size)
 {
-  /**
-   * @brief GZIP header flags
-   * See https://tools.ietf.org/html/rfc1952
-   **/
-  enum class GZIPHeaderFlag : uint8_t {
-    ftext    = 0x01,  // ASCII text hint
-    fhcrc    = 0x02,  // Header CRC present
-    fextra   = 0x04,  // Extra fields present
-    fname    = 0x08,  // Original file name present
-    fcomment = 0x10   // Comment present
-  };
-
   int hdr_len = -1;
 
   if (src_size >= 18) {
     uint32_t sig = (src[0] << 16) | (src[1] << 8) | src[2];
     if (sig == 0x1f8b08)  // 24-bit GZIP inflate signature {0x1f, 0x8b, 0x08}
     {
-      uint32_t flags = src[3];
-      hdr_len        = 10;
-      if (flags & static_cast<uint32_t>(GZIPHeaderFlag::fextra))  // Extra fields present
+      uint8_t flags = src[3];
+      hdr_len       = 10;
+      if (flags & GZIPHeaderFlag::fextra)  // Extra fields present
       {
         int xlen = src[hdr_len] | (src[hdr_len + 1] << 8);
         hdr_len += xlen;
         if (hdr_len >= src_size) return -1;
       }
-      if (flags & static_cast<uint32_t>(GZIPHeaderFlag::fname))  // Original file name present
+      if (flags & GZIPHeaderFlag::fname)  // Original file name present
       {
         // Skip zero-terminated string
         do {
           if (hdr_len >= src_size) return -1;
         } while (src[hdr_len++] != 0);
       }
-      if (flags & static_cast<uint32_t>(GZIPHeaderFlag::fcomment))  // Comment present
+      if (flags & GZIPHeaderFlag::fcomment)  // Comment present
       {
         // Skip zero-terminated string
         do {
           if (hdr_len >= src_size) return -1;
         } while (src[hdr_len++] != 0);
       }
-      if (flags & static_cast<uint32_t>(GZIPHeaderFlag::fhcrc))  // Header CRC present
+      if (flags & GZIPHeaderFlag::fhcrc)  // Header CRC present
       {
         hdr_len += 2;
       }
@@ -1030,7 +1019,7 @@ __device__ int parse_gzip_header(const uint8_t *src, size_t src_size)
  * @param inputs Source and destination buffer information per block
  * @param outputs Decompression status buffer per block
  * @param parse_hdr If nonzero, indicates that the compressed bitstream includes a GZIP header
- **/
+ */
 template <int num_threads>
 __global__ void __launch_bounds__(num_threads)
   inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int parse_hdr)
@@ -1151,7 +1140,7 @@ __global__ void __launch_bounds__(num_threads)
  * blockDim {1024,1,1}
  *
  * @param inputs Source and destination information per block
- **/
+ */
 __global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_input_s *inputs)
 {
   __shared__ const uint8_t *volatile src_g;

@@ -190,9 +190,9 @@ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Stora
     s->ck.null_count = s->group.num_rows - nn_cnt;
   }
   vmin = warp_reduce(storage.integer_stats[t / 32]).Reduce(vmin, cub::Min());
-  vmin = shuffle0(vmin);
+  vmin = shuffle(vmin);
   vmax = warp_reduce(storage.integer_stats[t / 32]).Reduce(vmax, cub::Max());
-  vmax = shuffle0(vmax);
+  vmax = shuffle(vmax);
   vsum = warp_reduce(storage.integer_stats[t / 32]).Sum(vsum);
   if (!(t & 0x1f)) {
     s->warp_min[t >> 5].i_val = vmin;
@@ -264,9 +264,9 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
     s->ck.null_count = s->group.num_rows - nn_cnt;
   }
   vmin = warp_reduce(storage.float_stats[t / 32]).Reduce(vmin, cub::Min());
-  vmin = shuffle0(vmin);
+  vmin = shuffle(vmin);
   vmax = warp_reduce(storage.float_stats[t / 32]).Reduce(vmax, cub::Max());
-  vmax = shuffle0(vmax);
+  vmax = shuffle(vmax);
   vsum = warp_reduce(storage.float_stats[t / 32]).Reduce(vsum, IgnoreNaNSum());
   if (!(t & 0x1f)) {
     s->warp_min[t >> 5].fp_val = vmin;
@@ -470,13 +470,13 @@ void __device__ mergeIntColumnStats(merge_state_s *s,
   __syncwarp();
   vmin = cub::WarpReduce<int64_t>(storage.i64[t / 32]).Reduce(vmin, cub::Min());
   __syncwarp();
-  vmin = shuffle0(vmin);
+  vmin = shuffle(vmin);
 
   null_count = cub::WarpReduce<uint32_t>(storage.u32[t / 32]).Sum(null_count);
   __syncwarp();
   vmax = cub::WarpReduce<int64_t>(storage.i64[t / 32]).Reduce(vmax, cub::Max());
   __syncwarp();
-  vmax = shuffle0(vmax);
+  vmax = shuffle(vmax);
 
   vsum = cub::WarpReduce<int64_t>(storage.i64[t / 32]).Sum(vsum);
 
@@ -555,13 +555,13 @@ void __device__ mergeFloatColumnStats(merge_state_s *s,
   __syncwarp();
   vmin = cub::WarpReduce<double>(storage.f64[t / 32]).Reduce(vmin, cub::Min());
   __syncwarp();
-  vmin = shuffle0(vmin);
+  vmin = shuffle(vmin);
 
   null_count = cub::WarpReduce<uint32_t>(storage.u32[t / 32]).Sum(null_count);
   __syncwarp();
   vmax = cub::WarpReduce<double>(storage.f64[t / 32]).Reduce(vmax, cub::Max());
   __syncwarp();
-  vmax = shuffle0(vmax);
+  vmax = shuffle(vmax);
 
   vsum = cub::WarpReduce<double>(storage.f64[t / 32]).Reduce(vsum, IgnoreNaNSum());
 

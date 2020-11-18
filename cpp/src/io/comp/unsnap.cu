@@ -98,7 +98,7 @@ __device__ void snappy_prefetch_bytestream(unsnap_state_s *s, int t)
         nanosleep(100);
       }
     }
-    blen = shuffle0(blen);
+    blen = shuffle(blen);
     if (t < blen) { read_byte(s, pos + t) = base[pos + t]; }
     pos += blen;
   } while (blen > 0);
@@ -288,7 +288,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
     {
       uint32_t v0, v1, v2, len3_mask, cur_t, is_long_sym, short_sym_mask;
       uint32_t b0;
-      cur            = shuffle0(cur);
+      cur            = shuffle(cur);
       cur_t          = cur + t;
       b0             = read_byte(s, cur_t);
       v0             = ballot((b0 == 4) || (b0 & 2));
@@ -296,15 +296,15 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
       v1             = ballot((b0 == 4) || (b0 & 2));
       b0             = read_byte(s, cur_t + 64);
       v2             = ballot((b0 == 4) || (b0 & 2));
-      len3_mask      = shuffle0((t == 0) ? get_len3_mask(v0, v1, v2) : 0);
+      len3_mask      = shuffle((t == 0) ? get_len3_mask(v0, v1, v2) : 0);
       cur_t          = cur + 2 * t + __popc(len3_mask & ((1 << t) - 1));
       b0             = read_byte(s, cur_t);
       is_long_sym    = ((b0 & ~4) != 0) && (((b0 + 1) & 2) == 0);
       short_sym_mask = ballot(is_long_sym);
       batch_len      = 0;
-      b = reinterpret_cast<volatile unsnap_batch_s *>(shuffle0(reinterpret_cast<uintptr_t>(b)));
+      b = reinterpret_cast<volatile unsnap_batch_s *>(shuffle(reinterpret_cast<uintptr_t>(b)));
       if (!(short_sym_mask & 1)) {
-        batch_len = shuffle0((t == 0) ? (short_sym_mask) ? __ffs(short_sym_mask) - 1 : 32 : 0);
+        batch_len = shuffle((t == 0) ? (short_sym_mask) ? __ffs(short_sym_mask) - 1 : 32 : 0);
         if (batch_len != 0) {
           uint32_t blen = 0;
           int32_t ofs   = 0;
@@ -318,8 +318,8 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
             ofs += blen;  // for correct out-of-range detection below
           }
           blen           = WarpReducePos32(blen, t);
-          bytes_left     = shuffle0(bytes_left);
-          dst_pos        = shuffle0(dst_pos);
+          bytes_left     = shuffle(bytes_left);
+          dst_pos        = shuffle(dst_pos);
           short_sym_mask = __ffs(ballot(blen > bytes_left || ofs > (int32_t)(dst_pos + blen)));
           if (short_sym_mask != 0) { batch_len = min(batch_len, short_sym_mask - 1); }
           if (batch_len != 0) {
@@ -343,7 +343,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
           clen      = (b0 & 3) ? (b0 & 2) ? 1 : 0 : (b0 >> 2);  // symbol length minus 2
           v0        = ballot(clen & 1);
           v1        = ballot((clen >> 1) & 1);
-          len3_mask = shuffle0((t == 0) ? get_len5_mask(v0, v1) : 0);
+          len3_mask = shuffle((t == 0) ? get_len5_mask(v0, v1) : 0);
           mask_t    = (1 << (2 * t)) - 1;
           cur_t     = cur + 2 * t + 2 * __popc((len3_mask & 0xaaaaaaaa) & mask_t) +
                   __popc((len3_mask & 0x55555555) & mask_t);
@@ -364,8 +364,8 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
               ofs += blen;  // for correct out-of-range detection below
             }
             blen           = WarpReducePos32(blen, t);
-            bytes_left     = shuffle0(bytes_left);
-            dst_pos        = shuffle0(dst_pos);
+            bytes_left     = shuffle(bytes_left);
+            dst_pos        = shuffle(dst_pos);
             short_sym_mask = __ffs(ballot(blen > bytes_left || ofs > (int32_t)(dst_pos + blen)));
             if (short_sym_mask != 0) { batch_add = min(batch_add, short_sym_mask - 1); }
             if (batch_add != 0) {
@@ -451,7 +451,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
         batch                 = (batch + 1) & (batch_count - 1);
       }
     }
-    batch_len = shuffle0(batch_len);
+    batch_len = shuffle(batch_len);
     if (t == 0) {
       while (s->q.batch_len[batch] != 0) { nanosleep(100); }
     }
@@ -490,7 +490,7 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t, Storage &temp_s
     } else {
       batch_len = 0;
     }
-    batch_len = shuffle0(batch_len);
+    batch_len = shuffle(batch_len);
     if (batch_len <= 0) { break; }
     if (t < batch_len) {
       blen_t = b[t].len;
@@ -500,14 +500,14 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t, Storage &temp_s
     }
     // Try to combine as many small entries as possible, but try to avoid doing that
     // if we see a small repeat distance 8 bytes or less
-    if (shuffle0(min((uint32_t)dist_t, (uint32_t)shuffle_xor(dist_t, 1))) > 8) {
+    if (shuffle(min((uint32_t)dist_t, (uint32_t)shuffle_xor(dist_t, 1))) > 8) {
       uint32_t n;
       do {
         uint32_t bofs      = WarpReducePos32(blen_t, t);
         uint32_t stop_mask = ballot((uint32_t)dist_t < bofs);
         uint32_t start_mask =
           cub::WarpReduce<uint32_t>(temp_storage).Sum((bofs < 32 && t < batch_len) ? 1 << bofs : 0);
-        start_mask = shuffle0(start_mask);
+        start_mask = shuffle(start_mask);
         n          = min(min((uint32_t)__popc(start_mask), (uint32_t)(__ffs(stop_mask) - 1u)),
                 (uint32_t)batch_len);
         if (n != 0) {
