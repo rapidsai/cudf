@@ -245,10 +245,10 @@ void print(std::string const& msg,
   thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<size_type>(0),
                      scatter.size(),
-                     [s = scatter.data().get()] __device__(auto const& i) {
+                     [s = scatter.begin()] __device__(auto const& i) {
                        auto si = s[i];
                        printf("%s[%d](%d), ",
-                              (si.label() == unbound_list_view::SOURCE ? "S" : "T"),
+                              (si.label() == unbound_list_view::label_type::SOURCE ? "S" : "T"),
                               si.row_index(),
                               si.size());
                      });
@@ -348,7 +348,7 @@ struct list_child_constructor {
     auto source_lists = cudf::detail::lists_column_device_view(*source_column_device_view);
     auto target_lists = cudf::detail::lists_column_device_view(*target_column_device_view);
 
-    int32_t num_child_rows{get_num_child_rows(list_offsets, stream)};
+    auto const num_child_rows{get_num_child_rows(list_offsets, stream)};
 
     auto const child_null_mask =
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
@@ -493,9 +493,14 @@ struct list_child_constructor {
     // string_views should now have been populated with source and target references.
 
     auto string_offsets =
-      cudf::strings::detail::child_offsets_from_string_vector(string_views, mr, stream.value());
+      cudf::strings::detail::child_offsets_from_string_iterator(
+        string_views.begin(), 
+        string_views.size(), 
+        mr, 
+        stream.value());
+
     auto string_chars = cudf::strings::detail::child_chars_from_string_vector(
-      string_views, string_offsets->view().data<int32_t>(), 0, mr, stream.value());
+      string_views, string_offsets->view().template data<cudf::size_type>(), 0, mr, stream.value());
     auto child_null_mask =
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
         ? construct_child_nullmask(
