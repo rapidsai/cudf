@@ -649,26 +649,17 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
       return sum + col.nesting_levels();
     });
 
-  if (state.md.version == 0) {
-    state.md.version  = 1;
-    state.md.num_rows = num_rows;
+  // Make schema with current table
+  std::vector<SchemaElement> this_table_schema;
+  {
     // Each level of nesting requires two levels of Schema. The leaf level needs one schema element
-    state.md.schema.reserve(1 + num_columns + list_col_depths * 2);
+    this_table_schema.reserve(1 + num_columns + list_col_depths * 2);
     SchemaElement root{};
     root.type            = UNDEFINED_TYPE;
     root.repetition_type = NO_REPETITION_TYPE;
     root.name            = "schema";
     root.num_children    = num_columns;
-    state.md.schema.push_back(std::move(root));
-    state.md.column_order_listsize =
-      (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
-    if (state.user_metadata != nullptr) {
-      for (auto it = state.user_metadata->user_data.begin();
-           it != state.user_metadata->user_data.end();
-           it++) {
-        state.md.key_value_metadata.push_back({it->first, it->second});
-      }
-    }
+    this_table_schema.push_back(std::move(root));
     for (auto i = 0; i < num_columns; i++) {
       auto &col = parquet_columns[i];
       if (col.is_list()) {
@@ -712,7 +703,7 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
             return s.name;
           });
         col.set_path_in_schema(path_in_schema);
-        state.md.schema.insert(state.md.schema.end(), list_schema.begin(), list_schema.end());
+        this_table_schema.insert(this_table_schema.end(), list_schema.begin(), list_schema.end());
       } else {
         SchemaElement col_schema{};
         // Column metadata
@@ -728,6 +719,7 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
         if (state.single_write_mode) {
           col_schema.repetition_type =
             (col.nullable() || col.data_count() < (size_t)num_rows) ? OPTIONAL : REQUIRED;
+          col.set_def_level((col_schema.repetition_type == OPTIONAL) ? 1 : 0);
         }
         // otherwise, if the user is explicitly telling us global information about all the tables
         // that will ever get passed in
@@ -744,20 +736,28 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
         col_schema.name         = col.name();
         col_schema.num_children = 0;  // Leaf node
 
-        state.md.schema.push_back(std::move(col_schema));
+        this_table_schema.push_back(std::move(col_schema));
       }
     }
+  }
+
+  if (state.md.version == 0) {
+    state.md.version  = 1;
+    state.md.num_rows = num_rows;
+    state.md.column_order_listsize =
+      (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
+    if (state.user_metadata != nullptr) {
+      for (auto it = state.user_metadata->user_data.begin();
+           it != state.user_metadata->user_data.end();
+           it++) {
+        state.md.key_value_metadata.push_back({it->first, it->second});
+      }
+    }
+    state.md.schema = this_table_schema;
   } else {
     // verify the user isn't passing mismatched tables
-    // TODO (dm): Now needs to compare children of columns in case of list when we support chunked
-    // write for it
-    CUDF_EXPECTS(state.md.schema[0].num_children == num_columns,
-                 "Mismatch in table structure between multiple calls to write_chunk");
-    for (auto i = 0; i < num_columns; i++) {
-      auto &col = parquet_columns[i];
-      CUDF_EXPECTS(state.md.schema[1 + i].type == col.physical_type(),
-                   "Mismatch in column types between multiple calls to write_chunk");
-    }
+    CUDF_EXPECTS(state.md.schema == this_table_schema,
+                 "Mismatch in schema between multiple calls to write_chunk");
 
     // increment num rows
     state.md.num_rows += num_rows;
