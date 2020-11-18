@@ -27,13 +27,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
-
 /**
  * A class that holds Host side Column Vector APIs and the OffHeapState.
  * Any children of a HostColumnVector will be instantiated via this class.
  */
-public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> {
+public class HostColumnVectorCore implements AutoCloseable {
 
   private static final Logger log = LoggerFactory.getLogger(HostColumnVector.class);
 
@@ -65,14 +63,14 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * Returns the data buffer for a given host side column vector
    */
-  HostMemoryBuffer getData() {
+  public HostMemoryBuffer getData() {
     return offHeap.data;
   }
 
   /**
    * Returns the validity buffer for a given host side column vector
    */
-  HostMemoryBuffer getValidity() {
+  public HostMemoryBuffer getValidity() {
     return offHeap.valid;
   }
 
@@ -83,29 +81,8 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
     return offHeap.offsets;
   }
 
-  @Override
-  public long getColumnViewAddress() {
-    throw new IllegalStateException("getColumnViewAddress is not supported on Host side");
-  }
-
-  @Override
-  public ColumnViewAccess<HostMemoryBuffer> getChildColumnViewAccess(int childIndex) {
+  public HostColumnVectorCore getChildColumnView(int childIndex) {
     return getNestedChildren().get(childIndex);
-  }
-
-  @Override
-  public HostMemoryBuffer getDataBuffer() {
-    return offHeap.data;
-  }
-
-  @Override
-  public HostMemoryBuffer getOffsetBuffer() {
-    return offHeap.offsets;
-  }
-
-  @Override
-  public HostMemoryBuffer getValidityBuffer() {
-    return offHeap.valid;
   }
 
   /**
@@ -128,35 +105,15 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   }
 
   /**
-   * Get the data type of this column
-   * @return DType of the column
-   */
-  @Override
-  public DType getDataType() {
-    return type;
-  }
-
-  /**
    * Returns the number of rows for a given host side column vector
    */
-  @Override
   public long getRowCount() {
-    return rows;
-  }
-
-  /**
-   * Returns the number of rows for a given host side column vector, deprecated.
-   */
-  @Override
-  @Deprecated
-  public long getNumRows() {
     return rows;
   }
 
   /**
    * Returns the number of children for this column
    */
-  @Override
   public int getNumChildren() {
     return children.size();
   }
