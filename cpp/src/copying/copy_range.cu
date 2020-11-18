@@ -32,10 +32,11 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/iterator/constant_iterator.h>
 
 #include <memory>
-#include "rmm/cuda_stream_view.hpp"
 
 namespace {
 template <typename T>

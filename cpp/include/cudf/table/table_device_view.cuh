@@ -19,9 +19,10 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <cassert>
 #include <memory>
-#include "rmm/cuda_stream_view.hpp"
 
 /**
  * @file table_device_view.cuh

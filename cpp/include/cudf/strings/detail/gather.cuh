@@ -22,7 +22,8 @@
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include "rmm/cuda_stream_view.hpp"
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 

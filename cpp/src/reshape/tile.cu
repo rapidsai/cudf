@@ -15,18 +15,19 @@
  */
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/reshape.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <memory>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <cudf/detail/gather.cuh>
-#include "rmm/cuda_stream_view.hpp"
+
+#include <memory>
 
 namespace cudf {
 namespace {

@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include <hash/concurrent_unordered_map.cuh>
+#include <join/join_common_utils.hpp>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -22,9 +25,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <hash/concurrent_unordered_map.cuh>
-#include <join/join_common_utils.hpp>
-#include "rmm/cuda_stream_view.hpp"
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {

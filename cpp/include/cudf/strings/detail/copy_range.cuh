@@ -22,7 +22,8 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
-#include "rmm/cuda_stream_view.hpp"
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>

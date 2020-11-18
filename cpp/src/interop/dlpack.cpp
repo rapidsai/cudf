@@ -18,10 +18,11 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <dlpack/dlpack.h>
 
 #include <algorithm>
-#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace {

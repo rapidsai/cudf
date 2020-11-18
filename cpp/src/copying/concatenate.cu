@@ -28,13 +28,14 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/binary_search.h>
 #include <thrust/transform_scan.h>
 
 #include <algorithm>
 #include <numeric>
 #include <utility>
-#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace detail {
