@@ -16,6 +16,7 @@ from cudf._lib.cpp.nvtext.tokenize cimport (
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 
+
 def tokenize(Column strings, object delimiter):
     from cudf import Scalar
     if isinstance(delimiter, Scalar):

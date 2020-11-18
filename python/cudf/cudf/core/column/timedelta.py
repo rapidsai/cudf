@@ -110,12 +110,7 @@ class TimeDeltaColumn(column.ColumnBase):
                 else:
                     rhs = cudf.Scalar(None, "float64")
             else:
-                try:
-                    rhs = rhs.astype(common_dtype).astype("float64")
-                except:
-                    import pdb
-                    pdb.set_trace()
-
+                rhs = rhs.astype(common_dtype).astype("float64")
             out_dtype = np.dtype("int64")
         elif rhs.dtype.kind in ("f", "i", "u"):
             out_dtype = self.dtype

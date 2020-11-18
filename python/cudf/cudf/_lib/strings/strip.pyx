@@ -25,7 +25,7 @@ def strip(Column source_strings,
     """
 
     cdef DeviceScalar repl = py_repl.device_value
-    
+
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 

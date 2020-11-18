@@ -422,9 +422,7 @@ class StringMethods(ColumnMethodsMixin):
 
         if others is None:
             data = cpp_join(
-                self._column,
-                cudf.Scalar(sep),
-                cudf.Scalar(na_rep, "str"),
+                self._column, cudf.Scalar(sep), cudf.Scalar(na_rep, "str"),
             )
         else:
             other_cols = _get_cols_list(self._parent, others)
@@ -1868,9 +1866,7 @@ class StringMethods(ColumnMethodsMixin):
             repl = ""
 
         return self._return_or_inplace(
-            cpp_slice_replace(
-                self._column, start, stop, cudf.Scalar(repl)
-            ),
+            cpp_slice_replace(self._column, start, stop, cudf.Scalar(repl)),
             **kwargs,
         )
 
@@ -3178,9 +3174,7 @@ class StringMethods(ColumnMethodsMixin):
                 len(self._column), dtype="bool", masked=True
             )
         elif is_scalar(pat):
-            result_col = cpp_endswith(
-                self._column, cudf.Scalar(pat, "str")
-            )
+            result_col = cpp_endswith(self._column, cudf.Scalar(pat, "str"))
         else:
             result_col = cpp_endswith_multiple(
                 self._column, column.as_column(pat, dtype="str")
@@ -3245,9 +3239,7 @@ class StringMethods(ColumnMethodsMixin):
                 len(self._column), dtype="bool", masked=True
             )
         elif is_scalar(pat):
-            result_col = cpp_startswith(
-                self._column, cudf.Scalar(pat, "str")
-            )
+            result_col = cpp_startswith(self._column, cudf.Scalar(pat, "str"))
         else:
             result_col = cpp_startswith_multiple(
                 self._column, column.as_column(pat, dtype="str")
