@@ -33,7 +33,7 @@ namespace cudf {
 /**
  * @brief Types of binary operations that can be performed on data.
  */
-enum class binary_op : int32_t {
+enum class binary_operator : int32_t {
   ADD,                   ///< operator +
   SUB,                   ///< operator -
   MUL,                   ///< operator *
@@ -96,7 +96,7 @@ enum class binary_op : int32_t {
 std::unique_ptr<column> binary_operation(
   scalar const& lhs,
   column_view const& rhs,
-  binary_op op,
+  binary_operator op,
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -121,7 +121,7 @@ std::unique_ptr<column> binary_operation(
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
   scalar const& rhs,
-  binary_op op,
+  binary_operator op,
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -145,7 +145,7 @@ std::unique_ptr<column> binary_operation(
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
   column_view const& rhs,
-  binary_op op,
+  binary_operator op,
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

@@ -35,9 +35,10 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
  * @brief Does the binop need to know if an operand is null/invalid to perform special
  * processing?
  */
-inline bool is_null_dependent(binary_op op)
+inline bool is_null_dependent(binary_operator op)
 {
-  return op == binary_op::NULL_EQUALS || op == binary_op::NULL_MIN || op == binary_op::NULL_MAX;
+  return op == binary_operator::NULL_EQUALS || op == binary_operator::NULL_MIN ||
+         op == binary_operator::NULL_MAX;
 }
 
 namespace compiled {
@@ -63,7 +64,7 @@ namespace compiled {
 std::unique_ptr<column> binary_operation(
   scalar const& lhs,
   column_view const& rhs,
-  binary_op op,
+  binary_operator op,
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
@@ -89,7 +90,7 @@ std::unique_ptr<column> binary_operation(
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
   scalar const& rhs,
-  binary_op op,
+  binary_operator op,
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
@@ -115,7 +116,7 @@ std::unique_ptr<column> binary_operation(
 std::unique_ptr<column> binary_operation(
   column_view const& lhs,
   column_view const& rhs,
-  binary_op op,
+  binary_operator op,
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);

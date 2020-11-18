@@ -32,17 +32,17 @@ namespace {
 
 template <typename Lhs, typename Rhs, typename Out>
 struct apply_binop {
-  binary_op op;
-  apply_binop(binary_op op) : op(op) {}
+  binary_operator op;
+  apply_binop(binary_operator op) : op(op) {}
   CUDA_DEVICE_CALLABLE Out operator()(Lhs const& x, Rhs const& y) const
   {
     switch (op) {
-      case binary_op::EQUAL: return this->equal(x, y);
-      case binary_op::NOT_EQUAL: return this->not_equal(x, y);
-      case binary_op::LESS: return this->less(x, y);
-      case binary_op::GREATER: return this->greater(x, y);
-      case binary_op::LESS_EQUAL: return this->less_equal(x, y);
-      case binary_op::GREATER_EQUAL: return this->greater_equal(x, y);
+      case binary_operator::EQUAL: return this->equal(x, y);
+      case binary_operator::NOT_EQUAL: return this->not_equal(x, y);
+      case binary_operator::LESS: return this->less(x, y);
+      case binary_operator::GREATER: return this->greater(x, y);
+      case binary_operator::LESS_EQUAL: return this->less_equal(x, y);
+      case binary_operator::GREATER_EQUAL: return this->greater_equal(x, y);
       default: return Out{};
     }
   }
@@ -75,7 +75,7 @@ struct apply_binop {
 template <typename Lhs, typename Rhs, typename Out>
 struct apply_binop_scalar_lhs_rhs : apply_binop<Lhs, Rhs, Out> {
   cudf::scalar_device_type_t<Rhs> scalar;
-  apply_binop_scalar_lhs_rhs(binary_op op, cudf::scalar_device_type_t<Rhs> scalar)
+  apply_binop_scalar_lhs_rhs(binary_operator op, cudf::scalar_device_type_t<Rhs> scalar)
     : apply_binop<Lhs, Rhs, Out>(op), scalar(scalar)
   {
   }
@@ -88,7 +88,7 @@ struct apply_binop_scalar_lhs_rhs : apply_binop<Lhs, Rhs, Out> {
 template <typename Lhs, typename Rhs, typename Out>
 struct apply_binop_scalar_rhs_lhs : apply_binop<Rhs, Lhs, Out> {
   cudf::scalar_device_type_t<Rhs> scalar;
-  apply_binop_scalar_rhs_lhs(binary_op op, cudf::scalar_device_type_t<Rhs> scalar)
+  apply_binop_scalar_rhs_lhs(binary_operator op, cudf::scalar_device_type_t<Rhs> scalar)
     : apply_binop<Rhs, Lhs, Out>(op), scalar(scalar)
   {
   }
@@ -99,10 +99,10 @@ struct apply_binop_scalar_rhs_lhs : apply_binop<Rhs, Lhs, Out> {
 };
 
 template <typename Lhs, typename Rhs, typename Out>
-struct binary_ope {
+struct binary_op {
   std::unique_ptr<column> operator()(column_view const& lhs,
                                      scalar const& rhs,
-                                     binary_op op,
+                                     binary_operator op,
                                      data_type out_type,
                                      bool const reversed,
                                      rmm::mr::device_memory_resource* mr,
@@ -160,7 +160,7 @@ struct binary_ope {
 
   std::unique_ptr<column> operator()(column_view const& lhs,
                                      column_view const& rhs,
-                                     binary_op op,
+                                     binary_operator op,
                                      data_type out_type,
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
@@ -323,7 +323,7 @@ struct null_considering_binop {
   template <typename LhsT, typename RhsT>
   std::unique_ptr<column> operator()(LhsT const& lhs,
                                      RhsT const& rhs,
-                                     binary_op op,
+                                     binary_operator op,
                                      data_type output_type,
                                      cudf::size_type col_size,
                                      rmm::mr::device_memory_resource* mr,
@@ -335,7 +335,7 @@ struct null_considering_binop {
     auto const rhs_dev_view = get_device_view(rhs);
 
     switch (op) {
-      case binary_op::NULL_EQUALS: {
+      case binary_operator::NULL_EQUALS: {
         // Validate input
         CUDF_EXPECTS(output_type.id() == type_id::BOOL8, "Output column type has to be bool");
 
@@ -364,8 +364,8 @@ struct null_considering_binop {
         break;
       }
 
-      case binary_op::NULL_MAX:
-      case binary_op::NULL_MIN: {
+      case binary_operator::NULL_MAX:
+      case binary_operator::NULL_MIN: {
         // Validate input
         CUDF_EXPECTS(output_type.id() == lhs.type().id(),
                      "Output column type should match input column type");
@@ -384,7 +384,7 @@ struct null_considering_binop {
           if (!lhs_valid && !rhs_valid)
             return invalid_str;
           else if (lhs_valid && rhs_valid) {
-            return (op == binary_op::NULL_MAX)
+            return (op == binary_operator::NULL_MAX)
                      ? thrust::maximum<cudf::string_view>()(lhs_value, rhs_value)
                      : thrust::minimum<cudf::string_view>()(lhs_value, rhs_value);
           } else if (lhs_valid)
@@ -416,7 +416,7 @@ struct null_considering_binop {
 
 std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          column_view const& rhs,
-                                         binary_op op,
+                                         binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream)
@@ -431,14 +431,14 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
   } else {
     CUDF_EXPECTS(is_boolean(output_type), "Invalid/Unsupported output datatype");
     // Should pass the right type of scalar and column_view when specializing binary_op
-    return binary_ope<cudf::string_view, cudf::string_view, bool>{}(
+    return binary_op<cudf::string_view, cudf::string_view, bool>{}(
       rhs, lhs, op, output_type, true, mr, stream);
   }
 }
 
 std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          scalar const& rhs,
-                                         binary_op op,
+                                         binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream)
@@ -452,14 +452,14 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
     return null_considering_binop{}(*lhs_device_view, rhs, op, output_type, lhs.size(), mr, stream);
   } else {
     CUDF_EXPECTS(is_boolean(output_type), "Invalid/Unsupported output datatype");
-    return binary_ope<cudf::string_view, cudf::string_view, bool>{}(
+    return binary_op<cudf::string_view, cudf::string_view, bool>{}(
       lhs, rhs, op, output_type, false, mr, stream);
   }
 }
 
 std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          column_view const& rhs,
-                                         binary_op op,
+                                         binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream)
@@ -476,7 +476,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
       *lhs_device_view, *rhs_device_view, op, output_type, lhs.size(), mr, stream);
   } else {
     CUDF_EXPECTS(is_boolean(output_type), "Invalid/Unsupported output datatype");
-    return binary_ope<cudf::string_view, cudf::string_view, bool>{}(
+    return binary_op<cudf::string_view, cudf::string_view, bool>{}(
       lhs, rhs, op, output_type, mr, stream);
   }
 }

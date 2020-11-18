@@ -105,7 +105,7 @@ std::istream* headers_code(std::string filename, std::iostream& stream)
 void binary_operation(mutable_column_view& out,
                       scalar const& lhs,
                       column_view const& rhs,
-                      binary_op op,
+                      binary_operator op,
                       cudaStream_t stream)
 {
   if (is_null_dependent(op)) {
@@ -144,7 +144,7 @@ void binary_operation(mutable_column_view& out,
 void binary_operation(mutable_column_view& out,
                       column_view const& lhs,
                       scalar const& rhs,
-                      binary_op op,
+                      binary_operator op,
                       cudaStream_t stream)
 {
   if (is_null_dependent(op)) {
@@ -183,7 +183,7 @@ void binary_operation(mutable_column_view& out,
 void binary_operation(mutable_column_view& out,
                       column_view const& lhs,
                       column_view const& rhs,
-                      binary_op op,
+                      binary_operator op,
                       cudaStream_t stream)
 {
   if (is_null_dependent(op)) {
@@ -241,7 +241,7 @@ void binary_operation(mutable_column_view& out,
                      {output_type_name,  // list of template arguments
                       cudf::jit::get_type_name(lhs.type()),
                       cudf::jit::get_type_name(rhs.type()),
-                      get_operator_name(binary_op::GENERIC_BINARY, OperatorType::Direct)})
+                      get_operator_name(binary_operator::GENERIC_BINARY, OperatorType::Direct)})
     .launch(out.size(),
             cudf::jit::get_data_ptr(out),
             cudf::jit::get_data_ptr(lhs),
@@ -268,7 +268,7 @@ namespace detail {
  *
  * @param lhs Left-hand side `scalar` used in the binary operation
  * @param rhs Right-hand side `column_view` used in the binary operation
- * @param op `binary_op` to be used to combine `lhs` and `rhs`
+ * @param op `binary_operator` to be used to combine `lhs` and `rhs`
  * @param output_type `data_type` of the output column
  * @param mr Device memory resource to use for device memory allocation
  * @param stream CUDA stream used for device memory operations
@@ -276,7 +276,7 @@ namespace detail {
  */
 std::unique_ptr<column> make_fixed_width_column_for_output(scalar const& lhs,
                                                            column_view const& rhs,
-                                                           binary_op op,
+                                                           binary_operator op,
                                                            data_type output_type,
                                                            rmm::mr::device_memory_resource* mr,
                                                            cudaStream_t stream)
@@ -295,7 +295,7 @@ std::unique_ptr<column> make_fixed_width_column_for_output(scalar const& lhs,
  *
  * @param lhs Left-hand side `column_view` used in the binary operation
  * @param rhs Right-hand side `scalar` used in the binary operation
- * @param op `binary_op` to be used to combine `lhs` and `rhs`
+ * @param op `binary_operator` to be used to combine `lhs` and `rhs`
  * @param output_type `data_type` of the output column
  * @param mr Device memory resource to use for device memory allocation
  * @param stream CUDA stream used for device memory operations
@@ -303,7 +303,7 @@ std::unique_ptr<column> make_fixed_width_column_for_output(scalar const& lhs,
  */
 std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lhs,
                                                            scalar const& rhs,
-                                                           binary_op op,
+                                                           binary_operator op,
                                                            data_type output_type,
                                                            rmm::mr::device_memory_resource* mr,
                                                            cudaStream_t stream)
@@ -322,7 +322,7 @@ std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lh
  *
  * @param lhs Left-hand side `column_view` used in the binary operation
  * @param rhs Right-hand side `column_view` used in the binary operation
- * @param op `binary_op` to be used to combine `lhs` and `rhs`
+ * @param op `binary_operator` to be used to combine `lhs` and `rhs`
  * @param output_type `data_type` of the output column
  * @param mr Device memory resource to use for device memory allocation
  * @param stream CUDA stream used for device memory operations
@@ -330,7 +330,7 @@ std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lh
  */
 std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lhs,
                                                            column_view const& rhs,
-                                                           binary_op op,
+                                                           binary_operator op,
                                                            data_type output_type,
                                                            rmm::mr::device_memory_resource* mr,
                                                            cudaStream_t stream)
@@ -345,33 +345,33 @@ std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lh
 };
 
 /**
- * @brief Returns `true` if `binary_op` `op` is a basic arithmetic binary operation
+ * @brief Returns `true` if `binary_operator` `op` is a basic arithmetic binary operation
  */
-bool is_basic_arithmetic_binop(binary_op op)
+bool is_basic_arithmetic_binop(binary_operator op)
 {
-  return op == binary_op::ADD or  ///< operator +
-         op == binary_op::SUB or  ///< operator -
-         op == binary_op::MUL or  ///< operator *
-         op == binary_op::DIV;    ///< operator / using common type of lhs and rhs
+  return op == binary_operator::ADD or  ///< operator +
+         op == binary_operator::SUB or  ///< operator -
+         op == binary_operator::MUL or  ///< operator *
+         op == binary_operator::DIV;    ///< operator / using common type of lhs and rhs
 }
 
 /**
- * @brief Returns `true` if `binary_op` `op` is a comparison binary operation
+ * @brief Returns `true` if `binary_operator` `op` is a comparison binary operation
  */
-bool is_comparison_binop(binary_op op)
+bool is_comparison_binop(binary_operator op)
 {
-  return op == binary_op::EQUAL or        ///< operator ==
-         op == binary_op::NOT_EQUAL or    ///< operator !=
-         op == binary_op::LESS or         ///< operator <
-         op == binary_op::GREATER or      ///< operator >
-         op == binary_op::LESS_EQUAL or   ///< operator <=
-         op == binary_op::GREATER_EQUAL;  ///< operator >=
+  return op == binary_operator::EQUAL or        ///< operator ==
+         op == binary_operator::NOT_EQUAL or    ///< operator !=
+         op == binary_operator::LESS or         ///< operator <
+         op == binary_operator::GREATER or      ///< operator >
+         op == binary_operator::LESS_EQUAL or   ///< operator <=
+         op == binary_operator::GREATER_EQUAL;  ///< operator >=
 }
 
 /**
- * @brief Returns `true` if `binary_op` `op` is supported by `fixed_point`
+ * @brief Returns `true` if `binary_operator` `op` is supported by `fixed_point`
  */
-bool is_supported_fixed_point_binop(binary_op op)
+bool is_supported_fixed_point_binop(binary_operator op)
 {
   return is_basic_arithmetic_binop(op) or is_comparison_binop(op);
 }
@@ -379,40 +379,43 @@ bool is_supported_fixed_point_binop(binary_op op)
 /**
  * @brief Computes the scale for a `fixed_point` number based on given binary operator `op`
  *
- * @param op The `binary_op` used for two `fixed_point` numbers
+ * @param op The binary_operator used for two `fixed_point` numbers
  * @param left_scale Scale of left `fixed_point` number
  * @param right_scale Scale of right `fixed_point` number
  * @return int32_t The resulting `scale` of the computed `fixed_point` number
  */
-int32_t compute_scale_for_binop(binary_op op, int32_t left_scale, int32_t right_scale)
+int32_t compute_scale_for_binop(binary_operator op, int32_t left_scale, int32_t right_scale)
 {
-  if (op == binary_op::MUL) return left_scale + right_scale;
-  if (op == binary_op::DIV) return left_scale - right_scale;
+  if (op == binary_operator::MUL) return left_scale + right_scale;
+  if (op == binary_operator::DIV) return left_scale - right_scale;
   return std::min(left_scale, right_scale);
 }
 
 /**
  * @brief Helper predicate function that identifies if `op` requires scales to be the same
  *
- * @param op `binary_op`
+ * @param op `binary_operator`
  * @return true `op` requires scales of lhs and rhs to be the same
  * @return false `op` does not require scales of lhs and rhs to be the same
  */
-bool is_same_scale_necessary(binary_op op) { return op != binary_op::MUL && op != binary_op::DIV; }
+bool is_same_scale_necessary(binary_operator op)
+{
+  return op != binary_operator::MUL && op != binary_operator::DIV;
+}
 
 /**
  * @brief Function to compute binary operation of one `column_view` and one `scalar`
  *
  * @param lhs Left-hand side `scalar` used in the binary operation
  * @param rhs Right-hand side `column_view` used in the binary operation
- * @param op `binary_op` to be used to combine `lhs` and `rhs`
+ * @param op `binary_operator` to be used to combine `lhs` and `rhs`
  * @param mr Device memory resource to use for device memory allocation
  * @param stream CUDA stream used for device memory operations
  * @return std::unique_ptr<column> Resulting output column from the binary operation
  */
 std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
                                                      column_view const& rhs,
-                                                     binary_op op,
+                                                     binary_operator op,
                                                      rmm::mr::device_memory_resource* mr,
                                                      cudaStream_t stream)
 {
@@ -458,13 +461,13 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
           auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(diff);
           auto const scalar =
             make_fixed_point_scalar<decimal32>(factor, scale_type{rhs.type().scale()});
-          return binary_operation(*scalar, rhs, binary_op::MUL, lhs.type(), mr, stream);
+          return binary_operation(*scalar, rhs, binary_operator::MUL, lhs.type(), mr, stream);
         } else {
           CUDF_EXPECTS(lhs.type().id() == type_id::DECIMAL64, "Unexpected DTYPE");
           auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(diff);
           auto const scalar =
             make_fixed_point_scalar<decimal64>(factor, scale_type{rhs.type().scale()});
-          return binary_operation(*scalar, rhs, binary_op::MUL, lhs.type(), mr, stream);
+          return binary_operation(*scalar, rhs, binary_operator::MUL, lhs.type(), mr, stream);
         }
       }();
       binops::jit::binary_operation(out_view, lhs, result->view(), op, stream);
@@ -481,14 +484,14 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
  *
  * @param lhs Left-hand side `column_view` used in the binary operation
  * @param rhs Right-hand side `scalar` used in the binary operation
- * @param op `binary_op` to be used to combine `lhs` and `rhs`
+ * @param op `binary_operator` to be used to combine `lhs` and `rhs`
  * @param mr Device memory resource to use for device memory allocation
  * @param stream CUDA stream used for device memory operations
  * @return std::unique_ptr<column> Resulting output column from the binary operation
  */
 std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
                                                      scalar const& rhs,
-                                                     binary_op op,
+                                                     binary_operator op,
                                                      rmm::mr::device_memory_resource* mr,
                                                      cudaStream_t stream)
 {
@@ -534,13 +537,13 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
           auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(diff);
           auto const scalar =
             make_fixed_point_scalar<decimal32>(factor, scale_type{lhs.type().scale()});
-          return binary_operation(*scalar, lhs, binary_op::MUL, rhs.type(), mr, stream);
+          return binary_operation(*scalar, lhs, binary_operator::MUL, rhs.type(), mr, stream);
         } else {
           CUDF_EXPECTS(rhs.type().id() == type_id::DECIMAL64, "Unexpected DTYPE");
           auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(diff);
           auto const scalar =
             make_fixed_point_scalar<decimal64>(factor, scale_type{lhs.type().scale()});
-          return binary_operation(*scalar, lhs, binary_op::MUL, rhs.type(), mr, stream);
+          return binary_operation(*scalar, lhs, binary_operator::MUL, rhs.type(), mr, stream);
         }
       }();
       binops::jit::binary_operation(out_view, result->view(), rhs, op, stream);
@@ -557,14 +560,14 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
  *
  * @param lhs Left-hand side `column_view` used in the binary operation
  * @param rhs Right-hand side `column_view` used in the binary operation
- * @param op `binary_op` to be used to combine `lhs` and `rhs`
+ * @param op `binary_operator` to be used to combine `lhs` and `rhs`
  * @param mr Device memory resource to use for device memory allocation
  * @param stream CUDA stream used for device memory operations
  * @return std::unique_ptr<column> Resulting output column from the binary operation
  */
 std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
                                                      column_view const& rhs,
-                                                     binary_op op,
+                                                     binary_operator op,
                                                      rmm::mr::device_memory_resource* mr,
                                                      cudaStream_t stream)
 {
@@ -592,13 +595,13 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
           auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(diff);
           auto const scalar =
             make_fixed_point_scalar<decimal32>(factor, scale_type{lhs.type().scale()});
-          return binary_operation(*scalar, lhs, binary_op::MUL, rhs.type(), mr, stream);
+          return binary_operation(*scalar, lhs, binary_operator::MUL, rhs.type(), mr, stream);
         } else {
           CUDF_EXPECTS(lhs.type().id() == type_id::DECIMAL64, "Unexpected DTYPE");
           auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(diff);
           auto const scalar =
             make_fixed_point_scalar<decimal64>(factor, scale_type{lhs.type().scale()});
-          return binary_operation(*scalar, lhs, binary_op::MUL, rhs.type(), mr, stream);
+          return binary_operation(*scalar, lhs, binary_operator::MUL, rhs.type(), mr, stream);
         }
       }();
       binops::jit::binary_operation(out_view, result->view(), rhs, op, stream);
@@ -610,13 +613,13 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
           auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(diff);
           auto const scalar =
             make_fixed_point_scalar<decimal32>(factor, scale_type{rhs.type().scale()});
-          return binary_operation(*scalar, rhs, binary_op::MUL, lhs.type(), mr, stream);
+          return binary_operation(*scalar, rhs, binary_operator::MUL, lhs.type(), mr, stream);
         } else {
           CUDF_EXPECTS(lhs.type().id() == type_id::DECIMAL64, "Unexpected DTYPE");
           auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(diff);
           auto const scalar =
             make_fixed_point_scalar<decimal64>(factor, scale_type{rhs.type().scale()});
-          return binary_operation(*scalar, rhs, binary_op::MUL, lhs.type(), mr, stream);
+          return binary_operation(*scalar, rhs, binary_operator::MUL, lhs.type(), mr, stream);
         }
       }();
       binops::jit::binary_operation(out_view, lhs, result->view(), op, stream);
@@ -630,7 +633,7 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
 
 std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          column_view const& rhs,
-                                         binary_op op,
+                                         binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream)
@@ -657,7 +660,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
 
 std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          scalar const& rhs,
-                                         binary_op op,
+                                         binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream)
@@ -684,7 +687,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
 std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          column_view const& rhs,
-                                         binary_op op,
+                                         binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr,
                                          cudaStream_t stream)
@@ -746,7 +749,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
 std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          column_view const& rhs,
-                                         binary_op op,
+                                         binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr)
 {
@@ -756,7 +759,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
 
 std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          scalar const& rhs,
-                                         binary_op op,
+                                         binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr)
 {
@@ -766,7 +769,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
 std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          column_view const& rhs,
-                                         binary_op op,
+                                         binary_operator op,
                                          data_type output_type,
                                          rmm::mr::device_memory_resource* mr)
 {
