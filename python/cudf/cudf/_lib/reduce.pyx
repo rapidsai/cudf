@@ -122,7 +122,7 @@ def minmax(Column incol):
     with nogil:
         c_result = move(cpp_minmax(c_incol_view))
 
-    py_result_min = Scalar.from_unique_ptr(move(c_result.first))
-    py_result_max = Scalar.from_unique_ptr(move(c_result.second))
+    py_result_min = DeviceScalar.from_unique_ptr(move(c_result.first))
+    py_result_max = DeviceScalar.from_unique_ptr(move(c_result.second))
 
-    return py_result_min.value, py_result_max.value
+    return cudf.Scalar(py_result_min), cudf.Scalar(py_result_max)
