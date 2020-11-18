@@ -33,14 +33,10 @@ TEST_F(DictionaryAddKeysTest, StringsColumn)
   cudf::test::strings_column_wrapper new_keys({"ddd", "bbb", "eee"});
 
   auto dictionary = cudf::dictionary::encode(strings);
-  cudf::dictionary_column_view view2(dictionary->view());
-  std::cout << "Before nullable?: " << view2.keys().nullable() << std::endl;
-
   auto result =
     cudf::dictionary::add_keys(cudf::dictionary_column_view(dictionary->view()), new_keys);
 
   cudf::dictionary_column_view view(result->view());
-  std::cout << "After nullable?: " << view.keys().nullable() << std::endl;
 
   cudf::test::strings_column_wrapper keys_expected({"aaa", "bbb", "ccc", "ddd", "eee", "fff"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.keys(), keys_expected);
