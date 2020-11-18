@@ -534,14 +534,12 @@ struct FixedPointOpDispatcher {
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr)
   {
-    // clang-format off
     switch (op) {
-      case cudf::unary_op::CEIL:  return unary_op_with<T, fixed_point_ceil> (input, stream, mr);
+      case cudf::unary_op::CEIL: return unary_op_with<T, fixed_point_ceil>(input, stream, mr);
       case cudf::unary_op::FLOOR: return unary_op_with<T, fixed_point_floor>(input, stream, mr);
-      case cudf::unary_op::ABS:   return unary_op_with<T, fixed_point_abs>  (input, stream, mr);
+      case cudf::unary_op::ABS: return unary_op_with<T, fixed_point_abs>(input, stream, mr);
       default: CUDF_FAIL("Unsupported fixed_point unary operation");
     }
-    // clang-format on
   }
 };
 
