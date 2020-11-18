@@ -641,9 +641,7 @@ def test_concat_dataframe_with_multiIndex(df1, df2):
 @pytest.mark.parametrize("sort", [True, False])
 @pytest.mark.parametrize("join", ["inner", "outer"])
 @pytest.mark.parametrize("axis", [0, 1])
-@pytest.mark.xfail(
-    raises=NotImplementedError, reason="we do not support duplicate columns"
-)
+@pytest.raises(raises=NotImplementedError)
 def test_concat_join(objs, ignore_index, sort, join, axis):
     gpu_objs = [gd.from_pandas(o) for o in objs]
 
