@@ -180,7 +180,7 @@ def to_datetime(
                         except ValueError:
                             current_col = current_col.astype(dtype="float64")
 
-                    factor = as_device_scalar(
+                    factor = cudf.Scalar(
                         column.datetime._numpy_to_pandas_conversion[u]
                         / (
                             column.datetime._numpy_to_pandas_conversion["s"]
@@ -257,7 +257,7 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
 
     if col.dtype.kind in ("f"):
         if unit not in (None, "ns"):
-            factor = as_device_scalar(
+            factor = cudf.Scalar(
                 column.datetime._numpy_to_pandas_conversion[unit]
             )
             col = col * factor
@@ -284,7 +284,7 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
 
     if col.dtype.kind in ("i"):
         if unit in ("D", "h", "m"):
-            factor = as_device_scalar(
+            factor = cudf.Scalar(
                 column.datetime._numpy_to_pandas_conversion[unit]
                 / column.datetime._numpy_to_pandas_conversion["s"]
             )
