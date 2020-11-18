@@ -163,7 +163,7 @@ class metadata {
    * @param[in,out] row_count Total number of rows selected
    *
    * @return List of stripe info and total number of selected rows
-   **/
+   */
   auto select_stripes(const std::vector<size_type> &stripes,
                       size_type &row_start,
                       size_type &row_count)
@@ -186,10 +186,11 @@ class metadata {
       if (row_count < 0) {
         row_count = static_cast<size_type>(
           std::min<size_t>(get_total_rows() - row_start, std::numeric_limits<size_type>::max()));
+      } else {
+        row_count =
+          static_cast<size_type>(std::min<size_t>(get_total_rows() - row_start, row_count));
       }
       CUDF_EXPECTS(row_count >= 0 && row_start >= 0, "Negative row count or starting row");
-      CUDF_EXPECTS(row_start + row_count <= static_cast<size_type>(get_total_rows()),
-                   "Number of rows is out of bounds");
       CUDF_EXPECTS(
         !(row_start > 0 && (row_count > (std::numeric_limits<size_type>::max() - row_start))),
         "Summation of starting row index and number of rows would cause overflow");

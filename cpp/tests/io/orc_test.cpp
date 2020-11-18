@@ -173,8 +173,13 @@ struct SkipRowTest {
       cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, input_table->view());
     cudf_io::write_orc(out_opts);
 
+    auto begin_sequence = sequence, end_sequence = sequence;
+    if (skip_rows < file_num_rows) {
+      begin_sequence += skip_rows;
+      end_sequence += std::min(skip_rows + read_num_rows, file_num_rows);
+    }
     column_wrapper<int32_t, typename decltype(sequence)::value_type> output_col(
-      sequence + skip_rows, sequence + skip_rows + read_num_rows, validity);
+      begin_sequence, end_sequence, validity);
     std::vector<std::unique_ptr<column>> output_cols;
     output_cols.push_back(output_col.release());
     auto expected = std::make_unique<table>(std::move(output_cols));
@@ -192,12 +197,8 @@ struct SkipRowTest {
         .use_index(false)
         .skip_rows(skip_rows)
         .num_rows(read_num_rows);
-    if (skip_rows + read_num_rows <= file_num_rows) {
-      auto result = cudf_io::read_orc(in_opts);
-      CUDF_TEST_EXPECT_TABLES_EQUAL(expected_result->view(), result.tbl->view());
-    } else {
-      EXPECT_THROW(cudf_io::read_orc(in_opts), cudf::logic_error);
-    }
+    auto result = cudf_io::read_orc(in_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_result->view(), result.tbl->view());
   }
 
   void test(int skip_rows, int file_num_rows)
