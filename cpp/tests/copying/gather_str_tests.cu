@@ -95,8 +95,7 @@ TEST_F(GatherTestStr, GatherDontCheckOutOfBounds)
   for (auto itr = h_map.begin(); itr != h_map.end(); ++itr) {
     h_expected.push_back(h_strings[*itr]);
   }
-  cudf::test::strings_column_wrapper expected(
-    h_expected.begin(), h_expected.end());
+  cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
 }
 
