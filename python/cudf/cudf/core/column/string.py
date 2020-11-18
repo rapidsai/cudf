@@ -42,7 +42,6 @@ from cudf._lib.nvtext.tokenize import (
     detokenize as cpp_detokenize,
     tokenize as cpp_tokenize,
 )
-from cudf._lib.scalar import DeviceScalar, as_device_scalar
 from cudf._lib.strings.attributes import (
     code_points as cpp_code_points,
     count_bytes as cpp_count_bytes,
@@ -424,8 +423,8 @@ class StringMethods(ColumnMethodsMixin):
         if others is None:
             data = cpp_join(
                 self._column,
-                as_device_scalar(sep),
-                as_device_scalar(na_rep, "str"),
+                cudf.Scalar(sep),
+                cudf.Scalar(na_rep, "str"),
             )
         else:
             other_cols = _get_cols_list(self._parent, others)
@@ -434,8 +433,8 @@ class StringMethods(ColumnMethodsMixin):
                 cudf.DataFrame(
                     {index: value for index, value in enumerate(all_cols)}
                 ),
-                as_device_scalar(sep),
-                as_device_scalar(na_rep, "str"),
+                cudf.Scalar(sep),
+                cudf.Scalar(na_rep, "str"),
             )
 
         if len(data) == 1 and data.null_count == 1:
@@ -646,7 +645,7 @@ class StringMethods(ColumnMethodsMixin):
                 result_col = cpp_contains_re(self._column, pat)
             else:
                 result_col = cpp_contains(
-                    self._column, as_device_scalar(pat, "str")
+                    self._column, cudf.Scalar(pat, "str")
                 )
         else:
             result_col = cpp_contains_multiple(
@@ -749,12 +748,12 @@ class StringMethods(ColumnMethodsMixin):
 
         # Pandas forces non-regex replace when pat is a single-character
         return self._return_or_inplace(
-            cpp_replace_re(self._column, pat, as_device_scalar(repl, "str"), n)
+            cpp_replace_re(self._column, pat, cudf.Scalar(repl, "str"), n)
             if regex is True and len(pat) > 1
             else cpp_replace(
                 self._column,
-                as_device_scalar(pat, "str"),
-                as_device_scalar(repl, "str"),
+                cudf.Scalar(pat, "str"),
+                cudf.Scalar(repl, "str"),
                 n,
             ),
             **kwargs,
@@ -1739,7 +1738,7 @@ class StringMethods(ColumnMethodsMixin):
             repl = ""
 
         return self._return_or_inplace(
-            cpp_filter_alphanum(self._column, as_device_scalar(repl), keep),
+            cpp_filter_alphanum(self._column, cudf.Scalar(repl), keep),
             **kwargs,
         )
 
@@ -1870,7 +1869,7 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(
             cpp_slice_replace(
-                self._column, start, stop, as_device_scalar(repl)
+                self._column, start, stop, cudf.Scalar(repl)
             ),
             **kwargs,
         )
@@ -1922,7 +1921,7 @@ class StringMethods(ColumnMethodsMixin):
             repl = ""
 
         return self._return_or_inplace(
-            cpp_string_insert(self._column, start, as_device_scalar(repl)),
+            cpp_string_insert(self._column, start, cudf.Scalar(repl)),
             **kwargs,
         )
 
@@ -2062,7 +2061,7 @@ class StringMethods(ColumnMethodsMixin):
         if pat is None:
             pat = ""
 
-        result_table = cpp_split(self._column, as_device_scalar(pat, "str"), n)
+        result_table = cpp_split(self._column, cudf.Scalar(pat, "str"), n)
         if len(result_table._data) == 1:
             if result_table._data[0].null_count == len(self._parent):
                 result_table = []
@@ -2154,7 +2153,7 @@ class StringMethods(ColumnMethodsMixin):
         if pat is None:
             pat = ""
 
-        result_table = cpp_rsplit(self._column, as_device_scalar(pat), n)
+        result_table = cpp_rsplit(self._column, cudf.Scalar(pat), n)
         if len(result_table._data) == 1:
             if result_table._data[0].null_count == len(self._parent):
                 result_table = []
@@ -2247,7 +2246,7 @@ class StringMethods(ColumnMethodsMixin):
             sep = " "
 
         return self._return_or_inplace(
-            cpp_partition(self._column, as_device_scalar(sep)), **kwargs
+            cpp_partition(self._column, cudf.Scalar(sep)), **kwargs
         )
 
     def rpartition(self, sep=" ", expand=True, **kwargs):
@@ -2318,7 +2317,7 @@ class StringMethods(ColumnMethodsMixin):
             sep = " "
 
         return self._return_or_inplace(
-            cpp_rpartition(self._column, as_device_scalar(sep)), **kwargs
+            cpp_rpartition(self._column, cudf.Scalar(sep)), **kwargs
         )
 
     def pad(self, width, side="left", fillchar=" ", **kwargs):
@@ -2717,7 +2716,7 @@ class StringMethods(ColumnMethodsMixin):
             to_strip = ""
 
         return self._return_or_inplace(
-            cpp_strip(self._column, as_device_scalar(to_strip)), **kwargs
+            cpp_strip(self._column, cudf.Scalar(to_strip)), **kwargs
         )
 
     def lstrip(self, to_strip=None, **kwargs):
@@ -2764,7 +2763,7 @@ class StringMethods(ColumnMethodsMixin):
             to_strip = ""
 
         return self._return_or_inplace(
-            cpp_lstrip(self._column, as_device_scalar(to_strip)), **kwargs
+            cpp_lstrip(self._column, cudf.Scalar(to_strip)), **kwargs
         )
 
     def rstrip(self, to_strip=None, **kwargs):
@@ -2819,7 +2818,7 @@ class StringMethods(ColumnMethodsMixin):
             to_strip = ""
 
         return self._return_or_inplace(
-            cpp_rstrip(self._column, as_device_scalar(to_strip)), **kwargs
+            cpp_rstrip(self._column, cudf.Scalar(to_strip)), **kwargs
         )
 
     def wrap(self, width, **kwargs):
@@ -3180,7 +3179,7 @@ class StringMethods(ColumnMethodsMixin):
             )
         elif is_scalar(pat):
             result_col = cpp_endswith(
-                self._column, as_device_scalar(pat, "str")
+                self._column, cudf.Scalar(pat, "str")
             )
         else:
             result_col = cpp_endswith_multiple(
@@ -3247,7 +3246,7 @@ class StringMethods(ColumnMethodsMixin):
             )
         elif is_scalar(pat):
             result_col = cpp_startswith(
-                self._column, as_device_scalar(pat, "str")
+                self._column, cudf.Scalar(pat, "str")
             )
         else:
             result_col = cpp_startswith_multiple(
@@ -3306,7 +3305,7 @@ class StringMethods(ColumnMethodsMixin):
             end = -1
 
         result_col = cpp_find(
-            self._column, as_device_scalar(sub, "str"), start, end
+            self._column, cudf.Scalar(sub, "str"), start, end
         )
 
         return self._return_or_inplace(result_col, **kwargs)
@@ -3365,7 +3364,7 @@ class StringMethods(ColumnMethodsMixin):
             end = -1
 
         result_col = cpp_rfind(
-            self._column, as_device_scalar(sub, "str"), start, end
+            self._column, cudf.Scalar(sub, "str"), start, end
         )
 
         return self._return_or_inplace(result_col, **kwargs)
@@ -3420,7 +3419,7 @@ class StringMethods(ColumnMethodsMixin):
             end = -1
 
         result_col = cpp_find(
-            self._column, as_device_scalar(sub, "str"), start, end
+            self._column, cudf.Scalar(sub, "str"), start, end
         )
 
         result = self._return_or_inplace(result_col, **kwargs)
@@ -3480,7 +3479,7 @@ class StringMethods(ColumnMethodsMixin):
             end = -1
 
         result_col = cpp_rfind(
-            self._column, as_device_scalar(sub, "str"), start, end
+            self._column, cudf.Scalar(sub, "str"), start, end
         )
 
         result = self._return_or_inplace(result_col, **kwargs)
@@ -3736,7 +3735,7 @@ class StringMethods(ColumnMethodsMixin):
         table = str.maketrans(table)
         return self._return_or_inplace(
             cpp_filter_characters(
-                self._column, table, keep, as_device_scalar(repl)
+                self._column, table, keep, cudf.Scalar(repl)
             ),
             **kwargs,
         )
@@ -4157,7 +4156,7 @@ class StringMethods(ColumnMethodsMixin):
                 self._column,
                 targets_column,
                 replacements_column,
-                as_device_scalar(delimiter, dtype="str"),
+                cudf.Scalar(delimiter, dtype="str"),
             ),
             **kwargs,
         )
@@ -4225,8 +4224,8 @@ class StringMethods(ColumnMethodsMixin):
             cpp_filter_tokens(
                 self._column,
                 min_token_length,
-                as_device_scalar(replacement, dtype="str"),
-                as_device_scalar(delimiter, dtype="str"),
+                cudf.Scalar(replacement, dtype="str"),
+                cudf.Scalar(delimiter, dtype="str"),
             ),
             **kwargs,
         )
@@ -4500,10 +4499,7 @@ class StringMethods(ColumnMethodsMixin):
 
 def _massage_string_arg(value, name, allow_col=False):
     if isinstance(value, str):
-        return as_device_scalar(value, dtype="str")
-
-    if isinstance(value, DeviceScalar) and is_string_dtype(value.dtype):
-        return value
+        return cudf.Scalar(value, dtype="str")
 
     allowed_types = ["Scalar"]
 

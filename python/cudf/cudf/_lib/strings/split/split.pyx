@@ -21,13 +21,16 @@ from cudf._lib.cpp.strings.split.split cimport (
 
 
 def split(Column source_strings,
-          DeviceScalar delimiter,
+          object py_delimiter,
           size_type maxsplit):
     """
     Returns a Table by splitting the `source_strings`
     column around the specified `delimiter`.
     The split happens from beginning.
     """
+
+    cdef DeviceScalar delimiter = py_delimiter.device_value
+
     cdef unique_ptr[table] c_result
     cdef column_view source_view = source_strings.view()
     cdef const string_scalar* scalar_str = <const string_scalar*>(
@@ -48,13 +51,16 @@ def split(Column source_strings,
 
 
 def rsplit(Column source_strings,
-           DeviceScalar delimiter,
+           object py_delimiter,
            size_type maxsplit):
     """
     Returns a Table by splitting the `source_strings`
     column around the specified `delimiter`.
     The split happens from the end.
     """
+
+    cdef DeviceScalar delimiter = py_delimiter.device_value
+
     cdef unique_ptr[table] c_result
     cdef column_view source_view = source_strings.view()
     cdef const string_scalar* scalar_str = <const string_scalar*>(

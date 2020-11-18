@@ -18,11 +18,13 @@ from cudf._lib.cpp.strings.find cimport (
 )
 
 
-def contains(Column source_strings, DeviceScalar target):
+def contains(Column source_strings, object py_target):
     """
     Returns a Column of boolean values with True for `source_strings`
     that contain the pattern given in `target`.
     """
+    cdef DeviceScalar target = py_target.device_value
+
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
@@ -57,11 +59,14 @@ def contains_multiple(Column source_strings, Column target_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
-def endswith(Column source_strings, DeviceScalar target):
+def endswith(Column source_strings, object py_target):
     """
     Returns a Column of boolean values with True for `source_strings`
     that contain strings that end with the pattern given in `target`.
     """
+
+    cdef DeviceScalar target = py_target.device_value
+
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
@@ -97,11 +102,14 @@ def endswith_multiple(Column source_strings, Column target_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
-def startswith(Column source_strings, DeviceScalar target):
+def startswith(Column source_strings, object py_target):
     """
     Returns a Column of boolean values with True for `source_strings`
     that contain strings that start with the pattern given in `target`.
     """
+
+    cdef DeviceScalar target = py_target.device_value
+
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
@@ -138,7 +146,7 @@ def startswith_multiple(Column source_strings, Column target_strings):
 
 
 def find(Column source_strings,
-         DeviceScalar target,
+         object py_target,
          size_type start,
          size_type end):
     """
@@ -147,6 +155,9 @@ def find(Column source_strings,
     Scan portion of strings in `source_strings` can be
     controlled by setting `start` and `end` values.
     """
+
+    cdef DeviceScalar target = py_target.device_value
+
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
@@ -166,7 +177,7 @@ def find(Column source_strings,
 
 
 def rfind(Column source_strings,
-          DeviceScalar target,
+          object py_target,
           size_type start,
           size_type end):
     """
@@ -175,6 +186,9 @@ def rfind(Column source_strings,
     Scan portion of strings in `source_strings` can be
     controlled by setting `start` and `end` values.
     """
+
+    cdef DeviceScalar target = py_target.device_value
+
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
