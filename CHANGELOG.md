@@ -67,6 +67,7 @@
 - PR #6622 Update `to_pandas` api docs
 - PR #6623 Add operator overloading to column and clean up error messages
 - PR #6644 Cover different CSV reader/writer options in benchmarks
+- PR #6741 Cover different ORC and Parquet reader/writer options in benchmarks
 - PR #6651 Add cudf::dictionary::make_dictionary_pair_iterator
 - PR #6635 Add cudf::test::dictionary_column_wrapper class
 - PR #6702 Fix orc read corruption on boolean column
