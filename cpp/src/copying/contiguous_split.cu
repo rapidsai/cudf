@@ -748,7 +748,6 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
   // HtoD indices and source buf info to device
   CUDA_TRY(cudaMemcpyAsync(
     d_indices, h_indices, indices_size + src_buf_info_size, cudaMemcpyHostToDevice, stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
 
   // clang-format off
   // packed block of memory 2. partition buffer sizes and dst_buf_info structs
@@ -811,8 +810,14 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
       // if I am a validity column, we may need to shift bits
       int const bit_shift = src_info.is_validity ? row_start % 32 : 0;
       // # of rows isn't necessarily the same as # of elements to be copied.
-      int num_elements = src_info.offsets == nullptr ? num_rows : num_rows + 1;
-      if (src_info.is_validity) { num_elements = (num_elements + 31) / 32; }
+      auto const num_elements = [&]() {
+        if (src_info.offsets != nullptr) {
+          return num_rows + 1;
+        } else if (src_info.is_validity) {
+          return (num_rows + 31) / 32;
+        }
+        return num_rows;
+      }();
       int const element_size = cudf::type_dispatcher(data_type{src_info.type}, size_of_helper{});
       size_t const bytes     = num_elements * element_size;
       return dst_buf_info{_round_up_safe(bytes, 64),
@@ -824,11 +829,6 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
                           value_shift,
                           bit_shift};
     });
-
-  // DtoH buf sizes and dest buf info back to the host
-  CUDA_TRY(cudaMemcpyAsync(
-    h_buf_sizes, d_buf_sizes, buf_sizes_size + dst_buf_info_size, cudaMemcpyDeviceToHost, stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
 
   // compute total size of each partition
   {
