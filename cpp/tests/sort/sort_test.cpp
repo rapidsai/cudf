@@ -318,8 +318,8 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointSortedOrderGather)
   auto const indices = cudf::sorted_order(input_table);
   auto const sorted  = cudf::gather(input_table, indices->view());
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(index_col, indices->view());
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(sorted_table, sorted->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(index_col, indices->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(sorted_table, sorted->view());
 }
 
 }  // namespace test
