@@ -1002,47 +1002,73 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProduct)
   auto const TWO   = decimalXX{2, scale_type{0}};
   auto const THREE = decimalXX{3, scale_type{0}};
   auto const FOUR  = decimalXX{4, scale_type{0}};
-  // auto const _24   = decimalXX{24, scale_type{0}};
+  auto const _24   = decimalXX{24, scale_type{0}};
 
-  auto const in     = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
-  auto const column = cudf::test::fixed_width_column_wrapper<decimalXX>(in.cbegin(), in.cend());
-  // auto const expected = std::accumulate(in.cbegin(), in.cend(), ONE,
-  // std::multiplies<decimalXX>());
+  auto const in       = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
+  auto const column   = cudf::test::fixed_width_column_wrapper<decimalXX>(in.cbegin(), in.cend());
+  auto const expected = std::accumulate(in.cbegin(), in.cend(), ONE, std::multiplies<decimalXX>());
   auto const out_type = static_cast<cudf::column_view>(column).type();
 
-  EXPECT_THROW(cudf::reduce(column, cudf::make_product_aggregation(), out_type), cudf::logic_error);
+  auto const result        = cudf::reduce(column, cudf::make_product_aggregation(), out_type);
+  auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+  auto const result_fp     = decimalXX{result_scalar->value()};
 
-  // auto const result        = cudf::reduce(column, cudf::make_product_aggregation(), out_type);
-  // auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
-
-  // EXPECT_EQ(result_scalar->value(), expected);
-  // EXPECT_EQ(result_scalar->value(), _24);
+  EXPECT_EQ(result_fp, expected);
+  EXPECT_EQ(result_fp, _24);
 }
 
 TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSum)
 {
   using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const scale = scale_type{0};
+
+  auto const ZERO  = decimalXX{0, scale};
+  auto const ONE   = decimalXX{1, scale};
+  auto const TWO   = decimalXX{2, scale};
+  auto const THREE = decimalXX{3, scale};
+  auto const FOUR  = decimalXX{4, scale};
+  auto const TEN   = decimalXX{10, scale};
+
+  auto const in       = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
+  auto const column   = fp_wrapper{{1, 2, 3, 4}, scale};
+  auto const expected = std::accumulate(in.cbegin(), in.cend(), ZERO, std::plus<decimalXX>());
+  auto const out_type = static_cast<cudf::column_view>(column).type();
+
+  auto const result        = cudf::reduce(column, cudf::make_sum_aggregation(), out_type);
+  auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+  auto const result_fp     = decimalXX{result_scalar->value(), scale};
+
+  EXPECT_EQ(result_fp, expected);
+  EXPECT_EQ(result_fp, TEN);
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumAlternate)
+{
+  using namespace numeric;
   using decimalXX = TypeParam;
 
-  // auto const ZERO  = decimalXX{0, scale_type{0}};
+  auto const ZERO  = decimalXX{0, scale_type{0}};
   auto const ONE   = decimalXX{1, scale_type{0}};
   auto const TWO   = decimalXX{2, scale_type{0}};
   auto const THREE = decimalXX{3, scale_type{0}};
   auto const FOUR  = decimalXX{4, scale_type{0}};
-  // auto const TEN   = decimalXX{10, scale_type{0}};
+  auto const TEN   = decimalXX{10, scale_type{0}};
 
-  auto const in     = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
-  auto const column = cudf::test::fixed_width_column_wrapper<decimalXX>(in.cbegin(), in.cend());
-  // auto const expected = std::accumulate(in.cbegin(), in.cend(), ZERO, std::plus<decimalXX>());
+  auto const in       = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
+  auto const column   = cudf::test::fixed_width_column_wrapper<decimalXX>(in.cbegin(), in.cend());
+  auto const expected = std::accumulate(in.cbegin(), in.cend(), ZERO, std::plus<decimalXX>());
   auto const out_type = static_cast<cudf::column_view>(column).type();
 
-  EXPECT_THROW(cudf::reduce(column, cudf::make_sum_aggregation(), out_type), cudf::logic_error);
+  auto const result        = cudf::reduce(column, cudf::make_sum_aggregation(), out_type);
+  auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+  auto const result_fp     = decimalXX{result_scalar->value()};
 
-  // auto const result        = cudf::reduce(column, cudf::make_sum_aggregation(), out_type);
-  // auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
-
-  // EXPECT_EQ(result_scalar->value(), expected);
-  // EXPECT_EQ(result_scalar->value(), TEN);
+  EXPECT_EQ(result_fp, expected);
+  EXPECT_EQ(result_fp, TEN);
 }
 
 TYPED_TEST(ReductionTest, NthElement)

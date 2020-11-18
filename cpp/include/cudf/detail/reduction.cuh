@@ -24,7 +24,7 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/iterator_traits.h>
 #include <cub/device/device_reduce.cuh>
-#include "reduction_operators.cuh"
+#include <reduction_operators.cuh>
 
 namespace cudf {
 namespace reduction {
@@ -45,16 +45,19 @@ namespace detail {
 template <typename Op,
           typename InputIterator,
           typename OutputType = typename thrust::iterator_value<InputIterator>::type,
-          typename std::enable_if_t<is_fixed_width<OutputType>()>* = nullptr>
+          typename std::enable_if_t<is_fixed_width<OutputType>() and
+                                    not is_fixed_point<OutputType>()>* = nullptr>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> sop,
                                rmm::mr::device_memory_resource* mr,
                                cudaStream_t stream)
 {
-  auto binary_op      = sop.get_binary_op();
-  OutputType identity = sop.template get_identity<OutputType>();
-  rmm::device_scalar<OutputType> dev_result{identity, stream, mr};
+  using Type = device_storage_type_t<OutputType>;
+
+  auto binary_op = sop.get_binary_op();
+  auto identity  = sop.template get_identity<Type>();
+  rmm::device_scalar<Type> dev_result{identity, stream, mr};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -80,8 +83,21 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             stream);
 
   // only for string_view, data is copied
-  auto s = new cudf::scalar_type_t<OutputType>(std::move(dev_result), true, stream, mr);
+  auto s = new cudf::scalar_type_t<Type>(std::move(dev_result), true, stream, mr);
   return std::unique_ptr<scalar>(s);
+}
+
+template <typename Op,
+          typename InputIterator,
+          typename OutputType = typename thrust::iterator_value<InputIterator>::type,
+          typename std::enable_if_t<is_fixed_point<OutputType>()>* = nullptr>
+std::unique_ptr<scalar> reduce(InputIterator d_in,
+                               cudf::size_type num_items,
+                               op::simple_op<Op> sop,
+                               rmm::mr::device_memory_resource* mr,
+                               cudaStream_t stream)
+{
+  CUDF_EXPECTS(false, "fail");  // TODO fix
 }
 
 // @brief string_view specialization of simple reduction

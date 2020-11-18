@@ -171,8 +171,7 @@ struct same_element_type_dispatcher {
   template <typename ElementType>
   static constexpr bool is_supported_v()
   {
-    return !(cudf::is_fixed_point<ElementType>() ||
-             std::is_same<ElementType, cudf::list_view>::value ||
+    return !(std::is_same<ElementType, cudf::list_view>::value ||
              std::is_same<ElementType, cudf::struct_view>::value);
   }
 
@@ -233,11 +232,13 @@ struct element_type_dispatcher {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    if (output_type == col.type())
-      return cudf::reduction::simple::simple_reduction<ElementType, ElementType, Op>(
-        col, mr, stream);
-    auto result =
-      cudf::reduction::simple::simple_reduction<ElementType, int64_t, Op>(col, mr, stream);
+    using namespace cudf::reduction::simple;
+
+    if (output_type == col.type()) {
+      return simple_reduction<ElementType, ElementType, Op>(col, mr, stream);
+    }
+
+    auto result = simple_reduction<ElementType, int64_t, Op>(col, mr, stream);
     if (output_type == result->type()) return result;
     // this will cast the result to the output_type
     return cudf::type_dispatcher(output_type,
@@ -249,8 +250,22 @@ struct element_type_dispatcher {
   }
 
   template <typename ElementType,
-            typename std::enable_if_t<!std::is_floating_point<ElementType>::value and
-                                      !std::is_integral<ElementType>::value>* = nullptr>
+            typename std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& col,
+                                     data_type const output_type,
+                                     rmm::mr::device_memory_resource* mr,
+                                     cudaStream_t stream)
+  {
+    CUDF_EXPECTS(output_type == col.type(), "fixed_point reductions requires same output type");
+
+    using Type = device_storage_type_t<ElementType>;
+
+    return cudf::reduction::simple::simple_reduction<Type, Type, Op>(col, mr, stream);
+  }
+
+  template <typename ElementType,
+            typename std::enable_if_t<!cudf::is_numeric<ElementType>() and
+                                      !cudf::is_fixed_point<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      data_type const output_type,
                                      rmm::mr::device_memory_resource* mr,
