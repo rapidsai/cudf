@@ -46,10 +46,10 @@ TYPED_TEST(GatherTest, IdentityTest)
   std::unique_ptr<cudf::table> result = std::move(cudf::gather(source_table, gather_map));
 
   for (auto i = 0; i < source_table.num_columns(); ++i) {
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(source_table.column(i), result->view().column(i));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(source_table.column(i), result->view().column(i));
   }
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(source_table, result->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(source_table, result->view());
 }
 
 TYPED_TEST(GatherTest, ReverseIdentityTest)
@@ -71,7 +71,7 @@ TYPED_TEST(GatherTest, ReverseIdentityTest)
                                                                   reversed_data + source_size);
 
   for (auto i = 0; i < source_table.num_columns(); ++i) {
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_column, result->view().column(i));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect_column, result->view().column(i));
   }
 }
 
@@ -195,7 +195,7 @@ TYPED_TEST(GatherTest, MultiColReverseIdentityTest)
                                                                   reversed_data + source_size);
 
   for (auto i = 0; i < source_table.num_columns(); ++i) {
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_column, result->view().column(i));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expect_column, result->view().column(i));
   }
 }
 

@@ -61,7 +61,7 @@ TYPED_TEST(GatherTestListTyped, Gather)
 
   LCW<T> expected{{1, 2, 3, 4}, {6, 7}};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
 }
 
 TYPED_TEST(GatherTestListTyped, GatherNothing)
@@ -120,7 +120,7 @@ TYPED_TEST(GatherTestListTyped, GatherNulls)
 
   LCW<T> expected{{{1, 2, 3, 4}, valids}, {{6, 7}, valids}};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
 }
 
 TYPED_TEST(GatherTestListTyped, GatherNested)
@@ -139,7 +139,7 @@ TYPED_TEST(GatherTestListTyped, GatherNested)
 
     LCW<T> expected{{{2, 3}, {4, 5}}, {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}}};
 
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view().column(0), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   }
 
   // List<List<List<T>>>
@@ -160,7 +160,7 @@ TYPED_TEST(GatherTestListTyped, GatherNested)
                     {{LCW<T>{0}}},
                     {{{10, 20}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}};
 
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view().column(0), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   }
 }
 
@@ -182,7 +182,7 @@ TYPED_TEST(GatherTestListTyped, GatherOutOfOrder)
                     {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}},
                     {{2, 3}, {4, 5}}};
 
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view().column(0), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   }
 }
 
@@ -210,7 +210,7 @@ TYPED_TEST(GatherTestListTyped, GatherNestedNulls)
       {{{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}, valids},
       {{{{25, 26}, valids}, {27, 28}, {{29, 30}, valids}, {31, 32}, {33, 34}}, valids}};
 
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view().column(0), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   }
 
   // List<List<List<T>>>
@@ -232,7 +232,7 @@ TYPED_TEST(GatherTestListTyped, GatherNestedNulls)
                     {{LCW<T>{0}}},
                     {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids}};
 
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view().column(0), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   }
 }
 
@@ -248,7 +248,7 @@ TYPED_TEST(GatherTestListTyped, GatherNestedWithEmpties)
 
   LCW<T> expected{{{2, 3}, LCW<T>{}}, {LCW<T>{}}};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view().column(0), expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
 }
 
 TYPED_TEST(GatherTestListTyped, GatherDetailInvalidIndex)
@@ -275,7 +275,7 @@ TYPED_TEST(GatherTestListTyped, GatherDetailInvalidIndex)
                      {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}}},
                     expected_validity.begin()};
 
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view().column(0), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   }
 }
 
@@ -354,14 +354,14 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
       {{4, 4, 4}, {5, 5}, {6, 6}},
       {{7, 7, 7}, {8, 8}, {9, 9}},
     };
-    cudf::test::expect_columns_equivalent(expected0, result0->get_column(0).view());
+    cudf::test::expect_columns_equal(expected0, result0->get_column(0).view());
 
     auto result1 = cudf::gather(tbl1, cudf::test::fixed_width_column_wrapper<int>{0, 3});
     LCW<T> expected1{
       {{10, 10, 10}, {11, 11}, {12, 12}},
       {{50, 50, 50, 50}, {6, 13}},
     };
-    cudf::test::expect_columns_equivalent(expected1, result1->get_column(0).view());
+    cudf::test::expect_columns_equal(expected1, result1->get_column(0).view());
   }
 
   auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
