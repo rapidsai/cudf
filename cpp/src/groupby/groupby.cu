@@ -29,11 +29,12 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/copy.h>
 
 #include <memory>
 #include <utility>
-#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace groupby {
