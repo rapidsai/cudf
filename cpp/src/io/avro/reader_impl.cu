@@ -111,6 +111,7 @@ class metadata : public file_metadata {
           }
         }
       }
+      CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
     } else {
       for (int i = 0; i < num_avro_columns; ++i) {
         // Exclude array columns (unsupported)
@@ -362,7 +363,6 @@ table_with_metadata reader::impl::read(avro_reader_options const &options, cudaS
   auto num_rows  = options.get_num_rows();
   num_rows       = (num_rows != 0) ? num_rows : -1;
   std::vector<std::unique_ptr<column>> out_columns;
-  table_metadata metadata_out;
 
   // Select and read partial metadata / schema within the subset of rows
   _metadata->init_and_select_rows(skip_rows, num_rows);
@@ -454,9 +454,15 @@ table_with_metadata reader::impl::read(avro_reader_options const &options, cudaS
       for (size_t i = 0; i < column_types.size(); ++i) {
         out_columns.emplace_back(make_column(out_buffers[i], stream, _mr));
       }
+    } else {
+      // Create empty columns
+      for (size_t i = 0; i < column_types.size(); ++i) {
+        out_columns.emplace_back(make_empty_column(column_types[i]));
+      }
     }
   }
 
+  table_metadata metadata_out{};
   // Return column names (must match order of returned columns)
   metadata_out.column_names.resize(selected_columns.size());
   for (size_t i = 0; i < selected_columns.size(); i++) {
