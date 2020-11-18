@@ -27,7 +27,7 @@ namespace cudf {
  * @brief Column APIs for unary ops
  */
 
-enum class unary_op : int32_t {
+enum class unary_operator : int32_t {
   SIN,         // < Trigonometric sine
   COS,         // < Trigonometric cosine
   TAN,         // < Trigonometric tangent
@@ -63,7 +63,7 @@ enum class unary_op : int32_t {
  */
 std::unique_ptr<cudf::column> unary_operation(
   cudf::column_view const& input,
-  cudf::unary_op op,
+  cudf::unary_operator op,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
