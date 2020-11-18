@@ -577,7 +577,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_unaryOperation(JNIEnv *
   try {
     cudf::jni::auto_set_device(env);
     cudf::column_view *input = reinterpret_cast<cudf::column_view *>(input_ptr);
-    cudf::unary_op op = static_cast<cudf::unary_op>(int_op);
+    cudf::unary_operator op = static_cast<cudf::unary_operator>(int_op);
     std::unique_ptr<cudf::column> ret = cudf::unary_operation(*input, op);
     return reinterpret_cast<jlong>(ret.release());
   }
