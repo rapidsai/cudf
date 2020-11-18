@@ -363,6 +363,7 @@ table_with_metadata reader::impl::read(avro_reader_options const &options, cudaS
   auto num_rows  = options.get_num_rows();
   num_rows       = (num_rows != 0) ? num_rows : -1;
   std::vector<std::unique_ptr<column>> out_columns;
+  table_metadata metadata_out{};
 
   // Select and read partial metadata / schema within the subset of rows
   _metadata->init_and_select_rows(skip_rows, num_rows);
@@ -462,7 +463,6 @@ table_with_metadata reader::impl::read(avro_reader_options const &options, cudaS
     }
   }
 
-  table_metadata metadata_out{};
   // Return column names (must match order of returned columns)
   metadata_out.column_names.resize(selected_columns.size());
   for (size_t i = 0; i < selected_columns.size(); i++) {
