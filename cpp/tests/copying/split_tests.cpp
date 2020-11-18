@@ -1145,6 +1145,49 @@ TEST_F(ContiguousSplitTableCornerCases, MixedColumnTypes)
   }
 }
 
+TEST_F(ContiguousSplitTableCornerCases, PreSplitTable)
+{
+  // test splitting a table that is already split (has an offset)
+  cudf::size_type start        = 0;
+  cudf::size_type presplit_pos = 47;
+  cudf::size_type size         = 10002;
+
+  srand(824);
+  auto rvalids = cudf::test::make_counting_transform_iterator(start, [](auto i) {
+    return static_cast<float>(rand()) / static_cast<float>(RAND_MAX) < 0.5f ? 0 : 1;
+  });
+
+  std::vector<bool> pre_split_valids{rvalids, rvalids + size};
+  cudf::test::fixed_width_column_wrapper<int> pre_split =
+    create_fixed_columns<int>(start, size, pre_split_valids.begin());
+
+  // pre-split this column
+  auto split_cols = cudf::split(pre_split, {47});
+
+  std::vector<cudf::size_type> splits{
+    2, 16, 31, 35, 64, 97, 158, 190, 638, 899, 900, 901, 996, 4200, 7131, 8111};
+
+  auto const post_split_start = start + presplit_pos;
+  auto const post_split_size  = size - presplit_pos;
+  auto el_iter                = thrust::make_counting_iterator(post_split_start);
+  std::vector<int> post_split_elements{el_iter, el_iter + post_split_size};
+  std::vector<bool> post_split_valids{
+    pre_split_valids.begin() + post_split_start,
+    pre_split_valids.begin() + post_split_start + post_split_size};
+
+  std::vector<cudf::test::fixed_width_column_wrapper<int>> expected =
+    create_expected_columns_for_splits<int>(splits, post_split_elements, post_split_valids);
+
+  cudf::table_view t({split_cols[1]});
+  auto result = cudf::contiguous_split(t, splits);
+
+  EXPECT_EQ(expected.size(), result.size());
+
+  for (unsigned long index = 0; index < result.size(); index++) {
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected[index], result[index].table.column(0));
+  }
+}
+
 struct ContiguousSplitNestedTypesTest : public cudf::test::BaseFixture {
 };
 

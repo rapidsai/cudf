@@ -56,12 +56,14 @@ struct src_buf_info {
                const int* _offsets,
                int _offset_stack_pos,
                int _parent_offsets_index,
-               bool _is_validity)
+               bool _is_validity,
+               int _column_offset)
     : type(_type),
       offsets(_offsets),
       offset_stack_pos(_offset_stack_pos),
       parent_offsets_index(_parent_offsets_index),
-      is_validity(_is_validity)
+      is_validity(_is_validity),
+      column_offset(_column_offset)
   {
   }
 
@@ -70,6 +72,7 @@ struct src_buf_info {
   int offset_stack_pos;      // position in the offset stack buffer
   int parent_offsets_index;  // immediate parent that has offsets, or -1 if none
   bool is_validity;          // if I am a validity buffer
+  size_type column_offset;   // offset in the case of a sliced column
 };
 
 /**
@@ -240,6 +243,11 @@ __global__ void copy_partition(int num_src_bufs,
 // functors traverse the hierarchy.
 
 /**
+ * @brief Returns whether or not the specified type is a column that contains offsets.
+ */
+bool is_offset_type(type_id id) { return (id == type_id::STRING or id == type_id::LIST); }
+
+/**
  * @brief Compute total device memory stack size needed to process nested
  * offsets per-output buffer.
  *
@@ -255,74 +263,19 @@ __global__ void copy_partition(int num_src_bufs,
  *
  * @param begin Beginning of input columns
  * @param end End of input columns
- * @param buf_index Current offset nesting depth
+ * @param offset_depth Current offset nesting depth
  *
  * @returns Total offset stack size needed for this range of columns.
  */
 template <typename InputIter>
-size_type compute_offset_stack_size(InputIter begin, InputIter end, int offset_depth = 0);
-
-/**
- * @brief Functor that retrieves the offset stack size needed for a single column.
- *
- * Called by compute_offset_stack_size.  This function will recursively call
- * compute_offset_stack_size in the case of nested types.
- */
-struct compute_offset_stack_size_functor {
-  template <typename T>
-  size_type operator()(column_view const& col, int offset_depth)
-  {
-    size_type const num_buffers = (1 + (col.nullable() ? 1 : 0));
-    return offset_depth * num_buffers;
-  }
-};
-
-template <>
-size_type compute_offset_stack_size_functor::operator()<cudf::string_view>(column_view const& col,
-                                                                           int offset_depth)
+size_t compute_offset_stack_size(InputIter begin, InputIter end, int offset_depth = 0)
 {
-  size_type const num_buffers = (1 + (col.nullable() ? 1 : 0));
-  // current offset depth applies to just our internal offsets/validity
-  // offset depth + 1 (the +1 coming from our internal offsets) applies to the chars
-  return (offset_depth * num_buffers) + (offset_depth + 1);
-}
-
-template <>
-size_type compute_offset_stack_size_functor::operator()<cudf::list_view>(column_view const& col,
-                                                                         int offset_depth)
-{
-  size_type const num_buffers = (1 + (col.nullable() ? 1 : 0));
-  return (offset_depth * num_buffers) +
-         // recurse through children
-         compute_offset_stack_size(col.child_begin() + 1, col.child_end(), offset_depth + 1);
-}
-
-template <>
-size_type compute_offset_stack_size_functor::operator()<cudf::struct_view>(column_view const& col,
-                                                                           int offset_depth)
-{
-  size_type const num_buffers = (1 + (col.nullable() ? 1 : 0));
-  return (offset_depth * num_buffers) +
-         // recurse through children
-         compute_offset_stack_size(col.child_begin(), col.child_end(), offset_depth);
-}
-
-template <>
-size_type compute_offset_stack_size_functor::operator()<cudf::dictionary32>(column_view const& col,
-                                                                            int offset_depth)
-{
-  CUDF_FAIL("Unsupported type");
-}
-
-template <typename InputIter>
-size_type compute_offset_stack_size(InputIter begin, InputIter end, int offset_depth)
-{
-  size_type ret = 0;
-  std::for_each(begin, end, [&ret, offset_depth](column_view const& col) {
-    ret +=
-      cudf::type_dispatcher(col.type(), compute_offset_stack_size_functor{}, col, offset_depth);
+  return std::accumulate(begin, end, 0, [offset_depth](auto stack_size, column_view const& col) {
+    auto const num_buffers = (col.head() != nullptr ? 1 : 0) + (col.nullable() ? 1 : 0);
+    return stack_size + (offset_depth * num_buffers) +
+           compute_offset_stack_size(
+             col.child_begin(), col.child_end(), offset_depth + is_offset_type(col.type().id()));
   });
-  return ret;
 }
 
 /**
@@ -334,92 +287,27 @@ size_type compute_offset_stack_size(InputIter begin, InputIter end, int offset_d
  *
  * @param begin Beginning of input columns
  * @param end End of input columns
- * @param buf_index Current buffer index (into out_buf)
- * @param out_buf Array of buffers to be output
+ * @param out_buf Iterator into output buffer infos
  *
- * @returns New working buf_index
+ * @returns next output buffer iterator
  */
-template <typename InputIter>
-size_type setup_src_buf_data(InputIter begin,
-                             InputIter end,
-                             size_type buf_index,
-                             uint8_t** out_buf);
-
-/**
- * @brief Functor that retrieves the individual buffers comprising a single column.
- *
- * Called by setup_src_buf_data.  This function will recursively call setup_src_buf_data in the case
- * of nested types.
- */
-struct setup_src_buf_data_functor {
-  template <typename T>
-  size_type operator()(column_view const& col, size_type buf_index, uint8_t** out_buf)
-  {
+template <typename InputIter, typename OutputIter>
+OutputIter setup_src_buf_data(InputIter begin, InputIter end, OutputIter out_buf)
+{
+  std::for_each(begin, end, [&out_buf](column_view const& col) {
     if (col.nullable()) {
-      out_buf[buf_index++] = reinterpret_cast<uint8_t*>(const_cast<bitmask_type*>(col.null_mask()));
+      *out_buf = reinterpret_cast<uint8_t*>(const_cast<bitmask_type*>(col.null_mask()));
+      out_buf++;
     }
-    out_buf[buf_index++] = reinterpret_cast<uint8_t*>(const_cast<T*>(col.begin<T>()));
-    return buf_index;
-  }
-};
-
-template <>
-size_type setup_src_buf_data_functor::operator()<cudf::string_view>(column_view const& col,
-                                                                    size_type buf_index,
-                                                                    uint8_t** out_buf)
-{
-  strings_column_view scv(col);
-  if (col.nullable()) {
-    out_buf[buf_index++] = reinterpret_cast<uint8_t*>(const_cast<bitmask_type*>(col.null_mask()));
-  }
-  out_buf[buf_index++] =
-    reinterpret_cast<uint8_t*>(const_cast<size_type*>(scv.offsets().begin<size_type>()));
-  out_buf[buf_index++] =
-    reinterpret_cast<uint8_t*>(const_cast<int8_t*>(scv.chars().begin<int8_t>()));
-  return buf_index;
-}
-
-template <>
-size_type setup_src_buf_data_functor::operator()<cudf::list_view>(column_view const& col,
-                                                                  size_type buf_index,
-                                                                  uint8_t** out_buf)
-{
-  lists_column_view lcv(col);
-  if (col.nullable()) {
-    out_buf[buf_index++] = reinterpret_cast<uint8_t*>(const_cast<bitmask_type*>(col.null_mask()));
-  }
-  out_buf[buf_index++] =
-    reinterpret_cast<uint8_t*>(const_cast<size_type*>(lcv.offsets().begin<size_type>()));
-  return setup_src_buf_data(col.child_begin() + 1, col.child_end(), buf_index, out_buf);
-}
-
-template <>
-size_type setup_src_buf_data_functor::operator()<cudf::struct_view>(column_view const& col,
-                                                                    size_type buf_index,
-                                                                    uint8_t** out_buf)
-{
-  if (col.nullable()) {
-    out_buf[buf_index++] = reinterpret_cast<uint8_t*>(const_cast<bitmask_type*>(col.null_mask()));
-  }
-  return setup_src_buf_data(col.child_begin(), col.child_end(), buf_index, out_buf);
-}
-
-template <>
-size_type setup_src_buf_data_functor::operator()<cudf::dictionary32>(column_view const& col,
-                                                                     size_type buf_index,
-                                                                     uint8_t** out_buf)
-{
-  CUDF_FAIL("Unsupported type");
-}
-
-template <typename InputIter>
-size_type setup_src_buf_data(InputIter begin, InputIter end, size_type buf_index, uint8_t** out_buf)
-{
-  std::for_each(begin, end, [&buf_index, &out_buf](column_view const& col) {
-    buf_index =
-      cudf::type_dispatcher(col.type(), setup_src_buf_data_functor{}, col, buf_index, out_buf);
+    // NOTE: we're always returning the base pointer here.  column-level offset is accounted
+    // for later.
+    if (col.head() != nullptr) {
+      *out_buf = const_cast<uint8_t*>(col.head<uint8_t>());
+      out_buf++;
+    }
+    out_buf = setup_src_buf_data(col.child_begin(), col.child_end(), out_buf);
   });
-  return buf_index;
+  return out_buf;
 }
 
 /**
@@ -441,21 +329,11 @@ template <typename InputIter>
 size_type count_src_bufs(InputIter begin, InputIter end)
 {
   auto buf_iter = thrust::make_transform_iterator(begin, [](column_view const& col) {
-    return (col.head<uint8_t>() != nullptr ? 1 : 0) + (col.nullable() ? 1 : 0) +
+    return (col.head() != nullptr ? 1 : 0) + (col.nullable() ? 1 : 0) +
            count_src_bufs(col.child_begin(), col.child_end());
   });
   return std::accumulate(buf_iter, buf_iter + std::distance(begin, end), 0);
 }
-
-/**
- * @brief Stores information about the current src_buf_info struct
- * we are producing information for as we march the hierarchy of columns.
- *
- */
-struct src_buf_iter {
-  src_buf_info* src;
-  int offset_stack_pos;
-};
 
 /**
  * @brief Computes source buffer information for the copy kernel.
@@ -469,8 +347,9 @@ struct src_buf_iter {
  * @param begin Beginning of input columns
  * @param end End of input columns
  * @param head Beginning of source buffer info array
- * @param current Pair containing current source buffer info pointer and an integer
- * representing our current offset nesting depth (how many list levels deep we are)
+ * @param current Current source buffer info to be written to
+ * @param offset_stack_pos Integer representing our current offset nesting depth
+ * (how many list or string levels deep we are)
  * @param parent_offset_index Index into src_buf_info output array indicating our nearest
  * containing list parent. -1 if we have no list parent
  * @param offset_depth Current offset nesting depth (how many list levels deep we are)
@@ -478,159 +357,192 @@ struct src_buf_iter {
  * @returns next src_buf_output after processing this range of input columns
  */
 template <typename InputIter>
-src_buf_iter setup_source_buf_info(InputIter begin,
-                                   InputIter end,
-                                   src_buf_info* head,
-                                   src_buf_iter current,
-                                   int parent_offset_index = -1,
-                                   int offset_depth        = 0);
+std::pair<src_buf_info*, size_type> setup_source_buf_info(InputIter begin,
+                                                          InputIter end,
+                                                          src_buf_info* head,
+                                                          src_buf_info* current,
+                                                          int offset_stack_pos    = 0,
+                                                          int parent_offset_index = -1,
+                                                          int offset_depth        = 0);
 
 /**
  * @brief Functor that builds source buffer information based on input columns.
  *
- * Called by setup_source_buf_info to build info for a single source column.  This function will
- * recursively call setup_source_buf_info in the case of nested types.
+ * Called by setup_source_buf_info to build information for a single source column.  This function
+ * will recursively call setup_source_buf_info in the case of nested types.
  */
 struct buf_info_functor {
+  src_buf_info* head;
+
   template <typename T>
-  src_buf_iter operator()(column_view const& col,
-                          src_buf_info* head,
-                          src_buf_iter current,
-                          int parent_offset_index,
-                          int offset_depth)
+  std::pair<src_buf_info*, size_type> operator()(column_view const& col,
+                                                 src_buf_info* current,
+                                                 int offset_stack_pos,
+                                                 int parent_offset_index,
+                                                 int offset_depth)
   {
     if (col.nullable()) {
-      current = add_null_buffer(col, current, parent_offset_index, offset_depth);
+      std::tie(current, offset_stack_pos) =
+        add_null_buffer(col, current, offset_stack_pos, parent_offset_index, offset_depth);
     }
 
     // info for the data buffer
-    *current.src =
-      src_buf_info(col.type().id(), nullptr, current.offset_stack_pos, parent_offset_index, false);
+    *current = src_buf_info(
+      col.type().id(), nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
 
-    return src_buf_iter{current.src + 1, current.offset_stack_pos + offset_depth};
+    return {current + 1, offset_stack_pos + offset_depth};
   }
 
  private:
-  src_buf_iter add_null_buffer(column_view const& col,
-                               src_buf_iter current,
-                               int parent_offset_index,
-                               int offset_depth)
+  std::pair<src_buf_info*, size_type> add_null_buffer(column_view const& col,
+                                                      src_buf_info* current,
+                                                      int offset_stack_pos,
+                                                      int parent_offset_index,
+                                                      int offset_depth)
   {
     // info for the validity buffer
-    *current.src =
-      src_buf_info(type_id::INT32, nullptr, current.offset_stack_pos, parent_offset_index, true);
+    *current = src_buf_info(
+      type_id::INT32, nullptr, offset_stack_pos, parent_offset_index, true, col.offset());
 
-    return src_buf_iter{current.src + 1, current.offset_stack_pos + offset_depth};
+    return {current + 1, offset_stack_pos + offset_depth};
   }
 };
 
 template <>
-src_buf_iter buf_info_functor::operator()<cudf::string_view>(column_view const& col,
-                                                             src_buf_info* head,
-                                                             src_buf_iter current,
-                                                             int parent_offset_index,
-                                                             int offset_depth)
+std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_view>(
+  column_view const& col,
+  src_buf_info* current,
+  int offset_stack_pos,
+  int parent_offset_index,
+  int offset_depth)
 {
   strings_column_view scv(col);
 
   if (col.nullable()) {
-    current = add_null_buffer(col, current, parent_offset_index, offset_depth);
+    std::tie(current, offset_stack_pos) =
+      add_null_buffer(col, current, offset_stack_pos, parent_offset_index, offset_depth);
   }
 
-  auto offset_col = current.src;
+  auto offset_col = current;
 
   // info for the offsets buffer
-  *current.src = src_buf_info(type_id::INT32,
-                              scv.offsets().begin<cudf::id_to_type<type_id::INT32>>(),
-                              current.offset_stack_pos,
-                              parent_offset_index,
-                              false);
-  current.src++;
-  current.offset_stack_pos += offset_depth;
+  *current = src_buf_info(type_id::INT32,
+                          scv.offsets().begin<cudf::id_to_type<type_id::INT32>>(),
+                          offset_stack_pos,
+                          parent_offset_index,
+                          false,
+                          col.offset());
+  current++;
+  offset_stack_pos += offset_depth;
 
-  // info for the chars buffer
+  // since we are crossing an offset boundary, our offset_depth and parent_offset_index go up.
   offset_depth++;
   parent_offset_index = offset_col - head;
-  *current.src =
-    src_buf_info(type_id::INT8, nullptr, current.offset_stack_pos, parent_offset_index, false);
 
-  return src_buf_iter{current.src + 1, current.offset_stack_pos + offset_depth};
+  // info for the chars buffer
+  *current = src_buf_info(
+    type_id::INT8, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+
+  return {current + 1, offset_stack_pos + offset_depth};
 }
 
 template <>
-src_buf_iter buf_info_functor::operator()<cudf::list_view>(column_view const& col,
-                                                           src_buf_info* head,
-                                                           src_buf_iter current,
-                                                           int parent_offset_index,
-                                                           int offset_depth)
+std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::list_view>(
+  column_view const& col,
+  src_buf_info* current,
+  int offset_stack_pos,
+  int parent_offset_index,
+  int offset_depth)
 {
   lists_column_view lcv(col);
 
   if (col.nullable()) {
-    current = add_null_buffer(col, current, parent_offset_index, offset_depth);
+    std::tie(current, offset_stack_pos) =
+      add_null_buffer(col, current, offset_stack_pos, parent_offset_index, offset_depth);
   }
 
-  auto offset_col = current.src;
+  auto offset_col = current;
 
   // info for the offsets buffer
-  *current.src = src_buf_info(type_id::INT32,
-                              lcv.offsets().begin<cudf::id_to_type<type_id::INT32>>(),
-                              current.offset_stack_pos,
-                              parent_offset_index,
-                              false);
+  *current = src_buf_info(type_id::INT32,
+                          lcv.offsets().begin<cudf::id_to_type<type_id::INT32>>(),
+                          offset_stack_pos,
+                          parent_offset_index,
+                          false,
+                          col.offset());
+  current++;
+  offset_stack_pos += offset_depth;
 
-  // recurse on children
-  src_buf_iter next{current.src + 1, current.offset_stack_pos + offset_depth};
+  // since we are crossing an offset boundary, our offset_depth and parent_offset_index go up.
   offset_depth++;
   parent_offset_index = offset_col - head;
-  return setup_source_buf_info(
-    col.child_begin() + 1, col.child_end(), head, next, parent_offset_index, offset_depth);
+
+  return setup_source_buf_info(col.child_begin() + 1,
+                               col.child_end(),
+                               head,
+                               current,
+                               offset_stack_pos,
+                               parent_offset_index,
+                               offset_depth);
 }
 
 template <>
-src_buf_iter buf_info_functor::operator()<cudf::struct_view>(column_view const& col,
-                                                             src_buf_info* head,
-                                                             src_buf_iter current,
-                                                             int parent_offset_index,
-                                                             int offset_depth)
+std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::struct_view>(
+  column_view const& col,
+  src_buf_info* current,
+  int offset_stack_pos,
+  int parent_offset_index,
+  int offset_depth)
 {
   if (col.nullable()) {
-    current = add_null_buffer(col, current, parent_offset_index, offset_depth);
+    std::tie(current, offset_stack_pos) =
+      add_null_buffer(col, current, offset_stack_pos, parent_offset_index, offset_depth);
   }
 
   // recurse on children
-  return setup_source_buf_info(
-    col.child_begin(), col.child_end(), head, current, parent_offset_index, offset_depth);
+  return setup_source_buf_info(col.child_begin(),
+                               col.child_end(),
+                               head,
+                               current,
+                               offset_stack_pos,
+                               parent_offset_index,
+                               offset_depth);
 }
 
 template <>
-src_buf_iter buf_info_functor::operator()<cudf::dictionary32>(column_view const& col,
-                                                              src_buf_info* head,
-                                                              src_buf_iter current,
-                                                              int parent_offset_index,
-                                                              int offset_depth)
+std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::dictionary32>(
+  column_view const& col,
+  src_buf_info* current,
+  int offset_stack_pos,
+  int parent_offset_index,
+  int offset_depth)
 {
   CUDF_FAIL("Unsupported type");
 }
 
 template <typename InputIter>
-src_buf_iter setup_source_buf_info(InputIter begin,
-                                   InputIter end,
-                                   src_buf_info* head,
-                                   src_buf_iter current,
-                                   int parent_offset_index,
-                                   int offset_depth)
+std::pair<src_buf_info*, size_type> setup_source_buf_info(InputIter begin,
+                                                          InputIter end,
+                                                          src_buf_info* head,
+                                                          src_buf_info* current,
+                                                          int offset_stack_pos,
+                                                          int parent_offset_index,
+                                                          int offset_depth)
 {
-  std::for_each(
-    begin, end, [head, &current, parent_offset_index, offset_depth](column_view const& col) {
-      current = cudf::type_dispatcher(
-        col.type(), buf_info_functor{}, col, head, current, parent_offset_index, offset_depth);
-    });
-  return current;
+  std::for_each(begin, end, [&](column_view const& col) {
+    std::tie(current, offset_stack_pos) = cudf::type_dispatcher(col.type(),
+                                                                buf_info_functor{head},
+                                                                col,
+                                                                current,
+                                                                offset_stack_pos,
+                                                                parent_offset_index,
+                                                                offset_depth);
+  });
+  return {current, offset_stack_pos};
 }
 
 /**
- * @brief Given a set of input columns and computed split buffers, produce
+ * @brief Given a set of input columns and processed split buffers, produce
  * output columns.
  *
  * After performing the split we are left with 1 large buffer per incoming split
@@ -642,154 +554,54 @@ src_buf_iter setup_source_buf_info(InputIter begin,
  *
  * @param begin Beginning of input columns
  * @param end End of input columns
- * @param dst Output vector of column views to produce
- * @param partition_index Partition index (which section of the split we are working with)
- * @param buf_index Absolute split output buffer index
- * @param h_dst_bufs Array of destination buffers (indexed by partition_index)
- * @param h_dst_buf_info Array of offsets into destination buffers (indexed by buf_index)
+ * @param info_begin Iterator of dst_buf_info structs containing information about each
+ * copied buffer
+ * @param out_begin Output iterator of column views
+ * @param base_ptr Pointer to the base address of copied data for the working partition
  *
- * @returns new working buffer index after processing this range of input columns
+ * @returns new dst_buf_info iterator after processing this range of input columns
  */
-template <typename InputIter>
-size_type build_output_columns(InputIter begin,
-                               InputIter end,
-                               std::vector<column_view>& dst,
-                               int partition_index,
-                               int buf_index,
-                               uint8_t** h_dst_bufs,
-                               dst_buf_info* h_dst_buf_info);
-
-/**
- * @brief Functor that builds an output column based on split partition buffers.
- *
- * Called by build_output_columns to build a single output column.  This function will
- * recursively call build_output_columns in the case of nested types.
- */
-struct build_column_functor {
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::string_view>::value>* = nullptr>
-  size_type operator()(column_view const& src,
-                       std::vector<column_view>& dst,
-                       int partition_index,
-                       int buf_index,
-                       uint8_t** h_dst_bufs,
-                       dst_buf_info* h_dst_buf_info)
-  {
-    bool const nullable       = src.nullable();
-    int const child_buf_index = nullable ? buf_index + 1 : buf_index;
-
-    dst.push_back(cudf::column_view{
-      data_type{type_id::STRING},
-      h_dst_buf_info[child_buf_index].num_rows,
-      nullptr,
-      nullable ? reinterpret_cast<bitmask_type*>(h_dst_bufs[partition_index] +
-                                                 h_dst_buf_info[buf_index].dst_offset)
-               : nullptr,
-      nullable ? UNKNOWN_NULL_COUNT : 0,
-      0,
-      {cudf::column_view{data_type{type_id::INT32},
-                         h_dst_buf_info[child_buf_index].num_elements,
-                         reinterpret_cast<void*>(h_dst_bufs[partition_index] +
-                                                 h_dst_buf_info[child_buf_index].dst_offset)},
-
-       cudf::column_view{
-         data_type{type_id::INT8},
-         h_dst_buf_info[child_buf_index + 1].num_elements,
-         reinterpret_cast<void*>(h_dst_bufs[partition_index] +
-                                 h_dst_buf_info[child_buf_index + 1].dst_offset)}}});
-    return buf_index + (nullable ? 3 : 2);
-  }
-
-  template <typename T,
-            std::enable_if_t<std::is_same<T, cudf::struct_view>::value ||
-                             std::is_same<T, cudf::list_view>::value>* = nullptr>
-  size_type operator()(column_view const& src,
-                       std::vector<column_view>& dst,
-                       int partition_index,
-                       int buf_index,
-                       uint8_t** h_dst_bufs,
-                       dst_buf_info* h_dst_buf_info)
-  {
-    bool const nullable  = src.nullable();
-    int const root_index = buf_index;
-    if (nullable) { buf_index++; }
-
-    // build children
-    std::vector<column_view> children;
-    buf_index = build_output_columns(src.child_begin(),
-                                     src.child_end(),
-                                     children,
-                                     partition_index,
-                                     buf_index,
-                                     h_dst_bufs,
-                                     h_dst_buf_info);
-
-    // build me
-    dst.push_back(cudf::column_view{
-      src.type(),
-      h_dst_buf_info[root_index].num_rows,
-      nullptr,
-      nullable ? reinterpret_cast<bitmask_type*>(h_dst_bufs[partition_index] +
-                                                 h_dst_buf_info[root_index].dst_offset)
-               : nullptr,
-      nullable ? UNKNOWN_NULL_COUNT : 0,
-      0,
-      children});
-    return buf_index;
-  }
-
-  template <typename T, std::enable_if_t<std::is_same<T, cudf::dictionary32>::value>* = nullptr>
-  size_type operator()(column_view const& src,
-                       std::vector<column_view>& dst,
-                       int partition_index,
-                       int buf_index,
-                       uint8_t** h_dst_bufs,
-                       dst_buf_info* h_dst_buf_info)
-  {
-    CUDF_FAIL("Unsupported type");
-  }
-
-  template <typename T, std::enable_if_t<!cudf::is_compound<T>()>* = nullptr>
-  size_type operator()(column_view const& src,
-                       std::vector<column_view>& dst,
-                       int partition_index,
-                       int buf_index,
-                       uint8_t** h_dst_bufs,
-                       dst_buf_info* h_dst_buf_info)
-  {
-    bool const nullable  = src.nullable();
-    int const root_index = nullable ? buf_index + 1 : buf_index;
-    dst.push_back(cudf::column_view{
-      src.type(),
-      h_dst_buf_info[root_index].num_rows,
-      reinterpret_cast<void*>(h_dst_bufs[partition_index] + h_dst_buf_info[root_index].dst_offset),
-      nullable ? reinterpret_cast<bitmask_type*>(h_dst_bufs[partition_index] +
-                                                 h_dst_buf_info[buf_index].dst_offset)
-               : nullptr,
-      nullable ? UNKNOWN_NULL_COUNT : 0});
-    return buf_index + (nullable ? 2 : 1);
-  }
-};
-
-template <typename InputIter>
-size_type build_output_columns(InputIter begin,
-                               InputIter end,
-                               std::vector<column_view>& dst,
-                               int partition_index,
-                               int buf_index,
-                               uint8_t** h_dst_bufs,
-                               dst_buf_info* h_dst_buf_info)
+template <typename InputIter, typename BufInfo, typename Output>
+BufInfo build_output_columns(InputIter begin,
+                             InputIter end,
+                             BufInfo info_begin,
+                             Output out_begin,
+                             uint8_t const* const base_ptr)
 {
-  std::for_each(begin, end, [&](column_view const& col) {
-    buf_index = cudf::type_dispatcher(col.type(),
-                                      build_column_functor{},
-                                      col,
-                                      dst,
-                                      partition_index,
-                                      buf_index,
-                                      h_dst_bufs,
-                                      h_dst_buf_info);
+  auto current_info = info_begin;
+  std::transform(begin, end, out_begin, [&current_info, base_ptr](column_view const& src) {
+    // Use C++17 structured bindings
+    bitmask_type const* bitmask_ptr;
+    size_type null_count;
+    std::tie(bitmask_ptr, null_count) = [&]() {
+      if (src.nullable()) {
+        auto const ptr = reinterpret_cast<bitmask_type const*>(base_ptr + current_info->dst_offset);
+        ++current_info;
+        return std::make_pair(ptr, UNKNOWN_NULL_COUNT);
+      }
+      return std::make_pair(static_cast<bitmask_type const*>(nullptr), 0);
+    }();
+    uint8_t const* data_ptr;
+    size_type row_count;
+    std::tie(data_ptr, row_count) = [&]() {
+      if (src.head()) {
+        auto const ptr      = base_ptr + current_info->dst_offset;
+        auto const num_rows = current_info->num_rows;
+        ++current_info;
+        return std::make_pair(ptr, num_rows);
+      }
+      // Parent columns w/o data (e.g., strings, lists) don't have an associated `dst_buf_info`,
+      // therefore, use the first child's info
+      return std::make_pair(static_cast<uint8_t const*>(nullptr), current_info->num_rows);
+    }();
+    auto children = std::vector<column_view>{};
+    children.reserve(src.num_children());
+    current_info = build_output_columns(
+      src.child_begin(), src.child_end(), current_info, std::back_inserter(children), base_ptr);
+    return column_view{
+      src.type(), row_count, data_ptr, bitmask_ptr, null_count, 0, std::move(children)};
   });
-  return buf_index;
+  return current_info;
 }
 
 /**
@@ -931,7 +743,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
   std::copy(splits.begin(), splits.end(), std::next(h_indices));
 
   // setup source buf info
-  setup_source_buf_info(input.begin(), input.end(), h_src_buf_info, {h_src_buf_info, 0});
+  setup_source_buf_info(input.begin(), input.end(), h_src_buf_info, h_src_buf_info);
 
   // HtoD indices and source buf info to device
   CUDA_TRY(cudaMemcpyAsync(
@@ -982,8 +794,9 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
         offset_stack[stack_size++] = parent_offsets_index;
         parent_offsets_index       = d_src_buf_info[parent_offsets_index].parent_offsets_index;
       }
-      int row_start = d_indices[split_index];
-      int row_end   = d_indices[split_index + 1];
+      // make sure to include the -column- offset in our calculations
+      int row_start = d_indices[split_index] + src_info.column_offset;
+      int row_end   = d_indices[split_index + 1] + src_info.column_offset;
       while (stack_size > 0) {
         stack_size--;
         row_start = d_src_buf_info[offset_stack[stack_size]].offsets[row_start];
@@ -1078,7 +891,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
   // clang-format on
 
   // setup src buffers
-  setup_src_buf_data(input.begin(), input.end(), 0, h_src_bufs);
+  setup_src_buf_data(input.begin(), input.end(), h_src_bufs);
 
   // setup dst buffers
   std::transform(out_buffers.begin(), out_buffers.end(), h_dst_bufs, [](auto& buf) {
@@ -1101,10 +914,10 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
   result.reserve(num_partitions);
   std::vector<column_view> cols;
   cols.reserve(num_root_columns);
-  size_t buf_index = 0;
+  auto cur_dst_buf_info = h_dst_buf_info;
   for (size_t idx = 0; idx < num_partitions; idx++) {
-    buf_index = build_output_columns(
-      input.begin(), input.end(), cols, idx, buf_index, h_dst_bufs, h_dst_buf_info);
+    cur_dst_buf_info = build_output_columns(
+      input.begin(), input.end(), cur_dst_buf_info, std::back_inserter(cols), h_dst_bufs[idx]);
     result.push_back(contiguous_split_result{
       cudf::table_view{cols}, std::make_unique<rmm::device_buffer>(std::move(out_buffers[idx]))});
     cols.clear();
