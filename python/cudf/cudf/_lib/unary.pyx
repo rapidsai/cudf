@@ -50,7 +50,8 @@ class UnaryOp(IntEnum):
     FLOOR = <underlying_type_t_unary_op> unary_operator.FLOOR
     ABS = <underlying_type_t_unary_op> unary_operator.ABS
     RINT = <underlying_type_t_unary_op> unary_operator.RINT
-    INVERT = <underlying_type_t_unary_op> unary_operator.BIT_INVERT
+    INVERT = 
+        <underlying_type_t_unary_op> unary_operator.BIT_INVERT
     NOT = <underlying_type_t_unary_op> unary_operator.NOT
 
 
