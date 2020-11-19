@@ -88,6 +88,7 @@
 - PR #6786 Add nested type support to ColumnVector#getDeviceMemorySize
 - PR #6780 Move `cudf::cast` tests to separate test file
 - PR #6770 Support building decimal columns with Table.TestBuilder
+- PR #6807 Refactor std::array usage and add test coverage for row group index writing in ORC
 
 ## Bug Fixes
 
