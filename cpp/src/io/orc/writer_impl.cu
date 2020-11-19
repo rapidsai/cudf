@@ -38,6 +38,13 @@ namespace orc {
 using namespace cudf::io::orc;
 using namespace cudf::io;
 
+struct row_group_index_info {
+    int32_t pos;        // Position
+    int32_t blk_pos;    // Block Position
+    int32_t comp_pos;   // Compressed Position
+    int32_t comp_size;  // Compressed size
+};
+
 namespace {
 /**
  * @brief Helper for pinned host memory
@@ -839,36 +846,35 @@ void writer::impl::write_index_stream(int32_t stripe_id,
                                       std::vector<Stream> &streams,
                                       ProtobufWriter *pbw)
 {
-  // 0: position, 1: block position, 2: compressed position, 3: compressed size
-  std::array<int32_t, 4> present;
-  std::array<int32_t, 4> data;
-  std::array<int32_t, 4> data2;
+  row_group_index_info present;
+  row_group_index_info data;
+  row_group_index_info data2;
   auto kind = TypeKind::STRUCT;
 
   auto find_record = [=, &strm_desc](gpu::EncChunk const &chunk, gpu::StreamIndexType type) {
-    std::array<int32_t, 4> record{-1, -1, -1, -1};
+    row_group_index_info record{-1, -1, -1, -1};
     if (chunk.strm_id[type] > 0) {
-      record[0] = 0;
+      record.pos = 0;
       if (compression_kind_ != NONE) {
         const auto *ss =
           &strm_desc[stripe_id * num_data_streams + chunk.strm_id[type] - (num_columns + 1)];
-        record[1] = ss->first_block;
-        record[2] = 0;
-        record[3] = ss->stream_size;
+        record.blk_pos = ss->first_block;
+        record.comp_pos = 0;
+        record.comp_size = ss->stream_size;
       }
     }
     return record;
   };
   auto scan_record = [=, &comp_out](gpu::EncChunk const &chunk,
                                     gpu::StreamIndexType type,
-                                    std::array<int32_t, 4> &record) {
-    if (record[0] >= 0) {
-      record[0] += chunk.strm_len[type];
-      while ((record[1] >= 0) && (static_cast<size_t>(record[0]) >= compression_blocksize_) &&
-             (record[2] + 3 + comp_out[record[1]].bytes_written < static_cast<size_t>(record[3]))) {
-        record[0] -= compression_blocksize_;
-        record[2] += 3 + comp_out[record[1]].bytes_written;
-        record[1] += 1;
+                                    row_group_index_info &record) {
+    if (record.pos >= 0) {
+      record.pos += chunk.strm_len[type];
+      while ((record.pos >= 0) && (record.blk_pos >= 0) && (static_cast<size_t>(record.pos) >= compression_blocksize_) &&
+             (record.comp_pos + 3 + comp_out[record.blk_pos].bytes_written < static_cast<size_t>(record.comp_size))) {
+        record.pos -= compression_blocksize_;
+        record.comp_pos += 3 + comp_out[record.blk_pos].bytes_written;
+        record.blk_pos += 1;
       }
     }
   };
@@ -891,7 +897,7 @@ void writer::impl::write_index_stream(int32_t stripe_id,
 
   // Add row index entries
   for (size_t g = group; g < group + groups_in_stripe; g++) {
-    pbw->put_row_index_entry(present[2], present[0], data[2], data[0], data2[2], data2[0], kind);
+    pbw->put_row_index_entry(present.comp_pos, present.pos, data.comp_pos, data.pos, data2.comp_pos, data2.pos, kind);
 
     if (stream_id != 0) {
       const auto &ck = chunks[g * num_columns + stream_id - 1];
