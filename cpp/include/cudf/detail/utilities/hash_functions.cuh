@@ -416,7 +416,7 @@ struct MurmurHash3_32 {
   hash_value_type CUDA_HOST_DEVICE_CALLABLE compute_floating_point(T const& key) const
   {
     if (key == T{0.0}) {
-      return 0;
+      return compute(T{0.0});
     } else if (isnan(key)) {
       T nan = std::numeric_limits<T>::quiet_NaN();
       return compute(nan);

@@ -719,9 +719,9 @@ std::unique_ptr<column> md5_hash(table_view const& input,
 }
 
 std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
-                                                  uint32_t seed,
-                                                  rmm::mr::device_memory_resource* mr,
-                                                  cudaStream_t stream)
+                                               uint32_t seed,
+                                               rmm::mr::device_memory_resource* mr,
+                                               cudaStream_t stream)
 {
   auto output = make_numeric_column(
     data_type(type_id::INT32), input.num_rows(), mask_state::UNALLOCATED, stream, mr);
@@ -731,38 +731,42 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
   bool const nullable     = has_nulls(input);
   auto const device_input = table_device_view::create(input, stream);
   auto output_view        = output->mutable_view();
-  auto d_hashes = output_view.data<hash_value_type>();
+  auto d_hashes           = output_view.data<hash_value_type>();
 
-  if(nullable) {
-    thrust::for_each(rmm::exec_policy(stream)->on(stream),
-                     thrust::make_counting_iterator(0),
-                     thrust::make_counting_iterator(input.num_rows()),
-                     [d_hashes, device_input = *device_input, original_seed = seed] __device__(auto row_index) {
-                        uint32_t hash_result = original_seed;
-                        for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
-                          hash_result = cudf::type_dispatcher(device_input.column(col_index).type(),
-                                                element_hasher_with_seed<MurmurHash3_32, true>{hash_result, hash_result},
-                                                device_input.column(col_index),
-                                                row_index);
-                        }
-                        d_hashes[row_index] = hash_result;
-                     });
+  if (nullable) {
+    thrust::for_each(
+      rmm::exec_policy(stream)->on(stream),
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(input.num_rows()),
+      [d_hashes, device_input = *device_input, original_seed = seed] __device__(auto row_index) {
+        uint32_t hash_result = original_seed;
+        for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
+          hash_result = cudf::type_dispatcher(
+            device_input.column(col_index).type(),
+            element_hasher_with_seed<MurmurHash3_32, true>{hash_result, hash_result},
+            device_input.column(col_index),
+            row_index);
+        }
+        d_hashes[row_index] = hash_result;
+      });
   } else {
-    thrust::for_each(rmm::exec_policy(stream)->on(stream),
-                     thrust::make_counting_iterator(0),
-                     thrust::make_counting_iterator(input.num_rows()),
-                     [d_hashes, device_input = *device_input, original_seed = seed] __device__(auto row_index) {
-                       uint32_t hash_result = original_seed;
-                       for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
-                         if (device_input.column(col_index).is_valid(row_index)) {
-                          hash_result = cudf::type_dispatcher(device_input.column(col_index).type(),
-                                                 element_hasher_with_seed<MurmurHash3_32, false>{hash_result, hash_result},
-                                                 device_input.column(col_index),
-                                                 row_index);
-                         }
-                       }
-                       d_hashes[row_index] = hash_result;
-                     });
+    thrust::for_each(
+      rmm::exec_policy(stream)->on(stream),
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(input.num_rows()),
+      [d_hashes, device_input = *device_input, original_seed = seed] __device__(auto row_index) {
+        uint32_t hash_result = original_seed;
+        for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
+          if (device_input.column(col_index).is_valid(row_index)) {
+            hash_result = cudf::type_dispatcher(
+              device_input.column(col_index).type(),
+              element_hasher_with_seed<MurmurHash3_32, false>{hash_result, hash_result},
+              device_input.column(col_index),
+              row_index);
+          }
+        }
+        d_hashes[row_index] = hash_result;
+      });
   }
 
   return output;
