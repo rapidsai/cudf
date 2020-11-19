@@ -431,7 +431,7 @@ public final class ColumnVector extends ColumnView {
           "Unsupported nested type column";
       columnViews[i] = columns[i].getNativeView();
     }
-    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId()));
+    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId(), new int[0], 0));
   }
 
   /**
