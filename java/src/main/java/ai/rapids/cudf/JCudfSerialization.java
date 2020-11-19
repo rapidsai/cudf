@@ -380,18 +380,18 @@ public class JCudfSerialization {
    * Visible for testing
    */
   static class ColumnProvider extends ColumnBufferProvider {
-    private final ColumnViewAccess<HostMemoryBuffer> column;
+    private final HostColumnVectorCore column;
     private final boolean closeAtEnd;
     private final ColumnBufferProvider[] childProviders;
 
-    ColumnProvider(ColumnViewAccess<HostMemoryBuffer> column, boolean closeAtEnd) {
+    ColumnProvider(HostColumnVectorCore column, boolean closeAtEnd) {
       this.column = column;
       this.closeAtEnd = closeAtEnd;
       if (getType().isNestedType()) {
         int numChildren = column.getNumChildren();
         childProviders = new ColumnBufferProvider[numChildren];
         for (int i = 0; i < numChildren; i++) {
-          childProviders[i] = new ColumnProvider(column.getChildColumnViewAccess(i), false);
+          childProviders[i] = new ColumnProvider(column.getChildColumnView(i), false);
         }
       } else {
         childProviders = null;
@@ -400,7 +400,7 @@ public class JCudfSerialization {
 
     @Override
     public DType getType() {
-      return column.getDataType();
+      return column.getType();
     }
 
     @Override
@@ -410,7 +410,7 @@ public class JCudfSerialization {
 
     @Override
     public long getOffset(long index) {
-      return column.getOffsetBuffer().getInt(index * Integer.BYTES);
+      return column.getOffsets().getInt(index * Integer.BYTES);
     }
 
     @Override
@@ -421,9 +421,9 @@ public class JCudfSerialization {
     @Override
     public HostMemoryBuffer getHostBufferFor(BufferType buffType) {
       switch (buffType) {
-        case VALIDITY: return column.getValidityBuffer();
-        case OFFSET: return column.getOffsetBuffer();
-        case DATA: return column.getDataBuffer();
+        case VALIDITY: return column.getValidity();
+        case OFFSET: return column.getOffsets();
+        case DATA: return column.getData();
         default: throw new IllegalStateException("Unexpected buffer type: " + buffType);
       }
     }
@@ -1634,7 +1634,7 @@ public class JCudfSerialization {
       long dataAddress = dtype.isNestedType() ? 0 : bufferAddress + offsetsInfo.data;
       long validityAddress = column.getNullCount() > 0 ? bufferAddress + offsetsInfo.validity : 0;
       long offsetsAddress = dtype.hasOffsets() ? bufferAddress + offsetsInfo.offsets : 0;
-      return ColumnVector.makeCudfColumnView(
+      return ColumnView.makeCudfColumnView(
           dtype.typeId.getNativeId(), dtype.getScale(),
           dataAddress, offsetsInfo.dataLen,
           offsetsAddress, validityAddress,
@@ -1643,7 +1643,7 @@ public class JCudfSerialization {
     } finally {
       if (childViews != null) {
         for (long childView : childViews) {
-          ColumnVector.deleteColumnView(childView);
+          ColumnView.deleteColumnView(childView);
         }
       }
     }

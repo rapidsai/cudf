@@ -55,6 +55,8 @@ enum class unary_op : int32_t {
 /**
  * @brief Performs unary op on all values in column
  *
+ * Note: For `decimal32` and `decimal64`, only `ABS`, `CEIL` and `FLOOR` are supported.
+ *
  * @param input A `column_view` as input
  * @param op operation to perform
  * @param mr Device memory resource used to allocate the returned column's device memory
