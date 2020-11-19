@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.hpp>
@@ -24,6 +25,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
+
 #include <strings/split/split_utils.cuh>
 
 #include <thrust/binary_search.h>  // upper_bound()
@@ -493,12 +495,12 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
     *thrust::max_element(execpol->on(stream), token_counts.begin(), token_counts.end());
   // boundary case: if no columns, return one null column (custrings issue #119)
   if (columns_count == 0) {
-    results.push_back(
-      std::make_unique<column>(data_type{type_id::STRING},
-                               strings_count,
-                               rmm::device_buffer{0, stream, mr},  // no data
-                               create_null_mask(strings_count, mask_state::ALL_NULL, stream, mr),
-                               strings_count));
+    results.push_back(std::make_unique<column>(
+      data_type{type_id::STRING},
+      strings_count,
+      rmm::device_buffer{0, stream, mr},  // no data
+      cudf::detail::create_null_mask(strings_count, mask_state::ALL_NULL, stream, mr),
+      strings_count));
   }
 
   // create working area to hold all token positions
@@ -764,12 +766,12 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
   std::vector<std::unique_ptr<column>> results;
   // boundary case: if no columns, return one null column (issue #119)
   if (columns_count == 0) {
-    results.push_back(
-      std::make_unique<column>(data_type{type_id::STRING},
-                               strings_count,
-                               rmm::device_buffer{0, stream, mr},  // no data
-                               create_null_mask(strings_count, mask_state::ALL_NULL, stream, mr),
-                               strings_count));
+    results.push_back(std::make_unique<column>(
+      data_type{type_id::STRING},
+      strings_count,
+      rmm::device_buffer{0, stream, mr},  // no data
+      cudf::detail::create_null_mask(strings_count, mask_state::ALL_NULL, stream, mr),
+      strings_count));
   }
 
   // get the positions for every token

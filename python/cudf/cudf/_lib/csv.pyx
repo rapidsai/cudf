@@ -6,7 +6,9 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp.utility cimport move
 
+import pandas as pd
 import cudf
+import numpy as np
 
 from cudf._lib.cpp.types cimport size_type
 
@@ -234,14 +236,31 @@ cdef csv_reader_options make_csv_reader_options(
             c_dtypes.reserve(len(dtype))
             for k, v in dtype.items():
                 c_dtypes.push_back(
-                    str(str(k)+":"+str(v)).encode()
+                    str(
+                        str(k)+":"+
+                        _get_cudf_compatible_str_from_dtype(v)
+                    ).encode()
                 )
+        elif (
+            cudf.utils.dtypes.is_scalar(dtype) or
+            isinstance(dtype, (
+                np.dtype, pd.core.dtypes.dtypes.ExtensionDtype, type
+            ))
+        ):
+            c_dtypes.reserve(1)
+            c_dtypes.push_back(
+                _get_cudf_compatible_str_from_dtype(dtype).encode()
+            )
         elif isinstance(dtype, abc.Iterable):
             c_dtypes.reserve(len(dtype))
             for col_dtype in dtype:
-                c_dtypes.push_back(str(col_dtype).encode())
+                c_dtypes.push_back(
+                    _get_cudf_compatible_str_from_dtype(col_dtype).encode()
+                )
         else:
-            c_dtypes.push_back(str(dtype).encode())
+            raise ValueError(
+                "dtype should be a scalar/str/list-like/dict-like"
+            )
 
         csv_reader_options_c.set_dtypes(c_dtypes)
 
@@ -428,7 +447,7 @@ cpdef write_csv(
     cdef sink_info sink_info_c = make_sink_info(path_or_buf, data_sink_c)
 
     if header is True:
-        all_names = table._column_names
+        all_names = columns_apply_na_rep(table._column_names, na_rep)
         if index is True:
             all_names = table._index.names + all_names
 
@@ -465,3 +484,37 @@ cpdef write_csv(
 
     with nogil:
         cpp_write_csv(options)
+
+
+def _get_cudf_compatible_str_from_dtype(dtype):
+    if (
+        str(dtype) in cudf.utils.dtypes.ALL_TYPES or
+        str(dtype) in {
+            "hex", "hex32", "hex64", "date", "date32", "timestamp",
+            "timestamp[us]", "timestamp[s]", "timestamp[ms]", "timestamp[ns]",
+            "date64"
+        }
+    ):
+        return str(dtype)
+    pd_dtype = pd.core.dtypes.common.pandas_dtype(dtype)
+
+    if pd_dtype in cudf.utils.dtypes.pandas_dtypes_to_cudf_dtypes:
+        return str(cudf.utils.dtypes.pandas_dtypes_to_cudf_dtypes[pd_dtype])
+    elif isinstance(pd_dtype, np.dtype) and pd_dtype.kind in ("O", "U"):
+        return "str"
+    elif (
+        pd_dtype in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes or
+        str(pd_dtype) in cudf.utils.dtypes.ALL_TYPES or
+        cudf.utils.dtypes.is_categorical_dtype(pd_dtype)
+    ):
+        return str(pd_dtype)
+    else:
+        raise ValueError(f"dtype not understood: {dtype}")
+
+
+def columns_apply_na_rep(column_names, na_rep):
+    return tuple(
+        na_rep if pd.isnull(col_name)
+        else col_name
+        for col_name in column_names
+    )
