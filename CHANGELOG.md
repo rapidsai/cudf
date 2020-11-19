@@ -84,6 +84,7 @@
 - PR #6761 Add Java/JNI bindings for round
 - PR #6786 Add nested type support to ColumnVector#getDeviceMemorySize
 - PR #6780 Move `cudf::cast` tests to separate test file
+- PR #6809 size_type overflow checking when concatenating columns
 
 ## Bug Fixes
 
