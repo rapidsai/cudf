@@ -26,13 +26,11 @@ std::unique_ptr<cudf::scalar> min(column_view const& col,
                                   rmm::mr::device_memory_resource* mr,
                                   cudaStream_t stream)
 {
-  auto const input_col = cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys() : col;
-  CUDF_EXPECTS(input_col.type() == output_dtype, "min() operation requires matching output type");
-  return cudf::type_dispatcher(input_col.type(),
-                               simple::same_element_type_dispatcher<cudf::reduction::op::min>{},
-                               input_col,
-                               mr,
-                               stream);
+  auto const input_type =
+    cudf::is_dictionary(col.type()) ? cudf::dictionary_column_view(col).keys().type() : col.type();
+  CUDF_EXPECTS(input_type == output_dtype, "min() operation requires matching output type");
+  return cudf::type_dispatcher(
+    col.type(), simple::same_element_type_dispatcher<cudf::reduction::op::min>{}, col, mr, stream);
 }
 
 }  // namespace reduction
