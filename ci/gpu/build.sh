@@ -165,8 +165,15 @@ else
         ${gt} --gtest_output=xml:${WORKSPACE}/test-results/
     done
 
-    gpuci_logger "Installing libcudf & libcudf_kafka"
-    conda install -c $WORKSPACE/ci/artifacts/cudf/cpu/conda-bld/ libcudf libcudf_kafka
+    CUDF_CONDA_FILE=`find $WORKSPACE/ci/artifacts/cudf/cpu/conda-bld/ -name "libcudf-*.tar.bz2"`
+    CUDF_CONDA_FILE=`basename "$CONDA_FILE" .tar.bz2` #get filename without extension
+    CUDF_CONDA_FILE=${CONDA_FILE//-/=} #convert to conda install
+    KAFKA_CONDA_FILE=`find $WORKSPACE/ci/artifacts/cudf/cpu/conda-bld/ -name "libcudf_kafka-*.tar.bz2"`
+    KAFKA_CONDA_FILE=`basename "$CONDA_FILE" .tar.bz2` #get filename without extension
+    KAFKA_CONDA_FILE=${CONDA_FILE//-/=} #convert to conda install
+
+    gpuci_logger "Installing $CUDF_CONDA_FILE & $KAFKA_CONDA_FILE"
+    conda install -c $WORKSPACE/ci/artifacts/cuspatial/cpu/conda-bld/ "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
 
     gpuci_logger "Build python libs from source"
     if [[ ${BUILD_MODE} == "pull-request" ]]; then
