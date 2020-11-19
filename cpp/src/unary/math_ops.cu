@@ -230,6 +230,79 @@ struct DeviceNot {
   }
 };
 
+// fixed_point ops
+
+/*
+ * Ceiling is calculated using integer division. When we divide by `n`, we get the integer part of
+ * the `fixed_point` number. For a negative number, this is all that is needed since the ceiling
+ * operation is defined as the least integer greater than the value. For a positive number, we may
+ * need to round up if the `fixed_point` number has a fractional part. This is handled by comparing
+ * the truncated value to the original value and if they are not equal, the result needs to be
+ * incremented by `n`.
+ */
+template <typename T>
+struct fixed_point_ceil {
+  T n;  // 10^-scale (value required to determine integer part of fixed_point number)
+  __device__ T operator()(T data)
+  {
+    T const a = (data / n) * n;                  // result of integer division
+    return a + (data > 0 && a != data ? n : 0);  // add 1 if positive and not round number
+  }
+};
+
+/*
+ * Floor is calculated using integer division. When we divide by `n`, we get the integer part of
+ * the `fixed_point` number. For a positive number, this is all that is needed since the floor
+ * operation is defined as the greatest integer less than the value. For a negative number, we may
+ * need to round down if the `fixed_point` number has a fractional part. This is handled by
+ * comparing the truncated value to the original value and if they are not equal, the result needs
+ * to be decremented by `n`.
+ */
+template <typename T>
+struct fixed_point_floor {
+  T n;  // 10^-scale (value required to determine integer part of fixed_point number)
+  __device__ T operator()(T data)
+  {
+    T const a = (data / n) * n;                  // result of integer division
+    return a - (data < 0 && a != data ? n : 0);  // subtract 1 if negative and not round number
+  }
+};
+
+template <typename T>
+struct fixed_point_abs {
+  T n;
+  __device__ T operator()(T data) { return std::abs(data); }
+};
+
+template <typename T, template <typename> typename FixedPointFunctor>
+std::unique_ptr<column> unary_op_with(column_view const& input,
+                                      cudaStream_t stream,
+                                      rmm::mr::device_memory_resource* mr)
+{
+  using Type                     = device_storage_type_t<T>;
+  using FixedPointUnaryOpFunctor = FixedPointFunctor<Type>;
+
+  // When scale is >= 0 and unary_operator is CEIL or FLOOR, the unary_operation is a no-op
+  if (input.type().scale() >= 0 &&
+      (std::is_same<FixedPointUnaryOpFunctor, fixed_point_ceil<Type>>::value ||
+       std::is_same<FixedPointUnaryOpFunctor, fixed_point_floor<Type>>::value))
+    return std::make_unique<cudf::column>(input, stream, mr);
+
+  auto result = cudf::make_fixed_width_column(
+    input.type(), input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);
+
+  auto out_view = result->mutable_view();
+  Type const n  = std::pow(10, -input.type().scale());
+
+  thrust::transform(rmm::exec_policy(stream)->on(stream),
+                    input.begin<Type>(),
+                    input.end<Type>(),
+                    out_view.begin<Type>(),
+                    FixedPointUnaryOpFunctor{n});
+
+  return result;
+}
+
 template <typename OutputType, typename UFN, typename InputIterator>
 std::unique_ptr<cudf::column> transform_fn(InputIterator begin,
                                            InputIterator end,
@@ -466,81 +539,110 @@ struct LogicalOpDispatcher {
   }
 };
 
+struct FixedPointOpDispatcher {
+  template <typename T, typename... Args>
+  std::enable_if_t<not cudf::is_fixed_point<T>(), std::unique_ptr<column>> operator()(
+    Args&&... args)
+  {
+    CUDF_FAIL("FixedPointOpDispatcher only for fixed_point");
+  }
+
+  template <typename T>
+  std::enable_if_t<cudf::is_fixed_point<T>(), std::unique_ptr<column>> operator()(
+    column_view const& input,
+    cudf::unary_operator op,
+    cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr)
+  {
+    // clang-format off
+    switch (op) {
+      case cudf::unary_operator::CEIL:  return unary_op_with<T, fixed_point_ceil>(input, stream, mr);
+      case cudf::unary_operator::FLOOR: return unary_op_with<T, fixed_point_floor>(input, stream, mr);
+      case cudf::unary_operator::ABS:   return unary_op_with<T, fixed_point_abs>(input, stream, mr);
+      default: CUDF_FAIL("Unsupported fixed_point unary operation");
+    }
+    // clang-format on
+  }
+};
+
 }  // namespace
 
 std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
-                                              cudf::unary_op op,
+                                              cudf::unary_operator op,
                                               rmm::mr::device_memory_resource* mr,
                                               cudaStream_t stream)
 {
+  if (cudf::is_fixed_point(input.type()))
+    return type_dispatcher(input.type(), detail::FixedPointOpDispatcher{}, input, op, stream, mr);
+
   switch (op) {
-    case cudf::unary_op::SIN:
+    case cudf::unary_operator::SIN:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceSin>{}, input, mr, stream);
-    case cudf::unary_op::COS:
+    case cudf::unary_operator::COS:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceCos>{}, input, mr, stream);
-    case cudf::unary_op::TAN:
+    case cudf::unary_operator::TAN:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceTan>{}, input, mr, stream);
-    case cudf::unary_op::ARCSIN:
+    case cudf::unary_operator::ARCSIN:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceArcSin>{}, input, mr, stream);
-    case cudf::unary_op::ARCCOS:
+    case cudf::unary_operator::ARCCOS:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceArcCos>{}, input, mr, stream);
-    case cudf::unary_op::ARCTAN:
+    case cudf::unary_operator::ARCTAN:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceArcTan>{}, input, mr, stream);
-    case cudf::unary_op::SINH:
+    case cudf::unary_operator::SINH:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceSinH>{}, input, mr, stream);
-    case cudf::unary_op::COSH:
+    case cudf::unary_operator::COSH:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceCosH>{}, input, mr, stream);
-    case cudf::unary_op::TANH:
+    case cudf::unary_operator::TANH:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceTanH>{}, input, mr, stream);
-    case cudf::unary_op::ARCSINH:
+    case cudf::unary_operator::ARCSINH:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceArcSinH>{}, input, mr, stream);
-    case cudf::unary_op::ARCCOSH:
+    case cudf::unary_operator::ARCCOSH:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceArcCosH>{}, input, mr, stream);
-    case cudf::unary_op::ARCTANH:
+    case cudf::unary_operator::ARCTANH:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceArcTanH>{}, input, mr, stream);
-    case cudf::unary_op::EXP:
+    case cudf::unary_operator::EXP:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceExp>{}, input, mr, stream);
-    case cudf::unary_op::LOG:
+    case cudf::unary_operator::LOG:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceLog>{}, input, mr, stream);
-    case cudf::unary_op::SQRT:
+    case cudf::unary_operator::SQRT:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceSqrt>{}, input, mr, stream);
-    case cudf::unary_op::CBRT:
+    case cudf::unary_operator::CBRT:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceCbrt>{}, input, mr, stream);
-    case cudf::unary_op::CEIL:
+    case cudf::unary_operator::CEIL:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceCeil>{}, input, mr, stream);
-    case cudf::unary_op::FLOOR:
+    case cudf::unary_operator::FLOOR:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceFloor>{}, input, mr, stream);
-    case cudf::unary_op::ABS:
+    case cudf::unary_operator::ABS:
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceAbs>{}, input, mr, stream);
-    case cudf::unary_op::RINT:
+    case cudf::unary_operator::RINT:
       CUDF_EXPECTS(
         (input.type().id() == type_id::FLOAT32) or (input.type().id() == type_id::FLOAT64),
         "rint expects floating point values");
       return cudf::type_dispatcher(
         input.type(), detail::MathOpDispatcher<detail::DeviceRInt>{}, input, mr, stream);
-    case cudf::unary_op::BIT_INVERT:
+    case cudf::unary_operator::BIT_INVERT:
       return cudf::type_dispatcher(
         input.type(), detail::BitwiseOpDispatcher<detail::DeviceInvert>{}, input, mr, stream);
-    case cudf::unary_op::NOT:
+    case cudf::unary_operator::NOT:
       return cudf::type_dispatcher(
         input.type(), detail::LogicalOpDispatcher<detail::DeviceNot>{}, input, mr, stream);
     default: CUDF_FAIL("Undefined unary operation");
@@ -550,7 +652,7 @@ std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
 }  // namespace detail
 
 std::unique_ptr<cudf::column> unary_operation(cudf::column_view const& input,
-                                              cudf::unary_op op,
+                                              cudf::unary_operator op,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
