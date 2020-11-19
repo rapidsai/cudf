@@ -975,6 +975,86 @@ TEST_F(ParquetChunkedWriterTest, MismatchedStructure)
   cudf_io::write_parquet_chunked_end(state);
 }
 
+TEST_F(ParquetChunkedWriterTest, DifferentNullability)
+{
+  srand(31337);
+  auto table1 = create_random_fixed_table<int>(5, 5, true);
+  auto table2 = create_random_fixed_table<int>(5, 5, false);
+
+  auto full_table = cudf::concatenate({*table1, *table2});
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedNullable.parquet");
+  cudf_io::chunked_parquet_writer_options args =
+    cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
+  auto state = cudf_io::write_parquet_chunked_begin(args);
+  cudf_io::write_parquet_chunked(*table1, state);
+  cudf_io::write_parquet_chunked(*table2, state);
+  cudf_io::write_parquet_chunked_end(state);
+
+  cudf_io::parquet_reader_options read_opts =
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+  auto result = cudf_io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
+}
+
+TEST_F(ParquetChunkedWriterTest, ForcedNullability)
+{
+  srand(31337);
+  auto table1 = create_random_fixed_table<int>(5, 5, false);
+  auto table2 = create_random_fixed_table<int>(5, 5, false);
+
+  auto full_table = cudf::concatenate({*table1, *table2});
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedNoNullable.parquet");
+
+  cudf::io::table_metadata_with_nullability nullable_metadata;
+
+  // In the absence of prescribed per-column nullability in metadata, the writer assumes the worst
+  // and considers all columns nullable. However cudf::concatenate will not force nulls in case no
+  // columns are nullable. To get the expected result, we tell the writer the nullability of all
+  // columns in advance.
+  nullable_metadata.column_nullable.insert(nullable_metadata.column_nullable.begin(), 5, false);
+
+  cudf_io::chunked_parquet_writer_options args =
+    cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath})
+      .nullable_metadata(&nullable_metadata);
+  auto state = cudf_io::write_parquet_chunked_begin(args);
+  cudf_io::write_parquet_chunked(*table1, state);
+  cudf_io::write_parquet_chunked(*table2, state);
+  cudf_io::write_parquet_chunked_end(state);
+
+  cudf_io::parquet_reader_options read_opts =
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+  auto result = cudf_io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
+}
+
+TEST_F(ParquetChunkedWriterTest, WrongNullability)
+{
+  srand(31337);
+  auto table1 = create_random_fixed_table<int>(5, 5, false);
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedWrongNullable.parquet");
+
+  cudf::io::table_metadata_with_nullability nullable_metadata;
+  nullable_metadata.column_nullable.insert(nullable_metadata.column_nullable.begin(), 6, true);
+  cudf_io::chunked_parquet_writer_options args =
+    cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath})
+      .nullable_metadata(&nullable_metadata);
+  auto state = cudf_io::write_parquet_chunked_begin(args);
+  EXPECT_THROW(cudf_io::write_parquet_chunked(*table1, state), cudf::logic_error);
+
+  nullable_metadata.column_nullable.clear();
+  nullable_metadata.column_nullable.insert(nullable_metadata.column_nullable.begin(), 4, true);
+  cudf_io::chunked_parquet_writer_options args2 =
+    cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath})
+      .nullable_metadata(&nullable_metadata);
+  state = cudf_io::write_parquet_chunked_begin(args2);
+  EXPECT_THROW(cudf_io::write_parquet_chunked(*table1, state), cudf::logic_error);
+}
+
 TEST_F(ParquetChunkedWriterTest, ReadRowGroups)
 {
   srand(31337);
