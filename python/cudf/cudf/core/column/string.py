@@ -2000,7 +2000,7 @@ class StringMethods(ColumnMethodsMixin):
         Returns
         -------
         Series, Index, DataFrame or MultiIndex
-            Type matches caller unless ``expand=True``(see Notes).
+            Type matches caller unless ``expand=True`` (see Notes).
 
         See also
         --------
@@ -2143,7 +2143,7 @@ class StringMethods(ColumnMethodsMixin):
         Returns
         -------
         Series, Index, DataFrame or MultiIndex
-            Type matches caller unless ``expand=True``(see Notes).
+            Type matches caller unless ``expand=True`` (see Notes).
 
         See also
         --------
