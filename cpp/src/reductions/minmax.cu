@@ -68,28 +68,28 @@ template <typename T,
 rmm::device_scalar<OutputType> reduce_device(InputIterator d_in,
                                              cudf::size_type num_items,
                                              Op binary_op,
-                                             cudaStream_t stream)
+                                             rmm::cuda_stream_view stream)
 {
   OutputType identity{};
-  rmm::device_scalar<OutputType> dev_result{identity, stream};
+  rmm::device_scalar<OutputType> result{identity, stream};
 
   // Allocate temporary storage
-  size_t temp_storage_bytes = 0;
+  size_t storage_bytes = 0;
   cub::DeviceReduce::Reduce(
-    nullptr, temp_storage_bytes, d_in, dev_result.data(), num_items, binary_op, identity, stream);
-  auto d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
+    nullptr, storage_bytes, d_in, result.data(), num_items, binary_op, identity, stream.value());
+  auto temp_storage = rmm::device_buffer{storage_bytes, stream};
 
   // Run reduction
-  cub::DeviceReduce::Reduce(d_temp_storage.data(),
-                            temp_storage_bytes,
+  cub::DeviceReduce::Reduce(temp_storage.data(),
+                            storage_bytes,
                             d_in,
-                            dev_result.data(),
+                            result.data(),
                             num_items,
                             binary_op,
                             identity,
-                            stream);
+                            stream.value());
 
-  return dev_result;
+  return result;
 }
 
 /**
@@ -148,7 +148,7 @@ struct minmax_functor {
   }
 
   template <typename T>
-  auto reduce(column_view const &col, cudaStream_t stream)
+  auto reduce(column_view const &col, rmm::cuda_stream_view stream)
   {
     auto device_col = column_device_view::create(col, stream);
     // compute minimum and maximum values
@@ -183,7 +183,7 @@ struct minmax_functor {
             std::enable_if_t<is_supported<T>() and !std::is_same<T, cudf::string_view>::value and
                              !cudf::is_dictionary<T>()> * = nullptr>
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
-    cudf::column_view const &col, rmm::mr::device_memory_resource *mr, cudaStream_t stream)
+    cudf::column_view const &col, rmm::mr::device_memory_resource *mr, rmm::cuda_stream_view stream)
   {
     // compute minimum and maximum values
     auto dev_result = reduce<T>(col, stream);
@@ -193,7 +193,7 @@ struct minmax_functor {
     auto maximum     = new ScalarType(T{}, true, stream, mr);
     // copy dev_result to the output scalars
     device_single_thread(assign_min_max<T>{dev_result.data(), minimum->data(), maximum->data()},
-                         stream);
+                         stream.value());
     return {std::unique_ptr<scalar>(minimum), std::unique_ptr<scalar>(maximum)};
   }
 
@@ -202,7 +202,7 @@ struct minmax_functor {
    */
   template <typename T, std::enable_if_t<std::is_same<T, cudf::string_view>::value> * = nullptr>
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
-    cudf::column_view const &col, rmm::mr::device_memory_resource *mr, cudaStream_t stream)
+    cudf::column_view const &col, rmm::mr::device_memory_resource *mr, rmm::cuda_stream_view stream)
   {
     // compute minimum and maximum values
     auto dev_result = reduce<cudf::string_view>(col, stream);
@@ -210,10 +210,10 @@ struct minmax_functor {
     using OutputType = minmax_pair<cudf::string_view>;
     OutputType host_result;
     CUDA_TRY(cudaMemcpyAsync(
-      &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDeviceToHost, stream));
+      &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDeviceToHost, stream.value()));
     // strings are copied to create the scalars here
-    return {std::make_unique<string_scalar>(host_result.min_val, true, stream, mr),
-            std::make_unique<string_scalar>(host_result.max_val, true, stream, mr)};
+    return {std::make_unique<string_scalar>(host_result.min_val, true, stream.value(), mr),
+            std::make_unique<string_scalar>(host_result.max_val, true, stream.value(), mr)};
   }
 
   /**
@@ -221,7 +221,7 @@ struct minmax_functor {
    */
   template <typename T, std::enable_if_t<cudf::is_dictionary<T>()> * = nullptr>
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
-    cudf::column_view const &col, rmm::mr::device_memory_resource *mr, cudaStream_t stream)
+    cudf::column_view const &col, rmm::mr::device_memory_resource *mr, rmm::cuda_stream_view stream)
   {
     // compute minimum and maximum values
     auto dev_result = reduce<T>(col, stream);
@@ -229,16 +229,16 @@ struct minmax_functor {
     using OutputType = minmax_pair<T>;
     OutputType host_result;
     CUDA_TRY(cudaMemcpyAsync(
-      &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDeviceToHost, stream));
+      &host_result, dev_result.data(), sizeof(OutputType), cudaMemcpyDeviceToHost, stream.value()));
     // get the keys for those indexes
     auto const keys = dictionary_column_view(col).keys();
-    return {get_element(keys, static_cast<size_type>(host_result.min_val), stream, mr),
-            get_element(keys, static_cast<size_type>(host_result.max_val), stream, mr)};
+    return {get_element(keys, static_cast<size_type>(host_result.min_val), stream.value(), mr),
+            get_element(keys, static_cast<size_type>(host_result.max_val), stream.value(), mr)};
   }
 
   template <typename T, std::enable_if_t<!is_supported<T>()> * = nullptr>
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
-    cudf::column_view const &, rmm::mr::device_memory_resource *, cudaStream_t)
+    cudf::column_view const &, rmm::mr::device_memory_resource *, rmm::cuda_stream_view)
   {
     CUDF_FAIL("type not supported for minmax() operation");
   }
@@ -247,7 +247,7 @@ struct minmax_functor {
 }  // namespace
 
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
-  cudf::column_view const &col, cudaStream_t stream, rmm::mr::device_memory_resource *mr)
+  cudf::column_view const &col, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource *mr)
 {
   if (col.null_count() == col.size()) {
     // this handles empty and all-null columns
@@ -266,7 +266,7 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
   const cudf::column_view &col, rmm::mr::device_memory_resource *mr)
 {
-  return cudf::detail::minmax(col, 0, mr);
+  return cudf::detail::minmax(col, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf
