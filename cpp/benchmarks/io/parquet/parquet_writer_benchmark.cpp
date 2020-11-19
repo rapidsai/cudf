@@ -33,7 +33,7 @@ namespace cudf_io = cudf::io;
 class ParquetWrite : public cudf::benchmark {
 };
 
-void PQ_write(benchmark::State& state)
+void BM_parq_write_varying_inout(benchmark::State& state)
 {
   auto const data_types             = get_type_or_group(state.range(0));
   cudf::size_type const cardinality = state.range(1);
@@ -61,16 +61,57 @@ void PQ_write(benchmark::State& state)
   state.SetBytesProcessed(data_size * state.iterations());
 }
 
-#define PARQ_WR_BENCHMARK_DEFINE(name, type_or_group, sink_type)                              \
+void BM_parq_write_varying_options(benchmark::State& state)
+{
+  auto const compression     = static_cast<cudf::io::compression_type>(state.range(0));
+  auto const enable_stats    = static_cast<cudf::io::statistics_freq>(state.range(1));
+  auto const output_metadata = state.range(2) != 0;
+
+  auto const data_types = get_type_or_group({int32_t(type_group_id::INTEGRAL_SIGNED),
+                                             int32_t(type_group_id::FLOATING_POINT),
+                                             int32_t(type_group_id::TIMESTAMP),
+                                             int32_t(cudf::type_id::STRING)});
+
+  auto const tbl  = create_random_table(data_types, data_types.size(), table_size_bytes{data_size});
+  auto const view = tbl->view();
+
+  cuio_source_sink_pair source_sink(io_type::FILEPATH);
+  for (auto _ : state) {
+    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
+    cudf_io::parquet_writer_options const options =
+      cudf_io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
+        .compression(compression)
+        .stats_level(enable_stats)
+        .return_filemetadata(output_metadata)
+        .column_chunks_file_path("dummy_path.parquet");
+    cudf_io::write_parquet(options);
+  }
+
+  state.SetBytesProcessed(data_size * state.iterations());
+}
+
+#define PARQ_WR_BM_INOUTS_DEFINE(name, type_or_group, sink_type)                              \
   BENCHMARK_DEFINE_F(ParquetWrite, name)                                                      \
-  (::benchmark::State & state) { PQ_write(state); }                                           \
+  (::benchmark::State & state) { BM_parq_write_varying_inout(state); }                        \
   BENCHMARK_REGISTER_F(ParquetWrite, name)                                                    \
     ->ArgsProduct({{int32_t(type_or_group)}, {0, 1000}, {1, 32}, {true, false}, {sink_type}}) \
     ->Unit(benchmark::kMillisecond)                                                           \
     ->UseManualTime();
 
-WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BENCHMARK_DEFINE, integral, type_group_id::INTEGRAL);
-WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BENCHMARK_DEFINE, floats, type_group_id::FLOATING_POINT);
-WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BENCHMARK_DEFINE, timestamps, type_group_id::TIMESTAMP);
-WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BENCHMARK_DEFINE, string, cudf::type_id::STRING);
-WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BENCHMARK_DEFINE, list, cudf::type_id::LIST);
+WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, integral, type_group_id::INTEGRAL);
+WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
+WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
+WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, string, cudf::type_id::STRING);
+WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, list, cudf::type_id::LIST);
+
+BENCHMARK_DEFINE_F(ParquetWrite, writer_options)
+(::benchmark::State& state) { BM_parq_write_varying_options(state); }
+BENCHMARK_REGISTER_F(ParquetWrite, writer_options)
+  ->ArgsProduct({{int32_t(cudf::io::compression_type::NONE),
+                  int32_t(cudf::io::compression_type::SNAPPY)},
+                 {int32_t(cudf::io::statistics_freq::STATISTICS_NONE),
+                  int32_t(cudf::io::statistics_freq::STATISTICS_ROWGROUP),
+                  int32_t(cudf::io::statistics_freq::STATISTICS_PAGE)},
+                 {false, true}})
+  ->Unit(benchmark::kMillisecond)
+  ->UseManualTime();
