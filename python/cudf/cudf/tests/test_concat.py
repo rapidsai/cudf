@@ -675,28 +675,18 @@ def test_concat_join(objs, ignore_index, sort, join, axis):
         ],
     ],
 )
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [1])
-def test_concat_join_axis_1_dup_error(objs, ignore_index, sort, join, axis):
+def test_concat_join_axis_1_dup_error(objs):
     gpu_objs = [gd.from_pandas(o) for o in objs]
     # we do not support duplicate columns
     with pytest.raises(NotImplementedError):
         assert_eq(
             pd.concat(
                 objs,
-                sort=sort,
-                join=join,
-                ignore_index=ignore_index,
-                axis=axis,
+                axis=1,
             ),
             gd.concat(
                 gpu_objs,
-                sort=sort,
-                join=join,
-                ignore_index=ignore_index,
-                axis=axis,
+                axis=1,
             ),
         )
 
