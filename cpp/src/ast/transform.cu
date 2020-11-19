@@ -29,6 +29,8 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
@@ -87,7 +89,7 @@ __launch_bounds__(max_block_size) __global__
 
 std::unique_ptr<column> compute_column(table_view const table,
                                        expression const& expr,
-                                       cudaStream_t stream,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   // Linearize the AST
@@ -126,14 +128,14 @@ std::unique_ptr<column> compute_column(table_view const table,
     reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]);
 
   // Create table device view
-  auto table_device         = table_device_view::create(table, stream);
+  auto table_device         = table_device_view::create(table, stream.value());
   auto const table_num_rows = table.num_rows();
 
   // Prepare output column
   auto output_column = cudf::make_fixed_width_column(
-    expr_data_type, table_num_rows, mask_state::UNALLOCATED, stream, mr);
+    expr_data_type, table_num_rows, mask_state::UNALLOCATED, stream.value(), mr);
   auto mutable_output_device =
-    cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
+    cudf::mutable_column_device_view::create(output_column->mutable_view(), stream.value());
 
   // Configure kernel parameters
   auto const num_intermediates     = expr_linearizer.get_intermediate_count();
@@ -153,7 +155,7 @@ std::unique_ptr<column> compute_column(table_view const table,
 
   // Execute the kernel
   cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE>
-    <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream>>>(
+    <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       *table_device,
       device_literals,
       *mutable_output_device,
@@ -162,7 +164,7 @@ std::unique_ptr<column> compute_column(table_view const table,
       device_operator_source_indices,
       num_operators,
       num_intermediates);
-  CHECK_CUDA(stream);
+  CHECK_CUDA(stream.value());
   return output_column;
 }
 
@@ -173,7 +175,7 @@ std::unique_ptr<column> compute_column(table_view const table,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::compute_column(table, expr, 0, mr);
+  return detail::compute_column(table, expr, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace ast

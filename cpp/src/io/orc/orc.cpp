@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
-#include "orc.h"
-#include <string.h>
+#include <io/orc/orc.h>
+#include <io/orc/orc_field_reader.hpp>
+#include <io/orc/orc_field_writer.hpp>
+#include <string>
 
 namespace cudf {
 namespace io {
@@ -33,161 +35,90 @@ void ProtobufReader::skip_struct_field(int t)
   }
 }
 
-#define ORC_BEGIN_STRUCT(st)                              \
-  bool ProtobufReader::read(st *s, size_t maxlen)         \
-  { /*printf(#st "\n");*/                                 \
-    const uint8_t *end = std::min(m_cur + maxlen, m_end); \
-    while (m_cur < end) {                                 \
-      int fld = get_u32();                                \
-      switch (fld) {
-#define ORC_FLD_UINT64(id, m)   \
-  case (id)*8 + PB_TYPE_VARINT: \
-    s->m = get_u64();           \
-    break;
+bool ProtobufReader::read(PostScript &s, size_t maxlen)
+{
+  auto op = std::make_tuple(FieldUInt64(1, s.footerLength),
+                            FieldEnum<CompressionKind>(2, s.compression),
+                            FieldUInt32(3, s.compressionBlockSize),
+                            FieldPackedUInt32(4, s.version),
+                            FieldUInt64(5, s.metadataLength),
+                            FieldString(8000, s.magic));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_FLD_INT64(id, m)    \
-  case (id)*8 + PB_TYPE_VARINT: \
-    s->m = get_i64();           \
-    break;
+bool ProtobufReader::read(FileFooter &s, size_t maxlen)
+{
+  auto op = std::make_tuple(FieldUInt64(1, s.headerLength),
+                            FieldUInt64(2, s.contentLength),
+                            FieldRepeatedStruct(3, s.stripes),
+                            FieldRepeatedStruct(4, s.types),
+                            FieldRepeatedStruct(5, s.metadata),
+                            FieldUInt64(6, s.numberOfRows),
+                            FieldRepeatedStructBlob(7, s.statistics),
+                            FieldUInt32(8, s.rowIndexStride));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_FLD_UINT32(id, m)   \
-  case (id)*8 + PB_TYPE_VARINT: \
-    s->m = get_u32();           \
-    break;
+bool ProtobufReader::read(StripeInformation &s, size_t maxlen)
+{
+  auto op = std::make_tuple(FieldUInt64(1, s.offset),
+                            FieldUInt64(2, s.indexLength),
+                            FieldUInt64(3, s.dataLength),
+                            FieldUInt32(4, s.footerLength),
+                            FieldUInt32(5, s.numberOfRows));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_FLD_INT32(id, m)    \
-  case (id)*8 + PB_TYPE_VARINT: \
-    s->m = get_i32();           \
-    break;
+bool ProtobufReader::read(SchemaType &s, size_t maxlen)
+{
+  auto op = std::make_tuple(FieldEnum<TypeKind>(1, s.kind),
+                            FieldPackedUInt32(2, s.subtypes),
+                            FieldRepeatedString(3, s.fieldNames),
+                            FieldUInt32(4, s.maximumLength),
+                            FieldUInt32(5, s.precision),
+                            FieldUInt32(6, s.scale));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_FLD_ENUM(id, m, mt) \
-  case (id)*8 + PB_TYPE_VARINT: \
-    s->m = (mt)get_u32();       \
-    break;
+bool ProtobufReader::read(UserMetadataItem &s, size_t maxlen)
+{
+  auto op = std::make_tuple(FieldString(1, s.name), FieldString(2, s.value));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_FLD_PACKED_UINT32(id, m)                     \
-  case (id)*8 + PB_TYPE_FIXEDLEN: {                      \
-    uint32_t len           = get_u32();                  \
-    const uint8_t *fld_end = std::min(m_cur + len, end); \
-    while (m_cur < fld_end) s->m.push_back(get_u32());   \
-    break;                                               \
-  }
+bool ProtobufReader::read(StripeFooter &s, size_t maxlen)
+{
+  auto op = std::make_tuple(FieldRepeatedStruct(1, s.streams),
+                            FieldRepeatedStruct(2, s.columns),
+                            FieldString(3, s.writerTimezone));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_FLD_STRING(id, m)                    \
-  case (id)*8 + PB_TYPE_FIXEDLEN: {              \
-    uint32_t n = get_u32();                      \
-    if (n > (size_t)(end - m_cur)) return false; \
-    s->m.assign((const char *)m_cur, n);         \
-    m_cur += n;                                  \
-    break;                                       \
-  }
+bool ProtobufReader::read(Stream &s, size_t maxlen)
+{
+  auto op = std::make_tuple(
+    FieldEnum<StreamKind>(1, s.kind), FieldUInt32(2, s.column), FieldUInt64(3, s.length));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_FLD_REPEATED_STRING(id, m)           \
-  case (id)*8 + PB_TYPE_FIXEDLEN: {              \
-    uint32_t n = get_u32();                      \
-    if (n > (size_t)(end - m_cur)) return false; \
-    s->m.resize(s->m.size() + 1);                \
-    s->m.back().assign((const char *)m_cur, n);  \
-    m_cur += n;                                  \
-    break;                                       \
-  }
+bool ProtobufReader::read(ColumnEncoding &s, size_t maxlen)
+{
+  auto op =
+    std::make_tuple(FieldEnum<ColumnEncodingKind>(1, s.kind), FieldUInt32(2, s.dictionarySize));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_FLD_REPEATED_STRUCT(id, m)           \
-  case (id)*8 + PB_TYPE_FIXEDLEN: {              \
-    uint32_t n = get_u32();                      \
-    if (n > (size_t)(end - m_cur)) return false; \
-    s->m.resize(s->m.size() + 1);                \
-    if (!read(&s->m.back(), n)) return false;    \
-    break;                                       \
-  }
+bool ProtobufReader::read(StripeStatistics &s, size_t maxlen)
+{
+  auto op = std::make_tuple(FieldRepeatedStructBlob(1, s.colStats));
+  return function_builder(s, maxlen, op);
+}
 
-#define ORC_FLD_REPEATED_STRUCT_BLOB(id, m)      \
-  case (id)*8 + PB_TYPE_FIXEDLEN: {              \
-    uint32_t n = get_u32();                      \
-    if (n > (size_t)(end - m_cur)) return false; \
-    s->m.resize(s->m.size() + 1);                \
-    s->m.back().assign(m_cur, m_cur + n);        \
-    m_cur += n;                                  \
-    break;                                       \
-  }
-
-#define ORC_END_STRUCT_(postproccond)                                    \
-  default: /*printf("unknown fld %d of type %d\n", fld >> 3, fld & 7);*/ \
-           skip_struct_field(fld & 7);                                   \
-    }                                                                    \
-    }                                                                    \
-    return (postproccond);                                               \
-    }
-
-#define ORC_END_STRUCT() ORC_END_STRUCT_(m_cur <= end)
-#define ORC_END_STRUCT_POSTPROC(fn) ORC_END_STRUCT_(m_cur <= end && fn(s))
-
-ORC_BEGIN_STRUCT(PostScript)
-ORC_FLD_UINT64(1, footerLength)
-ORC_FLD_ENUM(2, compression, CompressionKind)
-ORC_FLD_UINT32(3, compressionBlockSize)
-ORC_FLD_PACKED_UINT32(4, version)
-ORC_FLD_UINT64(5, metadataLength)
-ORC_FLD_STRING(8000, magic)
-ORC_END_STRUCT()
-
-ORC_BEGIN_STRUCT(FileFooter)
-ORC_FLD_UINT64(1, headerLength)
-ORC_FLD_UINT64(2, contentLength)
-ORC_FLD_REPEATED_STRUCT(3, stripes)
-ORC_FLD_REPEATED_STRUCT(4, types)
-ORC_FLD_REPEATED_STRUCT(5, metadata)
-ORC_FLD_UINT64(6, numberOfRows)
-ORC_FLD_REPEATED_STRUCT_BLOB(7, statistics)
-ORC_FLD_UINT32(8, rowIndexStride)
-ORC_END_STRUCT_POSTPROC(InitSchema)
-
-ORC_BEGIN_STRUCT(StripeInformation)
-ORC_FLD_UINT64(1, offset)
-ORC_FLD_UINT64(2, indexLength)
-ORC_FLD_UINT64(3, dataLength)
-ORC_FLD_UINT32(4, footerLength)
-ORC_FLD_UINT32(5, numberOfRows)
-ORC_END_STRUCT()
-
-ORC_BEGIN_STRUCT(SchemaType)
-ORC_FLD_ENUM(1, kind, TypeKind)
-ORC_FLD_PACKED_UINT32(2, subtypes)
-ORC_FLD_REPEATED_STRING(3, fieldNames)
-ORC_FLD_UINT32(4, maximumLength)
-ORC_FLD_UINT32(5, precision)
-ORC_FLD_UINT32(6, scale)
-ORC_END_STRUCT()
-
-ORC_BEGIN_STRUCT(UserMetadataItem)
-ORC_FLD_STRING(1, name)
-ORC_FLD_STRING(2, value)
-ORC_END_STRUCT()
-
-ORC_BEGIN_STRUCT(StripeFooter)
-ORC_FLD_REPEATED_STRUCT(1, streams)
-ORC_FLD_REPEATED_STRUCT(2, columns)
-ORC_FLD_STRING(3, writerTimezone)
-ORC_END_STRUCT()
-
-ORC_BEGIN_STRUCT(Stream)
-ORC_FLD_ENUM(1, kind, StreamKind)
-ORC_FLD_UINT32(2, column)
-ORC_FLD_UINT64(3, length)
-ORC_END_STRUCT()
-
-ORC_BEGIN_STRUCT(ColumnEncoding)
-ORC_FLD_ENUM(1, kind, ColumnEncodingKind)
-ORC_FLD_UINT32(2, dictionarySize)
-ORC_END_STRUCT()
-
-ORC_BEGIN_STRUCT(StripeStatistics)
-ORC_FLD_REPEATED_STRUCT_BLOB(1, colStats)
-ORC_END_STRUCT()
-
-ORC_BEGIN_STRUCT(Metadata)
-ORC_FLD_REPEATED_STRUCT(1, stripeStats)
-ORC_END_STRUCT()
+bool ProtobufReader::read(Metadata &s, size_t maxlen)
+{
+  auto op = std::make_tuple(FieldRepeatedStruct(1, s.stripeStats));
+  return function_builder(s, maxlen, op);
+}
 
 // return the column name
 std::string FileFooter::GetColumnName(uint32_t column_id)
@@ -212,27 +143,27 @@ std::string FileFooter::GetColumnName(uint32_t column_id)
 }
 
 // Initializes the parent_idx field in the schema
-bool ProtobufReader::InitSchema(FileFooter *ff)
+bool ProtobufReader::InitSchema(FileFooter &ff)
 {
-  int32_t schema_size = (int32_t)ff->types.size();
+  int32_t schema_size = (int32_t)ff.types.size();
   for (int32_t i = 0; i < schema_size; i++) {
-    int32_t num_children = (int32_t)ff->types[i].subtypes.size();
-    if (ff->types[i].parent_idx == -1)  // Not initialized
+    int32_t num_children = (int32_t)ff.types[i].subtypes.size();
+    if (ff.types[i].parent_idx == -1)  // Not initialized
     {
-      ff->types[i].parent_idx = i;  // set root node as its own parent
+      ff.types[i].parent_idx = i;  // set root node as its own parent
     }
     for (int32_t j = 0; j < num_children; j++) {
-      uint32_t column_id = ff->types[i].subtypes[j];
+      uint32_t column_id = ff.types[i].subtypes[j];
       if (column_id <= (uint32_t)i || column_id >= (uint32_t)schema_size) {
         // Invalid column id (or at least not a schema index)
         return false;
       }
-      if (ff->types[column_id].parent_idx != -1) {
+      if (ff.types[column_id].parent_idx != -1) {
         // Same node referenced twice
         return false;
       }
-      ff->types[column_id].parent_idx = i;
-      ff->types[column_id].field_idx  = j;
+      ff.types[column_id].parent_idx = i;
+      ff.types[column_id].field_idx  = j;
     }
   }
   return true;
@@ -244,76 +175,6 @@ bool ProtobufReader::InitSchema(FileFooter *ff)
  *
  */
 /* ----------------------------------------------------------------------------*/
-
-#define PBW_BEGIN_STRUCT(st)                \
-  size_t ProtobufWriter::write(const st *s) \
-  {                                         \
-    size_t struct_size = 0;
-
-#define PBW_FLD_UINT(id, m)                         \
-  struct_size += put_uint((id)*8 + PB_TYPE_VARINT); \
-  struct_size += put_uint(static_cast<uint64_t>(s->m));
-
-#define PBW_FLD_PACKED_UINT(id, m)                                                        \
-  {                                                                                       \
-    size_t cnt = s->m.size(), sz = 0, lpos;                                               \
-    struct_size += put_uint((id)*8 + PB_TYPE_FIXEDLEN);                                   \
-    lpos = m_buf->size();                                                                 \
-    putb(0);                                                                              \
-    for (size_t i = 0; i < cnt; i++) sz += put_uint(s->m[i]);                             \
-    struct_size += sz + 1;                                                                \
-    for (; sz > 0x7f; sz >>= 7, struct_size++)                                            \
-      m_buf->insert(m_buf->begin() + (lpos++), static_cast<uint8_t>((sz & 0x7f) | 0x80)); \
-    (*m_buf)[lpos] = static_cast<uint8_t>(sz);                                            \
-  }
-
-#define PBW_FLD_STRING(id, m)                           \
-  {                                                     \
-    size_t len = s->m.length();                         \
-    struct_size += put_uint((id)*8 + PB_TYPE_FIXEDLEN); \
-    struct_size += put_uint(len) + len;                 \
-    for (size_t i = 0; i < len; i++) putb(s->m[i]);     \
-  }
-
-#define PBW_FLD_BLOB(id, m)                             \
-  {                                                     \
-    size_t len = s->m.size();                           \
-    struct_size += put_uint((id)*8 + PB_TYPE_FIXEDLEN); \
-    struct_size += put_uint(len) + len;                 \
-    for (size_t i = 0; i < len; i++) putb(s->m[i]);     \
-  }
-
-#define PBW_FLD_STRUCT(id, m)                                                             \
-  {                                                                                       \
-    size_t sz, lpos;                                                                      \
-    struct_size += put_uint((id)*8 + PB_TYPE_FIXEDLEN);                                   \
-    lpos = m_buf->size();                                                                 \
-    putb(0);                                                                              \
-    sz = write(&s->m);                                                                    \
-    struct_size += sz + 1;                                                                \
-    for (; sz > 0x7f; sz >>= 7, struct_size++)                                            \
-      m_buf->insert(m_buf->begin() + (lpos++), static_cast<uint8_t>((sz & 0x7f) | 0x80)); \
-    (*m_buf)[lpos] = static_cast<uint8_t>(sz);                                            \
-  }
-
-#define PBW_FLD_REPEATED_STRING(id, m)                                 \
-  {                                                                    \
-    for (size_t k = 0; k < s->m.size(); k++) PBW_FLD_STRING(id, m[k]); \
-  }
-
-#define PBW_FLD_REPEATED_STRUCT(id, m)                                 \
-  {                                                                    \
-    for (size_t k = 0; k < s->m.size(); k++) PBW_FLD_STRUCT(id, m[k]); \
-  }
-
-#define PBW_FLD_REPEATED_STRUCT_BLOB(id, m)                          \
-  {                                                                  \
-    for (size_t k = 0; k < s->m.size(); k++) PBW_FLD_BLOB(id, m[k]); \
-  }
-
-#define PBW_END_STRUCT() \
-  return struct_size;    \
-  }
 
 /**
  * @Brief Add a single rowIndexEntry, negative input values treated as not present
@@ -364,72 +225,102 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
   m_buf->data()[lpos + 2] = (uint8_t)(sz);
 }
 
-PBW_BEGIN_STRUCT(PostScript)
-PBW_FLD_UINT(1, footerLength)
-PBW_FLD_UINT(2, compression)
-if (s->compression != NONE) { PBW_FLD_UINT(3, compressionBlockSize) }
-PBW_FLD_PACKED_UINT(4, version)
-PBW_FLD_UINT(5, metadataLength)
-PBW_FLD_STRING(8000, magic)
-PBW_END_STRUCT()
+size_t ProtobufWriter::write(const PostScript &s)
+{
+  ProtobufFieldWriter w(this);
+  w.field_uint(1, s.footerLength);
+  w.field_uint(2, s.compression);
+  if (s.compression != NONE) { w.field_uint(3, s.compressionBlockSize); }
+  w.field_packed_uint(4, s.version);
+  w.field_uint(5, s.metadataLength);
+  w.field_string(8000, s.magic);
+  return w.value();
+}
 
-PBW_BEGIN_STRUCT(FileFooter)
-PBW_FLD_UINT(1, headerLength)
-PBW_FLD_UINT(2, contentLength)
-PBW_FLD_REPEATED_STRUCT(3, stripes)
-PBW_FLD_REPEATED_STRUCT(4, types)
-PBW_FLD_REPEATED_STRUCT(5, metadata)
-PBW_FLD_UINT(6, numberOfRows)
-PBW_FLD_REPEATED_STRUCT_BLOB(7, statistics)
-PBW_FLD_UINT(8, rowIndexStride)
-PBW_END_STRUCT()
+size_t ProtobufWriter::write(const FileFooter &s)
+{
+  ProtobufFieldWriter w(this);
+  w.field_uint(1, s.headerLength);
+  w.field_uint(2, s.contentLength);
+  w.field_repeated_struct(3, s.stripes);
+  w.field_repeated_struct(4, s.types);
+  w.field_repeated_struct(5, s.metadata);
+  w.field_uint(6, s.numberOfRows);
+  w.field_repeated_struct_blob(7, s.statistics);
+  w.field_uint(8, s.rowIndexStride);
+  return w.value();
+}
 
-PBW_BEGIN_STRUCT(StripeInformation)
-PBW_FLD_UINT(1, offset)
-PBW_FLD_UINT(2, indexLength)
-PBW_FLD_UINT(3, dataLength)
-PBW_FLD_UINT(4, footerLength)
-PBW_FLD_UINT(5, numberOfRows)
-PBW_END_STRUCT()
+size_t ProtobufWriter::write(const StripeInformation &s)
+{
+  ProtobufFieldWriter w(this);
+  w.field_uint(1, s.offset);
+  w.field_uint(2, s.indexLength);
+  w.field_uint(3, s.dataLength);
+  w.field_uint(4, s.footerLength);
+  w.field_uint(5, s.numberOfRows);
+  return w.value();
+}
 
-PBW_BEGIN_STRUCT(SchemaType)
-PBW_FLD_UINT(1, kind)
-PBW_FLD_PACKED_UINT(2, subtypes)
-PBW_FLD_REPEATED_STRING(3, fieldNames)
-// PBW_FLD_UINT(4, maximumLength)
-// PBW_FLD_UINT(5, precision)
-// PBW_FLD_UINT(6, scale)
-PBW_END_STRUCT()
+size_t ProtobufWriter::write(const SchemaType &s)
+{
+  ProtobufFieldWriter w(this);
+  w.field_uint(1, s.kind);
+  w.field_packed_uint(2, s.subtypes);
+  w.field_repeated_string(3, s.fieldNames);
+  // w.field_uint(4, s.maximumLength);
+  // w.field_uint(5, s.precision);
+  // w.field_uint(6, s.scale);
+  return w.value();
+}
 
-PBW_BEGIN_STRUCT(UserMetadataItem)
-PBW_FLD_STRING(1, name)
-PBW_FLD_STRING(2, value)
-PBW_END_STRUCT()
+size_t ProtobufWriter::write(const UserMetadataItem &s)
+{
+  ProtobufFieldWriter w(this);
+  w.field_string(1, s.name);
+  w.field_string(2, s.value);
+  return w.value();
+}
 
-PBW_BEGIN_STRUCT(StripeFooter)
-PBW_FLD_REPEATED_STRUCT(1, streams)
-PBW_FLD_REPEATED_STRUCT(2, columns)
-if (s->writerTimezone != "") { PBW_FLD_STRING(3, writerTimezone) }
-PBW_END_STRUCT()
+size_t ProtobufWriter::write(const StripeFooter &s)
+{
+  ProtobufFieldWriter w(this);
+  w.field_repeated_struct(1, s.streams);
+  w.field_repeated_struct(2, s.columns);
+  if (s.writerTimezone != "") { w.field_string(3, s.writerTimezone); }
+  return w.value();
+}
 
-PBW_BEGIN_STRUCT(Stream)
-PBW_FLD_UINT(1, kind)
-PBW_FLD_UINT(2, column)
-PBW_FLD_UINT(3, length)
-PBW_END_STRUCT()
+size_t ProtobufWriter::write(const Stream &s)
+{
+  ProtobufFieldWriter w(this);
+  w.field_uint(1, s.kind);
+  w.field_uint(2, s.column);
+  w.field_uint(3, s.length);
+  return w.value();
+}
 
-PBW_BEGIN_STRUCT(ColumnEncoding)
-PBW_FLD_UINT(1, kind)
-if (s->kind == DICTIONARY || s->kind == DICTIONARY_V2) { PBW_FLD_UINT(2, dictionarySize) }
-PBW_END_STRUCT()
+size_t ProtobufWriter::write(const ColumnEncoding &s)
+{
+  ProtobufFieldWriter w(this);
+  w.field_uint(1, s.kind);
+  if (s.kind == DICTIONARY || s.kind == DICTIONARY_V2) { w.field_uint(2, s.dictionarySize); }
+  return w.value();
+}
 
-PBW_BEGIN_STRUCT(StripeStatistics)
-PBW_FLD_REPEATED_STRUCT_BLOB(1, colStats)
-PBW_END_STRUCT()
+size_t ProtobufWriter::write(const StripeStatistics &s)
+{
+  ProtobufFieldWriter w(this);
+  w.field_repeated_struct_blob(1, s.colStats);
+  return w.value();
+}
 
-PBW_BEGIN_STRUCT(Metadata)
-PBW_FLD_REPEATED_STRUCT(1, stripeStats)
-PBW_END_STRUCT()
+size_t ProtobufWriter::write(const Metadata &s)
+{
+  ProtobufFieldWriter w(this);
+  w.field_repeated_struct(1, s.stripeStats);
+  return w.value();
+}
 
 /* ----------------------------------------------------------------------------*/
 /**
