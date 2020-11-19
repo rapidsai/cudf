@@ -102,23 +102,17 @@ type_id to_type_id(SchemaElement const &schema,
   parquet::Type physical                = schema.type;
   parquet::ConvertedType converted_type = schema.converted_type;
   int32_t decimal_scale                 = schema.decimal_scale;
-  std::cout << "physical=" << int(physical) << ",converted_type=" << int(converted_type)
-            << ",decimal_scale=" << decimal_scale << "\n";
-  // std::cout << "logical_type=" << schema.logical_type.__isset << ",";
-  std::cout << "schema.repetition_type=" << int(schema.repetition_type)
-            << ",type_length=" << schema.type_length
-            << ",max_definition_level=" << schema.max_definition_level
-            << ",max_repetition_level=" << schema.max_repetition_level;
 
   // Logical type used for actual data interpretation; the legacy converted type
   // is superceded by 'logical' type whenever available.
   auto inferred_converted_type = logical_type_to_converted_type(schema.logical_type);
+  std::cout << "physical=" << int(physical) << ",converted_type=" << int(converted_type)
+            << ",decimal_scale=" << decimal_scale;
+  std::cout << ",inferred_converted_type=" << int(inferred_converted_type);
+  std::cout << "\n";
   if (inferred_converted_type != parquet::UNKNOWN) converted_type = inferred_converted_type;
   if (inferred_converted_type == parquet::DECIMAL && decimal_scale == 0)
     decimal_scale = schema.logical_type.DECIMAL.scale;
-
-  std::cout << ",inferred_converted_type=" << int(inferred_converted_type);
-  std::cout << "\n";
 
   switch (converted_type) {
     case parquet::UINT_8: return type_id::UINT8;

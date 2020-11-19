@@ -680,7 +680,8 @@ struct ParquetFieldUnionFunctor<T, true> {
 
   inline bool operator()(CompactProtocolReader *cpr, int field_type)
   {
-    return (field_type != ST_FLD_STRUCT || !(is_set = true, true));
+    return (field_type != ST_FLD_STRUCT ||
+            !(is_set = true, cpr->skip_struct_field(field_type), true));
   }
 
   int field() { return field_val; }
