@@ -143,6 +143,30 @@ TEST_F(ApplyBooleanMask, withoutNullString)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expect_cudf_table_view, tableView);
 }
 
+TEST_F(ApplyBooleanMask, FixedPointColumnTest)
+{
+  using namespace numeric;
+  using decimal32_wrapper = cudf::test::fixed_point_column_wrapper<int32_t>;
+  using decimal64_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
+
+  auto const col1 = decimal32_wrapper{{10, 40, 70, 5, 2, 10, -123}, scale_type{-1}};
+  auto const col2 = decimal64_wrapper{{10, 40, 70, 5, 2, 10, -123}, scale_type{-10}};
+  cudf::table_view cudf_table_in_view{{col1, col2}};
+
+  cudf::test::fixed_width_column_wrapper<bool> bool_filter{{1, 1, 0, 0, 1, 0, 0}};
+  cudf::column_view bool_filter_col(bool_filter);
+
+  std::unique_ptr<cudf::table> filteredTable =
+    cudf::apply_boolean_mask(cudf_table_in_view, bool_filter_col);
+  cudf::table_view tableView = filteredTable->view();
+
+  auto const expect_col1 = decimal32_wrapper{{10, 40, 2}, scale_type{-1}};
+  auto const expect_col2 = decimal64_wrapper{{10, 40, 2}, scale_type{-10}};
+  cudf::table_view expect_cudf_table_view{{expect_col1, expect_col2}};
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expect_cudf_table_view, tableView);
+}
+
 TEST_F(ApplyBooleanMask, NoNullInput)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col(
