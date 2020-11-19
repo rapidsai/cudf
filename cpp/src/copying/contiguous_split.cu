@@ -582,24 +582,28 @@ BufInfo build_output_columns(InputIter begin,
       return std::make_pair(static_cast<bitmask_type const*>(nullptr), 0);
     }();
     uint8_t const* data_ptr;
-    size_type row_count;
-    std::tie(data_ptr, row_count) = [&]() {
+    size_type size;
+    std::tie(data_ptr, size) = [&]() {
       if (src.head()) {
-        auto const ptr      = base_ptr + current_info->dst_offset;
-        auto const num_rows = current_info->num_rows;
+        auto const ptr = base_ptr + current_info->dst_offset;
+        // if we have data, num_elements will always be the correct size.
+        // we don't want to use num_rows because if we are an offset column, num_rows
+        // represents the # of rows of our owning parent. num_elements always represents
+        // the proper size for this column
+        auto const size = current_info->num_elements;
         ++current_info;
-        return std::make_pair(ptr, num_rows);
+        return std::make_pair(ptr, size);
       }
       // Parent columns w/o data (e.g., strings, lists) don't have an associated `dst_buf_info`,
-      // therefore, use the first child's info
+      // therefore, use the first child's info. their num_rows value will be correct (also see
+      // comment above)
       return std::make_pair(static_cast<uint8_t const*>(nullptr), current_info->num_rows);
     }();
     auto children = std::vector<column_view>{};
     children.reserve(src.num_children());
     current_info = build_output_columns(
       src.child_begin(), src.child_end(), current_info, std::back_inserter(children), base_ptr);
-    return column_view{
-      src.type(), row_count, data_ptr, bitmask_ptr, null_count, 0, std::move(children)};
+    return column_view{src.type(), size, data_ptr, bitmask_ptr, null_count, 0, std::move(children)};
   });
   return current_info;
 }
