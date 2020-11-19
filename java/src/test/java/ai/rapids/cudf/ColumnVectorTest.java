@@ -3195,9 +3195,12 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector expected = ColumnVector.fromLists(new HostColumnVector.ListType(true,
              new HostColumnVector.BasicType(true, DType.STRING)) , list, list3, list2)) {
       assert res1.getNullCount() == 1: "Null count is incorrect on input column";
-      assert res1.getChildColumnViewAccess(0).getNullCount() == 0 : "Null count is incorrect on input column";
       assert res2.getNullCount() == 0 : "Null count is incorrect on input column";
-      assert res2.getChildColumnViewAccess(0).getNullCount() == 2 : "Null count is incorrect on input column";
+      try(ColumnView cView1 = res1.getChildColumnView(0);
+          ColumnView cView2 = res2.getChildColumnView(0)) {
+        assert cView1.getNullCount() == 0 : "Null count is incorrect on input column";
+        assert cView2.getNullCount() == 2 : "Null count is incorrect on input column";
+      }
       assertColumnsAreEqual(expected, v);
     }
   }
@@ -3425,6 +3428,22 @@ public class ColumnVectorTest extends CudfTestBase {
          HostColumnVector hostColumnVector = cv.copyToHost();
          ColumnVector expected = hostColumnVector.copyToDevice()) {
       assertColumnsAreEqual(expected, cv);
+    }
+  }
+
+  @Test
+  void testCopyToColumnVector() {
+    List<Integer> list1 = Arrays.asList(10, 11, 12, 13);
+    List<Integer> list2 = Arrays.asList(16, 12, 14, 15);
+    List<Integer> list3 = Arrays.asList(0, 7, 3, 4, 2);
+
+    try(ColumnVector res = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT32)), list1, list2, list3);
+        ColumnView childColumnView = res.getChildColumnView(0);
+        ColumnVector copiedChildCv = childColumnView.copyToColumnVector();
+        ColumnVector expected =
+            ColumnVector.fromInts(10, 11, 12, 13, 16, 12, 14, 15, 0, 7, 3, 4, 2)) {
+      assertColumnsAreEqual(expected, copiedChildCv);
     }
   }
 }
