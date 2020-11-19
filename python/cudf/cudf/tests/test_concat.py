@@ -680,14 +680,7 @@ def test_concat_join_axis_1_dup_error(objs):
     # we do not support duplicate columns
     with pytest.raises(NotImplementedError):
         assert_eq(
-            pd.concat(
-                objs,
-                axis=1,
-            ),
-            gd.concat(
-                gpu_objs,
-                axis=1,
-            ),
+            pd.concat(objs, axis=1,), gd.concat(gpu_objs, axis=1,),
         )
 
 
