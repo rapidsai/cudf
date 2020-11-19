@@ -173,7 +173,7 @@ else
     KAFKA_CONDA_FILE=${CONDA_FILE//-/=} #convert to conda install
 
     gpuci_logger "Installing $CUDF_CONDA_FILE & $KAFKA_CONDA_FILE"
-    conda install -c $WORKSPACE/ci/artifacts/cuspatial/cpu/conda-bld/ "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
+    conda install -c $WORKSPACE/ci/artifacts/cudf/cpu/conda-bld/ "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
 
     gpuci_logger "Build python libs from source"
     if [[ ${BUILD_MODE} == "pull-request" ]]; then
