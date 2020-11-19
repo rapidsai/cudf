@@ -1601,7 +1601,7 @@ def test_strings_rsplit(data, n, expand):
     ],
 )
 @pytest.mark.parametrize("n", [-1, 2, 1, 9])
-@pytest.mark.parametrize("expand", [True])
+@pytest.mark.parametrize("expand", [True, False, None])
 def test_strings_split(data, n, expand):
     gs = Series(data)
     ps = pd.Series(data)
