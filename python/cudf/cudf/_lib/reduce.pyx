@@ -115,6 +115,10 @@ def minmax(Column incol):
     ----------
     incol : Column
         A cuDF Column object
+
+    Returns
+    -------
+    A pair of ``(min, max)`` values of ``incol``
     """
     cdef column_view c_incol_view = incol.view()
     cdef pair[unique_ptr[scalar], unique_ptr[scalar]] c_result
