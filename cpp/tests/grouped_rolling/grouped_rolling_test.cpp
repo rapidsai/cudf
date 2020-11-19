@@ -1534,4 +1534,740 @@ TYPED_TEST(TypedNullTimestampTestForRangeQueries, CountMultiGroupAllNullTimestam
                                    {2, 3, 3, 3, 2, 4, 4, 4, 4, 4}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
 }
 
+template <typename T>
+struct TypedUnboundedWindowTest : public cudf::test::BaseFixture {
+};
+
+struct UnboundedWindowTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(UnboundedWindowTest, UnboundedPrecedingWindowSingleGroupTimestampASCNullsFirst)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  auto const agg_col =
+    fixed_width_column_wrapper<T>{
+      {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+      {1, 1, 1, 1, 1, 0, 1, 1, 1, 1}};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+    {0, 0, 0, 0, 1, 1, 1, 1, 1, 1}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const unbounded_preceding = cudf::window_bounds::unbounded();
+  auto const one_day_following   = cudf::window_bounds::get(1L);
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::ASCENDING,
+                                                              agg_col,
+                                                              unbounded_preceding,
+                                                              one_day_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {4, 4, 4, 4, 5, 6, 7, 8, 9, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedFollowingWindowSingleGroupTimestampASCNullsFirst)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  auto const agg_col = fixed_width_column_wrapper<T>{
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1}};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+    {0, 0, 0, 0, 1, 1, 1, 1, 1, 1}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const one_day_preceding   = cudf::window_bounds::get(1L);
+  auto const unbounded_following = cudf::window_bounds::unbounded();
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::ASCENDING,
+                                                              agg_col,
+                                                              one_day_preceding,
+                                                              unbounded_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {9, 9, 9, 9, 5, 5, 4, 4, 3, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedPrecedingAndFollowingWindowSingleGroupTimestampASCNullsFirst)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  auto const agg_col = fixed_width_column_wrapper<T>{
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1}};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+    {0, 0, 0, 0, 1, 1, 1, 1, 1, 1}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const unbounded_preceding   = cudf::window_bounds::unbounded();
+  auto const unbounded_following = cudf::window_bounds::unbounded();
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::ASCENDING,
+                                                              agg_col,
+                                                              unbounded_preceding,
+                                                              unbounded_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {9, 9, 9, 9, 9, 9, 9, 9, 9, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedPrecedingWindowSingleGroupTimestampASCNullsLast)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  auto const agg_col =
+    fixed_width_column_wrapper<T>{
+      {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+      {1, 1, 1, 1, 1, 0, 1, 1, 1, 1}};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+      {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+      {1, 1, 1, 1, 1, 1, 0, 0, 0, 0}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const unbounded_preceding = cudf::window_bounds::unbounded();
+  auto const one_day_following   = cudf::window_bounds::get(1L);
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::ASCENDING,
+                                                              agg_col,
+                                                              unbounded_preceding,
+                                                              one_day_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {2, 3, 4, 5, 5, 5, 9, 9, 9, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedFollowingWindowSingleGroupTimestampASCNullsLast)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  auto const agg_col =
+    fixed_width_column_wrapper<T>{
+      {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+      {1, 1, 1, 1, 1, 0, 1, 1, 1, 1}};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+      {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+      {1, 1, 1, 1, 1, 1, 0, 0, 0, 0}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const one_day_preceding   = cudf::window_bounds::get(1L);
+  auto const unbounded_following = cudf::window_bounds::unbounded();
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::ASCENDING,
+                                                              agg_col,
+                                                              one_day_preceding,
+                                                              unbounded_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {9, 9, 8, 7, 6, 5, 4, 4, 4, 4}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedPrecedingAndFollowingWindowSingleGroupTimestampASCNullsLast)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  auto const agg_col =
+    fixed_width_column_wrapper<T>{
+      {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+      {1, 1, 1, 1, 1, 0, 1, 1, 1, 1}};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+      {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+      {1, 1, 1, 1, 1, 1, 0, 0, 0, 0}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const unbounded_preceding = cudf::window_bounds::unbounded();
+  auto const unbounded_following = cudf::window_bounds::unbounded();
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::ASCENDING,
+                                                              agg_col,
+                                                              unbounded_preceding,
+                                                              unbounded_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {9, 9, 9, 9, 9, 9, 9, 9, 9, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedPrecedingWindowSingleGroupTimestampDESCNullsFirst)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  auto const agg_col =
+    fixed_width_column_wrapper<T>{
+      {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+      {1, 1, 1, 1, 1, 0, 1, 1, 1, 1}};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+      {9, 8, 7, 6, 5, 4, 3, 2, 1, 0}, 
+      {0, 0, 0, 0, 1, 1, 1, 1, 1, 1}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const unbounded_preceding = cudf::window_bounds::unbounded();
+  auto const one_day_following   = cudf::window_bounds::get(1L);
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::DESCENDING,
+                                                              agg_col,
+                                                              unbounded_preceding,
+                                                              one_day_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {4, 4, 4, 4, 5, 6, 7, 8, 9, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedFollowingWindowSingleGroupTimestampDESCNullsFirst)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  auto const agg_col = fixed_width_column_wrapper<T>{
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1}};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    {9, 8, 7, 6, 5, 4, 3, 2, 1, 0}, 
+    {0, 0, 0, 0, 1, 1, 1, 1, 1, 1}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const one_day_preceding   = cudf::window_bounds::get(1L);
+  auto const unbounded_following = cudf::window_bounds::unbounded();
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::DESCENDING,
+                                                              agg_col,
+                                                              one_day_preceding,
+                                                              unbounded_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {9, 9, 9, 9, 5, 5, 4, 4, 3, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedPrecedingAndFollowingWindowSingleGroupTimestampDESCNullsFirst)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  auto const agg_col = fixed_width_column_wrapper<T>{
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+    {1, 1, 1, 1, 1, 0, 1, 1, 1, 1}};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    {9, 8, 7, 6, 5, 4, 3, 2, 1, 0}, 
+    {0, 0, 0, 0, 1, 1, 1, 1, 1, 1}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const unbounded_preceding   = cudf::window_bounds::unbounded();
+  auto const unbounded_following = cudf::window_bounds::unbounded();
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::DESCENDING,
+                                                              agg_col,
+                                                              unbounded_preceding,
+                                                              unbounded_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {9, 9, 9, 9, 9, 9, 9, 9, 9, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedPrecedingWindowSingleGroupTimestampDESCNullsLast)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  auto const agg_col =
+    fixed_width_column_wrapper<T>{
+      {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+      {1, 1, 1, 1, 1, 0, 1, 1, 1, 1}};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+      {9, 8, 7, 6, 5, 4, 3, 2, 1, 0}, 
+      {1, 1, 1, 1, 1, 1, 0, 0, 0, 0}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const unbounded_preceding = cudf::window_bounds::unbounded();
+  auto const one_day_following   = cudf::window_bounds::get(1L);
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::DESCENDING,
+                                                              agg_col,
+                                                              unbounded_preceding,
+                                                              one_day_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {2, 3, 4, 5, 5, 5, 9, 9, 9, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedFollowingWindowSingleGroupTimestampDESCNullsLast)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  auto const agg_col =
+    fixed_width_column_wrapper<T>{
+      {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+      {1, 1, 1, 1, 1, 0, 1, 1, 1, 1}};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+      {9, 8, 7, 6, 5, 4, 3, 2, 1, 0}, 
+      {1, 1, 1, 1, 1, 1, 0, 0, 0, 0}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const one_day_preceding   = cudf::window_bounds::get(1L);
+  auto const unbounded_following = cudf::window_bounds::unbounded();
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::DESCENDING,
+                                                              agg_col,
+                                                              one_day_preceding,
+                                                              unbounded_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {9, 9, 8, 7, 6, 5, 4, 4, 4, 4}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedPrecedingAndFollowingWindowSingleGroupTimestampDESCNullsLast)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  auto const agg_col =
+    fixed_width_column_wrapper<T>{
+      {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 
+      {1, 1, 1, 1, 1, 0, 1, 1, 1, 1}};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+      {9, 8, 7, 6, 5, 4, 3, 2, 1, 0}, 
+      {1, 1, 1, 1, 1, 1, 0, 0, 0, 0}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const unbounded_preceding = cudf::window_bounds::unbounded();
+  auto const unbounded_following = cudf::window_bounds::unbounded();
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::DESCENDING,
+                                                              agg_col,
+                                                              unbounded_preceding,
+                                                              unbounded_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {9, 9, 9, 9, 9, 9, 9, 9, 9, 9}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedPrecedingCountMultiGroupTimestampASCNullsFirst)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col  = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+  auto const agg_col  = fixed_width_column_wrapper<T>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    {1, 2, 2, 1, 2,  1, 2, 3, 4, 5}, 
+    {0, 0, 0, 1, 1,  0, 0, 1, 1, 1}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const unbounded_preceding   = cudf::window_bounds::unbounded();
+  auto const one_day_following     = cudf::window_bounds::get(1L);
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::ASCENDING,
+                                                              agg_col,
+                                                              unbounded_preceding,
+                                                              one_day_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {3, 3, 3, 5, 5,  2, 2, 4, 5, 5}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedFollowingCountMultiGroupTimestampASCNullsFirst)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col  = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+  auto const agg_col  = fixed_width_column_wrapper<T>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    {1, 2, 2, 1, 2,  1, 2, 3, 4, 5}, 
+    {0, 0, 0, 1, 1,  0, 0, 1, 1, 1}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const one_day_preceding   = cudf::window_bounds::get(1L);
+  auto const unbounded_following = cudf::window_bounds::unbounded();
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::ASCENDING,
+                                                              agg_col,
+                                                              one_day_preceding,
+                                                              unbounded_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {5, 5, 5, 2, 2,  5, 5, 3, 3, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedPrecedingAndFollowingCountMultiGroupTimestampASCNullsFirst)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col  = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+  auto const agg_col  = fixed_width_column_wrapper<T>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    {1, 2, 2, 1, 2,  1, 2, 3, 4, 5}, 
+    {0, 0, 0, 1, 1,  0, 0, 1, 1, 1}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const unbounded_preceding = cudf::window_bounds::unbounded();
+  auto const unbounded_following = cudf::window_bounds::unbounded();
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::ASCENDING,
+                                                              agg_col,
+                                                              unbounded_preceding,
+                                                              unbounded_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {5, 5, 5, 5, 5,  5, 5, 5, 5, 5}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedPrecedingCountMultiGroupTimestampASCNullsLast)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col  = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+  auto const agg_col  = fixed_width_column_wrapper<T>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    {1, 2, 2, 1, 3,  1, 2, 3, 4, 5}, 
+    {1, 1, 1, 0, 0,  1, 1, 1, 0, 0}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const unbounded_preceding   = cudf::window_bounds::unbounded();
+  auto const one_day_following     = cudf::window_bounds::get(1L);
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::ASCENDING,
+                                                              agg_col,
+                                                              unbounded_preceding,
+                                                              one_day_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {3, 3, 3, 5, 5,  2, 3, 3, 5, 5}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedFollowingCountMultiGroupTimestampASCNullsLast)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col  = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+  auto const agg_col  = fixed_width_column_wrapper<T>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    {1, 2, 2, 1, 3,  1, 2, 3, 4, 5}, 
+    {1, 1, 1, 0, 0,  1, 1, 1, 0, 0}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const one_day_preceding    = cudf::window_bounds::get(1L);
+  auto const unbounded_following = cudf::window_bounds::unbounded();
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::ASCENDING,
+                                                              agg_col,
+                                                              one_day_preceding,
+                                                              unbounded_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {5, 5, 5, 2, 2,  5, 5, 4, 2, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedPrecedingAndFollowingCountMultiGroupTimestampASCNullsLast)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col  = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+  auto const agg_col  = fixed_width_column_wrapper<T>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    {1, 2, 2, 1, 3,  1, 2, 3, 4, 5}, 
+    {1, 1, 1, 0, 0,  1, 1, 1, 0, 0}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const unbounded_preceding = cudf::window_bounds::unbounded();
+  auto const unbounded_following = cudf::window_bounds::unbounded();
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::ASCENDING,
+                                                              agg_col,
+                                                              unbounded_preceding,
+                                                              unbounded_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {5, 5, 5, 5, 5,  5, 5, 5, 5, 5}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedPrecedingCountMultiGroupTimestampDESCNullsFirst)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col  = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+  auto const agg_col  = fixed_width_column_wrapper<T>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    {4, 3, 2, 1, 0,  9, 8, 7, 6, 5}, 
+    {0, 0, 0, 1, 1,  0, 0, 1, 1, 1}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const unbounded_preceding = cudf::window_bounds::unbounded();
+  auto const one_day_following   = cudf::window_bounds::get(1L);
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::DESCENDING,
+                                                              agg_col,
+                                                              unbounded_preceding,
+                                                              one_day_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {3, 3, 3, 5, 5,  2, 2, 4, 5, 5}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedFollowingCountMultiGroupTimestampDESCNullsFirst)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col  = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+  auto const agg_col  = fixed_width_column_wrapper<T>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    {4, 3, 2, 1, 0,  9, 8, 7, 6, 5}, 
+    {0, 0, 0, 1, 1,  0, 0, 1, 1, 1}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const one_day_preceding   = cudf::window_bounds::get(1L);
+  auto const unbounded_following = cudf::window_bounds::unbounded();
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::DESCENDING,
+                                                              agg_col,
+                                                              one_day_preceding,
+                                                              unbounded_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {5, 5, 5, 2, 2,  5, 5, 3, 3, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedPrecedingAndFollowingCountMultiGroupTimestampDESCNullsFirst)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col  = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+  auto const agg_col  = fixed_width_column_wrapper<T>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    {4, 3, 2, 1, 0,  9, 8, 7, 6, 5}, 
+    {0, 0, 0, 1, 1,  0, 0, 1, 1, 1}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const unbounded_preceding = cudf::window_bounds::unbounded();
+  auto const unbounded_following = cudf::window_bounds::unbounded();
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::DESCENDING,
+                                                              agg_col,
+                                                              unbounded_preceding,
+                                                              unbounded_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {5, 5, 5, 5, 5,  5, 5, 5, 5, 5}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedPrecedingCountMultiGroupTimestampDESCNullsLast)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col  = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+  auto const agg_col  = fixed_width_column_wrapper<T>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    {4, 3, 2, 1, 0,  9, 8, 7, 6, 5}, 
+    {1, 1, 1, 0, 0,  1, 1, 1, 0, 0}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const unbounded_preceding = cudf::window_bounds::unbounded();
+  auto const one_day_following   = cudf::window_bounds::get(1L);
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::DESCENDING,
+                                                              agg_col,
+                                                              unbounded_preceding,
+                                                              one_day_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {2, 3, 3, 5, 5,  2, 3, 3, 5, 5}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedFollowingCountMultiGroupTimestampDESCNullsLast)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col  = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+  auto const agg_col  = fixed_width_column_wrapper<T>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    {4, 3, 2, 1, 0,  9, 8, 7, 6, 5}, 
+    {1, 1, 1, 0, 0,  1, 1, 1, 0, 0}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const one_day_preceding   = cudf::window_bounds::get(1L);
+  auto const unbounded_following = cudf::window_bounds::unbounded();
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::DESCENDING,
+                                                              agg_col,
+                                                              one_day_preceding,
+                                                              unbounded_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {5, 5, 4, 2, 2,  5, 5, 4, 2, 2}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TEST_F(UnboundedWindowTest, UnboundedPrecedingAndFollowingCountMultiGroupTimestampDESCNullsLast)
+{
+  using namespace cudf::test;
+  using T = int32_t;
+
+  auto const grp_col  = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+  auto const agg_col  = fixed_width_column_wrapper<T>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  auto const time_col = fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
+    {4, 3, 2, 1, 0,  9, 8, 7, 6, 5}, 
+    {1, 1, 1, 0, 0,  1, 1, 1, 0, 0}};
+
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grp_col}};
+  auto const unbounded_preceding = cudf::window_bounds::unbounded();
+  auto const unbounded_following = cudf::window_bounds::unbounded();
+  auto const min_periods   = 1L;
+  auto const output        = cudf::grouped_time_range_rolling_window(grouping_keys,
+                                                              time_col,
+                                                              cudf::order::DESCENDING,
+                                                              agg_col,
+                                                              unbounded_preceding,
+                                                              unbounded_following,
+                                                              min_periods,
+                                                              cudf::make_count_aggregation());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 fixed_width_column_wrapper<cudf::size_type>{
+                                   {5, 5, 5, 5, 5,  5, 5, 5, 5, 5}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+
 CUDF_TEST_PROGRAM_MAIN()
