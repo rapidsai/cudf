@@ -8020,10 +8020,7 @@ def test_dataframe_from_pandas_duplicate_columns():
         ("min", "sum", "max"),
         {"min", "sum", "max"},
         "sum",
-        "asdf",
         {"a": "sum", "b": "min", "c": "max"},
-        {"a": "asdf"},
-        {"a": np.sum, "b": np.min, "c": np.max},
         {"a": ["sum"], "b": ["min"], "c": ["max"]},
         {"a": ("sum"), "b": ("min"), "c": ("max")},
         {"a": {"sum"}, "b": {"min"}, "c": {"max"}},
@@ -8036,21 +8033,53 @@ def test_agg_for_dataframes(data, aggs):
     pdf = pd.DataFrame(data)
     gdf = gd.DataFrame(data)
 
-    if aggs == {"a": np.sum, "b": np.min, "c": np.max}:
-        with pytest.raises(NotImplementedError):
+    expect = pdf.agg(aggs)
+    got = gdf.agg(aggs)
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize("aggs",[{"a": np.sum, "b": np.min, "c": np.max}])
+def test_agg_for_unsupported_function_error(aggs):
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]})    
+    gdf = gd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]})
+
+    with pytest.raises(NotImplementedError):
             got = gdf.agg(aggs)
-    elif aggs == "asdf":
-        with pytest.raises(
-            AttributeError,
-            match=f"{aggs} is not a valid function for 'DataFrame' object",
-        ):
-            got = gdf.agg(aggs)
-    elif aggs == {"a": "asdf"}:
-        with pytest.raises(
-            AttributeError,
-            match=f"{aggs['a']} is not a valid function for 'Series' object",
-        ):
-            got = gdf.agg(aggs)
+    else:
+        expect = pdf.agg(aggs)
+        got = gdf.agg(aggs)
+
+        assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize("aggs",["asdf"])
+def test_agg_for_invalid_function_dataframe_object(aggs):
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]})    
+    gdf = gd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]})
+
+    with pytest.raises(
+        AttributeError,
+        match=f"{aggs} is not a valid function for 'DataFrame' object",
+    ):
+        got = gdf.agg(aggs)
+    else:
+        expect = pdf.agg(aggs)
+        got = gdf.agg(aggs)
+
+        assert_eq(expect, got, check_dtype=False)
+
+@pytest.mark.parametrize("aggs",[{"a": "asdf"}])
+def test_agg_for_invalid_function_series_object(aggs):
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]})    
+    gdf = gd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]})
+
+    with pytest.raises(
+        AttributeError,
+        match=f"{aggs['a']} is not a valid function for 'Series' object",
+    ):
+        got = gdf.agg(aggs)
+    
     else:
         expect = pdf.agg(aggs)
         got = gdf.agg(aggs)
