@@ -19,6 +19,7 @@
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/interop.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/unary.hpp>
@@ -30,6 +31,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 
@@ -132,11 +135,11 @@ struct dispatch_to_cudf_column {
       // If array is sliced, we have to copy whole mask and then take copy.
       auto out_mask = (num_rows == static_cast<size_type>(data_buffer->size() / sizeof(T)))
                         ? *tmp_mask
-                        : copy_bitmask(static_cast<bitmask_type*>(tmp_mask->data()),
-                                       array.offset(),
-                                       array.offset() + num_rows,
-                                       stream,
-                                       mr);
+                        : cudf::detail::copy_bitmask(static_cast<bitmask_type*>(tmp_mask->data()),
+                                                     array.offset(),
+                                                     array.offset() + num_rows,
+                                                     rmm::cuda_stream_view{stream},
+                                                     mr);
 
       col->set_null_mask(std::move(out_mask));
     }
@@ -186,11 +189,11 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
   auto const has_nulls = skip_mask ? false : array.null_bitmap_data() != nullptr;
   if (has_nulls) {
     auto out_mask =
-      copy_bitmask(static_cast<bitmask_type*>(get_mask_buffer(array, mr, stream)->data()),
-                   array.offset(),
-                   array.offset() + array.length(),
-                   stream,
-                   mr);
+      detail::copy_bitmask(static_cast<bitmask_type*>(get_mask_buffer(array, mr, stream)->data()),
+                           array.offset(),
+                           array.offset() + array.length(),
+                           rmm::cuda_stream_view{stream},
+                           mr);
 
     out_col->set_null_mask(std::move(out_mask));
   }
@@ -286,11 +289,11 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::struct_view>(
 
   auto out_mask = *(get_mask_buffer(array, mr, stream));
   if (struct_array->null_bitmap_data() != nullptr) {
-    out_mask = copy_bitmask(static_cast<bitmask_type*>(out_mask.data()),
-                            array.offset(),
-                            array.offset() + array.length(),
-                            stream,
-                            mr);
+    out_mask = detail::copy_bitmask(static_cast<bitmask_type*>(out_mask.data()),
+                                    array.offset(),
+                                    array.offset() + array.length(),
+                                    rmm::cuda_stream_view{stream},
+                                    mr);
   }
 
   return make_structs_column(

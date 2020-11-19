@@ -16,6 +16,7 @@
 
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
 #include <cudf/detail/stream_compaction.hpp>
@@ -28,6 +29,7 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -114,10 +116,11 @@ std::unique_ptr<column> add_keys(
 
   // create new dictionary column with keys_column and indices_column
   // null mask has not changed
-  return make_dictionary_column(std::move(keys_column),
-                                std::move(indices_column),
-                                copy_bitmask(dictionary_column.parent(), stream, mr),
-                                dictionary_column.null_count());
+  return make_dictionary_column(
+    std::move(keys_column),
+    std::move(indices_column),
+    cudf::detail::copy_bitmask(dictionary_column.parent(), rmm::cuda_stream_view{stream}, mr),
+    dictionary_column.null_count());
 }
 
 }  // namespace detail

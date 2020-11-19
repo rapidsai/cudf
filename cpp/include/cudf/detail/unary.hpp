@@ -64,7 +64,7 @@ std::unique_ptr<column> true_if(
  */
 std::unique_ptr<cudf::column> unary_operation(
   cudf::column_view const& input,
-  cudf::unary_op op,
+  cudf::unary_operator op,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
   cudaStream_t stream                 = 0);
 
