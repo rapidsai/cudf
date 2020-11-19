@@ -18,6 +18,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -871,24 +872,6 @@ struct mutable_value_accessor {
 
   __device__ T& operator()(cudf::size_type i) { return col.element<T>(i); }
 };
-
-/**
- * @brief Returns the aligned address for holding array of type T in pre-allocated memory
- * @param destination pointer to pre-allocated contiguous storage to store type T.
- * @return Pointer of type T, aligned to alignment of type T.
- */
-template <typename T>
-T* align_ptr_for_type(void* destination)
-{
-  constexpr std::size_t bytes_needed{sizeof(T)};
-  constexpr std::size_t alignment{alignof(T)};
-
-  // pad the allocation for aligning the first pointer
-  auto padded_bytes_needed = bytes_needed + (alignment - 1);
-  // std::align captures last argument by reference and modifies it, but we don't want it modified
-  return reinterpret_cast<T*>(
-    std::align(alignment, bytes_needed, destination, padded_bytes_needed));
-}
 
 /**
  * @brief Helper function for use by column_device_view and mutable_column_device_view constructors
