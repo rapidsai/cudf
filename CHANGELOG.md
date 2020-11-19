@@ -26,7 +26,6 @@
 - PR #6796 Add create_metadata_file in dask_cudf
 - PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
 
-
 ## Improvements
 
 - PR #6430 Add struct type support to `to_arrow` and `from_arrow`
