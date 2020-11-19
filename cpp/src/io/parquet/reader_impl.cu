@@ -106,10 +106,6 @@ type_id to_type_id(SchemaElement const &schema,
   // Logical type used for actual data interpretation; the legacy converted type
   // is superceded by 'logical' type whenever available.
   auto inferred_converted_type = logical_type_to_converted_type(schema.logical_type);
-  std::cout << "physical=" << int(physical) << ",converted_type=" << int(converted_type)
-            << ",decimal_scale=" << decimal_scale;
-  std::cout << ",inferred_converted_type=" << int(inferred_converted_type);
-  std::cout << "\n";
   if (inferred_converted_type != parquet::UNKNOWN) converted_type = inferred_converted_type;
   if (inferred_converted_type == parquet::DECIMAL && decimal_scale == 0)
     decimal_scale = schema.logical_type.DECIMAL.scale;
@@ -647,16 +643,12 @@ class aggregate_metadata {
       // walk the schema and choose all top level columns
       for (size_t schema_idx = 1; schema_idx < pfm.schema.size(); schema_idx++) {
         auto const &schema = pfm.schema[schema_idx];
-        std::cout << schema.name << ".";
         if (schema.parent_idx == 0) { output_column_schemas.push_back(schema_idx); }
       }
-      std::cout << "\n";
     } else {
       // Load subset of columns; include PANDAS index unless excluded
       std::vector<std::string> local_use_names = use_names;
       if (include_index) { add_pandas_index_names(local_use_names); }
-      for (const auto &use_name : local_use_names) std::cout << use_name << ",";
-      std::cout << "\n";
       for (const auto &use_name : local_use_names) {
         for (size_t schema_idx = 1; schema_idx < pfm.schema.size(); schema_idx++) {
           auto const &schema = pfm.schema[schema_idx];
@@ -1368,26 +1360,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     _metadata->select_row_groups(row_group_list, skip_rows, num_rows);
 
   table_metadata out_metadata;
-  /*
-  // Get a list of column data types
-  std::vector<data_type> column_types;
-  std::cout << "skip_rows=" << skip_rows << ",num_rows=" << num_rows << "\n";
-  std::cout << "_selected_columns.size()=" << _selected_columns.size() << "\n";
-  if (_metadata->get_num_row_groups() != 0) {
-    for (const auto &col : _selected_columns) {
-      auto &col_schema = _metadata->get_column_schema(col.first);
-      auto col_type    = to_type_id(col_schema, _strings_to_categorical, _timestamp_type.id());
-      std::cout << "type_id=" << int(col_type) << "\n";
-      CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
-      column_types.emplace_back(col_type);
-    }
-  }
-  */
 
   // output cudf columns as determined by the top level schema
   std::vector<std::unique_ptr<column>> out_columns;
   out_columns.reserve(_output_columns.size());
-  std::cout << "_output_columns.size()=" << _output_columns.size() << "\n";
 
   if (selected_row_groups.size() != 0 && _input_columns.size() != 0) {
     // Descriptors for all the chunks that make up the selected columns
@@ -1551,13 +1527,11 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     }
   }
 
-  std::cout << "out_columns.size()=" << out_columns.size() << "\n";
   // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
   for (size_t i = out_columns.size(); i < _output_columns.size(); ++i) {
     out_metadata.schema_info.push_back(column_name_info{""});
     out_columns.emplace_back(make_empty_column(_output_columns[i].type));
   }
-  std::cout << "out_columns.size()=" << out_columns.size() << "\n";
 
   // Return column names (must match order of returned columns)
   out_metadata.column_names.resize(_output_columns.size());
