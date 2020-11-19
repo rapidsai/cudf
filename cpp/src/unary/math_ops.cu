@@ -276,7 +276,7 @@ struct fixed_point_abs {
 
 template <typename T, template <typename> typename FixedPointFunctor>
 std::unique_ptr<column> unary_op_with(column_view const& input,
-                                      cudaStream_t stream,
+                                      rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   using Type                     = device_storage_type_t<T>;
@@ -294,7 +294,7 @@ std::unique_ptr<column> unary_op_with(column_view const& input,
   auto out_view = result->mutable_view();
   Type const n  = std::pow(10, -input.type().scale());
 
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
+  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                     input.begin<Type>(),
                     input.end<Type>(),
                     out_view.begin<Type>(),
@@ -554,7 +554,7 @@ struct FixedPointOpDispatcher {
   std::enable_if_t<cudf::is_fixed_point<T>(), std::unique_ptr<column>> operator()(
     column_view const& input,
     cudf::unary_op op,
-    cudaStream_t stream,
+    rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
   {
     switch (op) {
