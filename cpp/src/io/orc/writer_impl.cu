@@ -39,10 +39,10 @@ using namespace cudf::io::orc;
 using namespace cudf::io;
 
 struct row_group_index_info {
-    int32_t pos;        // Position
-    int32_t blk_pos;    // Block Position
-    int32_t comp_pos;   // Compressed Position
-    int32_t comp_size;  // Compressed size
+  int32_t pos;        // Position
+  int32_t blk_pos;    // Block Position
+  int32_t comp_pos;   // Compressed Position
+  int32_t comp_size;  // Compressed size
 };
 
 namespace {
@@ -858,8 +858,8 @@ void writer::impl::write_index_stream(int32_t stripe_id,
       if (compression_kind_ != NONE) {
         const auto *ss =
           &strm_desc[stripe_id * num_data_streams + chunk.strm_id[type] - (num_columns + 1)];
-        record.blk_pos = ss->first_block;
-        record.comp_pos = 0;
+        record.blk_pos   = ss->first_block;
+        record.comp_pos  = 0;
         record.comp_size = ss->stream_size;
       }
     }
@@ -870,8 +870,10 @@ void writer::impl::write_index_stream(int32_t stripe_id,
                                     row_group_index_info &record) {
     if (record.pos >= 0) {
       record.pos += chunk.strm_len[type];
-      while ((record.pos >= 0) && (record.blk_pos >= 0) && (static_cast<size_t>(record.pos) >= compression_blocksize_) &&
-             (record.comp_pos + 3 + comp_out[record.blk_pos].bytes_written < static_cast<size_t>(record.comp_size))) {
+      while ((record.pos >= 0) && (record.blk_pos >= 0) &&
+             (static_cast<size_t>(record.pos) >= compression_blocksize_) &&
+             (record.comp_pos + 3 + comp_out[record.blk_pos].bytes_written <
+              static_cast<size_t>(record.comp_size))) {
         record.pos -= compression_blocksize_;
         record.comp_pos += 3 + comp_out[record.blk_pos].bytes_written;
         record.blk_pos += 1;
@@ -897,7 +899,8 @@ void writer::impl::write_index_stream(int32_t stripe_id,
 
   // Add row index entries
   for (size_t g = group; g < group + groups_in_stripe; g++) {
-    pbw->put_row_index_entry(present.comp_pos, present.pos, data.comp_pos, data.pos, data2.comp_pos, data2.pos, kind);
+    pbw->put_row_index_entry(
+      present.comp_pos, present.pos, data.comp_pos, data.pos, data2.comp_pos, data2.pos, kind);
 
     if (stream_id != 0) {
       const auto &ck = chunks[g * num_columns + stream_id - 1];
