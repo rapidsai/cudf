@@ -170,27 +170,6 @@ struct update_target_element<
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
-struct update_target_element<Source,
-                             aggregation::SUM_OF_SQUARES,
-                             target_has_nulls,
-                             source_has_nulls,
-                             std::enable_if_t<is_numeric<Source>()>> {
-  __device__ void operator()(mutable_column_device_view target,
-                             size_type target_index,
-                             column_device_view source,
-                             size_type source_index) const noexcept
-  {
-    if (source_has_nulls and source.is_null(source_index)) { return; }
-
-    using Target = target_type_t<Source, aggregation::SUM_OF_SQUARES>;
-    auto const x = static_cast<Target>(source.element<Source>(source_index));
-    atomicAdd(&target.element<Target>(target_index), x * x);
-
-    if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
-  }
-};
-
-template <typename Source, bool target_has_nulls, bool source_has_nulls>
 struct update_target_element<
   Source,
   aggregation::COUNT_VALID,

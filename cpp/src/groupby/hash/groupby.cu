@@ -58,16 +58,16 @@ namespace {
  * @brief List of aggregation operations that can be computed with a hash-based
  * implementation.
  */
-constexpr std::array<aggregation::Kind, 11> hash_aggregations{
+constexpr std::array<aggregation::Kind, 10> hash_aggregations{
     aggregation::SUM, aggregation::MIN, aggregation::MAX,
     aggregation::COUNT_VALID, aggregation::COUNT_ALL,
     aggregation::ARGMIN, aggregation::ARGMAX,
-    aggregation::MEAN, aggregation::SUM_OF_SQUARES,
-    aggregation::STD, aggregation::VARIANCE};
+    aggregation::MEAN, aggregation::STD, aggregation::VARIANCE};
 
-//Could be hash: SUM, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL, ANY, ALL, SUM_OF_SQUARES,
+//Could be hash: SUM, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL, ANY, ALL,
 // Compound: MEAN(SUM, COUNT_VALID), VARIANCE, STD(MEAN (SUM, COUNT_VALID), COUNT_VALID),
 // ARGMAX, ARGMIN
+// FIXME(kn): adding SUM_OF_SQUARES causes ptxas compiler crash (<=CUDA 10.2) for more than 3 types!
 
 template <class T, size_t N>
 constexpr bool array_contains(std::array<T, N> const& haystack, T needle) {
@@ -94,8 +94,7 @@ bool constexpr is_hash_aggregation(aggregation::Kind t)
   return (t == aggregation::SUM) or (t == aggregation::MIN) or (t == aggregation::MAX) or
          (t == aggregation::COUNT_VALID) or (t == aggregation::COUNT_ALL) or
          (t == aggregation::ARGMIN) or (t == aggregation::ARGMAX) or (t == aggregation::MEAN) or
-         (t == aggregation::SUM_OF_SQUARES) or (t == aggregation::STD) or
-         (t == aggregation::VARIANCE);
+         (t == aggregation::STD) or (t == aggregation::VARIANCE);
 }
 
 template <typename Map>
