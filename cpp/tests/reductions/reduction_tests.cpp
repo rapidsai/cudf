@@ -1106,13 +1106,30 @@ TEST_P(DictionaryStringReductionTest, MinMax)
 
   cudf::test::dictionary_column_wrapper<std::string> col(host_strings.begin(), host_strings.end());
 
-  std::string expected_min_result = *(std::min_element(host_strings.begin(), host_strings.end()));
-  std::string expected_max_result = *(std::max_element(host_strings.begin(), host_strings.end()));
-
   // MIN
-  this->reduction_test(col, expected_min_result, true, cudf::make_min_aggregation(), output_type);
+  this->reduction_test(col,
+                       *(std::min_element(host_strings.begin(), host_strings.end())),
+                       true,
+                       cudf::make_min_aggregation(),
+                       output_type);
+  // sliced
+  this->reduction_test(cudf::slice(col, {1, 7}).front(),
+                       *(std::min_element(host_strings.begin() + 1, host_strings.begin() + 7)),
+                       true,
+                       cudf::make_min_aggregation(),
+                       output_type);
   // MAX
-  this->reduction_test(col, expected_max_result, true, cudf::make_max_aggregation(), output_type);
+  this->reduction_test(col,
+                       *(std::max_element(host_strings.begin(), host_strings.end())),
+                       true,
+                       cudf::make_max_aggregation(),
+                       output_type);
+  // sliced
+  this->reduction_test(cudf::slice(col, {1, 7}).front(),
+                       *(std::max_element(host_strings.begin() + 1, host_strings.begin() + 7)),
+                       true,
+                       cudf::make_max_aggregation(),
+                       output_type);
 }
 
 template <typename T>
@@ -1142,6 +1159,17 @@ TYPED_TEST(DictionaryAnyAllTest, AnyAll)
     cudf::test::dictionary_column_wrapper<T> some_col(v_some.begin(), v_some.end());
     this->reduction_test(some_col, true, true, cudf::make_any_aggregation(), output_dtype);
     this->reduction_test(some_col, false, true, cudf::make_all_aggregation(), output_dtype);
+    // sliced test
+    this->reduction_test(cudf::slice(some_col, {1, 3}).front(),
+                         true,
+                         true,
+                         cudf::make_any_aggregation(),
+                         output_dtype);
+    this->reduction_test(cudf::slice(some_col, {1, 2}).front(),
+                         true,
+                         true,
+                         cudf::make_all_aggregation(),
+                         output_dtype);
   }
   // with nulls
   {
@@ -1155,6 +1183,17 @@ TYPED_TEST(DictionaryAnyAllTest, AnyAll)
     cudf::test::dictionary_column_wrapper<T> some_col(v_some.begin(), v_some.end(), valid.begin());
     this->reduction_test(some_col, true, true, cudf::make_any_aggregation(), output_dtype);
     this->reduction_test(some_col, false, true, cudf::make_all_aggregation(), output_dtype);
+    // sliced test
+    this->reduction_test(cudf::slice(some_col, {0, 3}).front(),
+                         true,
+                         true,
+                         cudf::make_any_aggregation(),
+                         output_dtype);
+    this->reduction_test(cudf::slice(some_col, {1, 4}).front(),
+                         true,
+                         true,
+                         cudf::make_all_aggregation(),
+                         output_dtype);
   }
 }
 

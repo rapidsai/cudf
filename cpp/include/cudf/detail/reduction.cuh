@@ -127,37 +127,6 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   return std::unique_ptr<scalar>(s);
 }
 
-template <typename Op,
-          typename InputIterator,
-          typename OutputType = typename thrust::iterator_value<InputIterator>::type,
-          typename std::enable_if_t<is_dictionary<OutputType>()>* = nullptr>
-std::unique_ptr<scalar> reduce(InputIterator d_in,
-                               cudf::size_type num_items,
-                               op::simple_op<Op> sop,
-                               rmm::mr::device_memory_resource* mr,
-                               cudaStream_t stream)
-{
-  auto binary_op      = sop.get_binary_op();
-  OutputType identity = sop.template get_identity<OutputType>();
-  rmm::device_scalar<OutputType> dev_result{identity, stream, mr};
-
-  // Allocate temporary storage
-  rmm::device_buffer storage;
-  size_t storage_bytes = 0;
-  cub::DeviceReduce::Reduce(
-    storage.data(), storage_bytes, d_in, dev_result.data(), num_items, binary_op, identity, stream);
-  storage = rmm::device_buffer{storage_bytes, stream};
-
-  // Run reduction
-  cub::DeviceReduce::Reduce(
-    storage.data(), storage_bytes, d_in, dev_result.data(), num_items, binary_op, identity, stream);
-
-  // Create output scalar
-  auto s = new cudf::numeric_scalar<cudf::size_type>(
-    static_cast<cudf::size_type>(dev_result.value(stream)), true, stream, mr);
-  return std::unique_ptr<scalar>(s);
-}
-
 /** --------------------------------------------------------------------------*
  * @brief compute reduction by the compound operator (reduce and transform)
  *

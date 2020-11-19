@@ -210,9 +210,30 @@ struct same_element_type_dispatcher {
   template <typename ElementType>
   static constexpr bool is_supported()
   {
-    return !(cudf::is_fixed_point<ElementType>() ||
+    return !(cudf::is_fixed_point<ElementType>() || cudf::is_dictionary<ElementType>() ||
              std::is_same<ElementType, cudf::list_view>::value ||
              std::is_same<ElementType, cudf::struct_view>::value);
+  }
+
+  template <typename IndexType,
+            typename std::enable_if_t<cudf::is_index_type<IndexType>()>* = nullptr>
+  std::unique_ptr<scalar> resolve_key(column_view const& keys,
+                                      scalar const& keys_index,
+                                      rmm::mr::device_memory_resource* mr,
+                                      cudaStream_t stream)
+  {
+    auto index = static_cast<numeric_scalar<IndexType> const&>(keys_index);
+    return cudf::detail::get_element(keys, index.value(stream), stream, mr);
+  }
+
+  template <typename IndexType,
+            typename std::enable_if_t<!cudf::is_index_type<IndexType>()>* = nullptr>
+  std::unique_ptr<scalar> resolve_key(column_view const&,
+                                      scalar const&,
+                                      rmm::mr::device_memory_resource*,
+                                      cudaStream_t)
+  {
+    CUDF_FAIL("index type expected for dictionary column");
   }
 
  public:
@@ -221,11 +242,14 @@ struct same_element_type_dispatcher {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    auto result = simple_reduction<ElementType, ElementType, Op>(col, mr, stream);
-    if (!cudf::is_dictionary(col.type())) return result;
-    auto index = static_cast<numeric_scalar<cudf::size_type>*>(result.get());
-    return cudf::detail::get_element(
-      cudf::dictionary_column_view(col).keys(), index->value(stream), stream, mr);
+    if (!cudf::is_dictionary(col.type())) {
+      return simple::simple_reduction<ElementType, ElementType, Op>(col, mr, stream);
+    }
+    auto index = simple::simple_reduction<ElementType, ElementType, Op>(
+      dictionary_column_view(col).get_indices_annotated(),
+      rmm::mr::get_current_device_resource(),
+      stream);
+    return resolve_key<ElementType>(dictionary_column_view(col).keys(), *index, mr, stream);
   }
 
   template <typename ElementType, std::enable_if_t<not is_supported<ElementType>()>* = nullptr>
