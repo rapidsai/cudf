@@ -15,6 +15,13 @@ import cudf
 
 import dask_cudf
 
+# Check if create_metadata_file is supported by
+# the current dask.dataframe version
+need_create_meta = pytest.mark.skipif(
+    dask_cudf.io.parquet.create_metadata_file is None,
+    reason="Need create_metadata_file support in dask.dataframe.",
+)
+
 nrows = 40
 npartitions = 15
 df = pd.DataFrame(
@@ -370,6 +377,7 @@ def test_row_groups_per_part(tmpdir, row_groups, index):
     assert ddf2.npartitions == npartitions_expected
 
 
+@need_create_meta
 @pytest.mark.parametrize("partition_on", [None, "a"])
 def test_create_metadata_file(tmpdir, partition_on):
 
@@ -407,6 +415,7 @@ def test_create_metadata_file(tmpdir, partition_on):
     dd.assert_eq(ddf1, ddf2)
 
 
+@need_create_meta
 def test_create_metadata_file_inconsistent_schema(tmpdir):
 
     # NOTE: This test demonstrates that the CudfEngine

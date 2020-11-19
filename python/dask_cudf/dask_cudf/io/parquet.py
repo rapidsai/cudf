@@ -9,6 +9,13 @@ from pyarrow import parquet as pq
 from dask import dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowEngine
 
+try:
+    from dask.dataframe.io.parquet import (
+        create_metadata_file as create_metadata_file_dd,
+    )
+except ImportError:
+    create_metadata_file_dd = None
+
 import cudf
 from cudf.core.column import as_column, build_categorical_column
 from cudf.io import write_to_dataset
@@ -231,6 +238,8 @@ def read_parquet(
 
 
 to_parquet = partial(dd.to_parquet, engine=CudfEngine)
-create_metadata_file = partial(
-    dd.io.parquet.create_metadata_file, engine=CudfEngine
-)
+
+if create_metadata_file_dd is None:
+    create_metadata_file = create_metadata_file_dd
+else:
+    create_metadata_file = partial(create_metadata_file_dd, engine=CudfEngine)
