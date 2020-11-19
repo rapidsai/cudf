@@ -197,8 +197,7 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
 {
   auto dict_col = cudf::dictionary_column_view(col);
   // first, find the value in the dictionary's key set
-  auto index = cudf::dictionary::detail::get_index(
-    dict_col, value, stream, rmm::mr::get_current_device_resource());
+  auto index = cudf::dictionary::detail::get_index(dict_col, value, stream);
   // if found, check the index is actually in the indices column
   return index->is_valid() ? cudf::type_dispatcher(dict_col.indices().type(),
                                                    contains_scalar_dispatch{},

@@ -1248,19 +1248,16 @@ __global__ void __launch_bounds__(1024) gpuCompactCompressedBlocks(StripeStream 
  * @param[in] num_columns Number of columns
  * @param[in] num_rowgroups Number of row groups
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t EncodeOrcColumnData(EncChunk *chunks,
-                                uint32_t num_columns,
-                                uint32_t num_rowgroups,
-                                rmm::cuda_stream_view stream)
+ */
+void EncodeOrcColumnData(EncChunk *chunks,
+                         uint32_t num_columns,
+                         uint32_t num_rowgroups,
+                         rmm::cuda_stream_view stream)
 {
   dim3 dim_block(512, 1);  // 512 threads per chunk
   dim3 dim_grid(num_columns, num_rowgroups);
   gpuEncodeOrcColumnData<512>
     <<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_columns, num_rowgroups);
-  return cudaSuccess;
 }
 
 /**
@@ -1272,21 +1269,18 @@ cudaError_t EncodeOrcColumnData(EncChunk *chunks,
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t EncodeStripeDictionaries(StripeDictionary *stripes,
-                                     EncChunk *chunks,
-                                     uint32_t num_string_columns,
-                                     uint32_t num_columns,
-                                     uint32_t num_stripes,
-                                     rmm::cuda_stream_view stream)
+ */
+void EncodeStripeDictionaries(StripeDictionary *stripes,
+                              EncChunk *chunks,
+                              uint32_t num_string_columns,
+                              uint32_t num_columns,
+                              uint32_t num_stripes,
+                              rmm::cuda_stream_view stream)
 {
   dim3 dim_block(512, 1);  // 512 threads per dictionary
   dim3 dim_grid(num_string_columns * num_stripes, 2);
   gpuEncodeStringDictionaries<512>
     <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, chunks, num_columns);
-  return cudaSuccess;
 }
 
 /**
@@ -1297,20 +1291,17 @@ cudaError_t EncodeStripeDictionaries(StripeDictionary *stripes,
  * @param[in] num_stripe_streams Total number of streams
  * @param[in] num_columns Number of columns
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t CompactOrcDataStreams(StripeStream *strm_desc,
-                                  EncChunk *chunks,
-                                  uint32_t num_stripe_streams,
-                                  uint32_t num_columns,
-                                  rmm::cuda_stream_view stream)
+ */
+void CompactOrcDataStreams(StripeStream *strm_desc,
+                           EncChunk *chunks,
+                           uint32_t num_stripe_streams,
+                           uint32_t num_columns,
+                           rmm::cuda_stream_view stream)
 {
   dim3 dim_block(1024, 1);
   dim3 dim_grid(num_stripe_streams, 1);
   gpuCompactOrcDataStreams<<<dim_grid, dim_block, 0, stream.value()>>>(
     strm_desc, chunks, num_columns);
-  return cudaSuccess;
 }
 
 /**
@@ -1326,19 +1317,17 @@ cudaError_t CompactOrcDataStreams(StripeStream *strm_desc,
  * @param[in] compression Type of compression
  * @param[in] comp_blk_size Compression block size
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t CompressOrcDataStreams(uint8_t *compressed_data,
-                                   StripeStream *strm_desc,
-                                   EncChunk *chunks,
-                                   gpu_inflate_input_s *comp_in,
-                                   gpu_inflate_status_s *comp_out,
-                                   uint32_t num_stripe_streams,
-                                   uint32_t num_compressed_blocks,
-                                   CompressionKind compression,
-                                   uint32_t comp_blk_size,
-                                   rmm::cuda_stream_view stream)
+ */
+void CompressOrcDataStreams(uint8_t *compressed_data,
+                            StripeStream *strm_desc,
+                            EncChunk *chunks,
+                            gpu_inflate_input_s *comp_in,
+                            gpu_inflate_status_s *comp_out,
+                            uint32_t num_stripe_streams,
+                            uint32_t num_compressed_blocks,
+                            CompressionKind compression,
+                            uint32_t comp_blk_size,
+                            rmm::cuda_stream_view stream)
 {
   dim3 dim_block_init(256, 1);
   dim3 dim_grid(num_stripe_streams, 1);
@@ -1348,7 +1337,6 @@ cudaError_t CompressOrcDataStreams(uint8_t *compressed_data,
   dim3 dim_block_compact(1024, 1);
   gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream.value()>>>(
     strm_desc, comp_in, comp_out, compressed_data, comp_blk_size);
-  return cudaSuccess;
 }
 
 }  // namespace gpu

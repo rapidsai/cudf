@@ -17,6 +17,7 @@
  */
 package ai.rapids.cudf;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -368,6 +369,45 @@ class ReductionTest extends CudfTestBase {
     try (Scalar expected = buildExpectedScalar(op, DType.TIMESTAMP_NANOSECONDS, expectedObject);
          ColumnVector v = ColumnVector.timestampNanoSecondsFromBoxedLongs(values);
          Scalar result = v.reduce(op, expected.getType())) {
+      assertEquals(expected, result);
+    }
+  }
+
+  @Test
+  void testWithSetOutputType() {
+    try (Scalar expected = Scalar.fromLong(1 * 2 * 3 * 4L);
+         ColumnVector cv = ColumnVector.fromBytes(new byte[]{1, 2, 3, 4});
+         Scalar result = cv.product(DType.INT64)) {
+      assertEquals(expected, result);
+    }
+
+    try (Scalar expected = Scalar.fromLong(1 + 2 + 3 + 4L);
+         ColumnVector cv = ColumnVector.fromBytes(new byte[]{1, 2, 3, 4});
+         Scalar result = cv.sum(DType.INT64)) {
+      assertEquals(expected, result);
+    }
+
+    try (Scalar expected = Scalar.fromLong((1*1L) + (2*2L) + (3*3L) + (4*4L));
+         ColumnVector cv = ColumnVector.fromBytes(new byte[]{1, 2, 3, 4});
+         Scalar result = cv.sumOfSquares(DType.INT64)) {
+      assertEquals(expected, result);
+    }
+
+    try (Scalar expected = Scalar.fromFloat((1 + 2 + 3 + 4f)/4);
+         ColumnVector cv = ColumnVector.fromBytes(new byte[]{1, 2, 3, 4});
+         Scalar result = cv.mean(DType.FLOAT32)) {
+      assertEquals(expected, result);
+    }
+
+    try (Scalar expected = Scalar.fromFloat(1.666667f);
+         ColumnVector cv = ColumnVector.fromBytes(new byte[]{1, 2, 3, 4});
+         Scalar result = cv.variance(DType.FLOAT32)) {
+      assertEquals(expected, result);
+    }
+
+    try (Scalar expected = Scalar.fromFloat(1.2909945f);
+         ColumnVector cv = ColumnVector.fromBytes(new byte[]{1, 2, 3, 4});
+         Scalar result = cv.standardDeviation(DType.FLOAT32)) {
       assertEquals(expected, result);
     }
   }

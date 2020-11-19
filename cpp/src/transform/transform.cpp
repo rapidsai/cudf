@@ -26,11 +26,12 @@
 #include <jit/parser.h>
 #include <jit/type.h>
 #include "jit/code/code.h"
-#include "rmm/cuda_stream_view.hpp"
 
 #include <jit/common_headers.hpp>
 #include <jit/timestamps.hpp.jit>
 #include <jit/types.hpp.jit>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace transformation {

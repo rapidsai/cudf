@@ -329,20 +329,17 @@ __global__ void __launch_bounds__(block_size, 1)
  * @param[in] dev_scratch Device scratch data (kDictScratchSize per dictionary)
  * @param[in] num_chunks Number of column chunks
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t BuildChunkDictionaries(EncColumnChunk *chunks,
-                                   uint32_t *dev_scratch,
-                                   size_t scratch_size,
-                                   uint32_t num_chunks,
-                                   rmm::cuda_stream_view stream)
+ */
+void BuildChunkDictionaries(EncColumnChunk *chunks,
+                            uint32_t *dev_scratch,
+                            size_t scratch_size,
+                            uint32_t num_chunks,
+                            rmm::cuda_stream_view stream)
 {
   if (num_chunks > 0 && scratch_size > 0) {  // zero scratch size implies no dictionaries
     CUDA_TRY(cudaMemsetAsync(dev_scratch, 0, scratch_size, stream.value()));
     gpuBuildChunkDictionaries<1024><<<num_chunks, 1024, 0, stream.value()>>>(chunks, dev_scratch);
   }
-  return cudaSuccess;
 }
 
 }  // namespace gpu

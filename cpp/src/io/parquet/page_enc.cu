@@ -1875,21 +1875,18 @@ dremel_data get_dremel_data(column_view h_col, rmm::cuda_stream_view stream)
  * @param[in] num_fragments Number of fragments per column
  * @param[in] num_columns Number of columns
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t InitPageFragments(PageFragment *frag,
-                              const EncColumnDesc *col_desc,
-                              int32_t num_fragments,
-                              int32_t num_columns,
-                              uint32_t fragment_size,
-                              uint32_t num_rows,
-                              rmm::cuda_stream_view stream)
+ */
+void InitPageFragments(PageFragment *frag,
+                       const EncColumnDesc *col_desc,
+                       int32_t num_fragments,
+                       int32_t num_columns,
+                       uint32_t fragment_size,
+                       uint32_t num_rows,
+                       rmm::cuda_stream_view stream)
 {
   dim3 dim_grid(num_columns, num_fragments);  // 1 threadblock per fragment
   gpuInitPageFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
     frag, col_desc, num_fragments, num_columns, fragment_size, num_rows);
-  return cudaSuccess;
 }
 
 /**
@@ -1902,21 +1899,18 @@ cudaError_t InitPageFragments(PageFragment *frag,
  * @param[in] num_columns Number of columns
  * @param[in] fragment_size Max size of each fragment in rows
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t InitFragmentStatistics(statistics_group *groups,
-                                   const PageFragment *fragments,
-                                   const EncColumnDesc *col_desc,
-                                   int32_t num_fragments,
-                                   int32_t num_columns,
-                                   uint32_t fragment_size,
-                                   rmm::cuda_stream_view stream)
+ */
+void InitFragmentStatistics(statistics_group *groups,
+                            const PageFragment *fragments,
+                            const EncColumnDesc *col_desc,
+                            int32_t num_fragments,
+                            int32_t num_columns,
+                            uint32_t fragment_size,
+                            rmm::cuda_stream_view stream)
 {
   dim3 dim_grid(num_columns, (num_fragments + 3) >> 2);  // 1 warp per fragment
   gpuInitFragmentStats<<<dim_grid, 128, 0, stream.value()>>>(
     groups, fragments, col_desc, num_fragments, num_columns, fragment_size);
-  return cudaSuccess;
 }
 
 /**
@@ -1930,22 +1924,19 @@ cudaError_t InitFragmentStatistics(statistics_group *groups,
  * @param[out] page_grstats Setup for page-level stats
  * @param[out] chunk_grstats Setup for chunk-level stats
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t InitEncoderPages(EncColumnChunk *chunks,
-                             EncPage *pages,
-                             const EncColumnDesc *col_desc,
-                             int32_t num_rowgroups,
-                             int32_t num_columns,
-                             statistics_merge_group *page_grstats,
-                             statistics_merge_group *chunk_grstats,
-                             rmm::cuda_stream_view stream)
+ */
+void InitEncoderPages(EncColumnChunk *chunks,
+                      EncPage *pages,
+                      const EncColumnDesc *col_desc,
+                      int32_t num_rowgroups,
+                      int32_t num_columns,
+                      statistics_merge_group *page_grstats,
+                      statistics_merge_group *chunk_grstats,
+                      rmm::cuda_stream_view stream)
 {
   dim3 dim_grid(num_columns, num_rowgroups);  // 1 threadblock per rowgroup
   gpuInitPages<<<dim_grid, 128, 0, stream.value()>>>(
     chunks, pages, col_desc, page_grstats, chunk_grstats, num_rowgroups, num_columns);
-  return cudaSuccess;
 }
 
 /**
@@ -1958,22 +1949,19 @@ cudaError_t InitEncoderPages(EncColumnChunk *chunks,
  * @param[out] comp_in Optionally initializes compressor input params
  * @param[out] comp_out Optionally initializes compressor output params
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t EncodePages(EncPage *pages,
-                        const EncColumnChunk *chunks,
-                        uint32_t num_pages,
-                        uint32_t start_page,
-                        gpu_inflate_input_s *comp_in,
-                        gpu_inflate_status_s *comp_out,
-                        rmm::cuda_stream_view stream)
+ */
+void EncodePages(EncPage *pages,
+                 const EncColumnChunk *chunks,
+                 uint32_t num_pages,
+                 uint32_t start_page,
+                 gpu_inflate_input_s *comp_in,
+                 gpu_inflate_status_s *comp_out,
+                 rmm::cuda_stream_view stream)
 {
   // A page is part of one column. This is launching 1 block per page. 1 block will exclusively
   // deal with one datatype.
   gpuEncodePages<<<num_pages, 128, 0, stream.value()>>>(
     pages, chunks, comp_in, comp_out, start_page);
-  return cudaSuccess;
 }
 
 /**
@@ -1985,18 +1973,15 @@ cudaError_t EncodePages(EncPage *pages,
  * @param[in] start_page First page to encode in page array
  * @param[in] comp_out Compressor status
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t DecideCompression(EncColumnChunk *chunks,
-                              const EncPage *pages,
-                              uint32_t num_chunks,
-                              uint32_t start_page,
-                              const gpu_inflate_status_s *comp_out,
-                              rmm::cuda_stream_view stream)
+ */
+void DecideCompression(EncColumnChunk *chunks,
+                       const EncPage *pages,
+                       uint32_t num_chunks,
+                       uint32_t start_page,
+                       const gpu_inflate_status_s *comp_out,
+                       rmm::cuda_stream_view stream)
 {
   gpuDecideCompression<<<num_chunks, 128, 0, stream.value()>>>(chunks, pages, comp_out, start_page);
-  return cudaSuccess;
 }
 
 /**
@@ -2010,21 +1995,18 @@ cudaError_t DecideCompression(EncColumnChunk *chunks,
  * @param[in] page_stats Optional page-level statistics to be included in page header
  * @param[in] chunk_stats Optional chunk-level statistics to be encoded
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t EncodePageHeaders(EncPage *pages,
-                              EncColumnChunk *chunks,
-                              uint32_t num_pages,
-                              uint32_t start_page,
-                              const gpu_inflate_status_s *comp_out,
-                              const statistics_chunk *page_stats,
-                              const statistics_chunk *chunk_stats,
-                              rmm::cuda_stream_view stream)
+ */
+void EncodePageHeaders(EncPage *pages,
+                       EncColumnChunk *chunks,
+                       uint32_t num_pages,
+                       uint32_t start_page,
+                       const gpu_inflate_status_s *comp_out,
+                       const statistics_chunk *page_stats,
+                       const statistics_chunk *chunk_stats,
+                       rmm::cuda_stream_view stream)
 {
   gpuEncodePageHeaders<<<num_pages, 128, 0, stream.value()>>>(
     pages, chunks, comp_out, page_stats, chunk_stats, start_page);
-  return cudaSuccess;
 }
 
 /**
@@ -2034,16 +2016,13 @@ cudaError_t EncodePageHeaders(EncPage *pages,
  * @param[in] pages Device array of EncPages
  * @param[in] num_chunks Number of column chunks
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t GatherPages(EncColumnChunk *chunks,
-                        const EncPage *pages,
-                        uint32_t num_chunks,
-                        rmm::cuda_stream_view stream)
+ */
+void GatherPages(EncColumnChunk *chunks,
+                 const EncPage *pages,
+                 uint32_t num_chunks,
+                 rmm::cuda_stream_view stream)
 {
   gpuGatherPages<<<num_chunks, 1024, 0, stream.value()>>>(chunks, pages);
-  return cudaSuccess;
 }
 
 }  // namespace gpu

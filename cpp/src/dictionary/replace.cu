@@ -23,7 +23,8 @@
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
-#include "rmm/cuda_stream_view.hpp"
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>

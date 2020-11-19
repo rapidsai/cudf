@@ -459,28 +459,26 @@ extern "C" __global__ void __launch_bounds__(128, 8)
   }
 }
 
-cudaError_t __host__ ParseCompressedStripeData(CompressedStreamInfo *strm_info,
-                                               int32_t num_streams,
-                                               uint32_t compression_block_size,
-                                               uint32_t log2maxcr,
-                                               rmm::cuda_stream_view stream)
+void __host__ ParseCompressedStripeData(CompressedStreamInfo *strm_info,
+                                        int32_t num_streams,
+                                        uint32_t compression_block_size,
+                                        uint32_t log2maxcr,
+                                        rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_streams + 3) >> 2, 1);  // 1 stream per warp, 4 warps per block
   gpuParseCompressedStripeData<<<dim_grid, dim_block, 0, stream.value()>>>(
     strm_info, num_streams, compression_block_size, log2maxcr);
-  return cudaSuccess;
 }
 
-cudaError_t __host__ PostDecompressionReassemble(CompressedStreamInfo *strm_info,
-                                                 int32_t num_streams,
-                                                 rmm::cuda_stream_view stream)
+void __host__ PostDecompressionReassemble(CompressedStreamInfo *strm_info,
+                                          int32_t num_streams,
+                                          rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_streams + 3) >> 2, 1);  // 1 stream per warp, 4 warps per block
   gpuPostDecompressionReassemble<<<dim_grid, dim_block, 0, stream.value()>>>(strm_info,
                                                                              num_streams);
-  return cudaSuccess;
 }
 
 /**
@@ -493,23 +491,20 @@ cudaError_t __host__ PostDecompressionReassemble(CompressedStreamInfo *strm_info
  * @param[in] num_stripes Number of stripes
  * @param[in] num_rowgroups Number of row groups
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t __host__ ParseRowGroupIndex(RowGroup *row_groups,
-                                        CompressedStreamInfo *strm_info,
-                                        ColumnDesc *chunks,
-                                        uint32_t num_columns,
-                                        uint32_t num_stripes,
-                                        uint32_t num_rowgroups,
-                                        uint32_t rowidx_stride,
-                                        rmm::cuda_stream_view stream)
+ */
+void __host__ ParseRowGroupIndex(RowGroup *row_groups,
+                                 CompressedStreamInfo *strm_info,
+                                 ColumnDesc *chunks,
+                                 uint32_t num_columns,
+                                 uint32_t num_stripes,
+                                 uint32_t num_rowgroups,
+                                 uint32_t rowidx_stride,
+                                 rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid(num_columns, num_stripes);  // 1 column chunk per block
   gpuParseRowGroupIndex<<<dim_grid, dim_block, 0, stream.value()>>>(
     row_groups, strm_info, chunks, num_columns, num_stripes, num_rowgroups, rowidx_stride);
-  return cudaSuccess;
 }
 
 }  // namespace gpu

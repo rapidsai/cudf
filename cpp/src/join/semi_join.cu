@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-#include <join/join_common_utils.hpp>
-
 #include <hash/concurrent_unordered_map.cuh>
+#include <join/join_common_utils.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.cuh>

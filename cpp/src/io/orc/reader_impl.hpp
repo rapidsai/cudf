@@ -43,7 +43,7 @@ using namespace cudf::io;
 // Forward declarations
 class metadata;
 namespace {
-class orc_stream_info;
+struct orc_stream_info;
 }
 
 /**
