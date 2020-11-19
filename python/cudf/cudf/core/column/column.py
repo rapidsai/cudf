@@ -1452,6 +1452,7 @@ def build_column(
             null_count=null_count,
         )
     elif dtype.type is np.timedelta64:
+        assert data is not None
         return cudf.core.column.TimeDeltaColumn(
             data=data,
             dtype=dtype,

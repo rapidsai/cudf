@@ -10,7 +10,7 @@ from pandas.api.types import is_integer_dtype
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.quantiles import quantile as cpp_quantile
-from cudf._typing import Dtype, DtypeObj, ScalarObj
+from cudf._typing import BinaryOperand, Dtype, DtypeObj, ScalarObj
 from cudf.core.buffer import Buffer
 from cudf.core.column import (
     ColumnBase,
@@ -82,10 +82,7 @@ class NumericalColumn(ColumnBase):
         return _numeric_column_unaryop(self, op=unaryop)
 
     def binary_operator(
-        self,
-        binop: str,
-        rhs: Union["ColumnBase", "cudf.Scalar"],
-        reflect: bool = False,
+        self, binop: str, rhs: BinaryOperand, reflect: bool = False,
     ) -> "ColumnBase":
         int_dtypes = [
             np.dtype("int8"),

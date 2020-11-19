@@ -329,6 +329,9 @@ class Scalar(object):
             return np.ceil(self.value)
         return getattr(self.value, op)()
 
+    def astype(self, dtype):
+        return Scalar(self.device_value, dtype)
+
 
 class _NAType(object):
     def __init__(self):

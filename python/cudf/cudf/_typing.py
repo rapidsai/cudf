@@ -32,3 +32,6 @@ AnyColumn = Union[
     "cudf.core.column.StructColumn",
     "cudf.core.column.TimeDeltaColumn",
 ]
+
+# binary operation
+BinaryOperand = Union["cudf.Scalar", "cudf.core.column.ColumnBase"]
