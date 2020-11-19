@@ -19,7 +19,9 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
+#include <cudf/copying.hpp>
+
+#include <join/hash_join.cuh>
 
 #include <numeric>
 
@@ -407,7 +409,9 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
   std::vector<size_type> build_noncommon_col =
     non_common_column_indices(build.num_columns(), build_common_col);
 
-  bool const nullify_out_of_bounds{JoinKind != join_kind::INNER_JOIN};
+  out_of_bounds_policy const bounds_policy = JoinKind != join_kind::INNER_JOIN
+                                               ? out_of_bounds_policy::NULLIFY
+                                               : out_of_bounds_policy::DONT_CHECK;
 
   std::unique_ptr<table> common_table = std::make_unique<table>();
   // Construct the joined columns
@@ -415,52 +419,47 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
     auto complement_indices = get_left_join_indices_complement(
       joined_indices.second, probe.num_rows(), build.num_rows(), stream);
     if (not columns_in_common.empty()) {
-      auto common_from_build = detail::gather(
-        build.select(build_common_col),
-        complement_indices.second.begin(),
-        complement_indices.second.end(),
-        nullify_out_of_bounds ? out_of_bounds_policy::NULLIFY : out_of_bounds_policy::DONT_CHECK,
-        rmm::mr::get_current_device_resource(),
-        stream);
-      auto common_from_probe = detail::gather(
-        probe.select(probe_common_col),
-        joined_indices.first.begin(),
-        joined_indices.first.end(),
-        nullify_out_of_bounds ? out_of_bounds_policy::NULLIFY : out_of_bounds_policy::DONT_CHECK,
-        rmm::mr::get_current_device_resource(),
-        stream);
-      common_table = cudf::detail::concatenate(
+      auto common_from_build = detail::gather(build.select(build_common_col),
+                                              complement_indices.second.begin(),
+                                              complement_indices.second.end(),
+                                              bounds_policy,
+                                              rmm::mr::get_current_device_resource(),
+                                              stream);
+      auto common_from_probe = detail::gather(probe.select(probe_common_col),
+                                              joined_indices.first.begin(),
+                                              joined_indices.first.end(),
+                                              bounds_policy,
+                                              rmm::mr::get_current_device_resource(),
+                                              stream);
+      common_table           = cudf::detail::concatenate(
         {common_from_build->view(), common_from_probe->view()}, mr, stream);
     }
     joined_indices = concatenate_vector_pairs(complement_indices, joined_indices);
   } else {
     if (not columns_in_common.empty()) {
-      common_table = detail::gather(
-        probe.select(probe_common_col),
-        joined_indices.first.begin(),
-        joined_indices.first.end(),
-        nullify_out_of_bounds ? out_of_bounds_policy::NULLIFY : out_of_bounds_policy::DONT_CHECK,
-        mr,
-        stream);
+      common_table = detail::gather(probe.select(probe_common_col),
+                                    joined_indices.first.begin(),
+                                    joined_indices.first.end(),
+                                    bounds_policy,
+                                    mr,
+                                    stream);
     }
   }
 
   // Construct the probe non common columns
-  std::unique_ptr<table> probe_table = detail::gather(
-    probe.select(probe_noncommon_col),
-    joined_indices.first.begin(),
-    joined_indices.first.end(),
-    nullify_out_of_bounds ? out_of_bounds_policy::NULLIFY : out_of_bounds_policy::DONT_CHECK,
-    mr,
-    stream);
+  std::unique_ptr<table> probe_table = detail::gather(probe.select(probe_noncommon_col),
+                                                      joined_indices.first.begin(),
+                                                      joined_indices.first.end(),
+                                                      bounds_policy,
+                                                      mr,
+                                                      stream);
 
-  std::unique_ptr<table> build_table = detail::gather(
-    build.select(build_noncommon_col),
-    joined_indices.second.begin(),
-    joined_indices.second.end(),
-    nullify_out_of_bounds ? out_of_bounds_policy::NULLIFY : out_of_bounds_policy::DONT_CHECK,
-    mr,
-    stream);
+  std::unique_ptr<table> build_table = detail::gather(build.select(build_noncommon_col),
+                                                      joined_indices.second.begin(),
+                                                      joined_indices.second.end(),
+                                                      bounds_policy,
+                                                      mr,
+                                                      stream);
 
   return combine_join_columns(probe_table->release(),
                               probe_noncommon_col,
