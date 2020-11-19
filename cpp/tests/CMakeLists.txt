@@ -277,7 +277,8 @@ ConfigureTest(FIXED_POINT_TEST "${FIXED_POINT_TEST_SRC}")
 
 set(UNARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/unary/math_ops_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unary/unary_ops_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/unary/unary_ops_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/unary/cast_tests.cpp")
 
 ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
 
