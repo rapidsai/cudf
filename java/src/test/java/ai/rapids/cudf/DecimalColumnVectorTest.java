@@ -168,7 +168,7 @@ public class DecimalColumnVectorTest extends CudfTestBase {
   public void testDecimalGeneral() {
     // Safe max precision of Decimal32 is 9, so integers have 10 digits will be backed by DECIMAL64.
     try (ColumnVector cv = ColumnVector.fromDecimals(overflowDecimal32)) {
-      assertEquals(DType.create(DType.DTypeEnum.DECIMAL64, 0), cv.getDataType());
+      assertEquals(DType.create(DType.DTypeEnum.DECIMAL64, 0), cv.getType());
     }
     // Create DECIMAL64 vector with small values
     try (ColumnVector cv =  ColumnVector.decimalFromLongs(0, 0L)) {
@@ -342,7 +342,7 @@ public class DecimalColumnVectorTest extends CudfTestBase {
   public void testColumnVectorFromScalar() {
     try (Scalar s = Scalar.fromDecimal(-3, 1233456)) {
       try (ColumnVector cv = ColumnVector.fromScalar(s, 10)) {
-        assertEquals(s.getType(), cv.getDataType());
+        assertEquals(s.getType(), cv.getType());
         assertEquals(10L, cv.getRowCount());
         try (HostColumnVector hcv = cv.copyToHost()) {
           for (int i = 0; i < cv.getRowCount(); i++) {
@@ -354,7 +354,7 @@ public class DecimalColumnVectorTest extends CudfTestBase {
     }
     try (Scalar s = Scalar.fromDecimal(-6, 123456789098L)) {
       try (ColumnVector cv = ColumnVector.fromScalar(s, 10)) {
-        assertEquals(s.getType(), cv.getDataType());
+        assertEquals(s.getType(), cv.getType());
         assertEquals(10L, cv.getRowCount());
         try (HostColumnVector hcv = cv.copyToHost()) {
           for (int i = 0; i < cv.getRowCount(); i++) {

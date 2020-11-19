@@ -295,6 +295,7 @@ set(SOURCE_FILES
     "src/CudfJni.cpp"
     "src/CudaJni.cpp"
     "src/ColumnVectorJni.cpp"
+    "src/ColumnViewJni.cpp"
     "src/HostMemoryBufferNativeUtilsJni.cpp"
     "src/NvcompJni.cpp"
     "src/NvtxRangeJni.cpp"
