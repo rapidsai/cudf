@@ -470,12 +470,17 @@ def search_range(start, stop, x, step=1, side="left"):
 
 # Utils for using appropriate dispatch for array functions
 def get_appropriate_dispatched_func(
-    cudf_submodule, cupy_submodule, func, args, kwargs
+    cudf_submodule, cudf_ser_submodule, cupy_submodule, func, args, kwargs
 ):
     fname = func.__name__
+
     if hasattr(cudf_submodule, fname):
         cudf_func = getattr(cudf_submodule, fname)
         return cudf_func(*args, **kwargs)
+
+    elif hasattr(cudf_ser_submodule, fname):
+        cudf_ser_func = getattr(cudf_ser_submodule, fname)
+        return cudf_ser_func(*args, **kwargs)
 
     elif hasattr(cupy_submodule, fname):
         cupy_func = getattr(cupy_submodule, fname)

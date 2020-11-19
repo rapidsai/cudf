@@ -787,7 +787,7 @@ class Series(Frame, Serializable):
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         if method == "__call__":
             return get_appropriate_dispatched_func(
-                cudf, cupy, ufunc, inputs, kwargs
+                cudf, cudf.Series, cupy, ufunc, inputs, kwargs
             )
         else:
             return NotImplemented
@@ -798,11 +798,17 @@ class Series(Frame, Serializable):
             if t not in handled_types:
                 return NotImplemented
 
-        cudf_submodule = get_relevant_submodule(func, Series)
+        cudf_submodule = get_relevant_submodule(func, cudf)
+        cudf_ser_submodule = get_relevant_submodule(func, cudf.Series)
         cupy_submodule = get_relevant_submodule(func, cupy)
 
         return get_appropriate_dispatched_func(
-            cudf_submodule, cupy_submodule, func, args, kwargs
+            cudf_submodule,
+            cudf_ser_submodule,
+            cupy_submodule,
+            func,
+            args,
+            kwargs,
         )
 
     def map(self, arg, na_action=None) -> "Series":
