@@ -28,10 +28,11 @@ std::unique_ptr<cudf::scalar> all(column_view const& col,
 {
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
                "all() operation can be applied with output type `BOOL8` only");
-  auto const input_col = cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys() : col;
-  return cudf::type_dispatcher(input_col.type(),
+  auto const dispatch_type =
+    cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
+  return cudf::type_dispatcher(dispatch_type,
                                simple::bool_result_element_dispatcher<cudf::reduction::op::min>{},
-                               input_col,
+                               col,
                                mr,
                                stream);
 }

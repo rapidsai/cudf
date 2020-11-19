@@ -1105,7 +1105,6 @@ TEST_P(DictionaryStringReductionTest, MinMax)
   cudf::data_type output_type{cudf::type_id::STRING};
 
   cudf::test::dictionary_column_wrapper<std::string> col(host_strings.begin(), host_strings.end());
-  // auto col = cudf::dictionary::encode(col_w);
 
   std::string expected_min_result = *(std::min_element(host_strings.begin(), host_strings.end()));
   std::string expected_max_result = *(std::max_element(host_strings.begin(), host_strings.end()));
@@ -1114,6 +1113,49 @@ TEST_P(DictionaryStringReductionTest, MinMax)
   this->reduction_test(col, expected_min_result, true, cudf::make_min_aggregation(), output_type);
   // MAX
   this->reduction_test(col, expected_max_result, true, cudf::make_max_aggregation(), output_type);
+}
+
+template <typename T>
+struct DictionaryAnyAllTest : public ReductionTest<bool> {
+};
+
+TYPED_TEST_CASE(DictionaryAnyAllTest, cudf::test::NumericTypes);
+TYPED_TEST(DictionaryAnyAllTest, AnyAll)
+{
+  using T = TypeParam;
+  std::vector<int> all_values({true, true, true, true});
+  std::vector<T> v_all = convert_values<T>(all_values);
+  std::vector<int> none_values({false, false, false, false});
+  std::vector<T> v_none = convert_values<T>(none_values);
+  std::vector<int> some_values({false, true, false, true});
+  std::vector<T> v_some = convert_values<T>(some_values);
+  cudf::data_type output_dtype(cudf::type_id::BOOL8);
+
+  // without nulls
+  {
+    cudf::test::dictionary_column_wrapper<T> all_col(v_all.begin(), v_all.end());
+    this->reduction_test(all_col, true, true, cudf::make_any_aggregation(), output_dtype);
+    this->reduction_test(all_col, true, true, cudf::make_all_aggregation(), output_dtype);
+    cudf::test::dictionary_column_wrapper<T> none_col(v_none.begin(), v_none.end());
+    this->reduction_test(none_col, false, true, cudf::make_any_aggregation(), output_dtype);
+    this->reduction_test(none_col, false, true, cudf::make_all_aggregation(), output_dtype);
+    cudf::test::dictionary_column_wrapper<T> some_col(v_some.begin(), v_some.end());
+    this->reduction_test(some_col, true, true, cudf::make_any_aggregation(), output_dtype);
+    this->reduction_test(some_col, false, true, cudf::make_all_aggregation(), output_dtype);
+  }
+  // with nulls
+  {
+    std::vector<bool> valid({1, 1, 0, 1});
+    cudf::test::dictionary_column_wrapper<T> all_col(v_all.begin(), v_all.end(), valid.begin());
+    this->reduction_test(all_col, true, true, cudf::make_any_aggregation(), output_dtype);
+    this->reduction_test(all_col, true, true, cudf::make_all_aggregation(), output_dtype);
+    cudf::test::dictionary_column_wrapper<T> none_col(v_none.begin(), v_none.end(), valid.begin());
+    this->reduction_test(none_col, false, true, cudf::make_any_aggregation(), output_dtype);
+    this->reduction_test(none_col, false, true, cudf::make_all_aggregation(), output_dtype);
+    cudf::test::dictionary_column_wrapper<T> some_col(v_some.begin(), v_some.end(), valid.begin());
+    this->reduction_test(some_col, true, true, cudf::make_any_aggregation(), output_dtype);
+    this->reduction_test(some_col, false, true, cudf::make_all_aggregation(), output_dtype);
+  }
 }
 
 template <typename T>

@@ -16,9 +16,11 @@
 
 #pragma once
 
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/reduction.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/iterator.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/structs/struct_view.hpp>
@@ -51,7 +53,6 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
   std::unique_ptr<scalar> result;
   Op simple_op{};
 
-  // if (!cudf::is_dictionary(col.type())) {
   if (col.has_nulls()) {
     auto it = thrust::make_transform_iterator(
       dcol->pair_begin<ElementType, true>(),
@@ -181,7 +182,9 @@ struct bool_result_element_dispatcher {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    return simple_reduction<ElementType, bool, Op>(col, mr, stream);
+    return cudf::is_dictionary(col.type())
+             ? dictionary_reduction<ElementType, bool, Op>(col, mr, stream)
+             : simple_reduction<ElementType, bool, Op>(col, mr, stream);
   }
 
   template <typename ElementType,
@@ -208,7 +211,6 @@ struct same_element_type_dispatcher {
   static constexpr bool is_supported()
   {
     return !(cudf::is_fixed_point<ElementType>() ||
-             std::is_same<ElementType, cudf::dictionary32>::value ||
              std::is_same<ElementType, cudf::list_view>::value ||
              std::is_same<ElementType, cudf::struct_view>::value);
   }
@@ -219,7 +221,11 @@ struct same_element_type_dispatcher {
                                      rmm::mr::device_memory_resource* mr,
                                      cudaStream_t stream)
   {
-    return simple_reduction<ElementType, ElementType, Op>(col, mr, stream);
+    auto result = simple_reduction<ElementType, ElementType, Op>(col, mr, stream);
+    if (!cudf::is_dictionary(col.type())) return result;
+    auto index = static_cast<numeric_scalar<cudf::size_type>*>(result.get());
+    return cudf::detail::get_element(
+      cudf::dictionary_column_view(col).keys(), index->value(stream), stream, mr);
   }
 
   template <typename ElementType, std::enable_if_t<not is_supported<ElementType>()>* = nullptr>
