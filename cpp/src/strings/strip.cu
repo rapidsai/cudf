@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -23,6 +24,8 @@
 #include <cudf/strings/strip.hpp>
 #include <cudf/utilities/error.hpp>
 #include <strings/utilities.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/logical.h>
 #include <thrust/transform.h>
@@ -118,7 +121,8 @@ std::unique_ptr<column> strip(
   size_type null_count = strings.null_count();
 
   // copy null mask
-  rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
+  rmm::device_buffer null_mask =
+    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
 
   // build offsets column -- calculate the size of each output string
   auto offsets_transformer_itr = thrust::make_transform_iterator(
