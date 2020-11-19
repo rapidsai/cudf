@@ -21,7 +21,7 @@ from cudf._lib.cpp.types cimport (
 from cudf._lib.column import np_to_cudf_types, cudf_to_np_types
 from cudf._lib.cpp.unary cimport (
     underlying_type_t_unary_op,
-    unary_op,
+    unary_operator,
 )
 
 from cudf._lib.types cimport underlying_type_t_type_id
@@ -30,33 +30,34 @@ cimport cudf._lib.cpp.unary as libcudf_unary
 
 
 class UnaryOp(IntEnum):
-    SIN = <underlying_type_t_unary_op> unary_op.SIN
-    COS = <underlying_type_t_unary_op> unary_op.COS
-    TAN = <underlying_type_t_unary_op> unary_op.TAN
-    ASIN = <underlying_type_t_unary_op> unary_op.ARCSIN
-    ACOS = <underlying_type_t_unary_op> unary_op.ARCCOS
-    ATAN = <underlying_type_t_unary_op> unary_op.ARCTAN
-    SINH = <underlying_type_t_unary_op> unary_op.SINH
-    COSH = <underlying_type_t_unary_op> unary_op.COSH
-    TANH = <underlying_type_t_unary_op> unary_op.TANH
-    ARCSINH = <underlying_type_t_unary_op> unary_op.ARCSINH
-    ARCCOSH = <underlying_type_t_unary_op> unary_op.ARCCOSH
-    ARCTANH = <underlying_type_t_unary_op> unary_op.ARCTANH
-    EXP = <underlying_type_t_unary_op> unary_op.EXP
-    LOG = <underlying_type_t_unary_op> unary_op.LOG
-    SQRT = <underlying_type_t_unary_op> unary_op.SQRT
-    CBRT = <underlying_type_t_unary_op> unary_op.CBRT
-    CEIL = <underlying_type_t_unary_op> unary_op.CEIL
-    FLOOR = <underlying_type_t_unary_op> unary_op.FLOOR
-    ABS = <underlying_type_t_unary_op> unary_op.ABS
-    RINT = <underlying_type_t_unary_op> unary_op.RINT
-    INVERT = <underlying_type_t_unary_op> unary_op.BIT_INVERT
-    NOT = <underlying_type_t_unary_op> unary_op.NOT
+    SIN = <underlying_type_t_unary_op> unary_operator.SIN
+    COS = <underlying_type_t_unary_op> unary_operator.COS
+    TAN = <underlying_type_t_unary_op> unary_operator.TAN
+    ASIN = <underlying_type_t_unary_op> unary_operator.ARCSIN
+    ACOS = <underlying_type_t_unary_op> unary_operator.ARCCOS
+    ATAN = <underlying_type_t_unary_op> unary_operator.ARCTAN
+    SINH = <underlying_type_t_unary_op> unary_operator.SINH
+    COSH = <underlying_type_t_unary_op> unary_operator.COSH
+    TANH = <underlying_type_t_unary_op> unary_operator.TANH
+    ARCSINH = <underlying_type_t_unary_op> unary_operator.ARCSINH
+    ARCCOSH = <underlying_type_t_unary_op> unary_operator.ARCCOSH
+    ARCTANH = <underlying_type_t_unary_op> unary_operator.ARCTANH
+    EXP = <underlying_type_t_unary_op> unary_operator.EXP
+    LOG = <underlying_type_t_unary_op> unary_operator.LOG
+    SQRT = <underlying_type_t_unary_op> unary_operator.SQRT
+    CBRT = <underlying_type_t_unary_op> unary_operator.CBRT
+    CEIL = <underlying_type_t_unary_op> unary_operator.CEIL
+    FLOOR = <underlying_type_t_unary_op> unary_operator.FLOOR
+    ABS = <underlying_type_t_unary_op> unary_operator.ABS
+    RINT = <underlying_type_t_unary_op> unary_operator.RINT
+    INVERT = <underlying_type_t_unary_op> unary_operator.BIT_INVERT
+    NOT = <underlying_type_t_unary_op> unary_operator.NOT
 
 
 def unary_operation(Column input, object op):
     cdef column_view c_input = input.view()
-    cdef unary_op c_op = <unary_op>(<underlying_type_t_unary_op> op)
+    cdef unary_operator c_op = <unary_operator>(<underlying_type_t_unary_op>
+                                                op)
     cdef unique_ptr[column] c_result
 
     with nogil:
