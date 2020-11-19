@@ -120,6 +120,7 @@ std::unique_ptr<column> remove_keys_fn(
                                             mr)
                          ->release();
   std::unique_ptr<column> indices_column(std::move(table_indices.front()));
+  indices_column->set_null_mask(rmm::device_buffer{}, 0);
 
   // compute new nulls -- merge the existing nulls with the newly created ones (value<0)
   auto const offset = dictionary_column.offset();
