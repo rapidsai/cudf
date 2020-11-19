@@ -17,7 +17,9 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/strings/copying.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -42,6 +44,38 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
   if (end < 0 || end > strings_count) end = strings_count;
   CUDF_EXPECTS(((start >= 0) && (start < end)), "Invalid start parameter value.");
   strings_count = cudf::util::round_up_safe<size_type>((end - start), step);
+  if (start == 0 && strings.offset() == 0) {
+    // slice starts at the beginning, so do not need a gather to adjust offsets
+    auto offsets_column = make_numeric_column(
+      data_type{type_id::INT32},
+      strings.size() + 1,
+      mask_state::UNALLOCATED,
+      stream,
+      mr);
+    auto offsets_view = offsets_column->mutable_view();
+    CUDA_TRY(cudaMemcpyAsync(offsets_view.data<size_type>(),
+                             strings.offsets().data<size_type>(),
+                             (strings.size() + 1) * sizeof(size_type),
+                             cudaMemcpyDeviceToDevice,
+                             stream));
+    auto validity = cudf::detail::copy_bitmask(strings.null_mask(), 0, strings.size(), stream, mr);
+    auto data_size =
+      cudf::detail::get_value<size_type>(offsets_column->view(), strings.size(), stream);
+    auto chars_column = create_chars_child_column(strings.size(), 0, data_size, mr, stream);
+    auto chars_view  = chars_column->mutable_view();
+    CUDA_TRY(cudaMemcpyAsync(chars_view.data<char>(),
+                             strings.chars().data<char>(),
+                             data_size,
+                             cudaMemcpyDeviceToDevice,
+                             stream));
+    return make_strings_column(strings.size(),
+                               std::move(offsets_column),
+                               std::move(chars_column),
+                               UNKNOWN_NULL_COUNT,
+                               std::move(validity),
+                               stream,
+                               mr);
+  }
   //
   auto execpol = rmm::exec_policy(stream);
   // build indices
