@@ -203,8 +203,7 @@ __launch_bounds__(block_size) __global__
 // Dispatch functor which performs the scatter for fixed column types and gather for other
 template <typename Filter, int block_size>
 struct scatter_gather_functor {
-  template <typename T,
-            std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+  template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(
     cudf::column_view const& input,
     cudf::size_type const& output_size,
@@ -220,7 +219,7 @@ struct scatter_gather_functor {
 
     bool has_valid = input.nullable();
 
-    using Type = cudf::device_storage_type_t<T>;
+    using Type   = cudf::device_storage_type_t<T>;
     auto scatter = (has_valid) ? scatter_kernel<Type, Filter, block_size, true>
                                : scatter_kernel<Type, Filter, block_size, false>;
 
