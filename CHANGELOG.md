@@ -127,6 +127,7 @@
 - PR #6720 Fix implementation of `dtype` parameter in `cudf.read_csv`
 - PR #6721 Add missing serialization methods for ListColumn
 - PR #6722 Fix index=False bug in dask_cudf.read_parquet
+- PR #6766 Fix race conditions in parquet
 - PR #6728 Fix cudf python docs and associated build warnings
 - PR #6732 Fix cuDF benchmarks build with static Arrow lib and fix rapids-compose cuDF JNI build
 - PR #6742 Fix concat bug in dask_cudf Series/Index creation
