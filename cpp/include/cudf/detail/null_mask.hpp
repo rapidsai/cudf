@@ -93,20 +93,22 @@ rmm::device_buffer copy_bitmask(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
-rmm::device_buffer bitmask_and(std::vector<bitmask_type const *> const &masks,
-                               std::vector<size_type> const &begin_bits,
-                               size_type mask_size,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource *mr);
+rmm::device_buffer bitmask_and(
+  std::vector<bitmask_type const *> const &masks,
+  std::vector<size_type> const &begin_bits,
+  size_type mask_size,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc cudf::bitmask_and
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-rmm::device_buffer bitmask_and(table_view const &view,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource *mr);
+rmm::device_buffer bitmask_and(
+  table_view const &view,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a bitwise AND of the specified bitmasks,
@@ -120,12 +122,13 @@ rmm::device_buffer bitmask_and(table_view const &view,
  * @param mr Device memory resource used to allocate the returned device_buffer
  * @return rmm::device_buffer Output bitmask
  */
-void inplace_bitmask_and(bitmask_type *dest_mask,
-                         std::vector<bitmask_type const *> const &masks,
-                         std::vector<size_type> const &begin_bits,
-                         size_type mask_size,
-                         rmm::cuda_stream_view stream,
-                         rmm::mr::device_memory_resource *mr);
+void inplace_bitmask_and(
+  bitmask_type *dest_mask,
+  std::vector<bitmask_type const *> const &masks,
+  std::vector<size_type> const &begin_bits,
+  size_type mask_size,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 

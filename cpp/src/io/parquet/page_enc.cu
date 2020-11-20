@@ -156,6 +156,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
       s->start_value_idx = s->col.nesting_offsets[i][s->start_value_idx];
       end_value_idx      = s->col.nesting_offsets[i][end_value_idx];
     }
+    s->frag.start_value_idx = s->start_value_idx;
     s->frag.num_leaf_values = end_value_idx - s->start_value_idx;
 
     if (s->col.nesting_levels > 0) {
@@ -411,8 +412,8 @@ __global__ void __launch_bounds__(128) gpuInitFragmentStats(statistics_group *gr
   statistics_group *const g = &group_g[threadIdx.x >> 5];
   if (!lane_id && frag_id < num_fragments) {
     g->col       = &col_desc[column_id];
-    g->start_row = frag_id * fragment_size;
-    g->num_rows  = fragments[column_id * num_fragments + frag_id].num_rows;
+    g->start_row = fragments[column_id * num_fragments + frag_id].start_value_idx;
+    g->num_rows  = fragments[column_id * num_fragments + frag_id].num_leaf_values;
   }
   __syncthreads();
   if (frag_id < num_fragments and lane_id == 0) groups[column_id * num_fragments + frag_id] = *g;
