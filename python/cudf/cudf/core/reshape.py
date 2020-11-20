@@ -3,6 +3,7 @@ import itertools
 
 import numpy as np
 import pandas as pd
+
 import cudf
 
 _axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
@@ -26,11 +27,11 @@ def _align_objs(objs, how="outer"):
     # Then check for duplicate index value.
     i_objs = iter(objs)
     first = next(i_objs)
-    match_index = all(first.index.equals(rest.index) for rest in i_objs)
+    not_matching_index = any(
+        not first.index.equals(rest.index) for rest in i_objs
+    )
 
-    if match_index:
-        return objs, True
-    else:
+    if not_matching_index:
         if not all(o.index.is_unique for o in objs):
             raise ValueError("cannot reindex from a duplicate axis")
 
@@ -64,6 +65,8 @@ def _align_objs(objs, how="outer"):
             final_index.name = name
 
             return [obj.reindex(final_index) for obj in objs], False
+    else:
+        return objs, True
 
 
 def _normalize_series_and_dataframe(objs, axis):
@@ -204,15 +207,34 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     # Return for single object
     if len(objs) == 1:
         if ignore_index:
-            result = cudf.DataFrame(
-                data=objs[0]._data.copy(deep=True),
-                index=cudf.RangeIndex(len(objs[0])),
-            )
             if axis == 1:
-                result.columns = pd.RangeIndex(len(result.columns))
+                result = cudf.DataFrame(
+                    data=objs[0]._data.copy(deep=True),
+                    index=objs[0].index.copy(deep=True),
+                )
+                # TODO: Move following columns setting into
+                # above constructor after following issue is fixed:
+                # https://github.com/rapidsai/cudf/issues/6821
+                result.columns = pd.RangeIndex(len(objs[0]._data.names))
+            elif axis == 0:
+                result = cudf.DataFrame(
+                    data=objs[0]._data.copy(deep=True),
+                    index=cudf.RangeIndex(len(objs[0])),
+                )
         else:
             result = objs[0].copy()
-        return result
+        if sort:
+            if axis == 0:
+                return result.sort_index()
+            elif not result.columns.is_monotonic:
+                # TODO: Sorting by columns can be done
+                # once the following issue is fixed:
+                # https://github.com/rapidsai/cudf/issues/6821
+                raise NotImplementedError(
+                    "Sorting by columns is not yet supported"
+                )
+        else:
+            return result
 
     if len(objs) == 0:
         raise ValueError("All objects passed were None")
@@ -255,7 +277,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         old_objs = objs
         objs = [obj for obj in objs if obj.shape != (0, 0)]
         if len(objs) == 0:
-            return cudf.DataFrame()
+            return df
         empty_inner = False
         if join == "inner":
             # don't filter out empty df's
@@ -282,26 +304,19 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         if ignore_index:
             # with ignore_index the column names change to numbers
             df.columns = pd.RangeIndex(len(result_columns.unique()))
+        else:
+            df.columns = result_columns.unique()
         if empty_inner:
-            # if join is inner and it containes an empty df
+            # if join is inner and it contains an empty df
             # we return an empty df
             return df.head(0)
-        if not ignore_index:
-            df.columns = result_columns.unique()
         if not match_index and sort is not False:
             return df.sort_index()
-        if (
-            sort
-            or join == "inner"
-            or (
-                not isinstance(df.index, cudf.MultiIndex)
-                and df.index.dtype == "int"
-            )
-        ):
-            return df.sort_index()
+        if sort or join == "inner":
             # when join='outer' and sort=False string indexes
             # are returned unsorted. Everything else seems
             # to be returned sorted when axis = 1
+            return df.sort_index()
         else:
             return df
 

@@ -726,53 +726,8 @@ def test_concat_join_axis_1(objs, ignore_index, sort, join, axis):
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("sort", [True, False])
 @pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0])
+@pytest.mark.parametrize("axis", [1, 0])
 def test_concat_join_many_df_and_empty_df(ignore_index, sort, join, axis):
-    pdf1 = pd.DataFrame(
-        {
-            "x": range(10),
-            "y": list(map(float, range(10))),
-            "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-        }
-    )
-    pdf2 = pd.DataFrame(
-        {"x": range(10, 20), "y": list(map(float, range(10, 20)))}
-    )
-    pdf3 = pd.DataFrame({"v": [1, 2], "x": [1, 2], "y": [1, 2], "z": [1, 2]})
-
-    gdf1 = gd.from_pandas(pdf1)
-    gdf2 = gd.from_pandas(pdf2)
-    gdf3 = gd.from_pandas(pdf3)
-    # Make empty frame
-    gdf_empty1 = gdf2[:0]
-    assert len(gdf_empty1) == 0
-    pdf_empty1 = gdf_empty1.to_pandas()
-
-    assert_eq(
-        pd.concat(
-            [pdf1, pdf2, pdf3, pdf_empty1],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        ),
-        gd.concat(
-            [gdf1, gdf2, gdf3, gdf_empty1],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        ),
-    )
-
-
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [1])
-def test_concat_join_many_df_and_empty_df_axis_1(
-    ignore_index, sort, join, axis
-):
     # no duplicate columns
     pdf1 = pd.DataFrame(
         {
@@ -954,6 +909,17 @@ def test_concat_join_no_overlapping_columns_many_and_empty(
             ),
             pd.DataFrame(index=pd.Index([], dtype="str")),
         ],
+        pytest.param(
+            [
+                pd.DataFrame(
+                    {"a": [1, 2, 3], "nb": [10, 11, 12]}, index=["Q", "W", "R"]
+                ),
+                None,
+            ],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/6821"
+            ),
+        ),
     ],
 )
 @pytest.mark.parametrize("ignore_index", [True, False])
@@ -963,7 +929,7 @@ def test_concat_join_no_overlapping_columns_many_and_empty(
 def test_concat_join_no_overlapping_columns_many_and_empty2(
     objs, ignore_index, sort, join, axis
 ):
-    objs_gd = [gd.from_pandas(o) for o in objs]
+    objs_gd = [gd.from_pandas(o) if o is not None else o for o in objs]
 
     expected = pd.concat(
         objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis,
@@ -1113,7 +1079,7 @@ def test_concat_join_empty_dataframes(
                 if is_categorical_dtype(col.dtype):
                     expected[key] = expected[key].fillna("-1")
                     actual[key] = col.astype("str").fillna("-1")
-            # if not expected.empty:
+
             assert_eq(
                 expected.fillna(-1),
                 actual.fillna(-1),
@@ -1183,7 +1149,18 @@ def test_concat_join_empty_dataframes(
 )
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize("join", ["inner", "outer"])
+@pytest.mark.parametrize(
+    "join",
+    [
+        "inner",
+        pytest.param(
+            "outer",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/37937"
+            ),
+        ),
+    ],
+)
 @pytest.mark.parametrize("axis", [1])
 def test_concat_join_empty_dataframes_axis_1(
     df, other, ignore_index, axis, join, sort
