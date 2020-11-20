@@ -722,8 +722,8 @@ std::unique_ptr<column> md5_hash(table_view const& input,
 
 std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
                                                uint32_t seed,
-                                               rmm::mr::device_memory_resource* mr,
-                                               cudaStream_t stream)
+                                               cudaStream_t stream,
+                                               rmm::mr::device_memory_resource* mr)
 {
   auto output = make_numeric_column(
     data_type(type_id::INT32), input.num_rows(), mask_state::UNALLOCATED, stream, mr);

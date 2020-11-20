@@ -60,8 +60,8 @@ std::unique_ptr<column> md5_hash(
 std::unique_ptr<column> serial_murmur_hash3_32(
   table_view const& input,
   uint32_t seed                       = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace cudf
