@@ -95,6 +95,7 @@
 - PR #6780 Move `cudf::cast` tests to separate test file
 - PR #6789 Rename `unary_op` to `unary_operator`
 - PR #6770 Support building decimal columns with Table.TestBuilder
+- PR #6822 Split out `cudf::distinct_count` from `drop_duplicates.cu`
 
 ## Bug Fixes
 
