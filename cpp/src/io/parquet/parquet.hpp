@@ -649,6 +649,8 @@ ParquetFieldStructFunctor<T> ParquetFieldStruct(int f, T &v)
 /**
  * @brief Functor to read a union member from CompactProtocolReader
  *
+ * @tparam is_empty True if tparam `T` type is empty type, else false.
+ *
  * @return True if field types mismatch or if the process of reading a
  * union member fails
  */
@@ -663,7 +665,12 @@ class ParquetFieldUnionFunctor {
 
   inline bool operator()(CompactProtocolReader *cpr, int field_type)
   {
-    return (field_type != ST_FLD_STRUCT || !(is_set = true, cpr->read(&val)));
+    if (field_type != ST_FLD_STRUCT) {
+      return true;
+    } else {
+      is_set = true;
+      return cpr->read(&val);
+    }
   }
 
   int field() { return field_val; }
@@ -680,8 +687,13 @@ struct ParquetFieldUnionFunctor<T, true> {
 
   inline bool operator()(CompactProtocolReader *cpr, int field_type)
   {
-    return (field_type != ST_FLD_STRUCT ||
-            !(is_set = true, cpr->skip_struct_field(field_type), true));
+    if (field_type != ST_FLD_STRUCT) {
+      return true;
+    } else {
+      is_set = true;
+      cpr->skip_struct_field(field_type);
+      return false;
+    }
   }
 
   int field() { return field_val; }
