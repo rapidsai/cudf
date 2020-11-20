@@ -90,7 +90,7 @@
 - PR #6780 Move `cudf::cast` tests to separate test file
 - PR #6789 Rename `unary_op` to `unary_operator`
 - PR #6770 Support building decimal columns with Table.TestBuilder
-- PR #6813 Enable `expand=True` in `.str.split` and `.str.rsplit`
+- PR #6813 Enable `expand=False` in `.str.split` and `.str.rsplit`
 
 ## Bug Fixes
 
