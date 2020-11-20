@@ -13,42 +13,41 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
-#include <cudf/types.hpp>
+#include <cudf/quantiles.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <memory>
 
 namespace cudf {
 namespace detail {
 
-/**
- * @copydoc cudf::repeat(table_view const&, column_view const&, bool,
- * rmm::mr::device_memory_resource*)
+/** @copydoc cudf::quantile()
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<table> repeat(
-  table_view const& input_table,
-  column_view const& count,
-  bool check_count,
+std::unique_ptr<column> quantile(
+  column_view const& input,
+  std::vector<double> const& q,
+  interpolation interp                = interpolation::LINEAR,
+  column_view const& ordered_indices  = {},
+  bool exact                          = true,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-/**
- * @copydoc cudf::repeat(table_view const&, size_type,
- * rmm::mr::device_memory_resource*)
+/** @copydoc cudf::quantiles()
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<table> repeat(
-  table_view const& input_table,
-  size_type count,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<table> quantiles(
+  table_view const& input,
+  std::vector<double> const& q,
+  interpolation interp                           = interpolation::NEAREST,
+  cudf::sorted is_input_sorted                   = sorted::NO,
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::cuda_stream_view stream                   = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace cudf

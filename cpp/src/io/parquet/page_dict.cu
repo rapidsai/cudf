@@ -171,9 +171,11 @@ __global__ void __launch_bounds__(block_size, 1)
     s->ck.num_dict_fragments = 0;
   }
   dtype     = s->col.physical_type;
-  dtype_len = (dtype == INT64 || dtype == DOUBLE) ? 8 : 4;
+  dtype_len = (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : 4;
   if (dtype == INT32) {
     dtype_len_in = GetDtypeLogicalLen(s->col.converted_type);
+  } else if (dtype == INT96) {
+    dtype_len_in = 8;
   } else {
     dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len;
   }
