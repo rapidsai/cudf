@@ -10,6 +10,7 @@
 - PR #6711 Implement `cudf::cast` for `decimal32/64` to/from integer and floating point
 - PR #6777 Implement `cudf::unary_operation` for `decimal32` & `decimal64`
 - PR #6729 Implement `cudf::cast` for `decimal32/64` to/from different `type_id`
+- PR #6792 Implement `cudf::clamp` for `decimal32` and `decimal64`
 - PR #6528 Enable `fixed_point` binary operations
 - PR #6460 Add is_timestamp format check API
 - PR #6568 Add function to create hashed vocabulary file from raw vocabulary
@@ -22,6 +23,7 @@
 - PR #6652 Add support for struct columns in concatenate
 - PR #6675 Add DecimalDtype to cuDF
 - PR #6739 Add Java bindings for is_timestamp
+- PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
 
 ## Improvements
 
@@ -89,6 +91,7 @@
 - PR #6776 Use `void` return type for kernel wrapper functions instead of returning `cudaError_t`
 - PR #6786 Add nested type support to ColumnVector#getDeviceMemorySize
 - PR #6780 Move `cudf::cast` tests to separate test file
+- PR #6789 Rename `unary_op` to `unary_operator`
 - PR #6770 Support building decimal columns with Table.TestBuilder
 
 ## Bug Fixes
@@ -115,6 +118,7 @@
 - PR #6633 Fix Java HostColumnVector unnecessarily loading native dependencies
 - PR #6643 Fix csv writer handling embedded comma delimiter
 - PR #6640 Add error message for unsupported `axis` parameter in DataFrame APIs
+- PR #6686 Fix output size for orc read for skip_rows option
 - PR #6710 Fix an out-of-bounds indexing error in gather() for lists
 - PR #6670 Fix a bug where PTX parser fails to correctly parse a python lambda generated UDF
 - PR #6687 Fix issue where index name of caller object is being modified in csv writer
@@ -129,12 +133,14 @@
 - PR #6720 Fix implementation of `dtype` parameter in `cudf.read_csv`
 - PR #6721 Add missing serialization methods for ListColumn
 - PR #6722 Fix index=False bug in dask_cudf.read_parquet
+- PR #6766 Fix race conditions in parquet
 - PR #6728 Fix cudf python docs and associated build warnings
 - PR #6732 Fix cuDF benchmarks build with static Arrow lib and fix rapids-compose cuDF JNI build
 - PR #6742 Fix concat bug in dask_cudf Series/Index creation
 - PR #6632 Fix DataFrame initialization from list of dicts
 - PR #6767 Fix sort order of parameters in `test_scalar_invalid_implicit_conversion` pytest
 - PR #6787 Update java reduction APIs to reflect C++ changes
+- PR #6794 Fix AVRO reader issues with empty input
 
 
 # cuDF 0.16.0 (21 Oct 2020)

@@ -112,6 +112,7 @@ class metadata : public file_metadata {
           }
         }
       }
+      CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
     } else {
       for (int i = 0; i < num_avro_columns; ++i) {
         // Exclude array columns (unsupported)
@@ -130,7 +131,6 @@ class metadata : public file_metadata {
         }
       }
     }
-    CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
 
     return selection;
   }
@@ -459,6 +459,11 @@ table_with_metadata reader::impl::read(avro_reader_options const &options,
 
       for (size_t i = 0; i < column_types.size(); ++i) {
         out_columns.emplace_back(make_column(out_buffers[i], nullptr, stream, _mr));
+      }
+    } else {
+      // Create empty columns
+      for (size_t i = 0; i < column_types.size(); ++i) {
+        out_columns.emplace_back(make_empty_column(column_types[i]));
       }
     }
   }

@@ -48,6 +48,7 @@ namespace gpu {
 struct page_state_s {
   const uint8_t *data_start;
   const uint8_t *data_end;
+  const uint8_t *lvl_end;
   const uint8_t *dict_base;    // ptr to dictionary page data
   int32_t dict_size;           // size of dictionary data
   int32_t first_row;           // First row in page to output
@@ -239,7 +240,7 @@ __device__ void gpuDecodeStream(
   uint32_t *output, page_state_s *s, int32_t target_count, int t, level_type lvl)
 {
   const uint8_t *cur_def    = s->lvl_start[lvl];
-  const uint8_t *end        = s->data_start;
+  const uint8_t *end        = s->lvl_end;
   uint32_t level_run        = s->initial_rle_run[lvl];
   int32_t level_val         = s->initial_rle_value[lvl];
   int level_bits            = s->col.level_bits[lvl];
@@ -1080,6 +1081,7 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
           break;
       }
       if (cur > end) { s->error = 1; }
+      s->lvl_end    = cur;
       s->data_start = cur;
       s->data_end   = end;
     } else {
