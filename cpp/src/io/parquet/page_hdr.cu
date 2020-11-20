@@ -468,24 +468,20 @@ extern "C" __global__ void __launch_bounds__(128)
   }
 }
 
-cudaError_t __host__ DecodePageHeaders(ColumnChunkDesc *chunks,
-                                       int32_t num_chunks,
-                                       cudaStream_t stream)
+void __host__ DecodePageHeaders(ColumnChunkDesc *chunks, int32_t num_chunks, cudaStream_t stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
   gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream>>>(chunks, num_chunks);
-  return cudaSuccess;
 }
 
-cudaError_t __host__ BuildStringDictionaryIndex(ColumnChunkDesc *chunks,
-                                                int32_t num_chunks,
-                                                cudaStream_t stream)
+void __host__ BuildStringDictionaryIndex(ColumnChunkDesc *chunks,
+                                         int32_t num_chunks,
+                                         cudaStream_t stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
   gpuBuildStringDictionaryIndex<<<dim_grid, dim_block, 0, stream>>>(chunks, num_chunks);
-  return cudaSuccess;
 }
 
 }  // namespace gpu
