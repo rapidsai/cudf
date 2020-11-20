@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-20, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +39,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <hash/concurrent_unordered_map.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
 #include <utility>
@@ -137,7 +139,7 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
                              cudf::detail::result_cache* dense_results,
                              rmm::device_vector<size_type> const& gather_map,
                              size_type map_size,
-                             cudaStream_t stream,
+                             rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
   for (size_t i = 0; i < requests.size(); i++) {
@@ -150,7 +152,7 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
       [&sparse_results, &gather_map, map_size, i, mr, stream](auto const& agg) {
         auto s                  = sparse_results.get_result(i, agg);
         auto dense_result_table = cudf::detail::gather(
-          table_view({s}), gather_map.begin(), gather_map.begin() + map_size, false, mr, stream);
+          table_view({s}), gather_map.begin(), gather_map.begin() + map_size, false, stream, mr);
         return std::move(dense_result_table->release()[0]);
       };
 
@@ -173,8 +175,8 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
                              arg_result->nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
                                                     : cudf::detail::out_of_bounds_policy::NULLIFY,
                              cudf::detail::negative_index_policy::NOT_ALLOWED,
-                             mr,
-                             stream);
+                             stream,
+                             mr);
       return std::move(transformed_result->release()[0]);
     };
 
@@ -203,7 +205,7 @@ void sparse_to_dense_results(std::vector<aggregation_request> const& requests,
 template <bool keys_have_nulls>
 auto create_hash_map(table_device_view const& d_keys,
                      null_policy include_null_keys,
-                     cudaStream_t stream = 0)
+                     rmm::cuda_stream_view stream)
 {
   size_type constexpr unused_key{std::numeric_limits<size_type>::max()};
   size_type constexpr unused_value{std::numeric_limits<size_type>::max()};
@@ -226,7 +228,7 @@ auto create_hash_map(table_device_view const& d_keys,
                           hasher,
                           rows_equal,
                           allocator_type(),
-                          stream);
+                          stream.value());
 }
 
 /**
@@ -241,7 +243,7 @@ void compute_single_pass_aggs(table_view const& keys,
                               cudf::detail::result_cache* sparse_results,
                               Map& map,
                               null_policy include_null_keys,
-                              cudaStream_t stream)
+                              rmm::cuda_stream_view stream)
 {
   // flatten the aggs to a table that can be operated on by aggregate_row
   table_view flattened_values;
@@ -278,10 +280,9 @@ void compute_single_pass_aggs(table_view const& keys,
   bool skip_key_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
   if (skip_key_rows_with_nulls) {
-    auto row_bitmask{
-      cudf::detail::bitmask_and(keys, stream, rmm::mr::get_current_device_resource())};
+    auto row_bitmask{cudf::detail::bitmask_and(keys, stream)};
     thrust::for_each_n(
-      rmm::exec_policy(stream)->on(stream),
+      rmm::exec_policy(stream)->on(stream.value()),
       thrust::make_counting_iterator(0),
       keys.num_rows(),
       hash::compute_single_pass_aggs<true, Map>{map,
@@ -292,7 +293,7 @@ void compute_single_pass_aggs(table_view const& keys,
                                                 static_cast<bitmask_type*>(row_bitmask.data())});
   } else {
     thrust::for_each_n(
-      rmm::exec_policy(stream)->on(stream),
+      rmm::exec_policy(stream)->on(stream.value()),
       thrust::make_counting_iterator(0),
       keys.num_rows(),
       hash::compute_single_pass_aggs<false, Map>{
@@ -313,9 +314,8 @@ void compute_single_pass_aggs(table_view const& keys,
  * `map`.
  */
 template <typename Map>
-std::pair<rmm::device_vector<size_type>, size_type> extract_populated_keys(Map map,
-                                                                           size_type num_keys,
-                                                                           cudaStream_t stream = 0)
+std::pair<rmm::device_vector<size_type>, size_type> extract_populated_keys(
+  Map map, size_type num_keys, rmm::cuda_stream_view stream)
 {
   rmm::device_vector<size_type> populated_keys(num_keys);
 
@@ -326,7 +326,7 @@ std::pair<rmm::device_vector<size_type>, size_type> extract_populated_keys(Map m
   };
 
   auto end_it = thrust::copy_if(
-    rmm::exec_policy(stream)->on(stream),
+    rmm::exec_policy(stream)->on(stream.value()),
     thrust::make_transform_iterator(map.data(), get_key),
     thrust::make_transform_iterator(map.data() + map.capacity(), get_key),
     populated_keys.begin(),
@@ -369,7 +369,7 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
                                               std::vector<aggregation_request> const& requests,
                                               cudf::detail::result_cache* cache,
                                               null_policy include_null_keys,
-                                              cudaStream_t stream,
+                                              rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
   auto d_keys = table_device_view::create(keys);
@@ -396,7 +396,7 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
   sparse_to_dense_results(requests, sparse_results, cache, gather_map, map_size, stream, mr);
 
   return cudf::detail::gather(
-    keys, gather_map.begin(), gather_map.begin() + map_size, false, mr, stream);
+    keys, gather_map.begin(), gather_map.begin() + map_size, false, stream, mr);
 }
 
 }  // namespace
@@ -425,7 +425,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   table_view const& keys,
   std::vector<aggregation_request> const& requests,
   null_policy include_null_keys,
-  cudaStream_t stream,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
   cudf::detail::result_cache cache(requests.size());

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -20,9 +20,13 @@
 #pragma once
 
 #include <jit/cache.h>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <jitify.hpp>
+
 #include <chrono>
 #include <fstream>
-#include <jitify.hpp>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -58,7 +62,7 @@ class launcher {
            const std::vector<std::string>& header_names,
            const std::vector<std::string>& compiler_flags,
            jitify::experimental::file_callback_type file_callback,
-           cudaStream_t stream = 0);
+           rmm::cuda_stream_view stream = rmm::cuda_stream_default);
   launcher(launcher&&);
   launcher(const launcher&) = delete;
   launcher& operator=(launcher&&) = delete;
@@ -91,14 +95,14 @@ class launcher {
   template <typename... Args>
   void launch(Args... args)
   {
-    get_kernel().configure_1d_max_occupancy(0, 0, 0, stream).launch(args...);
+    get_kernel().configure_1d_max_occupancy(0, 0, 0, stream.value()).launch(args...);
   }
 
  private:
   cudf::jit::cudfJitCache& cache_instance;
   cudf::jit::named_prog<jitify::experimental::Program> program;
   cudf::jit::named_prog<jitify::experimental::KernelInstantiation> kernel_inst;
-  cudaStream_t stream;
+  rmm::cuda_stream_view stream;
 
   jitify::experimental::KernelInstantiation& get_kernel() { return *std::get<1>(kernel_inst); }
 };

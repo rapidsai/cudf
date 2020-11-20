@@ -356,7 +356,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional sint64 maximumUtc = 4;
         // }
         if (s->chunk.has_minmax) {
-          cur[0] = 7 * 8 + PB_TYPE_FIXEDLEN;
+          cur[0] = 9 * 8 + PB_TYPE_FIXEDLEN;
           cur += 2;
           cur          = pb_put_int(cur, 3, s->chunk.min_value.i_val);  // minimumUtc
           cur          = pb_put_int(cur, 4, s->chunk.max_value.i_val);  // maximumUtc

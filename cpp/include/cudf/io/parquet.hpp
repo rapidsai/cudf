@@ -367,6 +367,8 @@ class parquet_writer_options {
   const table_metadata* _metadata = nullptr;
   // Optionally return the raw parquet file metadata output
   bool _return_filemetadata = false;
+  // Parquet writes can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
+  bool _write_timestamps_as_int96 = false;
   // Column chunks file path to be set in the raw output metadata
   std::string _column_chunks_file_path;
 
@@ -434,6 +436,11 @@ class parquet_writer_options {
   table_metadata const* get_metadata() const { return _metadata; }
 
   /**
+   * @brief Returns `true` if timestamps will be written as INT96
+   */
+  bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
+
+  /**
    * @brief Returns `true` if metadata is required, `false` otherwise.
    */
   bool is_enabled_return_filemetadata() const { return _return_filemetadata; }
@@ -470,6 +477,14 @@ class parquet_writer_options {
    * @param req Boolean value to enable/disable return of file metadata.
    */
   void enable_return_filemetadata(bool req) { _return_filemetadata = req; }
+
+  /**
+   * @brief Sets timestamp writing preferences. INT96 timestamps will be written
+   * if `true` and TIMESTAMP_MICROS will be written if `false`.
+   *
+   * @param req Boolean value to enable/disable writing of INT96 timestamps
+   */
+  void enable_int96_timestamps(bool req) { _write_timestamps_as_int96 = req; }
 
   /**
    * @brief Sets column chunks file path to be set in the raw output metadata.
@@ -565,6 +580,18 @@ class parquet_writer_options_builder {
   }
 
   /**
+   * @brief Sets whether int96 timestamps are written or not in parquet_writer_options.
+   *
+   * @param enabled Boolean value to enable/disable int96 timestamps.
+   * @return this for chaining.
+   */
+  parquet_writer_options_builder& int96_timestamps(bool enabled)
+  {
+    options._write_timestamps_as_int96 = enabled;
+    return *this;
+  }
+
+  /**
    * @brief move parquet_writer_options member once it's built.
    */
   operator parquet_writer_options &&() { return std::move(options); }
@@ -628,6 +655,8 @@ class chunked_parquet_writer_options {
   statistics_freq _stats_level = statistics_freq::STATISTICS_ROWGROUP;
   // Optional associated metadata.
   const table_metadata_with_nullability* _nullable_metadata = nullptr;
+  // Parquet writes can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
+  bool _write_timestamps_as_int96 = false;
 
   /**
    * @brief Constructor from sink.
@@ -670,6 +699,11 @@ class chunked_parquet_writer_options {
   }
 
   /**
+   * @brief Returns `true` if timestamps will be written as INT96
+   */
+  bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
+
+  /**
    * @brief Sets nullable metadata.
    *
    * @param metadata Associated metadata.
@@ -692,6 +726,14 @@ class chunked_parquet_writer_options {
    * @param compression The compression type to use.
    */
   void set_compression(compression_type compression) { _compression = compression; }
+
+  /**
+   * @brief Sets timestamp writing preferences. INT96 timestamps will be written
+   * if `true` and TIMESTAMP_MICROS will be written if `false`.
+   *
+   * @param req Boolean value to enable/disable writing of INT96 timestamps
+   */
+  void enable_int96_timestamps(bool req) { _write_timestamps_as_int96 = req; }
 
   /**
    * @brief creates builder to build chunked_parquet_writer_options.
@@ -759,6 +801,21 @@ class chunked_parquet_writer_options_builder {
   }
 
   /**
+   * @brief Set to true if timestamps should be written as
+   * int96 types instead of int64 types. Even though int96 is deprecated and is
+   * not an internal type for cudf, it needs to be written for backwards
+   * compatability reasons.
+   *
+   * @param enabled Boolean value to enable/disable int96 timestamps.
+   * @return this for chaining.
+   */
+  chunked_parquet_writer_options_builder& int96_timestamps(bool enabled)
+  {
+    options._write_timestamps_as_int96 = enabled;
+    return *this;
+  }
+
+  /**
    * @brief move chunked_parquet_writer_options member once it's built.
    */
   operator chunked_parquet_writer_options &&() { return std::move(options); }
@@ -817,6 +874,7 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
  * @param[in] table The table data to be written.
  * @param[in] state Opaque state information about the writer process. Must be the same pointer
  * returned from write_parquet_chunked_begin().
+ * @param[in] int96_timestamps Write out timestamps as INT96 type
  */
 void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_state> state);
 
