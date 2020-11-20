@@ -1036,6 +1036,46 @@ TEST_F(ParquetChunkedWriterTest, MismatchedStructure)
   cudf_io::write_parquet_chunked_end(state);
 }
 
+TEST_F(ParquetChunkedWriterTest, MismatchedStructureList)
+{
+  auto valids  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto valids2 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+
+  using lcw = cudf::test::lists_column_wrapper<int32_t>;
+
+  // COL0 (mismatched depth) ====================
+  // [NULL, 2, NULL]
+  // []
+  // [4, 5]
+  // NULL
+  lcw col00{{{{1, 2, 3}, valids}, {}, {4, 5}, {}}, valids2};
+
+  // [[1, 2, 3], [], [4, 5], [], [0, 6, 0]]
+  // [[7, 8]]
+  // []
+  // [[]]
+  lcw col01{{{1, 2, 3}, {}, {4, 5}, {}, {0, 6, 0}}, {{7, 8}}, lcw{}, lcw{lcw{}}};
+
+  // COL2 (non-nested columns to test proper schema construction)
+  size_t num_rows = static_cast<cudf::column_view>(col00).size();
+  auto seq_col0   = random_values<int>(num_rows);
+  auto seq_col1   = random_values<int>(num_rows);
+
+  column_wrapper<int> col10{seq_col0.begin(), seq_col0.end(), valids};
+  column_wrapper<int> col11{seq_col1.begin(), seq_col1.end(), valids2};
+
+  auto tbl0 = table_view({col00, col10});
+  auto tbl1 = table_view({col01, col11});
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedLists.parquet");
+  cudf_io::chunked_parquet_writer_options args =
+    cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
+  auto state = cudf_io::write_parquet_chunked_begin(args);
+  cudf_io::write_parquet_chunked(tbl0, state);
+  CUDF_EXPECT_THROW_MESSAGE(cudf_io::write_parquet_chunked(tbl1, state),
+                            "Mismatch in schema between multiple calls to write_chunk");
+}
+
 TEST_F(ParquetChunkedWriterTest, DifferentNullability)
 {
   srand(31337);
