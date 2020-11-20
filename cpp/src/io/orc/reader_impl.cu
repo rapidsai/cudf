@@ -163,7 +163,7 @@ class metadata {
    * @param[in,out] row_count Total number of rows selected
    *
    * @return List of stripe info and total number of selected rows
-   **/
+   */
   auto select_stripes(const std::vector<size_type> &stripes,
                       size_type &row_start,
                       size_type &row_count)
@@ -177,15 +177,23 @@ class metadata {
         selection.emplace_back(&ff.stripes[stripe_idx], nullptr);
         stripe_rows += ff.stripes[stripe_idx].numberOfRows;
       }
+      // row_start is 0 if stripes are set. If this is not true anymore, then
+      // row_start needs to be subtracted to get the correct row_count
+      CUDF_EXPECTS(row_start == 0, "Start row index should be 0");
       row_count = static_cast<size_type>(stripe_rows);
     } else {
       row_start = std::max(row_start, 0);
       if (row_count < 0) {
         row_count = static_cast<size_type>(
-          std::min<size_t>(get_total_rows(), std::numeric_limits<size_type>::max()));
+          std::min<size_t>(get_total_rows() - row_start, std::numeric_limits<size_type>::max()));
+      } else {
+        row_count =
+          static_cast<size_type>(std::min<size_t>(get_total_rows() - row_start, row_count));
       }
-      CUDF_EXPECTS(row_count >= 0, "Invalid row count");
-      CUDF_EXPECTS(static_cast<size_t>(row_start) <= get_total_rows(), "Invalid row start");
+      CUDF_EXPECTS(row_count >= 0 && row_start >= 0, "Negative row count or starting row");
+      CUDF_EXPECTS(
+        !(row_start > 0 && (row_count > (std::numeric_limits<size_type>::max() - row_start))),
+        "Summation of starting row index and number of rows would cause overflow");
 
       size_type stripe_skip_rows = 0;
       for (size_t i = 0, count = 0; i < ff.stripes.size(); ++i) {
