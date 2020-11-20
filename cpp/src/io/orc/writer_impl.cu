@@ -736,6 +736,7 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
       default: desc->stats_dtype = dtype_none; break;
     }
     desc->num_rows         = columns[i].data_count();
+    desc->num_values       = columns[i].data_count();
     desc->valid_map_base   = columns[i].nulls();
     desc->column_data_base = columns[i].data();
     if (desc->stats_dtype == dtype_timestamp64) {

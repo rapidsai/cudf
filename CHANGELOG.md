@@ -10,6 +10,7 @@
 - PR #6711 Implement `cudf::cast` for `decimal32/64` to/from integer and floating point
 - PR #6777 Implement `cudf::unary_operation` for `decimal32` & `decimal64`
 - PR #6729 Implement `cudf::cast` for `decimal32/64` to/from different `type_id`
+- PR #6792 Implement `cudf::clamp` for `decimal32` and `decimal64`
 - PR #6528 Enable `fixed_point` binary operations
 - PR #6460 Add is_timestamp format check API
 - PR #6568 Add function to create hashed vocabulary file from raw vocabulary
@@ -22,6 +23,7 @@
 - PR #6652 Add support for struct columns in concatenate
 - PR #6675 Add DecimalDtype to cuDF
 - PR #6739 Add Java bindings for is_timestamp
+- PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
 
 ## Improvements
 
@@ -75,6 +77,7 @@
 - PR #6676 Add dictionary support to `cudf::quantile`
 - PR #6673 Parameterize avro and json benchmark
 - PR #6609 Support fixed-point decimal for HostColumnVector
+- PR #6703 Add list column statistics writing to Parquet writer
 - PR #6662 `RangeIndex` supports `step` parameter
 - PR #6712 Remove `reinterpret_cast` conversions between pointer types in Avro
 - PR #6705 Add nested type support to Java table serialization
@@ -136,6 +139,7 @@
 - PR #6632 Fix DataFrame initialization from list of dicts
 - PR #6767 Fix sort order of parameters in `test_scalar_invalid_implicit_conversion` pytest
 - PR #6787 Update java reduction APIs to reflect C++ changes
+- PR #6794 Fix AVRO reader issues with empty input
 
 
 # cuDF 0.16.0 (21 Oct 2020)
