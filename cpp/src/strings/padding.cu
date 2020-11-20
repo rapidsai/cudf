@@ -17,12 +17,15 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/padding.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <strings/utilities.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace strings {
@@ -67,7 +70,8 @@ std::unique_ptr<column> pad(
   auto d_strings      = *strings_column;
 
   // create null_mask
-  rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
+  rmm::device_buffer null_mask =
+    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
 
   // build offsets column
   auto offsets_transformer_itr =
@@ -155,7 +159,8 @@ std::unique_ptr<column> zfill(
   auto d_strings      = *strings_column;
 
   // copy bitmask
-  rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
+  rmm::device_buffer null_mask =
+    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
 
   // build offsets column
   auto offsets_transformer_itr = thrust::make_transform_iterator(

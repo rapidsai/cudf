@@ -398,18 +398,24 @@ class DataFrame(Frame, Serializable):
             index = as_index(index)
 
         self._index = as_index(index)
-        data = list(itertools.zip_longest(*data))
 
-        if columns is not None and len(data) == 0:
-            data = [
-                cudf.core.column.column_empty(row_count=0, dtype=None)
-                for _ in columns
-            ]
+        # list-of-dicts case
+        if len(data) > 0 and isinstance(data[0], dict):
+            data = DataFrame.from_pandas(pd.DataFrame(data))
+            self._data = data._data
+        else:
+            data = list(itertools.zip_longest(*data))
 
-        for col_name, col in enumerate(data):
-            self._data[col_name] = column.as_column(col)
+            if columns is not None and len(data) == 0:
+                data = [
+                    cudf.core.column.column_empty(row_count=0, dtype=None)
+                    for _ in columns
+                ]
 
-        self.columns = columns
+            for col_name, col in enumerate(data):
+                self._data[col_name] = column.as_column(col)
+        if columns:
+            self.columns = columns
 
     def _init_from_dict_like(self, data, index=None, columns=None):
         data = data.copy()
@@ -678,8 +684,9 @@ class DataFrame(Frame, Serializable):
         elif isinstance(arg, DataFrame):
             return self.where(arg)
         else:
-            msg = "__getitem__ on type {!r} is not supported"
-            raise TypeError(msg.format(type(arg)))
+            raise TypeError(
+                f"__getitem__ on type {type(arg)} is not supported"
+            )
 
     @annotate("DATAFRAME_SETITEM", color="blue", domain="cudf_python")
     def __setitem__(self, arg, value):
@@ -688,11 +695,10 @@ class DataFrame(Frame, Serializable):
         if isinstance(arg, DataFrame):
             # not handling set_item where arg = df & value = df
             if isinstance(value, DataFrame):
-                msg = (
-                    "__setitem__ with arg = {!r} and "
-                    "value = {!r} is not supported"
+                raise TypeError(
+                    f"__setitem__ with arg = {type(value)} and "
+                    f"value = {type(arg)} is not supported"
                 )
-                raise TypeError(msg.format(type(value), type(arg)))
             else:
                 for col_name in self._data:
                     scatter_map = arg[col_name]
@@ -781,17 +787,17 @@ class DataFrame(Frame, Serializable):
                     )
                 else:
                     for col in arg:
-                        # we will raise a key error if col not in dataframe
-                        # this behavior will make it
-                        # consistent to pandas >0.21.0
-                        if not is_scalar(value):
-                            self._data[col] = column.as_column(value)
+                        if is_scalar(value):
+                            self._data[col] = column.full(
+                                size=len(self), fill_value=value
+                            )
                         else:
-                            self._data[col][:] = value
+                            self._data[col] = column.as_column(value)
 
         else:
-            msg = "__setitem__ on type {!r} is not supported"
-            raise TypeError(msg.format(type(arg)))
+            raise TypeError(
+                f"__setitem__ on type {type(arg)} is not supported"
+            )
 
     def __delitem__(self, name):
         """
@@ -1365,7 +1371,7 @@ class DataFrame(Frame, Serializable):
                         l_opr = self[col]
                 result[col] = op(l_opr, r_opr)
 
-        elif isinstance(other, numbers.Number):
+        elif isinstance(other, (numbers.Number, cudf.Scalar)):
             for col in self._data:
                 result[col] = op(self[col], other)
         else:
@@ -2967,16 +2973,16 @@ class DataFrame(Frame, Serializable):
         """
         num_cols = len(self._data)
         if name in self._data:
-            raise NameError("duplicated column name {!r}".format(name))
+            raise NameError(f"duplicated column name {name}")
 
         if loc < 0:
             loc = num_cols + loc + 1
 
         if not (0 <= loc <= num_cols):
             raise ValueError(
-                "insert location must be within range {}, {}".format(
-                    -(num_cols + 1) * (num_cols > 0), num_cols * (num_cols > 0)
-                )
+                f"insert location must be within range "
+                f"{-(num_cols + 1) * (num_cols > 0)}, "
+                f"{num_cols * (num_cols > 0)}"
             )
 
         if is_scalar(value):
@@ -3202,7 +3208,7 @@ class DataFrame(Frame, Serializable):
         """Drop a column by *name*
         """
         if name not in self._data:
-            raise KeyError("column {!r} does not exist".format(name))
+            raise KeyError(f"column '{name}' does not exist")
         del self._data[name]
 
     def drop_duplicates(
@@ -3402,26 +3408,24 @@ class DataFrame(Frame, Serializable):
         dtype = find_common_type([col.dtype for col in cols])
         for k, c in self._data.items():
             if c.has_nulls:
-                errmsg = (
-                    "column {!r} has null values. "
-                    "hint: use .fillna() to replace null values"
+                raise ValueError(
+                    f"column '{k}' has null values. "
+                    f"hint: use .fillna() to replace null values"
                 )
-                raise ValueError(errmsg.format(k))
         cupy_dtype = dtype
         if np.issubdtype(cupy_dtype, np.datetime64):
             cupy_dtype = np.dtype("int64")
 
         if order not in ("F", "C"):
-            errmsg = (
+            raise ValueError(
                 "order parameter should be 'C' for row major or 'F' for"
                 "column major GPU matrix"
             )
-            raise ValueError(errmsg.format(k))
 
         matrix = cupy.empty(shape=(nrow, ncol), dtype=cupy_dtype, order=order)
         for colidx, inpcol in enumerate(cols):
             dense = inpcol.astype(cupy_dtype)
-            matrix[:, colidx] = dense
+            matrix[:, colidx] = cupy.asarray(dense)
         return cuda.as_cuda_array(matrix).view(dtype)
 
     def as_matrix(self, columns=None):
@@ -4142,9 +4146,8 @@ class DataFrame(Frame, Serializable):
 
             if not isinstance(local_dict, dict):
                 raise TypeError(
-                    "local_dict type: expected dict but found {!r}".format(
-                        type(local_dict)
-                    )
+                    f"local_dict type: expected dict but found "
+                    f"{type(local_dict)}"
                 )
 
             # Get calling environment
@@ -4787,9 +4790,22 @@ class DataFrame(Frame, Serializable):
                 sort=False,
             )
 
-    def to_pandas(self, **kwargs):
+    def to_pandas(self, nullable=False, **kwargs):
         """
         Convert to a Pandas DataFrame.
+
+        Parameters
+        ----------
+        nullable : Boolean, Default False
+            If ``nullable`` is ``True``, the resulting columns
+            in the dataframe will be having a corresponding
+            nullable Pandas dtype. If ``nullable`` is ``False``,
+            the resulting columns will either convert null
+            values to ``np.nan`` or ``None`` depending on the dtype.
+
+        Returns
+        -------
+        out : Pandas DataFrame
 
         Examples
         --------
@@ -4803,6 +4819,36 @@ class DataFrame(Frame, Serializable):
         2  2  0
         >>> type(pdf)
         <class 'pandas.core.frame.DataFrame'>
+
+        ``nullable`` parameter can be used to control
+        whether dtype can be Pandas Nullable or not:
+
+        >>> df = cudf.DataFrame({'a': [0, None, 2], 'b': [True, False, None]})
+        >>> df
+              a      b
+        0     0   True
+        1  <NA>  False
+        2     2   <NA>
+        >>> pdf = df.to_pandas(nullable=True)
+        >>> pdf
+              a      b
+        0     0   True
+        1  <NA>  False
+        2     2   <NA>
+        >>> pdf.dtypes
+        a      Int64
+        b    boolean
+        dtype: object
+        >>> pdf = df.to_pandas(nullable=False)
+        >>> pdf
+            a      b
+        0  0.0   True
+        1  NaN  False
+        2  2.0   None
+        >>> pdf.dtypes
+        a    float64
+        b     object
+        dtype: object
         """
 
         out_data = {}
@@ -4814,7 +4860,9 @@ class DataFrame(Frame, Serializable):
             out_columns = self.columns
 
         for i, col_key in enumerate(self._data):
-            out_data[i] = self._data[col_key].to_pandas(index=out_index)
+            out_data[i] = self._data[col_key].to_pandas(
+                index=out_index, nullable=nullable
+            )
 
         if isinstance(self.columns, Index):
             out_columns = self.columns.to_pandas()
@@ -4860,6 +4908,9 @@ class DataFrame(Frame, Serializable):
         """
         if not isinstance(dataframe, pd.DataFrame):
             raise TypeError("not a pandas.DataFrame")
+
+        if not dataframe.columns.is_unique:
+            raise ValueError("Duplicate column names are not allowed")
 
         df = cls()
         # Set columns
@@ -5068,9 +5119,7 @@ class DataFrame(Frame, Serializable):
         """
         if data.ndim != 1 and data.ndim != 2:
             raise ValueError(
-                "records dimension expected 1 or 2 but found {!r}".format(
-                    data.ndim
-                )
+                f"records dimension expected 1 or 2 but found {data.ndim}"
             )
 
         num_cols = len(data[0])
@@ -5083,8 +5132,10 @@ class DataFrame(Frame, Serializable):
 
         else:
             if len(columns) != num_cols:
-                msg = "columns length expected {!r} but found {!r}"
-                raise ValueError(msg.format(num_cols, len(columns)))
+                raise ValueError(
+                    f"columns length expected {num_cols} "
+                    f"but found {len(columns)}"
+                )
             names = columns
 
         df = DataFrame()
@@ -5338,7 +5389,7 @@ class DataFrame(Frame, Serializable):
                 ) and isinstance(
                     values._column, cudf.core.column.CategoricalColumn
                 ):
-                    res = self._data[col].binary_operator("eq", values._column)
+                    res = self._data[col] == values._column
                     result[col] = res
                 elif (
                     isinstance(
@@ -5353,9 +5404,7 @@ class DataFrame(Frame, Serializable):
                 ):
                     result[col] = utils.scalar_broadcast_to(False, len(self))
                 else:
-                    result[col] = self._data[col].binary_operator(
-                        "eq", values._column
-                    )
+                    result[col] = self._data[col] == values._column
 
             result.index = self.index
             return result
@@ -5365,9 +5414,7 @@ class DataFrame(Frame, Serializable):
             result = DataFrame()
             for col in self._data.names:
                 if col in values.columns:
-                    result[col] = self._data[col].binary_operator(
-                        "eq", values[col]._column
-                    )
+                    result[col] = self._data[col] == values[col]._column
                 else:
                     result[col] = utils.scalar_broadcast_to(False, len(self))
             result.index = self.index
@@ -5375,10 +5422,10 @@ class DataFrame(Frame, Serializable):
         else:
             if not is_list_like(values):
                 raise TypeError(
-                    "only list-like or dict-like objects are "
-                    "allowed to be passed to DataFrame.isin(), "
-                    "you passed a "
-                    "{0!r}".format(type(values).__name__)
+                    f"only list-like or dict-like objects are "
+                    f"allowed to be passed to DataFrame.isin(), "
+                    f"you passed a "
+                    f"'{type(values).__name__}'"
                 )
 
             result_df = DataFrame()
@@ -5470,6 +5517,9 @@ class DataFrame(Frame, Serializable):
         Single    5
         dtype: int64
         """
+        if axis not in (0, "index", None):
+            raise NotImplementedError("Only axis=0 is currently supported.")
+
         return self._apply_support_method(
             "count",
             axis=axis,
@@ -5771,6 +5821,9 @@ class DataFrame(Frame, Serializable):
         2  1  7
         3  1  7
         """
+        if axis not in (0, "index", None):
+            raise NotImplementedError("Only axis=0 is currently supported.")
+
         return self._apply_support_method(
             "cummin", axis=axis, skipna=skipna, *args, **kwargs
         )
@@ -5805,6 +5858,9 @@ class DataFrame(Frame, Serializable):
         2  3   9
         3  4  10
         """
+        if axis not in (0, "index", None):
+            raise NotImplementedError("Only axis=0 is currently supported.")
+
         return self._apply_support_method(
             "cummax", axis=axis, skipna=skipna, *args, **kwargs
         )
@@ -5840,6 +5896,9 @@ class DataFrame(Frame, Serializable):
         2   6  24
         3  10  34
         """
+        if axis not in (0, "index", None):
+            raise NotImplementedError("Only axis=0 is currently supported.")
+
         return self._apply_support_method(
             "cumsum", axis=axis, skipna=skipna, *args, **kwargs
         )
@@ -5874,6 +5933,9 @@ class DataFrame(Frame, Serializable):
         2   6   504
         3  24  5040
         """
+        if axis not in (0, "index", None):
+            raise NotImplementedError("Only axis=0 is currently supported.")
+
         return self._apply_support_method(
             "cumprod", axis=axis, skipna=skipna, *args, **kwargs
         )
@@ -6166,6 +6228,9 @@ class DataFrame(Frame, Serializable):
         b   -1.2
         dtype: float64
         """
+        if axis not in (0, "index", None):
+            raise NotImplementedError("Only axis=0 is currently supported.")
+
         if numeric_only not in (None, True):
             msg = "Kurtosis only supports int, float, and bool dtypes."
             raise NotImplementedError(msg)
@@ -6212,6 +6277,9 @@ class DataFrame(Frame, Serializable):
         b   -0.37037
         dtype: float64
         """
+        if axis not in (0, "index", None):
+            raise NotImplementedError("Only axis=0 is currently supported.")
+
         if numeric_only not in (None, True):
             msg = "Skew only supports int, float, and bool dtypes."
             raise NotImplementedError(msg)
@@ -6358,27 +6426,30 @@ class DataFrame(Frame, Serializable):
 
             level = kwargs.pop("level", None)
             if level not in (None,):
-                msg = "Row-wise operations currently do not "
-                "support `level`."
-                raise NotImplementedError(msg)
+                raise NotImplementedError(
+                    "Row-wise operations currently do not support `level`."
+                )
 
             numeric_only = kwargs.pop("numeric_only", None)
             if numeric_only not in (None, True):
-                msg = "Row-wise operations currently do not "
-                "support `numeric_only=False`."
-                raise NotImplementedError(msg)
+                raise NotImplementedError(
+                    "Row-wise operations currently do not "
+                    "support `numeric_only=False`."
+                )
 
             min_count = kwargs.pop("min_count", None)
             if min_count not in (None, 0):
-                msg = "Row-wise operations currently do not "
-                "support `min_count`."
-                raise NotImplementedError(msg)
+                raise NotImplementedError(
+                    "Row-wise operations currently do not "
+                    "support `min_count`."
+                )
 
             bool_only = kwargs.pop("bool_only", None)
             if bool_only not in (None, True):
-                msg = "Row-wise operations currently do not "
-                "support `bool_only`."
-                raise NotImplementedError(msg)
+                raise NotImplementedError(
+                    "Row-wise operations currently do not "
+                    "support `bool_only`."
+                )
 
             prepared, mask, common_dtype = self._prepare_for_rowwise_op(
                 method, skipna
@@ -6530,9 +6601,7 @@ class DataFrame(Frame, Serializable):
         # can't both include AND exclude!
         if not include.isdisjoint(exclude):
             raise ValueError(
-                "include and exclude overlap on {inc_ex}".format(
-                    inc_ex=(include & exclude)
-                )
+                f"include and exclude overlap on {(include & exclude)}"
             )
 
         # include all subtypes

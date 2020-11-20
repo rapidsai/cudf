@@ -19,6 +19,10 @@
 namespace cudf {
 namespace io {
 namespace orc {
+
+// ORC rows are divided into groups and assigned indexes for faster seeking
+static constexpr uint32_t default_row_index_stride = 10000;
+
 enum CompressionKind {
   NONE   = 0,
   ZLIB   = 1,

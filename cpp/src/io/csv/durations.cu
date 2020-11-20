@@ -16,9 +16,11 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/types.hpp>
+
 #include <strings/convert/utilities.cuh>
 #include <strings/utilities.cuh>
 
@@ -174,7 +176,8 @@ struct dispatch_from_durations_fn {
     auto d_column           = *column;
 
     // copy null mask
-    rmm::device_buffer null_mask = copy_bitmask(durations, stream, mr);
+    rmm::device_buffer null_mask =
+      cudf::detail::copy_bitmask(durations, rmm::cuda_stream_view{stream}, mr);
     // build offsets column
     auto offsets_transformer_itr = thrust::make_transform_iterator(
       thrust::make_counting_iterator<int32_t>(0), duration_to_string_size_fn<T>{d_column});

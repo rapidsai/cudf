@@ -150,9 +150,9 @@ class reader::impl {
 
   rmm::device_vector<char> data_;
   rmm::device_vector<uint64_t> row_offsets_;
-  size_t num_records_  = 0;  // Number of rows with actual data
-  int num_active_cols_ = 0;  // Number of columns to read
-  int num_actual_cols_ = 0;  // Number of columns in the dataset
+  cudf::size_type num_records_ = 0;  // Number of rows with actual data
+  int num_active_cols_         = 0;  // Number of columns to read
+  int num_actual_cols_         = 0;  // Number of columns in the dataset
 
   // Parsing options
   parse_options opts{};

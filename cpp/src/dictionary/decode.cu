@@ -17,11 +17,14 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -33,7 +36,7 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
                                rmm::mr::device_memory_resource* mr,
                                cudaStream_t stream)
 {
-  if (source.size() == 0) return make_empty_column(data_type{type_id::EMPTY});
+  if (source.is_empty()) return make_empty_column(data_type{type_id::EMPTY});
 
   column_view indices{source.indices().type(),
                       source.size(),
@@ -46,13 +49,15 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
                                            indices,
                                            cudf::detail::out_of_bounds_policy::IGNORE,
                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                           mr,
-                                           stream)
+                                           stream,
+                                           mr)
                         ->release();
   auto output_column = std::unique_ptr<column>(std::move(table_column.front()));
 
   // apply any nulls to the output column
-  output_column->set_null_mask(copy_bitmask(source.parent(), stream, mr), source.null_count());
+  output_column->set_null_mask(
+    cudf::detail::copy_bitmask(source.parent(), rmm::cuda_stream_view{stream}, mr),
+    source.null_count());
 
   return output_column;
 }

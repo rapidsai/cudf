@@ -6,7 +6,7 @@ import numpy as np
 from pandas.core.tools.datetimes import _unit_map
 
 import cudf
-from cudf._lib.scalar import as_scalar
+from cudf._lib.scalar import as_device_scalar
 from cudf._lib.strings.char_types import is_integer as cpp_is_integer
 from cudf.core import column
 from cudf.core.index import as_index
@@ -180,7 +180,7 @@ def to_datetime(
                         except ValueError:
                             current_col = current_col.astype(dtype="float64")
 
-                    factor = as_scalar(
+                    factor = as_device_scalar(
                         column.datetime._numpy_to_pandas_conversion[u]
                         / (
                             column.datetime._numpy_to_pandas_conversion["s"]
@@ -190,21 +190,12 @@ def to_datetime(
                     )
 
                     if times_column is None:
-                        times_column = current_col.binary_operator(
-                            binop="mul", rhs=factor
-                        )
+                        times_column = current_col * factor
                     else:
-                        times_column = times_column.binary_operator(
-                            binop="add",
-                            rhs=current_col.binary_operator(
-                                binop="mul", rhs=factor
-                            ),
-                        )
+                        times_column = times_column + (current_col * factor)
             if times_column is not None:
-                col = (
-                    col.astype(dtype="int64")
-                    .binary_operator(binop="add", rhs=times_column)
-                    .astype(dtype=col.dtype)
+                col = (col.astype(dtype="int64") + times_column).astype(
+                    dtype=col.dtype
                 )
             return cudf.Series(col, index=arg.index)
         elif isinstance(arg, cudf.Index):
@@ -266,10 +257,10 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
 
     if col.dtype.kind in ("f"):
         if unit not in (None, "ns"):
-            factor = as_scalar(
+            factor = as_device_scalar(
                 column.datetime._numpy_to_pandas_conversion[unit]
             )
-            col = col.binary_operator(binop="mul", rhs=factor)
+            col = col * factor
 
         if format is not None:
             # Converting to int because,
@@ -293,11 +284,11 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
 
     if col.dtype.kind in ("i"):
         if unit in ("D", "h", "m"):
-            factor = as_scalar(
+            factor = as_device_scalar(
                 column.datetime._numpy_to_pandas_conversion[unit]
                 / column.datetime._numpy_to_pandas_conversion["s"]
             )
-            col = col.binary_operator(binop="mul", rhs=factor)
+            col = col * factor
 
         if format is not None:
             col = col.astype("str").as_datetime_column(

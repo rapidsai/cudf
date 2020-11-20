@@ -21,6 +21,8 @@ package ai.rapids.cudf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Objects;
@@ -40,7 +42,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private final OffHeapState offHeap;
 
   public static Scalar fromNull(DType type) {
-    switch (type) {
+    switch (type.typeId) {
     case EMPTY:
     case BOOL8:
       return new Scalar(type, makeBool8Scalar(false, false));
@@ -70,7 +72,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case TIMESTAMP_MILLISECONDS:
     case TIMESTAMP_MICROSECONDS:
     case TIMESTAMP_NANOSECONDS:
-      return new Scalar(type, makeTimestampTimeScalar(type.nativeId, 0, false));
+      return new Scalar(type, makeTimestampTimeScalar(type.typeId.getNativeId(), 0, false));
     case STRING:
       return new Scalar(type, makeStringScalar(null, false));
     case DURATION_DAYS:
@@ -79,7 +81,11 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case DURATION_MILLISECONDS:
     case DURATION_NANOSECONDS:
     case DURATION_SECONDS:
-      return new Scalar(type, makeDurationTimeScalar(type.nativeId, 0, false));
+      return new Scalar(type, makeDurationTimeScalar(type.typeId.getNativeId(), 0, false));
+    case DECIMAL32:
+      return new Scalar(type, makeDecimal32Scalar(0, type.getScale(), false));
+    case DECIMAL64:
+      return new Scalar(type, makeDecimal64Scalar(0L, type.getScale(), false));
     default:
       throw new IllegalArgumentException("Unexpected type: " + type);
     }
@@ -209,6 +215,16 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return new Scalar(DType.FLOAT32, makeFloat32Scalar(value, true));
   }
 
+  public static Scalar fromDecimal(int scale, int unscaledValue) {
+    long handle = makeDecimal32Scalar(unscaledValue, scale, true);
+    return new Scalar(DType.create(DType.DTypeEnum.DECIMAL32, scale), handle);
+  }
+
+  public static Scalar fromDecimal(int scale, long unscaledValue) {
+    long handle = makeDecimal64Scalar(unscaledValue, scale, true);
+    return new Scalar(DType.create(DType.DTypeEnum.DECIMAL64, scale), handle);
+  }
+
   public static Scalar fromFloat(Float value) {
     if (value == null) {
       return Scalar.fromNull(DType.FLOAT32);
@@ -225,6 +241,20 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       return Scalar.fromNull(DType.FLOAT64);
     }
     return Scalar.fromDouble(value.doubleValue());
+  }
+
+  public static Scalar fromDecimal(BigDecimal value) {
+    if (value == null) {
+      return Scalar.fromNull(DType.create(DType.DTypeEnum.DECIMAL64, 0));
+    }
+    DType dt = DType.fromJavaBigDecimal(value);
+    long handle;
+    if (dt.typeId == DType.DTypeEnum.DECIMAL32) {
+      handle = makeDecimal32Scalar(value.unscaledValue().intValueExact(), -value.scale(), true);
+    } else {
+      handle = makeDecimal64Scalar(value.unscaledValue().longValueExact(), -value.scale(), true);
+    }
+    return new Scalar(dt, handle);
   }
 
   public static Scalar timestampDaysFromInt(int value) {
@@ -253,7 +283,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         }
         return durationDaysFromInt(intValue);
       } else {
-        return new Scalar(type, makeDurationTimeScalar(type.nativeId, value, true));
+        return new Scalar(type, makeDurationTimeScalar(type.typeId.getNativeId(), value, true));
       }
     } else {
       throw new IllegalArgumentException("type is not a timestamp: " + type);
@@ -282,7 +312,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         }
         return timestampDaysFromInt(intValue);
       } else {
-        return new Scalar(type, makeTimestampTimeScalar(type.nativeId, value, true));
+        return new Scalar(type, makeTimestampTimeScalar(type.typeId.getNativeId(), value, true));
       }
     } else {
       throw new IllegalArgumentException("type is not a timestamp: " + type);
@@ -328,6 +358,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native long makeDurationTimeScalar(int dtype, long value, boolean isValid);
   private static native long makeTimestampDaysScalar(int value, boolean isValid);
   private static native long makeTimestampTimeScalar(int dtypeNativeId, long value, boolean isValid);
+  private static native long makeDecimal32Scalar(int value, int scale, boolean isValid);
+  private static native long makeDecimal64Scalar(long value, int scale, boolean isValid);
 
 
   Scalar(DType type, long scalarHandle) {
@@ -427,6 +459,18 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns the scalar value as a BigDecimal.
+   */
+  public BigDecimal getBigDecimal() {
+    if (this.type.typeId == DType.DTypeEnum.DECIMAL32) {
+      return BigDecimal.valueOf(getInt(), -type.getScale());
+    } else if (this.type.typeId == DType.DTypeEnum.DECIMAL64) {
+      return BigDecimal.valueOf(getLong(), -type.getScale());
+    }
+    throw new IllegalArgumentException("Couldn't getBigDecimal from nonDecimal scalar");
+  }
+
+  /**
    * Returns the scalar value as a Java string.
    */
   public String getJavaString() {
@@ -442,8 +486,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
 
   @Override
   public ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType) {
-    if (rhs instanceof ColumnVector) {
-      ColumnVector cvRhs = (ColumnVector) rhs;
+    if (rhs instanceof ColumnView) {
+      ColumnView cvRhs = (ColumnView) rhs;
       return new ColumnVector(binaryOp(this, cvRhs, op, outType));
     } else {
       throw new IllegalArgumentException(rhs.getClass() + " is not supported as a binary op with " +
@@ -451,12 +495,12 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     }
   }
 
-  static long binaryOp(Scalar lhs, ColumnVector rhs, BinaryOp op, DType outputType) {
+  static long binaryOp(Scalar lhs, ColumnView rhs, BinaryOp op, DType outputType) {
     return binaryOpSV(lhs.getScalarHandle(), rhs.getNativeView(),
-        op.nativeId, outputType.nativeId);
+        op.nativeId, outputType.typeId.getNativeId(), outputType.getScale());
   }
 
-  private static native long binaryOpSV(long lhs, long rhs, int op, int dtype);
+  private static native long binaryOpSV(long lhs, long rhs, int op, int dtype, int scale);
 
   @Override
   public boolean equals(Object o) {
@@ -467,7 +511,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     boolean valid = isValid();
     if (valid != other.isValid()) return false;
     if (!valid) return true;
-    switch (type) {
+    switch (type.typeId) {
     case EMPTY:
       return true;
     case BOOL8:
@@ -504,7 +548,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   public int hashCode() {
     int valueHash = 0;
     if (isValid()) {
-      switch (type) {
+      switch (type.typeId) {
       case EMPTY:
         valueHash = 0;
         break;
@@ -554,7 +598,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     sb.append(type);
     if (getScalarHandle() != 0) {
       sb.append(" value=");
-      switch (type) {
+      switch (type.typeId) {
       case BOOL8:
         sb.append(getBoolean());
         break;

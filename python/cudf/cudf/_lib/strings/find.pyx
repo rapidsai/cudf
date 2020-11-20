@@ -4,7 +4,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.types cimport size_type
@@ -18,7 +18,7 @@ from cudf._lib.cpp.strings.find cimport (
 )
 
 
-def contains(Column source_strings, Scalar target):
+def contains(Column source_strings, DeviceScalar target):
     """
     Returns a Column of boolean values with True for `source_strings`
     that contain the pattern given in `target`.
@@ -26,7 +26,9 @@ def contains(Column source_strings, Scalar target):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(target.c_value.get())
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        target.get_raw_ptr()
+    )
 
     with nogil:
         c_result = move(cpp_contains(
@@ -37,7 +39,25 @@ def contains(Column source_strings, Scalar target):
     return Column.from_unique_ptr(move(c_result))
 
 
-def endswith(Column source_strings, Scalar target):
+def contains_multiple(Column source_strings, Column target_strings):
+    """
+    Returns a Column of boolean values with True for `source_strings`
+    that contain the corresponding string in `target_strings`.
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+    cdef column_view target_view = target_strings.view()
+
+    with nogil:
+        c_result = move(cpp_contains(
+            source_view,
+            target_view
+        ))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def endswith(Column source_strings, DeviceScalar target):
     """
     Returns a Column of boolean values with True for `source_strings`
     that contain strings that end with the pattern given in `target`.
@@ -45,7 +65,9 @@ def endswith(Column source_strings, Scalar target):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(target.c_value.get())
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        target.get_raw_ptr()
+    )
 
     with nogil:
         c_result = move(cpp_ends_with(
@@ -75,7 +97,7 @@ def endswith_multiple(Column source_strings, Column target_strings):
     return Column.from_unique_ptr(move(c_result))
 
 
-def startswith(Column source_strings, Scalar target):
+def startswith(Column source_strings, DeviceScalar target):
     """
     Returns a Column of boolean values with True for `source_strings`
     that contain strings that start with the pattern given in `target`.
@@ -83,7 +105,9 @@ def startswith(Column source_strings, Scalar target):
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(target.c_value.get())
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        target.get_raw_ptr()
+    )
 
     with nogil:
         c_result = move(cpp_starts_with(
@@ -114,7 +138,7 @@ def startswith_multiple(Column source_strings, Column target_strings):
 
 
 def find(Column source_strings,
-         Scalar target,
+         DeviceScalar target,
          size_type start,
          size_type end):
     """
@@ -126,7 +150,9 @@ def find(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(target.c_value.get())
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        target.get_raw_ptr()
+    )
 
     with nogil:
         c_result = move(cpp_find(
@@ -140,7 +166,7 @@ def find(Column source_strings,
 
 
 def rfind(Column source_strings,
-          Scalar target,
+          DeviceScalar target,
           size_type start,
           size_type end):
     """
@@ -152,7 +178,9 @@ def rfind(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(target.c_value.get())
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        target.get_raw_ptr()
+    )
 
     with nogil:
         c_result = move(cpp_rfind(

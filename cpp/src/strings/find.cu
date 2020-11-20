@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -23,6 +24,8 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/transform.h>
 
@@ -67,7 +70,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& strings,
   // create output column
   auto results      = make_numeric_column(data_type{type_id::INT32},
                                      strings_count,
-                                     copy_bitmask(strings.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
                                      stream,
                                      mr);
@@ -186,8 +189,9 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   if (target.size() == 0)  // empty target string returns true
   {
     auto const true_scalar = make_fixed_width_scalar<bool>(true, stream);
-    auto results           = make_column_from_scalar(*true_scalar, strings.size(), mr, stream);
-    results->set_null_mask(copy_bitmask(strings.parent(), stream, mr), strings.null_count());
+    auto results           = make_column_from_scalar(*true_scalar, strings.size(), stream, mr);
+    results->set_null_mask(cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                           strings.null_count());
     return results;
   }
 
@@ -197,7 +201,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   // create output column
   auto results      = make_numeric_column(data_type{type_id::BOOL8},
                                      strings_count,
-                                     copy_bitmask(strings.parent(), stream, mr),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
                                      stream,
                                      mr);
@@ -239,11 +243,10 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr,
                                     cudaStream_t stream)
 {
-  auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::BOOL8});
+  if (strings.is_empty()) return make_empty_column(data_type{type_id::BOOL8});
 
-  auto targets_count = targets.size();
-  CUDF_EXPECTS(targets_count > 0, "Must include at least one search target");
+  CUDF_EXPECTS(targets.size() == strings.size(),
+               "strings and targets column must be the same size");
 
   auto targets_column = column_device_view::create(targets.parent(), stream);
   auto d_targets      = *targets_column;
@@ -251,8 +254,8 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto d_strings      = *strings_column;
   // create output column
   auto results      = make_numeric_column(data_type{type_id::BOOL8},
-                                     strings_count,
-                                     copy_bitmask(strings.parent(), stream, mr),
+                                     strings.size(),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                                      strings.null_count(),
                                      stream,
                                      mr);
@@ -262,7 +265,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   thrust::transform(
     rmm::exec_policy(stream)->on(stream),
     thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(strings_count),
+    thrust::make_counting_iterator<size_type>(strings.size()),
     d_results,
     [d_strings, pfn, d_targets] __device__(size_type idx) {
       // empty target string returns true
@@ -290,6 +293,18 @@ std::unique_ptr<column> contains(
     return d_string.find(d_target) >= 0;
   };
   return contains_fn(strings, target, pfn, mr, stream);
+}
+
+std::unique_ptr<column> contains(
+  strings_column_view const& strings,
+  strings_column_view const& targets,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0)
+{
+  auto pfn = [] __device__(string_view d_string, string_view d_target) {
+    return d_string.find(d_target) >= 0;
+  };
+  return contains_fn(strings, targets, pfn, mr, stream);
 }
 
 std::unique_ptr<column> starts_with(
@@ -358,6 +373,14 @@ std::unique_ptr<column> contains(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::contains(strings, target, mr);
+}
+
+std::unique_ptr<column> contains(strings_column_view const& strings,
+                                 strings_column_view const& targets,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::contains(strings, targets, mr);
 }
 
 std::unique_ptr<column> starts_with(strings_column_view const& strings,

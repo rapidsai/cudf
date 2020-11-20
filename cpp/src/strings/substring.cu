@@ -20,12 +20,14 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/substring.hpp>
+
 #include <strings/utilities.cuh>
 
 namespace cudf {
@@ -111,7 +113,8 @@ std::unique_ptr<column> slice_strings(
   auto d_step         = get_scalar_device_view(const_cast<numeric_scalar<size_type>&>(step));
 
   // copy the null mask
-  rmm::device_buffer null_mask = copy_bitmask(strings.parent(), stream, mr);
+  rmm::device_buffer null_mask =
+    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
 
   // build offsets column
   auto offsets_transformer_itr = thrust::make_transform_iterator(
@@ -348,12 +351,12 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
   // Compute the substring indices first
   auto start_chars_pos_vec = make_column_from_scalar(numeric_scalar<size_type>(0, true, stream),
                                                      strings_count,
-                                                     rmm::mr::get_current_device_resource(),
-                                                     stream);
+                                                     stream,
+                                                     rmm::mr::get_current_device_resource());
   auto stop_chars_pos_vec  = make_column_from_scalar(numeric_scalar<size_type>(0, true, stream),
                                                     strings_count,
-                                                    rmm::mr::get_current_device_resource(),
-                                                    stream);
+                                                    stream,
+                                                    rmm::mr::get_current_device_resource());
 
   auto start_char_pos = start_chars_pos_vec->mutable_view().data<size_type>();
   auto end_char_pos   = stop_chars_pos_vec->mutable_view().data<size_type>();

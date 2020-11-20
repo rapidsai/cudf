@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,9 @@
 
 #pragma once
 
-#include <memory>
-#include <type_traits>
-#include <utility>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
+
 #include <vector>
 
 namespace cudf {
@@ -392,8 +392,11 @@ class hash_join {
    *
    * @param build The build table, from which the hash table is built.
    * @param build_on The column indices from `build` to join on.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  hash_join(cudf::table_view const& build, std::vector<size_type> const& build_on);
+  hash_join(cudf::table_view const& build,
+            std::vector<size_type> const& build_on,
+            cudaStream_t stream = 0);
 
   /**
    * @brief Controls where common columns will be output for a inner join.
@@ -432,6 +435,7 @@ class hash_join {
    * @param compare_nulls Controls whether null join-key values should match or not.
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return Table pair of (`probe`, `build`) of joining both tables on the columns
    * specified by `probe_on` and `build_on`. The resulting table pair will be joined columns of
@@ -445,7 +449,8 @@ class hash_join {
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     common_columns_output_side common_columns_output_side = common_columns_output_side::PROBE,
     null_equality compare_nulls                           = null_equality::EQUAL,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+    rmm::mr::device_memory_resource* mr                   = rmm::mr::get_current_device_resource(),
+    cudaStream_t stream                                   = 0) const;
 
   /**
    * @brief Performs a left join by probing in the internal hash table.
@@ -463,6 +468,7 @@ class hash_join {
    * @param compare_nulls Controls whether null join-key values should match or not.
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return Result of joining `build` and `probe` tables on the columns
    * specified by `build_on` and `probe_on`. The resulting table will be joined columns of
@@ -473,7 +479,8 @@ class hash_join {
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     null_equality compare_nulls         = null_equality::EQUAL,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+    cudaStream_t stream                 = 0) const;
 
   /**
    * @brief Performs a full join by probing in the internal hash table.
@@ -491,6 +498,7 @@ class hash_join {
    * @param compare_nulls Controls whether null join-key values should match or not.
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    *
    * @return Result of joining `build` and `probe` tables on the columns
    * specified by `build_on` and `probe_on`. The resulting table will be joined columns of
@@ -501,7 +509,8 @@ class hash_join {
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     null_equality compare_nulls         = null_equality::EQUAL,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+    cudaStream_t stream                 = 0) const;
 
  private:
   struct hash_join_impl;

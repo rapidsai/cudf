@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
-#define MAX_SHORT_DICT_ENTRIES (10 * 1024)
+constexpr uint32_t max_dict_entries = default_row_index_stride;
 #define INIT_HASH_BITS 12
 
 struct dictinit_state_s {
@@ -35,7 +35,7 @@ struct dictinit_state_s {
   uint32_t total_dupes;
   DictionaryChunk chunk;
   volatile uint32_t scratch_red[32];
-  uint16_t dict[MAX_SHORT_DICT_ENTRIES];
+  uint32_t dict[max_dict_entries];
   union {
     uint16_t u16[1 << (INIT_HASH_BITS)];
     uint32_t u32[1 << (INIT_HASH_BITS - 1)];
@@ -45,7 +45,7 @@ struct dictinit_state_s {
 /**
  * @brief Return a 12-bit hash from a byte sequence
  */
-static inline __device__ uint32_t nvstr_init_hash(const uint8_t *ptr, uint32_t len)
+static inline __device__ uint32_t nvstr_init_hash(char const *ptr, uint32_t len)
 {
   if (len != 0) {
     return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << INIT_HASH_BITS) - 1);
@@ -127,10 +127,7 @@ __global__ void __launch_bounds__(block_size, 2)
   uint32_t nnz, start_row, dict_char_count;
   int t = threadIdx.x;
 
-  if (t < sizeof(DictionaryChunk) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&s->chunk)[t] =
-      ((const uint32_t *)&chunks[group_id * num_columns + col_id])[t];
-  }
+  if (t == 0) s->chunk = chunks[group_id * num_columns + col_id];
   for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += block_size) {
     if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
   }
@@ -148,13 +145,13 @@ __global__ void __launch_bounds__(block_size, 2)
   start_row = s->chunk.start_row;
   ck_data   = static_cast<const nvstrdesc_s *>(s->chunk.column_data_base) + start_row;
   for (uint32_t i = 0; i < nnz; i += block_size) {
-    uint32_t ck_row = 0, len = 0, hash;
-    const uint8_t *ptr = 0;
+    uint32_t ck_row = 0;
+    uint32_t hash   = 0;
+    uint32_t len    = 0;
     if (i + t < nnz) {
       ck_row = s->dict[i + t];
-      ptr    = reinterpret_cast<const uint8_t *>(ck_data[ck_row].ptr);
-      len    = ck_data[ck_row].count;
-      hash   = nvstr_init_hash(ptr, len);
+      len    = static_cast<uint32_t>(ck_data[ck_row].count);
+      hash   = nvstr_init_hash(ck_data[ck_row].ptr, len);
     }
     len = half_warp_reduce(temp_storage.half[t / 32]).Sum(len);
     if (!(t & 0xf)) { s->scratch_red[t >> 4] = len; }
@@ -209,18 +206,13 @@ __global__ void __launch_bounds__(block_size, 2)
     uint32_t ck_row = 0, pos = 0, hash = 0, pos_old, pos_new, sh, colliding_row;
     bool collision;
     if (i + t < nnz) {
-      const uint8_t *ptr;
-      uint32_t len;
       ck_row  = dict_data[i + t] - start_row;
-      ptr     = reinterpret_cast<const uint8_t *>(ck_data[ck_row].ptr);
-      len     = (uint32_t)ck_data[ck_row].count;
-      hash    = nvstr_init_hash(ptr, len);
+      hash    = nvstr_init_hash(ck_data[ck_row].ptr, static_cast<uint32_t>(ck_data[ck_row].count));
       sh      = (hash & 1) ? 16 : 0;
       pos_old = s->map.u16[hash];
     }
     // The isolation of the atomicAdd, along with pos_old/pos_new is to guarantee deterministic
     // behavior for the first row in the hash map that will be used for early duplicate detection
-    // The lack of 16-bit atomicMin makes this a bit messy...
     __syncthreads();
     if (i + t < nnz) {
       pos          = (atomicAdd(&s->map.u32[hash >> 1], 1 << sh) >> sh) & 0xffff;
@@ -234,17 +226,8 @@ __global__ void __launch_bounds__(block_size, 2)
       if (collision) { colliding_row = s->dict[pos_old]; }
     }
     __syncthreads();
-    // evens
-    if (collision && !(pos_old & 1)) {
-      uint32_t *dict32 = reinterpret_cast<uint32_t *>(&s->dict[pos_old]);
-      atomicMin(dict32, (dict32[0] & 0xffff0000) | ck_row);
-    }
-    __syncthreads();
-    // odds
-    if (collision && (pos_old & 1)) {
-      uint32_t *dict32 = reinterpret_cast<uint32_t *>(&s->dict[pos_old - 1]);
-      atomicMin(dict32, (dict32[0] & 0x0000ffff) | (ck_row << 16));
-    }
+    if (collision) { atomicMin(s->dict + pos_old, ck_row); }
+
     __syncthreads();
     // Resolve collision
     if (collision && ck_row == s->dict[pos_old]) { s->dict[pos] = colliding_row; }
@@ -260,12 +243,12 @@ __global__ void __launch_bounds__(block_size, 2)
       uint32_t len1, len2, hash;
       ck_row     = s->dict[i + t];
       str1       = ck_data[ck_row].ptr;
-      len1       = (uint32_t)ck_data[ck_row].count;
-      hash       = nvstr_init_hash(reinterpret_cast<const uint8_t *>(str1), len1);
+      len1       = static_cast<uint32_t>(ck_data[ck_row].count);
+      hash       = nvstr_init_hash(str1, len1);
       ck_row_ref = s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0];
       if (ck_row_ref != ck_row) {
         str2    = ck_data[ck_row_ref].ptr;
-        len2    = (uint32_t)ck_data[ck_row_ref].count;
+        len2    = static_cast<uint32_t>(ck_data[ck_row_ref].count);
         is_dupe = nvstr_is_equal(str1, len1, str2, len2);
         dict_char_count += (is_dupe) ? 0 : len1;
       }
@@ -331,16 +314,10 @@ extern "C" __global__ void __launch_bounds__(1024)
   const uint32_t *src;
   uint32_t *dst;
 
-  if (t < sizeof(StripeDictionary) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&stripe_g)[t] =
-      ((const uint32_t *)&stripes[stripe_id * num_columns + col_id])[t];
-  }
+  if (t == 0) stripe_g = stripes[stripe_id * num_columns + col_id];
   __syncthreads();
   if (!stripe_g.dict_data) { return; }
-  if (t < sizeof(DictionaryChunk) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&chunk_g)[t] =
-      ((const uint32_t *)&chunks[stripe_g.start_chunk * num_columns + col_id])[t];
-  }
+  if (t == 0) chunk_g = chunks[stripe_g.start_chunk * num_columns + col_id];
   __syncthreads();
   dst = stripe_g.dict_data + chunk_g.num_dict_strings;
   for (uint32_t g = 1; g < stripe_g.num_chunks; g++) {
@@ -388,19 +365,16 @@ __global__ void __launch_bounds__(block_size)
   using warp_reduce = cub::WarpReduce<uint32_t>;
   __shared__ typename warp_reduce::TempStorage temp_storage[block_size / 32];
 
-  volatile build_state_s *const s = &state_g;
-  uint32_t col_id                 = blockIdx.x;
-  uint32_t stripe_id              = blockIdx.y;
+  build_state_s *const s = &state_g;
+  uint32_t col_id        = blockIdx.x;
+  uint32_t stripe_id     = blockIdx.y;
   uint32_t num_strings;
   uint32_t *dict_data, *dict_index;
   uint32_t dict_char_count;
   const nvstrdesc_s *str_data;
   int t = threadIdx.x;
 
-  if (t < sizeof(StripeDictionary) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&s->stripe)[t] =
-      ((const uint32_t *)&stripes[stripe_id * num_columns + col_id])[t];
-  }
+  if (t == 0) s->stripe = stripes[stripe_id * num_columns + col_id];
   if (t == 31 * 32) { s->total_dupes = 0; }
   __syncthreads();
   num_strings = s->stripe.num_strings;
@@ -458,18 +432,15 @@ __global__ void __launch_bounds__(block_size)
  * @param[in] num_columns Number of columns
  * @param[in] num_rowgroups Number of row groups
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t InitDictionaryIndices(DictionaryChunk *chunks,
-                                  uint32_t num_columns,
-                                  uint32_t num_rowgroups,
-                                  cudaStream_t stream)
+ */
+void InitDictionaryIndices(DictionaryChunk *chunks,
+                           uint32_t num_columns,
+                           uint32_t num_rowgroups,
+                           cudaStream_t stream)
 {
   dim3 dim_block(512, 1);  // 512 threads per chunk
   dim3 dim_grid(num_columns, num_rowgroups);
   gpuInitDictionaryIndices<512><<<dim_grid, dim_block, 0, stream>>>(chunks, num_columns);
-  return cudaSuccess;
 }
 
 /**
@@ -484,14 +455,14 @@ cudaError_t InitDictionaryIndices(DictionaryChunk *chunks,
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t BuildStripeDictionaries(StripeDictionary *stripes,
-                                    StripeDictionary *stripes_host,
-                                    DictionaryChunk const *chunks,
-                                    uint32_t num_stripes,
-                                    uint32_t num_rowgroups,
-                                    uint32_t num_columns,
-                                    cudaStream_t stream)
+ */
+void BuildStripeDictionaries(StripeDictionary *stripes,
+                             StripeDictionary *stripes_host,
+                             DictionaryChunk const *chunks,
+                             uint32_t num_stripes,
+                             uint32_t num_rowgroups,
+                             uint32_t num_columns,
+                             cudaStream_t stream)
 {
   dim3 dim_block(1024, 1);  // 1024 threads per chunk
   dim3 dim_grid_build(num_columns, num_stripes);
@@ -515,7 +486,6 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes,
     }
   }
   gpuBuildStripeDictionaries<1024><<<dim_grid_build, dim_block, 0, stream>>>(stripes, num_columns);
-  return cudaSuccess;
 }
 
 }  // namespace gpu

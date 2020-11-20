@@ -43,7 +43,7 @@ from cudf._lib.cpp.column.column_factories cimport (
 )
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.unary as libcudf_unary
 
@@ -70,6 +70,7 @@ cdef class Column:
     ):
 
         self._size = size
+        self._cached_sizeof = None
         self._dtype = dtype
         self._offset = offset
         self._null_count = null_count
@@ -566,9 +567,8 @@ cdef class Column:
         return result
 
 
-def make_column_from_scalar(Scalar val, size_type size):
-    cdef scalar* c_val = val.c_value.get()
-
+def make_column_from_scalar(DeviceScalar val, size_type size):
+    cdef const scalar* c_val = val.get_raw_ptr()
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(cpp_make_column_from_scalar(c_val[0], size))

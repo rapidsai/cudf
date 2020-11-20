@@ -15,14 +15,18 @@
  */
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/types.hpp>
 #include <strings/convert/utilities.cuh>
 #include <strings/utilities.cuh>
 
-#include <thrust/transform_reduce.h>
-#include <map>
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <thrust/transform_reduce.h>
+
+#include <map>
 #include <vector>
 
 namespace cudf {
@@ -409,7 +413,8 @@ struct dispatch_from_durations_fn {
     auto d_column           = *column;
 
     // copy null mask
-    rmm::device_buffer null_mask = copy_bitmask(durations, stream, mr);
+    rmm::device_buffer null_mask =
+      cudf::detail::copy_bitmask(durations, rmm::cuda_stream_view{stream}, mr);
     // build offsets column
     auto offsets_transformer_itr = thrust::make_transform_iterator(
       thrust::make_counting_iterator<int32_t>(0),
@@ -723,12 +728,13 @@ std::unique_ptr<column> to_durations(strings_column_view const& strings,
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
 
-  auto results      = make_duration_column(duration_type,
-                                      strings_count,
-                                      copy_bitmask(strings.parent(), stream, mr),
-                                      strings.null_count(),
-                                      stream,
-                                      mr);
+  auto results = make_duration_column(
+    duration_type,
+    strings_count,
+    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
+    strings.null_count(),
+    stream,
+    mr);
   auto results_view = results->mutable_view();
   cudf::type_dispatcher(
     duration_type, dispatch_to_durations_fn(), d_column, format, results_view, stream);

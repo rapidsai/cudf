@@ -16,10 +16,13 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace {
@@ -50,14 +53,15 @@ std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
                                                cudaStream_t stream)
 {
   CUDF_EXPECTS(!keys_column.has_nulls(), "keys column must not have nulls");
-  if (keys_column.size() == 0) return make_empty_column(data_type{type_id::DICTIONARY32});
+  if (keys_column.is_empty()) return make_empty_column(data_type{type_id::DICTIONARY32});
 
   auto keys_copy = std::make_unique<column>(keys_column, stream, mr);
   auto indices_copy =
     type_dispatcher(indices_column.type(), dispatch_create_indices{}, indices_column, mr, stream);
   rmm::device_buffer null_mask{0, stream, mr};
   auto null_count = indices_column.null_count();
-  if (null_count) null_mask = copy_bitmask(indices_column, stream, mr);
+  if (null_count)
+    null_mask = detail::copy_bitmask(indices_column, rmm::cuda_stream_view{stream}, mr);
 
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(indices_copy));
@@ -135,7 +139,7 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys,
     }
     // If the new type does not match, then convert the data.
     cudf::column_view cast_view{cudf::data_type{indices_type}, indices_size, contents.data->data()};
-    return cudf::detail::cast(cast_view, new_type, mr, stream);
+    return cudf::detail::cast(cast_view, new_type, stream, mr);
   }();
 
   return make_dictionary_column(std::move(keys),

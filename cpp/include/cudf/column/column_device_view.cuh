@@ -15,8 +15,6 @@
  */
 #pragma once
 
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 #include <cudf/column/column_view.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.cuh>
@@ -27,6 +25,11 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 /**
  * @file column_device_view.cuh
@@ -386,7 +389,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *`source_view` available in device memory.
    */
   static std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> create(
-    column_view source_view, cudaStream_t stream = 0);
+    column_view source_view, rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   /**
    * @brief Destroy the `column_device_view` object.
@@ -480,7 +483,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    */
   static std::unique_ptr<mutable_column_device_view,
                          std::function<void(mutable_column_device_view*)>>
-  create(mutable_column_view source_view, cudaStream_t stream = 0);
+  create(mutable_column_view source_view, rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   /**
    * @brief Returns pointer to the base device memory allocation casted to
@@ -845,7 +848,7 @@ struct pair_accessor {
    */
   pair_accessor(column_device_view const& _col) : col{_col}
   {
-    CUDF_EXPECTS(data_type(type_to_id<T>()) == col.type(), "the data type mismatch");
+    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
     if (has_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
   }
 

@@ -28,6 +28,8 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/traits.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace detail {
 
@@ -54,7 +56,7 @@ template <typename MapIterator>
 auto scatter_to_gather(MapIterator scatter_map_begin,
                        MapIterator scatter_map_end,
                        size_type gather_rows,
-                       cudaStream_t stream)
+                       rmm::cuda_stream_view stream)
 {
   using MapValueType = typename thrust::iterator_traits<MapIterator>::value_type;
 
@@ -66,7 +68,7 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
 
   // Convert scatter map to a gather map
   thrust::scatter(
-    rmm::exec_policy(stream)->on(stream),
+    rmm::exec_policy(stream)->on(stream.value()),
     thrust::make_counting_iterator<MapValueType>(0),
     thrust::make_counting_iterator<MapValueType>(std::distance(scatter_map_begin, scatter_map_end)),
     scatter_map_begin,
@@ -81,8 +83,8 @@ struct column_scatterer_impl {
                                      MapIterator scatter_map_begin,
                                      MapIterator scatter_map_end,
                                      column_view const& target,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
     auto result      = std::make_unique<column>(target, stream, mr);
     auto result_view = result->mutable_view();
@@ -91,7 +93,7 @@ struct column_scatterer_impl {
 
     // NOTE use source.begin + scatter rows rather than source.end in case the
     // scatter map is smaller than the number of source rows
-    thrust::scatter(rmm::exec_policy(stream)->on(stream),
+    thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
                     source.begin<Type>(),
                     source.begin<Type>() + cudf::distance(scatter_map_begin, scatter_map_end),
                     scatter_map_begin,
@@ -107,14 +109,14 @@ struct column_scatterer_impl<string_view, MapIterator> {
                                      MapIterator scatter_map_begin,
                                      MapIterator scatter_map_end,
                                      column_view const& target,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
     using strings::detail::create_string_vector_from_column;
-    auto const source_vector = create_string_vector_from_column(source, stream);
+    auto const source_vector = create_string_vector_from_column(source, stream.value());
     auto const begin         = source_vector.begin();
     auto const end           = begin + std::distance(scatter_map_begin, scatter_map_end);
-    return strings::detail::scatter(begin, end, scatter_map_begin, target, mr, stream);
+    return strings::detail::scatter(begin, end, scatter_map_begin, target, stream, mr);
   }
 };
 
@@ -125,11 +127,11 @@ struct column_scatterer {
                                      MapIterator scatter_map_begin,
                                      MapIterator scatter_map_end,
                                      column_view const& target,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
     column_scatterer_impl<Element, MapIterator> scatterer{};
-    return scatterer(source, scatter_map_begin, scatter_map_end, target, mr, stream);
+    return scatterer(source, scatter_map_begin, scatter_map_end, target, stream, mr);
   }
 };
 
@@ -139,12 +141,12 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
                                      MapIterator scatter_map_begin,
                                      MapIterator scatter_map_end,
                                      column_view const& target_in,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
-    if (target_in.size() == 0)  // empty begets empty
+    if (target_in.is_empty())  // empty begets empty
       return make_empty_column(data_type{type_id::DICTIONARY32});
-    if (source_in.size() == 0)  // no input, just make a copy
+    if (source_in.is_empty())  // no input, just make a copy
       return std::make_unique<column>(target_in, stream, mr);
 
     // check the keys match
@@ -154,17 +156,17 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
                  "scatter dictionary keys must be the same type");
 
     // first combine keys so both dictionaries have the same set
-    auto target_matched    = dictionary::detail::add_keys(target, source.keys(), mr, stream);
+    auto target_matched = dictionary::detail::add_keys(target, source.keys(), mr, stream.value());
     auto const target_view = dictionary_column_view(target_matched->view());
     auto source_matched    = dictionary::detail::set_keys(
-      source, target_view.keys(), rmm::mr::get_current_device_resource(), stream);
+      source, target_view.keys(), rmm::mr::get_current_device_resource(), stream.value());
     auto const source_view = dictionary_column_view(source_matched->view());
 
     // now build the new indices by doing a scatter on just the matched indices
     auto source_itr  = indexalator_factory::make_input_iterator(source_view.indices());
     auto new_indices = std::make_unique<column>(target_view.get_indices_annotated(), stream, mr);
     auto target_itr  = indexalator_factory::make_output_iterator(new_indices->mutable_view());
-    thrust::scatter(rmm::exec_policy(stream)->on(stream),
+    thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
                     source_itr,
                     source_itr + std::distance(scatter_map_begin, scatter_map_end),
                     scatter_map_begin,
@@ -221,8 +223,8 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
  * are to be scattered
  * @param[in] check_bounds Optionally perform bounds checking on the values of
  * `scatter_map` and throw an error if any of its values are out of bounds.
- * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
  *
  * @return Result of scattering values from source to target
  **/
@@ -233,8 +235,8 @@ std::unique_ptr<table> scatter(
   MapIterator scatter_map_end,
   table_view const& target,
   bool check_bounds                   = false,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_FUNC_RANGE();
 
@@ -247,7 +249,7 @@ std::unique_ptr<table> scatter(
     CUDF_EXPECTS(
       std::distance(scatter_map_begin, scatter_map_end) ==
         thrust::count_if(
-          rmm::exec_policy(stream)->on(stream), scatter_map_begin, scatter_map_end, bounds),
+          rmm::exec_policy(stream)->on(stream.value()), scatter_map_begin, scatter_map_end, bounds),
       "Scatter map index out of bounds");
   }
 
@@ -276,14 +278,14 @@ std::unique_ptr<table> scatter(
                                           updated_scatter_map_begin,
                                           updated_scatter_map_end,
                                           target_col,
-                                          mr,
-                                          stream);
+                                          stream,
+                                          mr);
                  });
 
   auto gather_map = scatter_to_gather(
     updated_scatter_map_begin, updated_scatter_map_end, target.num_rows(), stream);
 
-  gather_bitmask(source, gather_map.begin(), result, gather_bitmask_op::PASSTHROUGH, mr, stream);
+  gather_bitmask(source, gather_map.begin(), result, gather_bitmask_op::PASSTHROUGH, stream, mr);
 
   return std::make_unique<table>(std::move(result));
 }

@@ -45,14 +45,14 @@ set(JITIFY_INCLUDE_DIR "${jitify_SOURCE_DIR}" PARENT_SCOPE)
 ###################################################################################################
 # - libcudacxx ------------------------------------------------------------------------------------
 
-set(SRC_LIBCUDACXX "https://github.com/trxcllnt/libcudacxx.git")
+set(SRC_LIBCUDACXX "https://github.com/NVIDIA/libcudacxx.git")
 
 message(STATUS "Fetching libcudacxx from ${SRC_LIBCUDACXX}")
 
 FetchContent_Declare(
     libcudacxx
     GIT_REPOSITORY ${SRC_LIBCUDACXX}
-    GIT_TAG        cudf-backports
+    GIT_TAG        main
     GIT_SHALLOW    true
 )
 

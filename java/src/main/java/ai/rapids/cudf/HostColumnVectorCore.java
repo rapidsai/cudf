@@ -21,18 +21,17 @@ package ai.rapids.cudf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
-
 /**
  * A class that holds Host side Column Vector APIs and the OffHeapState.
  * Any children of a HostColumnVector will be instantiated via this class.
  */
-public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> {
+public class HostColumnVectorCore implements AutoCloseable {
 
   private static final Logger log = LoggerFactory.getLogger(HostColumnVector.class);
 
@@ -41,6 +40,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   protected long rows;
   protected Optional<Long> nullCount;
   protected List<HostColumnVectorCore> children;
+
 
   public HostColumnVectorCore(DType type, long rows,
                               Optional<Long> nullCount, HostMemoryBuffer data, HostMemoryBuffer validity,
@@ -63,14 +63,14 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * Returns the data buffer for a given host side column vector
    */
-  HostMemoryBuffer getData() {
+  public HostMemoryBuffer getData() {
     return offHeap.data;
   }
 
   /**
    * Returns the validity buffer for a given host side column vector
    */
-  HostMemoryBuffer getValidity() {
+  public HostMemoryBuffer getValidity() {
     return offHeap.valid;
   }
 
@@ -81,29 +81,8 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
     return offHeap.offsets;
   }
 
-  @Override
-  public long getColumnViewAddress() {
-    throw new IllegalStateException("getColumnViewAddress is not supported on Host side");
-  }
-
-  @Override
-  public ColumnViewAccess<HostMemoryBuffer> getChildColumnViewAccess(int childIndex) {
+  public HostColumnVectorCore getChildColumnView(int childIndex) {
     return getNestedChildren().get(childIndex);
-  }
-
-  @Override
-  public HostMemoryBuffer getDataBuffer() {
-    return offHeap.data;
-  }
-
-  @Override
-  public HostMemoryBuffer getOffsetBuffer() {
-    return offHeap.offsets;
-  }
-
-  @Override
-  public HostMemoryBuffer getValidityBuffer() {
-    return offHeap.valid;
   }
 
   /**
@@ -126,35 +105,15 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   }
 
   /**
-   * Get the data type of this column
-   * @return DType of the column
-   */
-  @Override
-  public DType getDataType() {
-    return type;
-  }
-
-  /**
    * Returns the number of rows for a given host side column vector
    */
-  @Override
   public long getRowCount() {
-    return rows;
-  }
-
-  /**
-   * Returns the number of rows for a given host side column vector, deprecated.
-   */
-  @Override
-  @Deprecated
-  public long getNumRows() {
     return rows;
   }
 
   /**
    * Returns the number of children for this column
    */
-  @Override
   public int getNumChildren() {
     return children.size();
   }
@@ -273,19 +232,18 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    * Get the value at index.
    */
   public byte getByte(long index) {
-    assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8 : type +
-        " is not stored as a byte.";
+    assert type.isBackedByByte() : type + " is not stored as a byte.";
     assertsForGet(index);
-    return offHeap.data.getByte(index * type.sizeInBytes);
+    return offHeap.data.getByte(index * type.getSizeInBytes());
   }
 
   /**
    * Get the value at index.
    */
   public final short getShort(long index) {
-    assert type == DType.INT16 || type == DType.UINT16 : type + " is not stored as a short.";
+    assert type.isBackedByShort() : type + " is not stored as a short.";
     assertsForGet(index);
-    return offHeap.data.getShort(index * type.sizeInBytes);
+    return offHeap.data.getShort(index * type.getSizeInBytes());
   }
 
   /**
@@ -294,7 +252,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   public final int getInt(long index) {
     assert type.isBackedByInt() : type + " is not stored as a int.";
     assertsForGet(index);
-    return offHeap.data.getInt(index * type.sizeInBytes);
+    return offHeap.data.getInt(index * type.getSizeInBytes());
   }
 
   /**
@@ -308,8 +266,8 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * Get the starting element offset for the list or string at index
    */
-  long getStartListOffset(long index) {
-    assert type == DType.STRING || type == DType.LIST: type +
+  public long getStartListOffset(long index) {
+    assert type.equals(DType.STRING) || type.equals(DType.LIST): type +
       " is not a supported string or list type.";
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
     return offHeap.offsets.getInt(index * 4);
@@ -326,8 +284,8 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * Get the ending element offset for the list or string at index.
    */
-  long getEndListOffset(long index) {
-    assert type == DType.STRING || type == DType.LIST: type +
+  public long getEndListOffset(long index) {
+    assert type.equals(DType.STRING) || type.equals(DType.LIST): type +
       " is not a supported string or list type.";
     assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
     // The offsets has one more entry than there are rows.
@@ -341,34 +299,51 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
     // Timestamps with time values are stored as longs
     assert type.isBackedByLong(): type + " is not stored as a long.";
     assertsForGet(index);
-    return offHeap.data.getLong(index * type.sizeInBytes);
+    return offHeap.data.getLong(index * type.getSizeInBytes());
   }
 
   /**
    * Get the value at index.
    */
   public final float getFloat(long index) {
-    assert type == DType.FLOAT32 : type + " is not a supported float type.";
+    assert type.equals(DType.FLOAT32) : type + " is not a supported float type.";
     assertsForGet(index);
-    return offHeap.data.getFloat(index * type.sizeInBytes);
+    return offHeap.data.getFloat(index * type.getSizeInBytes());
   }
 
   /**
    * Get the value at index.
    */
   public final double getDouble(long index) {
-    assert type == DType.FLOAT64 : type + " is not a supported double type.";
+    assert type.equals(DType.FLOAT64) : type + " is not a supported double type.";
     assertsForGet(index);
-    return offHeap.data.getDouble(index * type.sizeInBytes);
+    return offHeap.data.getDouble(index * type.getSizeInBytes());
   }
 
   /**
    * Get the boolean value at index
    */
   public final boolean getBoolean(long index) {
-    assert type == DType.BOOL8 : type + " is not a supported boolean type.";
+    assert type.equals(DType.BOOL8) : type + " is not a supported boolean type.";
     assertsForGet(index);
-    return offHeap.data.getBoolean(index * type.sizeInBytes);
+    return offHeap.data.getBoolean(index * type.getSizeInBytes());
+  }
+
+  /**
+   * Get the BigDecimal value at index.
+   */
+  public final BigDecimal getBigDecimal(long index) {
+    assert type.isDecimalType() : type + " is not a supported decimal type.";
+    assertsForGet(index);
+    if (type.typeId == DType.DTypeEnum.DECIMAL32) {
+      int unscaledValue = offHeap.data.getInt(index * type.getSizeInBytes());
+      return BigDecimal.valueOf(unscaledValue, -type.getScale());
+    } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
+      long unscaledValue = offHeap.data.getLong(index * type.getSizeInBytes());
+      return BigDecimal.valueOf(unscaledValue, -type.getScale());
+    } else {
+      throw new IllegalStateException(type + " is not a supported decimal type.");
+    }
   }
 
   /**
@@ -376,7 +351,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    * ideal because it is copying the data onto the heap.
    */
   public byte[] getUTF8(long index) {
-    assert type == DType.STRING : type + " is not a supported string type.";
+    assert type.equals(DType.STRING) : type + " is not a supported string type.";
     assertsForGet(index);
     int start = (int)getStartListOffset(index);
     int size = (int)getEndListOffset(index) - start;
@@ -403,9 +378,9 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    * of lists and may not have nulls.
    */
   public byte[] getBytesFromList(long rowIndex) {
-    assert type == DType.LIST : type + " is not a supported list of bytes type.";
+    assert type.equals(DType.LIST) : type + " is not a supported list of bytes type.";
     HostColumnVectorCore listData = children.get(0);
-    assert listData.type == DType.INT8 || listData.type == DType.UINT8  : type +
+    assert listData.type.equals(DType.INT8) || listData.type.equals(DType.UINT8)  : type +
       " is not a supported list of bytes type.";
     assert !listData.hasNulls() : "byte list column with nulls are not supported";
     assertsForGet(rowIndex);
@@ -495,7 +470,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   private Object readValue(int rowIndex) {
     assert rowIndex < rows;
     int rowOffset = rowIndex * type.getSizeInBytes();
-    switch (type) {
+    switch (type.typeId) {
       case INT32: // fall through
       case UINT32: // fall through
       case TIMESTAMP_DAYS:
@@ -518,6 +493,8 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
       case INT16: return offHeap.data.getShort(rowOffset);
       case BOOL8: return offHeap.data.getBoolean(rowOffset);
       case STRING: return getString(rowIndex);
+      case DECIMAL32: return BigDecimal.valueOf(offHeap.data.getInt(rowOffset), -type.getScale());
+      case DECIMAL64: return BigDecimal.valueOf(offHeap.data.getLong(rowOffset), -type.getScale());
       default: throw new UnsupportedOperationException("Do not support " + type);
     }
   }

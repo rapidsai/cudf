@@ -1,4 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
+
 from typing import Union
 
 import numpy as np
@@ -90,14 +91,15 @@ def assert_column_equal(
     check_category_order=True,
     obj="ColumnBase",
 ):
-    """ Check that left and right columns are equal
+    """
+    Check that left and right columns are equal
 
     This function is intended to compare two columns and output
     any differences. Additional parameters allow varying the strictness
     of the equality checks performed.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     left : Column
         left Column to compare
     right : Column
@@ -199,9 +201,7 @@ def assert_column_equal(
         msg1 = f"{left.to_array()}"
         msg2 = f"{right.to_array()}"
         try:
-            diff = left.apply_boolean_mask(
-                left.binary_operator("ne", right)
-            ).size
+            diff = left.apply_boolean_mask(left != right).size
             diff = diff * 100.0 / left.size
         except BaseException:
             diff = 100.0
@@ -220,14 +220,15 @@ def assert_index_equal(
     check_categorical: bool = True,
     obj: str = "Index",
 ):
-    """ Check that left and right Index are equal
+    """
+    Check that left and right Index are equal
 
     This function is intended to compare two Index and output
     any differences. Additional parameters allow varying the strictness
     of the equality checks performed.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     left : Index
         left Index to compare
     right : Index
@@ -257,7 +258,7 @@ def assert_index_equal(
     ......
     ......
     AssertionError: ColumnBase are different
-
+    <BLANKLINE>
     values are different (25.0 %)
     [left]:  [1 2 3 4]
     [right]: [1 2 3 5]
@@ -267,12 +268,13 @@ def assert_index_equal(
     ......
     ......
     AssertionError: Index are different
-
+    <BLANKLINE>
     name mismatch
     [left]:  a
     [right]: b
 
-    # This will pass without any hitch
+    This will pass without any hitch:
+
     >>> id2 = cudf.Index([1, 2, 3, 4], name="a")
     >>> cudf.testing.assert_index_equal(id1, id2)
     """
@@ -341,14 +343,15 @@ def assert_series_equal(
     check_category_order=True,
     obj="Series",
 ):
-    """ Check that left and right Series are equal
+    """
+    Check that left and right Series are equal
 
     This function is intended to compare two Series and output
     any differences. Additional parameters allow varying the strictness
     of the equality checks performed.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     left : Series
         left Series to compare
     right : Series
@@ -388,7 +391,7 @@ def assert_series_equal(
     ......
     ......
     AssertionError: ColumnBase are different
-
+    <BLANKLINE>
     values are different (25.0 %)
     [left]:  [1 2 3 4]
     [right]: [1 2 3 5]
@@ -398,12 +401,13 @@ def assert_series_equal(
     ......
     ......
     AssertionError: Series are different
-
+    <BLANKLINE>
     name mismatch
     [left]:  a
     [right]: b
 
-    # This will pass without any hitch
+    This will pass without any hitch:
+
     >>> sr2 = cudf.Series([1, 2, 3, 4], name="a")
     >>> cudf.testing.assert_series_equal(sr1, sr2)
     """
@@ -463,14 +467,15 @@ def assert_frame_equal(
     check_like=False,
     obj="DataFrame",
 ):
-    """ Check that left and right DataFrame are equal
+    """
+    Check that left and right DataFrame are equal
 
     This function is intended to compare two DataFrame and output
     any differences. Additional parameters allow varying the strictness
     of the equality checks performed.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     left : DataFrame
         left DataFrame to compare
     right : DataFrame
@@ -518,7 +523,7 @@ def assert_frame_equal(
     ......
     ......
     AssertionError: ColumnBase are different
-
+    <BLANKLINE>
     values are different (100.0 %)
     [left]:  [1 2]
     [right]: [2 3]
@@ -528,7 +533,7 @@ def assert_frame_equal(
     ......
     ......
     AssertionError: DataFrame.columns are different
-
+    <BLANKLINE>
     DataFrame.columns values are different (50.0 %)
     [left]: Index(['a', 'b'], dtype='object')
     right]: Index(['a', 'c'], dtype='object')
@@ -538,12 +543,13 @@ def assert_frame_equal(
     ......
     ......
     AssertionError: Column name="b" are different
-
+    <BLANKLINE>
     values are different (50.0 %)
     [left]:  [1. 2.]
     [right]: [1. 3.]
 
-    # This will pass without any hitch
+    This will pass without any hitch:
+
     >>> df2 = cudf.DataFrame({"a":[1, 2], "b":[1.0, 2.0]}, index=[1, 2])
     >>> cudf.testing.assert_frame_equal(df1, df2)
     """

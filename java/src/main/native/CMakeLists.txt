@@ -290,10 +290,12 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 # - library targets -------------------------------------------------------------------------------
 
 set(SOURCE_FILES
+    "src/row_conversion.cu"
     "src/AggregationJni.cpp"
     "src/CudfJni.cpp"
     "src/CudaJni.cpp"
     "src/ColumnVectorJni.cpp"
+    "src/ColumnViewJni.cpp"
     "src/HostMemoryBufferNativeUtilsJni.cpp"
     "src/NvcompJni.cpp"
     "src/NvtxRangeJni.cpp"

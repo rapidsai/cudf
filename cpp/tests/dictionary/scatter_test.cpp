@@ -70,8 +70,11 @@ TEST_F(DictionaryScatterTest, ScatterScalar)
   cudf::test::strings_column_wrapper strings_target{
     "eee", "aaa", "ddd", "ccc", "ccc", "ccc", "eee", "aaa"};
   auto target = cudf::dictionary::encode(strings_target);
-  std::vector<std::unique_ptr<cudf::scalar>> source;
-  source.emplace_back(std::make_unique<cudf::string_scalar>("bbb"));
+  std::vector<std::reference_wrapper<const cudf::scalar>> source;
+
+  const cudf::string_scalar source_scalar                       = cudf::string_scalar("bbb");
+  std::reference_wrapper<const cudf::string_scalar> slr_wrapper = std::ref(source_scalar);
+  source.emplace_back(slr_wrapper);
   cudf::test::fixed_width_column_wrapper<int32_t> scatter_map{0, 2, 3, 7};
 
   auto table_result =
@@ -111,9 +114,10 @@ TEST_F(DictionaryScatterTest, ScalarWithNulls)
   cudf::test::fixed_width_column_wrapper<int64_t> data_target{{1, 5, 5, 3, 7, 1, 4, 2},
                                                               {0, 1, 0, 1, 1, 1, 1, 1}};
   auto target = cudf::dictionary::encode(data_target);
-  std::vector<std::unique_ptr<cudf::scalar>> source;
-  source.emplace_back(std::make_unique<cudf::numeric_scalar<int64_t>>(
-    cudf::test::make_type_param_scalar<int64_t>(100)));
+  std::vector<std::reference_wrapper<const cudf::scalar>> source;
+  const cudf::numeric_scalar<int64_t> source_slr = cudf::test::make_type_param_scalar<int64_t>(100);
+  std::reference_wrapper<const cudf::numeric_scalar<int64_t>> slr_wrapper = std::ref(source_slr);
+  source.emplace_back(slr_wrapper);
 
   cudf::test::fixed_width_column_wrapper<int32_t> scatter_map{7, 2, 3, 1, -3};
   auto table_result =

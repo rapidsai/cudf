@@ -697,3 +697,165 @@ def test_series_error_equality(sr1, sr2, op):
     gsr2 = cudf.from_pandas(sr2)
 
     assert_exceptions_equal(op, op, ([sr1, sr2],), ([gsr1, gsr2],))
+
+
+def test_series_memory_usage():
+    sr = cudf.Series([1, 2, 3, 4], dtype="int64")
+    assert sr.memory_usage() == 32
+
+    sliced_sr = sr[2:]
+    assert sliced_sr.memory_usage() == 16
+
+    sliced_sr[3] = None
+    assert sliced_sr.memory_usage() == 80
+
+    sr = cudf.Series(["hello world", "rapids ai", "abc", "z"])
+    assert sr.memory_usage() == 44
+
+    assert sr[3:].memory_usage() == 9  # z
+    assert sr[:1].memory_usage() == 19  # hello world
+
+
+@pytest.mark.parametrize(
+    "sr,expected_psr",
+    [
+        (
+            cudf.Series([1, 2, None, 3], dtype="uint8"),
+            pd.Series([1, 2, None, 3], dtype=pd.UInt8Dtype()),
+        ),
+        (
+            cudf.Series([23, None, None, 32], dtype="uint16"),
+            pd.Series([23, None, None, 32], dtype=pd.UInt16Dtype()),
+        ),
+        (
+            cudf.Series([None, 123, None, 1], dtype="uint32"),
+            pd.Series([None, 123, None, 1], dtype=pd.UInt32Dtype()),
+        ),
+        (
+            cudf.Series([234, 2323, 23432, None, None, 224], dtype="uint64"),
+            pd.Series(
+                [234, 2323, 23432, None, None, 224], dtype=pd.UInt64Dtype()
+            ),
+        ),
+        (
+            cudf.Series([-10, 1, None, -1, None, 3], dtype="int8"),
+            pd.Series([-10, 1, None, -1, None, 3], dtype=pd.Int8Dtype()),
+        ),
+        (
+            cudf.Series([111, None, 222, None, 13], dtype="int16"),
+            pd.Series([111, None, 222, None, 13], dtype=pd.Int16Dtype()),
+        ),
+        (
+            cudf.Series([11, None, 22, 33, None, 2, None, 3], dtype="int32"),
+            pd.Series(
+                [11, None, 22, 33, None, 2, None, 3], dtype=pd.Int32Dtype()
+            ),
+        ),
+        (
+            cudf.Series(
+                [32431, None, None, 32322, 0, 10, -32324, None], dtype="int64"
+            ),
+            pd.Series(
+                [32431, None, None, 32322, 0, 10, -32324, None],
+                dtype=pd.Int64Dtype(),
+            ),
+        ),
+        (
+            cudf.Series(
+                [True, None, False, None, False, True, True, False],
+                dtype="bool_",
+            ),
+            pd.Series(
+                [True, None, False, None, False, True, True, False],
+                dtype=pd.BooleanDtype(),
+            ),
+        ),
+        (
+            cudf.Series(
+                [
+                    "abc",
+                    "a",
+                    None,
+                    "hello world",
+                    "foo buzz",
+                    "",
+                    None,
+                    "rapids ai",
+                ],
+                dtype="object",
+            ),
+            pd.Series(
+                [
+                    "abc",
+                    "a",
+                    None,
+                    "hello world",
+                    "foo buzz",
+                    "",
+                    None,
+                    "rapids ai",
+                ],
+                dtype=pd.StringDtype(),
+            ),
+        ),
+    ],
+)
+def test_series_to_pandas_nullable_dtypes(sr, expected_psr):
+    actual_psr = sr.to_pandas(nullable=True)
+
+    assert_eq(actual_psr, expected_psr)
+
+
+def test_series_pipe():
+    psr = pd.Series([10, 20, 30, 40])
+    gsr = cudf.Series([10, 20, 30, 40])
+
+    def custom_add_func(sr, val):
+        new_sr = sr + val
+        return new_sr
+
+    def custom_to_str_func(sr, val):
+        new_sr = sr.astype("str") + val
+        return new_sr
+
+    expected = (
+        psr.pipe(custom_add_func, 11)
+        .pipe(custom_add_func, val=12)
+        .pipe(custom_to_str_func, "rapids")
+    )
+    actual = (
+        gsr.pipe(custom_add_func, 11)
+        .pipe(custom_add_func, val=12)
+        .pipe(custom_to_str_func, "rapids")
+    )
+
+    assert_eq(expected, actual)
+
+    expected = (
+        psr.pipe((custom_add_func, "sr"), val=11)
+        .pipe(custom_add_func, val=1)
+        .pipe(custom_to_str_func, "rapids-ai")
+    )
+    actual = (
+        gsr.pipe((custom_add_func, "sr"), val=11)
+        .pipe(custom_add_func, val=1)
+        .pipe(custom_to_str_func, "rapids-ai")
+    )
+
+    assert_eq(expected, actual)
+
+
+def test_series_pipe_error():
+    psr = pd.Series([10, 20, 30, 40])
+    gsr = cudf.Series([10, 20, 30, 40])
+
+    def custom_add_func(sr, val):
+        new_sr = sr + val
+        return new_sr
+
+    assert_exceptions_equal(
+        lfunc=psr.pipe,
+        rfunc=gsr.pipe,
+        lfunc_args_and_kwargs=([(custom_add_func, "val")], {"val": 11}),
+        rfunc_args_and_kwargs=([(custom_add_func, "val")], {"val": 11}),
+    )

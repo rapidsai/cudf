@@ -19,7 +19,7 @@ from cudf._lib.null_mask import (
     bitmask_allocation_size_bytes,
     create_null_mask,
 )
-from cudf._lib.scalar import as_scalar
+from cudf._lib.scalar import as_device_scalar
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
@@ -29,6 +29,7 @@ from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
     NUMERIC_TYPES,
     check_cast_unsupported_dtype,
+    cudf_dtypes_to_pandas_dtypes,
     get_time_unit,
     is_categorical_dtype,
     is_list_dtype,
@@ -123,11 +124,17 @@ class ColumnBase(Column, Serializable):
     def __len__(self):
         return self.size
 
-    def to_pandas(self, index=None, **kwargs):
-        if str(self.dtype) in NUMERIC_TYPES and self.null_count == 0:
-            pd_series = pd.Series(cupy.asnumpy(self.values))
+    def to_pandas(self, index=None, nullable=False, **kwargs):
+        if nullable and self.dtype in cudf_dtypes_to_pandas_dtypes:
+            pandas_nullable_dtype = cudf_dtypes_to_pandas_dtypes[self.dtype]
+            arrow_array = self.to_arrow()
+            pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)
+            pd_series = pd.Series(pandas_array, copy=False)
+        elif str(self.dtype) in NUMERIC_TYPES and self.null_count == 0:
+            pd_series = pd.Series(cupy.asnumpy(self.values), copy=False)
         else:
             pd_series = self.to_arrow().to_pandas(**kwargs)
+
         if index is not None:
             pd_series.index = index
         return pd_series
@@ -170,7 +177,7 @@ class ColumnBase(Column, Serializable):
         if check_dtypes:
             if self.dtype != other.dtype:
                 return False
-        return self.binary_operator("eq", other).min()
+        return (self == other).min()
 
     def all(self):
         return bool(libcudf.reduce.reduce("all", self, dtype=np.bool_))
@@ -179,11 +186,9 @@ class ColumnBase(Column, Serializable):
         return bool(libcudf.reduce.reduce("any", self, dtype=np.bool_))
 
     def __sizeof__(self):
-        n = self.base_data.size if self.base_data is not None else 0
+        n = self.data.size
         if self.nullable:
-            n += self.base_mask.size
-        for child in self.base_children:
-            n += child.__sizeof__()
+            n += bitmask_allocation_size_bytes(self.size)
         return n
 
     @classmethod
@@ -261,8 +266,8 @@ class ColumnBase(Column, Serializable):
         newsize = sum(map(len, objs))
         if newsize > libcudf.MAX_COLUMN_SIZE:
             raise MemoryError(
-                "Result of concat cannot have "
-                "size > {}".format(libcudf.MAX_COLUMN_SIZE_STR)
+                f"Result of concat cannot have "
+                f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
             )
 
         # Filter out inputs that have 0 length
@@ -333,7 +338,7 @@ class ColumnBase(Column, Serializable):
             libcudf.table.Table(
                 cudf.core.column_accessor.ColumnAccessor({"None": self})
             ),
-            ["None"],
+            [["None"]],
             keep_index=False,
         )["None"].chunk(0)
 
@@ -443,6 +448,7 @@ class ColumnBase(Column, Serializable):
         if ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
         """
+
         return self.to_gpu_array(fillna=fillna).copy_to_host()
 
     def _fill(self, fill_value, begin=0, end=-1, inplace=False):
@@ -452,7 +458,7 @@ class ColumnBase(Column, Serializable):
         if is_categorical_dtype(self.dtype):
             return self._fill_categorical(fill_value, begin, end, inplace)
 
-        fill_scalar = as_scalar(fill_value, self.dtype)
+        fill_scalar = as_device_scalar(fill_value, self.dtype)
 
         if not inplace:
             return libcudf.filling.fill(self, begin, end, fill_scalar)
@@ -473,7 +479,7 @@ class ColumnBase(Column, Serializable):
 
     def _fill_categorical(self, fill_value, begin, end, inplace):
         fill_code = self._encode(fill_value)
-        fill_scalar = as_scalar(fill_code, self.codes.dtype)
+        fill_scalar = as_device_scalar(fill_code, self.codes.dtype)
 
         result = self if inplace else self.copy()
 
@@ -759,7 +765,7 @@ class ColumnBase(Column, Serializable):
         if self.dtype.kind == "f":
             # Need to consider `np.nan` values incase
             # of a float column
-            result = result.binary_operator("or", libcudf.unary.is_nan(self))
+            result = result | libcudf.unary.is_nan(self)
 
         return result
 
@@ -776,9 +782,7 @@ class ColumnBase(Column, Serializable):
         if self.dtype.kind == "f":
             # Need to consider `np.nan` values incase
             # of a float column
-            result = result.binary_operator(
-                "and", libcudf.unary.is_non_nan(self)
-            )
+            result = result & libcudf.unary.is_non_nan(self)
 
         return result
 
@@ -1105,6 +1109,51 @@ class ColumnBase(Column, Serializable):
 
         return output
 
+    def __add__(self, other):
+        return self.binary_operator("add", other)
+
+    def __sub__(self, other):
+        return self.binary_operator("sub", other)
+
+    def __mul__(self, other):
+        return self.binary_operator("mul", other)
+
+    def __eq__(self, other):
+        return self.binary_operator("eq", other)
+
+    def __ne__(self, other):
+        return self.binary_operator("ne", other)
+
+    def __or__(self, other):
+        return self.binary_operator("or", other)
+
+    def __and__(self, other):
+        return self.binary_operator("and", other)
+
+    def __floordiv__(self, other):
+        return self.binary_operator("floordiv", other)
+
+    def __truediv__(self, other):
+        return self.binary_operator("truediv", other)
+
+    def __mod__(self, other):
+        return self.binary_operator("mod", other)
+
+    def __pow__(self, other):
+        return self.binary_operator("pow", other)
+
+    def __lt__(self, other):
+        return self.binary_operator("lt", other)
+
+    def __gt__(self, other):
+        return self.binary_operator("gt", other)
+
+    def __le__(self, other):
+        return self.binary_operator("le", other)
+
+    def __ge__(self, other):
+        return self.binary_operator("ge", other)
+
     def searchsorted(
         self, value, side="left", ascending=True, na_position="last"
     ):
@@ -1261,9 +1310,7 @@ class ColumnBase(Column, Serializable):
         if nrows * ncols == 0:
             return cudf.core.frame.Frame({})
 
-        scatter_map = column_indices.binary_operator(
-            "mul", np.int32(nrows)
-        ).binary_operator("add", row_indices)
+        scatter_map = (column_indices * np.int32(nrows)) + row_indices
         target = cudf.core.frame.Frame(
             {None: column_empty_like(self, masked=True, newsize=nrows * ncols)}
         )
@@ -1772,6 +1819,10 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         data = as_column(
             np.asarray(arbitrary), dtype=dtype, nan_as_null=nan_as_null
         )
+    elif isinstance(arbitrary, cudf.Scalar):
+        data = libcudf.column.make_column_from_scalar(
+            arbitrary, length if length else 1
+        )
     elif isinstance(arbitrary, pd.core.arrays.masked.BaseMaskedArray):
         cudf_dtype = arbitrary._data.dtype
 
@@ -2018,7 +2069,9 @@ def arange(start, stop=None, step=1, dtype=None):
     size = int(np.ceil((stop - start) / step))
 
     return libcudf.filling.sequence(
-        size, as_scalar(start, dtype=dtype), as_scalar(step, dtype=dtype)
+        size,
+        as_device_scalar(start, dtype=dtype),
+        as_device_scalar(step, dtype=dtype),
     )
 
 
@@ -2055,5 +2108,5 @@ def full(size, fill_value, dtype=None):
     """
 
     return libcudf.column.make_column_from_scalar(
-        as_scalar(fill_value, dtype), size
+        as_device_scalar(fill_value, dtype), size
     )

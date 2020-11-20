@@ -18,13 +18,17 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/concatenate.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
+#include <cudf/structs/detail/concatenate.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/transform_scan.h>
@@ -43,11 +47,11 @@ constexpr bool use_fused_kernel_heuristic(bool const has_nulls, size_t const num
   return has_nulls || num_columns > 4;
 }
 
-auto create_device_views(std::vector<column_view> const& views, cudaStream_t stream)
+auto create_device_views(std::vector<column_view> const& views, rmm::cuda_stream_view stream)
 {
   // Create device views for each input view
-  using CDViewPtr =
-    decltype(column_device_view::create(std::declval<column_view>(), std::declval<cudaStream_t>()));
+  using CDViewPtr = decltype(
+    column_device_view::create(std::declval<column_view>(), std::declval<rmm::cuda_stream_view>()));
   auto device_view_owners = std::vector<CDViewPtr>(views.size());
   std::transform(
     views.cbegin(), views.cend(), device_view_owners.begin(), [stream](auto const& col) {
@@ -129,11 +133,11 @@ void concatenate_masks(rmm::device_vector<column_device_view> const& d_views,
                        rmm::device_vector<size_t> const& d_offsets,
                        bitmask_type* dest_mask,
                        size_type output_size,
-                       cudaStream_t stream)
+                       rmm::cuda_stream_view stream)
 {
   constexpr size_type block_size{256};
   cudf::detail::grid_1d config(output_size, block_size);
-  concatenate_masks_kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
+  concatenate_masks_kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
     d_views.data().get(),
     d_offsets.data().get(),
     static_cast<size_type>(d_views.size()),
@@ -143,7 +147,7 @@ void concatenate_masks(rmm::device_vector<column_device_view> const& d_views,
 
 void concatenate_masks(std::vector<column_view> const& views,
                        bitmask_type* dest_mask,
-                       cudaStream_t stream)
+                       rmm::cuda_stream_view stream)
 {
   // Preprocess and upload inputs to device memory
   auto const device_views = create_device_views(views, stream);
@@ -209,8 +213,8 @@ __global__ void fused_concatenate_kernel(column_device_view const* input_views,
 template <typename T>
 std::unique_ptr<column> fused_concatenate(std::vector<column_view> const& views,
                                           bool const has_nulls,
-                                          rmm::mr::device_memory_resource* mr,
-                                          cudaStream_t stream)
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr)
 {
   using mask_policy = cudf::mask_allocation_policy;
 
@@ -225,19 +229,19 @@ std::unique_ptr<column> fused_concatenate(std::vector<column_view> const& views,
 
   // Allocate output
   auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
-  auto out_col      = detail::allocate_like(views.front(), output_size, policy, mr, stream);
+  auto out_col      = detail::allocate_like(views.front(), output_size, policy, stream, mr);
   out_col->set_null_count(0);  // prevent null count from being materialized
   auto out_view   = out_col->mutable_view();
   auto d_out_view = mutable_column_device_view::create(out_view, stream);
 
-  rmm::device_scalar<size_type> d_valid_count(0);
+  rmm::device_scalar<size_type> d_valid_count(0, stream);
 
   // Launch kernel
   constexpr size_type block_size{256};
   cudf::detail::grid_1d config(output_size, block_size);
   auto const kernel = has_nulls ? fused_concatenate_kernel<T, block_size, true>
                                 : fused_concatenate_kernel<T, block_size, false>;
-  kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
+  kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
     d_views.data().get(),
     d_offsets.data().get(),
     static_cast<size_type>(d_views.size()),
@@ -252,8 +256,8 @@ std::unique_ptr<column> fused_concatenate(std::vector<column_view> const& views,
 template <typename T>
 std::unique_ptr<column> for_each_concatenate(std::vector<column_view> const& views,
                                              bool const has_nulls,
-                                             rmm::mr::device_memory_resource* mr,
-                                             cudaStream_t stream)
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
 {
   size_type const total_element_count =
     std::accumulate(views.begin(), views.end(), 0, [](auto accumulator, auto const& v) {
@@ -262,15 +266,17 @@ std::unique_ptr<column> for_each_concatenate(std::vector<column_view> const& vie
 
   using mask_policy = cudf::mask_allocation_policy;
   auto const policy = has_nulls ? mask_policy::ALWAYS : mask_policy::NEVER;
-  auto col          = cudf::allocate_like(views.front(), total_element_count, policy, mr);
+  auto col = cudf::detail::allocate_like(views.front(), total_element_count, policy, stream, mr);
 
   col->set_null_count(0);             // prevent null count from being materialized...
   auto m_view = col->mutable_view();  // ...when we take a mutable view
 
   auto count = 0;
   for (auto& v : views) {
-    thrust::copy(
-      rmm::exec_policy()->on(stream), v.begin<T>(), v.end<T>(), m_view.begin<T>() + count);
+    thrust::copy(rmm::exec_policy(stream)->on(stream.value()),
+                 v.begin<T>(),
+                 v.end<T>(),
+                 m_view.begin<T>() + count);
     count += v.size();
   }
 
@@ -284,8 +290,8 @@ std::unique_ptr<column> for_each_concatenate(std::vector<column_view> const& vie
 
 struct concatenate_dispatch {
   std::vector<column_view> const& views;
+  rmm::cuda_stream_view stream;
   rmm::mr::device_memory_resource* mr;
-  cudaStream_t stream;
 
   // fixed width
   template <typename T>
@@ -298,9 +304,9 @@ struct concatenate_dispatch {
 
     // Use a heuristic to guess when the fused kernel will be faster
     if (use_fused_kernel_heuristic(has_nulls, views.size())) {
-      return fused_concatenate<Type>(views, has_nulls, mr, stream);
+      return fused_concatenate<Type>(views, has_nulls, stream, mr);
     } else {
-      return for_each_concatenate<Type>(views, has_nulls, mr, stream);
+      return for_each_concatenate<Type>(views, has_nulls, stream, mr);
     }
   }
 };
@@ -314,7 +320,7 @@ std::unique_ptr<column> concatenate_dispatch::operator()<cudf::dictionary32>()
 template <>
 std::unique_ptr<column> concatenate_dispatch::operator()<cudf::string_view>()
 {
-  return cudf::strings::detail::concatenate(views, mr, stream);
+  return cudf::strings::detail::concatenate(views, stream, mr);
 }
 
 template <>
@@ -323,10 +329,16 @@ std::unique_ptr<column> concatenate_dispatch::operator()<cudf::list_view>()
   return cudf::lists::detail::concatenate(views, stream, mr);
 }
 
+template <>
+std::unique_ptr<column> concatenate_dispatch::operator()<cudf::struct_view>()
+{
+  return cudf::structs::detail::concatenate(views, stream, mr);
+}
+
 // Concatenates the elements from a vector of column_views
 std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_concat,
-                                    rmm::mr::device_memory_resource* mr,
-                                    cudaStream_t stream)
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(not columns_to_concat.empty(), "Unexpected empty list of columns to concatenate.");
 
@@ -342,12 +354,12 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
     return empty_like(columns_to_concat.front());
   }
 
-  return type_dispatcher(type, concatenate_dispatch{columns_to_concat, mr, stream});
+  return type_dispatcher(type, concatenate_dispatch{columns_to_concat, stream, mr});
 }
 
 std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_concat,
-                                   rmm::mr::device_memory_resource* mr,
-                                   cudaStream_t stream)
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   if (tables_to_concat.empty()) { return std::make_unique<table>(); }
 
@@ -367,7 +379,7 @@ std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_conc
                    tables_to_concat.cend(),
                    std::back_inserter(cols),
                    [i](auto const& t) { return t.column(i); });
-    concat_columns.emplace_back(detail::concatenate(cols, mr, stream));
+    concat_columns.emplace_back(detail::concatenate(cols, stream, mr));
   }
   return std::make_unique<table>(std::move(concat_columns));
 }
@@ -386,14 +398,14 @@ rmm::device_buffer concatenate_masks(std::vector<column_view> const& views,
       });
 
     rmm::device_buffer null_mask =
-      create_null_mask(total_element_count, mask_state::UNINITIALIZED, 0, mr);
+      create_null_mask(total_element_count, mask_state::UNINITIALIZED, mr);
 
     detail::concatenate_masks(views, static_cast<bitmask_type*>(null_mask.data()), 0);
 
     return null_mask;
   }
   // no nulls, so return an empty device buffer
-  return rmm::device_buffer{0, (cudaStream_t)0, mr};
+  return rmm::device_buffer{0, rmm::cuda_stream_default, mr};
 }
 
 // Concatenates the elements from a vector of column_views
@@ -401,14 +413,14 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(columns_to_concat, mr, 0);
+  return detail::concatenate(columns_to_concat, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_concat,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(tables_to_concat, mr, 0);
+  return detail::concatenate(tables_to_concat, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

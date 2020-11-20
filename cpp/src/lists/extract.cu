@@ -60,7 +60,7 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                              cudaStream_t stream,
                                              rmm::mr::device_memory_resource* mr)
 {
-  if (lists_column.size() == 0) return empty_like(lists_column.parent());
+  if (lists_column.is_empty()) return empty_like(lists_column.parent());
   auto const offsets_column = lists_column.offsets();
 
   // create a column_view with attributes of the parent and data from the offsets
@@ -97,8 +97,8 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                      d_gather_map,
                                      d_gather_map + gather_map->size(),
                                      true,  // nullify-out-of-bounds
-                                     mr,
-                                     stream)
+                                     stream,
+                                     mr)
                   ->release();
   if (result.front()->null_count() == 0)
     result.front()->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
