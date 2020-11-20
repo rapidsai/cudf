@@ -947,8 +947,10 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
     cols.clear();
   }
 
-  // overlap the actual copy with the work of constructing the output columns. this can be a
-  // non-trivial savings because of the sheer number of output views.
+  // we need to synchronize, as the HtoD memcpy before the copy kernel could still be in-flight as
+  // we exit the function and our stack frame disappears. also of note : we're overlapping
+  // construction of the output columns on the cpu while the data they point to is still being
+  // copied. this can be a significant time savings.
   stream.synchronize();
 
   return result;
