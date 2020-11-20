@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -22,14 +22,17 @@
 #include <chrono>
 #include <cstdint>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace jit {
+
 launcher::launcher(const std::string& hash,
                    const std::string& cuda_source,
                    const std::vector<std::string>& header_names,
                    const std::vector<std::string>& compiler_flags,
                    jitify::experimental::file_callback_type file_callback,
-                   cudaStream_t stream)
+                   rmm::cuda_stream_view stream)
   : cache_instance{cudf::jit::cudfJitCache::Instance()}, stream(stream)
 {
   program = cache_instance.getProgram(

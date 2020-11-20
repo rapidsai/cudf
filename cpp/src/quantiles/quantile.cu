@@ -41,8 +41,8 @@ struct quantile_functor {
   std::vector<double> const& q;
   interpolation interp;
   bool retain_types;
-  rmm::mr::device_memory_resource* mr;
   rmm::cuda_stream_view stream;
+  rmm::mr::device_memory_resource* mr;
 
   template <typename T>
   std::enable_if_t<not std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
@@ -124,11 +124,11 @@ std::unique_ptr<column> quantile(column_view const& input,
                                  std::vector<double> const& q,
                                  interpolation interp,
                                  bool retain_types,
-                                 cudaStream_t stream,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   auto functor = quantile_functor<exact, SortMapIterator>{
-    ordered_indices, size, q, interp, retain_types, mr, stream};
+    ordered_indices, size, q, interp, retain_types, stream, mr};
 
   auto input_type = cudf::is_dictionary(input.type()) && !input.is_empty()
                       ? dictionary_column_view(input).keys().type()
@@ -142,7 +142,7 @@ std::unique_ptr<column> quantile(column_view const& input,
                                  interpolation interp,
                                  column_view const& indices,
                                  bool exact,
-                                 cudaStream_t stream,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   if (indices.is_empty()) {
@@ -176,7 +176,7 @@ std::unique_ptr<column> quantile(column_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::quantile(input, q, interp, ordered_indices, exact, 0, mr);
+  return detail::quantile(input, q, interp, ordered_indices, exact, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

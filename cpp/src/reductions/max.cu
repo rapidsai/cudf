@@ -18,13 +18,15 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <reductions/simple.cuh>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace reduction {
 
 std::unique_ptr<cudf::scalar> max(column_view const& col,
                                   cudf::data_type const output_dtype,
-                                  rmm::mr::device_memory_resource* mr,
-                                  cudaStream_t stream)
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   auto const input_type =
     cudf::is_dictionary(col.type()) ? cudf::dictionary_column_view(col).keys().type() : col.type();
@@ -35,8 +37,8 @@ std::unique_ptr<cudf::scalar> max(column_view const& col,
   return cudf::type_dispatcher(dispatch_type,
                                simple::same_element_type_dispatcher<cudf::reduction::op::max>{},
                                col,
-                               mr,
-                               stream);
+                               stream,
+                               mr);
 }
 
 }  // namespace reduction

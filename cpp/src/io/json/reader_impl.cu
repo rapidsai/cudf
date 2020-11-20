@@ -609,7 +609,7 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
     if (out_column->type().id() == type_id::STRING) {
       // Need to remove escape character in case of '\"' and '\\'
       out_columns.emplace_back(cudf::strings::detail::replace(
-        out_column->view(), target->view(), repl->view(), mr_, stream));
+        out_column->view(), target->view(), repl->view(), stream, mr_));
     } else {
       out_columns.emplace_back(std::move(out_column));
     }
