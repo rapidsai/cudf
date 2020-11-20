@@ -33,7 +33,6 @@
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
-// #include <cudf/datetime.hpp>  // replace eventually
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
