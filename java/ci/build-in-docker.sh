@@ -65,9 +65,6 @@ echo "RMM SHA: `git rev-parse HEAD`"
 cmake .. -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX -DBUILD_TESTS=$BUILD_CPP_TESTS
 make -j$PARALLEL_LEVEL install
 
-# Install spdlog headers from RMM build
-(cd /rapids/rmm/build/_deps/spdlog-src && find include/spdlog | cpio -pmdv $INSTALL_PREFIX)
-
 mkdir -p /rapids/dlpack/build
 cd /rapids/dlpack/build
 echo "DLPACK SHA: `git rev-parse HEAD`"
