@@ -145,7 +145,7 @@
 - PR #6787 Update java reduction APIs to reflect C++ changes
 - PR #6794 Fix AVRO reader issues with empty input
 - PR #6824 Fix JNI build
-- PR #6824 Fix resource management in Java ColumnBuilder
+- PR #6826 Fix resource management in Java ColumnBuilder
 
 
 # cuDF 0.16.0 (21 Oct 2020)
