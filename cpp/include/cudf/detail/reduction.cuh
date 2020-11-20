@@ -24,7 +24,7 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/iterator_traits.h>
 #include <cub/device/device_reduce.cuh>
-#include <reduction_operators.cuh>
+#include "reduction_operators.cuh"
 
 namespace cudf {
 namespace reduction {

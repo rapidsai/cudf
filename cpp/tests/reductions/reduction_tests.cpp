@@ -1071,6 +1071,26 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumAlternate)
   EXPECT_EQ(result_fp, TEN);
 }
 
+TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumNeg3Scale)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const scale = scale_type{-3};
+
+  auto const column   = fp_wrapper{{1234, 2345, 3456, 4567, 5678, 6789}, scale};
+  auto const expected = decimalXX{24069, scale};
+  auto const out_type = static_cast<cudf::column_view>(column).type();
+
+  auto const result        = cudf::reduce(column, cudf::make_sum_aggregation(), out_type);
+  auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+  auto const result_fp     = decimalXX{result_scalar->value(), scale};
+
+  EXPECT_EQ(result_fp, expected);
+}
+
 TYPED_TEST(ReductionTest, NthElement)
 {
   using T = TypeParam;
