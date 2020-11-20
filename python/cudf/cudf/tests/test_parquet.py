@@ -1592,10 +1592,9 @@ def test_parquet_allnull_str(tmpdir, engine):
             )
         }
     )
-    expected_gdf = cudf.DataFrame({"a": pd.Series([None, None, None, None, None], dtype='str')})
+    expected_gdf = cudf.DataFrame({"a": cudf.Series([None, None, None, None, None], dtype='str')})
 
     pdf.to_parquet(pandas_path)
     actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
 
     assert_eq(actual_gdf, expected_gdf)
-
