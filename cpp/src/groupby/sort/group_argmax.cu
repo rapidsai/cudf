@@ -54,8 +54,8 @@ std::unique_ptr<column> group_argmax(column_view const& values,
                          indices->nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
                                              : cudf::detail::out_of_bounds_policy::NULLIFY,
                          cudf::detail::negative_index_policy::NOT_ALLOWED,
-                         mr,
-                         stream);
+                         stream,
+                         mr);
 
   return std::move(result_table->release()[0]);
 }

@@ -99,8 +99,8 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
                                          rotated_iter_begin,
                                          rotated_iter_begin + nrows,  // map
                                          false,
-                                         mr,
-                                         stream);
+                                         stream,
+                                         mr);
 
     auto ret_pair =
       std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
@@ -134,8 +134,8 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
                                          d_row_indices.begin(),
                                          d_row_indices.end(),  // map
                                          false,
-                                         mr,
-                                         stream);
+                                         stream,
+                                         mr);
 
     auto ret_pair =
       std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
@@ -251,7 +251,7 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
       return num_partitions * index_within_partition + partition_index;
     });
 
-  auto uniq_tbl = cudf::detail::gather(input, iter_begin, iter_begin + nrows, false, mr, stream);
+  auto uniq_tbl = cudf::detail::gather(input, iter_begin, iter_begin + nrows, false, stream, mr);
   auto ret_pair = std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
 
   // this has the effect of rotating the set of partition sizes

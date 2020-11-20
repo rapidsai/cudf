@@ -298,11 +298,7 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
     auto add_scalar_key            = [&](scalar const& key, scalar const& key_replace) {
       if (key.is_valid()) {
         result = dictionary::detail::add_keys(
-          matched_view,
-          make_column_from_scalar(key_replace, 1, rmm::mr::get_current_device_resource(), stream)
-            ->view(),
-          mr,
-          stream);
+          matched_view, make_column_from_scalar(key_replace, 1, stream)->view(), mr, stream);
         matched_view = dictionary_column_view(result->view());
       }
     };
@@ -313,16 +309,12 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
   auto matched_view = dictionary_column_view(matched_column->view());
 
   // get the indexes for lo_replace and for hi_replace
-  auto lo_replace_index = dictionary::detail::get_index(
-    matched_view, lo_replace, rmm::mr::get_current_device_resource(), stream);
-  auto hi_replace_index = dictionary::detail::get_index(
-    matched_view, hi_replace, rmm::mr::get_current_device_resource(), stream);
+  auto lo_replace_index = dictionary::detail::get_index(matched_view, lo_replace, stream);
+  auto hi_replace_index = dictionary::detail::get_index(matched_view, hi_replace, stream);
 
   // get the closest indexes for lo and for hi
-  auto lo_index = dictionary::detail::get_insert_index(
-    matched_view, lo, rmm::mr::get_current_device_resource(), stream);
-  auto hi_index = dictionary::detail::get_insert_index(
-    matched_view, hi, rmm::mr::get_current_device_resource(), stream);
+  auto lo_index = dictionary::detail::get_insert_index(matched_view, lo, stream);
+  auto hi_index = dictionary::detail::get_insert_index(matched_view, hi, stream);
 
   // call clamp with the scalar indexes and the matched indices
   auto matched_indices = matched_view.get_indices_annotated();

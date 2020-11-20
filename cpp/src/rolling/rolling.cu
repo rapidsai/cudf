@@ -701,8 +701,8 @@ struct rolling_window_launcher {
                                        output->view(),
                                        detail::out_of_bounds_policy::IGNORE,
                                        detail::negative_index_policy::NOT_ALLOWED,
-                                       mr,
-                                       stream);
+                                       stream,
+                                       mr);
     return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
   }
 

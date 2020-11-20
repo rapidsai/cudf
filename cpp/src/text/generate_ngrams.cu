@@ -104,8 +104,8 @@ std::unique_ptr<cudf::column> generate_ngrams(
                              if (d_strings.is_null(idx)) return false;
                              return !d_strings.element<cudf::string_view>(idx).empty();
                            },
-                           mr,
-                           stream)
+                           stream,
+                           mr)
                            ->release();
     strings_count = table_offsets.front()->size() - 1;
     return std::move(table_offsets.front());

@@ -24,6 +24,7 @@
 - PR #6675 Add DecimalDtype to cuDF
 - PR #6739 Add Java bindings for is_timestamp
 - PR #6811 First class support for unbounded window function bounds
+- PR #6796 Add create_metadata_file in dask_cudf
 - PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
 
 ## Improvements
@@ -66,6 +67,7 @@
 - PR #6610 Add ability to set scalar values in `cudf.DataFrame`
 - PR #6612 Update JNI to new RMM cuda_stream_view API
 - PR #6646 Replace `cudaStream_t` with `rmm::cuda_stream_view` (part 1)
+- PR #6648 Replace `cudaStream_t` with `rmm::cuda_stream_view` (part 2)
 - PR #6579 Update scatter APIs to use reference wrapper / const scalar
 - PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
 - PR #6622 Update `to_pandas` api docs
@@ -86,6 +88,7 @@
 - PR #6727 Remove 2nd type-dispatcher call from cudf::reduce
 - PR #6749 Update nested JNI builder so we can do it incrementally
 - PR #6748 Add Java API to concatenate serialized tables to ContiguousTable
+- PR #6764 Add dictionary support to `cudf::minmax`
 - PR #6734 Binary operations support for decimal type in cudf Java
 - PR #6761 Add Java/JNI bindings for round
 - PR #6776 Use `void` return type for kernel wrapper functions instead of returning `cudaError_t`

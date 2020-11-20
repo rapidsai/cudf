@@ -113,13 +113,13 @@ std::unique_ptr<column> set_keys(
                                                   std::vector<size_type>{0},
                                                   duplicate_keep_option::KEEP_FIRST,
                                                   null_equality::EQUAL,
-                                                  mr,
-                                                  stream)
+                                                  stream,
+                                                  mr)
                       ->release();
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
 
   // compute the new nulls
-  auto matches   = cudf::detail::contains(keys, keys_column->view(), mr, stream);
+  auto matches   = cudf::detail::contains(keys, keys_column->view(), stream, mr);
   auto d_matches = matches->view().data<bool>();
   auto indices_itr =
     cudf::detail::indexalator_factory::make_input_iterator(dictionary_column.indices());
@@ -156,7 +156,7 @@ std::vector<std::unique_ptr<column>> match_dictionaries(std::vector<dictionary_c
 {
   std::vector<column_view> keys(input.size());
   std::transform(input.begin(), input.end(), keys.begin(), [](auto& col) { return col.keys(); });
-  auto new_keys  = cudf::detail::concatenate(keys, rmm::mr::get_current_device_resource(), stream);
+  auto new_keys  = cudf::detail::concatenate(keys, stream);
   auto keys_view = new_keys->view();
   std::vector<std::unique_ptr<column>> result(input.size());
   std::transform(input.begin(), input.end(), result.begin(), [keys_view, mr, stream](auto& col) {
