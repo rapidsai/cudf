@@ -85,14 +85,6 @@ gpuci_conda_retry install -y \
 # gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
 # gpuci_conda_retry install -y "your-pkg=1.0.0"
 
-# Install the master version of dask, distributed, and streamz
-gpuci_logger "Install the master version of dask, distributed, and streamz"
-set -x
-pip install "git+https://github.com/dask/distributed.git" --upgrade --no-deps
-pip install "git+https://github.com/dask/dask.git" --upgrade --no-deps
-pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
-set +x
-
 gpuci_logger "Check compiler versions"
 python --version
 $CC --version
@@ -103,7 +95,19 @@ conda info
 conda config --show-sources
 conda list --show-channel-urls
 
+function install_dask {
+    # Install the master version of dask, distributed, and streamz
+    gpuci_logger "Install the master version of dask, distributed, and streamz"
+    set -x
+    pip install "git+https://github.com/dask/distributed.git" --upgrade --no-deps
+    pip install "git+https://github.com/dask/dask.git" --upgrade --no-deps
+    pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
+    set +x
+}
+
 if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
+
+    install_dask
 
     ################################################################################
     # BUILD - Build libcudf, cuDF, libcudf_kafka, and dask_cudf from source
@@ -174,6 +178,8 @@ else
 
     gpuci_logger "Installing $CUDF_CONDA_FILE & $KAFKA_CONDA_FILE"
     conda install -c $WORKSPACE/ci/artifacts/cudf/cpu/conda-bld/ "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
+
+    install_dask
 
     gpuci_logger "Build python libs from source"
     if [[ ${BUILD_MODE} == "pull-request" ]]; then
