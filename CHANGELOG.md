@@ -24,6 +24,7 @@
 - PR #6675 Add DecimalDtype to cuDF
 - PR #6739 Add Java bindings for is_timestamp
 - PR #6768 Add support for scatter() on list columns
+- PR #6796 Add create_metadata_file in dask_cudf
 - PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
 
 ## Improvements
@@ -78,6 +79,7 @@
 - PR #6676 Add dictionary support to `cudf::quantile`
 - PR #6673 Parameterize avro and json benchmark
 - PR #6609 Support fixed-point decimal for HostColumnVector
+- PR #6703 Add list column statistics writing to Parquet writer
 - PR #6662 `RangeIndex` supports `step` parameter
 - PR #6712 Remove `reinterpret_cast` conversions between pointer types in Avro
 - PR #6705 Add nested type support to Java table serialization
