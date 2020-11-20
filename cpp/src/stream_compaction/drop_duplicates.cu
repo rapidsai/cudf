@@ -29,9 +29,12 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
 #include <thrust/logical.h>
+
 #include <algorithm>
 #include <cmath>
 
@@ -105,14 +108,14 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
                                        cudf::mutable_column_view& unique_indices,
                                        duplicate_keep_option keep,
                                        null_equality nulls_equal,
-                                       cudaStream_t stream = 0)
+                                       rmm::cuda_stream_view stream)
 {
   // sort only indices
   auto sorted_indices = sorted_order(keys,
                                      std::vector<order>{},
                                      std::vector<null_order>{},
-                                     rmm::mr::get_current_device_resource(),
-                                     stream);
+                                     stream,
+                                     rmm::mr::get_current_device_resource());
 
   // extract unique indices
   auto device_input_table = cudf::table_device_view::create(keys, stream);
@@ -120,7 +123,7 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
   if (cudf::has_nulls(keys)) {
     auto comp = row_equality_comparator<true>(
       *device_input_table, *device_input_table, nulls_equal == null_equality::EQUAL);
-    auto result_end = unique_copy(rmm::exec_policy(stream)->on(stream),
+    auto result_end = unique_copy(rmm::exec_policy(stream)->on(stream.value()),
                                   sorted_indices->view().begin<cudf::size_type>(),
                                   sorted_indices->view().end<cudf::size_type>(),
                                   unique_indices.begin<cudf::size_type>(),
@@ -134,7 +137,7 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
   } else {
     auto comp = row_equality_comparator<false>(
       *device_input_table, *device_input_table, nulls_equal == null_equality::EQUAL);
-    auto result_end = unique_copy(rmm::exec_policy(stream)->on(stream),
+    auto result_end = unique_copy(rmm::exec_policy(stream)->on(stream.value()),
                                   sorted_indices->view().begin<cudf::size_type>(),
                                   sorted_indices->view().end<cudf::size_type>(),
                                   unique_indices.begin<cudf::size_type>(),
@@ -150,14 +153,14 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
 
 cudf::size_type distinct_count(table_view const& keys,
                                null_equality nulls_equal,
-                               cudaStream_t stream)
+                               rmm::cuda_stream_view stream)
 {
   // sort only indices
   auto sorted_indices = sorted_order(keys,
                                      std::vector<order>{},
                                      std::vector<null_order>{},
-                                     rmm::mr::get_current_device_resource(),
-                                     stream);
+                                     stream,
+                                     rmm::mr::get_current_device_resource());
 
   // count unique elements
   auto sorted_row_index   = sorted_indices->view().data<cudf::size_type>();
@@ -167,7 +170,7 @@ cudf::size_type distinct_count(table_view const& keys,
     row_equality_comparator<true> comp(
       *device_input_table, *device_input_table, nulls_equal == null_equality::EQUAL);
     return thrust::count_if(
-      rmm::exec_policy(stream)->on(stream),
+      rmm::exec_policy(stream)->on(stream.value()),
       thrust::counting_iterator<cudf::size_type>(0),
       thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
       [sorted_row_index, comp] __device__(cudf::size_type i) {
@@ -177,7 +180,7 @@ cudf::size_type distinct_count(table_view const& keys,
     row_equality_comparator<false> comp(
       *device_input_table, *device_input_table, nulls_equal == null_equality::EQUAL);
     return thrust::count_if(
-      rmm::exec_policy(stream)->on(stream),
+      rmm::exec_policy(stream)->on(stream.value()),
       thrust::counting_iterator<cudf::size_type>(0),
       thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
       [sorted_row_index, comp] __device__(cudf::size_type i) {
@@ -190,8 +193,8 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
                                        std::vector<size_type> const& keys,
                                        duplicate_keep_option keep,
                                        null_equality nulls_equal,
-                                       rmm::mr::device_memory_resource* mr,
-                                       cudaStream_t stream)
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
   if (0 == input.num_rows() || 0 == input.num_columns() || 0 == keys.size()) {
     return empty_like(input);
@@ -213,8 +216,8 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
                         unique_indices_view,
                         detail::out_of_bounds_policy::NULLIFY,
                         detail::negative_index_policy::NOT_ALLOWED,
-                        mr,
-                        stream);
+                        stream,
+                        mr);
 }
 
 /**
@@ -263,11 +266,11 @@ struct has_nans {
    * @returns bool true if `input` has `NAN` else false
    */
   template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
-  bool operator()(column_view const& input, cudaStream_t stream)
+  bool operator()(column_view const& input, rmm::cuda_stream_view stream)
   {
     auto input_device_view = cudf::column_device_view::create(input, stream);
     auto device_view       = *input_device_view;
-    auto count             = thrust::count_if(rmm::exec_policy(stream)->on(stream),
+    auto count             = thrust::count_if(rmm::exec_policy(stream)->on(stream.value()),
                                   thrust::counting_iterator<cudf::size_type>(0),
                                   thrust::counting_iterator<cudf::size_type>(input.size()),
                                   check_for_nan<T>(device_view));
@@ -287,7 +290,7 @@ struct has_nans {
    * @returns bool Always false as non-floating point columns can't have `NAN`
    */
   template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
-  bool operator()(column_view const& input, cudaStream_t stream)
+  bool operator()(column_view const& input, rmm::cuda_stream_view stream)
   {
     return false;
   }
@@ -296,7 +299,7 @@ struct has_nans {
 cudf::size_type distinct_count(column_view const& input,
                                null_policy null_handling,
                                nan_policy nan_handling,
-                               cudaStream_t stream)
+                               rmm::cuda_stream_view stream)
 {
   if (0 == input.size() || input.null_count() == input.size()) { return 0; }
 
@@ -332,7 +335,7 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::drop_duplicates(input, keys, keep, nulls_equal, mr);
+  return detail::drop_duplicates(input, keys, keep, nulls_equal, rmm::cuda_stream_default, mr);
 }
 
 cudf::size_type distinct_count(column_view const& input,
@@ -340,13 +343,13 @@ cudf::size_type distinct_count(column_view const& input,
                                nan_policy nan_handling)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct_count(input, null_handling, nan_handling);
+  return detail::distinct_count(input, null_handling, nan_handling, rmm::cuda_stream_default);
 }
 
 cudf::size_type distinct_count(table_view const& input, null_equality nulls_equal)
 {
   CUDF_FUNC_RANGE();
-  return detail::distinct_count(input, nulls_equal);
+  return detail::distinct_count(input, nulls_equal, rmm::cuda_stream_default);
 }
 
 }  // namespace cudf

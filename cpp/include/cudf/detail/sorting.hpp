@@ -18,6 +18,8 @@
 
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <memory>
 #include <vector>
 
@@ -33,8 +35,8 @@ std::unique_ptr<column> sorted_order(
   table_view input,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                            = 0);
+  rmm::cuda_stream_view stream                   = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc cudf::stable_sorted_order
@@ -45,8 +47,8 @@ std::unique_ptr<column> stable_sorted_order(
   table_view input,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                            = 0);
+  rmm::cuda_stream_view stream                   = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc cudf::sort_by_key
@@ -58,8 +60,8 @@ std::unique_ptr<table> sort_by_key(
   table_view const& keys,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
-  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                            = 0);
+  rmm::cuda_stream_view stream                   = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace cudf
