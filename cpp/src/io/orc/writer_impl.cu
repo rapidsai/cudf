@@ -39,10 +39,10 @@ using namespace cudf::io::orc;
 using namespace cudf::io;
 
 struct row_group_index_info {
-  int32_t pos;        // Position
-  int32_t blk_pos;    // Block Position
-  int32_t comp_pos;   // Compressed Position
-  int32_t comp_size;  // Compressed size
+  int32_t pos       = -1;  // Position
+  int32_t blk_pos   = -1;  // Block Position
+  int32_t comp_pos  = -1;  // Compressed Position
+  int32_t comp_size = -1;  // Compressed size
 };
 
 namespace {
@@ -852,7 +852,7 @@ void writer::impl::write_index_stream(int32_t stripe_id,
   auto kind = TypeKind::STRUCT;
 
   auto find_record = [=, &strm_desc](gpu::EncChunk const &chunk, gpu::StreamIndexType type) {
-    row_group_index_info record{-1, -1, -1, -1};
+    row_group_index_info record;
     if (chunk.strm_id[type] > 0) {
       record.pos = 0;
       if (compression_kind_ != NONE) {
