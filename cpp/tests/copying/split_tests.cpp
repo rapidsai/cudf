@@ -22,6 +22,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <rmm/device_buffer.hpp>
@@ -954,7 +955,12 @@ TEST_F(SplitNestedTypesTest, StructsOfList)
 template <typename T>
 struct ContiguousSplitTest : public cudf::test::BaseFixture {
 };
-TYPED_TEST_CASE(ContiguousSplitTest, cudf::test::NumericTypes);
+
+// the various utility functions in slice_tests.cuh don't like the chrono types
+using FixedWidthTypesWithoutChrono =
+  cudf::test::Concat<cudf::test::NumericTypes, cudf::test::FixedPointTypes>;
+
+TYPED_TEST_CASE(ContiguousSplitTest, FixedWidthTypesWithoutChrono);
 
 TYPED_TEST(ContiguousSplitTest, LongColumn)
 {
@@ -1031,7 +1037,7 @@ TEST_F(ContiguousSplitStringTableTest, EmptyOutputColumn)
 template <typename T>
 struct ContiguousSplitTableTest : public cudf::test::BaseFixture {
 };
-TYPED_TEST_CASE(ContiguousSplitTableTest, cudf::test::NumericTypes);
+TYPED_TEST_CASE(ContiguousSplitTableTest, FixedWidthTypesWithoutChrono);
 
 TYPED_TEST(ContiguousSplitTableTest, SplitEndLessThanSize)
 {

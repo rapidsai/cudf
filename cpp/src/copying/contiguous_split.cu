@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <thrust/iterator/discard_iterator.h>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
@@ -24,7 +23,10 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
+
 #include <rmm/device_uvector.hpp>
+
+#include <thrust/iterator/discard_iterator.h>
 
 #include <numeric>
 
@@ -46,7 +48,7 @@ inline __device__ size_t _round_up_safe(size_t number_to_round, size_t modulus)
  * @brief Struct which contains information on a source buffer.
  *
  * The definition of "buffer" used throughout this module is a component piece of a
- * cudf column. So for example, a fixed with column with validity would have 2 associated
+ * cudf column. So for example, a fixed-width column with validity would have 2 associated
  * buffers : the data itself and the validity buffer.  contiguous_split operates by breaking
  * each column up into it's individual components and copying each one as a seperate kernel
  * block.
@@ -111,7 +113,7 @@ struct dst_buf_info {
  * This function always does the ALU work related to value_shift and bit_shift because it is
  * entirely memory-bandwidth bound.
  *
- * @param dst Desination buffer
+ * @param dst Destination buffer
  * @param src Source buffer
  * @param t Thread index
  * @param num_elements Number of elements to copy
@@ -123,7 +125,7 @@ struct dst_buf_info {
  *
  */
 __device__ void copy_buffer(uint8_t* __restrict__ dst,
-                            uint8_t* __restrict__ _src,
+                            uint8_t* __restrict__ src,
                             int t,
                             int num_elements,
                             int element_size,
@@ -132,7 +134,7 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
                             int value_shift,
                             int bit_shift)
 {
-  uint8_t* const src = _src + (src_row_index * element_size);
+  src += (src_row_index * element_size);
 
   // handle misalignment. read 16 bytes in 4 byte reads. write in a single 16 byte store.
   const size_t num_bytes = num_elements * element_size;
@@ -189,10 +191,10 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
  * @brief Kernel which copies a single buffer from a set of partitioned
  * column buffers.
  *
- * When doing a contiguous_split on X columns comprised of N total internal buffers
+ * When doing a contiguous_split on X columns comprising N total internal buffers
  * with M splits, we end up having to copy N*M source/destination buffer pairs.
- * This kernel is arrangedsuch that each block copies 1 source/destination pair.
- * This function retrieves the relevant function and then calls copy_buffer to perform
+ * This kernel is arranged such that each block copies 1 source/destination pair.
+ * This function retrieves the relevant buffers and then calls copy_buffer to perform
  * the actual copy.
  *
  * @param num_src_bufs Total number of source buffers (N)
@@ -201,7 +203,6 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
  * @param dst_bufs Desination buffers (N*M)
  * @param buf_info Information on the range of values to be copied for each destination buffer.
  *
- * @returns Total offset stack size needed for this range of columns.
  */
 __global__ void copy_partition(int num_src_bufs,
                                int num_partitions,
@@ -225,7 +226,7 @@ __global__ void copy_partition(int num_src_bufs,
               buf_info[buf_index].bit_shift);
 }
 
-// The block of function below are all related:
+// The block of functions below are all related:
 //
 // compute_offset_stack_size()
 // setup_src_buf_data()
@@ -315,7 +316,7 @@ OutputIter setup_src_buf_data(InputIter begin, InputIter end, OutputIter out_buf
  * from.
  *
  * This count includes buffers for all input columns. For example a
- * fixed with column with validity would be 2 buffers (data, validity).
+ * fixed-width column with validity would be 2 buffers (data, validity).
  * A string column with validity would be 3 buffers (chars, offsets, validity).
  *
  * This function is called recursively in the case of nested types.
@@ -356,6 +357,7 @@ size_type count_src_bufs(InputIter begin, InputIter end)
  *
  * @returns next src_buf_output after processing this range of input columns
  */
+// setup source buf info
 template <typename InputIter>
 std::pair<src_buf_info*, size_type> setup_source_buf_info(InputIter begin,
                                                           InputIter end,
@@ -670,7 +672,7 @@ struct size_of_helper {
   template <typename T>
   constexpr std::enable_if_t<is_fixed_width<T>(), int> __device__ operator()() const noexcept
   {
-    return sizeof(T);
+    return sizeof(cudf::device_storage_type_t<T>);
   }
 };
 
@@ -712,7 +714,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
         return contiguous_split_result{input, std::make_unique<rmm::device_buffer>()};
       });
 
-    return std::move(result);
+    return result;
   }
 
   size_t const num_root_columns = input.num_columns();
@@ -722,24 +724,29 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
   size_type const num_src_bufs = count_src_bufs(input.begin(), input.end());
   size_t const num_bufs        = num_src_bufs * num_partitions;
 
-  // clang-format off
   // packed block of memory 1. split indices and src_buf_info structs
-  size_t const indices_size = cudf::util::round_up_safe((num_partitions + 1) * sizeof(size_type), split_align);
-  size_t const src_buf_info_size = cudf::util::round_up_safe(num_src_bufs * sizeof(src_buf_info), split_align);
+  size_t const indices_size =
+    cudf::util::round_up_safe((num_partitions + 1) * sizeof(size_type), split_align);
+  size_t const src_buf_info_size =
+    cudf::util::round_up_safe(num_src_bufs * sizeof(src_buf_info), split_align);
   // host-side
   std::vector<uint8_t> h_indices_and_source_info(indices_size + src_buf_info_size);
   size_type* h_indices = reinterpret_cast<size_type*>(h_indices_and_source_info.data());
-  src_buf_info* h_src_buf_info = reinterpret_cast<src_buf_info*>(h_indices_and_source_info.data() + indices_size);
+  src_buf_info* h_src_buf_info =
+    reinterpret_cast<src_buf_info*>(h_indices_and_source_info.data() + indices_size);
   // device-side
   // gpu-only : stack space needed for nested list offset calculation
   int const offset_stack_partition_size = compute_offset_stack_size(input.begin(), input.end());
   size_t const offset_stack_size = offset_stack_partition_size * num_partitions * sizeof(size_type);
-  rmm::device_buffer d_indices_and_source_info(indices_size + src_buf_info_size + offset_stack_size, stream, rmm::mr::get_current_device_resource());
+  rmm::device_buffer d_indices_and_source_info(indices_size + src_buf_info_size + offset_stack_size,
+                                               stream,
+                                               rmm::mr::get_current_device_resource());
   size_type* d_indices         = reinterpret_cast<size_type*>(d_indices_and_source_info.data());
-  src_buf_info* d_src_buf_info = reinterpret_cast<src_buf_info*>(reinterpret_cast<uint8_t*>(d_indices_and_source_info.data()) + indices_size);
-  size_type* d_offset_stack =    reinterpret_cast<size_type*>(reinterpret_cast<uint8_t*>(d_indices_and_source_info.data()) +
+  src_buf_info* d_src_buf_info = reinterpret_cast<src_buf_info*>(
+    reinterpret_cast<uint8_t*>(d_indices_and_source_info.data()) + indices_size);
+  size_type* d_offset_stack =
+    reinterpret_cast<size_type*>(reinterpret_cast<uint8_t*>(d_indices_and_source_info.data()) +
                                  indices_size + src_buf_info_size);
-  // clang-format on
 
   // compute splits -> indices.
   h_indices[0]              = 0;
@@ -753,19 +760,22 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
   CUDA_TRY(cudaMemcpyAsync(
     d_indices, h_indices, indices_size + src_buf_info_size, cudaMemcpyHostToDevice, stream));
 
-  // clang-format off
   // packed block of memory 2. partition buffer sizes and dst_buf_info structs
-  size_t const buf_sizes_size = cudf::util::round_up_safe(num_partitions * sizeof(size_t), split_align);
-  size_t const dst_buf_info_size = cudf::util::round_up_safe(num_bufs * sizeof(dst_buf_info), split_align);
+  size_t const buf_sizes_size =
+    cudf::util::round_up_safe(num_partitions * sizeof(size_t), split_align);
+  size_t const dst_buf_info_size =
+    cudf::util::round_up_safe(num_bufs * sizeof(dst_buf_info), split_align);
   // host-side
   std::vector<uint8_t> h_buf_sizes_and_dst_info(buf_sizes_size + dst_buf_info_size);
   size_t* h_buf_sizes = reinterpret_cast<size_t*>(h_buf_sizes_and_dst_info.data());
-  dst_buf_info* h_dst_buf_info = reinterpret_cast<dst_buf_info*>(h_buf_sizes_and_dst_info.data() + buf_sizes_size);
+  dst_buf_info* h_dst_buf_info =
+    reinterpret_cast<dst_buf_info*>(h_buf_sizes_and_dst_info.data() + buf_sizes_size);
   // device-side
-  rmm::device_buffer d_buf_sizes_and_dst_info(buf_sizes_size + dst_buf_info_size, stream, rmm::mr::get_current_device_resource());
+  rmm::device_buffer d_buf_sizes_and_dst_info(
+    buf_sizes_size + dst_buf_info_size, stream, rmm::mr::get_current_device_resource());
   size_t* d_buf_sizes          = reinterpret_cast<size_t*>(d_buf_sizes_and_dst_info.data());
-  dst_buf_info* d_dst_buf_info = reinterpret_cast<dst_buf_info*>(reinterpret_cast<uint8_t*>(d_buf_sizes_and_dst_info.data()) + buf_sizes_size);
-  // clang-format on
+  dst_buf_info* d_dst_buf_info = reinterpret_cast<dst_buf_info*>(
+    static_cast<uint8_t*>(d_buf_sizes_and_dst_info.data()) + buf_sizes_size);
 
   // compute sizes of each column in each partition, including alignment.
   thrust::transform(
@@ -879,20 +889,23 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
                    return rmm::device_buffer{bytes, stream, mr};
                  });
 
-  // clang-format off
   // packed block of memory 3. pointers to source and destination buffers (and stack space on the
   // gpu for offset computation)
-  size_t const src_bufs_size = cudf::util::round_up_safe(num_src_bufs * sizeof(uint8_t*), split_align);
-  size_t const dst_bufs_size = cudf::util::round_up_safe(num_partitions * sizeof(uint8_t*), split_align);
+  size_t const src_bufs_size =
+    cudf::util::round_up_safe(num_src_bufs * sizeof(uint8_t*), split_align);
+  size_t const dst_bufs_size =
+    cudf::util::round_up_safe(num_partitions * sizeof(uint8_t*), split_align);
   // host-side
   std::vector<uint8_t> h_src_and_dst_buffers(src_bufs_size + dst_bufs_size);
   uint8_t** h_src_bufs = reinterpret_cast<uint8_t**>(h_src_and_dst_buffers.data());
   uint8_t** h_dst_bufs = reinterpret_cast<uint8_t**>(h_src_and_dst_buffers.data() + src_bufs_size);
   // device-side
-  rmm::device_buffer d_src_and_dst_buffers(src_bufs_size + dst_bufs_size + offset_stack_size, stream, rmm::mr::get_current_device_resource());
+  rmm::device_buffer d_src_and_dst_buffers(src_bufs_size + dst_bufs_size + offset_stack_size,
+                                           stream,
+                                           rmm::mr::get_current_device_resource());
   uint8_t** d_src_bufs = reinterpret_cast<uint8_t**>(d_src_and_dst_buffers.data());
-  uint8_t** d_dst_bufs = reinterpret_cast<uint8_t**>(reinterpret_cast<uint8_t*>(d_src_and_dst_buffers.data()) + src_bufs_size);
-  // clang-format on
+  uint8_t** d_dst_bufs = reinterpret_cast<uint8_t**>(
+    reinterpret_cast<uint8_t*>(d_src_and_dst_buffers.data()) + src_bufs_size);
 
   // setup src buffers
   setup_src_buf_data(input.begin(), input.end(), h_src_bufs);
