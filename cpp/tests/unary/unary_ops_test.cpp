@@ -280,7 +280,7 @@ TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryAbs)
 
   auto const input    = fp_wrapper{{-1234, -3456, -6789, 1234, 3456, 6789}, scale_type{-3}};
   auto const expected = fp_wrapper{{1234, 3456, 6789, 1234, 3456, 6789}, scale_type{-3}};
-  auto const result   = cudf::unary_operation(input, cudf::unary_op::ABS);
+  auto const result   = cudf::unary_operation(input, cudf::unary_operator::ABS);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -294,7 +294,7 @@ TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryAbsPositiveScale)
 
   auto const input    = fp_wrapper{{-1234, -3456, -6789, 1234, 3456, 6789}, scale_type{1}};
   auto const expected = fp_wrapper{{1234, 3456, 6789, 1234, 3456, 6789}, scale_type{1}};
-  auto const result   = cudf::unary_operation(input, cudf::unary_op::ABS);
+  auto const result   = cudf::unary_operation(input, cudf::unary_operator::ABS);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -310,7 +310,7 @@ TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryAbsLarge)
   auto b = cudf::test::make_counting_transform_iterator(-2000, [](auto e) { return std::abs(e); });
   auto const input    = fp_wrapper{a, a + 4000, scale_type{-1}};
   auto const expected = fp_wrapper{b, b + 4000, scale_type{-1}};
-  auto const result   = cudf::unary_operation(input, cudf::unary_op::ABS);
+  auto const result   = cudf::unary_operation(input, cudf::unary_operator::ABS);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -324,7 +324,7 @@ TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryCeil)
 
   auto const input    = fp_wrapper{{-1234, -3456, -6789, 1234, 3456, 7000, 0}, scale_type{-3}};
   auto const expected = fp_wrapper{{-1000, -3000, -6000, 2000, 4000, 7000, 0}, scale_type{-3}};
-  auto const result   = cudf::unary_operation(input, cudf::unary_op::CEIL);
+  auto const result   = cudf::unary_operation(input, cudf::unary_operator::CEIL);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -340,7 +340,7 @@ TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryCeilLarge)
   auto b = cudf::test::make_counting_transform_iterator(-5000, [](int e) { return (e / 10) * 10; });
   auto const input    = fp_wrapper{a, a + 4000, scale_type{-1}};
   auto const expected = fp_wrapper{b, b + 4000, scale_type{-1}};
-  auto const result   = cudf::unary_operation(input, cudf::unary_op::CEIL);
+  auto const result   = cudf::unary_operation(input, cudf::unary_operator::CEIL);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -354,7 +354,7 @@ TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryFloor)
 
   auto const input    = fp_wrapper{{-1234, -3456, -6789, 1234, 3456, 6000, 0}, scale_type{-3}};
   auto const expected = fp_wrapper{{-2000, -4000, -7000, 1000, 3000, 6000, 0}, scale_type{-3}};
-  auto const result   = cudf::unary_operation(input, cudf::unary_op::FLOOR);
+  auto const result   = cudf::unary_operation(input, cudf::unary_operator::FLOOR);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -370,7 +370,7 @@ TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryFloorLarge)
   auto b = cudf::test::make_counting_transform_iterator(100, [](auto e) { return (e / 10) * 10; });
   auto const input    = fp_wrapper{a, a + 4000, scale_type{-1}};
   auto const expected = fp_wrapper{b, b + 4000, scale_type{-1}};
-  auto const result   = cudf::unary_operation(input, cudf::unary_op::FLOOR);
+  auto const result   = cudf::unary_operation(input, cudf::unary_operator::FLOOR);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
