@@ -112,9 +112,8 @@ class mutable_table_device_view
 };
 
 template <typename ColumnDeviceView, typename HostTableView>
-auto contiguous_copy_column_device_views(HostTableView source_view, cudaStream_t stream)
+auto contiguous_copy_column_device_views(HostTableView source_view, rmm::cuda_stream_view stream)
 {
-  //
   // First calculate the size of memory needed to hold the
   // table's ColumnDeviceViews. This is done by calling extent()
   // for each of the table's ColumnViews columns.
@@ -143,8 +142,8 @@ auto contiguous_copy_column_device_views(HostTableView source_view, cudaStream_t
 
   // align h_ptr also, because both h_ptr, d_ptr alignment will not be same!
   auto aligned_hptr = detail::align_ptr_for_type<ColumnDeviceView>(h_buffer.data());
-  CUDA_TRY(cudaMemcpyAsync(d_columns, aligned_hptr, views_size_bytes, cudaMemcpyDefault, stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  CUDA_TRY(cudaMemcpyAsync(d_columns, aligned_hptr, views_size_bytes, cudaMemcpyDefault, stream.value()));
+  stream.synchronize();
   return std::make_tuple(_descendant_storage, d_columns);
 }
 

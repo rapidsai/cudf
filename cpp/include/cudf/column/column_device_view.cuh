@@ -885,7 +885,7 @@ struct mutable_value_accessor {
  * all the children and set the member pointers appropriately.
  *
  * This is accomplished by laying out all the children and grand-children into a flat host
- * buffer first but also keep a running device pointer to but used when setting the
+ * buffer first but also keep a running device pointer to use when setting the
  * d_children array result.
  *
  * This function is provided both the host pointer in which to insert its children (and
