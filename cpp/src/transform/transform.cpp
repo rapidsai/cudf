@@ -31,6 +31,8 @@
 #include <jit/timestamps.hpp.jit>
 #include <jit/types.hpp.jit>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace transformation {
 //! Jit functions
@@ -52,7 +54,7 @@ void unary_operation(mutable_column_view output,
                      const std::string& udf,
                      data_type output_type,
                      bool is_ptx,
-                     cudaStream_t stream)
+                     rmm::cuda_stream_view stream)
 {
   std::string hash = "prog_transform" + std::to_string(std::hash<std::string>{}(udf));
 
@@ -86,8 +88,8 @@ std::unique_ptr<column> transform(column_view const& input,
                                   std::string const& unary_udf,
                                   data_type output_type,
                                   bool is_ptx,
-                                  rmm::mr::device_memory_resource* mr,
-                                  cudaStream_t stream)
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(is_fixed_width(input.type()), "Unexpected non-fixed-width type.");
 
@@ -113,7 +115,7 @@ std::unique_ptr<column> transform(column_view const& input,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::transform(input, unary_udf, output_type, is_ptx, mr);
+  return detail::transform(input, unary_udf, output_type, is_ptx, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

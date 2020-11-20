@@ -416,16 +416,16 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
                                               complement_indices.second.begin(),
                                               complement_indices.second.end(),
                                               nullify_out_of_bounds,
-                                              rmm::mr::get_current_device_resource(),
-                                              stream);
+                                              stream,
+                                              rmm::mr::get_current_device_resource());
       auto common_from_probe = detail::gather(probe.select(probe_common_col),
                                               joined_indices.first.begin(),
                                               joined_indices.first.end(),
                                               nullify_out_of_bounds,
-                                              rmm::mr::get_current_device_resource(),
-                                              stream);
+                                              stream,
+                                              rmm::mr::get_current_device_resource());
       common_table           = cudf::detail::concatenate(
-        {common_from_build->view(), common_from_probe->view()}, mr, stream);
+        {common_from_build->view(), common_from_probe->view()}, stream, mr);
     }
     joined_indices = concatenate_vector_pairs(complement_indices, joined_indices);
   } else {
@@ -434,8 +434,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
                                     joined_indices.first.begin(),
                                     joined_indices.first.end(),
                                     nullify_out_of_bounds,
-                                    mr,
-                                    stream);
+                                    stream,
+                                    mr);
     }
   }
 
@@ -444,15 +444,15 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
                                                       joined_indices.first.begin(),
                                                       joined_indices.first.end(),
                                                       nullify_out_of_bounds,
-                                                      mr,
-                                                      stream);
+                                                      stream,
+                                                      mr);
 
   std::unique_ptr<table> build_table = detail::gather(build.select(build_noncommon_col),
                                                       joined_indices.second.begin(),
                                                       joined_indices.second.end(),
                                                       nullify_out_of_bounds,
-                                                      mr,
-                                                      stream);
+                                                      stream,
+                                                      mr);
 
   return combine_join_columns(probe_table->release(),
                               probe_noncommon_col,

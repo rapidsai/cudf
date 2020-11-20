@@ -22,13 +22,12 @@
 #include <cudf/detail/stream_compaction.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/row_operators.cuh>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
+#include <rmm/cuda_stream_view.hpp>
 #include <vector>
 
 namespace cudf {
@@ -36,14 +35,14 @@ namespace detail {
 
 cudf::size_type distinct_count(table_view const& keys,
                                null_equality nulls_equal,
-                               cudaStream_t stream)
+                               rmm::cuda_stream_view stream)
 {
   // sort only indices
   auto sorted_indices = sorted_order(keys,
                                      std::vector<order>{},
                                      std::vector<null_order>{},
-                                     rmm::mr::get_current_device_resource(),
-                                     stream);
+                                     stream,
+                                     rmm::mr::get_current_device_resource());
 
   // count unique elements
   auto sorted_row_index   = sorted_indices->view().data<cudf::size_type>();
@@ -53,7 +52,7 @@ cudf::size_type distinct_count(table_view const& keys,
     row_equality_comparator<true> comp(
       *device_input_table, *device_input_table, nulls_equal == null_equality::EQUAL);
     return thrust::count_if(
-      rmm::exec_policy(stream)->on(stream),
+      rmm::exec_policy(stream)->on(stream.value()),
       thrust::counting_iterator<cudf::size_type>(0),
       thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
       [sorted_row_index, comp] __device__(cudf::size_type i) {
@@ -63,7 +62,7 @@ cudf::size_type distinct_count(table_view const& keys,
     row_equality_comparator<false> comp(
       *device_input_table, *device_input_table, nulls_equal == null_equality::EQUAL);
     return thrust::count_if(
-      rmm::exec_policy(stream)->on(stream),
+      rmm::exec_policy(stream)->on(stream.value()),
       thrust::counting_iterator<cudf::size_type>(0),
       thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
       [sorted_row_index, comp] __device__(cudf::size_type i) {
@@ -118,11 +117,11 @@ struct has_nans {
    * @returns bool true if `input` has `NAN` else false
    */
   template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
-  bool operator()(column_view const& input, cudaStream_t stream)
+  bool operator()(column_view const& input, rmm::cuda_stream_view stream)
   {
     auto input_device_view = cudf::column_device_view::create(input, stream);
     auto device_view       = *input_device_view;
-    auto count             = thrust::count_if(rmm::exec_policy(stream)->on(stream),
+    auto count             = thrust::count_if(rmm::exec_policy(stream)->on(stream.value()),
                                   thrust::counting_iterator<cudf::size_type>(0),
                                   thrust::counting_iterator<cudf::size_type>(input.size()),
                                   check_for_nan<T>(device_view));
@@ -142,7 +141,7 @@ struct has_nans {
    * @returns bool Always false as non-floating point columns can't have `NAN`
    */
   template <typename T, std::enable_if_t<not std::is_floating_point<T>::value>* = nullptr>
-  bool operator()(column_view const& input, cudaStream_t stream)
+  bool operator()(column_view const& input, rmm::cuda_stream_view stream)
   {
     return false;
   }
@@ -151,7 +150,7 @@ struct has_nans {
 cudf::size_type distinct_count(column_view const& input,
                                null_policy null_handling,
                                nan_policy nan_handling,
-                               cudaStream_t stream)
+                               rmm::cuda_stream_view stream)
 {
   if (0 == input.size() || input.null_count() == input.size()) { return 0; }
 

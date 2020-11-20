@@ -351,12 +351,12 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
   // Compute the substring indices first
   auto start_chars_pos_vec = make_column_from_scalar(numeric_scalar<size_type>(0, true, stream),
                                                      strings_count,
-                                                     rmm::mr::get_current_device_resource(),
-                                                     stream);
+                                                     stream,
+                                                     rmm::mr::get_current_device_resource());
   auto stop_chars_pos_vec  = make_column_from_scalar(numeric_scalar<size_type>(0, true, stream),
                                                     strings_count,
-                                                    rmm::mr::get_current_device_resource(),
-                                                    stream);
+                                                    stream,
+                                                    rmm::mr::get_current_device_resource());
 
   auto start_char_pos = start_chars_pos_vec->mutable_view().data<size_type>();
   auto end_char_pos   = stop_chars_pos_vec->mutable_view().data<size_type>();

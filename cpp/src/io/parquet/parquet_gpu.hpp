@@ -224,8 +224,6 @@ struct EncColumnDesc : stats_column_desc {
   size_type const *const
     *nesting_offsets;  //!< If column is a nested type, contains offset array of each nesting level
   size_type nesting_levels;  //!< Number of nesting levels in column. 0 means no nesting.
-  size_type num_values;  //!< Number of data values in column. Different from num_rows in case of
-                         //!< nested columns
 
   size_type const *level_offsets;  //!< Offset array for per-row pre-calculated rep/def level values
   uint8_t const *rep_values;       //!< Pre-calculated repetition level values
@@ -241,6 +239,7 @@ struct PageFragment {
   uint32_t fragment_data_size;  //!< Size of fragment data in bytes
   uint32_t dict_data_size;      //!< Size of dictionary for this fragment
   uint32_t num_values;  //!< Number of values in fragment. Different from num_rows for nested type
+  uint32_t start_value_idx;
   uint32_t num_leaf_values;  //!< Number of leaf values in fragment. Does not include nulls at
                              //!< non-leaf level
   uint32_t non_nulls;        //!< Number of non-null values

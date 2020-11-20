@@ -196,6 +196,9 @@ enum {
  */
 bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &json_str)
 {
+  // Empty schema
+  if (json_str == "[]") return true;
+
   char depthbuf[MAX_SCHEMA_DEPTH];
   int depth = 0, parent_idx = -1, entry_idx = -1;
   json_state_e state = state_attrname;

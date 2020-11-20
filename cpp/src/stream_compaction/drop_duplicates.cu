@@ -97,7 +97,7 @@ OutputIterator unique_copy(InputIterator first,
 {
   size_type const last_index = thrust::distance(first, last) - 1;
   return thrust::copy_if(
-    rmm::exec_policy(stream.value())->on(stream.value()),
+    rmm::exec_policy(stream)->on(stream.value()),
     first,
     last,
     thrust::counting_iterator<size_type>(0),
@@ -136,8 +136,8 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
   auto sorted_indices = sorted_order(keys,
                                      std::vector<order>{},
                                      std::vector<null_order>{},
-                                     rmm::mr::get_current_device_resource(),
-                                     stream.value());
+                                     stream,
+                                     rmm::mr::get_current_device_resource());
 
   // extract unique indices
   auto device_input_table = cudf::table_device_view::create(keys, stream.value());
@@ -177,8 +177,8 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
                                        std::vector<size_type> const& keys,
                                        duplicate_keep_option keep,
                                        null_equality nulls_equal,
-                                       rmm::mr::device_memory_resource* mr,
-                                       cudaStream_t stream)
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
   if (0 == input.num_rows() || 0 == input.num_columns() || 0 == keys.size()) {
     return empty_like(input);
@@ -200,8 +200,8 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
                         unique_indices_view,
                         detail::out_of_bounds_policy::NULLIFY,
                         detail::negative_index_policy::NOT_ALLOWED,
-                        mr,
-                        stream);
+                        stream,
+                        mr);
 }
 
 }  // namespace detail
@@ -213,7 +213,7 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::drop_duplicates(input, keys, keep, nulls_equal, mr);
+  return detail::drop_duplicates(input, keys, keep, nulls_equal, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,9 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
 
@@ -55,8 +58,8 @@ namespace detail {
  * are to be scattered
  * @param check_bounds Optionally perform bounds checking on the values of
  * `scatter_map` and throw an error if any of its values are out of bounds.
- * @param mr Device memory resource used to allocate the returned table's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Result of scattering values from source to target
  **/
 std::unique_ptr<table> scatter(
@@ -64,8 +67,8 @@ std::unique_ptr<table> scatter(
   column_view const& scatter_map,
   table_view const& target,
   bool check_bounds                   = false,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Scatters a row of scalar values into a copy of the target table
@@ -95,8 +98,8 @@ std::unique_ptr<table> scatter(
  * are to be scattered
  * @param check_bounds Optionally perform bounds checking on the values of
  * `scatter_map` and throw an error if any of its values are out of bounds.
- * @param mr Device memory resource used to allocate the returned table's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Result of scattering values from source to target
  **/
 std::unique_ptr<table> scatter(
@@ -104,8 +107,8 @@ std::unique_ptr<table> scatter(
   column_view const& indices,
   table_view const& target,
   bool check_bounds                   = false,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc cudf::boolean_mask_scatter(
@@ -115,11 +118,12 @@ std::unique_ptr<table> scatter(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<table> boolean_mask_scatter(table_view const& source,
-                                            table_view const& target,
-                                            column_view const& boolean_mask,
-                                            rmm::mr::device_memory_resource* mr,
-                                            cudaStream_t stream = 0);
+std::unique_ptr<table> boolean_mask_scatter(
+  table_view const& source,
+  table_view const& target,
+  column_view const& boolean_mask,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc cudf::boolean_mask_scatter(
@@ -134,8 +138,8 @@ std::unique_ptr<table> boolean_mask_scatter(
   std::vector<std::reference_wrapper<const scalar>> const& source,
   table_view const& target,
   column_view const& boolean_mask,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace cudf
