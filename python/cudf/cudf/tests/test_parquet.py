@@ -2,6 +2,8 @@
 import os
 import pathlib
 import random
+import datetime
+import math
 from glob import glob
 from io import BytesIO
 from string import ascii_letters
@@ -103,7 +105,7 @@ def pdf(request):
 
     # Cast all the column dtypes to objects, rename them, and then cast to
     # appropriate types
-    test_pdf = test_pdf.astype("object").rename(renamer, axis=1).astype(typer)
+    test_pdf = test_pdf.rename(renamer, axis=1).astype(typer)
 
     # Create non-numeric categorical data otherwise parquet may typecast it
     data = [ascii_letters[np.random.randint(0, 52)] for i in range(nrows)]
@@ -1180,7 +1182,9 @@ def test_parquet_writer_cpu_pyarrow(tmpdir, pdf, gdf):
 
     # Pandas uses a datetime64[ns] while we use a datetime64[ms]
     expect_idx = expect.schema.get_field_index("col_datetime64[ms]")
-    expect_field = clone_field(expect, "col_datetime64[ms]", pa.date64())
+    expect_field = clone_field(
+        expect, "col_datetime64[ms]", pa.timestamp("ms")
+    )
     expect = expect.set_column(
         expect_idx,
         expect_field,
@@ -1189,7 +1193,7 @@ def test_parquet_writer_cpu_pyarrow(tmpdir, pdf, gdf):
     expect = expect.replace_schema_metadata()
 
     got_idx = got.schema.get_field_index("col_datetime64[ms]")
-    got_field = clone_field(got, "col_datetime64[ms]", pa.date64())
+    got_field = clone_field(got, "col_datetime64[ms]", pa.timestamp("ms"))
     got = got.set_column(
         got_idx, got_field, got.column(got_idx).cast(got_field.type)
     )
@@ -1579,3 +1583,85 @@ def test_parquet_nullable_boolean(tmpdir, engine):
     actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
 
     assert_eq(actual_gdf, expected_gdf)
+
+
+def normalized_equals(value1, value2):
+    if isinstance(value1, pd.Timestamp):
+        value1 = value1.to_pydatetime()
+    if isinstance(value2, pd.Timestamp):
+        value2 = value2.to_pydatetime()
+    if isinstance(value1, datetime.datetime):
+        value1 = value1.replace(tzinfo=None)
+    if isinstance(value2, datetime.datetime):
+        value2 = value2.replace(tzinfo=None)
+
+    # if one is datetime then both values are datetimes now
+    if isinstance(value1, datetime.datetime):
+        return value1 == value2
+
+    # Compare integers with floats now
+    if isinstance(value1, float) or isinstance(value2, float):
+        return math.isclose(value1, value2)
+
+    return value1 == value2
+
+
+def test_parquet_writer_statistics(tmpdir, pdf):
+    file_path = tmpdir.join("cudf.parquet")
+    if "col_category" in pdf.columns:
+        pdf = pdf.drop(columns=["col_category", "col_bool"])
+
+    gdf = cudf.from_pandas(pdf)
+    gdf.to_parquet(file_path, index=False)
+
+    # Read back from pyarrow
+    pq_file = pq.ParquetFile(file_path)
+    # verify each row group's statistics
+    for rg in range(0, pq_file.num_row_groups):
+        pd_slice = pq_file.read_row_group(rg).to_pandas()
+
+        # statistics are per-column. So need to verify independently
+        for i, col in enumerate(pd_slice):
+            stats = pq_file.metadata.row_group(rg).column(i).statistics
+
+            actual_min = pd_slice[col].min()
+            stats_min = stats.min
+            assert normalized_equals(actual_min, stats_min)
+
+            actual_max = pd_slice[col].max()
+            stats_max = stats.max
+            assert normalized_equals(actual_max, stats_max)
+
+
+def test_parquet_writer_list_statistics(tmpdir):
+    df = pd.DataFrame(
+        {
+            "a": list_gen(string_gen, 0, 128, 80, 50),
+            "b": list_gen(int_gen, 0, 128, 80, 50),
+            "c": list_gen(int_gen, 0, 128, 80, 50, include_validity=True),
+            "d": list_gen(string_gen, 0, 128, 80, 50, include_validity=True),
+        }
+    )
+    fname = tmpdir.join("test_parquet_writer_list_statistics.parquet")
+    gdf = cudf.from_pandas(df)
+
+    gdf.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    # Read back from pyarrow
+    pq_file = pq.ParquetFile(fname)
+    # verify each row group's statistics
+    for rg in range(0, pq_file.num_row_groups):
+        pd_slice = pq_file.read_row_group(rg).to_pandas()
+
+        # statistics are per-column. So need to verify independently
+        for i, col in enumerate(pd_slice):
+            stats = pq_file.metadata.row_group(rg).column(i).statistics
+
+            actual_min = cudf.Series(pd_slice[col].explode().explode()).min()
+            stats_min = stats.min
+            assert normalized_equals(actual_min, stats_min)
+
+            actual_max = cudf.Series(pd_slice[col].explode().explode()).max()
+            stats_max = stats.max
+            assert normalized_equals(actual_max, stats_max)

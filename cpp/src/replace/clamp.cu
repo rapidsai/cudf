@@ -245,12 +245,14 @@ struct dispatch_clamp {
   {
     CUDF_EXPECTS(lo.type() == input.type(), "mismatching types of scalar and input");
 
-    auto lo_itr         = make_pair_iterator<T>(lo);
-    auto hi_itr         = make_pair_iterator<T>(hi);
-    auto lo_replace_itr = make_pair_iterator<T>(lo_replace);
-    auto hi_replace_itr = make_pair_iterator<T>(hi_replace);
+    using Type = device_storage_type_t<T>;
 
-    return clamp<T>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, mr, stream);
+    auto lo_itr         = make_pair_iterator<Type>(lo);
+    auto hi_itr         = make_pair_iterator<Type>(hi);
+    auto lo_replace_itr = make_pair_iterator<Type>(lo_replace);
+    auto hi_replace_itr = make_pair_iterator<Type>(hi_replace);
+
+    return clamp<Type>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, mr, stream);
   }
 };
 
@@ -265,32 +267,6 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::list_view>(
   cudaStream_t stream)
 {
   CUDF_FAIL("clamp for list_view not supported");
-}
-
-template <>
-std::unique_ptr<column> dispatch_clamp::operator()<numeric::decimal32>(
-  column_view const& input,
-  scalar const& lo,
-  scalar const& lo_replace,
-  scalar const& hi,
-  scalar const& hi_replace,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream)
-{
-  CUDF_FAIL("clamp for decimal32 not supported");
-}
-
-template <>
-std::unique_ptr<column> dispatch_clamp::operator()<numeric::decimal64>(
-  column_view const& input,
-  scalar const& lo,
-  scalar const& lo_replace,
-  scalar const& hi,
-  scalar const& hi_replace,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream)
-{
-  CUDF_FAIL("clamp for decimal64 not supported");
 }
 
 template <>
