@@ -157,7 +157,7 @@ class NumericalColumn(ColumnBase):
         else:
             raise TypeError(f"cannot broadcast {type(other)}")
 
-    def int2ip(self) -> "ColumnBase":
+    def int2ip(self) -> "cudf.core.column.StringColumn":
         if self.dtype != np.dtype("int64"):
             raise TypeError("Only int64 type can be converted to ip")
 
@@ -209,7 +209,7 @@ class NumericalColumn(ColumnBase):
             return self
         return libcudf.unary.cast(self, dtype)
 
-    def reduce(self, op: str, skipna: bool = None, **kwargs) -> ScalarObj:
+    def reduce(self, op: str, skipna: bool = None, **kwargs) -> float:
         min_count = kwargs.pop("min_count", 0)
         preprocessed = self._process_for_reduction(
             skipna=skipna, min_count=min_count
@@ -217,39 +217,39 @@ class NumericalColumn(ColumnBase):
         if isinstance(preprocessed, ColumnBase):
             return libcudf.reduce.reduce(op, preprocessed, **kwargs)
         else:
-            return preprocessed
+            return cast(float, preprocessed)
 
     def sum(
         self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
-    ) -> ScalarObj:
+    ) -> float:
         return self.reduce(
             "sum", skipna=skipna, dtype=dtype, min_count=min_count
         )
 
     def product(
         self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
-    ):
+    ) -> float:
         return self.reduce(
             "product", skipna=skipna, dtype=dtype, min_count=min_count
         )
 
-    def mean(self, skipna: bool = None, dtype: Dtype = np.float64):
+    def mean(self, skipna: bool = None, dtype: Dtype = np.float64) -> float:
         return self.reduce("mean", skipna=skipna, dtype=dtype)
 
     def var(
         self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
-    ):
+    ) -> float:
         return self.reduce("var", skipna=skipna, dtype=dtype, ddof=ddof)
 
     def std(
         self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
-    ):
+    ) -> float:
         return self.reduce("std", skipna=skipna, dtype=dtype, ddof=ddof)
 
-    def sum_of_squares(self, dtype: Dtype = None):
+    def sum_of_squares(self, dtype: Dtype = None) -> float:
         return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)
 
-    def kurtosis(self, skipna: bool = None):
+    def kurtosis(self, skipna: bool = None) -> float:
         skipna = True if skipna is None else skipna
 
         if len(self) == 0 or (not skipna and self.has_nulls):
@@ -274,7 +274,7 @@ class NumericalColumn(ColumnBase):
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
         return kurt
 
-    def skew(self, skipna: bool = None):
+    def skew(self, skipna: bool = None) -> ScalarObj:
         skipna = True if skipna is None else skipna
 
         if len(self) == 0 or (not skipna and self.has_nulls):
@@ -299,7 +299,7 @@ class NumericalColumn(ColumnBase):
 
     def quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
-    ) -> "ColumnBase":
+    ) -> "NumericalColumn":
         if isinstance(q, Number) or cudf.utils.dtypes.is_list_like(q):
             np_array_q = np.asarray(q)
             if np.logical_or(np_array_q < 0, np_array_q > 1).any():
@@ -317,7 +317,7 @@ class NumericalColumn(ColumnBase):
             )
         return result
 
-    def median(self, skipna: bool = None) -> "ColumnBase":
+    def median(self, skipna: bool = None) -> "NumericalColumn":
         skipna = True if skipna is None else skipna
 
         if not skipna and self.has_nulls:
@@ -328,7 +328,7 @@ class NumericalColumn(ColumnBase):
 
     def _numeric_quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
-    ) -> "ColumnBase":
+    ) -> "NumericalColumn":
         quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
         # get sorted indices and exclude nulls
         sorted_indices = self.as_frame()._get_sorted_inds(True, "first")
@@ -359,7 +359,7 @@ class NumericalColumn(ColumnBase):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
         return cov / lhs_std / rhs_std
 
-    def round(self, decimals: int = 0) -> "ColumnBase":
+    def round(self, decimals: int = 0) -> "NumericalColumn":
         if decimals < 0:
             msg = "Decimal values < 0 are not yet supported."
             raise NotImplementedError(msg)
@@ -370,7 +370,10 @@ class NumericalColumn(ColumnBase):
         data = Buffer(
             cudautils.apply_round(self.data_array_view, decimals).view("|u1")
         )
-        return column.build_column(data=data, dtype=self.dtype, mask=self.mask)
+        return cast(
+            "NumericalColumn",
+            column.build_column(data=data, dtype=self.dtype, mask=self.mask),
+        )
 
     def applymap(
         self, udf: Callable[[ScalarObj], ScalarObj], out_dtype: Dtype = None
@@ -415,7 +418,7 @@ class NumericalColumn(ColumnBase):
         to_replace: Union["ColumnBase", list],
         replacement: Union["ColumnBase", list],
         all_nan: bool,
-    ) -> "ColumnBase":
+    ) -> "NumericalColumn":
         """
         Return col with *to_replace* replaced with *value*.
         """
@@ -442,7 +445,7 @@ class NumericalColumn(ColumnBase):
             replaced, to_replace_col, replacement_col
         )
 
-    def fillna(self, fill_value: Any) -> "ColumnBase":
+    def fillna(self, fill_value: Any) -> "NumericalColumn":
         """
         Fill null values with *fill_value*
         """
