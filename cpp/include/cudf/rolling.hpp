@@ -86,39 +86,38 @@ std::unique_ptr<column> rolling_window(
 /**
  * @brief Abstraction for window boundary sizes
  */
-struct window_bounds
-{
-  public:
+struct window_bounds {
+ public:
+  /**
+   * @brief Construct bounded window boundary.
+   *
+   * @param value Finite window boundary (in days or rows)
+   */
+  static window_bounds get(size_type value) { return window_bounds(false, value); }
 
-    /**
-     * @brief Construct bounded window boundary.
-     * 
-     * @param value Finite window boundary (in days or rows)
-     */
-    static window_bounds get(size_type value)
-    { return window_bounds(false, value); }
+  /**
+   * @brief Construct unbounded window boundary.
+   *
+   * @return window_bounds
+   */
+  static window_bounds unbounded()
+  {
+    return window_bounds(true, std::numeric_limits<cudf::size_type>::max());
+  }
 
-    /**
-     * @brief Construct unbounded window boundary.
-     * 
-     * @return window_bounds 
-     */
-    static window_bounds unbounded()
-    { return window_bounds(true, std::numeric_limits<cudf::size_type>::max()); }
+  // TODO: In the future, add units for bounds.
+  //       E.g. {value=1, unit=DAYS, unbounded=false}
+  //       For the present, assume units from context:
+  //         1. For time-based window functions, assume DAYS as before
+  //         2. For all else, assume ROWS as before.
+  const bool is_unbounded;
+  const size_type value;
 
-    // TODO: In the future, add units for bounds.
-    //       E.g. {value=1, unit=DAYS, unbounded=false}
-    //       For the present, assume units from context:
-    //         1. For time-based window functions, assume DAYS as before
-    //         2. For all else, assume ROWS as before.
-    const bool is_unbounded;
-    const size_type value;
-
-  private:
-
-    explicit window_bounds(bool is_unbounded_, size_type value_=0) 
-      : is_unbounded{is_unbounded_}, value{value_} 
-    {}
+ private:
+  explicit window_bounds(bool is_unbounded_, size_type value_ = 0)
+    : is_unbounded{is_unbounded_}, value{value_}
+  {
+  }
 };
 /**
  * @brief  Applies a grouping-aware, fixed-size rolling window function to the values in a column.

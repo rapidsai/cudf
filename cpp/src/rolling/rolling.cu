@@ -1147,15 +1147,13 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                std::unique_ptr<aggregation> const& aggr,
                                                rmm::mr::device_memory_resource* mr)
 {
-  return grouped_rolling_window(
-    group_keys,
-    input,
-    window_bounds::get(preceding_window),
-    window_bounds::get(following_window),
-    min_periods,
-    aggr,
-    mr
-  );
+  return grouped_rolling_window(group_keys,
+                                input,
+                                window_bounds::get(preceding_window),
+                                window_bounds::get(following_window),
+                                min_periods,
+                                aggr,
+                                mr);
 }
 
 std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
@@ -1185,16 +1183,14 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                std::unique_ptr<aggregation> const& aggr,
                                                rmm::mr::device_memory_resource* mr)
 {
-  return grouped_rolling_window(
-    group_keys,
-    input,
-    default_outputs,
-    window_bounds::get(preceding_window),
-    window_bounds::get(following_window),
-    min_periods,
-    aggr,
-    mr
-  );
+  return grouped_rolling_window(group_keys,
+                                input,
+                                default_outputs,
+                                window_bounds::get(preceding_window),
+                                window_bounds::get(following_window),
+                                min_periods,
+                                aggr,
+                                mr);
 }
 
 std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
@@ -1370,15 +1366,16 @@ std::unique_ptr<column> time_range_window_ASC(column_view const& input,
   size_type nulls_begin_idx, nulls_end_idx;
   std::tie(nulls_begin_idx, nulls_end_idx) = get_null_bounds_for_timestamp_column(timestamp_column);
 
-  auto preceding_calculator = [nulls_begin_idx,
-                               nulls_end_idx,
-                               d_timestamps = timestamp_column.data<TimeT>(),
-                               preceding_window,
-                               preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
+  auto preceding_calculator =
+    [nulls_begin_idx,
+     nulls_end_idx,
+     d_timestamps = timestamp_column.data<TimeT>(),
+     preceding_window,
+     preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
     if (preceding_window_is_unbounded) {
-      return idx + 1; // Technically `idx - 0 + 1`,
-                      // where 0 == Group start,
-                      // and   1 accounts for the current row
+      return idx + 1;  // Technically `idx - 0 + 1`,
+                       // where 0 == Group start,
+                       // and   1 accounts for the current row
     }
     if (idx >= nulls_begin_idx && idx < nulls_end_idx) {
       // Current row is in the null group.
@@ -1401,15 +1398,14 @@ std::unique_ptr<column> time_range_window_ASC(column_view const& input,
            1;  // Add 1, for `preceding` to account for current row.
   };
 
-  auto following_calculator = [nulls_begin_idx,
-                               nulls_end_idx,
-                               num_rows     = input.size(),
-                               d_timestamps = timestamp_column.data<TimeT>(),
-                               following_window,
-                               following_window_is_unbounded] __device__(size_type idx) -> size_type {
-    if (following_window_is_unbounded) {
-      return num_rows - idx - 1;
-    }
+  auto following_calculator =
+    [nulls_begin_idx,
+     nulls_end_idx,
+     num_rows     = input.size(),
+     d_timestamps = timestamp_column.data<TimeT>(),
+     following_window,
+     following_window_is_unbounded] __device__(size_type idx) -> size_type {
+    if (following_window_is_unbounded) { return num_rows - idx - 1; }
     if (idx >= nulls_begin_idx && idx < nulls_end_idx) {
       // Current row is in the null group.
       // Window ends at the end of the null group.
@@ -1523,9 +1519,9 @@ std::unique_ptr<column> time_range_window_ASC(
   rmm::device_vector<cudf::size_type> const& group_offsets,
   rmm::device_vector<cudf::size_type> const& group_labels,
   TimeT preceding_window,
-  bool  preceding_window_is_unbounded,
+  bool preceding_window_is_unbounded,
   TimeT following_window,
-  bool  following_window_is_unbounded,
+  bool following_window_is_unbounded,
   size_type min_periods,
   std::unique_ptr<aggregation> const& aggr,
   rmm::mr::device_memory_resource* mr)
@@ -1534,21 +1530,20 @@ std::unique_ptr<column> time_range_window_ASC(
   std::tie(null_start, null_end) =
     get_null_bounds_for_timestamp_column(timestamp_column, group_offsets);
 
-  auto preceding_calculator = [d_group_offsets = group_offsets.data().get(),
-                               d_group_labels  = group_labels.data().get(),
-                               d_timestamps    = timestamp_column.data<TimeT>(),
-                               d_nulls_begin   = null_start.data().get(),
-                               d_nulls_end     = null_end.data().get(),
-                               preceding_window,
-                               preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
+  auto preceding_calculator =
+    [d_group_offsets = group_offsets.data().get(),
+     d_group_labels  = group_labels.data().get(),
+     d_timestamps    = timestamp_column.data<TimeT>(),
+     d_nulls_begin   = null_start.data().get(),
+     d_nulls_end     = null_end.data().get(),
+     preceding_window,
+     preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
     auto group_label = d_group_labels[idx];
     auto group_start = d_group_offsets[group_label];
     auto nulls_begin = d_nulls_begin[group_label];
     auto nulls_end   = d_nulls_end[group_label];
 
-    if (preceding_window_is_unbounded) {
-      return idx - group_start + 1;
-    }
+    if (preceding_window_is_unbounded) { return idx - group_start + 1; }
 
     // If idx lies in the null-range, the window is the null range.
     if (idx >= nulls_begin && idx < nulls_end) {
@@ -1573,13 +1568,14 @@ std::unique_ptr<column> time_range_window_ASC(
            1;  // Add 1, for `preceding` to account for current row.
   };
 
-  auto following_calculator = [d_group_offsets = group_offsets.data().get(),
-                               d_group_labels  = group_labels.data().get(),
-                               d_timestamps    = timestamp_column.data<TimeT>(),
-                               d_nulls_begin   = null_start.data().get(),
-                               d_nulls_end     = null_end.data().get(),
-                               following_window,
-                               following_window_is_unbounded] __device__(size_type idx) -> size_type {
+  auto following_calculator =
+    [d_group_offsets = group_offsets.data().get(),
+     d_group_labels  = group_labels.data().get(),
+     d_timestamps    = timestamp_column.data<TimeT>(),
+     d_nulls_begin   = null_start.data().get(),
+     d_nulls_end     = null_end.data().get(),
+     following_window,
+     following_window_is_unbounded] __device__(size_type idx) -> size_type {
     auto group_label = d_group_labels[idx];
     auto group_start = d_group_offsets[group_label];
     auto group_end =
@@ -1588,9 +1584,7 @@ std::unique_ptr<column> time_range_window_ASC(
     auto nulls_begin = d_nulls_begin[group_label];
     auto nulls_end   = d_nulls_end[group_label];
 
-    if (following_window_is_unbounded) {
-      return group_end - idx - 1;
-    }
+    if (following_window_is_unbounded) { return group_end - idx - 1; }
 
     // If idx lies in the null-range, the window is the null range.
     if (idx >= nulls_begin && idx < nulls_end) {
@@ -1636,9 +1630,9 @@ template <typename TimeT>
 std::unique_ptr<column> time_range_window_DESC(column_view const& input,
                                                column_view const& timestamp_column,
                                                TimeT preceding_window,
-                                               bool  preceding_window_is_unbounded,
+                                               bool preceding_window_is_unbounded,
                                                TimeT following_window,
-                                               bool  following_window_is_unbounded,
+                                               bool following_window_is_unbounded,
                                                size_type min_periods,
                                                std::unique_ptr<aggregation> const& aggr,
                                                rmm::mr::device_memory_resource* mr)
@@ -1646,15 +1640,16 @@ std::unique_ptr<column> time_range_window_DESC(column_view const& input,
   size_type nulls_begin_idx, nulls_end_idx;
   std::tie(nulls_begin_idx, nulls_end_idx) = get_null_bounds_for_timestamp_column(timestamp_column);
 
-  auto preceding_calculator = [nulls_begin_idx,
-                               nulls_end_idx,
-                               d_timestamps = timestamp_column.data<TimeT>(),
-                               preceding_window,
-                               preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
+  auto preceding_calculator =
+    [nulls_begin_idx,
+     nulls_end_idx,
+     d_timestamps = timestamp_column.data<TimeT>(),
+     preceding_window,
+     preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
     if (preceding_window_is_unbounded) {
-      return idx + 1; // Technically `idx - 0 + 1`,
-                      // where 0 == Group start,
-                      // and   1 accounts for the current row
+      return idx + 1;  // Technically `idx - 0 + 1`,
+                       // where 0 == Group start,
+                       // and   1 accounts for the current row
     }
     if (idx >= nulls_begin_idx && idx < nulls_end_idx) {
       // Current row is in the null group.
@@ -1679,15 +1674,14 @@ std::unique_ptr<column> time_range_window_DESC(column_view const& input,
            1;  // Add 1, for `preceding` to account for current row.
   };
 
-  auto following_calculator = [nulls_begin_idx,
-                               nulls_end_idx,
-                               num_rows     = input.size(),
-                               d_timestamps = timestamp_column.data<TimeT>(),
-                               following_window,
-                               following_window_is_unbounded] __device__(size_type idx) -> size_type {
-    if (following_window_is_unbounded) {
-      return num_rows - idx - 1;
-    }
+  auto following_calculator =
+    [nulls_begin_idx,
+     nulls_end_idx,
+     num_rows     = input.size(),
+     d_timestamps = timestamp_column.data<TimeT>(),
+     following_window,
+     following_window_is_unbounded] __device__(size_type idx) -> size_type {
+    if (following_window_is_unbounded) { return num_rows - idx - 1; }
     if (idx >= nulls_begin_idx && idx < nulls_end_idx) {
       // Current row is in the null group.
       // Window ends at the end of the null group.
@@ -1732,9 +1726,9 @@ std::unique_ptr<column> time_range_window_DESC(
   rmm::device_vector<cudf::size_type> const& group_offsets,
   rmm::device_vector<cudf::size_type> const& group_labels,
   TimeT preceding_window,
-  bool  preceding_window_is_unbounded,
+  bool preceding_window_is_unbounded,
   TimeT following_window,
-  bool  following_window_is_unbounded,
+  bool following_window_is_unbounded,
   size_type min_periods,
   std::unique_ptr<aggregation> const& aggr,
   rmm::mr::device_memory_resource* mr)
@@ -1743,21 +1737,20 @@ std::unique_ptr<column> time_range_window_DESC(
   std::tie(null_start, null_end) =
     get_null_bounds_for_timestamp_column(timestamp_column, group_offsets);
 
-  auto preceding_calculator = [d_group_offsets = group_offsets.data().get(),
-                               d_group_labels  = group_labels.data().get(),
-                               d_timestamps    = timestamp_column.data<TimeT>(),
-                               d_nulls_begin   = null_start.data().get(),
-                               d_nulls_end     = null_end.data().get(),
-                               preceding_window,
-                               preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
+  auto preceding_calculator =
+    [d_group_offsets = group_offsets.data().get(),
+     d_group_labels  = group_labels.data().get(),
+     d_timestamps    = timestamp_column.data<TimeT>(),
+     d_nulls_begin   = null_start.data().get(),
+     d_nulls_end     = null_end.data().get(),
+     preceding_window,
+     preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
     auto group_label = d_group_labels[idx];
     auto group_start = d_group_offsets[group_label];
     auto nulls_begin = d_nulls_begin[group_label];
     auto nulls_end   = d_nulls_end[group_label];
 
-    if (preceding_window_is_unbounded) {
-      return idx - group_start + 1;
-    }
+    if (preceding_window_is_unbounded) { return idx - group_start + 1; }
 
     // If idx lies in the null-range, the window is the null range.
     if (idx >= nulls_begin && idx < nulls_end) {
@@ -1784,22 +1777,21 @@ std::unique_ptr<column> time_range_window_DESC(
            1;  // Add 1, for `preceding` to account for current row.
   };
 
-  auto following_calculator = [d_group_offsets = group_offsets.data().get(),
-                               d_group_labels  = group_labels.data().get(),
-                               d_timestamps    = timestamp_column.data<TimeT>(),
-                               d_nulls_begin   = null_start.data().get(),
-                               d_nulls_end     = null_end.data().get(),
-                               following_window,
-                               following_window_is_unbounded] __device__(size_type idx) -> size_type {
+  auto following_calculator =
+    [d_group_offsets = group_offsets.data().get(),
+     d_group_labels  = group_labels.data().get(),
+     d_timestamps    = timestamp_column.data<TimeT>(),
+     d_nulls_begin   = null_start.data().get(),
+     d_nulls_end     = null_end.data().get(),
+     following_window,
+     following_window_is_unbounded] __device__(size_type idx) -> size_type {
     auto group_label = d_group_labels[idx];
     auto group_start = d_group_offsets[group_label];
     auto group_end   = d_group_offsets[group_label + 1];
     auto nulls_begin = d_nulls_begin[group_label];
     auto nulls_end   = d_nulls_end[group_label];
 
-    if (following_window_is_unbounded) {
-      return group_end - idx - 1;
-    }
+    if (following_window_is_unbounded) { return group_end - idx - 1; }
 
     // If idx lies in the null-range, the window is the null range.
     if (idx >= nulls_begin && idx < nulls_end) {
@@ -1850,58 +1842,59 @@ std::unique_ptr<column> grouped_time_range_rolling_window_impl(
   cudf::order const& timestamp_ordering,
   rmm::device_vector<cudf::size_type> const& group_offsets,
   rmm::device_vector<cudf::size_type> const& group_labels,
-  window_bounds preceding_window_in_days,  // TODO: Consider taking offset-type as type_id. Assumes days
-                                           // for now.
+  window_bounds preceding_window_in_days,  // TODO: Consider taking offset-type as type_id. Assumes
+                                           // days for now.
   window_bounds following_window_in_days,
   size_type min_periods,
   std::unique_ptr<aggregation> const& aggr,
   rmm::mr::device_memory_resource* mr)
 {
-  TimeT mult_factor{
-    static_cast<TimeT>(multiplication_factor(timestamp_column.type()))};
+  TimeT mult_factor{static_cast<TimeT>(multiplication_factor(timestamp_column.type()))};
 
   if (timestamp_ordering == cudf::order::ASCENDING) {
-    return group_offsets.empty() ? time_range_window_ASC(input,
-                                                         timestamp_column,
-                                                         preceding_window_in_days.value * mult_factor,
-                                                         preceding_window_in_days.is_unbounded,
-                                                         following_window_in_days.value * mult_factor,
-                                                         following_window_in_days.is_unbounded,
-                                                         min_periods,
-                                                         aggr,
-                                                         mr)
-                                 : time_range_window_ASC(input,
-                                                         timestamp_column,
-                                                         group_offsets,
-                                                         group_labels,
-                                                         preceding_window_in_days.value * mult_factor,
-                                                         preceding_window_in_days.is_unbounded,
-                                                         following_window_in_days.value * mult_factor,
-                                                         following_window_in_days.is_unbounded,
-                                                         min_periods,
-                                                         aggr,
-                                                         mr);
+    return group_offsets.empty()
+             ? time_range_window_ASC(input,
+                                     timestamp_column,
+                                     preceding_window_in_days.value * mult_factor,
+                                     preceding_window_in_days.is_unbounded,
+                                     following_window_in_days.value * mult_factor,
+                                     following_window_in_days.is_unbounded,
+                                     min_periods,
+                                     aggr,
+                                     mr)
+             : time_range_window_ASC(input,
+                                     timestamp_column,
+                                     group_offsets,
+                                     group_labels,
+                                     preceding_window_in_days.value * mult_factor,
+                                     preceding_window_in_days.is_unbounded,
+                                     following_window_in_days.value * mult_factor,
+                                     following_window_in_days.is_unbounded,
+                                     min_periods,
+                                     aggr,
+                                     mr);
   } else {
-    return group_offsets.empty() ? time_range_window_DESC(input,
-                                                          timestamp_column,
-                                                          preceding_window_in_days.value * mult_factor,
-                                                          preceding_window_in_days.is_unbounded,
-                                                          following_window_in_days.value * mult_factor,
-                                                          following_window_in_days.is_unbounded,
-                                                          min_periods,
-                                                          aggr,
-                                                          mr)
-                                 : time_range_window_DESC(input,
-                                                          timestamp_column,
-                                                          group_offsets,
-                                                          group_labels,
-                                                          preceding_window_in_days.value * mult_factor,
-                                                          preceding_window_in_days.is_unbounded,
-                                                          following_window_in_days.value * mult_factor,
-                                                          following_window_in_days.is_unbounded,
-                                                          min_periods,
-                                                          aggr,
-                                                          mr);
+    return group_offsets.empty()
+             ? time_range_window_DESC(input,
+                                      timestamp_column,
+                                      preceding_window_in_days.value * mult_factor,
+                                      preceding_window_in_days.is_unbounded,
+                                      following_window_in_days.value * mult_factor,
+                                      following_window_in_days.is_unbounded,
+                                      min_periods,
+                                      aggr,
+                                      mr)
+             : time_range_window_DESC(input,
+                                      timestamp_column,
+                                      group_offsets,
+                                      group_labels,
+                                      preceding_window_in_days.value * mult_factor,
+                                      preceding_window_in_days.is_unbounded,
+                                      following_window_in_days.value * mult_factor,
+                                      following_window_in_days.is_unbounded,
+                                      min_periods,
+                                      aggr,
+                                      mr);
   }
 }
 
@@ -1917,17 +1910,15 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                                           std::unique_ptr<aggregation> const& aggr,
                                                           rmm::mr::device_memory_resource* mr)
 {
-  return grouped_time_range_rolling_window(
-    group_keys,
-    timestamp_column,
-    timestamp_order,
-    input,
-    window_bounds::get(preceding_window_in_days),
-    window_bounds::get(following_window_in_days),
-    min_periods,
-    aggr,
-    mr
-  );
+  return grouped_time_range_rolling_window(group_keys,
+                                           timestamp_column,
+                                           timestamp_order,
+                                           input,
+                                           window_bounds::get(preceding_window_in_days),
+                                           window_bounds::get(following_window_in_days),
+                                           min_periods,
+                                           aggr,
+                                           mr);
 }
 
 std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& group_keys,
