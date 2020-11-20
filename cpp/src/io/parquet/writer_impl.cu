@@ -66,6 +66,43 @@ parquet::Compression to_parquet_compression(compression_type compression)
   }
 }
 
+std::vector<std::vector<bool>> get_per_column_nullability(table_view const &table,
+                                                          std::vector<bool> const &col_nullable)
+{
+  auto get_depth = [](column_view const &col) {
+    column_view curr_col = col;
+    uint16_t depth       = 1;
+    while (curr_col.type().id() == type_id::LIST) {
+      depth++;
+      curr_col = lists_column_view{curr_col}.child();
+    }
+    return depth;
+  };
+
+  // for each column, check depth and add subsequent bool values to its nullable vector
+  std::vector<std::vector<bool>> per_column_nullability;
+  auto null_it  = col_nullable.begin();
+  auto const_it = thrust::make_constant_iterator(true);
+  for (auto &&col : table) {
+    uint16_t depth = get_depth(col);
+    if (col_nullable.empty()) {
+      per_column_nullability.emplace_back(const_it, const_it + depth);
+    } else {
+      CUDF_EXPECTS(
+        null_it + depth <= col_nullable.end(),
+        "Mismatch between size of column nullability passed in user_metadata_with_nullability and "
+        "number of null masks expected in table. Expected more values in passed metadata");
+      per_column_nullability.emplace_back(null_it, null_it + depth);
+      null_it += depth;
+    }
+  }
+  CUDF_EXPECTS(
+    null_it == col_nullable.end(),
+    "Mismatch between size of column nullability passed in user_metadata_with_nullability and "
+    "number of null masks expected in table. Too many values in passed metadata");
+  return per_column_nullability;
+}
+
 /**
  * @brief Get the leaf column
  *
@@ -121,6 +158,7 @@ class parquet_column_view {
    **/
   explicit parquet_column_view(size_t id,
                                column_view const &col,
+                               std::vector<bool> const &nullability,
                                const table_metadata *metadata,
                                cudaStream_t stream)
     : _col(col),
@@ -137,7 +175,8 @@ class parquet_column_view {
       _ts_scale(0),
       _dremel_offsets(0, stream),
       _rep_level(0, stream),
-      _def_level(0, stream)
+      _def_level(0, stream),
+      _nullability(nullability)
   {
     switch (_leaf_col.type().id()) {
       case cudf::type_id::INT8:
@@ -285,6 +324,17 @@ class parquet_column_view {
       }
       _offsets_array = offsets_array;
 
+      // Update level nullability if no nullability was passed in.
+      curr_col = col;
+      if (_nullability.empty()) {
+        while (curr_col.type().id() == type_id::LIST) {
+          lists_column_view list_col(curr_col);
+          _nullability.push_back(list_col.null_mask() != nullptr);
+          curr_col = list_col.child();
+        }
+        _nullability.push_back(curr_col.null_mask() != nullptr);
+      }
+
       CUDA_TRY(cudaStreamSynchronize(stream));
     }
     if (_string_type && _data_count > 0) {
@@ -318,6 +368,7 @@ class parquet_column_view {
   bool nullable() const noexcept { return (_nulls != nullptr); }
   void const *data() const noexcept { return _data; }
   uint32_t const *nulls() const noexcept { return _nulls; }
+  bool level_nullable(size_t level) { return _nullability[level]; }
 
   // List related data
   column_view cudf_col() const noexcept { return _col; }
@@ -414,6 +465,7 @@ class parquet_column_view {
                       ///< level vectors. O(num rows)
   rmm::device_uvector<uint8_t> _rep_level;
   rmm::device_uvector<uint8_t> _def_level;
+  std::vector<bool> _nullability;
   size_type _max_def_level = -1;
 
   // String-related members
@@ -626,12 +678,19 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
   // we actually have.
   std::vector<parquet_column_view> parquet_columns;
   parquet_columns.reserve(num_columns);  // Avoids unnecessary re-allocation
+  std::vector<std::vector<bool>> per_column_nullability =
+    get_per_column_nullability(table, state.user_metadata_with_nullability.column_nullable);
+
   for (auto it = table.begin(); it < table.end(); ++it) {
     const auto col        = *it;
     const auto current_id = parquet_columns.size();
 
     num_rows = std::max<uint32_t>(num_rows, col.size());
-    parquet_columns.emplace_back(current_id, col, state.user_metadata, state.stream);
+    auto const &this_column_nullability =
+      (state.single_write_mode) ? std::vector<bool>{} : per_column_nullability[current_id];
+
+    parquet_columns.emplace_back(
+      current_id, col, this_column_nullability, state.user_metadata, state.stream);
   }
 
   if (state.user_metadata_with_nullability.column_nullable.size() > 0) {
@@ -663,12 +722,10 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
     for (auto i = 0; i < num_columns; i++) {
       auto &col = parquet_columns[i];
       if (col.is_list()) {
-        CUDF_EXPECTS(state.single_write_mode, "Chunked write for lists is not supported");
         size_type nesting_depth = col.nesting_levels();
         // Each level of nesting requires two levels of Schema. The leaf level needs one schema
         // element
         std::vector<SchemaElement> list_schema(nesting_depth * 2 + 1);
-        column_view cudf_col = col.cudf_col();
         for (size_type j = 0; j < nesting_depth; j++) {
           // List schema is denoted by two levels for each nesting level and one final level for
           // leaf. The top level is the same name as the column name.
@@ -678,21 +735,17 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
           auto const list_idx  = 2 * j + 1;
 
           list_schema[group_idx].name            = (j == 0) ? col.name() : "element";
-          list_schema[group_idx].repetition_type = (cudf_col.nullable()) ? OPTIONAL : REQUIRED;
+          list_schema[group_idx].repetition_type = (col.level_nullable(j)) ? OPTIONAL : REQUIRED;
           list_schema[group_idx].converted_type  = ConvertedType::LIST;
           list_schema[group_idx].num_children    = 1;
 
           list_schema[list_idx].name            = "list";
           list_schema[list_idx].repetition_type = REPEATED;
           list_schema[list_idx].num_children    = 1;
-
-          // Move on to next child
-          lists_column_view lcw(cudf_col);
-          cudf_col = lcw.child();
         }
         list_schema[nesting_depth * 2].name = "element";
         list_schema[nesting_depth * 2].repetition_type =
-          col.leaf_col().nullable() ? OPTIONAL : REQUIRED;
+          col.level_nullable(nesting_depth) ? OPTIONAL : REQUIRED;
         list_schema[nesting_depth * 2].type           = col.physical_type();
         list_schema[nesting_depth * 2].converted_type = col.converted_type();
         list_schema[nesting_depth * 2].num_children   = 0;
