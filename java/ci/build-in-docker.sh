@@ -22,7 +22,7 @@ gcc --version
 PARALLEL_LEVEL=${PARALLEL_LEVEL:-4}
 SKIP_JAVA_TESTS=${SKIP_JAVA_TESTS:-true}
 BUILD_CPP_TESTS=${BUILD_CPP_TESTS:-OFF}
-ENABLE_PTDS=${ENABLE_PTDS:-OFF}
+ENABLE_PTDS=${ENABLE_PTDS:-ON}
 RMM_LOGGING_LEVEL=${RMM_LOGGING_LEVEL:-OFF}
 OUT=${OUT:-out}
 
@@ -50,6 +50,9 @@ export CUDACXX=/usr/local/cuda/bin/nvcc
 export RMM_ROOT=$INSTALL_PREFIX
 export DLPACK_ROOT=$INSTALL_PREFIX
 export LIBCUDF_KERNEL_CACHE_PATH=/rapids
+
+# add cmake 3.19 to PATH
+export PATH=/usr/local/cmake-3.19.0-Linux-x86_64/bin:$PATH
 
 cd /rapids/
 git clone --recurse-submodules https://github.com/rapidsai/rmm.git -b branch-$RMM_VERSION
