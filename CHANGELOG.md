@@ -92,6 +92,7 @@
 - PR #6780 Move `cudf::cast` tests to separate test file
 - PR #6789 Rename `unary_op` to `unary_operator`
 - PR #6770 Support building decimal columns with Table.TestBuilder
+- PR #6815 Add wildcard path support to `read_parquet`
 
 ## Bug Fixes
 
