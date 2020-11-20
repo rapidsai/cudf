@@ -47,8 +47,12 @@ std::unique_ptr<table> quantiles(table_view const& input,
 
   auto quantile_idx_iter = thrust::make_transform_iterator(q_device.begin(), quantile_idx_lookup);
 
-  return detail::gather(
-    input, quantile_idx_iter, quantile_idx_iter + q.size(), out_of_bounds_policy::DONT_CHECK, mr);
+  return detail::gather(input,
+                        quantile_idx_iter,
+                        quantile_idx_iter + q.size(),
+                        out_of_bounds_policy::DONT_CHECK,
+                        stream,
+                        mr);
 }
 
 }  // namespace detail
