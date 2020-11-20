@@ -280,7 +280,8 @@ cpdef write_parquet(
         object index=None,
         object compression=None,
         object statistics="ROWGROUP",
-        object metadata_file_path=None):
+        object metadata_file_path=None,
+        object int96_timestamps=False):
     """
     Cython function to call into libcudf API, see `write_parquet`.
 
@@ -328,6 +329,7 @@ cpdef write_parquet(
     cdef unique_ptr[vector[uint8_t]] out_metadata_c
     cdef string c_column_chunks_file_path
     cdef bool return_filemetadata = False
+    cdef bool _int96_timestamps = int96_timestamps
     if metadata_file_path is not None:
         c_column_chunks_file_path = str.encode(metadata_file_path)
         return_filemetadata = True
@@ -341,6 +343,7 @@ cpdef write_parquet(
             .stats_level(stat_freq)
             .column_chunks_file_path(c_column_chunks_file_path)
             .return_filemetadata(return_filemetadata)
+            .int96_timestamps(_int96_timestamps)
             .build()
         )
         out_metadata_c = move(parquet_writer(args))

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/table/table_view.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
 #include <vector>
@@ -63,7 +65,7 @@ class table {
    * @param mr Device memory resource used for allocating the device memory for the new columns
    **/
   table(table_view view,
-        cudaStream_t stream                 = 0,
+        rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
         rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**

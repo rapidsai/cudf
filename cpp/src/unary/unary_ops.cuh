@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,14 @@
 #ifndef UNARY_OPS_H
 #define UNARY_OPS_H
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace unary {
@@ -29,8 +32,8 @@ template <typename T, typename Tout, typename F>
 struct launcher {
   static std::unique_ptr<cudf::column> launch(cudf::column_view const& input,
                                               cudf::unary_operator op,
-                                              rmm::mr::device_memory_resource* mr,
-                                              cudaStream_t stream = 0)
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr)
   {
     std::unique_ptr<cudf::column> output = [&] {
       if (op == cudf::unary_operator::NOT) {
@@ -40,12 +43,12 @@ struct launcher {
         return std::make_unique<column>(type,
                                         size,
                                         rmm::device_buffer{size * cudf::size_of(type), 0, mr},
-                                        copy_bitmask(input, 0, mr),
+                                        cudf::detail::copy_bitmask(input, stream, mr),
                                         input.null_count());
 
       } else {
         return cudf::detail::allocate_like(
-          input, input.size(), mask_allocation_policy::NEVER, mr, stream);
+          input, input.size(), mask_allocation_policy::NEVER, stream, mr);
       }
     }();
 
@@ -62,7 +65,7 @@ struct launcher {
         rmm::device_buffer{input.null_mask(), bitmask_allocation_size_bytes(input.size())},
         input.null_count());
 
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
+    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                       input.begin<T>(),
                       input.end<T>(),
                       output_view.begin<Tout>(),

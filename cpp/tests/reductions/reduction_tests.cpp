@@ -848,6 +848,64 @@ TEST_P(StringReductionTest, MinMax)
   // MAX
   this->reduction_test(col, expected_max_result, succeed, cudf::make_max_aggregation());
   this->reduction_test(col_nulls, expected_max_null_result, succeed, cudf::make_max_aggregation());
+
+  // MINMAX
+  auto result = cudf::minmax(col);
+  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.first.get())->to_string(),
+            expected_min_result);
+  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.second.get())->to_string(),
+            expected_max_result);
+  result = cudf::minmax(col_nulls);
+  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.first.get())->to_string(),
+            expected_min_null_result);
+  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.second.get())->to_string(),
+            expected_max_null_result);
+}
+
+TEST_P(StringReductionTest, DictionaryMinMax)
+{
+  // data and valid arrays
+  std::vector<std::string> host_strings(GetParam());
+  cudf::test::dictionary_column_wrapper<std::string> col(host_strings.begin(), host_strings.end());
+
+  std::string expected_min_result = *(std::min_element(host_strings.begin(), host_strings.end()));
+  std::string expected_max_result = *(std::max_element(host_strings.begin(), host_strings.end()));
+
+  auto result = cudf::minmax(col);
+  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.first.get())->to_string(),
+            expected_min_result);
+  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.second.get())->to_string(),
+            expected_max_result);
+
+  // column with nulls
+  std::vector<bool> validity({1, 0, 1, 1, 1, 1, 0, 0, 1});
+  cudf::test::dictionary_column_wrapper<std::string> col_nulls(
+    host_strings.begin(), host_strings.end(), validity.begin());
+
+  std::vector<std::string> r_strings;
+  std::copy_if(host_strings.begin(),
+               host_strings.end(),
+               std::back_inserter(r_strings),
+               [validity, i = 0](auto s) mutable { return validity[i++]; });
+
+  expected_min_result = *(std::min_element(r_strings.begin(), r_strings.end()));
+  expected_max_result = *(std::max_element(r_strings.begin(), r_strings.end()));
+
+  result = cudf::minmax(col_nulls);
+  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.first.get())->to_string(),
+            expected_min_result);
+  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.second.get())->to_string(),
+            expected_max_result);
+
+  // test sliced column
+  result = cudf::minmax(cudf::slice(col_nulls, {3, 7}).front());
+  // 3->2 and 7->5 because r_strings contains no null entries
+  expected_min_result = *(std::min_element(r_strings.begin() + 2, r_strings.begin() + 5));
+  expected_max_result = *(std::max_element(r_strings.begin() + 2, r_strings.begin() + 5));
+  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.first.get())->to_string(),
+            expected_min_result);
+  EXPECT_EQ(static_cast<cudf::string_scalar *>(result.second.get())->to_string(),
+            expected_max_result);
 }
 
 TEST_F(StringReductionTest, AllNull)
@@ -863,13 +921,15 @@ TEST_F(StringReductionTest, AllNull)
   cudf::data_type output_dtype = cudf::column_view(col_nulls).type();
 
   // MIN
-  std::unique_ptr<cudf::scalar> minresult =
-    cudf::reduce(col_nulls, cudf::make_min_aggregation(), output_dtype);
-  EXPECT_FALSE(minresult->is_valid());
+  auto result = cudf::reduce(col_nulls, cudf::make_min_aggregation(), output_dtype);
+  EXPECT_FALSE(result->is_valid());
   // MAX
-  std::unique_ptr<cudf::scalar> maxresult =
-    cudf::reduce(col_nulls, cudf::make_max_aggregation(), output_dtype);
-  EXPECT_FALSE(maxresult->is_valid());
+  result = cudf::reduce(col_nulls, cudf::make_max_aggregation(), output_dtype);
+  EXPECT_FALSE(result->is_valid());
+  // MINMAX
+  auto mm_result = cudf::minmax(col_nulls);
+  EXPECT_FALSE(mm_result.first->is_valid());
+  EXPECT_FALSE(mm_result.second->is_valid());
 }
 
 TYPED_TEST(ReductionTest, Median)

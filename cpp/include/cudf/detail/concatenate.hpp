@@ -19,6 +19,8 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <vector>
 
 namespace cudf {
@@ -31,8 +33,8 @@ namespace detail {
  */
 std::unique_ptr<column> concatenate(
   std::vector<column_view> const& columns_to_concat,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc cudf::concatenate(std::vector<table_view> const&,rmm::mr::device_memory_resource*)
@@ -41,8 +43,8 @@ std::unique_ptr<column> concatenate(
  */
 std::unique_ptr<table> concatenate(
   std::vector<table_view> const& tables_to_concat,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace cudf
