@@ -65,14 +65,14 @@ struct MilliSeconds {
 };
 struct MicroSeconds {
 };
-typedef struct _TimeUnit__isset {
-  _TimeUnit__isset() : MILLIS(false), MICROS(false) {}
+typedef struct TimeUnit_isset {
+  TimeUnit_isset() : MILLIS(false), MICROS(false) {}
   bool MILLIS;
   bool MICROS;
-} _TimeUnit__isset;
+} TimeUnit_isset;
 
 struct TimeUnit {
-  _TimeUnit__isset __isset;
+  TimeUnit_isset isset;
   MilliSeconds MILLIS;
   MicroSeconds MICROS;
 };
@@ -97,8 +97,8 @@ struct BsonType {
 };
 
 // thrift generated code simplified.
-typedef struct _LogicalType__isset {
-  _LogicalType__isset()
+typedef struct LogicalType_isset {
+  LogicalType_isset()
     : STRING(false),
       MAP(false),
       LIST(false),
@@ -125,10 +125,10 @@ typedef struct _LogicalType__isset {
   bool UNKNOWN;
   bool JSON;
   bool BSON;
-} _LogicalType__isset;
+} LogicalType_isset;
 
 struct LogicalType {
-  _LogicalType__isset __isset;
+  LogicalType_isset isset;
   StringType STRING;
   MapType MAP;
   ListType LIST;

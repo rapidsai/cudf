@@ -52,29 +52,29 @@ namespace {
 
 parquet::ConvertedType logical_type_to_converted_type(parquet::LogicalType const &logical)
 {
-  if (logical.__isset.STRING) {
+  if (logical.isset.STRING) {
     return parquet::UTF8;
-  } else if (logical.__isset.MAP) {
+  } else if (logical.isset.MAP) {
     return parquet::MAP;
-  } else if (logical.__isset.LIST) {
+  } else if (logical.isset.LIST) {
     return parquet::LIST;
-  } else if (logical.__isset.ENUM) {
+  } else if (logical.isset.ENUM) {
     return parquet::ENUM;
-  } else if (logical.__isset.DECIMAL) {
+  } else if (logical.isset.DECIMAL) {
     return parquet::DECIMAL;  // TODO set decimal values
-  } else if (logical.__isset.DATE) {
+  } else if (logical.isset.DATE) {
     return parquet::DATE;
-  } else if (logical.__isset.TIME) {
-    if (logical.TIME.unit.__isset.MILLIS)
+  } else if (logical.isset.TIME) {
+    if (logical.TIME.unit.isset.MILLIS)
       return parquet::TIME_MILLIS;
-    else if (logical.TIME.unit.__isset.MICROS)
+    else if (logical.TIME.unit.isset.MICROS)
       return parquet::TIME_MICROS;
-  } else if (logical.__isset.TIMESTAMP) {
-    if (logical.TIMESTAMP.unit.__isset.MILLIS)
+  } else if (logical.isset.TIMESTAMP) {
+    if (logical.TIMESTAMP.unit.isset.MILLIS)
       return parquet::TIMESTAMP_MILLIS;
-    else if (logical.TIMESTAMP.unit.__isset.MICROS)
+    else if (logical.TIMESTAMP.unit.isset.MICROS)
       return parquet::TIMESTAMP_MICROS;
-  } else if (logical.__isset.INTEGER) {
+  } else if (logical.isset.INTEGER) {
     switch (logical.INTEGER.bitWidth) {
       case 8: return logical.INTEGER.isSigned ? INT_8 : UINT_8;
       case 16: return logical.INTEGER.isSigned ? INT_16 : UINT_16;
@@ -82,11 +82,11 @@ parquet::ConvertedType logical_type_to_converted_type(parquet::LogicalType const
       case 64: return logical.INTEGER.isSigned ? INT_64 : UINT_64;
       default: break;
     }
-  } else if (logical.__isset.UNKNOWN) {
+  } else if (logical.isset.UNKNOWN) {
     return parquet::NA;
-  } else if (logical.__isset.JSON) {
+  } else if (logical.isset.JSON) {
     return parquet::JSON;
-  } else if (logical.__isset.BSON) {
+  } else if (logical.isset.BSON) {
     return parquet::BSON;
   }
   return parquet::UNKNOWN;

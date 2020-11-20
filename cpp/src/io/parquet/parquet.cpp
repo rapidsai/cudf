@@ -160,18 +160,18 @@ bool CompactProtocolReader::read(SchemaElement *s)
 bool CompactProtocolReader::read(LogicalType *l)
 {
   auto op =
-    std::make_tuple(ParquetFieldUnion(1, l->__isset.STRING, l->STRING),
-                    ParquetFieldUnion(2, l->__isset.MAP, l->MAP),
-                    ParquetFieldUnion(3, l->__isset.LIST, l->LIST),
-                    ParquetFieldUnion(4, l->__isset.ENUM, l->ENUM),
-                    ParquetFieldUnion(5, l->__isset.DECIMAL, l->DECIMAL),  // read the struct
-                    ParquetFieldUnion(6, l->__isset.DATE, l->DATE),
-                    ParquetFieldUnion(7, l->__isset.TIME, l->TIME),            //  read the struct
-                    ParquetFieldUnion(8, l->__isset.TIMESTAMP, l->TIMESTAMP),  //  read the struct
-                    ParquetFieldUnion(10, l->__isset.INTEGER, l->INTEGER),     //  read the struct
-                    ParquetFieldUnion(11, l->__isset.UNKNOWN, l->UNKNOWN),
-                    ParquetFieldUnion(12, l->__isset.JSON, l->JSON),
-                    ParquetFieldUnion(13, l->__isset.BSON, l->BSON));
+    std::make_tuple(ParquetFieldUnion(1, l->isset.STRING, l->STRING),
+                    ParquetFieldUnion(2, l->isset.MAP, l->MAP),
+                    ParquetFieldUnion(3, l->isset.LIST, l->LIST),
+                    ParquetFieldUnion(4, l->isset.ENUM, l->ENUM),
+                    ParquetFieldUnion(5, l->isset.DECIMAL, l->DECIMAL),  // read the struct
+                    ParquetFieldUnion(6, l->isset.DATE, l->DATE),
+                    ParquetFieldUnion(7, l->isset.TIME, l->TIME),            //  read the struct
+                    ParquetFieldUnion(8, l->isset.TIMESTAMP, l->TIMESTAMP),  //  read the struct
+                    ParquetFieldUnion(10, l->isset.INTEGER, l->INTEGER),     //  read the struct
+                    ParquetFieldUnion(11, l->isset.UNKNOWN, l->UNKNOWN),
+                    ParquetFieldUnion(12, l->isset.JSON, l->JSON),
+                    ParquetFieldUnion(13, l->isset.BSON, l->BSON));
   return function_builder(this, op);
 }
 
@@ -197,8 +197,8 @@ bool CompactProtocolReader::read(TimestampType *t)
 
 bool CompactProtocolReader::read(TimeUnit *u)
 {
-  auto op = std::make_tuple(ParquetFieldUnion(1, u->__isset.MILLIS, u->MILLIS),
-                            ParquetFieldUnion(2, u->__isset.MICROS, u->MICROS));
+  auto op = std::make_tuple(ParquetFieldUnion(1, u->isset.MILLIS, u->MILLIS),
+                            ParquetFieldUnion(2, u->isset.MICROS, u->MICROS));
   return function_builder(this, op);
 }
 
