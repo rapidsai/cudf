@@ -24,6 +24,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
@@ -682,8 +683,8 @@ namespace detail {
 
 std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& input,
                                                       std::vector<size_type> const& splits,
-                                                      rmm::mr::device_memory_resource* mr,
-                                                      cudaStream_t stream)
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::mr::device_memory_resource* mr)
 {
   if (input.num_columns() == 0) { return {}; }
   if (splits.size() > 0) {
@@ -757,8 +758,11 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
   setup_source_buf_info(input.begin(), input.end(), h_src_buf_info, h_src_buf_info);
 
   // HtoD indices and source buf info to device
-  CUDA_TRY(cudaMemcpyAsync(
-    d_indices, h_indices, indices_size + src_buf_info_size, cudaMemcpyHostToDevice, stream));
+  CUDA_TRY(cudaMemcpyAsync(d_indices,
+                           h_indices,
+                           indices_size + src_buf_info_size,
+                           cudaMemcpyHostToDevice,
+                           stream.value()));
 
   // packed block of memory 2. partition buffer sizes and dst_buf_info structs
   size_t const buf_sizes_size =
@@ -779,7 +783,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
 
   // compute sizes of each column in each partition, including alignment.
   thrust::transform(
-    rmm::exec_policy(stream)->on(stream),
+    rmm::exec_policy(stream)->on(stream.value()),
     thrust::make_counting_iterator<size_t>(0),
     thrust::make_counting_iterator<size_t>(num_bufs),
     d_dst_buf_info,
@@ -852,7 +856,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
     auto values = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
                                                   buf_size_functor{d_dst_buf_info});
 
-    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
+    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream.value()),
                           keys,
                           keys + num_bufs,
                           values,
@@ -866,7 +870,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
                                                 split_key_functor{static_cast<int>(num_src_bufs)});
     auto values = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
                                                   buf_size_functor{d_dst_buf_info});
-    thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream),
+    thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream.value()),
                                   keys,
                                   keys + num_bufs,
                                   values,
@@ -875,9 +879,12 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
   }
 
   // DtoH buf sizes and col info back to the host
-  CUDA_TRY(cudaMemcpyAsync(
-    h_buf_sizes, d_buf_sizes, buf_sizes_size + dst_buf_info_size, cudaMemcpyDeviceToHost, stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  CUDA_TRY(cudaMemcpyAsync(h_buf_sizes,
+                           d_buf_sizes,
+                           buf_sizes_size + dst_buf_info_size,
+                           cudaMemcpyDeviceToHost,
+                           stream.value()));
+  stream.synchronize();
 
   // allocate output partition buffers
   std::vector<rmm::device_buffer> out_buffers;
@@ -917,12 +924,12 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
 
   // HtoD src and dest buffers
   CUDA_TRY(cudaMemcpyAsync(
-    d_src_bufs, h_src_bufs, src_bufs_size + dst_bufs_size, cudaMemcpyHostToDevice, stream));
+    d_src_bufs, h_src_bufs, src_bufs_size + dst_bufs_size, cudaMemcpyHostToDevice, stream.value()));
 
   // copy.  1 block per buffer
   {
     constexpr int block_size = 512;
-    copy_partition<<<num_bufs, block_size, 0, stream>>>(
+    copy_partition<<<num_bufs, block_size, 0, stream.value()>>>(
       num_src_bufs, num_partitions, d_src_bufs, d_dst_bufs, d_dst_buf_info);
   }
 
@@ -942,7 +949,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
 
   // overlap the actual copy with the work of constructing the output columns. this can be a
   // non-trivial savings because of the sheer number of output views.
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  stream.synchronize();
 
   return result;
 }
@@ -954,7 +961,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
                                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::contiguous_split(input, splits, mr, (cudaStream_t)0);
+  return cudf::detail::contiguous_split(input, splits, rmm::cuda_stream_default, mr);
 }
 
 };  // namespace cudf
