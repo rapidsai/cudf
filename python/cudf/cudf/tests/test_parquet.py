@@ -1590,16 +1590,10 @@ def test_parquet_allnull_str(tmpdir, engine):
     pandas_path = tmpdir.join("pandas_allnulls.parquet")
 
     pdf = pd.DataFrame(
-        {
-            "a": pd.Series(
-                [None, None, None, None, None], dtype='str'
-            )
-        }
+        {"a": pd.Series([None, None, None, None, None], dtype="str")}
     )
     expected_gdf = cudf.DataFrame(
-      {
-        "a": cudf.Series([None, None, None, None, None], dtype='str')
-      }
+        {"a": cudf.Series([None, None, None, None, None], dtype="str")}
     )
 
     pdf.to_parquet(pandas_path)
