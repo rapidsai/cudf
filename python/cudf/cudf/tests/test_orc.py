@@ -477,16 +477,3 @@ def test_int_overflow(tmpdir):
     df.to_orc(file_path)
 
     assert_eq(cudf.read_orc(file_path), df)
-
-
-def test_row_group_indexing():
-    buffer_orc = BytesIO()
-
-    expected = cudf.DataFrame(
-        {"a": np.random.randint(0, 1000, size=40000, dtype="int64")}
-    )
-
-    expected.to_orc(buffer_orc)
-    got = cudf.read_orc(buffer_orc)
-
-    assert_eq(expected, got)
