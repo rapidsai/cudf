@@ -2,7 +2,6 @@
 import os
 import pathlib
 import random
-from glob import glob
 from io import BytesIO
 from string import ascii_letters
 
@@ -1199,13 +1198,10 @@ def test_parquet_writer_cpu_pyarrow(tmpdir, pdf, gdf):
 
 
 def test_multifile_warning(datadir):
-    fpath = datadir.__fspath__() + "/*.parquet"
-    with pytest.warns(UserWarning):
-        got = cudf.read_parquet(fpath)
-        fname = sorted(glob(fpath))[0]
-        expect = pd.read_parquet(fname)
-        expect = expect.apply(pd.to_numeric)
-        assert_eq(expect, got)
+    fpath = datadir.__fspath__() + "/multipart_parquet"
+    got = cudf.read_parquet(fpath + "/*.parquet")
+    expect = pd.read_parquet(fpath)
+    assert_eq(expect, got)
 
 
 # Validates the metadata return path of the parquet writer
