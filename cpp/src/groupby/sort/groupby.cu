@@ -204,8 +204,8 @@ void store_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
                              argmin_result.nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
                                                       : cudf::detail::out_of_bounds_policy::NULLIFY,
                              cudf::detail::negative_index_policy::NOT_ALLOWED,
-                             mr,
-                             stream);
+                             stream,
+                             mr);
       return std::move(transformed_result->release()[0]);
     }
   }();
@@ -241,8 +241,8 @@ void store_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
                              argmax_result.nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
                                                       : cudf::detail::out_of_bounds_policy::NULLIFY,
                              cudf::detail::negative_index_policy::NOT_ALLOWED,
-                             mr,
-                             stream);
+                             stream,
+                             mr);
       return std::move(transformed_result->release()[0]);
     }
   }();
@@ -269,8 +269,8 @@ void store_result_functor::operator()<aggregation::MEAN>(aggregation const& agg)
                                    count_result,
                                    binary_operator::DIV,
                                    cudf::detail::target_type(values.type(), aggregation::MEAN),
-                                   mr,
-                                   stream);
+                                   stream,
+                                   mr);
   cache.add_result(col_idx, agg, std::move(result));
 };
 
@@ -307,7 +307,7 @@ void store_result_functor::operator()<aggregation::STD>(aggregation const& agg)
   operator()<aggregation::VARIANCE>(*var_agg);
   column_view var_result = cache.get_result(col_idx, *var_agg);
 
-  auto result = cudf::detail::unary_operation(var_result, unary_operator::SQRT, mr, stream);
+  auto result = cudf::detail::unary_operation(var_result, unary_operator::SQRT, stream, mr);
   cache.add_result(col_idx, agg, std::move(result));
 };
 
@@ -434,7 +434,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort
 
   auto results = detail::extract_results(requests, cache);
 
-  return std::make_pair(helper().unique_keys(mr, stream), std::move(results));
+  return std::make_pair(helper().unique_keys(stream, mr), std::move(results));
 }
 }  // namespace groupby
 }  // namespace cudf

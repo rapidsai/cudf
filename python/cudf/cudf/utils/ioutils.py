@@ -193,6 +193,13 @@ partition_file_name : str, optional, default None
     will be written to different directories, but all files will
     have this name.  If nothing is specified, a random uuid4 hex string
     will be used for each file.
+int96_timestamps : bool, default False
+    If ``True``, write timestamps in int96 format. This will convert
+    timestamps from timestamp[ns], timestamp[ms], timestamp[s], and
+    timestamp[us] to the int96 format, which is the number of Julian
+    days and the number of nanoseconds since midnight. If ``False``,
+    timestamps will not be altered.
+
 
 See Also
 --------

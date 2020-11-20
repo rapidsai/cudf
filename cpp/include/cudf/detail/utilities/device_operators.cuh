@@ -106,9 +106,10 @@ struct DeviceMin {
     return std::min(lhs, rhs);
   }
 
-  template <typename T,
-            typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value &&
-                                      !cudf::is_fixed_point<T>()>* = nullptr>
+  template <
+    typename T,
+    typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value &&
+                              !cudf::is_dictionary<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
     return std::numeric_limits<T>::max();
@@ -134,6 +135,12 @@ struct DeviceMin {
 #endif
     return T(psentinel, 4);
   }
+
+  template <typename T, typename std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
+  static constexpr T identity()
+  {
+    return static_cast<T>(T::max_value());
+  }
 };
 
 /* @brief binary `max` operator */
@@ -144,9 +151,10 @@ struct DeviceMax {
     return std::max(lhs, rhs);
   }
 
-  template <typename T,
-            typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value &&
-                                      !cudf::is_fixed_point<T>()>* = nullptr>
+  template <
+    typename T,
+    typename std::enable_if_t<!std::is_same<T, cudf::string_view>::value &&
+                              !cudf::is_dictionary<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
     return std::numeric_limits<T>::lowest();
@@ -170,6 +178,12 @@ struct DeviceMax {
     CUDA_TRY(cudaGetSymbolAddress((void**)&psentinel, max_string_sentinel));
 #endif
     return T(psentinel, 0);
+  }
+
+  template <typename T, typename std::enable_if_t<cudf::is_dictionary<T>()>* = nullptr>
+  static constexpr T identity()
+  {
+    return static_cast<T>(T::lowest_value());
   }
 };
 
