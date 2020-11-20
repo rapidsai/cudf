@@ -203,7 +203,7 @@ class NumericalColumn(ColumnBase):
             ),
         )
 
-    def as_numerical_column(self, dtype: Dtype, **kwargs) -> "NumericalColumn":
+    def as_numerical_column(self, dtype: Dtype) -> "NumericalColumn":
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self

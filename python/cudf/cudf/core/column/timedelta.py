@@ -311,7 +311,7 @@ class TimeDeltaColumn(column.ColumnBase):
         return result
 
     def as_numerical_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
         return cast(
             "cudf.core.column.NumericalColumn", self.as_numerical.astype(dtype)
