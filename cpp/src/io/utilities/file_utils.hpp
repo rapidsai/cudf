@@ -126,5 +126,19 @@ class cufile_output final : public cufile_io_base {
   void write(void const *data, size_t offset, size_t size);
 };
 
+/**
+ * @brief Creates a `cufile_input` object
+ *
+ * Returns a null pointer if an exception occurs in the `cufile_input` constructor.
+ */
+std::unique_ptr<cufile_input> make_cufile_input(std::string const &filepath);
+
+/**
+ * @brief Creates a `cufile_output` object
+ *
+ * Returns a null pointer if an exception occurs in the `cufile_output` constructor.
+ */
+std::unique_ptr<cufile_output> make_cufile_output(std::string const &filepath);
+
 };  // namespace io
 };  // namespace cudf

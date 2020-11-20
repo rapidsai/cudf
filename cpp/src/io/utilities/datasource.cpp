@@ -46,7 +46,7 @@ class memory_mapped_source : public datasource {
 
  public:
   explicit memory_mapped_source(const char *filepath, size_t offset, size_t size)
-    : _cufile_in(filepath)
+    : _cufile_in(make_cufile_input(filepath))
   {
     auto const file = file_wrapper(filepath, O_RDONLY);
     _file_size      = file.size();
@@ -81,23 +81,26 @@ class memory_mapped_source : public datasource {
     return read_size;
   }
 
-  bool supports_device_read() const override { return true; }
+  bool supports_device_read() const override { return _cufile_in != nullptr; }
 
   bool is_device_read_preferred(size_t size) const
   {
-    return _cufile_in.is_cufile_io_preferred(size);
+    return _cufile_in != nullptr && _cufile_in->is_cufile_io_preferred(size);
   }
 
   std::unique_ptr<datasource::buffer> device_read(size_t offset, size_t size) override
   {
+    if (!supports_device_read()) CUDF_FAIL("Device reads are not supported for this file.");
+
     auto const read_size = std::min(size, _map_size - (offset - _map_offset));
-    return _cufile_in.read(offset, size);
+    return _cufile_in->read(offset, size);
   }
 
   size_t device_read(size_t offset, size_t size, uint8_t *dst) override
   {
+    if (!supports_device_read()) CUDF_FAIL("Device reads are not supported for this file.");
     auto const read_size = std::min(size, _map_size - (offset - _map_offset));
-    return _cufile_in.read(offset, size, dst);
+    return _cufile_in->read(offset, size, dst);
   }
 
   size_t size() const override { return _file_size; }
@@ -130,7 +133,7 @@ class memory_mapped_source : public datasource {
   void *_map_addr    = nullptr;
   size_t _map_size   = 0;
   size_t _map_offset = 0;
-  cufile_input _cufile_in;
+  std::unique_ptr<cufile_input> _cufile_in;
 };
 
 /**

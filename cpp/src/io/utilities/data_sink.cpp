@@ -28,7 +28,7 @@ namespace io {
  */
 class file_sink : public data_sink {
  public:
-  explicit file_sink(std::string const& filepath) : _cufile_out(filepath)
+  explicit file_sink(std::string const& filepath) : _cufile_out(make_cufile_output(filepath))
   {
     _output_stream.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
     CUDF_EXPECTS(_output_stream.is_open(), "Cannot open output file");
@@ -51,19 +51,21 @@ class file_sink : public data_sink {
 
   bool is_device_write_preferred(size_t size) const override
   {
-    return _cufile_out.is_cufile_io_preferred(size);
+    return _cufile_out != nullptr && _cufile_out->is_cufile_io_preferred(size);
   }
 
   void device_write(void const* gpu_data, size_t size, cudaStream_t stream) override
   {
-    _cufile_out.write(gpu_data, _bytes_written, size);
+    if (!supports_device_write()) CUDF_FAIL("Device writes are not supported for this file.");
+
+    _cufile_out->write(gpu_data, _bytes_written, size);
     _bytes_written += size;
   }
 
  private:
   std::ofstream _output_stream;
   size_t _bytes_written = 0;
-  cufile_output _cufile_out;
+  std::unique_ptr<cufile_output> _cufile_out;
 };
 
 /**

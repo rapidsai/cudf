@@ -138,5 +138,23 @@ void cufile_output::write(void const *data, size_t offset, size_t size)
                "cuFile error writing to a file");
 }
 
+std::unique_ptr<cufile_input> make_cufile_input(std::string const &filepath)
+{
+  try {
+    return std::make_unique<cufile_input>(filepath);
+  } catch (...) {
+    return nullptr;
+  }
+}
+
+std::unique_ptr<cufile_output> make_cufile_output(std::string const &filepath)
+{
+  try {
+    return std::make_unique<cufile_output>(filepath);
+  } catch (...) {
+    return nullptr;
+  }
+}
+
 };  // namespace io
 };  // namespace cudf
