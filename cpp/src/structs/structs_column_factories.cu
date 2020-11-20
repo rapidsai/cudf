@@ -14,12 +14,16 @@
  * limitations under the License.
  */
 
-#include <algorithm>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/types.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+
+#include <algorithm>
 #include <memory>
-#include "cudf/types.hpp"
-#include "thrust/iterator/counting_iterator.h"
 
 namespace cudf {
 namespace {
@@ -29,7 +33,7 @@ void superimpose_parent_nullmask(bitmask_type const* parent_null_mask,
                                  std::size_t parent_null_mask_size,
                                  size_type parent_null_count,
                                  column& child,
-                                 cudaStream_t stream,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   if (!child.nullable()) {
@@ -78,7 +82,7 @@ std::unique_ptr<cudf::column> make_structs_column(
   std::vector<std::unique_ptr<column>>&& child_columns,
   size_type null_count,
   rmm::device_buffer&& null_mask,
-  cudaStream_t stream,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(null_count <= 0 || !null_mask.is_empty(),

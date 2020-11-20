@@ -22,6 +22,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace groupby {
@@ -92,8 +93,8 @@ struct sort_groupby_helper {
    */
   std::unique_ptr<column> sorted_values(
     column_view const& values,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-    cudaStream_t stream                 = 0);
+    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Groups a column of values according to `keys`
@@ -107,8 +108,8 @@ struct sort_groupby_helper {
    */
   std::unique_ptr<column> grouped_values(
     column_view const& values,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-    cudaStream_t stream                 = 0);
+    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Get a table of sorted unique keys
@@ -116,8 +117,8 @@ struct sort_groupby_helper {
    * @return a new table in which each row is a unique row in the sorted key table.
    */
   std::unique_ptr<table> unique_keys(
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-    cudaStream_t stream                 = 0);
+    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Get a table of sorted keys
@@ -125,8 +126,8 @@ struct sort_groupby_helper {
    * @return a new table containing the sorted keys.
    */
   std::unique_ptr<table> sorted_keys(
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-    cudaStream_t stream                 = 0);
+    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Get the number of groups in `keys`
@@ -140,7 +141,7 @@ struct sort_groupby_helper {
    * When include_null_keys = NO, returned value is the number of rows in `keys`
    *  in which no element is null
    */
-  size_type num_keys(cudaStream_t stream = 0);
+  size_type num_keys(rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   /**
    * @brief Get the sorted order of `keys`.
@@ -155,7 +156,7 @@ struct sort_groupby_helper {
    *
    * @return the sort order indices for `keys`.
    */
-  column_view key_sort_order(cudaStream_t stream = 0);
+  column_view key_sort_order(rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   /**
    * @brief Get each group's offset into the sorted order of `keys`.
@@ -168,7 +169,7 @@ struct sort_groupby_helper {
    * @return vector of offsets of the starting point of each group in the sorted
    * key table
    */
-  index_vector const& group_offsets(cudaStream_t stream = 0);
+  index_vector const& group_offsets(rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   /**
    * @brief Get the group labels corresponding to the sorted order of `keys`.
@@ -183,7 +184,7 @@ struct sort_groupby_helper {
    *
    * @return vector of group labels for each row in the sorted key column
    */
-  index_vector const& group_labels(cudaStream_t stream = 0);
+  index_vector const& group_labels(rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
  private:
   /**
@@ -200,7 +201,7 @@ struct sort_groupby_helper {
    * @return A nullable column of `INT32` containing group labels in the order
    *         of the unsorted key table
    */
-  column_view unsorted_keys_labels(cudaStream_t stream = 0);
+  column_view unsorted_keys_labels(rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   /**
    * @brief Get the column representing the row bitmask for the `keys`
@@ -214,7 +215,7 @@ struct sort_groupby_helper {
    * Computes and stores bitmask on first invocation and returns stored column
    * on subsequent calls.
    */
-  column_view keys_bitmask_column(cudaStream_t stream = 0);
+  column_view keys_bitmask_column(rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
  private:
   column_ptr _key_sorted_order;      ///< Indices to produce _keys in sorted order
