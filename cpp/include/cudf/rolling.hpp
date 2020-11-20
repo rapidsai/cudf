@@ -90,11 +90,21 @@ struct window_bounds
 {
   public:
 
+    /**
+     * @brief Construct bounded window boundary.
+     * 
+     * @param value Finite window boundary (in days or rows)
+     */
     static window_bounds get(size_type value)
     { return window_bounds(false, value); }
 
+    /**
+     * @brief Construct unbounded window boundary.
+     * 
+     * @return window_bounds 
+     */
     static window_bounds unbounded()
-    { return window_bounds(true); }
+    { return window_bounds(true, std::numeric_limits<cudf::size_type>::max()); }
 
     // TODO: In the future, add units for bounds.
     //       E.g. {value=1, unit=DAYS, unbounded=false}

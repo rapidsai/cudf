@@ -1147,6 +1147,25 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                std::unique_ptr<aggregation> const& aggr,
                                                rmm::mr::device_memory_resource* mr)
 {
+  return grouped_rolling_window(
+    group_keys,
+    input,
+    window_bounds::get(preceding_window),
+    window_bounds::get(following_window),
+    min_periods,
+    aggr,
+    mr
+  );
+}
+
+std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
+                                               column_view const& input,
+                                               window_bounds preceding_window,
+                                               window_bounds following_window,
+                                               size_type min_periods,
+                                               std::unique_ptr<aggregation> const& aggr,
+                                               rmm::mr::device_memory_resource* mr)
+{
   return grouped_rolling_window(group_keys,
                                 input,
                                 empty_like(input)->view(),
@@ -1166,6 +1185,27 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                std::unique_ptr<aggregation> const& aggr,
                                                rmm::mr::device_memory_resource* mr)
 {
+  return grouped_rolling_window(
+    group_keys,
+    input,
+    default_outputs,
+    window_bounds::get(preceding_window),
+    window_bounds::get(following_window),
+    min_periods,
+    aggr,
+    mr
+  );
+}
+
+std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
+                                               column_view const& input,
+                                               column_view const& default_outputs,
+                                               window_bounds preceding_window_bounds,
+                                               window_bounds following_window_bounds,
+                                               size_type min_periods,
+                                               std::unique_ptr<aggregation> const& aggr,
+                                               rmm::mr::device_memory_resource* mr)
+{
   CUDF_FUNC_RANGE();
 
   if (input.is_empty()) return empty_like(input);
@@ -1177,6 +1217,9 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 
   CUDF_EXPECTS((default_outputs.is_empty() || default_outputs.size() == input.size()),
                "Defaults column must be either empty or have as many rows as the input column.");
+
+  auto const preceding_window = preceding_window_bounds.value;
+  auto const following_window = following_window_bounds.value;
 
   if (group_keys.num_columns() == 0) {
     // No Groupby columns specified. Treat as one big group.
