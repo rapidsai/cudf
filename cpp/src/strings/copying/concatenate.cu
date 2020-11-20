@@ -65,16 +65,12 @@ struct chars_size_transform {
 auto create_strings_device_views(std::vector<column_view> const& views, cudaStream_t stream)
 {
   CUDF_FUNC_RANGE();
-  // Create device views for each input view
-  cudf::thread_range r1{"device_view_owners"};
-  cudf::thread_range r2{"create_contiguous_device_views"};
   // Assemble contiguous array of device views
   rmm::device_buffer* device_view_owners;
   column_device_view* device_views_ptr;
   std::tie(device_view_owners, device_views_ptr) =
     contiguous_copy_column_device_views<column_device_view>(views, stream);
 
-  cudf::thread_range r3{"input_offsets"};
   // Compute the partition offsets and size of offset column
   // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type
   auto input_offsets = thrust::host_vector<size_t>(views.size() + 1);
@@ -87,7 +83,6 @@ auto create_strings_device_views(std::vector<column_view> const& views, cudaStre
   auto const d_input_offsets = rmm::device_vector<size_t>{input_offsets};
   auto const output_size     = input_offsets.back();
 
-  cudf::thread_range r4{"d_partition_offsets"};
   // Compute the partition offsets and size of chars column
   // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type
   // Note: Using separate transform and inclusive_scan because
@@ -106,7 +101,6 @@ auto create_strings_device_views(std::vector<column_view> const& views, cudaStre
                          d_partition_offsets.begin());
   auto const output_chars_size = d_partition_offsets.back();
 
-  cudf::thread_range r5{"return_statement"};
   return std::make_tuple(std::unique_ptr<rmm::device_buffer>(device_view_owners),
                          device_views_ptr,
                          std::move(d_input_offsets),

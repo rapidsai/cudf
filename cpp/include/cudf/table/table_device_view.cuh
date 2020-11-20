@@ -142,7 +142,8 @@ auto contiguous_copy_column_device_views(HostTableView source_view, rmm::cuda_st
 
   // align h_ptr also, because both h_ptr, d_ptr alignment will not be same!
   auto aligned_hptr = detail::align_ptr_for_type<ColumnDeviceView>(h_buffer.data());
-  CUDA_TRY(cudaMemcpyAsync(d_columns, aligned_hptr, views_size_bytes, cudaMemcpyDefault, stream.value()));
+  CUDA_TRY(
+    cudaMemcpyAsync(d_columns, aligned_hptr, views_size_bytes, cudaMemcpyDefault, stream.value()));
   stream.synchronize();
   return std::make_tuple(_descendant_storage, d_columns);
 }
