@@ -1056,7 +1056,7 @@ class ColumnBase(Column, Serializable):
             ordered=ordered,
         )
 
-    def as_numerical_column(self, dtype, **kwargs):
+    def as_numerical_column(self, dtype):
         raise NotImplementedError
 
     def as_datetime_column(self, dtype, **kwargs):

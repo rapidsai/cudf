@@ -284,7 +284,7 @@ class TimeDeltaColumn(column.ColumnBase):
         result = libcudf.replace.replace_nulls(col, fill_value)
         return result
 
-    def as_numerical_column(self, dtype, **kwargs):
+    def as_numerical_column(self, dtype):
         return self.as_numerical.astype(dtype)
 
     def as_datetime_column(self, dtype, **kwargs):

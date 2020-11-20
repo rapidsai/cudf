@@ -4624,7 +4624,7 @@ class StringColumn(column.ColumnBase):
         else:
             return self.children[1].size
 
-    def as_numerical_column(self, dtype, **kwargs):
+    def as_numerical_column(self, dtype):
         out_dtype = np.dtype(dtype)
 
         if out_dtype.kind in {"i", "u"}:

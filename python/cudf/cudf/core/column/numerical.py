@@ -171,7 +171,7 @@ class NumericalColumn(column.ColumnBase):
             size=self.size,
         )
 
-    def as_numerical_column(self, dtype, **kwargs):
+    def as_numerical_column(self, dtype):
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self

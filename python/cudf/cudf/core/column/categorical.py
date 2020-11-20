@@ -1131,10 +1131,8 @@ class CategoricalColumn(column.ColumnBase):
             new_categories=dtype.categories, ordered=dtype.ordered
         )
 
-    def as_numerical_column(self, dtype, **kwargs):
-        return self._get_decategorized_column().as_numerical_column(
-            dtype, **kwargs
-        )
+    def as_numerical_column(self, dtype):
+        return self._get_decategorized_column().as_numerical_column(dtype)
 
     def as_string_column(self, dtype, **kwargs):
         return self._get_decategorized_column().as_string_column(

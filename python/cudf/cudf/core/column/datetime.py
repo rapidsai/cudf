@@ -177,7 +177,7 @@ class DatetimeColumn(column.ColumnBase):
             f"cannot astype a datetimelike from [{self.dtype}] to [{dtype}]"
         )
 
-    def as_numerical_column(self, dtype, **kwargs):
+    def as_numerical_column(self, dtype):
         return self.as_numerical.astype(dtype)
 
     def as_string_column(self, dtype, format=None):
