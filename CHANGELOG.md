@@ -16,6 +16,7 @@
 - PR #6568 Add function to create hashed vocabulary file from raw vocabulary
 - PR #6142 Add Python `read_orc_statistics` function for reading file- and stripe-level statistics
 - PR #6581 Add JNI API to check if PTDS is enabled
+- PR #6625 Add INT96 timestamp writing option to parquet writer
 - PR #6592 Add `cudf.to_numeric` function
 - PR #6598 Add strings::contains API with target column parameter
 - PR #6638 Add support for `pipe` API
@@ -144,6 +145,8 @@
 - PR #6767 Fix sort order of parameters in `test_scalar_invalid_implicit_conversion` pytest
 - PR #6787 Update java reduction APIs to reflect C++ changes
 - PR #6794 Fix AVRO reader issues with empty input
+- PR #6824 Fix JNI build
+- PR #6826 Fix resource management in Java ColumnBuilder
 
 
 # cuDF 0.16.0 (21 Oct 2020)

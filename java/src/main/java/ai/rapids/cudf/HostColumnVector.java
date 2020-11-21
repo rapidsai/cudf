@@ -282,22 +282,25 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   public static<T> HostColumnVector fromLists(DataType dataType, List<T>... values) {
-    ColumnBuilder cb = new ColumnBuilder(dataType, values.length);
-    cb.appendLists(values);
-    return cb.build();
+    try (ColumnBuilder cb = new ColumnBuilder(dataType, values.length)) {
+      cb.appendLists(values);
+      return cb.build();
+    }
   }
 
   public static HostColumnVector fromStructs(DataType dataType,
                                              List<StructData> values) {
-    ColumnBuilder cb = new ColumnBuilder(dataType, values.size());
-    cb.appendStructValues(values);
-    return cb.build();
+    try (ColumnBuilder cb = new ColumnBuilder(dataType, values.size())) {
+      cb.appendStructValues(values);
+      return cb.build();
+    }
   }
 
   public static HostColumnVector fromStructs(DataType dataType, StructData... values) {
-    ColumnBuilder cb = new ColumnBuilder(dataType, values.length);
-    cb.appendStructValues(values);
-    return cb.build();
+    try (ColumnBuilder cb = new ColumnBuilder(dataType, values.length)) {
+      cb.appendStructValues(values);
+      return cb.build();
+    }
   }
 
   /**
@@ -794,6 +797,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       }
       HostColumnVector hostColumnVector = new HostColumnVector(type, rows, Optional.of(nullCount), data, valid, offsets,
           hostColumnVectorCoreList);
+      built = true;
       return hostColumnVector;
     }
 
@@ -1198,6 +1202,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
         if (offsets != null) {
           offsets.close();
           offsets = null;
+        }
+        for (ColumnBuilder childBuilder : childBuilders) {
+          childBuilder.close();
         }
         built = true;
       }
