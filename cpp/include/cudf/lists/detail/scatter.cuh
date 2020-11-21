@@ -317,7 +317,8 @@ struct list_child_constructor {
   template <typename T>
   struct is_supported_child_type {
     static const bool value = cudf::is_fixed_width<T>() || std::is_same<T, string_view>::value ||
-                              std::is_same<T, list_view>::value;
+                              std::is_same<T, list_view>::value ||
+                              std::is_same<T, struct_view>::value;
   };
 
  public:
@@ -612,6 +613,94 @@ struct list_child_constructor {
                                    std::move(child_null_mask.first),  // Null mask
                                    stream.value(),
                                    mr);
+  }
+
+  /**
+   * @brief (Recursively) constructs child columns that are structs.
+   */
+  template <typename T>
+  std::enable_if_t<std::is_same<T, struct_view>::value, std::unique_ptr<column>> operator()(
+    rmm::device_uvector<unbound_list_view> const& list_vector,
+    cudf::column_view const& list_offsets,
+    cudf::lists_column_view const& source_lists_column_view,
+    cudf::lists_column_view const& target_lists_column_view,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr) const
+  {
+    auto source_column_device_view =
+      column_device_view::create(source_lists_column_view.parent(), stream);
+    auto target_column_device_view =
+      column_device_view::create(target_lists_column_view.parent(), stream);
+    auto source_lists = cudf::detail::lists_column_device_view(*source_column_device_view);
+    auto target_lists = cudf::detail::lists_column_device_view(*target_column_device_view);
+
+    auto source_structs = source_lists_column_view.child();
+    auto target_structs = target_lists_column_view.child();
+
+    auto num_child_rows = get_num_child_rows(list_offsets, stream);
+
+    auto num_struct_members =
+      std::distance(source_structs.child_begin(), source_structs.child_end());
+    std::vector<std::unique_ptr<column>> child_columns;
+    child_columns.reserve(num_struct_members);
+
+    auto project_member_as_list = [stream, mr](column_view const& structs_member,
+                                               cudf::size_type const& structs_list_num_rows,
+                                               column_view const& structs_list_offsets,
+                                               rmm::device_buffer const& structs_list_nullmask,
+                                               cudf::size_type const& structs_list_null_count) {
+      return cudf::make_lists_column(structs_list_num_rows,
+                                     std::make_unique<column>(structs_list_offsets, stream, mr),
+                                     std::make_unique<column>(structs_member, stream, mr),
+                                     structs_list_null_count,
+                                     rmm::device_buffer(structs_list_nullmask),
+                                     stream.value(),
+                                     mr);
+    };
+
+    for (int i{0}; i < num_struct_members; ++i) {
+      auto source_struct_member      = source_structs.child(i);
+      auto source_struct_member_list = project_member_as_list(
+        source_struct_member,
+        source_lists_column_view.size(),
+        source_lists_column_view.offsets(),
+        cudf::detail::copy_bitmask(source_lists_column_view.parent(), stream, mr),
+        source_lists_column_view.null_count());
+
+      auto target_struct_member      = target_structs.child(i);
+      auto target_struct_member_list = project_member_as_list(
+        target_struct_member,
+        target_lists_column_view.size(),
+        target_lists_column_view.offsets(),
+        cudf::detail::copy_bitmask(target_lists_column_view.parent(), stream, mr),
+        target_lists_column_view.null_count());
+
+      child_columns.emplace_back(
+        cudf::type_dispatcher(source_struct_member.type(),
+                              list_child_constructor{},
+                              list_vector,
+                              list_offsets,
+                              cudf::lists_column_view(source_struct_member_list->view()),
+                              cudf::lists_column_view(target_struct_member_list->view()),
+                              stream,
+                              mr));
+    }
+
+    // child columns should now have individually constructed child columns.
+    // Assemble struct column now.
+
+    auto child_null_mask =
+      source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
+        ? construct_child_nullmask(
+            list_vector, list_offsets, source_lists, target_lists, num_child_rows, stream, mr)
+        : std::make_pair(rmm::device_buffer{}, 0);
+
+    return cudf::make_structs_column(num_child_rows,
+                                     std::move(child_columns),
+                                     child_null_mask.second,
+                                     std::move(child_null_mask.first),
+                                     stream.value(),
+                                     mr);
   }
 };
 
