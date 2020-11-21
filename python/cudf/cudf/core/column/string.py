@@ -2102,14 +2102,15 @@ class StringMethods(ColumnMethodsMixin):
             pat = ""
 
         if expand:
-            result_table = cpp_split(
-                self._column, as_device_scalar(pat, "str"), n
-            )
-            if len(result_table._data) == 1:
-                if result_table._data[0].null_count == len(self._parent):
-                    result_table = []
-                if self._column.null_count == len(self._column):
-                    result_table = [self._column.copy()]
+            if self._column.null_count == len(self._column):
+                result_table = [self._column.copy()]
+            else:
+                result_table = cpp_split(
+                    self._column, as_device_scalar(pat, "str"), n
+                )
+                if len(result_table._data) == 1:
+                    if result_table._data[0].null_count == len(self._parent):
+                        result_table = []
         else:
             result_table = cpp_split_record(
                 self._column, as_device_scalar(pat, "str"), n
@@ -2254,12 +2255,15 @@ class StringMethods(ColumnMethodsMixin):
             pat = ""
 
         if expand:
-            result_table = cpp_rsplit(self._column, as_device_scalar(pat), n)
-            if len(result_table._data) == 1:
-                if result_table._data[0].null_count == len(self._parent):
-                    result_table = []
-                elif self._parent.null_count == len(self._parent):
-                    result_table = [self._column.copy()]
+            if self._column.null_count == len(self._column):
+                result_table = [self._column.copy()]
+            else:
+                result_table = cpp_rsplit(
+                    self._column, as_device_scalar(pat), n
+                )
+                if len(result_table._data) == 1:
+                    if result_table._data[0].null_count == len(self._parent):
+                        result_table = []
         else:
             result_table = cpp_rsplit_record(
                 self._column, as_device_scalar(pat), n
