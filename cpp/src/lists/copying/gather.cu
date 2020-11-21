@@ -18,6 +18,8 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/lists/detail/gather.cuh>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace lists {
 namespace detail {
@@ -86,7 +88,7 @@ struct list_gatherer {
  */
 std::unique_ptr<column> gather_list_leaf(column_view const& column,
                                          gather_data const& gd,
-                                         cudaStream_t stream,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   // gather map iterator for this level (N)
@@ -135,7 +137,7 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
  */
 std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                                            gather_data& gd,
-                                           cudaStream_t stream,
+                                           rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
   // gather map iterator for this level (N)
@@ -164,7 +166,7 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
   // generate gather_data for next level (N+1), potentially recycling the temporary
   // base_offsets buffer.
   gather_data child_gd = make_gather_data<false>(
-    list, gather_map_begin, gather_map_size, stream, mr, std::move(gd.base_offsets));
+    list, gather_map_begin, gather_map_size, std::move(gd.base_offsets), stream, mr);
 
   // the nesting case.
   if (list.child().type() == cudf::data_type{type_id::LIST}) {

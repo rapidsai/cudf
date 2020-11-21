@@ -2,6 +2,8 @@
 import os
 import pathlib
 import random
+import datetime
+import math
 from glob import glob
 from io import BytesIO
 from string import ascii_letters
@@ -68,8 +70,7 @@ def simple_gdf(simple_pdf):
     return cudf.DataFrame.from_pandas(simple_pdf)
 
 
-@pytest.fixture(params=[0, 1, 10, 100])
-def pdf(request):
+def build_pdf(num_columns, day_resolution_timestamps):
     types = [
         "bool",
         "int8",
@@ -84,6 +85,7 @@ def pdf(request):
         "float32",
         "float64",
         "datetime64[ms]",
+        "datetime64[us]",
         "str",
     ]
     renamer = {
@@ -91,7 +93,7 @@ def pdf(request):
     }
     typer = {"col_" + val: val for val in types}
     ncols = len(types)
-    nrows = request.param
+    nrows = num_columns.param
 
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd._testing.makeCustomDataframe(
@@ -103,7 +105,33 @@ def pdf(request):
 
     # Cast all the column dtypes to objects, rename them, and then cast to
     # appropriate types
-    test_pdf = test_pdf.astype("object").rename(renamer, axis=1).astype(typer)
+    test_pdf = test_pdf.rename(renamer, axis=1).astype(typer)
+
+    # make datetime64's a little more interesting by increasing the range of
+    # dates note that pandas will convert these to ns timestamps, so care is
+    # taken to avoid overflowing a ns timestamp. There is also the ability to
+    # request timestamps be whole days only via `day_resolution_timestamps`.
+    for t in [
+        {
+            "name": "datetime64[ms]",
+            "nsDivisor": 1000000,
+            "dayModulus": 86400000,
+        },
+        {
+            "name": "datetime64[us]",
+            "nsDivisor": 1000,
+            "dayModulus": 86400000000,
+        },
+    ]:
+        data = [
+            np.random.randint(0, (0x7FFFFFFFFFFFFFFF / t["nsDivisor"]))
+            for i in range(nrows)
+        ]
+        if day_resolution_timestamps:
+            data = [int(d / t["dayModulus"]) * t["dayModulus"] for d in data]
+        test_pdf["col_" + t["name"]] = pd.Series(
+            np.asarray(data, dtype=t["name"])
+        )
 
     # Create non-numeric categorical data otherwise parquet may typecast it
     data = [ascii_letters[np.random.randint(0, 52)] for i in range(nrows)]
@@ -116,9 +144,24 @@ def pdf(request):
     return test_pdf
 
 
+@pytest.fixture(params=[0, 1, 10, 100])
+def pdf(request):
+    return build_pdf(request, False)
+
+
+@pytest.fixture(params=[0, 1, 10, 100])
+def pdf_day_timestamps(request):
+    return build_pdf(request, True)
+
+
 @pytest.fixture
 def gdf(pdf):
     return cudf.DataFrame.from_pandas(pdf)
+
+
+@pytest.fixture
+def gdf_day_timestamps(pdf_day_timestamps):
+    return cudf.DataFrame.from_pandas(pdf_day_timestamps)
 
 
 @pytest.fixture(params=["snappy", "gzip", "brotli", None, np.str_("snappy")])
@@ -1155,16 +1198,18 @@ def test_parquet_reader_struct_sol_table(tmpdir, params):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-def test_parquet_writer_cpu_pyarrow(tmpdir, pdf, gdf):
+def test_parquet_writer_cpu_pyarrow(
+    tmpdir, pdf_day_timestamps, gdf_day_timestamps
+):
     pdf_fname = tmpdir.join("pdf.parquet")
     gdf_fname = tmpdir.join("gdf.parquet")
 
-    if len(pdf) == 0:
-        pdf = pdf.reset_index(drop=True)
-        gdf = gdf.reset_index(drop=True)
+    if len(pdf_day_timestamps) == 0:
+        pdf_day_timestamps = pdf_day_timestamps.reset_index(drop=True)
+        gdf_day_timestamps = pdf_day_timestamps.reset_index(drop=True)
 
-    pdf.to_parquet(pdf_fname.strpath)
-    gdf.to_parquet(gdf_fname.strpath, engine="pyarrow")
+    pdf_day_timestamps.to_parquet(pdf_fname.strpath)
+    gdf_day_timestamps.to_parquet(gdf_fname.strpath, engine="pyarrow")
 
     assert os.path.exists(pdf_fname)
     assert os.path.exists(gdf_fname)
@@ -1175,27 +1220,45 @@ def test_parquet_writer_cpu_pyarrow(tmpdir, pdf, gdf):
     assert_eq(expect, got)
 
     def clone_field(table, name, datatype):
-        f = table.schema.field_by_name(name)
+        f = table.schema.field(name)
         return pa.field(f.name, datatype, f.nullable, f.metadata)
 
     # Pandas uses a datetime64[ns] while we use a datetime64[ms]
-    expect_idx = expect.schema.get_field_index("col_datetime64[ms]")
-    expect_field = clone_field(expect, "col_datetime64[ms]", pa.date64())
-    expect = expect.set_column(
-        expect_idx,
-        expect_field,
-        expect.column(expect_idx).cast(expect_field.type),
-    )
-    expect = expect.replace_schema_metadata()
-
-    got_idx = got.schema.get_field_index("col_datetime64[ms]")
-    got_field = clone_field(got, "col_datetime64[ms]", pa.date64())
-    got = got.set_column(
-        got_idx, got_field, got.column(got_idx).cast(got_field.type)
-    )
-    got = got.replace_schema_metadata()
+    for t in [expect, got]:
+        for t_col in ["col_datetime64[ms]", "col_datetime64[us]"]:
+            idx = t.schema.get_field_index(t_col)
+            field = clone_field(t, t_col, pa.timestamp("ms"))
+            t = t.set_column(idx, field, t.column(idx).cast(field.type))
+            t = t.replace_schema_metadata()
 
     assert_eq(expect, got)
+
+
+@pytest.mark.filterwarnings("ignore:Using CPU")
+def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+
+    if len(pdf) == 0:
+        pdf = pdf.reset_index(drop=True)
+        gdf = gdf.reset_index(drop=True)
+
+    if "col_category" in pdf.columns:
+        pdf = pdf.drop(columns=["col_category"])
+    if "col_category" in gdf.columns:
+        gdf = gdf.drop(columns=["col_category"])
+
+    assert_eq(pdf, gdf)
+
+    # Write out the gdf using the GPU accelerated writer with INT96 timestamps
+    gdf.to_parquet(gdf_fname.strpath, index=None, int96_timestamps=True)
+
+    assert os.path.exists(gdf_fname)
+
+    expect = pdf
+    got = pd.read_parquet(gdf_fname)
+
+    # verify INT96 timestamps were converted back to the same data.
+    assert_eq(expect, got, check_categorical=False)
 
 
 def test_multifile_warning(datadir):
@@ -1579,3 +1642,85 @@ def test_parquet_nullable_boolean(tmpdir, engine):
     actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
 
     assert_eq(actual_gdf, expected_gdf)
+
+
+def normalized_equals(value1, value2):
+    if isinstance(value1, pd.Timestamp):
+        value1 = value1.to_pydatetime()
+    if isinstance(value2, pd.Timestamp):
+        value2 = value2.to_pydatetime()
+    if isinstance(value1, datetime.datetime):
+        value1 = value1.replace(tzinfo=None)
+    if isinstance(value2, datetime.datetime):
+        value2 = value2.replace(tzinfo=None)
+
+    # if one is datetime then both values are datetimes now
+    if isinstance(value1, datetime.datetime):
+        return value1 == value2
+
+    # Compare integers with floats now
+    if isinstance(value1, float) or isinstance(value2, float):
+        return math.isclose(value1, value2)
+
+    return value1 == value2
+
+
+def test_parquet_writer_statistics(tmpdir, pdf):
+    file_path = tmpdir.join("cudf.parquet")
+    if "col_category" in pdf.columns:
+        pdf = pdf.drop(columns=["col_category", "col_bool"])
+
+    gdf = cudf.from_pandas(pdf)
+    gdf.to_parquet(file_path, index=False)
+
+    # Read back from pyarrow
+    pq_file = pq.ParquetFile(file_path)
+    # verify each row group's statistics
+    for rg in range(0, pq_file.num_row_groups):
+        pd_slice = pq_file.read_row_group(rg).to_pandas()
+
+        # statistics are per-column. So need to verify independently
+        for i, col in enumerate(pd_slice):
+            stats = pq_file.metadata.row_group(rg).column(i).statistics
+
+            actual_min = pd_slice[col].min()
+            stats_min = stats.min
+            assert normalized_equals(actual_min, stats_min)
+
+            actual_max = pd_slice[col].max()
+            stats_max = stats.max
+            assert normalized_equals(actual_max, stats_max)
+
+
+def test_parquet_writer_list_statistics(tmpdir):
+    df = pd.DataFrame(
+        {
+            "a": list_gen(string_gen, 0, 128, 80, 50),
+            "b": list_gen(int_gen, 0, 128, 80, 50),
+            "c": list_gen(int_gen, 0, 128, 80, 50, include_validity=True),
+            "d": list_gen(string_gen, 0, 128, 80, 50, include_validity=True),
+        }
+    )
+    fname = tmpdir.join("test_parquet_writer_list_statistics.parquet")
+    gdf = cudf.from_pandas(df)
+
+    gdf.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    # Read back from pyarrow
+    pq_file = pq.ParquetFile(fname)
+    # verify each row group's statistics
+    for rg in range(0, pq_file.num_row_groups):
+        pd_slice = pq_file.read_row_group(rg).to_pandas()
+
+        # statistics are per-column. So need to verify independently
+        for i, col in enumerate(pd_slice):
+            stats = pq_file.metadata.row_group(rg).column(i).statistics
+
+            actual_min = cudf.Series(pd_slice[col].explode().explode()).min()
+            stats_min = stats.min
+            assert normalized_equals(actual_min, stats_min)
+
+            actual_max = cudf.Series(pd_slice[col].explode().explode()).max()
+            stats_max = stats.max
+            assert normalized_equals(actual_max, stats_max)
