@@ -109,7 +109,7 @@ public:
 
   bool supports_device_write() const override { return true; }
 
-  void device_write(void const *gpu_data, size_t size, rmm::cuda_stream_view stream) {
+  void device_write(void const *gpu_data, size_t size, cudaStream_t stream) override {
     JNIEnv *env = cudf::jni::get_jni_env(jvm);
     size_t left_to_copy = size;
     const char *copy_from = static_cast<const char *>(gpu_data);
@@ -117,7 +117,7 @@ public:
       long buffer_amount_available = current_buffer_len - current_buffer_written;
       if (buffer_amount_available <= 0) {
         // should never be < 0, but just to be safe
-        stream.synchronize();
+        CUDA_TRY(cudaStreamSynchronize(stream));
         rotate_buffer(env);
         buffer_amount_available = current_buffer_len - current_buffer_written;
       }
@@ -126,14 +126,14 @@ public:
       char *copy_to = current_buffer_data + current_buffer_written;
 
       CUDA_TRY(cudaMemcpyAsync(copy_to, copy_from, amount_to_copy, cudaMemcpyDeviceToHost,
-                               stream.value()));
+                               stream));
 
       copy_from = copy_from + amount_to_copy;
       current_buffer_written += amount_to_copy;
       total_written += amount_to_copy;
       left_to_copy -= amount_to_copy;
     }
-    stream.synchronize();
+    CUDA_TRY(cudaStreamSynchronize(stream));
   }
 
   void flush() override {
