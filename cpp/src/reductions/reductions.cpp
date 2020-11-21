@@ -18,7 +18,6 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/quantile.hpp>
 #include <cudf/detail/quantiles.hpp>
 #include <cudf/detail/reduction_functions.hpp>
 #include <cudf/detail/sorting.hpp>
