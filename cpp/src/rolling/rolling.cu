@@ -1584,7 +1584,7 @@ std::unique_ptr<column> time_range_window_ASC(
     auto nulls_begin = d_nulls_begin[group_label];
     auto nulls_end   = d_nulls_end[group_label];
 
-    if (following_window_is_unbounded) { return group_end - idx - 1; }
+    if (following_window_is_unbounded) { return (group_end - idx) - 1; }
 
     // If idx lies in the null-range, the window is the null range.
     if (idx >= nulls_begin && idx < nulls_end) {
@@ -1681,7 +1681,7 @@ std::unique_ptr<column> time_range_window_DESC(column_view const& input,
      d_timestamps = timestamp_column.data<TimeT>(),
      following_window,
      following_window_is_unbounded] __device__(size_type idx) -> size_type {
-    if (following_window_is_unbounded) { return num_rows - idx - 1; }
+    if (following_window_is_unbounded) { return (num_rows - idx) - 1; }
     if (idx >= nulls_begin_idx && idx < nulls_end_idx) {
       // Current row is in the null group.
       // Window ends at the end of the null group.
@@ -1750,7 +1750,7 @@ std::unique_ptr<column> time_range_window_DESC(
     auto nulls_begin = d_nulls_begin[group_label];
     auto nulls_end   = d_nulls_end[group_label];
 
-    if (preceding_window_is_unbounded) { return idx - group_start + 1; }
+    if (preceding_window_is_unbounded) { return (idx - group_start) + 1; }
 
     // If idx lies in the null-range, the window is the null range.
     if (idx >= nulls_begin && idx < nulls_end) {
@@ -1791,7 +1791,7 @@ std::unique_ptr<column> time_range_window_DESC(
     auto nulls_begin = d_nulls_begin[group_label];
     auto nulls_end   = d_nulls_end[group_label];
 
-    if (following_window_is_unbounded) { return group_end - idx - 1; }
+    if (following_window_is_unbounded) { return (group_end - idx) - 1; }
 
     // If idx lies in the null-range, the window is the null range.
     if (idx >= nulls_begin && idx < nulls_end) {
