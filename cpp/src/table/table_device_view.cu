@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <algorithm>
 #include <numeric>
 #include <vector>
@@ -34,8 +36,8 @@ void table_device_view_base<ColumnDeviceView, HostTableView>::destroy()
 
 template <typename ColumnDeviceView, typename HostTableView>
 table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
-  HostTableView source_view, cudaStream_t stream)
-  : _num_rows{source_view.num_rows()}, _num_columns{source_view.num_columns()}, _stream{stream}
+  HostTableView source_view, rmm::cuda_stream_view stream)
+  : _num_rows{source_view.num_rows()}, _num_columns{source_view.num_columns()}
 {
   // The table's columns must be converted to ColumnDeviceView
   // objects and copied into device memory for the table_device_view's
@@ -82,9 +84,9 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
       d_end += col_child_data_size;
     }
 
-    CUDA_TRY(
-      cudaMemcpyAsync(_columns, h_buffer.data(), views_size_bytes, cudaMemcpyDefault, stream));
-    CUDA_TRY(cudaStreamSynchronize(stream));
+    CUDA_TRY(cudaMemcpyAsync(
+      _columns, h_buffer.data(), views_size_bytes, cudaMemcpyDefault, stream.value()));
+    stream.synchronize();
   }
 }
 
