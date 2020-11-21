@@ -8039,49 +8039,90 @@ def test_agg_for_dataframes(data, aggs):
     assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize("aggs",[{"a": np.sum, "b": np.min, "c": np.max}])
-def test_agg_for_unsupported_function_error(aggs):
-    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]})    
-    gdf = gd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]})
+@pytest.mark.parametrize("aggs", [{"a": np.sum, "b": np.min, "c": np.max}])
+def test_agg_for_unsupported_function(aggs):
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
+    )
+    gdf = gd.DataFrame(
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
+    )
 
     with pytest.raises(NotImplementedError):
-            got = gdf.agg(aggs)
-    else:
-        expect = pdf.agg(aggs)
         got = gdf.agg(aggs)
 
-        assert_eq(expect, got, check_dtype=False)
+    expect = pdf.agg(aggs)
+    got = gdf.agg(aggs)
+
+    assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize("aggs",["asdf"])
-def test_agg_for_invalid_function_dataframe_object(aggs):
-    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]})    
-    gdf = gd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]})
+@pytest.mark.parametrize("aggs", ["asdf"])
+def test_agg_for_dataframe_with_invalid_function(aggs):
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
+    )
+    gdf = gd.DataFrame(
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
+    )
 
     with pytest.raises(
         AttributeError,
         match=f"{aggs} is not a valid function for 'DataFrame' object",
     ):
         got = gdf.agg(aggs)
-    else:
-        expect = pdf.agg(aggs)
-        got = gdf.agg(aggs)
 
-        assert_eq(expect, got, check_dtype=False)
+    expect = pdf.agg(aggs)
+    got = gdf.agg(aggs)
 
-@pytest.mark.parametrize("aggs",[{"a": "asdf"}])
-def test_agg_for_invalid_function_series_object(aggs):
-    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]})    
-    gdf = gd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]})
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize("aggs", [{"a": "asdf"}])
+def test_agg_for_series_with_invalid_function(aggs):
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
+    )
+    gdf = gd.DataFrame(
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
+    )
 
     with pytest.raises(
         AttributeError,
         match=f"{aggs['a']} is not a valid function for 'Series' object",
     ):
         got = gdf.agg(aggs)
-    
-    else:
-        expect = pdf.agg(aggs)
+
+    expect = pdf.agg(aggs)
+    got = gdf.agg(aggs)
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "aggs",
+    [
+        "sum",
+        ["min", "sum", "max"],
+        {"a": {"sum", "min"}, "b": {"sum", "max"}, "c": {"min", "max"}},
+    ],
+)
+def test_agg_for_dataframe_with_string_columns(aggs):
+    pdf = pd.DataFrame(
+        {"a": ["m", "n", "o"], "b": ["t", "u", "v"], "c": ["x", "y", "z"]},
+        index=["a", "b", "c"],
+    )
+    gdf = gd.DataFrame(
+        {"a": ["m", "n", "o"], "b": ["t", "u", "v"], "c": ["x", "y", "z"]},
+        index=["a", "b", "c"],
+    )
+
+    with pytest.raises(
+        NotImplementedError, match="Cannot transpose string columns",
+    ):
         got = gdf.agg(aggs)
 
-        assert_eq(expect, got, check_dtype=False)
+    expect = pdf.agg(aggs)
+    got = gdf.agg(aggs)
+
+    assert_eq(expect, got, check_dtype=False)

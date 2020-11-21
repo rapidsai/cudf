@@ -3732,7 +3732,7 @@ class DataFrame(Frame, Serializable):
 
         Parameters
         ----------
-        aggs : str, list or dict
+        aggs : Iterable (set, list, string, tuple or dict)
             Function to use for aggregating data. Accepted combinations are:
                 string name (ex: "sum")
                 list of functions  (ex: ["sum", "min", "max"])
@@ -3741,7 +3741,7 @@ class DataFrame(Frame, Serializable):
 
         axis : not yet supported
 
-        Returns 
+        Returns
         -------
         Aggregation Result : ``Series`` or ``DataFrame``
             When DataFrame.agg is called with a single aggregation, a ``Series`` is returned
@@ -3753,84 +3753,93 @@ class DataFrame(Frame, Serializable):
           * Not supporting: axis, *args, **kwargs
 
         """
-
-        from cudf.core.groupby.groupby import _is_multi_agg
+        dtypes = [self[col].dtype for col in self._column_names]
+        common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
+        df_normalized = self.astype(common_dtype)
 
         if axis is 0 or axis is not None:
             raise NotImplementedError("axis not implemented yet")
-        
-        if not _is_multi_agg(aggs):
-            dtypes = [self[col].dtype for col in self._column_names]
-            common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
-            df_normalized = self.astype(common_dtype)
-        else:
-            df_normalized = self
 
         if isinstance(aggs, Iterable) and not isinstance(aggs, (str, dict)):
-            result = cudf.DataFrame() 
+            result = cudf.DataFrame()
             # TODO : Allow simultaneous pass for multi-aggregation as a future optimization
             for agg in aggs:
                 result[agg] = getattr(df_normalized, agg)()
+            return result.T.sort_index(axis=1, ascending=True)
 
         elif isinstance(aggs, str):
             if not hasattr(df_normalized, aggs):
-                raise AttributeError(f"{aggs} is not a valid function for 'DataFrame' object")
+                raise AttributeError(
+                    f"{aggs} is not a valid function for 'DataFrame' object"
+                )
             result = cudf.DataFrame()
-            result[aggs] = getattr(df_normalized,aggs)()
+            result[aggs] = getattr(df_normalized, aggs)()
             result = result.T.loc[aggs]
             result.name = None
             return result
 
         elif isinstance(aggs, dict):
-            cols=aggs.keys()
+            cols = aggs.keys()
             if any([callable(val) for val in aggs.values()]):
-                raise NotImplementedError("callable parameter is not implemented yet")
+                raise NotImplementedError(
+                    "callable parameter is not implemented yet"
+                )
             elif all([isinstance(val, str) for val in aggs.values()]):
                 result = cudf.Series(index=cols)
                 for key, value in aggs.items():
                     col = df_normalized[key]
                     if not hasattr(col, value):
-                        raise AttributeError(f"{value} is not a valid function for 'Series' object")
-                    result[key]= getattr(col, value)()
+                        raise AttributeError(
+                            f"{value} is not a valid function for 'Series' object"
+                        )
+                    result[key] = getattr(col, value)()
             elif all([isinstance(val, Iterable) for val in aggs.values()]):
-                idxs=set()
+                idxs = set()
                 for val in aggs.values():
                     if isinstance(val, Iterable):
                         idxs.update(val)
                     elif isinstance(val, str):
-                        idxs.add(val)    
+                        idxs.add(val)
                 idxs = sorted(list(idxs))
                 for agg in idxs:
                     if agg is callable:
-                        raise NotImplementedError("callable parameter is not implemented yet")
+                        raise NotImplementedError(
+                            "callable parameter is not implemented yet"
+                        )
                 result = cudf.DataFrame(index=idxs, columns=cols)
                 for key in aggs.keys():
                     col = df_normalized[key]
-                    col_empty =  column_empty(len(idxs), dtype=col.dtype, masked=True)
+                    col_empty = column_empty(
+                        len(idxs), dtype=col.dtype, masked=True
+                    )
                     ans = cudf.Series(data=col_empty, index=idxs)
                     if isinstance(aggs.get(key), Iterable):
                         # TODO : Allow simultaneous pass for multi-aggregation as a future optimization
                         for agg in aggs.get(key):
                             if not hasattr(col, agg):
-                                raise AttributeError(f"{agg} is not a valid function for 'Series' object")
+                                raise AttributeError(
+                                    f"{agg} is not a valid function for 'Series' object"
+                                )
                             ans[agg] = getattr(col, agg)()
-                    elif isinstance(aggs.get(key),str):
+                    elif isinstance(aggs.get(key), str):
                         if not hasattr(col, aggs.get(key)):
-                                raise AttributeError(f"{aggs.get(key)} is not a valid function for 'Series' object")
+                            raise AttributeError(
+                                f"{aggs.get(key)} is not a valid function for 'Series' object"
+                            )
                         ans[aggs.get(key)] = getattr(col, agg)()
                     result[key] = ans
+            else:
+                raise ValueError("values of dict must be a string or list")
 
-            else: raise ValueError("values of dict must be a string or list")
+            return result
 
-            return result 
-                
         elif callable(aggs):
-            raise NotImplementedError("callable parameter is not implemented yet")
+            raise NotImplementedError(
+                "callable parameter is not implemented yet"
+            )
 
         else:
             raise ValueError("argument must be a string, list or dict")
-
-        return result.T.sort_index(axis=1, ascending=True)
 
     def nlargest(self, n, columns, keep="first"):
         """Get the rows of the DataFrame sorted by the n largest value of *columns*
