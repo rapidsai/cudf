@@ -161,7 +161,7 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
 
   _group_offsets = std::make_unique<index_vector>(num_keys(stream) + 1);
 
-  auto device_input_table = table_device_view::create(_keys, stream);
+  auto device_input_table = table_device_view::create(_keys, stream.value());
   auto sorted_order       = key_sort_order().data<size_type>();
   decltype(_group_offsets->begin()) result_end;
   auto exec = rmm::exec_policy(stream);

@@ -2895,7 +2895,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       BaseDeviceMemoryBuffer offsets = getOffsets();
       BaseDeviceMemoryBuffer data = null;
       DType type = this.type;
-      Long rows = this.rows;
+      long rows = this.rows;
       if (!type.isNestedType()) {
         data = getData();
       }
@@ -2923,21 +2923,18 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
           needsCleanup = false;
           return ret;
         } else {
-          HostMemoryBuffer hOffset = null;
-          HostMemoryBuffer hValid = null;
-          HostMemoryBuffer hData = null;
           if (data != null) {
-            hData = HostMemoryBuffer.allocate(data.length);
-            hData.copyFromDeviceBuffer(data);
+            hostDataBuffer = HostMemoryBuffer.allocate(data.length);
+            hostDataBuffer.copyFromDeviceBuffer(data);
           }
 
           if (valid != null) {
-            hValid = HostMemoryBuffer.allocate(valid.getLength());
-            hValid.copyFromDeviceBuffer(valid);
+            hostValidityBuffer = HostMemoryBuffer.allocate(valid.getLength());
+            hostValidityBuffer.copyFromDeviceBuffer(valid);
           }
           if (offsets != null) {
-            hOffset = HostMemoryBuffer.allocate(offsets.getLength());
-            hOffset.copyFromDeviceBuffer(offsets);
+            hostOffsetsBuffer = HostMemoryBuffer.allocate(offsets.getLength());
+            hostOffsetsBuffer.copyFromDeviceBuffer(offsets);
           }
           List<HostColumnVectorCore> children = new ArrayList<>();
           for (int i = 0; i < getNumChildren(); i++) {
@@ -2946,7 +2943,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
             }
           }
           HostColumnVector ret = new HostColumnVector(type, rows, Optional.of(nullCount),
-              hData, hValid, hOffset, children);
+              hostDataBuffer, hostValidityBuffer, hostOffsetsBuffer, children);
+          needsCleanup = false;
           return ret;
         }
       } finally {

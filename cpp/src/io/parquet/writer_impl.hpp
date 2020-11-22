@@ -88,6 +88,7 @@ class writer::impl {
                                               const table_metadata* metadata,
                                               bool return_filemetadata,
                                               const std::string& column_chunks_file_path,
+                                              bool int96_timestamps,
                                               rmm::cuda_stream_view stream);
 
   /**
@@ -232,6 +233,7 @@ class writer::impl {
   size_t target_page_size_           = DEFAULT_TARGET_PAGE_SIZE;
   Compression compression_           = Compression::UNCOMPRESSED;
   statistics_freq stats_granularity_ = statistics_freq::STATISTICS_NONE;
+  bool int96_timestamps              = false;
 
   std::vector<uint8_t> buffer_;
   std::unique_ptr<data_sink> out_sink_;

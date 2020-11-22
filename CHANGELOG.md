@@ -16,6 +16,7 @@
 - PR #6568 Add function to create hashed vocabulary file from raw vocabulary
 - PR #6142 Add Python `read_orc_statistics` function for reading file- and stripe-level statistics
 - PR #6581 Add JNI API to check if PTDS is enabled
+- PR #6625 Add INT96 timestamp writing option to parquet writer
 - PR #6592 Add `cudf.to_numeric` function
 - PR #6598 Add strings::contains API with target column parameter
 - PR #6638 Add support for `pipe` API
@@ -23,6 +24,8 @@
 - PR #6652 Add support for struct columns in concatenate
 - PR #6675 Add DecimalDtype to cuDF
 - PR #6739 Add Java bindings for is_timestamp
+- PR #6768 Add support for scatter() on list columns
+- PR #6796 Add create_metadata_file in dask_cudf
 - PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
 
 ## Improvements
@@ -79,6 +82,7 @@
 - PR #6676 Add dictionary support to `cudf::quantile`
 - PR #6673 Parameterize avro and json benchmark
 - PR #6609 Support fixed-point decimal for HostColumnVector
+- PR #6703 Add list column statistics writing to Parquet writer
 - PR #6662 `RangeIndex` supports `step` parameter
 - PR #6712 Remove `reinterpret_cast` conversions between pointer types in Avro
 - PR #6705 Add nested type support to Java table serialization
@@ -86,6 +90,7 @@
 - PR #6727 Remove 2nd type-dispatcher call from cudf::reduce
 - PR #6749 Update nested JNI builder so we can do it incrementally
 - PR #6748 Add Java API to concatenate serialized tables to ContiguousTable
+- PR #6764 Add dictionary support to `cudf::minmax`
 - PR #6734 Binary operations support for decimal type in cudf Java
 - PR #6761 Add Java/JNI bindings for round
 - PR #6776 Use `void` return type for kernel wrapper functions instead of returning `cudaError_t`
@@ -141,6 +146,9 @@
 - PR #6767 Fix sort order of parameters in `test_scalar_invalid_implicit_conversion` pytest
 - PR #6787 Update java reduction APIs to reflect C++ changes
 - PR #6794 Fix AVRO reader issues with empty input
+- PR #6798 Fix `read_avro` docs
+- PR #6824 Fix JNI build
+- PR #6826 Fix resource management in Java ColumnBuilder
 
 
 # cuDF 0.16.0 (21 Oct 2020)
@@ -279,6 +287,7 @@
 - PR #6459 Add `map` method to series
 - PR #6379 Add list hashing functionality to MD5
 - PR #6498 Add helper method to ColumnBuilder with some nits
+- PR #6336 Add `join` functionality in cudf concat 
 - PR #6653 Replaced SHFL_XOR calls with cub::WarpReduce
 - PR #6751 Rework ColumnViewAccess and its usage
 - PR #6698 Remove macros from ORC reader and writer

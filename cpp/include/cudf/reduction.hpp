@@ -94,8 +94,6 @@ std::unique_ptr<column> scan(
   null_policy null_handling           = null_policy::EXCLUDE,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
-/** @} */  // end of group
-
 /**
  * @brief Determines the minimum and maximum values of a column.
  *
@@ -108,5 +106,7 @@ std::unique_ptr<column> scan(
 std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
   column_view const &col,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+
+/** @} */  // end of group
 
 }  // namespace cudf

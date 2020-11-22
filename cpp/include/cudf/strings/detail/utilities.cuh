@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,6 +62,28 @@ std::unique_ptr<column> make_offsets_child_column(
   thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()), begin, end, d_offsets + 1);
   CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(int32_t), stream.value()));
   return offsets_column;
+}
+
+/**
+ * @brief Creates an offsets column from a string_view iterator, and size.
+ *
+ * @tparam Iter Iterator type that returns string_view instances
+ * @param strings_begin Iterator to the beginning of the string_view sequence
+ * @param num_strings The number of string_view instances in the sequence
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return Child offsets column
+ */
+template <typename Iter>
+std::unique_ptr<cudf::column> child_offsets_from_string_iterator(
+  Iter strings_begin,
+  cudf::size_type num_strings,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  auto transformer = [] __device__(string_view v) { return v.size_bytes(); };
+  auto begin       = thrust::make_transform_iterator(strings_begin, transformer);
+  return make_offsets_child_column(begin, begin + num_strings, stream, mr);
 }
 
 // This template is a thin wrapper around per-context singleton objects.
