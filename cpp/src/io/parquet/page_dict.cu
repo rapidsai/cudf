@@ -171,9 +171,11 @@ __global__ void __launch_bounds__(block_size, 1)
     s->ck.num_dict_fragments = 0;
   }
   dtype     = s->col.physical_type;
-  dtype_len = (dtype == INT64 || dtype == DOUBLE) ? 8 : 4;
+  dtype_len = (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : 4;
   if (dtype == INT32) {
     dtype_len_in = GetDtypeLogicalLen(s->col.converted_type);
+  } else if (dtype == INT96) {
+    dtype_len_in = 8;
   } else {
     dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len;
   }
@@ -324,20 +326,17 @@ __global__ void __launch_bounds__(block_size, 1)
  * @param[in] dev_scratch Device scratch data (kDictScratchSize per dictionary)
  * @param[in] num_chunks Number of column chunks
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t BuildChunkDictionaries(EncColumnChunk *chunks,
-                                   uint32_t *dev_scratch,
-                                   size_t scratch_size,
-                                   uint32_t num_chunks,
-                                   cudaStream_t stream)
+ */
+void BuildChunkDictionaries(EncColumnChunk *chunks,
+                            uint32_t *dev_scratch,
+                            size_t scratch_size,
+                            uint32_t num_chunks,
+                            cudaStream_t stream)
 {
   if (num_chunks > 0 && scratch_size > 0) {  // zero scratch size implies no dictionaries
     CUDA_TRY(cudaMemsetAsync(dev_scratch, 0, scratch_size, stream));
     gpuBuildChunkDictionaries<1024><<<num_chunks, 1024, 0, stream>>>(chunks, dev_scratch);
   }
-  return cudaSuccess;
 }
 
 }  // namespace gpu

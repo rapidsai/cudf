@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <algorithm>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -23,9 +22,11 @@
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/structs/structs_column_view.hpp>
-
 #include <structs/utilities.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
+#include <algorithm>
 #include <memory>
 
 namespace cudf {
@@ -36,10 +37,9 @@ namespace detail {
  * @copydoc cudf::structs::detail::concatenate
  *
  */
-std::unique_ptr<column> concatenate(
-  std::vector<column_view> const& columns,
-  cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   // get ordered children
   auto ordered_children = extract_ordered_struct_children(columns);
@@ -51,7 +51,7 @@ std::unique_ptr<column> concatenate(
                  ordered_children.end(),
                  std::back_inserter(children),
                  [mr, stream](std::vector<column_view> const& cols) {
-                   return cudf::detail::concatenate(cols, mr, stream);
+                   return cudf::detail::concatenate(cols, stream, mr);
                  });
 
   size_type const total_length = children[0]->size();

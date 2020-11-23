@@ -486,8 +486,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
 
   @Override
   public ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType) {
-    if (rhs instanceof ColumnVector) {
-      ColumnVector cvRhs = (ColumnVector) rhs;
+    if (rhs instanceof ColumnView) {
+      ColumnView cvRhs = (ColumnView) rhs;
       return new ColumnVector(binaryOp(this, cvRhs, op, outType));
     } else {
       throw new IllegalArgumentException(rhs.getClass() + " is not supported as a binary op with " +
@@ -495,7 +495,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     }
   }
 
-  static long binaryOp(Scalar lhs, ColumnVector rhs, BinaryOp op, DType outputType) {
+  static long binaryOp(Scalar lhs, ColumnView rhs, BinaryOp op, DType outputType) {
     return binaryOpSV(lhs.getScalarHandle(), rhs.getNativeView(),
         op.nativeId, outputType.typeId.getNativeId(), outputType.getScale());
   }
