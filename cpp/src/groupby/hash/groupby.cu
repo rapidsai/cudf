@@ -279,27 +279,19 @@ void compute_single_pass_aggs(table_view const& keys,
 
   bool skip_key_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
-  if (skip_key_rows_with_nulls) {
-    auto row_bitmask{cudf::detail::bitmask_and(keys, stream)};
-    thrust::for_each_n(
-      rmm::exec_policy(stream)->on(stream.value()),
-      thrust::make_counting_iterator(0),
-      keys.num_rows(),
-      hash::compute_single_pass_aggs<true, Map>{map,
-                                                keys.num_rows(),
-                                                *d_values,
-                                                *d_sparse_table,
-                                                d_aggs.data().get(),
-                                                static_cast<bitmask_type*>(row_bitmask.data())});
-  } else {
-    thrust::for_each_n(
-      rmm::exec_policy(stream)->on(stream.value()),
-      thrust::make_counting_iterator(0),
-      keys.num_rows(),
-      hash::compute_single_pass_aggs<false, Map>{
-        map, keys.num_rows(), *d_values, *d_sparse_table, d_aggs.data().get(), nullptr});
-  }
-
+  auto row_bitmask =
+    skip_key_rows_with_nulls ? cudf::detail::bitmask_and(keys, stream) : rmm::device_buffer{};
+  thrust::for_each_n(
+    rmm::exec_policy(stream)->on(stream.value()),
+    thrust::make_counting_iterator(0),
+    keys.num_rows(),
+    hash::compute_single_pass_aggs_fn<Map>{map,
+                                           keys.num_rows(),
+                                           *d_values,
+                                           *d_sparse_table,
+                                           d_aggs.data().get(),
+                                           static_cast<bitmask_type*>(row_bitmask.data()),
+                                           skip_key_rows_with_nulls});
   // Add results back to sparse_results cache
   auto sparse_result_cols = sparse_table.release();
   for (size_t i = 0; i < aggs.size(); i++) {
