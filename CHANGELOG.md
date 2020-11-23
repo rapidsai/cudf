@@ -99,6 +99,7 @@
 - PR #6770 Support building decimal columns with Table.TestBuilder
 - PR #6829 Enable workaround to write categorical columns in csv
 - PR #6819 Use CMake 3.19 for RMM when building cuDF jar
+- PR #6833 Use settings.xml if existing for internal build
 
 ## Bug Fixes
 
