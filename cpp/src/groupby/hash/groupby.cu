@@ -214,7 +214,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
     dense_results->add_result(col_idx, agg, std::move(result));
   }
 
-  void visit(cudf::detail::std_var_aggregation& agg) override
+  void visit(cudf::detail::var_aggregation& agg) override
   {
     if (dense_results->has_result(col_idx, agg)) return;
 
@@ -242,14 +242,17 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
       ::cudf::detail::var_hash_functor<Map>{
         map, row_bitmask, *var_result_view, *values_view, *sum_view, *count_view, agg._ddof});
     sparse_results->add_result(col_idx, agg, std::move(var_result));
+    dense_results->add_result(col_idx, agg, to_dense_agg_result(agg));
+  }
 
-    auto result = [&]() {
-      auto variance = to_dense_agg_result(agg);
-      if (agg.kind == aggregation::VARIANCE)
-        return variance;
-      else
-        return cudf::detail::unary_operation(*variance, unary_op::SQRT, mr, stream);
-    }();
+  void visit(cudf::detail::std_aggregation& agg) override
+  {
+    if (dense_results->has_result(col_idx, agg)) return;
+    auto var_agg = make_variance_aggregation(agg._ddof);
+    this->visit(*static_cast<cudf::detail::var_aggregation*>(var_agg.get()));
+    column_view variance = dense_results->get_result(col_idx, *var_agg);
+
+    auto result = cudf::detail::unary_operation(variance, unary_op::SQRT, mr, stream);
     dense_results->add_result(col_idx, agg, std::move(result));
   }
 };

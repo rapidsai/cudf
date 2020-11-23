@@ -81,12 +81,12 @@ std::unique_ptr<aggregation> make_mean_aggregation()
 /// Factory to create a VARIANCE aggregation
 std::unique_ptr<aggregation> make_variance_aggregation(size_type ddof)
 {
-  return std::make_unique<detail::std_var_aggregation>(aggregation::VARIANCE, ddof);
+  return std::make_unique<detail::var_aggregation>(ddof);
 };
 /// Factory to create a STD aggregation
 std::unique_ptr<aggregation> make_std_aggregation(size_type ddof)
 {
-  return std::make_unique<detail::std_var_aggregation>(aggregation::STD, ddof);
+  return std::make_unique<detail::std_aggregation>(ddof);
 };
 /// Factory to create a MEDIAN aggregation
 std::unique_ptr<aggregation> make_median_aggregation()
