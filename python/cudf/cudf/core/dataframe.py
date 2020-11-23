@@ -204,6 +204,15 @@ class DataFrame(Frame, Serializable):
             columns = columns.to_pandas()
 
         if isinstance(data, ColumnAccessor):
+            if columns is not None:
+                data = ColumnAccessor(
+                    data=OrderedDict(
+                        (col_name, data[col_name]) for col_name in columns
+                    ),
+                    multiindex=data.multiindex,
+                    level_names=data.level_names,
+                )
+
             self._data = data
             if index is None:
                 index = as_index(range(self._data.nrows))
