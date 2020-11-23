@@ -421,7 +421,7 @@ class GroupBy(Serializable):
             chunk_results[0]
         ):
             result = cudf.Series(
-                chunk_results, index=self.grouping.keys.unique()
+                chunk_results, index=self.grouping.keys[offsets[:-1]]
             )
             result.index.names = self.grouping.names
         elif len(chunk_results) > 0 and isinstance(
