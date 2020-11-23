@@ -50,6 +50,8 @@ from cudf.utils.dtypes import (
     min_scalar_type,
     numeric_normalize_types,
 )
+from cudf.utils.utils import get_relevant_submodule
+from cudf.utils.utils import get_appropriate_dispatched_func
 
 
 class Series(Frame, Serializable):
@@ -783,39 +785,31 @@ class Series(Frame, Serializable):
         return len(self._column)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == "__call__" and hasattr(cudf, ufunc.__name__):
-            func = getattr(cudf, ufunc.__name__)
-            return func(*inputs)
+        if method == "__call__":
+            return get_appropriate_dispatched_func(
+                cudf, cudf.Series, cupy, ufunc, inputs, kwargs
+            )
         else:
             return NotImplemented
 
     def __array_function__(self, func, types, args, kwargs):
-
-        cudf_series_module = Series
-        for submodule in func.__module__.split(".")[1:]:
-            # point cudf to the correct submodule
-            if hasattr(cudf_series_module, submodule):
-                cudf_series_module = getattr(cudf_series_module, submodule)
-            else:
-                return NotImplemented
-
-        fname = func.__name__
-
-        handled_types = [cudf_series_module]
+        handled_types = [cudf.Series]
         for t in types:
             if t not in handled_types:
                 return NotImplemented
 
-        if hasattr(cudf_series_module, fname):
-            cudf_func = getattr(cudf_series_module, fname)
-            # Handle case if cudf_func is same as numpy function
-            if cudf_func is func:
-                return NotImplemented
-            else:
-                return cudf_func(*args, **kwargs)
+        cudf_submodule = get_relevant_submodule(func, cudf)
+        cudf_ser_submodule = get_relevant_submodule(func, cudf.Series)
+        cupy_submodule = get_relevant_submodule(func, cupy)
 
-        else:
-            return NotImplemented
+        return get_appropriate_dispatched_func(
+            cudf_submodule,
+            cudf_ser_submodule,
+            cupy_submodule,
+            func,
+            args,
+            kwargs,
+        )
 
     def map(self, arg, na_action=None) -> "Series":
         """

@@ -23,6 +23,8 @@
 #include <cudf/utilities/error.hpp>
 #include <quantiles/quantiles_util.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <memory>
 #include <vector>
 
@@ -33,6 +35,7 @@ std::unique_ptr<table> quantiles(table_view const& input,
                                  SortMapIterator sortmap,
                                  std::vector<double> const& q,
                                  interpolation interp,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   auto quantile_idx_lookup = [sortmap, interp, size = input.num_rows()] __device__(double q) {
@@ -44,7 +47,7 @@ std::unique_ptr<table> quantiles(table_view const& input,
 
   auto quantile_idx_iter = thrust::make_transform_iterator(q_device.begin(), quantile_idx_lookup);
 
-  return detail::gather(input, quantile_idx_iter, quantile_idx_iter + q.size(), false, mr);
+  return detail::gather(input, quantile_idx_iter, quantile_idx_iter + q.size(), false, stream, mr);
 }
 
 }  // namespace detail
@@ -67,10 +70,12 @@ std::unique_ptr<table> quantiles(table_view const& input,
   CUDF_EXPECTS(input.num_rows() > 0, "multi-column quantiles require at least one input row.");
 
   if (is_input_sorted == sorted::YES) {
-    return detail::quantiles(input, thrust::make_counting_iterator<size_type>(0), q, interp, mr);
+    return detail::quantiles(
+      input, thrust::make_counting_iterator<size_type>(0), q, interp, rmm::cuda_stream_default, mr);
   } else {
     auto sorted_idx = detail::sorted_order(input, column_order, null_precedence);
-    return detail::quantiles(input, sorted_idx->view().data<size_type>(), q, interp, mr);
+    return detail::quantiles(
+      input, sorted_idx->view().data<size_type>(), q, interp, rmm::cuda_stream_default, mr);
   }
 }
 
