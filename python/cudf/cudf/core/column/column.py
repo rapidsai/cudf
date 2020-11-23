@@ -1851,6 +1851,14 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                                 "Cannot create list column from given data"
                             )
                         return as_column(data, nan_as_null=nan_as_null)
+                    if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
+                        data = pa.array(
+                            arbitrary,
+                            type=pa.decimal128(
+                                precision=dtype.precision, scale=dtype.scale
+                            ),
+                        )
+                        return cudf.core.column.DecimalColumn.from_arrow(data)
                     dtype = pd.api.types.pandas_dtype(dtype)
                     if is_categorical_dtype(dtype):
                         raise TypeError
