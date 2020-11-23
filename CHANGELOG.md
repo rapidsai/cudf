@@ -24,6 +24,7 @@
 - PR #6652 Add support for struct columns in concatenate
 - PR #6675 Add DecimalDtype to cuDF
 - PR #6739 Add Java bindings for is_timestamp
+- PR #6768 Add support for scatter() on list columns
 - PR #6796 Add create_metadata_file in dask_cudf
 - PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
 
@@ -97,6 +98,7 @@
 - PR #6789 Rename `unary_op` to `unary_operator`
 - PR #6770 Support building decimal columns with Table.TestBuilder
 - PR #6813 Enable `expand=False` in `.str.split` and `.str.rsplit`
+- PR #6819 Use CMake 3.19 for RMM when building cuDF jar
 
 ## Bug Fixes
 
@@ -145,6 +147,7 @@
 - PR #6767 Fix sort order of parameters in `test_scalar_invalid_implicit_conversion` pytest
 - PR #6787 Update java reduction APIs to reflect C++ changes
 - PR #6794 Fix AVRO reader issues with empty input
+- PR #6798 Fix `read_avro` docs
 - PR #6824 Fix JNI build
 - PR #6826 Fix resource management in Java ColumnBuilder
 
@@ -285,6 +288,7 @@
 - PR #6459 Add `map` method to series
 - PR #6379 Add list hashing functionality to MD5
 - PR #6498 Add helper method to ColumnBuilder with some nits
+- PR #6336 Add `join` functionality in cudf concat 
 - PR #6653 Replaced SHFL_XOR calls with cub::WarpReduce
 - PR #6751 Rework ColumnViewAccess and its usage
 - PR #6698 Remove macros from ORC reader and writer
