@@ -34,7 +34,7 @@ constexpr bool enable_bool_rle = false;
 #endif
 
 constexpr int init_hash_bits = 12;
-constexpr uint32_t rle_bfrsz = (1 << 9);
+constexpr uint32_t rle_buffer_size = (1 << 9);
 
 struct frag_init_state_s {
   EncColumnDesc col;
@@ -66,7 +66,7 @@ struct page_enc_state_s {
   EncColumnDesc col;
   gpu_inflate_input_s comp_in;
   gpu_inflate_status_s comp_out;
-  uint16_t vals[rle_bfrsz];
+  uint16_t vals[rle_buffer_size];
 };
 
 /**
@@ -744,7 +744,7 @@ static __device__ void RleEncode(
     uint32_t pos = rle_pos + t;
     if (rle_run > 0 && !(rle_run & 1)) {
       // Currently in a long repeat run
-      uint32_t mask = ballot(pos < numvals && s->vals[pos & (rle_bfrsz - 1)] == s->run_val);
+      uint32_t mask = ballot(pos < numvals && s->vals[pos & (rle_buffer_size - 1)] == s->run_val);
       uint32_t rle_rpt_count, max_rpt_count;
       if (!(t & 0x1f)) { s->rpt_map[t >> 5] = mask; }
       __syncthreads();
@@ -773,8 +773,8 @@ static __device__ void RleEncode(
       }
     } else {
       // New run or in a literal run
-      uint32_t v0      = s->vals[pos & (rle_bfrsz - 1)];
-      uint32_t v1      = s->vals[(pos + 1) & (rle_bfrsz - 1)];
+      uint32_t v0      = s->vals[pos & (rle_buffer_size - 1)];
+      uint32_t v1      = s->vals[(pos + 1) & (rle_buffer_size - 1)];
       uint32_t mask    = ballot(pos + 1 < numvals && v0 == v1);
       uint32_t maxvals = min(numvals - rle_pos, 128);
       uint32_t rle_lit_count, rle_rpt_count;
@@ -883,7 +883,7 @@ static __device__ void PlainBoolEncode(page_enc_state_s *s,
 
   while (rle_pos < numvals) {
     uint32_t pos    = rle_pos + t;
-    uint32_t v      = (pos < numvals) ? s->vals[pos & (rle_bfrsz - 1)] : 0;
+    uint32_t v      = (pos < numvals) ? s->vals[pos & (rle_buffer_size - 1)] : 0;
     uint32_t n      = min(numvals - rle_pos, 128);
     uint32_t nbytes = (n + ((flush) ? 7 : 0)) >> 3;
     if (!nbytes) { break; }
@@ -947,7 +947,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         uint32_t def_lvl = (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
                              ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1
                              : 0;
-        s->vals[(rle_numvals + t) & (rle_bfrsz - 1)] = def_lvl;
+        s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = def_lvl;
         __syncthreads();
         rle_numvals += nrows;
         RleEncode(s, rle_numvals, def_lvl_bits, (rle_numvals == s->page.num_rows), t);
@@ -983,7 +983,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         uint32_t idx         = page_first_val_idx + rle_numvals + t;
         uint32_t lvl_val =
           (rle_numvals + t < s->page.num_values && idx < col_last_val_idx) ? lvl_val_data[idx] : 0;
-        s->vals[(rle_numvals + t) & (rle_bfrsz - 1)] = lvl_val;
+        s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = lvl_val;
         __syncthreads();
         rle_numvals += nvals;
         RleEncode(s, rle_numvals, nbits, (rle_numvals == s->page.num_values), t);
@@ -1065,7 +1065,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
           } else {
             v = s->col.dict_index[val_idx];
           }
-          s->vals[(rle_numvals + pos) & (rle_bfrsz - 1)] = v;
+          s->vals[(rle_numvals + pos) & (rle_buffer_size - 1)] = v;
         }
         rle_numvals += s->scratch_red[3];
         __syncthreads();

@@ -50,10 +50,10 @@ Mark Adler    madler@alumni.caltech.edu
 namespace cudf {
 namespace io {
 
-constexpr int maxbits   = 15;   // maximum bits in a code
-constexpr int maxlcodes = 286;  // maximum number of literal/length codes
-constexpr int maxdcodes = 30;   // maximum number of distance codes
-constexpr int fixlcodes = 288;  // number of fixed literal/length codes
+constexpr int max_bits    = 15;   // maximum bits in a code
+constexpr int max_l_codes = 286;  // maximum number of literal/length codes
+constexpr int max_d_codes = 30;   // maximum number of distance codes
+constexpr int fix_l_codes = 288;  // number of fixed literal/length codes
 
 constexpr int log2_len_lut  = 10;
 constexpr int log2_dist_lut = 8;
@@ -62,8 +62,8 @@ constexpr int log2_dist_lut = 8;
  * @brief Intermediate arrays for building huffman tables
  */
 struct scratch_arr {
-  int16_t lengths[maxlcodes + maxdcodes];  ///< descriptor code lengths
-  int16_t offs[maxbits + 1];               ///< offset in symbol table for each length (scratch)
+  int16_t lengths[max_l_codes + max_d_codes];  ///< descriptor code lengths
+  int16_t offs[max_bits + 1];               ///< offset in symbol table for each length (scratch)
 };
 
 /**
@@ -142,10 +142,10 @@ struct inflate_state_s {
   volatile prefetch_queue_s pref;
 #endif
 
-  int16_t lencnt[maxbits + 1];
-  int16_t lensym[fixlcodes];  // Assumes fixlcodes >= maxlcodes
-  int16_t distcnt[maxbits + 1];
-  int16_t distsym[maxdcodes];
+  int16_t lencnt[max_bits + 1];
+  int16_t lensym[fix_l_codes];  // Assumes fix_l_codes >= max_l_codes
+  int16_t distcnt[max_bits + 1];
+  int16_t distsym[max_d_codes];
 
   union {
     scratch_arr scratch;
@@ -200,7 +200,7 @@ __device__ uint32_t getbits(inflate_state_s *s, uint32_t n)
  * Return the symbol or a negative value if there is an error.
  * If all of the lengths are zero, i.e. an empty code, or if the code is
  * incomplete and an invalid code is received, then -10 is returned after
- * reading maxbits bits.
+ * reading max_bits bits.
  *
  * Format notes:
  *
@@ -228,7 +228,7 @@ __device__ int decode(inflate_state_s *s, const int16_t *counts, const int16_t *
   uint32_t next32r = __brev(nextbits32(s));
 
   first = 0;
-  for (len = 1; len <= maxbits; len++) {
+  for (len = 1; len <= max_bits; len++) {
     code  = (next32r >> (32 - len)) - first;
     count = counts[len];
     if (code < count)  // if length len, return symbol
@@ -262,7 +262,7 @@ __device__ int decode(inflate_state_s *s, const int16_t *counts, const int16_t *
  * codes.  This is useful for checking for incomplete codes that have more than
  * one symbol, which is an error in a dynamic block.
  *
- * Assumption: for all i in 0..n-1, 0 <= length[i] <= maxbits
+ * Assumption: for all i in 0..n-1, 0 <= length[i] <= max_bits
  * This is assured by the construction of the length arrays in dynamic() and
  * fixed() and is not verified by construct().
  *
@@ -284,7 +284,7 @@ __device__ int construct(
   int16_t *offs = s->u.scratch.offs;
 
   // count number of codes of each length
-  for (len = 0; len <= maxbits; len++) counts[len] = 0;
+  for (len = 0; len <= max_bits; len++) counts[len] = 0;
   for (symbol = 0; symbol < n; symbol++)
     (counts[length[symbol]])++;  // assumes lengths are within bounds
   if (counts[0] == n)            // no codes!
@@ -292,7 +292,7 @@ __device__ int construct(
 
   // check for an over-subscribed or incomplete set of lengths
   left = 1;  // one possible code of zero length
-  for (len = 1; len <= maxbits; len++) {
+  for (len = 1; len <= max_bits; len++) {
     left <<= 1;                 // one more bit, double codes left
     left -= counts[len];        // deduct count from possible codes
     if (left < 0) return left;  // over-subscribed--return negative
@@ -300,7 +300,7 @@ __device__ int construct(
 
   // generate offsets into symbol table for each length for sorting
   offs[1] = 0;
-  for (len = 1; len < maxbits; len++) offs[len + 1] = offs[len] + counts[len];
+  for (len = 1; len < max_bits; len++) offs[len + 1] = offs[len] + counts[len];
 
   // put symbols in table sorted by length, by symbol order within each length
   for (symbol = 0; symbol < n; symbol++)
@@ -326,7 +326,7 @@ __device__ int init_dynamic(inflate_state_s *s)
   nlen  = getbits(s, 5) + 257;
   ndist = getbits(s, 5) + 1;
   ncode = getbits(s, 4) + 4;
-  if (nlen > maxlcodes || ndist > maxdcodes) {
+  if (nlen > max_l_codes || ndist > max_d_codes) {
     return -3;  // bad counts
   }
   // read code length code lengths (really), missing lengths are zero
@@ -410,14 +410,14 @@ __device__ int init_fixed(inflate_state_s *s)
   for (symbol = 0; symbol < 144; symbol++) lengths[symbol] = 8;
   for (; symbol < 256; symbol++) lengths[symbol] = 9;
   for (; symbol < 280; symbol++) lengths[symbol] = 7;
-  for (; symbol < fixlcodes; symbol++) lengths[symbol] = 8;
-  construct(s, s->lencnt, s->lensym, lengths, fixlcodes);
+  for (; symbol < fix_l_codes; symbol++) lengths[symbol] = 8;
+  construct(s, s->lencnt, s->lensym, lengths, fix_l_codes);
 
   // distance table
-  for (symbol = 0; symbol < maxdcodes; symbol++) lengths[symbol] = 5;
+  for (symbol = 0; symbol < max_d_codes; symbol++) lengths[symbol] = 5;
 
   // build huffman table for distance codes
-  construct(s, s->distcnt, s->distsym, lengths, maxdcodes);
+  construct(s, s->distcnt, s->distsym, lengths, max_d_codes);
 
   return 0;
 }
@@ -548,7 +548,7 @@ __device__ void decode_symbols(inflate_state_s *s)
         unsigned int first     = s->first_slow_len;
         int lext;
 #pragma unroll 1
-        for (len = log2_len_lut + 1; len <= maxbits; len++) {
+        for (len = log2_len_lut + 1; len <= max_bits; len++) {
           unsigned int code  = (next32r >> (32 - len)) - first;
           unsigned int count = s->lencnt[len];
           if (code < count)  // if length len, return symbol
@@ -560,7 +560,7 @@ __device__ void decode_symbols(inflate_state_s *s)
           first += count;
           first <<= 1;
         }
-        if (len > maxbits) {
+        if (len > max_bits) {
           s->err = -10;
           sym    = 256;
           len    = 0;
@@ -602,7 +602,7 @@ __device__ void decode_symbols(inflate_state_s *s)
           const int16_t *symbols = &s->distsym[s->index_slow_dist];
           unsigned int first     = s->first_slow_dist;
 #pragma unroll 1
-          for (len = log2_dist_lut + 1; len <= maxbits; len++) {
+          for (len = log2_dist_lut + 1; len <= max_bits; len++) {
             unsigned int code  = (next32r >> (32 - len)) - first;
             unsigned int count = s->distcnt[len];
             if (code < count)  // if length len, return symbol
@@ -614,7 +614,7 @@ __device__ void decode_symbols(inflate_state_s *s)
             first += count;
             first <<= 1;
           }
-          if (len > maxbits) {
+          if (len > max_bits) {
             s->err = -10;
             sym    = 256;
             len    = 0;
@@ -1013,15 +1013,15 @@ __device__ int parse_gzip_header(const uint8_t *src, size_t src_size)
 /**
  * @brief INFLATE decompression kernel
  *
- * blockDim {num_threads,1,1}
+ * blockDim {block_size,1,1}
  *
- * @tparam num_threads Thread block dimension for this call
+ * @tparam block_size Thread block dimension for this call
  * @param inputs Source and destination buffer information per block
  * @param outputs Decompression status buffer per block
  * @param parse_hdr If nonzero, indicates that the compressed bitstream includes a GZIP header
  */
-template <int num_threads>
-__global__ void __launch_bounds__(num_threads)
+template <int block_size>
+__global__ void __launch_bounds__(block_size)
   inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int parse_hdr)
 {
   __shared__ __align__(16) inflate_state_s state_g;
@@ -1197,9 +1197,9 @@ cudaError_t __host__ gpuinflate(gpu_inflate_input_s *inputs,
                                 int parse_hdr,
                                 cudaStream_t stream)
 {
-  constexpr int num_threads = 128;  // Threads per block
+  constexpr int block_size = 128;  // Threads per block
   if (count > 0) {
-    inflate_kernel<num_threads><<<count, num_threads, 0, stream>>>(inputs, outputs, parse_hdr);
+    inflate_kernel<block_size><<<count, block_size, 0, stream>>>(inputs, outputs, parse_hdr);
   }
   return cudaSuccess;
 }

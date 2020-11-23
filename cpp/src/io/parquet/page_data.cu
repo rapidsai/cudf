@@ -26,8 +26,8 @@
 
 #include <io/parquet/parquet_gpu.hpp>
 
-constexpr int nthreads             = (1 << (5 + 2));
-constexpr int non_zero_buffer_size = nthreads * 2;
+constexpr int block_size             = 128;
+constexpr int non_zero_buffer_size = block_size * 2;
 
 inline __device__ uint32_t rotl32(uint32_t x, uint32_t r)
 {
@@ -1514,8 +1514,8 @@ static __device__ void gpuUpdatePageSizes(page_state_s *s,
  * the full size information of every page before we come through in a second (trim) pass
  * to determine what subset of rows in this page we should be reading.
  */
-// blockDim {nthreads,1,1}
-extern "C" __global__ void __launch_bounds__(nthreads)
+// blockDim {block_size,1,1}
+extern "C" __global__ void __launch_bounds__(block_size)
   gpuComputePageSizes(PageInfo *pages,
                       ColumnChunkDesc const *chunks,
                       size_t min_row,
@@ -1560,7 +1560,7 @@ extern "C" __global__ void __launch_bounds__(nthreads)
   // optimization : it might be useful to have a version of gpuDecodeStream that could go
   // wider than 1 warp.  Currently it only only uses 1 warp so that it can overlap work
   // with the value decoding step when in the actual value decoding kernel.  however during
-  // this preprocess step we have no such limits -  we could go as wide as nthreads
+  // this preprocess step we have no such limits -  we could go as wide as block_size
   if (t < 32) {
     constexpr int batch_size = 32;
     int target_input_count   = batch_size;
@@ -1606,8 +1606,8 @@ extern "C" __global__ void __launch_bounds__(nthreads)
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] num_chunks Number of column chunks
  */
-// blockDim {nthreads,1,1}
-extern "C" __global__ void __launch_bounds__(nthreads)
+// blockDim {block_size,1,1}
+extern "C" __global__ void __launch_bounds__(block_size)
   gpuDecodePageData(PageInfo *pages,
                     ColumnChunkDesc const *chunks,
                     size_t min_row,
@@ -1637,9 +1637,9 @@ extern "C" __global__ void __launch_bounds__(nthreads)
 
     if (t < out_thread0) {
       target_pos =
-        min(out_pos + 2 * (nthreads - out_thread0), s->nz_count + (nthreads - out_thread0));
+        min(out_pos + 2 * (block_size - out_thread0), s->nz_count + (block_size - out_thread0));
     } else {
-      target_pos = min(s->nz_count, out_pos + nthreads - out_thread0);
+      target_pos = min(s->nz_count, out_pos + block_size - out_thread0);
       if (out_thread0 > 32) { target_pos = min(target_pos, s->dict_pos); }
     }
     __syncthreads();
@@ -1766,7 +1766,7 @@ cudaError_t PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
                                  cudaStream_t stream,
                                  rmm::mr::device_memory_resource *mr)
 {
-  dim3 dim_block(nthreads, 1);
+  dim3 dim_block(block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   // computes:
@@ -1892,7 +1892,7 @@ cudaError_t __host__ DecodePageData(hostdevice_vector<PageInfo> &pages,
                                     size_t min_row,
                                     cudaStream_t stream)
 {
-  dim3 dim_block(nthreads, 1);
+  dim3 dim_block(block_size, 1);
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   gpuDecodePageData<<<dim_grid, dim_block, 0, stream>>>(

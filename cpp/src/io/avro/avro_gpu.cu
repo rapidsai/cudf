@@ -23,7 +23,7 @@ namespace cudf {
 namespace io {
 namespace avro {
 namespace gpu {
-constexpr int nwarps                = 16;
+constexpr int num_warps             = 16;
 constexpr int max_shared_schema_len = 1000;
 
 /*
@@ -226,8 +226,8 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
  * @param[in] first_row Crop all rows below first_row
  *
  **/
-// blockDim {32,nwarps,1}
-extern "C" __global__ void __launch_bounds__(nwarps * 32, 2)
+// blockDim {32,num_warps,1}
+extern "C" __global__ void __launch_bounds__(num_warps * 32, 2)
   gpuDecodeAvroColumnData(block_desc_s *blocks,
                           schemadesc_s *schema_g,
                           device_span<nvstrdesc_s> global_dictionary,
@@ -239,18 +239,18 @@ extern "C" __global__ void __launch_bounds__(nwarps * 32, 2)
                           size_t first_row)
 {
   __shared__ __align__(8) schemadesc_s g_shared_schema[max_shared_schema_len];
-  __shared__ __align__(8) block_desc_s blk_g[nwarps];
+  __shared__ __align__(8) block_desc_s blk_g[num_warps];
 
   schemadesc_s *schema;
   block_desc_s *const blk = &blk_g[threadIdx.y];
-  uint32_t block_id       = blockIdx.x * nwarps + threadIdx.y;
+  uint32_t block_id       = blockIdx.x * num_warps + threadIdx.y;
   size_t cur_row;
   uint32_t rows_remaining;
   const uint8_t *cur, *end;
 
   // Fetch schema into shared mem if possible
   if (schema_len <= max_shared_schema_len) {
-    for (int i = threadIdx.y * 32 + threadIdx.x; i < schema_len; i += nwarps * 32) {
+    for (int i = threadIdx.y * 32 + threadIdx.x; i < schema_len; i += num_warps * 32) {
       g_shared_schema[i] = schema_g[i];
     }
     __syncthreads();
@@ -322,10 +322,10 @@ void __host__ DecodeAvroColumnData(block_desc_s *blocks,
                                    uint32_t min_row_size,
                                    cudaStream_t stream)
 {
-  // NWARPS warps per threadblock
-  dim3 const dim_block(32, nwarps);
-  // 1 warp per datablock, nwarps datablocks per threadblock
-  dim3 const dim_grid((num_blocks + nwarps - 1) / nwarps, 1);
+  // num_warps warps per threadblock
+  dim3 const dim_block(32, num_warps);
+  // 1 warp per datablock, num_warps datablocks per threadblock
+  dim3 const dim_grid((num_blocks + num_warps - 1) / num_warps, 1);
 
   gpuDecodeAvroColumnData<<<dim_grid, dim_block, 0, stream>>>(blocks,
                                                               schema,

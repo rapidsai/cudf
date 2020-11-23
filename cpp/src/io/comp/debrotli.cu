@@ -61,11 +61,11 @@ THE SOFTWARE.
 
 namespace cudf {
 namespace io {
-constexpr uint32_t hufftab_lut1_bits               = 8;
+constexpr uint32_t huffman_lookup_table_width      = 8;
 constexpr int8_t brotli_code_length_codes          = 18;
 constexpr uint32_t brotli_num_distance_short_codes = 16;
 constexpr uint32_t brotli_max_allowed_distance     = 0x7FFFFFFC;
-constexpr int numthreads                           = 256;
+constexpr int block_size                           = 256;
 
 template <typename T0, typename T1>
 inline __device__ uint16_t huffcode(T0 len, T1 sym)
@@ -288,15 +288,15 @@ static __device__ uint32_t getvlc(debrotli_state_s *s, const uint16_t *lut)
 {
   uint32_t next32 = next32bits(s);
   uint32_t vlc, len;
-  lut += next32 & ((1 << hufftab_lut1_bits) - 1);
+  lut += next32 & ((1 << huffman_lookup_table_width) - 1);
   vlc = lut[0];
   len = vlc & 0x0f;
   vlc >>= 4;
-  if (len > hufftab_lut1_bits) {
-    len -= hufftab_lut1_bits;
-    lut += vlc + ((next32 >> hufftab_lut1_bits) & ((1 << len) - 1));
+  if (len > huffman_lookup_table_width) {
+    len -= huffman_lookup_table_width;
+    lut += vlc + ((next32 >> huffman_lookup_table_width) & ((1 << len) - 1));
     vlc = lut[0];
-    len = hufftab_lut1_bits + (vlc & 0xf);
+    len = huffman_lookup_table_width + (vlc & 0xf);
     vlc >>= 4;
   }
   skipbits(s, len);
@@ -913,7 +913,7 @@ static __device__ uint32_t DecodeHuffmanTree(debrotli_state_s *s,
     if (nsym == 3) {
       nsym += getbits(s, 1);  // tree_select;
     }
-    return BuildSimpleHuffmanTable(vlctab, hufftab_lut1_bits, s->hs.symbols_lists_array, nsym);
+    return BuildSimpleHuffmanTable(vlctab, huffman_lookup_table_width, s->hs.symbols_lists_array, nsym);
   } else {
     // Complex prefix code
     huff_scratch_s *const hs = &s->hs;
@@ -1027,7 +1027,7 @@ static __device__ uint32_t DecodeHuffmanTree(debrotli_state_s *s,
       s->error = -1;
       return 0;
     }
-    return BuildHuffmanTable(vlctab, hufftab_lut1_bits, symbol_lists, hs->code_length_histo);
+    return BuildHuffmanTable(vlctab, huffman_lookup_table_width, symbol_lists, hs->code_length_histo);
   }
 }
 
@@ -1882,7 +1882,7 @@ static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_diction
  * @brief Brotli decoding kernel
  * See https://tools.ietf.org/html/rfc7932
  *
- * blockDim = {numthreads,1,1}
+ * blockDim = {block_size,1,1}
  *
  * @param inputs[in] Source/Destination buffer information per block
  * @param outputs[out] Decompressor status per block
@@ -1891,7 +1891,7 @@ static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_diction
  *blocks)
  * @param count Number of blocks to decompress
  **/
-extern "C" __global__ void __launch_bounds__(numthreads, 2)
+extern "C" __global__ void __launch_bounds__(block_size, 2)
   gpu_debrotli_kernel(gpu_inflate_input_s *inputs,
                       gpu_inflate_status_s *outputs,
                       uint8_t *scratch,
@@ -1955,7 +1955,7 @@ extern "C" __global__ void __launch_bounds__(numthreads, 2)
           __syncthreads();
           if (!s->error) {
             // Simple block-wide memcpy
-            for (int32_t i = t; i < s->meta_block_len; i += numthreads) { dst[i] = src[i]; }
+            for (int32_t i = t; i < s->meta_block_len; i += block_size) { dst[i] = src[i]; }
           }
         } else {
           // Compressed block
@@ -2064,7 +2064,7 @@ cudaError_t __host__ gpu_debrotli(gpu_inflate_input_s *inputs,
   uint32_t count32 = (count > 0) ? count : 0;
   uint32_t fb_heap_size;
   uint8_t *scratch_u8 = static_cast<uint8_t *>(scratch);
-  dim3 dim_block(numthreads, 1);
+  dim3 dim_block(block_size, 1);
   dim3 dim_grid(count32, 1);  // TODO: Check max grid dimensions vs max expected count
 
   if (scratch_size < sizeof(brotli_dictionary_s)) { return cudaErrorLaunchOutOfResources; }
