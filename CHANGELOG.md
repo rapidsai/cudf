@@ -101,6 +101,7 @@
 - PR #6770 Support building decimal columns with Table.TestBuilder
 - PR #6819 Use CMake 3.19 for RMM when building cuDF jar
 - PR #6833 Use settings.xml if existing for internal build
+- PR #6835 Move template param to member var to improve compile of hash/groupby.cu
 
 ## Bug Fixes
 
