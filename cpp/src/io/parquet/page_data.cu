@@ -26,7 +26,7 @@
 
 #include <io/parquet/parquet_gpu.hpp>
 
-constexpr int block_size             = 128;
+constexpr int block_size           = 128;
 constexpr int non_zero_buffer_size = block_size * 2;
 
 inline __device__ uint32_t rotl32(uint32_t x, uint32_t r)

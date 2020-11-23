@@ -913,7 +913,8 @@ static __device__ uint32_t DecodeHuffmanTree(debrotli_state_s *s,
     if (nsym == 3) {
       nsym += getbits(s, 1);  // tree_select;
     }
-    return BuildSimpleHuffmanTable(vlctab, huffman_lookup_table_width, s->hs.symbols_lists_array, nsym);
+    return BuildSimpleHuffmanTable(
+      vlctab, huffman_lookup_table_width, s->hs.symbols_lists_array, nsym);
   } else {
     // Complex prefix code
     huff_scratch_s *const hs = &s->hs;
@@ -1027,7 +1028,8 @@ static __device__ uint32_t DecodeHuffmanTree(debrotli_state_s *s,
       s->error = -1;
       return 0;
     }
-    return BuildHuffmanTable(vlctab, huffman_lookup_table_width, symbol_lists, hs->code_length_histo);
+    return BuildHuffmanTable(
+      vlctab, huffman_lookup_table_width, symbol_lists, hs->code_length_histo);
   }
 }
 

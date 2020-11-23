@@ -63,7 +63,7 @@ constexpr int log2_dist_lut = 8;
  */
 struct scratch_arr {
   int16_t lengths[max_l_codes + max_d_codes];  ///< descriptor code lengths
-  int16_t offs[max_bits + 1];               ///< offset in symbol table for each length (scratch)
+  int16_t offs[max_bits + 1];                  ///< offset in symbol table for each length (scratch)
 };
 
 /**

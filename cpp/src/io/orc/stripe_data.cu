@@ -24,13 +24,13 @@ namespace io {
 namespace orc {
 namespace gpu {
 
-//Must be able to handle 512x 8-byte values. These values are base 128 encoded
-//so 8 byte value is expanded to 10 bytes.
-constexpr int bytestream_buffer_size     = 512*8*2;
+// Must be able to handle 512x 8-byte values. These values are base 128 encoded
+// so 8 byte value is expanded to 10 bytes.
+constexpr int bytestream_buffer_size = 512 * 8 * 2;
 constexpr int bytestream_buffer_mask = (bytestream_buffer_size - 1) >> 2;
 
 // TODO: Should be more efficient with 512 threads per block and circular queue for values
-constexpr int num_warps   = 32;
+constexpr int num_warps  = 32;
 constexpr int block_size = 32 * num_warps;
 // Add some margin to look ahead to future rows in case there are many zeroes
 constexpr int row_decoder_buffer_size = block_size + 128;
@@ -1822,14 +1822,14 @@ cudaError_t __host__ DecodeOrcColumnData(ColumnDesc *chunks,
   dim3 dim_grid((num_rowgroups > 0) ? num_columns : num_chunks,
                 (num_rowgroups > 0) ? num_rowgroups : 1);
   gpuDecodeOrcColumnData<block_size><<<dim_grid, dim_block, 0, stream>>>(chunks,
-                                                                       global_dictionary,
-                                                                       tz_table,
-                                                                       row_groups,
-                                                                       max_num_rows,
-                                                                       first_row,
-                                                                       num_columns,
-                                                                       num_rowgroups,
-                                                                       rowidx_stride);
+                                                                         global_dictionary,
+                                                                         tz_table,
+                                                                         row_groups,
+                                                                         max_num_rows,
+                                                                         first_row,
+                                                                         num_columns,
+                                                                         num_rowgroups,
+                                                                         rowidx_stride);
   return cudaSuccess;
 }
 
