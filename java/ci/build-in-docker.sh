@@ -88,7 +88,7 @@ fi
 
 if [ -f $WORKSPACE/java/ci/settings.xml ]; then
     # Build with an internal settings.xml
-    BUILD_ARG="$BUILD_ARG -s ci/settings.xml"
+    BUILD_ARG="$BUILD_ARG -s $WORKSPACE/javaci/settings.xml"
 fi
 
 cd $WORKSPACE/java
