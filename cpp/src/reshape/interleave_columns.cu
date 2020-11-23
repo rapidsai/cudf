@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
+#include <strings/utilities.cuh>
+
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 
-#include <strings/utilities.cuh>
-#include "rmm/cuda_stream_view.hpp"
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {

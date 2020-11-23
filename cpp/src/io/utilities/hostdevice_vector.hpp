@@ -16,10 +16,10 @@
 
 #pragma once
 
-#include <rmm/device_buffer.hpp>
-
 #include <cudf/utilities/error.hpp>
-#include "rmm/cuda_stream_view.hpp"
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 
 /**
  * @brief A helper class that wraps fixed-length device memory for the GPU, and

@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+#include "backref_re.cuh"
+
+#include <strings/regex/regex.cuh>
+#include <strings/utilities.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -23,13 +28,10 @@
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-#include <strings/regex/regex.cuh>
-#include <strings/utilities.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <regex>
-
-#include "backref_re.cuh"
-#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace strings {

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <strings/utilities.cuh>
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -28,16 +30,14 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 
-#include <strings/utilities.cuh>
-
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/logical.h>
 #include <thrust/transform_reduce.h>
 #include <thrust/transform_scan.h>
 
 #include <algorithm>
-#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace strings {

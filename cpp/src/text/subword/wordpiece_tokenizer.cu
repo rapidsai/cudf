@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/utilities/error.hpp>
-#include <nvtext/subword_tokenize.hpp>
 #include <text/subword/detail/hash_utils.cuh>
 #include <text/subword/detail/tokenizer_utils.cuh>
 #include <text/subword/detail/wordpiece_tokenizer.hpp>
-#include "rmm/cuda_stream_view.hpp"
+
+#include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/utilities/error.hpp>
+
+#include <nvtext/subword_tokenize.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/remove.h>
