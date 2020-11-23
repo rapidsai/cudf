@@ -13,16 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package ai.rapids.cudf;
 
-#include <cudf/column/column.hpp>
-#include <cudf/structs/structs_column_view.hpp>
-#include "cudf/utilities/error.hpp"
+/**
+ * Rounding modes supported in round method.
+ * HALF_UP : Rounding mode to round towards "nearest neighbor". If both neighbors are
+ * equidistant, then round up.
+ * HALF_EVEN : Rounding mode to round towards the "nearest neighbor". If both neighbors are
+ * equidistant, round towards the even neighbor.
+ */
+public enum RoundMode {
+  HALF_UP(0),
+  HALF_EVEN(1);
+  final int nativeId;
 
-namespace cudf {
-
-structs_column_view::structs_column_view(column_view const& rhs) : column_view{rhs}
-{
-  CUDF_EXPECTS(type().id() == type_id::STRUCT, "structs_column_view only supports struct columns");
+  RoundMode(int nativeId) { this.nativeId = nativeId; }
 }
-
-}  // namespace cudf

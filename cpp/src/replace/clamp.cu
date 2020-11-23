@@ -158,7 +158,7 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
   cudaStream_t stream)
 {
   auto output =
-    detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, mr, stream);
+    detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream, mr);
   // mask will not change
   if (input.nullable()) { output->set_null_mask(copy_bitmask(input), input.null_count()); }
 
@@ -245,12 +245,14 @@ struct dispatch_clamp {
   {
     CUDF_EXPECTS(lo.type() == input.type(), "mismatching types of scalar and input");
 
-    auto lo_itr         = make_pair_iterator<T>(lo);
-    auto hi_itr         = make_pair_iterator<T>(hi);
-    auto lo_replace_itr = make_pair_iterator<T>(lo_replace);
-    auto hi_replace_itr = make_pair_iterator<T>(hi_replace);
+    using Type = device_storage_type_t<T>;
 
-    return clamp<T>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, mr, stream);
+    auto lo_itr         = make_pair_iterator<Type>(lo);
+    auto hi_itr         = make_pair_iterator<Type>(hi);
+    auto lo_replace_itr = make_pair_iterator<Type>(lo_replace);
+    auto hi_replace_itr = make_pair_iterator<Type>(hi_replace);
+
+    return clamp<Type>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, mr, stream);
   }
 };
 
@@ -265,32 +267,6 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::list_view>(
   cudaStream_t stream)
 {
   CUDF_FAIL("clamp for list_view not supported");
-}
-
-template <>
-std::unique_ptr<column> dispatch_clamp::operator()<numeric::decimal32>(
-  column_view const& input,
-  scalar const& lo,
-  scalar const& lo_replace,
-  scalar const& hi,
-  scalar const& hi_replace,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream)
-{
-  CUDF_FAIL("clamp for decimal32 not supported");
-}
-
-template <>
-std::unique_ptr<column> dispatch_clamp::operator()<numeric::decimal64>(
-  column_view const& input,
-  scalar const& lo,
-  scalar const& lo_replace,
-  scalar const& hi,
-  scalar const& hi_replace,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream)
-{
-  CUDF_FAIL("clamp for decimal64 not supported");
 }
 
 template <>
@@ -322,11 +298,7 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
     auto add_scalar_key            = [&](scalar const& key, scalar const& key_replace) {
       if (key.is_valid()) {
         result = dictionary::detail::add_keys(
-          matched_view,
-          make_column_from_scalar(key_replace, 1, rmm::mr::get_current_device_resource(), stream)
-            ->view(),
-          mr,
-          stream);
+          matched_view, make_column_from_scalar(key_replace, 1, stream)->view(), mr, stream);
         matched_view = dictionary_column_view(result->view());
       }
     };
@@ -337,16 +309,12 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
   auto matched_view = dictionary_column_view(matched_column->view());
 
   // get the indexes for lo_replace and for hi_replace
-  auto lo_replace_index = dictionary::detail::get_index(
-    matched_view, lo_replace, rmm::mr::get_current_device_resource(), stream);
-  auto hi_replace_index = dictionary::detail::get_index(
-    matched_view, hi_replace, rmm::mr::get_current_device_resource(), stream);
+  auto lo_replace_index = dictionary::detail::get_index(matched_view, lo_replace, stream);
+  auto hi_replace_index = dictionary::detail::get_index(matched_view, hi_replace, stream);
 
   // get the closest indexes for lo and for hi
-  auto lo_index = dictionary::detail::get_insert_index(
-    matched_view, lo, rmm::mr::get_current_device_resource(), stream);
-  auto hi_index = dictionary::detail::get_insert_index(
-    matched_view, hi, rmm::mr::get_current_device_resource(), stream);
+  auto lo_index = dictionary::detail::get_insert_index(matched_view, lo, stream);
+  auto hi_index = dictionary::detail::get_insert_index(matched_view, hi, stream);
 
   // call clamp with the scalar indexes and the matched indices
   auto matched_indices = matched_view.get_indices_annotated();
