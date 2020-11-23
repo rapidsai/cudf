@@ -446,13 +446,12 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   cudf::detail::result_cache cache(requests.size());
 
   std::unique_ptr<table> unique_keys;
-  if (has_nulls(keys)) {
-    unique_keys =
-      groupby_null_templated<true>(keys, requests, &cache, include_null_keys, stream, mr);
-  } else {
-    unique_keys =
-      groupby_null_templated<false>(keys, requests, &cache, include_null_keys, stream, mr);
-  }
+  //  if (has_nulls(keys)) {
+  unique_keys = groupby_null_templated<true>(keys, requests, &cache, include_null_keys, stream, mr);
+  //  } else {
+  //    unique_keys =
+  //      groupby_null_templated<false>(keys, requests, &cache, include_null_keys, stream, mr);
+  //  }
 
   return std::make_pair(std::move(unique_keys), extract_results(requests, cache));
 }
