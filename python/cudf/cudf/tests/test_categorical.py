@@ -759,8 +759,7 @@ def test_categorical_assignment(data, cat_dtype):
     pd_df["a"] = np.ones(len(data))
     cd_df = gd.from_pandas(pd_df)
 
-    pd_categorical = pd.Series(data, dtype=cat_dtype).cat.categorical
-
+    pd_categorical = pd.Categorical(data, dtype=cat_dtype)
     pd_df.assign(cat_col=pd_categorical)
     cd_df.assign(cat_col=pd_categorical)
     assert_eq(pd_df, cd_df)
