@@ -1817,14 +1817,14 @@ void __host__ DecodeOrcColumnData(ColumnDesc *chunks,
   dim3 dim_grid((num_rowgroups > 0) ? num_columns : num_chunks,
                 (num_rowgroups > 0) ? num_rowgroups : 1);
   gpuDecodeOrcColumnData<block_size><<<dim_grid, dim_block, 0, stream>>>(chunks,
-                                                                       global_dictionary,
-                                                                       tz_table,
-                                                                       row_groups,
-                                                                       max_num_rows,
-                                                                       first_row,
-                                                                       num_columns,
-                                                                       num_rowgroups,
-                                                                       rowidx_stride);
+                                                                         global_dictionary,
+                                                                         tz_table,
+                                                                         row_groups,
+                                                                         max_num_rows,
+                                                                         first_row,
+                                                                         num_columns,
+                                                                         num_rowgroups,
+                                                                         rowidx_stride);
 }
 
 }  // namespace gpu
