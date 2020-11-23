@@ -410,6 +410,7 @@ struct dremel_data {
 
   size_type leaf_col_offset;
   size_type leaf_data_size;
+  uint8_t max_def_level;
 };
 
 /**
@@ -425,11 +426,15 @@ struct dremel_data {
  * def_level      = { 1, 1, 1,   0,   1, 1}
  * ```
  * @param col Column of LIST type
+ * @param level_nullability Pre-determined nullability at each list level. Empty means infer from
+ * `col`
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return A struct containing dremel data
  */
-dremel_data get_dremel_data(column_view h_col, cudaStream_t stream = (cudaStream_t)0);
+dremel_data get_dremel_data(column_view h_col,
+                            std::vector<bool> const &level_nullablility = {},
+                            cudaStream_t stream                         = (cudaStream_t)0);
 
 /**
  * @brief Launches kernel for initializing encoder page fragments

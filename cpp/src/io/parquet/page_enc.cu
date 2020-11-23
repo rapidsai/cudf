@@ -1587,7 +1587,9 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
  *
  * Similarly we merge up all the way till level 0 offsets
  */
-dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
+dremel_data get_dremel_data(column_view h_col,
+                            std::vector<bool> const &level_nullablility,
+                            cudaStream_t stream)
 {
   CUDF_EXPECTS(h_col.type().id() == type_id::LIST,
                "Can only get rep/def levels for LIST type column");
@@ -1620,17 +1622,24 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
   size_t max_vals_size = 0;
   std::vector<column_view> nesting_levels;
   std::vector<uint8_t> def_at_level;
+  size_type level = 0;
   while (curr_col.type().id() == type_id::LIST) {
     nesting_levels.push_back(curr_col);
-    def_at_level.push_back(curr_col.nullable() ? 2 : 1);
+    def_at_level.push_back(
+      curr_col.nullable() or (not level_nullablility.empty() and level_nullablility[level]) ? 2
+                                                                                            : 1);
     auto lcv = lists_column_view(curr_col);
     max_vals_size += lcv.offsets().size();
     curr_col = lcv.child();
+    level++;
   }
   // One more entry for leaf col
-  def_at_level.push_back(curr_col.nullable() ? 2 : 1);
+  def_at_level.push_back(
+    curr_col.nullable() or (not level_nullablility.empty() and level_nullablility[level]) ? 2 : 1);
   max_vals_size += curr_col.size();
 
+  // Add one more value at the end so that we can have the max def level
+  def_at_level.push_back(0);
   thrust::exclusive_scan(
     thrust::host, def_at_level.begin(), def_at_level.end(), def_at_level.begin());
 
@@ -1694,15 +1703,21 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
       thrust::make_counting_iterator(0),
       [idx            = empties_idx.data(),
        mask           = lcv.null_mask(),
+       level_nullable = level_nullablility.empty() ? false : level_nullablility[level],
        curr_def_level = def_at_level[level]] __device__(auto i) {
-        return curr_def_level + ((mask && bit_is_set(mask, idx[i])) ? 1 : 0);
+        return curr_def_level +
+               ((mask && bit_is_set(mask, idx[i]) or (!mask && level_nullable)) ? 1 : 0);
       });
 
     auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size());
     auto input_child_def_it = thrust::make_transform_iterator(
       thrust::make_counting_iterator(column_offsets[level + 1]),
-      [mask = lcv.child().null_mask(), curr_def_level = def_at_level[level + 1]] __device__(
-        auto i) { return curr_def_level + ((mask && bit_is_set(mask, i)) ? 1 : 0); });
+      [mask           = lcv.child().null_mask(),
+       level_nullable = level_nullablility.empty() ? false : level_nullablility[level + 1],
+       curr_def_level = def_at_level[level + 1]] __device__(auto i) {
+        return curr_def_level +
+               ((mask && bit_is_set(mask, i) or (!mask && level_nullable)) ? 1 : 0);
+      });
 
     // Zip the input and output value iterators so that merge operation is done only once
     auto input_parent_zip_it =
@@ -1787,8 +1802,10 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
       thrust::make_counting_iterator(0),
       [idx            = empties_idx.data(),
        mask           = lcv.null_mask(),
+       level_nullable = level_nullablility.empty() ? false : level_nullablility[level],
        curr_def_level = def_at_level[level]] __device__(auto i) {
-        return curr_def_level + ((mask && bit_is_set(mask, idx[i])) ? 1 : 0);
+        return curr_def_level +
+               ((mask && bit_is_set(mask, idx[i]) or (!mask && level_nullable)) ? 1 : 0);
       });
 
     // Zip the input and output value iterators so that merge operation is done only once
@@ -1855,12 +1872,14 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
 
   size_type leaf_col_offset = column_offsets[column_offsets.size() - 1];
   size_type leaf_data_size  = column_ends[column_ends.size() - 1] - leaf_col_offset;
+  uint8_t max_def_level     = def_at_level.back() - 1;
 
   return dremel_data{std::move(new_offsets),
                      std::move(rep_level),
                      std::move(def_level),
                      leaf_col_offset,
-                     leaf_data_size};
+                     leaf_data_size,
+                     max_def_level};
 }
 
 /**

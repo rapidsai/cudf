@@ -86,6 +86,7 @@ std::vector<std::vector<bool>> get_per_column_nullability(table_view const &tabl
   for (auto &&col : table) {
     uint16_t depth = get_depth(col);
     if (col_nullable.empty()) {
+      // If no per-column nullability is specified then assume that all columns are nullable
       per_column_nullability.emplace_back(const_it, const_it + depth);
     } else {
       CUDF_EXPECTS(
@@ -302,12 +303,13 @@ class parquet_column_view {
       // size of the leaf column
       // Calculate row offset into dremel data (repetition/definition values) and the respective
       // definition and repetition levels
-      gpu::dremel_data dremel = gpu::get_dremel_data(col, stream);
+      gpu::dremel_data dremel = gpu::get_dremel_data(col, _nullability, stream);
       _dremel_offsets         = std::move(dremel.dremel_offsets);
       _rep_level              = std::move(dremel.rep_level);
       _def_level              = std::move(dremel.def_level);
       leaf_col_offset         = dremel.leaf_col_offset;
       _data_count             = dremel.leaf_data_size;
+      _max_def_level          = dremel.max_def_level;
 
       _type_width = (is_fixed_width(_leaf_col.type())) ? cudf::size_of(_leaf_col.type()) : 0;
       _data       = (is_fixed_width(_leaf_col.type()))
@@ -336,6 +338,9 @@ class parquet_column_view {
       }
 
       CUDA_TRY(cudaStreamSynchronize(stream));
+    } else {
+      if (_nullability.empty()) { _nullability = {col.nullable()}; }
+      _max_def_level = (_nullability[0]) ? 1 : 0;
     }
     if (_string_type && _data_count > 0) {
       strings_column_view view{_leaf_col};
@@ -365,7 +370,7 @@ class parquet_column_view {
   size_t row_count() const noexcept { return _row_count; }
   size_t data_count() const noexcept { return _data_count; }
   size_t null_count() const noexcept { return _null_count; }
-  bool nullable() const noexcept { return (_nulls != nullptr); }
+  bool nullable() const { return _nullability.back(); }
   void const *data() const noexcept { return _data; }
   uint32_t const *nulls() const noexcept { return _nulls; }
   bool level_nullable(size_t level) { return _nullability[level]; }
@@ -378,24 +383,7 @@ class parquet_column_view {
   size_type const *level_offsets() const noexcept { return _dremel_offsets.data(); }
   uint8_t const *repetition_levels() const noexcept { return _rep_level.data(); }
   uint8_t const *definition_levels() const noexcept { return _def_level.data(); }
-  uint16_t max_def_level()
-  {
-    if (_max_def_level > -1) return _max_def_level;
-
-    uint16_t num_def_level = 0;
-    auto curr_col          = cudf_col();
-    while (curr_col.type().id() == type_id::LIST) {
-      // There is one definition level for each level of nesting and one for each level's
-      // nullability. If the level is nullable, then it needs 2 definition levels to describe it.
-      num_def_level += curr_col.nullable() ? 2 : 1;
-      lists_column_view lcw(curr_col);
-      curr_col = lcw.child();
-    }
-    // This is the leaf level. There is no further nesting.
-    if (curr_col.nullable()) ++num_def_level;
-    _max_def_level = num_def_level;
-    return _max_def_level;
-  }
+  uint16_t max_def_level() const noexcept { return _max_def_level; }
   void set_def_level(uint16_t def_level) { _max_def_level = def_level; }
 
   auto name() const noexcept { return _name; }
@@ -678,26 +666,31 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
   // we actually have.
   std::vector<parquet_column_view> parquet_columns;
   parquet_columns.reserve(num_columns);  // Avoids unnecessary re-allocation
+
+  // because the repetition type is global (in the sense of, not per-rowgroup or per write_chunk()
+  // call) we cannot know up front if the user is going to end up passing tables with nulls/no nulls
+  // in the multiple write_chunk() case.  so we'll do some special handling.
+  // The user can pass in information about the nullability of a column to be enforced across
+  // write_chunk() calls, in a flattened bool vector. Figure out that per column.
   std::vector<std::vector<bool>> per_column_nullability =
-    get_per_column_nullability(table, state.user_metadata_with_nullability.column_nullable);
+    (state.single_write_mode)
+      ? std::vector<std::vector<bool>>{}
+      : get_per_column_nullability(table, state.user_metadata_with_nullability.column_nullable);
 
   for (auto it = table.begin(); it < table.end(); ++it) {
     const auto col        = *it;
     const auto current_id = parquet_columns.size();
 
     num_rows = std::max<uint32_t>(num_rows, col.size());
+
+    // if the user is explicitly saying "I am only calling this once", assume the columns in this
+    // one table tell us everything we need to know about their nullability.
+    // Empty nullability means the writer figures out the nullability from the cudf columns.
     auto const &this_column_nullability =
       (state.single_write_mode) ? std::vector<bool>{} : per_column_nullability[current_id];
 
     parquet_columns.emplace_back(
       current_id, col, this_column_nullability, state.user_metadata, state.stream);
-  }
-
-  if (state.user_metadata_with_nullability.column_nullable.size() > 0) {
-    CUDF_EXPECTS(state.user_metadata_with_nullability.column_nullable.size() ==
-                   static_cast<size_t>(num_columns),
-                 "When passing values in user_metadata_with_nullability, data for all columns must "
-                 "be specified");
   }
 
   // first call. setup metadata. num_rows will get incremented as write_chunk is
@@ -762,30 +755,13 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
         // Column metadata
         col_schema.type           = col.physical_type();
         col_schema.converted_type = col.converted_type();
-        // because the repetition type is global (in the sense of, not per-rowgroup or per
-        // write_chunk() call) we cannot know up front if the user is going to end up passing tables
-        // with nulls/no nulls in the multiple write_chunk() case.  so we'll do some special
-        // handling.
-        //
-        // if the user is explicitly saying "I am only calling this once", fall back to the original
-        // behavior and assume the columns in this one table tell us everything we need to know.
-        if (state.single_write_mode) {
-          col_schema.repetition_type =
-            (col.nullable() || col.data_count() < (size_t)num_rows) ? OPTIONAL : REQUIRED;
-          col.set_def_level((col_schema.repetition_type == OPTIONAL) ? 1 : 0);
-        }
-        // otherwise, if the user is explicitly telling us global information about all the tables
-        // that will ever get passed in
-        else if (state.user_metadata_with_nullability.column_nullable.size() > 0) {
-          col_schema.repetition_type =
-            state.user_metadata_with_nullability.column_nullable[i] ? OPTIONAL : REQUIRED;
-          col.set_def_level((col_schema.repetition_type == OPTIONAL) ? 1 : 0);
-        }
-        // otherwise assume the worst case.
-        else {
-          col_schema.repetition_type = OPTIONAL;
-          col.set_def_level(1);  // def level for OPTIONAL is 1, for REQUIRED is 0
-        }
+
+        col_schema.repetition_type =
+          (col.max_def_level() == 1 ||
+           (state.single_write_mode && col.row_count() < (size_t)num_rows))
+            ? OPTIONAL
+            : REQUIRED;
+
         col_schema.name         = col.name();
         col_schema.num_children = 0;  // Leaf node
 

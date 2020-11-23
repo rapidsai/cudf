@@ -1132,6 +1132,65 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullability)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
+TEST_F(ParquetChunkedWriterTest, ForcedNullabilityList)
+{
+  srand(31337);
+
+  auto valids  = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  auto valids2 = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
+
+  using lcw = cudf::test::lists_column_wrapper<int32_t>;
+
+  cudf::io::table_metadata_with_nullability nullable_metadata;
+
+  // COL0 ====================
+  // [1, 2, 3]
+  // []
+  // [4, 5]
+  // NULL
+  lcw col00{{{1, 2, 3}, {}, {4, 5}, {}}, valids2};
+
+  // [7]
+  // []
+  // [8, 9, 10, 11]
+  // NULL
+  lcw col01{{{7}, {}, {8, 9, 10, 11}, {}}, valids2};
+
+  nullable_metadata.column_nullable.push_back(true);   // List is nullable at first (root) level
+  nullable_metadata.column_nullable.push_back(false);  // non-nullable at second (leaf) level
+
+  // COL1 (non-nested columns to test proper schema construction)
+  size_t num_rows = static_cast<cudf::column_view>(col00).size();
+  auto seq_col0   = random_values<int>(num_rows);
+  auto seq_col1   = random_values<int>(num_rows);
+
+  column_wrapper<int> col10{seq_col0.begin(), seq_col0.end(), valids};
+  column_wrapper<int> col11{seq_col1.begin(), seq_col1.end(), valids2};
+
+  nullable_metadata.column_nullable.push_back(true);
+
+  auto table1 = table_view({col00, col10});
+  auto table2 = table_view({col01, col11});
+
+  auto full_table = cudf::concatenate({table1, table2});
+
+  auto filepath = temp_env->get_temp_filepath("ChunkedListNullable.parquet");
+
+  cudf_io::chunked_parquet_writer_options args =
+    cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath})
+      .nullable_metadata(&nullable_metadata);
+  auto state = cudf_io::write_parquet_chunked_begin(args);
+  cudf_io::write_parquet_chunked(table1, state);
+  cudf_io::write_parquet_chunked(table2, state);
+  cudf_io::write_parquet_chunked_end(state);
+
+  cudf_io::parquet_reader_options read_opts =
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+  auto result = cudf_io::read_parquet(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
+}
+
 TEST_F(ParquetChunkedWriterTest, WrongNullability)
 {
   srand(31337);
