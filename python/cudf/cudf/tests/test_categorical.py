@@ -650,60 +650,7 @@ def test_astype_dtype(data, expected):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
-        [1, 2, 3, 4],
-        ["a", "1", "2", "1", "a"],
-        pd.Series(["a", "1", "22", "1", "aa"]),
-        pd.Series(["a", "1", "22", "1", "aa"], dtype="category"),
-        pd.Series([1, 2, 3, 4], dtype="int64"),
-        pd.Series([1, 2.3, 3, 4], dtype="float"),
-        [None, 1, None, 2, None],
-        ["a"],
-    ]
-)
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        pd.CategoricalDtype(categories=["aa", "bb", "cc"]),
-        pd.CategoricalDtype(categories=[2, 4, 10, 100]),
-        pd.CategoricalDtype(categories=["aa", "bb", "c"]),
-        pd.CategoricalDtype(categories=["a", "bb", "c"]),
-        pd.CategoricalDtype(categories=["a", "b", "c"]),
-        pd.CategoricalDtype(categories=["22", "b", "c"]),
-        pd.CategoricalDtype(categories=["a"]),
-    ],
-)
-def test_categorical_insertion(data, dtype):
-    # insert categorical series
-    pd_df = pd.DataFrame()
-    pd_df["a"] = np.ones(len(data))
-    cd_df = gd.from_pandas(pd_df)
-
-    pd_df.assign(cat_col=pd.Series(data, dtype=dtype))
-    cd_df.assign(cat_col=pd.Series(data, dtype=dtype))
-    assert_eq(pd_df, cd_df)
-
-    # insert categorical array
-    # needed for dask_cudf support for including file name
-    # as a categorical column
-    # see issue: https://github.com/rapidsai/cudf/issues/2269
-    pd_df = pd.DataFrame()
-    pd_df["a"] = np.ones(len(data))
-    cd_df = gd.from_pandas(pd_df)
-
-    cat_col = pd.Categorical(
-        values=data, categories=list(dtype.categories), ordered=None
-    )
-    pd_df.assign(cat_col=cat_col)
-    cd_df.assign(cat_col=cat_col)
-    assert_eq(pd_df, cd_df)
-<<<<<<< HEAD
-=======
-
-
-@pytest.mark.parametrize(
-    ("data,add"),
+    "data,add",
     [
         ([1, 2, 3], [100, 11, 12]),
         ([1, 2, 3], [0.01, 9.7, 15.0]),
@@ -712,6 +659,7 @@ def test_categorical_insertion(data, dtype):
         (["a", "bd", "ef"], ["asdfsdf", "bddf", "eff"]),
         ([1, 2, 3], []),
         ([0.0, 6.7, 10.0], []),
+        (["a", "bd", "ef"], []),
     ],
 )
 def test_add_categories(data, add):
@@ -720,7 +668,9 @@ def test_add_categories(data, add):
 
     expected = pds.cat.add_categories(add)
     actual = gds.cat.add_categories(add)
-    assert_eq(expected.cat.codes, actual.cat.codes)
+    assert_eq(
+        expected.cat.codes, actual.cat.codes.astype(expected.cat.codes.dtype)
+    )
 
     # Need to type-cast pandas object to str due to mixed-type
     # support in "object"
@@ -744,14 +694,13 @@ def test_add_categories_error(data, add):
     pds = pd.Series(data, dtype="category")
     gds = gd.Series(data, dtype="category")
 
-    error_type = None
-    try:
-        pds.cat.add_categories(add)
-    except Exception as e:
-        error_type = type(e)
-
-    with pytest.raises(error_type):
-        gds.cat.add_categories(add)
+    assert_exceptions_equal(
+        pds.cat.add_categories,
+        gds.cat.add_categories,
+        ([add],),
+        ([add],),
+        compare_error_message=False,
+    )
 
 
 def test_add_categories_mixed_error():
@@ -764,4 +713,54 @@ def test_add_categories_mixed_error():
 
     with pytest.raises(TypeError):
         gds.cat.add_categories(["a", "bd", "ef"])
->>>>>>> fix parameerization style
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 4],
+        ["a", "1", "2", "1", "a"],
+        pd.Series(["a", "1", "22", "1", "aa"]),
+        pd.Series(["a", "1", "22", "1", "aa"], dtype="category"),
+        pd.Series([1, 2, 3, 4], dtype="int64"),
+        pd.Series([1, 2.3, 3, 4], dtype="float"),
+        [None, 1, None, 2, None],
+        ["a"],
+    ],
+)
+@pytest.mark.parametrize(
+    "cat_dtype",
+    [
+        pd.CategoricalDtype(categories=["aa", "bb", "cc"]),
+        pd.CategoricalDtype(categories=[2, 4, 10, 100]),
+        pd.CategoricalDtype(categories=["aa", "bb", "c"]),
+        pd.CategoricalDtype(categories=["a", "bb", "c"]),
+        pd.CategoricalDtype(categories=["a", "b", "c"]),
+        pd.CategoricalDtype(categories=["22", "b", "c"]),
+        pd.CategoricalDtype(categories=["a"]),
+    ],
+)
+def test_categorical_assignment(data, cat_dtype):
+    pd_df = pd.DataFrame()
+    pd_df["a"] = np.ones(len(data))
+    cd_df = gd.from_pandas(pd_df)
+
+    pd_cat_series = pd.Series(data, dtype=cat_dtype)
+    # assign categorical series
+    pd_df.assign(cat_col=pd_cat_series)
+    cd_df.assign(cat_col=pd_cat_series)
+    assert_eq(pd_df, cd_df)
+
+    # assign categorical array
+    # needed for dask_cudf support for including file name
+    # as a categorical column
+    # see issue: https://github.com/rapidsai/cudf/issues/2269
+    pd_df = pd.DataFrame()
+    pd_df["a"] = np.ones(len(data))
+    cd_df = gd.from_pandas(pd_df)
+
+    pd_categorical = pd.Series(data, dtype=cat_dtype).cat.categorical
+
+    pd_df.assign(cat_col=pd_categorical)
+    cd_df.assign(cat_col=pd_categorical)
+    assert_eq(pd_df, cd_df)
