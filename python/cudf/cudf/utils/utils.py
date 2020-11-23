@@ -88,9 +88,9 @@ def scalar_broadcast_to(scalar, size, dtype=None):
             dtype = "object"
         return column.column_empty(size, dtype=dtype, masked=True)
 
-    if isinstance(scalar, pd.Categorical):
-        if dtype is not None:
-            return create_cat_series_from_pd_cat_scalar(scalar, size)
+    if isinstance(scalar, pd.CategoricalDtype):
+        if dtype is None:
+            return create_cat_column_from_pd_cat_scalar(scalar, size)
         else:
             return scalar_broadcast_to(scalar.categories[0], size).astype(
                 dtype
