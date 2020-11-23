@@ -129,6 +129,23 @@ class Buffer(Serializable):
         dbuf = DeviceBuffer(size=size)
         return Buffer(dbuf)
 
+    @classmethod
+    def from_bytes(cls, data):
+        """
+        Construct a Buffer object from `bytes`
+
+        Parameters
+        ----------
+        data : bytes
+
+        Returns
+        -------
+        cudf.core.buffer.Buffer
+        """
+        dbuf = DeviceBuffer(size=len(data))
+        dbuf.copy_from_host(data)
+        return cls(dbuf)
+
 
 def _buffer_data_from_array_interface(array_interface):
     ptr = array_interface["data"][0]
