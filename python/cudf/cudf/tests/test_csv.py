@@ -1841,3 +1841,42 @@ def test_csv_reader_datetime_dtypes(dtype):
     actual = cudf.read_csv(StringIO(buf), dtype=dtype)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        cudf.DataFrame(
+            {
+                "a": cudf.Series([1, 2, 3, 1, 2], dtype="category"),
+                "b": cudf.Series(["a", "c", "a", "b", "a"], dtype="category"),
+            }
+        ),
+        cudf.DataFrame(
+            {
+                "a": cudf.Series([1.1, 2, 3, 1.1, 2], dtype="category"),
+                "b": cudf.Series(
+                    [None, "c", None, "b", "a"], dtype="category"
+                ),
+            }
+        ),
+        cudf.DataFrame(
+            {
+                "b": cudf.Series(
+                    [1.1, 2, 3, 1.1, 2],
+                    dtype="category",
+                    index=cudf.CategoricalIndex(
+                        ["abc", "def", "ghi", "jkl", "xyz"]
+                    ),
+                )
+            }
+        ),
+    ],
+)
+def test_csv_writer_category(df):
+    pdf = df.to_pandas()
+
+    expected = pdf.to_csv()
+    actual = df.to_csv()
+
+    assert expected == actual
