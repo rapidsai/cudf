@@ -66,7 +66,7 @@ auto create_strings_device_views(std::vector<column_view> const& views, cudaStre
 {
   CUDF_FUNC_RANGE();
   // Assemble contiguous array of device views
-  rmm::device_buffer* device_view_owners;
+  std::unique_ptr<rmm::device_buffer> device_view_owners;
   column_device_view* device_views_ptr;
   std::tie(device_view_owners, device_views_ptr) =
     contiguous_copy_column_device_views<column_device_view>(views, stream);
@@ -101,7 +101,7 @@ auto create_strings_device_views(std::vector<column_view> const& views, cudaStre
                          d_partition_offsets.begin());
   auto const output_chars_size = d_partition_offsets.back();
 
-  return std::make_tuple(std::unique_ptr<rmm::device_buffer>(device_view_owners),
+  return std::make_tuple(std::move(device_view_owners),
                          device_views_ptr,
                          std::move(d_input_offsets),
                          std::move(d_partition_offsets),

@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <algorithm>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -907,28 +908,26 @@ ColumnDeviceView* child_columns_to_device_array(ColumnViewIterator child_begin,
                                                 void* h_ptr,
                                                 void* d_ptr)
 {
-  ColumnDeviceView* d_children = nullptr;
+  ColumnDeviceView* d_children = detail::align_ptr_for_type<ColumnDeviceView>(d_ptr);
   auto num_children            = std::distance(child_begin, child_end);
   if (num_children > 0) {
     // The beginning of the memory must be the fixed-sized ColumnDeviceView
     // struct objects in order for d_children to be used as an array.
     auto h_column = detail::align_ptr_for_type<ColumnDeviceView>(h_ptr);
-    auto d_column = detail::align_ptr_for_type<ColumnDeviceView>(d_ptr);
+    auto d_column = d_children;
 
     // Any child data is assigned past the end of this array: h_end and d_end.
     auto h_end = reinterpret_cast<int8_t*>(h_column + num_children);
     auto d_end = reinterpret_cast<int8_t*>(d_column + num_children);
-    d_children = d_column;  // set children pointer for return
-    for (auto itr = child_begin; itr != child_end; ++itr) {
+    std::for_each(child_begin, child_end, [&](auto const& col) {
       // inplace-new each child into host memory
-      auto col = *itr;
       new (h_column) ColumnDeviceView(col, h_end, d_end);
       h_column++;  // advance to next child
       // update the pointers for holding this child column's child data
       auto col_child_data_size = ColumnDeviceView::extent(col) - sizeof(ColumnDeviceView);
       h_end += col_child_data_size;
       d_end += col_child_data_size;
-    }
+    });
   }
   return d_children;
 }
