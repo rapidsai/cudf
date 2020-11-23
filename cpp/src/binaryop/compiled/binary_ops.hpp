@@ -19,6 +19,8 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/null_mask.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace binops {
 namespace detail {
@@ -27,7 +29,7 @@ namespace detail {
  */
 rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
                                              scalar const& s,
-                                             cudaStream_t stream,
+                                             rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr);
 }  // namespace detail
 
@@ -66,8 +68,8 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a binary operation between a string column and a string
@@ -92,8 +94,8 @@ std::unique_ptr<column> binary_operation(
   scalar const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a binary operation between two string columns.
@@ -118,8 +120,8 @@ std::unique_ptr<column> binary_operation(
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace compiled
 }  // namespace binops

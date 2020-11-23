@@ -1,10 +1,20 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 import warnings
 from functools import partial
-from io import BufferedWriter, IOBase
+from io import BufferedWriter, BytesIO, IOBase
+
+import numpy as np
+from pyarrow import parquet as pq
 
 from dask import dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowEngine
+
+try:
+    from dask.dataframe.io.parquet import (
+        create_metadata_file as create_metadata_file_dd,
+    )
+except ImportError:
+    create_metadata_file_dd = None
 
 import cudf
 from cudf.core.column import as_column, build_categorical_column
@@ -155,6 +165,33 @@ class CudfEngine(ArrowEngine):
             with fs.open(metadata_path, "wb") as fil:
                 fil.write(memoryview(_meta))
 
+    @classmethod
+    def collect_file_metadata(cls, path, fs, file_path):
+        with fs.open(path, "rb") as f:
+            meta = pq.ParquetFile(f).metadata
+        if file_path:
+            meta.set_file_path(file_path)
+        with BytesIO() as myio:
+            meta.write_metadata_file(myio)
+            myio.seek(0)
+            meta = np.frombuffer(myio.read(), dtype="uint8")
+        return meta
+
+    @classmethod
+    def aggregate_metadata(cls, meta_list, fs, out_path):
+        meta = (
+            cudf.io.merge_parquet_filemetadata(meta_list)
+            if len(meta_list) > 1
+            else meta_list[0]
+        )
+        if out_path:
+            metadata_path = fs.sep.join([out_path, "_metadata"])
+            with fs.open(metadata_path, "wb") as fil:
+                fil.write(memoryview(meta))
+            return None
+        else:
+            return meta
+
 
 def read_parquet(
     path,
@@ -201,3 +238,8 @@ def read_parquet(
 
 
 to_parquet = partial(dd.to_parquet, engine=CudfEngine)
+
+if create_metadata_file_dd is None:
+    create_metadata_file = create_metadata_file_dd
+else:
+    create_metadata_file = partial(create_metadata_file_dd, engine=CudfEngine)

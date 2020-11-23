@@ -49,8 +49,8 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
                                            indices,
                                            cudf::detail::out_of_bounds_policy::IGNORE,
                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                           mr,
-                                           stream)
+                                           stream,
+                                           mr)
                         ->release();
   auto output_column = std::unique_ptr<column>(std::move(table_column.front()));
 
