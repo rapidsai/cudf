@@ -627,19 +627,19 @@ struct list_child_constructor {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const
   {
-    auto source_column_device_view =
+    auto const source_column_device_view =
       column_device_view::create(source_lists_column_view.parent(), stream);
-    auto target_column_device_view =
+    auto const target_column_device_view =
       column_device_view::create(target_lists_column_view.parent(), stream);
-    auto source_lists = cudf::detail::lists_column_device_view(*source_column_device_view);
-    auto target_lists = cudf::detail::lists_column_device_view(*target_column_device_view);
+    auto const source_lists = cudf::detail::lists_column_device_view(*source_column_device_view);
+    auto const target_lists = cudf::detail::lists_column_device_view(*target_column_device_view);
 
-    auto source_structs = source_lists_column_view.child();
-    auto target_structs = target_lists_column_view.child();
+    auto const source_structs = source_lists_column_view.child();
+    auto const target_structs = target_lists_column_view.child();
 
-    auto num_child_rows = get_num_child_rows(list_offsets, stream);
+    auto const num_child_rows = get_num_child_rows(list_offsets, stream);
 
-    auto num_struct_members =
+    auto const num_struct_members =
       std::distance(source_structs.child_begin(), source_structs.child_end());
     std::vector<std::unique_ptr<column>> child_columns;
     child_columns.reserve(num_struct_members);
@@ -658,7 +658,7 @@ struct list_child_constructor {
                                      mr);
     };
 
-    auto iter_source_member_as_list = thrust::make_transform_iterator(
+    auto const iter_source_member_as_list = thrust::make_transform_iterator(
       thrust::make_counting_iterator<cudf::size_type>(0), [&](auto child_idx) {
         return project_member_as_list(
           source_structs.child(child_idx),
@@ -668,7 +668,7 @@ struct list_child_constructor {
           source_lists_column_view.null_count());
       });
 
-    auto iter_target_member_as_list = thrust::make_transform_iterator(
+    auto const iter_target_member_as_list = thrust::make_transform_iterator(
       thrust::make_counting_iterator<cudf::size_type>(0), [&](auto child_idx) {
         return project_member_as_list(
           target_structs.child(child_idx),
