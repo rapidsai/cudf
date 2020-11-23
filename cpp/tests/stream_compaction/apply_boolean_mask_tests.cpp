@@ -202,12 +202,12 @@ TEST_F(ApplyBooleanMask, FixedPointLargeColumnTest)
                   dec32_data.cend(),
                   mask_data.cbegin(),
                   std::back_inserter(expect_dec32_data),
-                  thrust::identity());
+                  thrust::identity<bool>());
   thrust::copy_if(dec64_data.cbegin(),
                   dec64_data.cend(),
                   mask_data.cbegin(),
                   std::back_inserter(expect_dec64_data),
-                  thrust::identity());
+                  thrust::identity<bool>());
 
   decimal32_wrapper expect_col32(
     expect_dec32_data.begin(), expect_dec32_data.end(), numeric::scale_type{-3});
