@@ -200,6 +200,9 @@ class DataFrame(Frame, Serializable):
         """
         super().__init__()
 
+        if isinstance(columns, (Series, cudf.Index)):
+            columns = columns.to_pandas()
+
         if isinstance(data, ColumnAccessor):
             self._data = data
             if index is None:
@@ -207,16 +210,15 @@ class DataFrame(Frame, Serializable):
             self.index = as_index(index)
             return None
 
-        if isinstance(data, DataFrame):
-            self._data = data._data
-            self._index = data._index
-            self.columns = data.columns
-            return
+        if isinstance(data, (DataFrame, pd.DataFrame)):
+            if columns is not None:
+                data = data[columns]
 
-        if isinstance(data, pd.DataFrame):
-            data = self.from_pandas(data)
+            if isinstance(data, pd.DataFrame):
+                data = self.from_pandas(data)
+
             self._data = data._data
-            self._index = data._index
+            self._index = data._index if index is None else as_index(index)
             self.columns = data.columns
             return
 
@@ -226,8 +228,6 @@ class DataFrame(Frame, Serializable):
             else:
                 self._index = as_index(index)
             if columns is not None:
-                if isinstance(columns, (Series, cudf.Index)):
-                    columns = columns.to_pandas()
 
                 self._data = ColumnAccessor(
                     OrderedDict.fromkeys(
