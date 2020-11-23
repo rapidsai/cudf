@@ -125,8 +125,8 @@ inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int l
  *
  **/
 #ifndef NDEBUG
-#define CHECK_CUDA(stream.value()) CUDA_TRY(cudaStreamSynchronize(stream));
+#define CHECK_CUDA(stream) CUDA_TRY(cudaStreamSynchronize(stream));
 #else
-#define CHECK_CUDA(stream.value()) CUDA_TRY(cudaPeekAtLastError());
+#define CHECK_CUDA(stream) CUDA_TRY(cudaPeekAtLastError());
 #endif
 /** @} */
