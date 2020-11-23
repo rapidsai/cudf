@@ -17,6 +17,7 @@
 #include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
 
+#include <chrono>
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <thrust/gather.h>
@@ -170,10 +171,16 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
       s->frag.num_values = s->frag.num_rows;
     }
   }
-  dtype     = s->col.physical_type;
-  dtype_len = (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
+  dtype = s->col.physical_type;
+  dtype_len =
+    (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
   if (dtype == INT32) {
     dtype_len_in = GetDtypeLogicalLen(s->col.converted_type);
+  } else if (dtype == INT96) {
+    // cudf doesn't support INT96 internally and uses INT64, so treat INT96 as an INT64 for
+    // computing dictionary hash values and reading the data, but we do treat it as 12 bytes for
+    // dtype_len, which determines how much memory we need to allocate for the fragment.
+    dtype_len_in = 8;
   } else {
     dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len;
   }
@@ -908,6 +915,33 @@ static __device__ void PlainBoolEncode(page_enc_state_s *s,
   }
 }
 
+constexpr auto julian_calendar_epoch_diff()
+{
+  using namespace simt::std::chrono;
+  using namespace simt::std::chrono_literals;
+  return sys_days{January / 1 / 1970} - (sys_days{November / 24 / -4713} + 12h);
+}
+
+/**
+ * @brief Converts a sys_time<nanoseconds> into a pair with nanoseconds since midnight and number of
+ * Julian days. Does not deal with time zones. Used by INT96 code.
+ *
+ * @param ns number of nanoseconds since epoch
+ * @return std::pair<nanoseconds,days> where nanoseconds is the number of nanoseconds
+ * elapsed in the day and days is the number of days from Julian epoch.
+ */
+static __device__ std::pair<simt::std::chrono::nanoseconds, simt::std::chrono::days>
+convert_nanoseconds(simt::std::chrono::sys_time<simt::std::chrono::nanoseconds> const ns)
+{
+  using namespace simt::std::chrono;
+  auto const nanosecond_ticks = ns.time_since_epoch();
+  auto const gregorian_days   = floor<days>(nanosecond_ticks);
+  auto const julian_days      = gregorian_days + ceil<days>(julian_calendar_epoch_diff());
+
+  auto const last_day_ticks = nanosecond_ticks - duration_cast<nanoseconds>(gregorian_days);
+  return {last_day_ticks, julian_days};
+}
+
 // blockDim(128, 1, 1)
 __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
                                                          const EncColumnChunk *chunks,
@@ -1012,10 +1046,13 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   }
   // Encode data values
   __syncthreads();
-  dtype         = s->col.physical_type;
-  dtype_len_out = (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
+  dtype = s->col.physical_type;
+  dtype_len_out =
+    (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
   if (dtype == INT32) {
     dtype_len_in = GetDtypeLogicalLen(s->col.converted_type);
+  } else if (dtype == INT96) {
+    dtype_len_in = 8;
   } else {
     dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len_out;
   }
@@ -1141,6 +1178,48 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
             dst[pos + 6] = v >> 48;
             dst[pos + 7] = v >> 56;
           } break;
+          case INT96: {
+            int64_t v        = *reinterpret_cast<const int64_t *>(src8);
+            int32_t ts_scale = s->col.ts_scale;
+            if (ts_scale != 0) {
+              if (ts_scale < 0) {
+                v /= -ts_scale;
+              } else {
+                v *= ts_scale;
+              }
+            }
+
+            auto const ret = convert_nanoseconds([&]() {
+              using namespace simt::std::chrono;
+
+              switch (s->col.converted_type) {
+                case TIMESTAMP_MILLIS: {
+                  return sys_time<nanoseconds>{milliseconds{v}};
+                } break;
+                case TIMESTAMP_MICROS: {
+                  return sys_time<nanoseconds>{microseconds{v}};
+                } break;
+              }
+              return sys_time<nanoseconds>{microseconds{0}};
+            }());
+
+            // the 12 bytes of fixed length data.
+            v             = ret.first.count();
+            dst[pos + 0]  = v;
+            dst[pos + 1]  = v >> 8;
+            dst[pos + 2]  = v >> 16;
+            dst[pos + 3]  = v >> 24;
+            dst[pos + 4]  = v >> 32;
+            dst[pos + 5]  = v >> 40;
+            dst[pos + 6]  = v >> 48;
+            dst[pos + 7]  = v >> 56;
+            uint32_t w    = ret.second.count();
+            dst[pos + 8]  = w;
+            dst[pos + 9]  = w >> 8;
+            dst[pos + 10] = w >> 16;
+            dst[pos + 11] = w >> 24;
+          } break;
+
           case DOUBLE: memcpy(dst + pos, src8, 8); break;
           case BYTE_ARRAY: {
             const char *str_data = reinterpret_cast<const nvstrdesc_s *>(src8)->ptr;
