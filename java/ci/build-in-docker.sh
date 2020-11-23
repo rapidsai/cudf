@@ -86,6 +86,11 @@ if [ "$SIGN_FILE" == true ]; then
     BUILD_ARG="$BUILD_ARG -Prelease"
 fi
 
+if [ -f $WORKSPACE/java/ci/settings.xml ]; then
+    # Build with an internal settings.xml
+    BUILD_ARG="$BUILD_ARG -s $WORKSPACE/java/ci/settings.xml"
+fi
+
 cd $WORKSPACE/java
 mvn -B clean package $BUILD_ARG
 
