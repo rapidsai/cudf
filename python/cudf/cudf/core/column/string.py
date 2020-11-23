@@ -1974,7 +1974,7 @@ class StringMethods(ColumnMethodsMixin):
             cpp_string_get(self._column, i), **kwargs
         )
 
-    def split(self, pat=None, n=-1, expand=None, **kwargs):
+    def split(self, pat=None, n=-1, expand=False, **kwargs):
         """
         Split strings around given separator/delimiter.
 
@@ -2084,14 +2084,15 @@ class StringMethods(ColumnMethodsMixin):
         1  https://docs.python.org/index.html  <NA>  <NA>     <NA>      <NA>
         2                                <NA>  <NA>  <NA>     <NA>      <NA>
         """
-        if expand not in (None, True, False):
-            raise ValueError(
-                f"expand parameter accepts only : [None, True, False], "
-                f"got {expand}"
-            )
 
         if expand is None:
             expand = False
+
+        if expand not in (True, False):
+            raise ValueError(
+                f"expand parameter accepts only : [True, False], "
+                f"got {expand}"
+            )
 
         # Pandas treats 0 as all
         if n == 0:
@@ -2118,7 +2119,7 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(result_table, **kwargs,)
 
-    def rsplit(self, pat=None, n=-1, expand=None, **kwargs):
+    def rsplit(self, pat=None, n=-1, expand=False, **kwargs):
         """
         Split strings around given separator/delimiter.
 
@@ -2237,14 +2238,15 @@ class StringMethods(ColumnMethodsMixin):
         1  https://docs.python.org/3/tutorial  index.html
         2                                <NA>        <NA>
         """
-        if expand not in (None, True, False):
-            raise ValueError(
-                f"expand parameter accepts only : [None, True, False], "
-                f"got {expand}"
-            )
 
         if expand is None:
             expand = False
+
+        if expand not in (True, False):
+            raise ValueError(
+                f"expand parameter accepts only : [True, False], "
+                f"got {expand}"
+            )
 
         # Pandas treats 0 as all
         if n == 0:
