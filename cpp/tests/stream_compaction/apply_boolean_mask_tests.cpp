@@ -169,7 +169,7 @@ TEST_F(ApplyBooleanMask, FixedPointColumnTest)
 
 TEST_F(ApplyBooleanMask, FixedPointLargeColumnTest)
 {
-  cudf::size_type num_rows = 10000;
+  cudf::size_type const num_rows = 10000;
 
   using decimal32_wrapper = cudf::test::fixed_point_column_wrapper<int32_t>;
   using decimal64_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
