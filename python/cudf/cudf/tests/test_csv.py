@@ -518,7 +518,7 @@ def test_csv_reader_float_decimal(tmpdir):
 def test_csv_reader_NaN_values():
 
     names = dtypes = ["float32"]
-    empty_cells = '\n""\n  \n "" \n'
+    empty_cells = '\n""\n'
     default_na_cells = (
         "#N/A\n#N/A N/A\n#NA\n-1.#IND\n"
         "-1.#QNAN\n-NaN\n-nan\n1.#IND\n"
@@ -564,11 +564,15 @@ def test_csv_reader_NaN_values():
         df_int8["0"][idx] is cudf.NA for idx in range(len(df_int8["0"]))
     )
 
-    # data type detection should evaluate the column to object;
-    # for data type detection, cells need to be completely empty,
-    # but some cells in empty_cells contain blank characters and quotes
+    # data type detection should evaluate the column to int8 if all nulls;
     df_obj = read_csv(
         StringIO(all_cells), header=None, na_values=custom_na_values
+    )
+    assert df_obj.dtypes[0] == np.dtype("int8")
+
+    # data type detection should evaluate the column to object if some nulls;
+    df_obj = read_csv(
+        StringIO(all_cells), header=None
     )
     assert df_obj.dtypes[0] == np.dtype("object")
 

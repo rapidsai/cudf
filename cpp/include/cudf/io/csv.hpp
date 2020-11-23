@@ -117,7 +117,8 @@ class csv_reader_options {
   // Additional values to recognize as boolean false values
   std::vector<std::string> _false_values{"False", "FALSE", "false"};
   // Additional values to recognize as null values
-  std::vector<std::string> _na_values{"#N/A",
+  std::vector<std::string> _na_values{"",
+                                      "#N/A",
                                       "#N/A N/A",
                                       "#NA",
                                       "-1.#IND",
