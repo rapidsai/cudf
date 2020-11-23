@@ -118,6 +118,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_writer_options_builder& column_chunks_file_path(
             string column_chunks_file_path
         ) except +
+        parquet_writer_options_builder& int96_timestamps(
+            bool enabled
+        ) except +
 
         parquet_writer_options build() except +
 

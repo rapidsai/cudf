@@ -20,14 +20,16 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/reduction_functions.hpp>
 
-#include <thrust/binary_search.h>
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <thrust/binary_search.h>
 
 std::unique_ptr<cudf::scalar> cudf::reduction::nth_element(column_view const& col,
                                                            size_type n,
                                                            null_policy null_handling,
-                                                           rmm::mr::device_memory_resource* mr,
-                                                           cudaStream_t stream)
+                                                           rmm::cuda_stream_view stream,
+                                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(n >= -col.size() and n < col.size(), "Index out of bounds");
   auto wrap_n = [n](size_type size) { return (n < 0 ? size + n : n); };
@@ -41,11 +43,12 @@ std::unique_ptr<cudf::scalar> cudf::reduction::nth_element(column_view const& co
                                       [] __device__(auto b) { return static_cast<size_type>(b); });
     rmm::device_uvector<size_type> null_skipped_index(col.size(), stream);
     // null skipped index for valids only.
-    thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
+    thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
                            bitmask_iterator,
                            bitmask_iterator + col.size(),
                            null_skipped_index.begin());
-    auto n_pos          = thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
+
+    auto n_pos          = thrust::upper_bound(rmm::exec_policy(stream)->on(stream.value()),
                                      null_skipped_index.begin(),
                                      null_skipped_index.end(),
                                      n);

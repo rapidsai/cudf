@@ -139,7 +139,7 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys,
     }
     // If the new type does not match, then convert the data.
     cudf::column_view cast_view{cudf::data_type{indices_type}, indices_size, contents.data->data()};
-    return cudf::detail::cast(cast_view, new_type, mr, stream);
+    return cudf::detail::cast(cast_view, new_type, stream, mr);
   }();
 
   return make_dictionary_column(std::move(keys),
