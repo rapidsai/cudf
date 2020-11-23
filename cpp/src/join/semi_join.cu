@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include <hash/concurrent_unordered_map.cuh>
+#include <join/join_common_utils.hpp>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -22,8 +25,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <hash/concurrent_unordered_map.cuh>
-#include <join/join_common_utils.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {
@@ -155,7 +157,7 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
   // rebuild left table for call to gather
   auto const left_updated = scatter_columns(left_selected, left_on, left);
   return cudf::detail::gather(
-    left_updated.select(return_columns), gather_map.begin(), gather_map_end, false, mr);
+    left_updated.select(return_columns), gather_map.begin(), gather_map_end, false, stream, mr);
 }
 }  // namespace detail
 

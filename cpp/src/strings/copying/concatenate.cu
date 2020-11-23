@@ -25,6 +25,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
 #include <thrust/transform_reduce.h>
@@ -62,7 +64,8 @@ struct chars_size_transform {
   }
 };
 
-auto create_strings_device_views(std::vector<column_view> const& views, cudaStream_t stream)
+auto create_strings_device_views(std::vector<column_view> const& views,
+                                 rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   // Assemble contiguous array of device views
@@ -90,12 +93,12 @@ auto create_strings_device_views(std::vector<column_view> const& views, cudaStre
   // error: the default constructor of "cudf::column_device_view" cannot be
   // referenced -- it is a deleted function
   auto d_partition_offsets = rmm::device_vector<size_t>(views.size() + 1);
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
+  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                     device_views_ptr,
                     device_views_ptr + views.size(),
                     std::next(d_partition_offsets.begin()),
                     chars_size_transform{});
-  thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
+  thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
                          d_partition_offsets.cbegin(),
                          d_partition_offsets.cend(),
                          d_partition_offsets.begin());
@@ -202,8 +205,8 @@ __global__ void fused_concatenate_string_chars_kernel(column_device_view const* 
 }
 
 std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
-                                    rmm::mr::device_memory_resource* mr,
-                                    cudaStream_t stream)
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   // Compute output sizes
@@ -215,7 +218,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
   auto const total_bytes          = std::get<5>(device_views);
   auto const offsets_count        = strings_count + 1;
 
-  if (strings_count == 0) { return make_empty_strings_column(mr, stream); }
+  if (strings_count == 0) { return make_empty_strings_column(mr, stream.value()); }
 
   CUDF_EXPECTS(offsets_count <= std::numeric_limits<size_type>::max(),
                "total number of strings is too large for cudf column");
@@ -251,7 +254,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
     cudf::detail::grid_1d config(offsets_count, block_size);
     auto const kernel = has_nulls ? fused_concatenate_string_offset_kernel<block_size, true>
                                   : fused_concatenate_string_offset_kernel<block_size, false>;
-    kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
+    kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
       d_views,
       d_input_offsets.data().get(),
       d_partition_offsets.data().get(),
@@ -271,7 +274,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
       constexpr size_type block_size{256};
       cudf::detail::grid_1d config(total_bytes, block_size);
       auto const kernel = fused_concatenate_string_chars_kernel;
-      kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream>>>(
+      kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
         d_views,
         d_partition_offsets.data().get(),
         static_cast<size_type>(columns.size()),
@@ -293,7 +296,8 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
         // copy the chars column data
         auto d_chars    = chars_child.data<char>() + bytes_offset;
         size_type bytes = thrust::device_pointer_cast(d_offsets)[column_size] - bytes_offset;
-        CUDA_TRY(cudaMemcpyAsync(d_new_chars, d_chars, bytes, cudaMemcpyDeviceToDevice, stream));
+        CUDA_TRY(
+          cudaMemcpyAsync(d_new_chars, d_chars, bytes, cudaMemcpyDeviceToDevice, stream.value()));
 
         // get ready for the next column
         d_new_chars += bytes;

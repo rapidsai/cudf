@@ -55,8 +55,8 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
                                            indices_view,
                                            cudf::detail::out_of_bounds_policy::NULLIFY,
                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                           mr,
-                                           stream)
+                                           stream,
+                                           mr)
                         ->release();
   std::unique_ptr<column> output_column(std::move(sliced_table.front()));
   if (output_column->null_count() == 0)

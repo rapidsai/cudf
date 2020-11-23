@@ -22,35 +22,37 @@
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace detail {
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
 {
-  return sorted_order<false>(input, column_order, null_precedence, mr, stream);
+  return sorted_order<false>(input, column_order, null_precedence, stream, mr);
 }
 
 std::unique_ptr<table> sort_by_key(table_view const& values,
                                    table_view const& keys,
                                    std::vector<order> const& column_order,
                                    std::vector<null_order> const& null_precedence,
-                                   rmm::mr::device_memory_resource* mr,
-                                   cudaStream_t stream)
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(values.num_rows() == keys.num_rows(),
                "Mismatch in number of rows for values and keys");
 
-  auto sorted_order = detail::sorted_order(keys, column_order, null_precedence, mr, stream);
+  auto sorted_order = detail::sorted_order(keys, column_order, null_precedence, stream, mr);
 
   return detail::gather(values,
                         sorted_order->view(),
                         detail::out_of_bounds_policy::NULLIFY,
                         detail::negative_index_policy::NOT_ALLOWED,
-                        mr,
-                        stream);
+                        stream,
+                        mr);
 }
 
 }  // namespace detail
@@ -61,7 +63,7 @@ std::unique_ptr<column> sorted_order(table_view input,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sorted_order(input, column_order, null_precedence, mr);
+  return detail::sorted_order(input, column_order, null_precedence, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<table> sort(table_view input,
@@ -70,7 +72,8 @@ std::unique_ptr<table> sort(table_view input,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sort_by_key(input, input, column_order, null_precedence, mr);
+  return detail::sort_by_key(
+    input, input, column_order, null_precedence, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<table> sort_by_key(table_view const& values,
@@ -80,7 +83,8 @@ std::unique_ptr<table> sort_by_key(table_view const& values,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sort_by_key(values, keys, column_order, null_precedence, mr);
+  return detail::sort_by_key(
+    values, keys, column_order, null_precedence, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

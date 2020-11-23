@@ -850,7 +850,7 @@ struct pair_accessor {
    */
   pair_accessor(column_device_view const& _col) : col{_col}
   {
-    CUDF_EXPECTS(data_type(type_to_id<T>()) == col.type(), "the data type mismatch");
+    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
     if (has_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
   }
 
