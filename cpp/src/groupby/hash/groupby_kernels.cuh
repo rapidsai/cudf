@@ -62,7 +62,7 @@ namespace hash {
  * bitmask where bit `i` indicates the presence of a null value in row `i`.
  * @tparam Map The type of the hash map
  */
-template <typename Map>
+template <bool skip_rows_with_nulls, typename Map>
 struct compute_single_pass_aggs {
   Map map;
   size_type num_keys;
@@ -70,7 +70,6 @@ struct compute_single_pass_aggs {
   mutable_table_device_view output_values;
   aggregation::Kind const* __restrict__ aggs;
   bitmask_type const* __restrict__ row_bitmask;
-  bool skip_rows_with_nulls;
 
   /**
    * @brief Construct a new compute_single_pass_aggs functor object
@@ -91,15 +90,13 @@ struct compute_single_pass_aggs {
                            table_device_view input_values,
                            mutable_table_device_view output_values,
                            aggregation::Kind const* aggs,
-                           bitmask_type const* row_bitmask,
-                           bool skip_rows_with_nulls)
+                           bitmask_type const* row_bitmask)
     : map(map),
       num_keys(num_keys),
       input_values(input_values),
       output_values(output_values),
       aggs(aggs),
-      row_bitmask(row_bitmask),
-      skip_rows_with_nulls(skip_rows_with_nulls)
+      row_bitmask(row_bitmask)
   {
   }
 
