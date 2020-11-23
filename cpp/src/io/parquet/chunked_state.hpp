@@ -53,13 +53,19 @@ struct pq_chunked_state {
   /// only used in the write_chunked() case. copied from the (optionally) user supplied
   /// argument to write_parquet_chunked_begin()
   bool single_write_mode;
+  ///  timestamps should be written as int96 types
+  bool int96_timestamps;
 
   pq_chunked_state() = default;
 
   pq_chunked_state(table_metadata const* metadata,
                    SingleWriteMode mode         = SingleWriteMode::NO,
+                   bool write_int96_timestamps  = false,
                    rmm::cuda_stream_view stream = rmm::cuda_stream_default)
-    : stream{stream}, user_metadata{metadata}, single_write_mode{mode == SingleWriteMode::YES}
+    : stream{stream},
+      user_metadata{metadata},
+      single_write_mode{mode == SingleWriteMode::YES},
+      int96_timestamps(write_int96_timestamps)
   {
   }
 };

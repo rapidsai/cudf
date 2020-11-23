@@ -161,7 +161,7 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
 
   _group_offsets = std::make_unique<index_vector>(num_keys(stream) + 1);
 
-  auto device_input_table = table_device_view::create(_keys, stream);
+  auto device_input_table = table_device_view::create(_keys, stream.value());
   auto sorted_order       = key_sort_order().data<size_type>();
   decltype(_group_offsets->begin()) result_end;
   auto exec = rmm::exec_policy(stream);
@@ -243,8 +243,7 @@ column_view sort_groupby_helper::keys_bitmask_column(rmm::cuda_stream_view strea
 {
   if (_keys_bitmask_column) return _keys_bitmask_column->view();
 
-  auto row_bitmask =
-    cudf::detail::bitmask_and(_keys, stream, rmm::mr::get_current_device_resource());
+  auto row_bitmask = cudf::detail::bitmask_and(_keys, stream);
 
   _keys_bitmask_column = make_numeric_column(data_type(type_id::INT8),
                                              _keys.num_rows(),

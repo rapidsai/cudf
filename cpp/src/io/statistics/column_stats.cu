@@ -163,7 +163,7 @@ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Stora
     uint32_t r                = i + t;
     uint32_t row              = r + s->group.start_row;
     const uint32_t *valid_map = s->col.valid_map_base;
-    uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_rows)
+    uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_values)
                           ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1
                           : 0;
     if (is_valid) {
@@ -248,7 +248,7 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
     uint32_t r                = i + t;
     uint32_t row              = r + s->group.start_row;
     const uint32_t *valid_map = s->col.valid_map_base;
-    uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_rows)
+    uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_values)
                           ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1
                           : 0;
     if (is_valid) {
@@ -328,7 +328,7 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &s
     uint32_t r                = i + t;
     uint32_t row              = r + s->group.start_row;
     const uint32_t *valid_map = s->col.valid_map_base;
-    uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_rows)
+    uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_values)
                           ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1
                           : 0;
     if (is_valid) {
@@ -756,16 +756,13 @@ __global__ void __launch_bounds__(block_size, 1)
  * @param[in] groups Statistics row groups [num_chunks]
  * @param[in] num_chunks Number of chunks & rowgroups
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t GatherColumnStatistics(statistics_chunk *chunks,
-                                   const statistics_group *groups,
-                                   uint32_t num_chunks,
-                                   rmm::cuda_stream_view stream)
+ */
+void GatherColumnStatistics(statistics_chunk *chunks,
+                            const statistics_group *groups,
+                            uint32_t num_chunks,
+                            rmm::cuda_stream_view stream)
 {
   gpuGatherColumnStatistics<1024><<<num_chunks, 1024, 0, stream.value()>>>(chunks, groups);
-  return cudaSuccess;
 }
 
 /**
@@ -776,18 +773,15 @@ cudaError_t GatherColumnStatistics(statistics_chunk *chunks,
  * @param[in] groups Statistics groups [num_chunks]
  * @param[in] num_chunks Number of chunks & groups
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t MergeColumnStatistics(statistics_chunk *chunks_out,
-                                  const statistics_chunk *chunks_in,
-                                  const statistics_merge_group *groups,
-                                  uint32_t num_chunks,
-                                  rmm::cuda_stream_view stream)
+ */
+void MergeColumnStatistics(statistics_chunk *chunks_out,
+                           const statistics_chunk *chunks_in,
+                           const statistics_merge_group *groups,
+                           uint32_t num_chunks,
+                           rmm::cuda_stream_view stream)
 {
   gpuMergeColumnStatistics<1024>
     <<<num_chunks, 1024, 0, stream.value()>>>(chunks_out, chunks_in, groups);
-  return cudaSuccess;
 }
 
 }  // namespace io

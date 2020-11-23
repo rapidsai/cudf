@@ -108,6 +108,7 @@ class writer {
    * @param metadata Table metadata and column names
    * @param return_filemetadata If true, return the raw file metadata
    * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
+   * @param int96_timestamps If true, write timestamps as INT96 values
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   std::unique_ptr<std::vector<uint8_t>> write(
@@ -115,6 +116,7 @@ class writer {
     const table_metadata* metadata            = nullptr,
     bool return_filemetadata                  = false,
     const std::string column_chunks_file_path = "",
+    bool int96_timestamps                     = false,
     rmm::cuda_stream_view stream              = rmm::cuda_stream_default);
 
   /**

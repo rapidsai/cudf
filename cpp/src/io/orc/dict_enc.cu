@@ -435,18 +435,15 @@ __global__ void __launch_bounds__(block_size)
  * @param[in] num_columns Number of columns
  * @param[in] num_rowgroups Number of row groups
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t InitDictionaryIndices(DictionaryChunk *chunks,
-                                  uint32_t num_columns,
-                                  uint32_t num_rowgroups,
-                                  rmm::cuda_stream_view stream)
+ */
+void InitDictionaryIndices(DictionaryChunk *chunks,
+                           uint32_t num_columns,
+                           uint32_t num_rowgroups,
+                           rmm::cuda_stream_view stream)
 {
   dim3 dim_block(512, 1);  // 512 threads per chunk
   dim3 dim_grid(num_columns, num_rowgroups);
   gpuInitDictionaryIndices<512><<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_columns);
-  return cudaSuccess;
 }
 
 /**
@@ -459,16 +456,14 @@ cudaError_t InitDictionaryIndices(DictionaryChunk *chunks,
  * @param[in] num_rowgroups Number of row groups
  * @param[in] num_columns Number of columns
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t BuildStripeDictionaries(StripeDictionary *stripes,
-                                    StripeDictionary *stripes_host,
-                                    DictionaryChunk const *chunks,
-                                    uint32_t num_stripes,
-                                    uint32_t num_rowgroups,
-                                    uint32_t num_columns,
-                                    rmm::cuda_stream_view stream)
+ */
+void BuildStripeDictionaries(StripeDictionary *stripes,
+                             StripeDictionary *stripes_host,
+                             DictionaryChunk const *chunks,
+                             uint32_t num_stripes,
+                             uint32_t num_rowgroups,
+                             uint32_t num_columns,
+                             rmm::cuda_stream_view stream)
 {
   dim3 dim_block(1024, 1);  // 1024 threads per chunk
   dim3 dim_grid_build(num_columns, num_stripes);
@@ -493,7 +488,6 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes,
   }
   gpuBuildStripeDictionaries<1024>
     <<<dim_grid_build, dim_block, 0, stream.value()>>>(stripes, num_columns);
-  return cudaSuccess;
 }
 
 }  // namespace gpu

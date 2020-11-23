@@ -109,7 +109,7 @@ public:
 
   bool supports_device_write() const override { return true; }
 
-  void device_write(void const *gpu_data, size_t size, rmm::cuda_stream_view stream) {
+  void device_write(void const *gpu_data, size_t size, rmm::cuda_stream_view stream) override {
     JNIEnv *env = cudf::jni::get_jni_env(jvm);
     size_t left_to_copy = size;
     const char *copy_from = static_cast<const char *>(gpu_data);

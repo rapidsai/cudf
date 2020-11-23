@@ -64,7 +64,7 @@ struct in_place_fill_range_dispatch {
 
   template <typename T>
   std::enable_if_t<cudf::is_fixed_width<T>() && not cudf::is_fixed_point<T>(), void> operator()(
-    cudf::size_type begin, cudf::size_type end, cudaStream_t stream = 0)
+    cudf::size_type begin, cudf::size_type end, rmm::cuda_stream_view stream)
   {
     in_place_fill<T>(destination, begin, end, value, stream);
   }
@@ -174,16 +174,14 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
   }
 
   // add the scalar to get the output dictionary key-set
-  auto scalar_column =
-    cudf::make_column_from_scalar(value, 1, stream, rmm::mr::get_current_device_resource());
+  auto scalar_column = cudf::make_column_from_scalar(value, 1, stream);
   auto target_matched =
     cudf::dictionary::detail::add_keys(target, scalar_column->view(), stream, mr);
   cudf::column_view const target_indices =
     cudf::dictionary_column_view(target_matched->view()).get_indices_annotated();
 
   // get the index of the key just added
-  auto index_of_value = cudf::dictionary::detail::get_index(
-    target_matched->view(), value, stream, rmm::mr::get_current_device_resource());
+  auto index_of_value = cudf::dictionary::detail::get_index(target_matched->view(), value, stream);
   // now call fill using just the indices column and the new index
   auto new_indices =
     cudf::type_dispatcher(target_indices.type(),

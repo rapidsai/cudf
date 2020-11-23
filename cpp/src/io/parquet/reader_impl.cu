@@ -803,7 +803,7 @@ size_t reader::impl::count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc> 
   size_t total_pages = 0;
 
   chunks.host_to_device(stream);
-  CUDA_TRY(gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), stream));
+  gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), stream);
   chunks.device_to_host(stream, true);
 
   for (size_t c = 0; c < chunks.size(); c++) {
@@ -829,7 +829,7 @@ void reader::impl::decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc> &
   }
 
   chunks.host_to_device(stream);
-  CUDA_TRY(gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), stream));
+  gpu::DecodePageHeaders(chunks.device_ptr(), chunks.size(), stream);
   pages.device_to_host(stream, true);
 }
 
@@ -1098,8 +1098,8 @@ void reader::impl::preprocess_columns(hostdevice_vector<gpu::ColumnChunkDesc> &c
     create_columns(_output_columns);
   } else {
     // preprocess per-nesting level sizes by page
-    CUDA_TRY(gpu::PreprocessColumnData(
-      pages, chunks, _input_columns, _output_columns, total_rows, min_row, stream, _mr));
+    gpu::PreprocessColumnData(
+      pages, chunks, _input_columns, _output_columns, total_rows, min_row, stream, _mr);
     stream.synchronize();
   }
 }
@@ -1216,10 +1216,10 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
   chunks.host_to_device(stream);
 
   if (total_str_dict_indexes > 0) {
-    CUDA_TRY(gpu::BuildStringDictionaryIndex(chunks.device_ptr(), chunks.size(), stream));
+    gpu::BuildStringDictionaryIndex(chunks.device_ptr(), chunks.size(), stream);
   }
 
-  CUDA_TRY(gpu::DecodePageData(pages, chunks, total_rows, min_row, stream));
+  gpu::DecodePageData(pages, chunks, total_rows, min_row, stream);
   pages.device_to_host(stream);
   page_nesting.device_to_host(stream);
   stream.synchronize();

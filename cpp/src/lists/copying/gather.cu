@@ -20,7 +20,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/binary_search.h>
-#include <thrust/iterator/iterator_facade.h>
 
 namespace cudf {
 namespace lists {

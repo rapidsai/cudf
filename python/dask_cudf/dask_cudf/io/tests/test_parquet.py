@@ -1,4 +1,5 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
+import glob
 import math
 import os
 
@@ -13,6 +14,13 @@ from dask.utils import natural_sort_key, parse_bytes
 import cudf
 
 import dask_cudf
+
+# Check if create_metadata_file is supported by
+# the current dask.dataframe version
+need_create_meta = pytest.mark.skipif(
+    dask_cudf.io.parquet.create_metadata_file is None,
+    reason="Need create_metadata_file support in dask.dataframe.",
+)
 
 nrows = 40
 npartitions = 15
@@ -367,3 +375,76 @@ def test_row_groups_per_part(tmpdir, row_groups, index):
     dd.assert_eq(ddf1, ddf2, check_divisions=False)
 
     assert ddf2.npartitions == npartitions_expected
+
+
+@need_create_meta
+@pytest.mark.parametrize("partition_on", [None, "a"])
+def test_create_metadata_file(tmpdir, partition_on):
+
+    tmpdir = str(tmpdir)
+
+    # Write ddf without a _metadata file
+    df1 = cudf.DataFrame({"b": range(100), "a": ["A", "B", "C", "D"] * 25})
+    df1.index.name = "myindex"
+    ddf1 = dask_cudf.from_cudf(df1, npartitions=10)
+    ddf1.to_parquet(
+        tmpdir, write_metadata_file=False, partition_on=partition_on,
+    )
+
+    # Add global _metadata file
+    if partition_on:
+        fns = glob.glob(os.path.join(tmpdir, partition_on + "=*/*.parquet"))
+    else:
+        fns = glob.glob(os.path.join(tmpdir, "*.parquet"))
+    dask_cudf.io.parquet.create_metadata_file(
+        fns, split_every=3,  # Force tree reduction
+    )
+
+    # Check that we can now read the ddf
+    # with the _metadata file present
+    ddf2 = dask_cudf.read_parquet(
+        tmpdir,
+        gather_statistics=True,
+        split_row_groups=False,
+        index="myindex",
+    )
+    if partition_on:
+        ddf1 = df1.sort_values("b")
+        ddf2 = ddf2.compute().sort_values("b")
+        ddf2.a = ddf2.a.astype("object")
+    dd.assert_eq(ddf1, ddf2)
+
+
+@need_create_meta
+def test_create_metadata_file_inconsistent_schema(tmpdir):
+
+    # NOTE: This test demonstrates that the CudfEngine
+    # can be used to generate a global `_metadata` file
+    # even if there are inconsistent schemas in the dataset.
+
+    # Write file 0
+    df0 = pd.DataFrame({"a": [None] * 10, "b": range(10)})
+    p0 = os.path.join(tmpdir, "part.0.parquet")
+    df0.to_parquet(p0, engine="pyarrow")
+
+    # Write file 1
+    b = list(range(10))
+    b[1] = None
+    df1 = pd.DataFrame({"a": range(10), "b": b})
+    p1 = os.path.join(tmpdir, "part.1.parquet")
+    df1.to_parquet(p1, engine="pyarrow")
+
+    with pytest.raises(RuntimeError):
+        # Pyarrow will fail to aggregate metadata
+        # if gather_statistics=True
+        dask_cudf.read_parquet(str(tmpdir), gather_statistics=True,).compute()
+
+    # Add global metadata file.
+    # Dask-CuDF can do this without requiring schema
+    # consistency.  Once the _metadata file is avaible,
+    # parsing metadata should no longer be a problem
+    dask_cudf.io.parquet.create_metadata_file([p0, p1])
+
+    # Check that we can now read the ddf
+    # with the _metadata file present
+    dask_cudf.read_parquet(str(tmpdir), gather_statistics=True,).compute()

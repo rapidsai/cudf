@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "rmm/cuda_stream_view.hpp"
 #include "sort_impl.cuh"
 
 #include <cudf/column/column.hpp>
@@ -22,6 +21,8 @@
 #include <cudf/detail/sorting.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {

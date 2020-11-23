@@ -138,7 +138,7 @@ std::unique_ptr<column> make_strings_column(const rmm::device_vector<char>& stri
 {
   CUDF_FUNC_RANGE();
   size_type num_strings = offsets.size() - 1;
-  if (num_strings == 0) return strings::detail::make_empty_strings_column(stream);
+  if (num_strings == 0) return strings::detail::make_empty_strings_column(stream, mr);
 
   CUDF_EXPECTS(null_count < num_strings, "null strings column not yet supported");
   if (null_count > 0) {

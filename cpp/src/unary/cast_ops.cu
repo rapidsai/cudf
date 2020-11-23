@@ -172,18 +172,18 @@ struct device_cast {
 template <typename T, typename std::enable_if_t<is_fixed_point<T>()>* = nullptr>
 std::unique_ptr<column> rescale(column_view input,
                                 numeric::scale_type scale,
-                                rmm::mr::device_memory_resource* mr,
-                                cudaStream_t stream)
+                                rmm::cuda_stream_view stream,
+                                rmm::mr::device_memory_resource* mr)
 {
   using namespace numeric;
 
   if (input.type().scale() > scale) {
     auto const scalar = make_fixed_point_scalar<T>(0, scale_type{scale});
-    return detail::binary_operation(input, *scalar, binary_operator::ADD, {}, mr, stream);
+    return detail::binary_operation(input, *scalar, binary_operator::ADD, {}, stream, mr);
   } else {
     auto const diff   = input.type().scale() - scale;
     auto const scalar = make_fixed_point_scalar<T>(std::pow(10, -diff), scale_type{diff});
-    return detail::binary_operation(input, *scalar, binary_operator::DIV, {}, mr, stream);
+    return detail::binary_operation(input, *scalar, binary_operator::DIV, {}, stream, mr);
   }
 };
 
@@ -286,12 +286,12 @@ struct dispatch_unary_cast_to {
     typename std::enable_if_t<cudf::is_fixed_point<SourceT>() && cudf::is_fixed_point<TargetT>() &&
                               std::is_same<SourceT, TargetT>::value>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     if (input.type() == type) return std::make_unique<column>(input);  // TODO add test for this
 
-    return detail::rescale<TargetT>(input, numeric::scale_type{type.scale()}, mr, stream);
+    return detail::rescale<TargetT>(input, numeric::scale_type{type.scale()}, stream, mr);
   }
 
   template <
@@ -300,8 +300,8 @@ struct dispatch_unary_cast_to {
     typename std::enable_if_t<cudf::is_fixed_point<SourceT>() && cudf::is_fixed_point<TargetT>() &&
                               not std::is_same<SourceT, TargetT>::value>* = nullptr>
   std::unique_ptr<column> operator()(data_type type,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     using namespace numeric;
 
@@ -318,14 +318,14 @@ struct dispatch_unary_cast_to {
 
     mutable_column_view output_mutable = *temporary;
 
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
+    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                       input.begin<SourceDeviceT>(),
                       input.end<SourceDeviceT>(),
                       output_mutable.begin<TargetDeviceT>(),
                       device_cast<SourceDeviceT, TargetDeviceT>{});
 
     // clearly there is a more efficient way to do this, can optimize in the future
-    return rescale<TargetT>(*temporary, numeric::scale_type{type.scale()}, mr, stream);
+    return rescale<TargetT>(*temporary, numeric::scale_type{type.scale()}, stream, mr);
   }
 
   template <typename TargetT,

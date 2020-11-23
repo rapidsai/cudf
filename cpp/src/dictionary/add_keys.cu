@@ -57,8 +57,8 @@ std::unique_ptr<column> add_keys(
   CUDF_EXPECTS(new_keys.type() == old_keys.type(), "Keys must be the same type");
   // first, concatenate the keys together
   // [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
-  auto combined_keys = cudf::detail::concatenate(
-    std::vector<column_view>{old_keys, new_keys}, stream, rmm::mr::get_current_device_resource());
+  auto combined_keys =
+    cudf::detail::concatenate(std::vector<column_view>{old_keys, new_keys}, stream);
   // sort and remove any duplicates from the combined keys
   // drop_duplicates([a,b,c,d,f,d,b,e]) = [a,b,c,d,e,f]
   auto table_keys = cudf::detail::drop_duplicates(table_view{{combined_keys->view()}},
