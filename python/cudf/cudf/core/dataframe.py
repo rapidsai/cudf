@@ -398,18 +398,24 @@ class DataFrame(Frame, Serializable):
             index = as_index(index)
 
         self._index = as_index(index)
-        data = list(itertools.zip_longest(*data))
 
-        if columns is not None and len(data) == 0:
-            data = [
-                cudf.core.column.column_empty(row_count=0, dtype=None)
-                for _ in columns
-            ]
+        # list-of-dicts case
+        if len(data) > 0 and isinstance(data[0], dict):
+            data = DataFrame.from_pandas(pd.DataFrame(data))
+            self._data = data._data
+        else:
+            data = list(itertools.zip_longest(*data))
 
-        for col_name, col in enumerate(data):
-            self._data[col_name] = column.as_column(col)
+            if columns is not None and len(data) == 0:
+                data = [
+                    cudf.core.column.column_empty(row_count=0, dtype=None)
+                    for _ in columns
+                ]
 
-        self.columns = columns
+            for col_name, col in enumerate(data):
+                self._data[col_name] = column.as_column(col)
+        if columns:
+            self.columns = columns
 
     def _init_from_dict_like(self, data, index=None, columns=None):
         data = data.copy()
@@ -689,11 +695,10 @@ class DataFrame(Frame, Serializable):
         if isinstance(arg, DataFrame):
             # not handling set_item where arg = df & value = df
             if isinstance(value, DataFrame):
-                msg = (
+                raise TypeError(
                     f"__setitem__ with arg = {type(value)} and "
                     f"value = {type(arg)} is not supported"
                 )
-                raise TypeError(msg)
             else:
                 for col_name in self._data:
                     scatter_map = arg[col_name]
@@ -782,13 +787,12 @@ class DataFrame(Frame, Serializable):
                     )
                 else:
                     for col in arg:
-                        # we will raise a key error if col not in dataframe
-                        # this behavior will make it
-                        # consistent to pandas >0.21.0
-                        if not is_scalar(value):
-                            self._data[col] = column.as_column(value)
+                        if is_scalar(value):
+                            self._data[col] = column.full(
+                                size=len(self), fill_value=value
+                            )
                         else:
-                            self._data[col][:] = value
+                            self._data[col] = column.as_column(value)
 
         else:
             raise TypeError(
@@ -1367,7 +1371,7 @@ class DataFrame(Frame, Serializable):
                         l_opr = self[col]
                 result[col] = op(l_opr, r_opr)
 
-        elif isinstance(other, numbers.Number):
+        elif isinstance(other, (numbers.Number, cudf.Scalar)):
             for col in self._data:
                 result[col] = op(self[col], other)
         else:
@@ -4904,6 +4908,9 @@ class DataFrame(Frame, Serializable):
         """
         if not isinstance(dataframe, pd.DataFrame):
             raise TypeError("not a pandas.DataFrame")
+
+        if not dataframe.columns.is_unique:
+            raise ValueError("Duplicate column names are not allowed")
 
         df = cls()
         # Set columns

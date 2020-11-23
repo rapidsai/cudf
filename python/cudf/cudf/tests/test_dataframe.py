@@ -760,12 +760,13 @@ def test_dataframe_to_string():
     densearray = masked.to_array()
     np.testing.assert_equal(data[validids], densearray)
     # valid position is corret
+
     for i in validids:
         assert data[i] == values[i]
     # null position is correct
     for i in range(len(values)):
         if i not in validids:
-            assert values[i] is None
+            assert values[i] is gd.NA
 
     pd.options.display.max_rows = 10
     got = df.to_string()
@@ -7891,6 +7892,24 @@ def test_dataframe_to_pandas_nullable_dtypes(df, expected_pdf):
     assert_eq(actual_pdf, expected_pdf)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        [{"a": 1, "b": 2, "c": 3}, {"a": 4, "b": 5, "c": 6}],
+        [{"a": 1, "b": 2, "c": None}, {"a": None, "b": 5, "c": 6}],
+        [{"a": 1, "b": 2}, {"a": 1, "b": 5, "c": 6}],
+        [{"a": 1, "b": 2}, {"b": 5, "c": 6}],
+        [{}, {"a": 1, "b": 5, "c": 6}],
+        [{"a": 1, "b": 2, "c": 3}, {"a": 4.5, "b": 5.5, "c": 6.5}],
+    ],
+)
+def test_dataframe_init_from_list_of_dicts(data):
+    expect = pd.DataFrame(data)
+    got = gd.DataFrame(data)
+
+    assert_eq(expect, got)
+
+
 def test_dataframe_pipe():
     pdf = pd.DataFrame()
     gdf = gd.DataFrame()
@@ -7966,3 +7985,13 @@ def test_dataframe_axis1_unsupported_ops(op):
         NotImplementedError, match="Only axis=0 is currently supported."
     ):
         getattr(df, op)(axis=1)
+
+
+def test_dataframe_from_pandas_duplicate_columns():
+    pdf = pd.DataFrame(columns=["a", "b", "c", "a"])
+    pdf["a"] = [1, 2, 3]
+
+    with pytest.raises(
+        ValueError, match="Duplicate column names are not allowed"
+    ):
+        gd.from_pandas(pdf)

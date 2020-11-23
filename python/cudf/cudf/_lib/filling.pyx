@@ -17,17 +17,17 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.table cimport Table
 
 cimport cudf._lib.cpp.filling as cpp_filling
 
 
-def fill_in_place(Column destination, int begin, int end, Scalar value):
+def fill_in_place(Column destination, int begin, int end, DeviceScalar value):
     cdef mutable_column_view c_destination = destination.mutable_view()
     cdef size_type c_begin = <size_type> begin
     cdef size_type c_end = <size_type> end
-    cdef scalar* c_value = value.c_value.get()
+    cdef const scalar* c_value = value.get_raw_ptr()
 
     cpp_filling.fill_in_place(
         c_destination,
@@ -37,11 +37,11 @@ def fill_in_place(Column destination, int begin, int end, Scalar value):
     )
 
 
-def fill(Column destination, int begin, int end, Scalar value):
+def fill(Column destination, int begin, int end, DeviceScalar value):
     cdef column_view c_destination = destination.view()
     cdef size_type c_begin = <size_type> begin
     cdef size_type c_end = <size_type> end
-    cdef scalar* c_value = value.c_value.get()
+    cdef const scalar* c_value = value.get_raw_ptr()
     cdef unique_ptr[column] c_result
 
     with nogil:
@@ -99,10 +99,10 @@ def _repeat_via_size_type(Table inp, size_type count):
     )
 
 
-def sequence(int size, Scalar init, Scalar step):
+def sequence(int size, DeviceScalar init, DeviceScalar step):
     cdef size_type c_size = size
-    cdef scalar* c_init = init.c_value.get()
-    cdef scalar* c_step = step.c_value.get()
+    cdef const scalar* c_init = init.get_raw_ptr()
+    cdef const scalar* c_step = step.get_raw_ptr()
     cdef unique_ptr[column] c_result
 
     with nogil:

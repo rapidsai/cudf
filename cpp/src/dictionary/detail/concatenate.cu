@@ -24,10 +24,13 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+
 #include <thrust/binary_search.h>
 #include <thrust/transform_scan.h>
+
 #include <algorithm>
-#include <rmm/device_uvector.hpp>
 #include <vector>
 
 namespace cudf {
@@ -84,7 +87,7 @@ struct compute_children_offsets_fn {
    * @param stream Stream used for allocating the output rmm::device_uvector.
    * @return Vector of offsets_pair objects for keys and indices.
    */
-  rmm::device_uvector<offsets_pair> create_children_offsets(cudaStream_t stream)
+  rmm::device_uvector<offsets_pair> create_children_offsets(rmm::cuda_stream_view stream)
   {
     std::vector<offsets_pair> offsets(columns_ptrs.size());
     thrust::transform_exclusive_scan(
@@ -105,8 +108,8 @@ struct compute_children_offsets_fn {
                              offsets.data(),
                              offsets.size() * sizeof(offsets_pair),
                              cudaMemcpyHostToDevice,
-                             stream));
-    CUDA_TRY(cudaStreamSynchronize(stream));
+                             stream.value()));
+    stream.synchronize();
     return d_offsets;
   }
 
@@ -130,7 +133,7 @@ struct dispatch_compute_indices {
              column_view const& new_keys,
              offsets_pair const* d_offsets,
              size_type const* d_map_to_keys,
-             cudaStream_t stream,
+             rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr)
   {
     auto keys_view     = column_device_view::create(all_keys, stream);
@@ -155,7 +158,7 @@ struct dispatch_compute_indices {
     auto result_itr =
       cudf::detail::indexalator_factory::make_output_iterator(result->mutable_view());
     // new indices values are computed by matching the concatenated keys to the new key set
-    thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
+    thrust::lower_bound(rmm::exec_policy(stream)->on(stream.value()),
                         new_keys_view->begin<Element>(),
                         new_keys_view->end<Element>(),
                         all_itr,
@@ -173,7 +176,7 @@ struct dispatch_compute_indices {
              column_view const&,
              offsets_pair const*,
              size_type const*,
-             cudaStream_t stream,
+             rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource*)
   {
     CUDF_FAIL("list_view as keys for dictionary not supported");
@@ -183,7 +186,7 @@ struct dispatch_compute_indices {
 }  // namespace
 
 std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
-                                    cudaStream_t stream,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   // exception here is the same behavior as in cudf::concatenate
@@ -201,8 +204,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
     CUDF_EXPECTS(keys.type() == keys_type, "key types of all dictionary columns must match");
     return keys;
   });
-  auto all_keys =
-    cudf::detail::concatenate(keys_views, rmm::mr::get_current_device_resource(), stream);
+  auto all_keys = cudf::detail::concatenate(keys_views, stream);
 
   // sort keys and remove duplicates;
   // this becomes the keys child for the output dictionary column
@@ -210,8 +212,8 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
                                                   std::vector<size_type>{0},
                                                   duplicate_keep_option::KEEP_FIRST,
                                                   null_equality::EQUAL,
-                                                  mr,
-                                                  stream)
+                                                  stream,
+                                                  mr)
                       ->release();
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
 
@@ -222,7 +224,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
     if (dict_view.is_empty()) return column_view{data_type{type_id::UINT32}, 0, nullptr};
     return dict_view.get_indices_annotated();  // nicely includes validity mask and view offset
   });
-  auto all_indices        = cudf::detail::concatenate(indices_views, mr, stream);
+  auto all_indices        = cudf::detail::concatenate(indices_views, stream, mr);
   auto const indices_size = all_indices->size();
 
   // build a vector of values to map the old indices to the concatenated keys
@@ -234,7 +236,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
                                                      });
   // the indices offsets (pair.second) are for building the map
   thrust::lower_bound(
-    rmm::exec_policy(stream)->on(stream),
+    rmm::exec_policy(stream)->on(stream.value()),
     children_offsets.begin() + 1,
     children_offsets.end(),
     indices_itr,

@@ -14,15 +14,26 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
-#include <cudf/structs/structs_column_view.hpp>
-#include "cudf/utilities/error.hpp"
+#pragma once
+
+#include <cudf/types.hpp>
 
 namespace cudf {
+namespace io {
 
-structs_column_view::structs_column_view(column_view const& rhs) : column_view{rhs}
-{
-  CUDF_EXPECTS(type().id() == type_id::STRUCT, "structs_column_view only supports struct columns");
-}
+/**
+ * @brief Per-column histogram struct containing detected occurrences of each dtype
+ */
+struct column_type_histogram {
+  cudf::size_type float_count;
+  cudf::size_type datetime_count;
+  cudf::size_type string_count;
+  cudf::size_type negative_small_int_count;
+  cudf::size_type positive_small_int_count;
+  cudf::size_type big_int_count;
+  cudf::size_type bool_count;
+  cudf::size_type null_count;
+};
 
+}  // namespace io
 }  // namespace cudf

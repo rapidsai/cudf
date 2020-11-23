@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/unary.hpp>
@@ -25,6 +26,7 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -43,7 +45,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
   CUDF_EXPECTS(input_column.type().id() != type_id::DICTIONARY32,
                "cannot encode a dictionary from a dictionary");
 
-  auto codified       = cudf::detail::encode(cudf::table_view({input_column}), mr, stream);
+  auto codified       = cudf::detail::encode(cudf::table_view({input_column}), stream, mr);
   auto keys_table     = std::move(codified.first);
   auto indices_column = std::move(codified.second);
   auto keys_column    = std::move(keys_table->release().front());
@@ -58,13 +60,14 @@ std::unique_ptr<column> encode(column_view const& input_column,
 
   // the encode() returns INT32 for indices
   if (indices_column->type().id() != indices_type.id())
-    indices_column = cudf::detail::cast(indices_column->view(), indices_type, mr, stream);
+    indices_column = cudf::detail::cast(indices_column->view(), indices_type, stream, mr);
 
   // create column with keys_column and indices_column
-  return make_dictionary_column(std::move(keys_column),
-                                std::move(indices_column),
-                                copy_bitmask(input_column, stream, mr),
-                                input_column.null_count());
+  return make_dictionary_column(
+    std::move(keys_column),
+    std::move(indices_column),
+    cudf::detail::copy_bitmask(input_column, rmm::cuda_stream_view{stream}, mr),
+    input_column.null_count());
 }
 
 /**

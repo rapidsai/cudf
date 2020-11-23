@@ -21,18 +21,17 @@ package ai.rapids.cudf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
-
 /**
  * A class that holds Host side Column Vector APIs and the OffHeapState.
  * Any children of a HostColumnVector will be instantiated via this class.
  */
-public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> {
+public class HostColumnVectorCore implements AutoCloseable {
 
   private static final Logger log = LoggerFactory.getLogger(HostColumnVector.class);
 
@@ -64,14 +63,14 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * Returns the data buffer for a given host side column vector
    */
-  HostMemoryBuffer getData() {
+  public HostMemoryBuffer getData() {
     return offHeap.data;
   }
 
   /**
    * Returns the validity buffer for a given host side column vector
    */
-  HostMemoryBuffer getValidity() {
+  public HostMemoryBuffer getValidity() {
     return offHeap.valid;
   }
 
@@ -82,29 +81,8 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
     return offHeap.offsets;
   }
 
-  @Override
-  public long getColumnViewAddress() {
-    throw new IllegalStateException("getColumnViewAddress is not supported on Host side");
-  }
-
-  @Override
-  public ColumnViewAccess<HostMemoryBuffer> getChildColumnViewAccess(int childIndex) {
+  public HostColumnVectorCore getChildColumnView(int childIndex) {
     return getNestedChildren().get(childIndex);
-  }
-
-  @Override
-  public HostMemoryBuffer getDataBuffer() {
-    return offHeap.data;
-  }
-
-  @Override
-  public HostMemoryBuffer getOffsetBuffer() {
-    return offHeap.offsets;
-  }
-
-  @Override
-  public HostMemoryBuffer getValidityBuffer() {
-    return offHeap.valid;
   }
 
   /**
@@ -127,35 +105,15 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   }
 
   /**
-   * Get the data type of this column
-   * @return DType of the column
-   */
-  @Override
-  public DType getDataType() {
-    return type;
-  }
-
-  /**
    * Returns the number of rows for a given host side column vector
    */
-  @Override
   public long getRowCount() {
-    return rows;
-  }
-
-  /**
-   * Returns the number of rows for a given host side column vector, deprecated.
-   */
-  @Override
-  @Deprecated
-  public long getNumRows() {
     return rows;
   }
 
   /**
    * Returns the number of children for this column
    */
-  @Override
   public int getNumChildren() {
     return children.size();
   }
@@ -372,6 +330,23 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   }
 
   /**
+   * Get the BigDecimal value at index.
+   */
+  public final BigDecimal getBigDecimal(long index) {
+    assert type.isDecimalType() : type + " is not a supported decimal type.";
+    assertsForGet(index);
+    if (type.typeId == DType.DTypeEnum.DECIMAL32) {
+      int unscaledValue = offHeap.data.getInt(index * type.getSizeInBytes());
+      return BigDecimal.valueOf(unscaledValue, -type.getScale());
+    } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
+      long unscaledValue = offHeap.data.getLong(index * type.getSizeInBytes());
+      return BigDecimal.valueOf(unscaledValue, -type.getScale());
+    } else {
+      throw new IllegalStateException(type + " is not a supported decimal type.");
+    }
+  }
+
+  /**
    * Get the raw UTF8 bytes at index.  This API is faster than getJavaString, but still not
    * ideal because it is copying the data onto the heap.
    */
@@ -518,6 +493,8 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
       case INT16: return offHeap.data.getShort(rowOffset);
       case BOOL8: return offHeap.data.getBoolean(rowOffset);
       case STRING: return getString(rowIndex);
+      case DECIMAL32: return BigDecimal.valueOf(offHeap.data.getInt(rowOffset), -type.getScale());
+      case DECIMAL64: return BigDecimal.valueOf(offHeap.data.getLong(rowOffset), -type.getScale());
       default: throw new UnsupportedOperationException("Do not support " + type);
     }
   }

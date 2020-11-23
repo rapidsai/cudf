@@ -215,6 +215,16 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return new Scalar(DType.FLOAT32, makeFloat32Scalar(value, true));
   }
 
+  public static Scalar fromDecimal(int scale, int unscaledValue) {
+    long handle = makeDecimal32Scalar(unscaledValue, scale, true);
+    return new Scalar(DType.create(DType.DTypeEnum.DECIMAL32, scale), handle);
+  }
+
+  public static Scalar fromDecimal(int scale, long unscaledValue) {
+    long handle = makeDecimal64Scalar(unscaledValue, scale, true);
+    return new Scalar(DType.create(DType.DTypeEnum.DECIMAL64, scale), handle);
+  }
+
   public static Scalar fromFloat(Float value) {
     if (value == null) {
       return Scalar.fromNull(DType.FLOAT32);
@@ -233,7 +243,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return Scalar.fromDouble(value.doubleValue());
   }
 
-  public static Scalar fromBigDecimal(BigDecimal value) {
+  public static Scalar fromDecimal(BigDecimal value) {
     if (value == null) {
       return Scalar.fromNull(DType.create(DType.DTypeEnum.DECIMAL64, 0));
     }
@@ -476,8 +486,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
 
   @Override
   public ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType) {
-    if (rhs instanceof ColumnVector) {
-      ColumnVector cvRhs = (ColumnVector) rhs;
+    if (rhs instanceof ColumnView) {
+      ColumnView cvRhs = (ColumnView) rhs;
       return new ColumnVector(binaryOp(this, cvRhs, op, outType));
     } else {
       throw new IllegalArgumentException(rhs.getClass() + " is not supported as a binary op with " +
@@ -485,7 +495,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     }
   }
 
-  static long binaryOp(Scalar lhs, ColumnVector rhs, BinaryOp op, DType outputType) {
+  static long binaryOp(Scalar lhs, ColumnView rhs, BinaryOp op, DType outputType) {
     return binaryOpSV(lhs.getScalarHandle(), rhs.getNativeView(),
         op.nativeId, outputType.typeId.getNativeId(), outputType.getScale());
   }

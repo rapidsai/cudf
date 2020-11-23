@@ -76,9 +76,7 @@ std::unique_ptr<cudf::column> child_offsets_from_string_vector(
   rmm::mr::device_memory_resource* mr,
   cudaStream_t stream)
 {
-  auto transformer = [] __device__(string_view v) { return v.size_bytes(); };
-  auto begin       = thrust::make_transform_iterator(strings.begin(), transformer);
-  return make_offsets_child_column(begin, begin + strings.size(), mr, stream);
+  return child_offsets_from_string_iterator(strings.begin(), strings.size(), mr, stream);
 }
 
 // build a strings chars column from an vector of string_views
