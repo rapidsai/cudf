@@ -75,7 +75,7 @@ size_type estimate_nested_loop_join_output_size(table_device_view left,
   size_type h_size_estimate{0};
   rmm::device_scalar<size_type> size_estimate(0, stream);
 
-  CHECK_CUDA(stream);
+  CHECK_CUDA(stream.value());
 
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   int numBlocks{-1};
@@ -97,7 +97,7 @@ size_type estimate_nested_loop_join_output_size(table_device_view left,
   compute_nested_loop_join_output_size<block_size>
     <<<numBlocks * num_sms, block_size, 0, stream.value()>>>(
       left, right, JoinKind, equality, size_estimate.data());
-  CHECK_CUDA(stream);
+  CHECK_CUDA(stream.value());
 
   h_size_estimate = size_estimate.value(stream);
 
@@ -180,7 +180,7 @@ get_base_nested_loop_join_indices(table_view const& left,
                                                                                write_index.data(),
                                                                                estimated_size);
 
-    CHECK_CUDA(stream);
+    CHECK_CUDA(stream.value());
 
     join_size              = write_index.value();
     current_estimated_size = estimated_size;

@@ -98,7 +98,7 @@ size_type estimate_join_output_size(table_device_view build_table,
   estimate_size_type h_size_estimate{0};
   rmm::device_scalar<estimate_size_type> size_estimate(0, stream);
 
-  CHECK_CUDA(stream);
+  CHECK_CUDA(stream.value());
 
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   int numBlocks{-1};

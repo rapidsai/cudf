@@ -291,7 +291,7 @@ std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>> probe_jo
         write_index.data(),
         estimated_size);
 
-    CHECK_CUDA(stream);
+    CHECK_CUDA(stream.value());
 
     join_size              = write_index.value(stream);
     current_estimated_size = estimated_size;
