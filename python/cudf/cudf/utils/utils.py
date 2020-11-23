@@ -90,7 +90,7 @@ def scalar_broadcast_to(scalar, size, dtype=None):
 
     if isinstance(scalar, pd.Categorical):
         if dtype is None:
-            return create_cat_column_from_pd_cat_scalar(scalar, size)
+            return _categorical_scalar_broadcast_to(scalar, size)
         else:
             return scalar_broadcast_to(scalar.categories[0], size).astype(
                 dtype
@@ -539,10 +539,19 @@ def get_relevant_submodule(func, module):
     return module
 
 
-def create_cat_column_from_pd_cat_scalar(cat_scalar, size):
+def _categorical_scalar_broadcast_to(cat_scalar, size):
+    if isinstance(cat_scalar, (cudf.Series, pd.Series)):
+        cats = cat_scalar.cat.categories
+        code = cat_scalar.cat.codes[0]
+        ordered = cat_scalar.cat.ordered
+    else:
+        # handles pd.Categorical, cudf.categorical.CategoricalColumn
+        cats = cat_scalar.categories
+        code = cat_scalar.codes[0]
+        ordered = cat_scalar.ordered
 
-    cats = column.as_column(cat_scalar.categories)
-    codes = scalar_broadcast_to(cat_scalar.codes[0], size)
+    cats = column.as_column(cats)
+    codes = scalar_broadcast_to(code, size)
 
     return column.build_categorical_column(
         categories=cats,
@@ -550,5 +559,5 @@ def create_cat_column_from_pd_cat_scalar(cat_scalar, size):
         mask=codes.base_mask,
         size=codes.size,
         offset=codes.offset,
-        ordered=cat_scalar.ordered,
+        ordered=ordered,
     )
