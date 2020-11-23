@@ -1724,13 +1724,13 @@ dremel_data get_dremel_data(column_view h_col,
     thrust::host, def_at_level.begin(), def_at_level.end(), def_at_level.begin());
 
   // Sliced list column views only have offsets applied to top level. Get offsets for each level.
-  hostdevice_vector<size_type> column_offsets(nesting_levels.size() + 1, stream);
-  hostdevice_vector<size_type> column_ends(nesting_levels.size() + 1, stream);
+  rmm::device_uvector<size_type> d_column_offsets(nesting_levels.size() + 1, stream);
+  rmm::device_uvector<size_type> d_column_ends(nesting_levels.size() + 1, stream);
 
   auto d_col = column_device_view::create(h_col, stream);
   cudf::detail::device_single_thread(
-    [offset_at_level  = column_offsets.device_ptr(),
-     end_idx_at_level = column_ends.device_ptr(),
+    [offset_at_level  = d_column_offsets.data(),
+     end_idx_at_level = d_column_ends.data(),
      col              = *d_col] __device__() {
       auto curr_col           = col;
       size_type off           = curr_col.offset();
@@ -1751,8 +1751,18 @@ dremel_data get_dremel_data(column_view h_col,
     },
     stream);
 
-  column_offsets.device_to_host(stream, true);
-  column_ends.device_to_host(stream, true);
+  thrust::host_vector<size_type> column_offsets(nesting_levels.size() + 1);
+  CUDA_TRY(cudaMemcpyAsync(column_offsets.data(),
+                           d_column_offsets.data(),
+                           d_column_offsets.size() * sizeof(size_type),
+                           cudaMemcpyDeviceToHost,
+                           stream));
+  thrust::host_vector<size_type> column_ends(nesting_levels.size() + 1);
+  CUDA_TRY(cudaMemcpyAsync(column_ends.data(),
+                           d_column_ends.data(),
+                           d_column_ends.size() * sizeof(size_type),
+                           cudaMemcpyDeviceToHost,
+                           stream));
 
   rmm::device_uvector<uint8_t> rep_level(max_vals_size, stream);
   rmm::device_uvector<uint8_t> def_level(max_vals_size, stream);
