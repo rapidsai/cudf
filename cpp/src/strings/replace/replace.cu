@@ -126,7 +126,7 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
     create_chars_child_column(strings_count, strings.null_count(), bytes, stream, mr);
   auto d_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     replace_fn<two_pass::EXECUTE_OP>{d_strings, d_target, d_repl, maxrepl, d_offsets, d_chars});
@@ -214,7 +214,7 @@ std::unique_ptr<column> replace_slice(strings_column_view const& strings,
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.data<char>();
   thrust::for_each_n(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     replace_slice_fn<two_pass::EXECUTE_OP>{d_strings, d_repl, start, stop, d_offsets, d_chars});
@@ -321,7 +321,7 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
     create_chars_child_column(strings_count, strings.null_count(), bytes, stream, mr);
   auto d_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     replace_multi_fn<two_pass::EXECUTE_OP>{d_strings, d_targets, d_repls, d_offsets, d_chars});
@@ -364,7 +364,7 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
   auto chars_column = strings::detail::create_chars_child_column(
     strings_count, strings.null_count(), bytes, stream, mr);
   auto d_chars = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      [d_strings, d_repl, d_offsets, d_chars] __device__(size_type idx) {

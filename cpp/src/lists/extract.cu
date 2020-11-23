@@ -83,13 +83,13 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
   // build the gather map using the offsets and the provided index
   auto const d_column = column_device_view::create(annotated_offsets, stream);
   if (index < 0)
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(gather_map->size()),
                       d_gather_map,
                       map_index_fn<false>{*d_column, index, child_column.size()});
   else
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(gather_map->size()),
                       d_gather_map,

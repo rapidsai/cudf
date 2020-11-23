@@ -198,13 +198,13 @@ TEST_F(ApplyBooleanMask, FixedPointLargeColumnTest)
 
   std::vector<int32_t> expect_dec32_data;
   std::vector<int64_t> expect_dec64_data;
-  thrust::copy_if(thrust::host,
+  thrust::copy_if(thrust::seq,
                   dec32_data.cbegin(),
                   dec32_data.cend(),
                   mask_data.cbegin(),
                   std::back_inserter(expect_dec32_data),
                   thrust::identity<bool>());
-  thrust::copy_if(thrust::host,
+  thrust::copy_if(thrust::seq,
                   dec64_data.cbegin(),
                   dec64_data.cend(),
                   mask_data.cbegin(),

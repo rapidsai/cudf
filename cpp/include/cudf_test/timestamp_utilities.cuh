@@ -19,11 +19,8 @@
 #include <cudf/wrappers/timestamps.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-#include <thrust/device_vector.h>
 #include <thrust/logical.h>
 #include <thrust/sequence.h>
-
-#include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
 namespace test {
@@ -31,7 +28,7 @@ using time_point_ms =
   simt::std::chrono::time_point<simt::std::chrono::system_clock, simt::std::chrono::milliseconds>;
 
 /**
- * @brief Creates a `thrust::device_vector` with ascending timestamps in the
+ * @brief Creates a `fixed_width_column_wrapper` with ascending timestamps in the
  * range `[start, stop)`.
  *
  * The period is inferred from `count` and difference between `start`
