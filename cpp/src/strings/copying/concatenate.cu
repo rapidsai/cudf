@@ -25,6 +25,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
@@ -104,12 +105,12 @@ auto create_strings_device_views(std::vector<column_view> const& views,
   // error: the default constructor of "cudf::column_device_view" cannot be
   // referenced -- it is a deleted function
   auto d_partition_offsets = rmm::device_vector<size_t>(views.size() + 1);
-  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::transform(rmm::exec_policy(stream),
                     d_views.cbegin(),
                     d_views.cend(),
                     std::next(d_partition_offsets.begin()),
                     chars_size_transform{});
-  thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::inclusive_scan(rmm::exec_policy(stream),
                          d_partition_offsets.cbegin(),
                          d_partition_offsets.cend(),
                          d_partition_offsets.begin());

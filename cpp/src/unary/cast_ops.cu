@@ -25,8 +25,8 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace detail {
@@ -211,7 +211,7 @@ struct dispatch_unary_cast_to {
 
     mutable_column_view output_mutable = *output;
 
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       input.begin<SourceT>(),
                       input.end<SourceT>(),
                       output_mutable.begin<TargetT>(),
@@ -241,7 +241,7 @@ struct dispatch_unary_cast_to {
     using DeviceT    = device_storage_type_t<SourceT>;
     auto const scale = numeric::scale_type{input.type().scale()};
 
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       input.begin<DeviceT>(),
                       input.end<DeviceT>(),
                       output_mutable.begin<TargetT>(),
@@ -271,7 +271,7 @@ struct dispatch_unary_cast_to {
     using DeviceT    = device_storage_type_t<TargetT>;
     auto const scale = numeric::scale_type{type.scale()};
 
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       input.begin<SourceT>(),
                       input.end<SourceT>(),
                       output_mutable.begin<DeviceT>(),
@@ -318,7 +318,7 @@ struct dispatch_unary_cast_to {
 
     mutable_column_view output_mutable = *temporary;
 
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       input.begin<SourceDeviceT>(),
                       input.end<SourceDeviceT>(),
                       output_mutable.begin<TargetDeviceT>(),

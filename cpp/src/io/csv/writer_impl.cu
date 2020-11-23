@@ -19,30 +19,24 @@
  * @brief cuDF-IO CSV writer class implementation
  */
 
-#include "rmm/cuda_stream_view.hpp"
 #include "writer_impl.hpp"
 
 #include <cudf/copying.hpp>
 #include <cudf/null_mask.hpp>
-
-#include <cudf/utilities/traits.hpp>
-
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/combine.hpp>
 #include <cudf/strings/convert/convert_booleans.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
-
-#include <cudf/strings/combine.hpp>
+#include <cudf/strings/detail/modify_strings.cuh>
 #include <cudf/strings/replace.hpp>
-
+#include <cudf/utilities/traits.hpp>
 #include <strings/utilities.cuh>
 
-#include <algorithm>
-#include <cstring>
-#include <iterator>
-#include <sstream>
-#include <type_traits>
-#include <utility>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
@@ -51,11 +45,12 @@
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
-#include <rmm/thrust_rmm_allocator.h>
-#include <rmm/device_buffer.hpp>
-
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/detail/modify_strings.cuh>
+#include <algorithm>
+#include <cstring>
+#include <iterator>
+#include <sstream>
+#include <type_traits>
+#include <utility>
 
 namespace cudf {
 namespace io {
@@ -483,8 +478,6 @@ void writer::impl::write(table_view const& table,
 
     CUDF_EXPECTS(n_rows_per_chunk >= 8, "write_csv: invalid chunk_rows; must be at least 8");
 
-    auto exec = rmm::exec_policy(stream);
-
     auto num_rows = table.num_rows();
     std::vector<table_view> vector_views;
 
@@ -497,7 +490,7 @@ void writer::impl::write(table_view const& table,
 
       rmm::device_vector<size_type> d_splits(n_chunks, n_rows_per_chunk);
       thrust::inclusive_scan(
-        exec->on(stream.value()), d_splits.begin(), d_splits.end(), d_splits.begin());
+        rmm::exec_policy(stream), d_splits.begin(), d_splits.end(), d_splits.begin());
 
       CUDA_TRY(cudaMemcpyAsync(splits.data(),
                                d_splits.data().get(),

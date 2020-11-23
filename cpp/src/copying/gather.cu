@@ -47,7 +47,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
     cudf::size_type begin =
       neg_indices == negative_index_policy::ALLOWED ? -source_table.num_rows() : 0;
     cudf::size_type end = source_table.num_rows();
-    CUDF_EXPECTS(gather_map.size() == thrust::count_if(rmm::exec_policy(stream)->on(stream.value()),
+    CUDF_EXPECTS(gather_map.size() == thrust::count_if(rmm::exec_policy(stream),
                                                        map_begin,
                                                        map_end,
                                                        [begin, end] __device__(size_type index) {

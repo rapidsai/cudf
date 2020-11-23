@@ -18,6 +18,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -50,11 +51,10 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
   auto end_offset   = cudf::detail::get_value<size_type>(lists.offsets(), end, stream);
 
   rmm::device_uvector<cudf::size_type> out_offsets(offsets_count, stream);
-  auto execpol = rmm::exec_policy(stream);
 
   // Compute the offsets column of the result:
   thrust::transform(
-    execpol->on(stream.value()),
+    rmm::exec_policy(stream),
     offsets_data + start,
     offsets_data + end + 1,  // size of offsets column is 1 greater than slice length
     out_offsets.data(),

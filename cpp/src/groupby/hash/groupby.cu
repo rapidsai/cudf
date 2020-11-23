@@ -282,7 +282,7 @@ void compute_single_pass_aggs(table_view const& keys,
   if (skip_key_rows_with_nulls) {
     auto row_bitmask{cudf::detail::bitmask_and(keys, stream)};
     thrust::for_each_n(
-      rmm::exec_policy(stream)->on(stream.value()),
+      rmm::exec_policy(stream),
       thrust::make_counting_iterator(0),
       keys.num_rows(),
       hash::compute_single_pass_aggs<true, Map>{map,
@@ -293,7 +293,7 @@ void compute_single_pass_aggs(table_view const& keys,
                                                 static_cast<bitmask_type*>(row_bitmask.data())});
   } else {
     thrust::for_each_n(
-      rmm::exec_policy(stream)->on(stream.value()),
+      rmm::exec_policy(stream),
       thrust::make_counting_iterator(0),
       keys.num_rows(),
       hash::compute_single_pass_aggs<false, Map>{
@@ -326,7 +326,7 @@ std::pair<rmm::device_vector<size_type>, size_type> extract_populated_keys(
   };
 
   auto end_it = thrust::copy_if(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_transform_iterator(map.data(), get_key),
     thrust::make_transform_iterator(map.data() + map.capacity(), get_key),
     populated_keys.begin(),

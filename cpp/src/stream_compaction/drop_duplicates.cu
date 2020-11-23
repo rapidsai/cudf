@@ -30,6 +30,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/functional.h>
@@ -123,7 +124,7 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
   if (cudf::has_nulls(keys)) {
     auto comp = row_equality_comparator<true>(
       *device_input_table, *device_input_table, nulls_equal == null_equality::EQUAL);
-    auto result_end = unique_copy(rmm::exec_policy(stream)->on(stream.value()),
+    auto result_end = unique_copy(rmm::exec_policy(stream),
                                   sorted_indices->view().begin<cudf::size_type>(),
                                   sorted_indices->view().end<cudf::size_type>(),
                                   unique_indices.begin<cudf::size_type>(),
@@ -137,7 +138,7 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
   } else {
     auto comp = row_equality_comparator<false>(
       *device_input_table, *device_input_table, nulls_equal == null_equality::EQUAL);
-    auto result_end = unique_copy(rmm::exec_policy(stream)->on(stream.value()),
+    auto result_end = unique_copy(rmm::exec_policy(stream),
                                   sorted_indices->view().begin<cudf::size_type>(),
                                   sorted_indices->view().end<cudf::size_type>(),
                                   unique_indices.begin<cudf::size_type>(),
@@ -170,7 +171,7 @@ cudf::size_type distinct_count(table_view const& keys,
     row_equality_comparator<true> comp(
       *device_input_table, *device_input_table, nulls_equal == null_equality::EQUAL);
     return thrust::count_if(
-      rmm::exec_policy(stream)->on(stream.value()),
+      rmm::exec_policy(stream),
       thrust::counting_iterator<cudf::size_type>(0),
       thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
       [sorted_row_index, comp] __device__(cudf::size_type i) {
@@ -180,7 +181,7 @@ cudf::size_type distinct_count(table_view const& keys,
     row_equality_comparator<false> comp(
       *device_input_table, *device_input_table, nulls_equal == null_equality::EQUAL);
     return thrust::count_if(
-      rmm::exec_policy(stream)->on(stream.value()),
+      rmm::exec_policy(stream),
       thrust::counting_iterator<cudf::size_type>(0),
       thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
       [sorted_row_index, comp] __device__(cudf::size_type i) {
@@ -270,7 +271,7 @@ struct has_nans {
   {
     auto input_device_view = cudf::column_device_view::create(input, stream);
     auto device_view       = *input_device_view;
-    auto count             = thrust::count_if(rmm::exec_policy(stream)->on(stream.value()),
+    auto count             = thrust::count_if(rmm::exec_policy(stream),
                                   thrust::counting_iterator<cudf::size_type>(0),
                                   thrust::counting_iterator<cudf::size_type>(input.size()),
                                   check_for_nan<T>(device_view));

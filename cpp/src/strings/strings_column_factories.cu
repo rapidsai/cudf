@@ -22,8 +22,9 @@
 #include <cudf/utilities/error.hpp>
 #include <strings/utilities.cuh>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/transform_reduce.h>
@@ -40,7 +41,6 @@ std::unique_ptr<column> make_strings_column(
   size_type strings_count = strings.size();
   if (strings_count == 0) return strings::detail::make_empty_strings_column(stream, mr);
 
-  auto execpol   = rmm::exec_policy(stream);
   auto d_strings = strings.data().get();
 
   // check total size is not too large for cudf column
@@ -48,7 +48,7 @@ std::unique_ptr<column> make_strings_column(
     auto item = d_strings[idx];
     return (item.first != nullptr) ? item.second : 0;
   };
-  size_t bytes = thrust::transform_reduce(execpol->on(stream.value()),
+  size_t bytes = thrust::transform_reduce(rmm::exec_policy(stream),
                                           thrust::make_counting_iterator<size_t>(0),
                                           thrust::make_counting_iterator<size_t>(strings_count),
                                           size_checker,
@@ -85,7 +85,7 @@ std::unique_ptr<column> make_strings_column(
     strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.data<char>();
-  thrust::for_each_n(execpol->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      [d_strings, d_offsets, d_chars] __device__(size_type idx) {
@@ -145,7 +145,6 @@ std::unique_ptr<column> make_strings_column(const rmm::device_vector<char>& stri
     CUDF_EXPECTS(!valid_mask.empty(), "Cannot have null elements without a null mask.");
   }
 
-  auto execpol    = rmm::exec_policy(stream);
   size_type bytes = offsets.back();
   CUDF_EXPECTS(bytes >= 0, "invalid offsets vector");
 

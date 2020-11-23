@@ -24,6 +24,8 @@
 #include <cudf/utilities/bit.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <numeric>
 
@@ -374,7 +376,7 @@ thrust::host_vector<column_split_info> preprocess_string_column_info(
   // compute column split information
   rmm::device_vector<thrust::pair<size_type, size_type>> device_offsets(t.num_columns());
   auto* offsets_p = device_offsets.data().get();
-  thrust::for_each(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each(rmm::exec_policy(stream),
                    device_offset_columns.begin(),
                    device_offset_columns.end(),
                    [offsets_p] __device__(column_preprocess_info const& cpi) {

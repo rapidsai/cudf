@@ -27,7 +27,8 @@
 #include <cudf/utilities/bit.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <numeric>
 
@@ -58,8 +59,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
       cudf::count_unset_bits(reinterpret_cast<bitmask_type*>(mask.data()), 0, num_rows);
 
     rmm::device_vector<cudf::size_type> gather_map(num_rows);
-    auto execpol = rmm::exec_policy(stream);
-    thrust::transform(execpol->on(stream.value()),
+
+    thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<cudf::size_type>(0),
                       thrust::make_counting_iterator<cudf::size_type>(num_rows),
                       gather_map.begin(),

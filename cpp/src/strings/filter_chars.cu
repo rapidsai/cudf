@@ -27,6 +27,7 @@
 #include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/find.h>
 
@@ -122,7 +123,6 @@ std::unique_ptr<column> filter_characters(
     });
   rmm::device_vector<char_range> table(htable);  // copy filter table to device memory
 
-  auto execpol        = rmm::exec_policy(stream);
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
 
@@ -142,7 +142,7 @@ std::unique_ptr<column> filter_characters(
   auto chars_column = strings::detail::create_chars_child_column(
     strings_count, strings.null_count(), bytes, stream, mr);
   ffn.d_chars = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,
                      ffn);

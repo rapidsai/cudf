@@ -23,6 +23,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/sequence.h>
 
@@ -44,11 +45,10 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
   if (end < 0 || end > strings_count) end = strings_count;
   CUDF_EXPECTS(((start >= 0) && (start < end)), "Invalid start parameter value.");
   strings_count = cudf::util::round_up_safe<size_type>((end - start), step);
-  //
-  auto execpol = rmm::exec_policy(stream);
+
   // build indices
   rmm::device_vector<size_type> indices(strings_count);
-  thrust::sequence(execpol->on(stream.value()), indices.begin(), indices.end(), start, step);
+  thrust::sequence(rmm::exec_policy(stream), indices.begin(), indices.end(), start, step);
   // create a column_view as a wrapper of these indices
   column_view indices_view(
     data_type{type_id::INT32}, strings_count, indices.data().get(), nullptr, 0);
