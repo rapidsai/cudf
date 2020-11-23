@@ -198,12 +198,16 @@ TEST_F(ApplyBooleanMask, FixedPointLargeColumnTest)
 
   std::vector<int32_t> expect_dec32_data;
   std::vector<int64_t> expect_dec64_data;
-  for (int i = 0; i < mask_data.size(); ++i) {
-    if (mask_data[i]) {
-      expect_dec32_data.push_back(dec32_data[i]);
-      expect_dec64_data.push_back(dec64_data[i]);
-    }
-  }
+  thrust::copy_if(dec32_data.cbegin(),
+                  dec32_data.cend(),
+                  mask_data.cbegin(),
+                  std::back_inserter(expect_dec32_data),
+                  thrust::identity());
+  thrust::copy_if(dec64_data.cbegin(),
+                  dec64_data.cend(),
+                  mask_data.cbegin(),
+                  std::back_inserter(expect_dec64_data),
+                  thrust::identity());
 
   decimal32_wrapper expect_col32(
     expect_dec32_data.begin(), expect_dec32_data.end(), numeric::scale_type{-3});
