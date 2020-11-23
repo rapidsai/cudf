@@ -24,6 +24,7 @@
 - PR #6737 New build process (Project Flash)
 - PR #6652 Add support for struct columns in concatenate
 - PR #6675 Add DecimalDtype to cuDF
+- PR #6715 Add Python DecimalColumn
 - PR #6739 Add Java bindings for is_timestamp
 - PR #6768 Add support for scatter() on list columns
 - PR #6796 Add create_metadata_file in dask_cudf
