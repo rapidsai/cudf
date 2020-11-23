@@ -13,15 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cub/cub.cuh>
 #include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
 
-#include <chrono>
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <thrust/gather.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <cub/cub.cuh>
+#include <cuda/std/chrono>
 
 namespace cudf {
 namespace io {
@@ -917,8 +917,8 @@ static __device__ void PlainBoolEncode(page_enc_state_s *s,
 
 constexpr auto julian_calendar_epoch_diff()
 {
-  using namespace simt::std::chrono;
-  using namespace simt::std::chrono_literals;
+  using namespace cuda::std::chrono;
+  using namespace cuda::std::chrono_literals;
   return sys_days{January / 1 / 1970} - (sys_days{November / 24 / -4713} + 12h);
 }
 
@@ -930,10 +930,10 @@ constexpr auto julian_calendar_epoch_diff()
  * @return std::pair<nanoseconds,days> where nanoseconds is the number of nanoseconds
  * elapsed in the day and days is the number of days from Julian epoch.
  */
-static __device__ std::pair<simt::std::chrono::nanoseconds, simt::std::chrono::days>
-convert_nanoseconds(simt::std::chrono::sys_time<simt::std::chrono::nanoseconds> const ns)
+static __device__ std::pair<cuda::std::chrono::nanoseconds, cuda::std::chrono::days>
+convert_nanoseconds(cuda::std::chrono::sys_time<cuda::std::chrono::nanoseconds> const ns)
 {
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
   auto const nanosecond_ticks = ns.time_since_epoch();
   auto const gregorian_days   = floor<days>(nanosecond_ticks);
   auto const julian_days      = gregorian_days + ceil<days>(julian_calendar_epoch_diff());
@@ -1190,7 +1190,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
             }
 
             auto const ret = convert_nanoseconds([&]() {
-              using namespace simt::std::chrono;
+              using namespace cuda::std::chrono;
 
               switch (s->col.converted_type) {
                 case TIMESTAMP_MILLIS: {
