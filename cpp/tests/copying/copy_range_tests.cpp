@@ -463,3 +463,24 @@ TEST_F(CopyRangeErrorTestFixture, DTypeMismatch)
   EXPECT_THROW(cudf::copy_range(dict_source->view(), dict_target->view(), 0, 100, 0),
                cudf::logic_error);
 }
+
+template <typename T>
+struct FixedPointTypes : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(FixedPointTypes, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTypes, FixedPointSimple)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const source   = fp_wrapper{{110, 220, 330, 440, 550, 660}, scale_type{-2}};
+  auto const target   = fp_wrapper{{0, 0, 0, 0, 0, 0}, scale_type{-2}};
+  auto const expected = fp_wrapper{{0, 220, 330, 440, 0, 0}, scale_type{-2}};
+  auto const result   = cudf::copy_range(source, target, 1, 4, 1);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
