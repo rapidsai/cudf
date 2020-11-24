@@ -13,10 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cub/cub.cuh>
-#include <io/utilities/block_utils.cuh>
+
 #include "orc_common.h"
 #include "orc_gpu.h"
+#include <io/utilities/block_utils.cuh>
+#include <rmm/cuda_stream_view.hpp>
+#include <cub/cub.cuh>
 
 namespace cudf {
 namespace io {
@@ -1247,12 +1249,12 @@ __global__ void __launch_bounds__(1024) gpuCompactCompressedBlocks(StripeStream 
 void EncodeOrcColumnData(EncChunk *chunks,
                          uint32_t num_columns,
                          uint32_t num_rowgroups,
-                         cudaStream_t stream)
+                         rmm::cuda_stream_view stream)
 {
   dim3 dim_block(512, 1);  // 512 threads per chunk
   dim3 dim_grid(num_columns, num_rowgroups);
   gpuEncodeOrcColumnData<512>
-    <<<dim_grid, dim_block, 0, stream>>>(chunks, num_columns, num_rowgroups);
+    <<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_columns, num_rowgroups);
 }
 
 /**
@@ -1270,12 +1272,12 @@ void EncodeStripeDictionaries(StripeDictionary *stripes,
                               uint32_t num_string_columns,
                               uint32_t num_columns,
                               uint32_t num_stripes,
-                              cudaStream_t stream)
+                              rmm::cuda_stream_view stream)
 {
   dim3 dim_block(512, 1);  // 512 threads per dictionary
   dim3 dim_grid(num_string_columns * num_stripes, 2);
   gpuEncodeStringDictionaries<512>
-    <<<dim_grid, dim_block, 0, stream>>>(stripes, chunks, num_columns);
+    <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, chunks, num_columns);
 }
 
 /**
@@ -1291,11 +1293,12 @@ void CompactOrcDataStreams(StripeStream *strm_desc,
                            EncChunk *chunks,
                            uint32_t num_stripe_streams,
                            uint32_t num_columns,
-                           cudaStream_t stream)
+                           rmm::cuda_stream_view stream)
 {
   dim3 dim_block(1024, 1);
   dim3 dim_grid(num_stripe_streams, 1);
-  gpuCompactOrcDataStreams<<<dim_grid, dim_block, 0, stream>>>(strm_desc, chunks, num_columns);
+  gpuCompactOrcDataStreams<<<dim_grid, dim_block, 0, stream.value()>>>(
+    strm_desc, chunks, num_columns);
 }
 
 /**
@@ -1321,15 +1324,15 @@ void CompressOrcDataStreams(uint8_t *compressed_data,
                             uint32_t num_compressed_blocks,
                             CompressionKind compression,
                             uint32_t comp_blk_size,
-                            cudaStream_t stream)
+                            rmm::cuda_stream_view stream)
 {
   dim3 dim_block_init(256, 1);
   dim3 dim_grid(num_stripe_streams, 1);
-  gpuInitCompressionBlocks<<<dim_grid, dim_block_init, 0, stream>>>(
+  gpuInitCompressionBlocks<<<dim_grid, dim_block_init, 0, stream.value()>>>(
     strm_desc, chunks, comp_in, comp_out, compressed_data, comp_blk_size);
   if (compression == SNAPPY) { gpu_snap(comp_in, comp_out, num_compressed_blocks, stream); }
   dim3 dim_block_compact(1024, 1);
-  gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream>>>(
+  gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream.value()>>>(
     strm_desc, comp_in, comp_out, compressed_data, comp_blk_size);
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,8 @@
 #include <cudf/types.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/iterator/discard_iterator.h>
 
 namespace cudf {
@@ -52,8 +54,8 @@ struct reduce_functor {
     column_view const& values,
     size_type num_groups,
     rmm::device_vector<cudf::size_type> const& group_labels,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream)
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
   {
     using OpType     = cudf::detail::corresponding_operator_t<K>;
     using ResultType = cudf::detail::target_type_t<T, K>;
@@ -70,10 +72,10 @@ struct reduce_functor {
     auto result_table = mutable_table_view({*result});
     cudf::detail::initialize_with_identity(result_table, {K}, stream);
 
-    auto resultview = mutable_column_device_view::create(result->mutable_view());
-    auto valuesview = column_device_view::create(values);
+    auto resultview = mutable_column_device_view::create(result->mutable_view(), stream);
+    auto valuesview = column_device_view::create(values, stream);
 
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                        thrust::make_counting_iterator(0),
                        values.size(),
                        [d_values     = *valuesview,

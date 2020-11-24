@@ -184,7 +184,7 @@ std::unique_ptr<table> sample(
  */
 std::unique_ptr<scalar> get_element(column_view const& input,
                                     size_type index,
-                                    cudaStream_t stream,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr);
 }  // namespace detail
 }  // namespace cudf

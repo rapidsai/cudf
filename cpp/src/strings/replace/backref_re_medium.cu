@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
+#include "backref_re.cuh"
+
 #include <cudf/strings/detail/utilities.hpp>
 
-#include "backref_re.cuh"
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace strings {
@@ -28,16 +30,16 @@ children_pair replace_with_backrefs_medium(column_device_view const& d_strings,
                                            string_view const& d_repl_template,
                                            rmm::device_vector<backref_type>& backrefs,
                                            size_type null_count,
-                                           rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream)
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   return make_strings_children(
     backrefs_fn<RX_STACK_MEDIUM>{
       d_strings, d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
     d_strings.size(),
     null_count,
-    mr,
-    stream);
+    stream,
+    mr);
 }
 
 }  // namespace detail

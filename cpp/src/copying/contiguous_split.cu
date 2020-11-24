@@ -608,6 +608,7 @@ BufInfo build_output_columns(InputIter begin,
       src.child_begin(), src.child_end(), current_info, std::back_inserter(children), base_ptr);
     return column_view{src.type(), size, data_ptr, bitmask_ptr, null_count, 0, std::move(children)};
   });
+
   return current_info;
 }
 

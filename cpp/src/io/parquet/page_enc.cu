@@ -13,12 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cub/cub.cuh>
+
 #include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
 
 #include <chrono>
 #include <cudf/detail/utilities/cuda.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <cub/cub.cuh>
 
 #include <thrust/gather.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -1662,7 +1666,7 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
  *
  * Similarly we merge up all the way till level 0 offsets
  */
-dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
+dremel_data get_dremel_data(column_view h_col, rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(h_col.type().id() == type_id::LIST,
                "Can only get rep/def levels for LIST type column");
@@ -1674,12 +1678,12 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
     auto d_off = lcv.offsets().data<size_type>();
 
     auto empties_idx_end =
-      thrust::copy_if(rmm::exec_policy(stream)->on(stream),
+      thrust::copy_if(rmm::exec_policy(stream)->on(stream.value()),
                       thrust::make_counting_iterator(start),
                       thrust::make_counting_iterator(end),
                       empties_idx.begin(),
                       [d_off] __device__(auto i) { return d_off[i] == d_off[i + 1]; });
-    auto empties_end = thrust::gather(rmm::exec_policy(stream)->on(stream),
+    auto empties_end = thrust::gather(rmm::exec_policy(stream)->on(stream.value()),
                                       empties_idx.begin(),
                                       empties_idx_end,
                                       lcv.offsets().begin<size_type>(),
@@ -1789,7 +1793,7 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
     auto output_zip_it =
       thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
 
-    auto ends = thrust::merge_by_key(rmm::exec_policy(stream)->on(stream),
+    auto ends = thrust::merge_by_key(rmm::exec_policy(stream)->on(stream.value()),
                                      empties.begin(),
                                      empties.begin() + empties_size,
                                      thrust::make_counting_iterator(column_offsets[level + 1]),
@@ -1807,14 +1811,14 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
                                       [off = lcv.offsets().data<size_type>()] __device__(
                                         auto i) -> int { return off[i] == off[i + 1]; });
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
-    thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream),
+    thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
                            scan_it,
                            scan_it + offset_size_at_level,
                            scan_out.begin());
 
     // Add scan output to existing offsets to get new offsets into merged rep level values
     new_offsets = rmm::device_uvector<size_type>(offset_size_at_level, stream);
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                        thrust::make_counting_iterator(0),
                        offset_size_at_level,
                        [off      = lcv.offsets().data<size_type>() + column_offsets[level],
@@ -1825,7 +1829,7 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
 
     // Set rep level values at level starts to appropriate rep level
     auto scatter_it = thrust::make_constant_iterator(level);
-    thrust::scatter(rmm::exec_policy(stream)->on(stream),
+    thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
                     scatter_it,
                     scatter_it + new_offsets.size() - 1,
                     new_offsets.begin(),
@@ -1876,7 +1880,7 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
     auto output_zip_it =
       thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
 
-    auto ends = thrust::merge_by_key(rmm::exec_policy(stream)->on(stream),
+    auto ends = thrust::merge_by_key(rmm::exec_policy(stream)->on(stream.value()),
                                      transformed_empties,
                                      transformed_empties + empties_size,
                                      thrust::make_counting_iterator(0),
@@ -1895,14 +1899,14 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
                                       [off = lcv.offsets().data<size_type>()] __device__(
                                         auto i) -> int { return off[i] == off[i + 1]; });
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
-    thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream),
+    thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
                            scan_it,
                            scan_it + offset_size_at_level,
                            scan_out.begin());
 
     // Add scan output to existing offsets to get new offsets into merged rep level values
     rmm::device_uvector<size_type> temp_new_offsets(offset_size_at_level, stream);
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                        thrust::make_counting_iterator(0),
                        offset_size_at_level,
                        [off      = lcv.offsets().data<size_type>() + column_offsets[level],
@@ -1915,7 +1919,7 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
 
     // Set rep level values at level starts to appropriate rep level
     auto scatter_it = thrust::make_constant_iterator(level);
-    thrust::scatter(rmm::exec_policy(stream)->on(stream),
+    thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
                     scatter_it,
                     scatter_it + new_offsets.size() - 1,
                     new_offsets.begin(),
@@ -1926,7 +1930,7 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
   rep_level.resize(level_vals_size, stream);
   def_level.resize(level_vals_size, stream);
 
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  stream.synchronize();
 
   size_type leaf_col_offset = column_offsets[column_offsets.size() - 1];
   size_type leaf_data_size  = column_ends[column_ends.size() - 1] - leaf_col_offset;
@@ -1953,10 +1957,10 @@ void InitPageFragments(PageFragment *frag,
                        int32_t num_columns,
                        uint32_t fragment_size,
                        uint32_t num_rows,
-                       cudaStream_t stream)
+                       rmm::cuda_stream_view stream)
 {
   dim3 dim_grid(num_columns, num_fragments);  // 1 threadblock per fragment
-  gpuInitPageFragments<512><<<dim_grid, 512, 0, stream>>>(
+  gpuInitPageFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
     frag, col_desc, num_fragments, num_columns, fragment_size, num_rows);
 }
 
@@ -1977,10 +1981,10 @@ void InitFragmentStatistics(statistics_group *groups,
                             int32_t num_fragments,
                             int32_t num_columns,
                             uint32_t fragment_size,
-                            cudaStream_t stream)
+                            rmm::cuda_stream_view stream)
 {
   dim3 dim_grid(num_columns, (num_fragments + 3) >> 2);  // 1 warp per fragment
-  gpuInitFragmentStats<<<dim_grid, 128, 0, stream>>>(
+  gpuInitFragmentStats<<<dim_grid, 128, 0, stream.value()>>>(
     groups, fragments, col_desc, num_fragments, num_columns, fragment_size);
 }
 
@@ -2003,10 +2007,10 @@ void InitEncoderPages(EncColumnChunk *chunks,
                       int32_t num_columns,
                       statistics_merge_group *page_grstats,
                       statistics_merge_group *chunk_grstats,
-                      cudaStream_t stream)
+                      rmm::cuda_stream_view stream)
 {
   dim3 dim_grid(num_columns, num_rowgroups);  // 1 threadblock per rowgroup
-  gpuInitPages<<<dim_grid, 128, 0, stream>>>(
+  gpuInitPages<<<dim_grid, 128, 0, stream.value()>>>(
     chunks, pages, col_desc, page_grstats, chunk_grstats, num_rowgroups, num_columns);
 }
 
@@ -2027,11 +2031,12 @@ void EncodePages(EncPage *pages,
                  uint32_t start_page,
                  gpu_inflate_input_s *comp_in,
                  gpu_inflate_status_s *comp_out,
-                 cudaStream_t stream)
+                 rmm::cuda_stream_view stream)
 {
   // A page is part of one column. This is launching 1 block per page. 1 block will exclusively
   // deal with one datatype.
-  gpuEncodePages<<<num_pages, 128, 0, stream>>>(pages, chunks, comp_in, comp_out, start_page);
+  gpuEncodePages<<<num_pages, 128, 0, stream.value()>>>(
+    pages, chunks, comp_in, comp_out, start_page);
 }
 
 /**
@@ -2049,9 +2054,9 @@ void DecideCompression(EncColumnChunk *chunks,
                        uint32_t num_chunks,
                        uint32_t start_page,
                        const gpu_inflate_status_s *comp_out,
-                       cudaStream_t stream)
+                       rmm::cuda_stream_view stream)
 {
-  gpuDecideCompression<<<num_chunks, 128, 0, stream>>>(chunks, pages, comp_out, start_page);
+  gpuDecideCompression<<<num_chunks, 128, 0, stream.value()>>>(chunks, pages, comp_out, start_page);
 }
 
 /**
@@ -2073,9 +2078,9 @@ void EncodePageHeaders(EncPage *pages,
                        const gpu_inflate_status_s *comp_out,
                        const statistics_chunk *page_stats,
                        const statistics_chunk *chunk_stats,
-                       cudaStream_t stream)
+                       rmm::cuda_stream_view stream)
 {
-  gpuEncodePageHeaders<<<num_pages, 128, 0, stream>>>(
+  gpuEncodePageHeaders<<<num_pages, 128, 0, stream.value()>>>(
     pages, chunks, comp_out, page_stats, chunk_stats, start_page);
 }
 
@@ -2090,9 +2095,9 @@ void EncodePageHeaders(EncPage *pages,
 void GatherPages(EncColumnChunk *chunks,
                  const EncPage *pages,
                  uint32_t num_chunks,
-                 cudaStream_t stream)
+                 rmm::cuda_stream_view stream)
 {
-  gpuGatherPages<<<num_chunks, 1024, 0, stream>>>(chunks, pages);
+  gpuGatherPages<<<num_chunks, 1024, 0, stream.value()>>>(chunks, pages);
 }
 
 }  // namespace gpu

@@ -13,10 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cub/cub.cuh>
-#include <cudf/utilities/error.hpp>
+
 #include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
+
+#include <cudf/utilities/error.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <cub/cub.cuh>
 
 namespace cudf {
 namespace io {
@@ -331,11 +336,11 @@ void BuildChunkDictionaries(EncColumnChunk *chunks,
                             uint32_t *dev_scratch,
                             size_t scratch_size,
                             uint32_t num_chunks,
-                            cudaStream_t stream)
+                            rmm::cuda_stream_view stream)
 {
   if (num_chunks > 0 && scratch_size > 0) {  // zero scratch size implies no dictionaries
-    CUDA_TRY(cudaMemsetAsync(dev_scratch, 0, scratch_size, stream));
-    gpuBuildChunkDictionaries<1024><<<num_chunks, 1024, 0, stream>>>(chunks, dev_scratch);
+    CUDA_TRY(cudaMemsetAsync(dev_scratch, 0, scratch_size, stream.value()));
+    gpuBuildChunkDictionaries<1024><<<num_chunks, 1024, 0, stream.value()>>>(chunks, dev_scratch);
   }
 }
 

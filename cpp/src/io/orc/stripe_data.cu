@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-#include <cub/cub.cuh>
-#include <io/utilities/block_utils.cuh>
 #include "orc_common.h"
 #include "orc_gpu.h"
+#include <io/utilities/block_utils.cuh>
+#include <rmm/cuda_stream_view.hpp>
+#include <cub/cub.cuh>
 
 namespace cudf {
 namespace io {
@@ -1777,11 +1778,15 @@ void __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
                                                uint32_t num_stripes,
                                                size_t max_num_rows,
                                                size_t first_row,
-                                               cudaStream_t stream)
+                                               rmm::cuda_stream_view stream)
 {
   dim3 dim_block(block_size, 1);
   dim3 dim_grid(num_columns, num_stripes * 2);  // 1024 threads per chunk
+<<<<<<< HEAD
   gpuDecodeNullsAndStringDictionaries<block_size><<<dim_grid, dim_block, 0, stream>>>(
+=======
+  gpuDecodeNullsAndStringDictionaries<NTHREADS><<<dim_grid, dim_block, 0, stream.value()>>>(
+>>>>>>> 632ac54ce6fed86f0a938103dc5fcb4e91eebbf7
     chunks, global_dictionary, num_columns, num_stripes, max_num_rows, first_row);
 }
 
@@ -1810,12 +1815,13 @@ void __host__ DecodeOrcColumnData(ColumnDesc *chunks,
                                   const RowGroup *row_groups,
                                   uint32_t num_rowgroups,
                                   uint32_t rowidx_stride,
-                                  cudaStream_t stream)
+                                  rmm::cuda_stream_view stream)
 {
   uint32_t num_chunks = num_columns * num_stripes;
   dim3 dim_block(block_size, 1);  // 1024 threads per chunk
   dim3 dim_grid((num_rowgroups > 0) ? num_columns : num_chunks,
                 (num_rowgroups > 0) ? num_rowgroups : 1);
+<<<<<<< HEAD
   gpuDecodeOrcColumnData<block_size><<<dim_grid, dim_block, 0, stream>>>(chunks,
                                                                          global_dictionary,
                                                                          tz_table,
@@ -1825,6 +1831,17 @@ void __host__ DecodeOrcColumnData(ColumnDesc *chunks,
                                                                          num_columns,
                                                                          num_rowgroups,
                                                                          rowidx_stride);
+=======
+  gpuDecodeOrcColumnData<NTHREADS><<<dim_grid, dim_block, 0, stream.value()>>>(chunks,
+                                                                               global_dictionary,
+                                                                               tz_table,
+                                                                               row_groups,
+                                                                               max_num_rows,
+                                                                               first_row,
+                                                                               num_columns,
+                                                                               num_rowgroups,
+                                                                               rowidx_stride);
+>>>>>>> 632ac54ce6fed86f0a938103dc5fcb4e91eebbf7
 }
 
 }  // namespace gpu

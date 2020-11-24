@@ -14,9 +14,13 @@
  * limitations under the License.
  */
 
-#include <cub/cub.cuh>
-#include <io/utilities/block_utils.cuh>
 #include "gpuinflate.h"
+
+#include <io/utilities/block_utils.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <cub/cub.cuh>
 
 namespace cudf {
 namespace io {
@@ -690,13 +694,13 @@ __global__ void __launch_bounds__(block_size)
 cudaError_t __host__ gpu_unsnap(gpu_inflate_input_s *inputs,
                                 gpu_inflate_status_s *outputs,
                                 int count,
-                                cudaStream_t stream)
+                                rmm::cuda_stream_view stream)
 {
   uint32_t count32 = (count > 0) ? count : 0;
   dim3 dim_block(128, 1);     // 4 warps per stream, 1 stream per block
   dim3 dim_grid(count32, 1);  // TODO: Check max grid dimensions vs max expected count
 
-  unsnap_kernel<128><<<dim_grid, dim_block, 0, stream>>>(inputs, outputs);
+  unsnap_kernel<128><<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs);
 
   return cudaSuccess;
 }

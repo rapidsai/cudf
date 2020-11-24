@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
-#include <io/utilities/block_utils.cuh>
 #include "gpuinflate.h"
+
+#include <io/utilities/block_utils.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
@@ -341,11 +344,13 @@ extern "C" __global__ void __launch_bounds__(128)
 cudaError_t __host__ gpu_snap(gpu_inflate_input_s *inputs,
                               gpu_inflate_status_s *outputs,
                               int count,
-                              cudaStream_t stream)
+                              rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);  // 4 warps per stream, 1 stream per block
   dim3 dim_grid(count, 1);
-  if (count > 0) { snap_kernel<<<dim_grid, dim_block, 0, stream>>>(inputs, outputs, count); }
+  if (count > 0) {
+    snap_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, count);
+  }
   return cudaSuccess;
 }
 

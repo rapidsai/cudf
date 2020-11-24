@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
-#include <cudf/copying.hpp>
-#include <cudf/detail/copy_if_else.cuh>
-#include <cudf/detail/iterator.cuh>
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/copying.hpp>
+#include <cudf/detail/copy_if_else.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 template <typename T>
 struct CopyTest : public cudf::test::BaseFixture {
@@ -69,8 +70,8 @@ struct copy_if_else_tiny_grid_functor {
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& lhs,
                                            cudf::column_view const& rhs,
                                            Filter filter,
-                                           rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream)
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
   {
     // output
     std::unique_ptr<cudf::column> out =
@@ -85,7 +86,7 @@ struct copy_if_else_tiny_grid_functor {
 
     // call the kernel with an artificially small grid
     cudf::detail::copy_if_else_kernel<32, T, decltype(lhs_iter), decltype(rhs_iter), Filter, false>
-      <<<1, 32, 0, stream>>>(lhs_iter, rhs_iter, filter, *out_dv, nullptr);
+      <<<1, 32, 0, stream.value()>>>(lhs_iter, rhs_iter, filter, *out_dv, nullptr);
 
     return out;
   }
@@ -94,8 +95,8 @@ struct copy_if_else_tiny_grid_functor {
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& lhs,
                                            cudf::column_view const& rhs,
                                            Filter filter,
-                                           rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream)
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
   {
     CUDF_FAIL("Unexpected test execution");
   }
@@ -115,8 +116,8 @@ std::unique_ptr<cudf::column> tiny_grid_launch(cudf::column_view const& lhs,
                                lhs,
                                rhs,
                                filter,
-                               rmm::mr::get_current_device_resource(),
-                               (cudaStream_t)0);
+                               rmm::cuda_stream_default,
+                               rmm::mr::get_current_device_resource());
 }
 
 TYPED_TEST(CopyTest, CopyIfElseTestTinyGrid)

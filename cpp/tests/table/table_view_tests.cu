@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_view.hpp>
-#include <cudf/table/row_operators.cuh>
-#include <cudf/table/table_device_view.cuh>
-#include <cudf/table/table_view.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/column/column_view.hpp>
+#include <cudf/table/row_operators.cuh>
+#include <cudf/table/table_device_view.cuh>
+#include <cudf/table/table_view.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <vector>
 
@@ -34,7 +37,7 @@ void row_comparison(cudf::table_view input1,
                     cudf::mutable_column_view output,
                     std::vector<cudf::order> const& column_order)
 {
-  cudaStream_t stream = 0;
+  rmm::cuda_stream_view stream{};
 
   auto device_table_1 = cudf::table_device_view::create(input1, stream);
   auto device_table_2 = cudf::table_device_view::create(input2, stream);
@@ -43,7 +46,7 @@ void row_comparison(cudf::table_view input1,
   auto comparator = cudf::row_lexicographic_comparator<false>(
     *device_table_1, *device_table_2, d_column_order.data().get());
 
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
+  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                     thrust::make_counting_iterator(0),
                     thrust::make_counting_iterator(input1.num_rows()),
                     thrust::make_counting_iterator(0),
