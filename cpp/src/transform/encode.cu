@@ -26,6 +26,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <numeric>
@@ -34,7 +35,7 @@ namespace cudf {
 namespace detail {
 
 std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
-  table_view const& input_table, rmm::mr::device_memory_resource* mr, cudaStream_t stream)
+  table_view const& input_table, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
   std::vector<size_type> drop_keys(input_table.num_columns());
   std::iota(drop_keys.begin(), drop_keys.end(), 0);
@@ -43,7 +44,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
   // - resulting column elements are sorted ascending
   // - nulls are sorted to the beginning
   auto keys_table = cudf::detail::drop_duplicates(
-    input_table, drop_keys, duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL, mr, stream);
+    input_table, drop_keys, duplicate_keep_option::KEEP_FIRST, null_equality::EQUAL, stream, mr);
 
   if (cudf::has_nulls(keys_table->view())) {
     // Rows with nulls appear at the top of `keys_table`, but we want them to appear at
@@ -52,14 +53,13 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
     // https://github.com/rapidsai/cudf/issues/6144 is resolved
 
     auto num_rows = keys_table->num_rows();
-    auto mask =
-      cudf::detail::bitmask_and(keys_table->view(), stream, rmm::mr::get_current_device_resource());
+    auto mask     = cudf::detail::bitmask_and(keys_table->view(), stream);
     auto num_rows_with_nulls =
       cudf::count_unset_bits(reinterpret_cast<bitmask_type*>(mask.data()), 0, num_rows);
 
     rmm::device_vector<cudf::size_type> gather_map(num_rows);
     auto execpol = rmm::exec_policy(stream);
-    thrust::transform(execpol->on(stream),
+    thrust::transform(execpol->on(stream.value()),
                       thrust::make_counting_iterator<cudf::size_type>(0),
                       thrust::make_counting_iterator<cudf::size_type>(num_rows),
                       gather_map.begin(),
@@ -78,8 +78,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
                                       gather_map_column,
                                       cudf::detail::out_of_bounds_policy::FAIL,
                                       cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                      mr,
-                                      stream);
+                                      stream,
+                                      mr);
   }
 
   auto indices_column =
@@ -87,8 +87,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
                               input_table,
                               std::vector<order>(input_table.num_columns(), order::ASCENDING),
                               std::vector<null_order>(input_table.num_columns(), null_order::AFTER),
-                              mr,
-                              stream);
+                              stream,
+                              mr);
 
   return std::make_pair(std::move(keys_table), std::move(indices_column));
 }
@@ -98,7 +98,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   cudf::table_view const& input, rmm::mr::device_memory_resource* mr)
 {
-  return detail::encode(input, mr, 0);
+  return detail::encode(input, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf
