@@ -62,6 +62,28 @@ std::unique_ptr<column> make_offsets_child_column(
   return offsets_column;
 }
 
+/**
+ * @brief Creates an offsets column from a string_view iterator, and size.
+ *
+ * @tparam Iter Iterator type that returns string_view instances
+ * @param strings_begin Iterator to the beginning of the string_view sequence
+ * @param num_strings The number of string_view instances in the sequence
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return Child offsets column
+ */
+template <typename Iter>
+std::unique_ptr<cudf::column> child_offsets_from_string_iterator(
+  Iter strings_begin,
+  cudf::size_type num_strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+  cudaStream_t stream                 = 0)
+{
+  auto transformer = [] __device__(string_view v) { return v.size_bytes(); };
+  auto begin       = thrust::make_transform_iterator(strings_begin, transformer);
+  return make_offsets_child_column(begin, begin + num_strings, mr, stream);
+}
+
 // This template is a thin wrapper around per-context singleton objects.
 // It maintains a single object for each CUDA context.
 template <typename TableType>

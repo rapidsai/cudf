@@ -97,8 +97,8 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                      d_gather_map,
                                      d_gather_map + gather_map->size(),
                                      true,  // nullify-out-of-bounds
-                                     mr,
-                                     stream)
+                                     stream,
+                                     mr)
                   ->release();
   if (result.front()->null_count() == 0)
     result.front()->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);

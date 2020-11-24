@@ -50,7 +50,7 @@ TYPED_TEST(UnaryLogicalOpsTest, LogicalNot)
   cudf::test::fixed_width_column_wrapper<bool> expected(std::cbegin(h_expect_v),
                                                         std::cend(h_expect_v));
 
-  auto output = cudf::unary_operation(input, cudf::unary_op::NOT);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::NOT);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
@@ -59,10 +59,10 @@ TYPED_TEST(UnaryLogicalOpsTest, SimpleLogicalNot)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{true, true, true, true}};
   cudf::test::fixed_width_column_wrapper<bool> expected{{false, false, false, false}};
-  auto output = cudf::unary_operation(input, cudf::unary_op::NOT);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::NOT);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
   auto encoded = cudf::dictionary::encode(input);
-  output       = cudf::unary_operation(encoded->view(), cudf::unary_op::NOT);
+  output       = cudf::unary_operation(encoded->view(), cudf::unary_operator::NOT);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -70,10 +70,10 @@ TYPED_TEST(UnaryLogicalOpsTest, SimpleLogicalNotWithNullMask)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{true, true, true, true}, {1, 0, 1, 1}};
   cudf::test::fixed_width_column_wrapper<bool> expected{{false, true, false, false}, {1, 0, 1, 1}};
-  auto output = cudf::unary_operation(input, cudf::unary_op::NOT);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::NOT);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
   auto encoded = cudf::dictionary::encode(input);
-  output       = cudf::unary_operation(encoded->view(), cudf::unary_op::NOT);
+  output       = cudf::unary_operation(encoded->view(), cudf::unary_operator::NOT);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -81,7 +81,7 @@ TYPED_TEST(UnaryLogicalOpsTest, EmptyLogicalNot)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{};
   cudf::test::fixed_width_column_wrapper<bool> expected{};
-  auto output = cudf::unary_operation(input, cudf::unary_op::NOT);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::NOT);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -112,7 +112,7 @@ TYPED_TEST(UnaryMathOpsTest, ABS)
   cudf::test::fixed_width_column_wrapper<T> const expected(std::cbegin(h_expect_v),
                                                            std::cend(h_expect_v));
 
-  auto const output = cudf::unary_operation(input, cudf::unary_op::ABS);
+  auto const output = cudf::unary_operation(input, cudf::unary_operator::ABS);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
@@ -139,7 +139,7 @@ TYPED_TEST(UnaryMathOpsTest, SQRT)
   cudf::test::fixed_width_column_wrapper<T> const expected(std::cbegin(h_expect_v),
                                                            std::cend(h_expect_v));
 
-  auto const output = cudf::unary_operation(input, cudf::unary_op::SQRT);
+  auto const output = cudf::unary_operation(input, cudf::unary_operator::SQRT);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
@@ -149,7 +149,7 @@ TYPED_TEST(UnaryMathOpsTest, SimpleABS)
   auto const v = cudf::test::make_type_param_vector<TypeParam>({-2, -1, 1, 2});
   cudf::test::fixed_width_column_wrapper<TypeParam> input(v.begin(), v.end());
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{2, 1, 1, 2}};
-  auto output = cudf::unary_operation(input, cudf::unary_op::ABS);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::ABS);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -157,7 +157,7 @@ TYPED_TEST(UnaryMathOpsTest, SimpleSQRT)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 4, 9, 16}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1, 2, 3, 4}};
-  auto output = cudf::unary_operation(input, cudf::unary_op::SQRT);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::SQRT);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -165,7 +165,7 @@ TYPED_TEST(UnaryMathOpsTest, SimpleCBRT)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 27, 125}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1, 3, 5}};
-  auto output = cudf::unary_operation(input, cudf::unary_op::CBRT);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::CBRT);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -173,7 +173,7 @@ TYPED_TEST(UnaryMathOpsTest, SimpleSQRTWithNullMask)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 4, 9, 16}, {1, 1, 0, 1}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1, 2, 9, 4}, {1, 1, 0, 1}};
-  auto output = cudf::unary_operation(input, cudf::unary_op::SQRT);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::SQRT);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -181,7 +181,7 @@ TYPED_TEST(UnaryMathOpsTest, SimpleCBRTWithNullMask)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 27, 125}, {1, 1, 0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1, 3, 125}, {1, 1, 0}};
-  auto output = cudf::unary_operation(input, cudf::unary_op::CBRT);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::CBRT);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -189,7 +189,7 @@ TYPED_TEST(UnaryMathOpsTest, EmptyABS)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{};
-  auto output = cudf::unary_operation(input, cudf::unary_op::ABS);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::ABS);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -197,7 +197,7 @@ TYPED_TEST(UnaryMathOpsTest, EmptySQRT)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{};
-  auto output = cudf::unary_operation(input, cudf::unary_op::SQRT);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::SQRT);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -208,7 +208,7 @@ TYPED_TEST(UnaryMathOpsTest, DictionaryABS)
   auto input = cudf::dictionary::encode(input_w);
   cudf::test::fixed_width_column_wrapper<TypeParam> expected_w{{2, 1, 1, 2, 1, 2, 0}};
   auto expected = cudf::dictionary::encode(expected_w);
-  auto output   = cudf::unary_operation(input->view(), cudf::unary_op::ABS);
+  auto output   = cudf::unary_operation(input->view(), cudf::unary_operator::ABS);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), output->view());
 }
 
@@ -218,7 +218,7 @@ TYPED_TEST(UnaryMathOpsTest, DictionarySQRT)
   auto input = cudf::dictionary::encode(input_w);
   cudf::test::fixed_width_column_wrapper<TypeParam> expected_w{{1, 2, 0, 4}, {1, 1, 0, 1}};
   auto expected = cudf::dictionary::encode(expected_w);
-  auto output   = cudf::unary_operation(input->view(), cudf::unary_op::SQRT);
+  auto output   = cudf::unary_operation(input->view(), cudf::unary_operator::SQRT);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), output->view());
 }
 
@@ -228,7 +228,7 @@ TYPED_TEST(UnaryMathOpsTest, DictionaryCBRT)
   auto input = cudf::dictionary::encode(input_w);
   cudf::test::fixed_width_column_wrapper<TypeParam> expected_w{{1, 3, 0, 5}, {1, 1, 0, 1}};
   auto expected = cudf::dictionary::encode(expected_w);
-  auto output   = cudf::unary_operation(input->view(), cudf::unary_op::CBRT);
+  auto output   = cudf::unary_operation(input->view(), cudf::unary_operator::CBRT);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), output->view());
 }
 
@@ -244,7 +244,7 @@ TYPED_TEST(UnaryMathFloatOpsTest, SimpleSIN)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};
-  auto output = cudf::unary_operation(input, cudf::unary_op::SIN);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::SIN);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -252,7 +252,7 @@ TYPED_TEST(UnaryMathFloatOpsTest, SimpleCOS)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1.0}};
-  auto output = cudf::unary_operation(input, cudf::unary_op::COS);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::COS);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -260,7 +260,7 @@ TYPED_TEST(UnaryMathFloatOpsTest, SimpleSINH)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};
-  auto output = cudf::unary_operation(input, cudf::unary_op::SINH);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::SINH);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -268,7 +268,7 @@ TYPED_TEST(UnaryMathFloatOpsTest, SimpleCOSH)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1.0}};
-  auto output = cudf::unary_operation(input, cudf::unary_op::COSH);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::COSH);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -276,7 +276,7 @@ TYPED_TEST(UnaryMathFloatOpsTest, SimpleTANH)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};
-  auto output = cudf::unary_operation(input, cudf::unary_op::TANH);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::TANH);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -284,7 +284,7 @@ TYPED_TEST(UnaryMathFloatOpsTest, SimpleiASINH)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};
-  auto output = cudf::unary_operation(input, cudf::unary_op::ARCSINH);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::ARCSINH);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -292,7 +292,7 @@ TYPED_TEST(UnaryMathFloatOpsTest, SimpleACOSH)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};
-  auto output = cudf::unary_operation(input, cudf::unary_op::ARCCOSH);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::ARCCOSH);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -300,7 +300,7 @@ TYPED_TEST(UnaryMathFloatOpsTest, SimpleATANH)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{0.0}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{0.0}};
-  auto output = cudf::unary_operation(input, cudf::unary_op::ARCTANH);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::ARCTANH);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -308,7 +308,7 @@ TYPED_TEST(UnaryMathFloatOpsTest, SimpleFLOOR)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1.1, 3.3, 5.5, 7.7}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1.0, 3.0, 5.0, 7.0}};
-  auto output = cudf::unary_operation(input, cudf::unary_op::FLOOR);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::FLOOR);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -316,7 +316,7 @@ TYPED_TEST(UnaryMathFloatOpsTest, SimpleCEIL)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1.1, 3.3, 5.5, 7.7}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{2.0, 4.0, 6.0, 8.0}};
-  auto output = cudf::unary_operation(input, cudf::unary_op::CEIL);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::CEIL);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -327,7 +327,7 @@ TYPED_TEST(UnaryMathFloatOpsTest, SimpleRINT)
     T(1.5), T(3.5), T(-1.5), T(-3.5), T(0.0), T(NAN)};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{
     T(2.0), T(4.0), T(-2.0), T(-4.0), T(0.0), T(NAN)};
-  auto output = cudf::unary_operation(input, cudf::unary_op::RINT);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::RINT);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -341,7 +341,7 @@ TYPED_TEST(UnaryMathFloatOpsTest, SimpleEXP)
                                                      T(std::exp(-3.5)),
                                                      T(std::exp(0.0)),
                                                      T(NAN)};
-  auto output = cudf::unary_operation(input, cudf::unary_op::EXP);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::EXP);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, output->view());
 }
 
@@ -352,7 +352,7 @@ TYPED_TEST(UnaryMathFloatOpsTest, SimpleLOG)
     T(1.5), T(3.5), T(1.0), T(INFINITY), T(0.0), T(NAN), T(-1.0)};
   cudf::test::fixed_width_column_wrapper<T> expected{
     T(std::log(1.5)), T(std::log(3.5)), T(+0.0), T(INFINITY), T(-INFINITY), T(NAN), T(NAN)};
-  auto output = cudf::unary_operation(input, cudf::unary_op::LOG);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::LOG);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, output->view());
 }
 
@@ -362,7 +362,7 @@ TYPED_TEST(UnaryMathFloatOpsTest, DictionaryFLOOR)
   auto input = cudf::dictionary::encode(input_w);
   cudf::test::fixed_width_column_wrapper<TypeParam> expected_w{{1.0, 3.0, 5.0, 7.0}};
   auto expected = cudf::dictionary::encode(expected_w);
-  auto output   = cudf::unary_operation(input->view(), cudf::unary_op::FLOOR);
+  auto output   = cudf::unary_operation(input->view(), cudf::unary_operator::FLOOR);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), output->view());
 }
 
@@ -372,7 +372,7 @@ TYPED_TEST(UnaryMathFloatOpsTest, DictionaryCEIL)
   auto input = cudf::dictionary::encode(input_w);
   cudf::test::fixed_width_column_wrapper<TypeParam> expected_w{{2.0, 4.0, 6.0, 8.0}};
   auto expected = cudf::dictionary::encode(expected_w);
-  auto output   = cudf::unary_operation(input->view(), cudf::unary_op::CEIL);
+  auto output   = cudf::unary_operation(input->view(), cudf::unary_operator::CEIL);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), output->view());
 }
 
@@ -382,8 +382,8 @@ TYPED_TEST(UnaryMathFloatOpsTest, DictionaryEXP)
   cudf::test::fixed_width_column_wrapper<T> input_w{
     T(1.5), T(3.5), T(-1.5), T(-3.5), T(0.0), T(NAN)};
   auto input    = cudf::dictionary::encode(input_w);
-  auto output   = cudf::unary_operation(input->view(), cudf::unary_op::EXP);
-  auto expect   = cudf::unary_operation(input_w, cudf::unary_op::EXP);
+  auto output   = cudf::unary_operation(input->view(), cudf::unary_operator::EXP);
+  auto expect   = cudf::unary_operation(input_w, cudf::unary_operator::EXP);
   auto expected = cudf::dictionary::encode(expect->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), output->view());
 }
@@ -394,8 +394,8 @@ TYPED_TEST(UnaryMathFloatOpsTest, DictionaryLOG)
   cudf::test::fixed_width_column_wrapper<T> input_w{
     T(1.5), T(3.5), T(1.0), T(INFINITY), T(0.0), T(NAN), T(-1.0)};
   auto input    = cudf::dictionary::encode(input_w);
-  auto output   = cudf::unary_operation(input->view(), cudf::unary_op::LOG);
-  auto expect   = cudf::unary_operation(input_w, cudf::unary_op::LOG);
+  auto output   = cudf::unary_operation(input->view(), cudf::unary_operator::LOG);
+  auto expect   = cudf::unary_operation(input_w, cudf::unary_operator::LOG);
   auto expected = cudf::dictionary::encode(expect->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), output->view());
 }
@@ -403,22 +403,23 @@ TYPED_TEST(UnaryMathFloatOpsTest, DictionaryLOG)
 TYPED_TEST(UnaryMathFloatOpsTest, RINTNonFloatingFail)
 {
   cudf::test::fixed_width_column_wrapper<int64_t> input{{1, 2, 3, 4, 5}};
-  EXPECT_THROW(cudf::unary_operation(input, cudf::unary_op::RINT), cudf::logic_error);
+  EXPECT_THROW(cudf::unary_operation(input, cudf::unary_operator::RINT), cudf::logic_error);
 }
 
 TYPED_TEST(UnaryMathFloatOpsTest, IntegralTypeFail)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{1.0};
-  EXPECT_THROW(cudf::unary_operation(input, cudf::unary_op::BIT_INVERT), cudf::logic_error);
+  EXPECT_THROW(cudf::unary_operation(input, cudf::unary_operator::BIT_INVERT), cudf::logic_error);
   auto d = cudf::dictionary::encode(input);
-  EXPECT_THROW(cudf::unary_operation(d->view(), cudf::unary_op::BIT_INVERT), cudf::logic_error);
+  EXPECT_THROW(cudf::unary_operation(d->view(), cudf::unary_operator::BIT_INVERT),
+               cudf::logic_error);
 }
 
 TYPED_TEST(UnaryMathFloatOpsTest, SimpleCBRT)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> input{{1, 27, 343, 4913}};
   cudf::test::fixed_width_column_wrapper<TypeParam> expected{{1, 3, 7, 17}};
-  auto output = cudf::unary_operation(input, cudf::unary_op::CBRT);
+  auto output = cudf::unary_operation(input, cudf::unary_operator::CBRT);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
@@ -428,15 +429,15 @@ struct UnaryMathOpsErrorTest : public cudf::test::BaseFixture {
 TEST_F(UnaryMathOpsErrorTest, ArithmeticTypeFail)
 {
   cudf::test::strings_column_wrapper input{"c"};
-  EXPECT_THROW(cudf::unary_operation(input, cudf::unary_op::SQRT), cudf::logic_error);
+  EXPECT_THROW(cudf::unary_operation(input, cudf::unary_operator::SQRT), cudf::logic_error);
   auto d = cudf::dictionary::encode(input);
-  EXPECT_THROW(cudf::unary_operation(d->view(), cudf::unary_op::SQRT), cudf::logic_error);
+  EXPECT_THROW(cudf::unary_operation(d->view(), cudf::unary_operator::SQRT), cudf::logic_error);
 }
 
 TEST_F(UnaryMathOpsErrorTest, LogicalOpTypeFail)
 {
   cudf::test::strings_column_wrapper input{"h"};
-  EXPECT_THROW(cudf::unary_operation(input, cudf::unary_op::NOT), cudf::logic_error);
+  EXPECT_THROW(cudf::unary_operation(input, cudf::unary_operator::NOT), cudf::logic_error);
   auto d = cudf::dictionary::encode(input);
-  EXPECT_THROW(cudf::unary_operation(d->view(), cudf::unary_op::NOT), cudf::logic_error);
+  EXPECT_THROW(cudf::unary_operation(d->view(), cudf::unary_operator::NOT), cudf::logic_error);
 }

@@ -1273,3 +1273,51 @@ def test_groupby_pipe():
     actual = gdf.groupby("A").pipe(lambda x: x.max() - x.min())
 
     assert_eq(expected, actual)
+
+
+def test_groupby_apply_return_scalars():
+    pdf = pd.DataFrame(
+        {
+            "A": [1, 1, 2, 2, 3, 3, 4, 4, 5, 5],
+            "B": [
+                0.01,
+                np.nan,
+                0.03,
+                0.04,
+                np.nan,
+                0.06,
+                0.07,
+                0.08,
+                0.09,
+                1.0,
+            ],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    def custom_map_func(x):
+        x = x[~x["B"].isna()]
+        ticker = x.shape[0]
+        full = ticker / 10
+        return full
+
+    expected = pdf.groupby("A").apply(lambda x: custom_map_func(x))
+    actual = gdf.groupby("A").apply(lambda x: custom_map_func(x))
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "cust_func",
+    [lambda x: x - x.max(), lambda x: x.min() - x.max(), lambda x: x.min()],
+)
+def test_groupby_apply_return_series_dataframe(cust_func):
+    pdf = pd.DataFrame(
+        {"key": [0, 0, 1, 1, 2, 2, 2], "val": [0, 1, 2, 3, 4, 5, 6]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pdf.groupby(["key"]).apply(cust_func)
+    actual = gdf.groupby(["key"]).apply(cust_func)
+
+    assert_eq(expected, actual)

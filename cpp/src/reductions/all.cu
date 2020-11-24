@@ -14,24 +14,27 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/reduction_functions.hpp>
 #include <reductions/simple.cuh>
+
+#include <cudf/detail/reduction_functions.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace reduction {
 
 std::unique_ptr<cudf::scalar> all(column_view const& col,
                                   cudf::data_type const output_dtype,
-                                  rmm::mr::device_memory_resource* mr,
-                                  cudaStream_t stream)
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(output_dtype == cudf::data_type(cudf::type_id::BOOL8),
                "all() operation can be applied with output type `BOOL8` only");
   return cudf::type_dispatcher(col.type(),
                                simple::bool_result_element_dispatcher<cudf::reduction::op::min>{},
                                col,
-                               mr,
-                               stream);
+                               stream,
+                               mr);
 }
 
 }  // namespace reduction

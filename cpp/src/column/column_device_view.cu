@@ -133,7 +133,7 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
                            cudaMemcpyDefault,
                            stream.value()));
 
-  CUDA_TRY(cudaStreamSynchronize(stream.value()));
+  stream.synchronize();
 
   return result;
 }

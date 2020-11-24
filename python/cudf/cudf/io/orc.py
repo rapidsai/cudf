@@ -33,10 +33,10 @@ def _parse_column_statistics(cs, column_statistics_blob):
     cs.ParseFromString(column_statistics_blob)
 
     # Load from parsed stats blob into stats to return
-    if not cs.HasField("numberOfValues") or not cs.HasField("hasNull"):
-        return None
-    column_statistics["number_of_values"] = cs.numberOfValues
-    column_statistics["has_null"] = cs.hasNull
+    if cs.HasField("numberOfValues"):
+        column_statistics["number_of_values"] = cs.numberOfValues
+    if cs.HasField("hasNull"):
+        column_statistics["has_null"] = cs.hasNull
     if cs.HasField("intStatistics"):
         column_statistics["minimum"] = cs.intStatistics.minimum
         column_statistics["maximum"] = cs.intStatistics.maximum
