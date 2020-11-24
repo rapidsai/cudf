@@ -90,6 +90,8 @@ public class WindowOptions {
     if (followingCol != null) {
       ret = 31 * ret + followingCol.hashCode();
     }
+    ret = 31 * ret + Boolean.hashCode(isUnboundedPreceding);
+    ret = 31 * ret + Boolean.hashCode(isUnboundedFollowing);
     return ret;
   }
 
