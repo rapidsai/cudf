@@ -144,7 +144,7 @@ auto contiguous_copy_column_device_views(HostTableView source_view, rmm::cuda_st
   auto d_columns = detail::child_columns_to_device_array<ColumnDeviceView>(
     source_view.begin(), source_view.end(), h_ptr, d_ptr);
 
-  CUDA_TRY(cudaMemcpyAsync(d_columns, hptr, views_size_bytes, cudaMemcpyDefault, stream.value()));
+  CUDA_TRY(cudaMemcpyAsync(d_ptr, h_ptr, views_size_bytes, cudaMemcpyDefault, stream.value()));
   stream.synchronize();
   return std::make_tuple(std::move(descendant_storage), d_columns);
 }
