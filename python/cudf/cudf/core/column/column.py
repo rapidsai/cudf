@@ -977,7 +977,7 @@ class ColumnBase(Column, Serializable):
         elif np.issubdtype(dtype, np.timedelta64):
             return self.as_timedelta_column(dtype, **kwargs)
         else:
-            return self.as_numerical_column(dtype, **kwargs)
+            return self.as_numerical_column(dtype)
 
     def as_categorical_column(self, dtype, **kwargs) -> "ColumnBase":
         if "ordered" in kwargs:
@@ -1023,7 +1023,7 @@ class ColumnBase(Column, Serializable):
         )
 
     def as_numerical_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
         raise NotImplementedError
 

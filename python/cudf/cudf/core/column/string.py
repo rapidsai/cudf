@@ -4701,7 +4701,7 @@ class StringColumn(column.ColumnBase):
             return self.children[1].size
 
     def as_numerical_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
         out_dtype = np.dtype(dtype)
 
