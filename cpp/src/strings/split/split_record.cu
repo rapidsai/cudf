@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <strings/split/split_utils.cuh>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -23,7 +25,8 @@
 #include <cudf/strings/split/split.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-#include <strings/split/split_utils.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/scan.h>
 #include <thrust/transform.h>
@@ -221,21 +224,23 @@ template <typename TokenCounter, typename TokenReader>
 std::unique_ptr<column> split_record_fn(strings_column_view const& strings,
                                         TokenCounter counter,
                                         TokenReader reader,
-                                        rmm::mr::device_memory_resource* mr,
-                                        cudaStream_t stream)
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
 {
   // create offsets column by counting the number of tokens per string
   auto strings_count = strings.size();
   auto offsets       = make_numeric_column(
     data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto d_offsets = offsets->mutable_view().data<int32_t>();
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
+  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                     thrust::make_counting_iterator(0),
                     thrust::make_counting_iterator(strings_count),
                     d_offsets,
                     counter);
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream)->on(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+  thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
+                         d_offsets,
+                         d_offsets + strings_count + 1,
+                         d_offsets);
 
   // last entry is the total number of tokens to be generated
   auto total_tokens = cudf::detail::get_value<int32_t>(offsets->view(), strings_count, stream);
@@ -243,12 +248,12 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& strings,
   rmm::device_vector<string_index_pair> tokens(total_tokens);
   reader.d_token_offsets = d_offsets;
   reader.d_tokens        = tokens.data().get();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      reader);
   // convert the index-pairs into one big strings column
-  auto strings_output = make_strings_column(tokens.begin(), tokens.end(), mr, stream);
+  auto strings_output = make_strings_column(tokens.begin(), tokens.end(), stream, mr);
   // create a lists column using the offsets and the strings columns
   return make_lists_column(strings_count,
                            std::move(offsets),
@@ -262,8 +267,8 @@ std::unique_ptr<column> split_record(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
   size_type maxsplit                  = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
 
@@ -275,15 +280,15 @@ std::unique_ptr<column> split_record(
     return split_record_fn(strings,
                            whitespace_token_counter_fn{*d_strings_column_ptr, max_tokens},
                            whitespace_token_reader_fn<dir>{*d_strings_column_ptr, max_tokens},
-                           mr,
-                           stream);
+                           stream,
+                           mr);
   } else {
     string_view d_delimiter(delimiter.data(), delimiter.size());
     return split_record_fn(strings,
                            token_counter_fn{*d_strings_column_ptr, d_delimiter, max_tokens},
                            token_reader_fn<dir>{*d_strings_column_ptr, d_delimiter},
-                           mr,
-                           stream);
+                           stream,
+                           mr);
   }
 }
 
@@ -297,7 +302,8 @@ std::unique_ptr<column> split_record(strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split_record<detail::Dir::FORWARD>(strings, delimiter, maxsplit, mr, 0);
+  return detail::split_record<detail::Dir::FORWARD>(
+    strings, delimiter, maxsplit, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> rsplit_record(strings_column_view const& strings,
@@ -306,7 +312,8 @@ std::unique_ptr<column> rsplit_record(strings_column_view const& strings,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::split_record<detail::Dir::BACKWARD>(strings, delimiter, maxsplit, mr, 0);
+  return detail::split_record<detail::Dir::BACKWARD>(
+    strings, delimiter, maxsplit, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

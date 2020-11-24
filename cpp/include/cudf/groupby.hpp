@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <utility>
 #include <vector>
@@ -222,13 +224,13 @@ class groupby {
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> dispatch_aggregation(
     std::vector<aggregation_request> const& requests,
-    cudaStream_t stream,
+    rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr);
 
   // Sort-based groupby
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> sort_aggregate(
     std::vector<aggregation_request> const& requests,
-    cudaStream_t stream,
+    rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr);
 };
 /** @} */

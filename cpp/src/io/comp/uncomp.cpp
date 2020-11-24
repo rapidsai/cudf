@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 
-#include <cuda_runtime.h>
-#include <string.h>  // memset
-#include <zlib.h>    // uncompress
 #include "io_uncomp.h"
 #include "unbz2.h"  // bz2 uncompress
 
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
+
+#include <cuda_runtime.h>
+
+#include <string.h>  // memset
+
+#include <zlib.h>  // uncompress
 
 using cudf::detail::host_span;
 
