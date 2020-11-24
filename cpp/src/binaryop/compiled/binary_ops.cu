@@ -23,6 +23,7 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace binops {
@@ -105,8 +106,8 @@ struct binary_op {
                                      binary_operator op,
                                      data_type out_type,
                                      bool const reversed,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     auto new_mask = binops::detail::scalar_col_valid_mask_and(lhs, rhs, stream, mr);
     auto out      = make_fixed_width_column(out_type,
@@ -125,12 +126,12 @@ struct binary_op {
       if (lhs.has_nulls()) {
         auto lhs_itr = cudf::detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});
         reversed
-          ? thrust::transform(rmm::exec_policy(stream)->on(stream),
+          ? thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                               lhs_itr,
                               lhs_itr + lhs.size(),
                               out_itr,
                               apply_binop_scalar_rhs_lhs<Lhs, Rhs, Out>{op, rhs_scalar_view})
-          : thrust::transform(rmm::exec_policy(stream)->on(stream),
+          : thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                               lhs_itr,
                               lhs_itr + lhs.size(),
                               out_itr,
@@ -140,12 +141,12 @@ struct binary_op {
           thrust::make_counting_iterator(size_type{0}),
           [col = *lhs_device_view] __device__(size_type i) { return col.element<Lhs>(i); });
         reversed
-          ? thrust::transform(rmm::exec_policy(stream)->on(stream),
+          ? thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                               lhs_itr,
                               lhs_itr + lhs.size(),
                               out_itr,
                               apply_binop_scalar_rhs_lhs<Lhs, Rhs, Out>{op, rhs_scalar_view})
-          : thrust::transform(rmm::exec_policy(stream)->on(stream),
+          : thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                               lhs_itr,
                               lhs_itr + lhs.size(),
                               out_itr,
@@ -153,7 +154,7 @@ struct binary_op {
       }
     }
 
-    CHECK_CUDA(stream);
+    CHECK_CUDA(stream.value());
 
     return out;
   }
@@ -162,8 +163,8 @@ struct binary_op {
                                      column_view const& rhs,
                                      binary_operator op,
                                      data_type out_type,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     auto new_mask = cudf::detail::bitmask_and(table_view({lhs, rhs}), stream, mr);
     auto out      = make_fixed_width_column(
@@ -177,7 +178,7 @@ struct binary_op {
       if (lhs.has_nulls() && rhs.has_nulls()) {
         auto lhs_itr = cudf::detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});
         auto rhs_itr = cudf::detail::make_null_replacement_iterator(*rhs_device_view, Rhs{});
-        thrust::transform(rmm::exec_policy(stream)->on(stream),
+        thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                           lhs_itr,
                           lhs_itr + lhs.size(),
                           rhs_itr,
@@ -188,7 +189,7 @@ struct binary_op {
         auto rhs_itr = thrust::make_transform_iterator(
           thrust::make_counting_iterator(size_type{0}),
           [col = *rhs_device_view] __device__(size_type i) { return col.element<Rhs>(i); });
-        thrust::transform(rmm::exec_policy(stream)->on(stream),
+        thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                           lhs_itr,
                           lhs_itr + lhs.size(),
                           rhs_itr,
@@ -199,7 +200,7 @@ struct binary_op {
           thrust::make_counting_iterator(size_type{0}),
           [col = *lhs_device_view] __device__(size_type i) { return col.element<Lhs>(i); });
         auto rhs_itr = cudf::detail::make_null_replacement_iterator(*rhs_device_view, Rhs{});
-        thrust::transform(rmm::exec_policy(stream)->on(stream),
+        thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                           lhs_itr,
                           lhs_itr + lhs.size(),
                           rhs_itr,
@@ -212,7 +213,7 @@ struct binary_op {
         auto rhs_itr = thrust::make_transform_iterator(
           thrust::make_counting_iterator(size_type{0}),
           [col = *rhs_device_view] __device__(size_type i) { return col.element<Rhs>(i); });
-        thrust::transform(rmm::exec_policy(stream)->on(stream),
+        thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                           lhs_itr,
                           lhs_itr + lhs.size(),
                           rhs_itr,
@@ -221,7 +222,7 @@ struct binary_op {
       }
     }
 
-    CHECK_CUDA(stream);
+    CHECK_CUDA(stream.value());
 
     return out;
   }
@@ -304,7 +305,7 @@ struct null_considering_binop {
   void populate_out_col(LhsViewT const& lhsv,
                         RhsViewT const& rhsv,
                         cudf::size_type col_size,
-                        cudaStream_t stream,
+                        rmm::cuda_stream_view stream,
                         CompareFunc cfunc,
                         OutT* out_col) const
   {
@@ -312,7 +313,7 @@ struct null_considering_binop {
     compare_functor<LhsViewT, RhsViewT, OutT, CompareFunc> binop_func{lhsv, rhsv, cfunc};
 
     // Execute it on every element
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
+    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(col_size),
                       out_col,
@@ -326,8 +327,8 @@ struct null_considering_binop {
                                      binary_operator op,
                                      data_type output_type,
                                      cudf::size_type col_size,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
     std::unique_ptr<column> out;
     // Create device views for inputs
@@ -418,8 +419,8 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
                                          data_type output_type,
-                                         rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream)
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::type_id::STRING, "Invalid/Unsupported lhs datatype");
@@ -427,12 +428,12 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
   if (is_null_dependent(op)) {
     if (rhs.is_empty()) return cudf::make_empty_column(output_type);
     auto rhs_device_view = cudf::column_device_view::create(rhs, stream);
-    return null_considering_binop{}(lhs, *rhs_device_view, op, output_type, rhs.size(), mr, stream);
+    return null_considering_binop{}(lhs, *rhs_device_view, op, output_type, rhs.size(), stream, mr);
   } else {
     CUDF_EXPECTS(is_boolean(output_type), "Invalid/Unsupported output datatype");
     // Should pass the right type of scalar and column_view when specializing binary_op
     return binary_op<cudf::string_view, cudf::string_view, bool>{}(
-      rhs, lhs, op, output_type, true, mr, stream);
+      rhs, lhs, op, output_type, true, stream, mr);
   }
 }
 
@@ -440,8 +441,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          scalar const& rhs,
                                          binary_operator op,
                                          data_type output_type,
-                                         rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream)
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::type_id::STRING, "Invalid/Unsupported lhs datatype");
@@ -449,11 +450,11 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   if (is_null_dependent(op)) {
     if (lhs.is_empty()) return cudf::make_empty_column(output_type);
     auto lhs_device_view = cudf::column_device_view::create(lhs, stream);
-    return null_considering_binop{}(*lhs_device_view, rhs, op, output_type, lhs.size(), mr, stream);
+    return null_considering_binop{}(*lhs_device_view, rhs, op, output_type, lhs.size(), stream, mr);
   } else {
     CUDF_EXPECTS(is_boolean(output_type), "Invalid/Unsupported output datatype");
     return binary_op<cudf::string_view, cudf::string_view, bool>{}(
-      lhs, rhs, op, output_type, false, mr, stream);
+      lhs, rhs, op, output_type, false, stream, mr);
   }
 }
 
@@ -461,8 +462,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
                                          data_type output_type,
-                                         rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream)
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   // hard-coded to only work with cudf::string_view so we don't explode compile times
   CUDF_EXPECTS(lhs.type().id() == cudf::type_id::STRING, "Invalid/Unsupported lhs datatype");
@@ -473,11 +474,11 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
     auto lhs_device_view = cudf::column_device_view::create(lhs, stream);
     auto rhs_device_view = cudf::column_device_view::create(rhs, stream);
     return null_considering_binop{}(
-      *lhs_device_view, *rhs_device_view, op, output_type, lhs.size(), mr, stream);
+      *lhs_device_view, *rhs_device_view, op, output_type, lhs.size(), stream, mr);
   } else {
     CUDF_EXPECTS(is_boolean(output_type), "Invalid/Unsupported output datatype");
     return binary_op<cudf::string_view, cudf::string_view, bool>{}(
-      lhs, rhs, op, output_type, mr, stream);
+      lhs, rhs, op, output_type, stream, mr);
   }
 }
 

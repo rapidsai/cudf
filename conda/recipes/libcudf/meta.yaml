@@ -76,6 +76,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/replace.hpp
     - test -f $PREFIX/include/cudf/detail/reshape.hpp
     - test -f $PREFIX/include/cudf/detail/round.hpp
+    - test -f $PREFIX/include/cudf/detail/quantiles.hpp
     - test -f $PREFIX/include/cudf/detail/scatter.hpp
     - test -f $PREFIX/include/cudf/detail/search.hpp
     - test -f $PREFIX/include/cudf/detail/sequence.hpp
