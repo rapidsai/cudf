@@ -347,10 +347,7 @@ std::unique_ptr<cudf::column> transform_fn(cudf::dictionary_column_view const& i
                                      stream,
                                      default_mr);
   return cudf::dictionary::detail::encode(
-    output->view(),
-    dictionary::detail::get_indices_type_for_size(output->size()),
-    mr,
-    stream.value());
+    output->view(), dictionary::detail::get_indices_type_for_size(output->size()), stream, mr);
 }
 
 template <typename UFN>
@@ -360,13 +357,12 @@ struct MathOpDispatcher {
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
   {
-    return transform_fn<T, UFN>(
-      input.begin<T>(),
-      input.end<T>(),
-      cudf::detail::copy_bitmask(input, rmm::cuda_stream_view{stream}, mr),
-      input.null_count(),
-      stream,
-      mr);
+    return transform_fn<T, UFN>(input.begin<T>(),
+                                input.end<T>(),
+                                cudf::detail::copy_bitmask(input, stream, mr),
+                                input.null_count(),
+                                stream,
+                                mr);
   }
 
   struct dictionary_dispatch {

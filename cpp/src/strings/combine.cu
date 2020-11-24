@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <strings/utilities.cuh>
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -28,9 +30,8 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 
-#include <strings/utilities.cuh>
-
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/logical.h>
 #include <thrust/transform_reduce.h>
@@ -41,12 +42,12 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-//
+
 std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     string_scalar const& separator,
                                     string_scalar const& narep,
-                                    rmm::mr::device_memory_resource* mr,
-                                    cudaStream_t stream = 0)
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   auto num_columns = strings_columns.num_columns();
   CUDF_EXPECTS(num_columns > 0, "At least one column must be specified");
@@ -59,7 +60,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
     return std::make_unique<column>(*(strings_columns.begin()), stream, mr);
   auto strings_count = strings_columns.num_rows();
   if (strings_count == 0)  // empty begets empty
-    return detail::make_empty_strings_column(mr, stream);
+    return detail::make_empty_strings_column(stream, mr);
 
   CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be a valid string_scalar");
   string_view d_separator(separator.data(), separator.size());
@@ -111,17 +112,17 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0), offsets_transformer);
   auto offsets_column = detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_results_offsets = offsets_column->view().data<int32_t>();
 
   // create the chars column
   size_type bytes = thrust::device_pointer_cast(d_results_offsets)[strings_count];
   auto chars_column =
-    strings::detail::create_chars_child_column(strings_count, null_count, bytes, mr, stream);
+    strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
   // fill the chars column
   auto d_results_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
-    rmm::exec_policy(stream)->on(stream),
+    rmm::exec_policy(stream)->on(stream.value()),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     [d_table, num_columns, d_separator, d_narep, d_results_offsets, d_results_chars] __device__(
@@ -154,15 +155,14 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                              mr);
 }
 
-//
 std::unique_ptr<column> join_strings(strings_column_view const& strings,
                                      string_scalar const& separator,
                                      string_scalar const& narep,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream = 0)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(mr, stream);
+  if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
 
   CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be a valid string_scalar");
 
@@ -178,7 +178,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
   auto d_output_offsets = output_offsets.data().get();
   // using inclusive-scan to compute last entry which is the total size
   thrust::transform_inclusive_scan(
-    execpol->on(stream),
+    execpol->on(stream.value()),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     d_output_offsets + 1,
@@ -193,7 +193,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
       return bytes;
     },
     thrust::plus<size_type>());
-  CUDA_TRY(cudaMemsetAsync(d_output_offsets, 0, sizeof(size_type), stream));
+  CUDA_TRY(cudaMemsetAsync(d_output_offsets, 0, sizeof(size_type), stream.value()));
   // total size is the last entry
   size_type bytes = output_offsets.back();
 
@@ -207,7 +207,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
                            new_offsets,
                            sizeof(new_offsets),
                            cudaMemcpyHostToDevice,
-                           stream));
+                           stream.value()));
 
   // build null mask
   // only one entry so it is either all valid or all null
@@ -218,11 +218,11 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
     null_count = 1;
   }
   auto chars_column =
-    detail::create_chars_child_column(strings_count, null_count, bytes, mr, stream);
+    detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.data<char>();
   thrust::for_each_n(
-    execpol->on(stream),
+    execpol->on(stream.value()),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     [d_strings, d_separator, d_narep, d_output_offsets, d_chars] __device__(size_type idx) {
@@ -248,13 +248,12 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
                              mr);
 }
 
-//
 std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     strings_column_view const& separators,
                                     string_scalar const& separator_narep,
                                     string_scalar const& col_narep,
-                                    rmm::mr::device_memory_resource* mr,
-                                    cudaStream_t stream = 0)
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   auto num_columns = strings_columns.num_columns();
   CUDF_EXPECTS(num_columns > 0, "At least one column must be specified");
@@ -268,7 +267,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   CUDF_EXPECTS(strings_count == separators.size(),
                "Separators column should be the same size as the strings columns");
   if (strings_count == 0)  // Empty begets empty
-    return detail::make_empty_strings_column(mr, stream);
+    return detail::make_empty_strings_column(stream, mr);
 
   // Invalid output column strings - null rows
   string_view const invalid_str{nullptr, 0};
@@ -287,7 +286,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 
     // Execute it on every element
     thrust::transform(
-      rmm::exec_policy(stream)->on(stream),
+      rmm::exec_policy(stream)->on(stream.value()),
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(strings_count),
       out_col_strings.data().get(),
@@ -373,17 +372,17 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0), offsets_transformer);
   auto offsets_column = detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_results_offsets = offsets_column->view().data<int32_t>();
 
   // Create the chars column
   size_type bytes = thrust::device_pointer_cast(d_results_offsets)[strings_count];
   auto chars_column =
-    strings::detail::create_chars_child_column(strings_count, null_count, bytes, mr, stream);
+    strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
 
   // Fill the chars column
   auto d_results_chars = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      [d_table,
@@ -453,7 +452,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(strings_columns, separator, narep, mr);
+  return detail::concatenate(strings_columns, separator, narep, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> join_strings(strings_column_view const& strings,
@@ -462,7 +461,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::join_strings(strings, separator, narep, mr);
+  return detail::join_strings(strings, separator, narep, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> concatenate(table_view const& strings_columns,
@@ -472,7 +471,8 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(strings_columns, separators, separator_narep, col_narep, mr);
+  return detail::concatenate(
+    strings_columns, separators, separator_narep, col_narep, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

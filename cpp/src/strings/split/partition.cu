@@ -24,6 +24,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <vector>
 
 namespace cudf {
@@ -176,8 +178,8 @@ struct rpartition_fn : public partition_fn {
 std::unique_ptr<table> partition(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
   auto strings_count = strings.size();
@@ -189,7 +191,7 @@ std::unique_ptr<table> partition(
   partition_fn partitioner(
     *strings_column, d_delimiter, left_indices, delim_indices, right_indices);
 
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      partitioner);
@@ -203,8 +205,8 @@ std::unique_ptr<table> partition(
 std::unique_ptr<table> rpartition(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
   auto strings_count = strings.size();
@@ -215,7 +217,7 @@ std::unique_ptr<table> rpartition(
     right_indices(strings_count);
   rpartition_fn partitioner(
     *strings_column, d_delimiter, left_indices, delim_indices, right_indices);
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      partitioner);
@@ -236,7 +238,7 @@ std::unique_ptr<table> partition(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::partition(strings, delimiter, mr);
+  return detail::partition(strings, delimiter, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<table> rpartition(strings_column_view const& strings,
@@ -244,7 +246,7 @@ std::unique_ptr<table> rpartition(strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rpartition(strings, delimiter, mr);
+  return detail::rpartition(strings, delimiter, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

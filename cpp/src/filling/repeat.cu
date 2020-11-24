@@ -46,7 +46,8 @@ struct count_accessor {
   cudf::scalar const* p_scalar = nullptr;
 
   template <typename T>
-  std::enable_if_t<std::is_integral<T>::value, cudf::size_type> operator()(cudaStream_t stream = 0)
+  std::enable_if_t<std::is_integral<T>::value, cudf::size_type> operator()(
+    rmm::cuda_stream_view stream)
   {
     using ScalarType = cudf::scalar_type_t<T>;
 #if 1
@@ -63,7 +64,8 @@ struct count_accessor {
   }
 
   template <typename T>
-  std::enable_if_t<not std::is_integral<T>::value, cudf::size_type> operator()(cudaStream_t stream)
+  std::enable_if_t<not std::is_integral<T>::value, cudf::size_type> operator()(
+    rmm::cuda_stream_view)
   {
     CUDF_FAIL("count value should be a integral type.");
   }

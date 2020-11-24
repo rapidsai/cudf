@@ -180,8 +180,8 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
     auto dict_target =
       dictionary::detail::add_keys(dictionary_column_view(target),
                                    make_column_from_scalar(source.get(), 1, stream)->view(),
-                                   mr,
-                                   stream.value());
+                                   stream,
+                                   mr);
     auto dict_view    = dictionary_column_view(dict_target->view());
     auto scalar_index = dictionary::detail::get_index(dict_view, source.get(), stream);
     auto scalar_iter  = thrust::make_permutation_iterator(

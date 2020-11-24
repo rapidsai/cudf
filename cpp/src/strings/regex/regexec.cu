@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,12 @@
  */
 
 #include <strings/regex/regcomp.h>
-#include <cudf/detail/utilities/integer_utils.hpp>
-#include <rmm/device_buffer.hpp>
 #include <strings/regex/regex.cuh>
+
+#include <cudf/detail/utilities/integer_utils.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 
 namespace cudf {
 namespace strings {
@@ -72,7 +75,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   std::string const& pattern,
   const uint8_t* codepoint_flags,
   size_type strings_count,
-  cudaStream_t stream)
+  rmm::cuda_stream_view stream)
 {
   std::vector<char32_t> pattern32 = string_to_char32_vector(pattern);
   // compile pattern into host object
@@ -148,7 +151,8 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   }
 
   // copy flat prog to device memory
-  CUDA_TRY(cudaMemcpy(d_buffer->data(), h_buffer.data(), memsize, cudaMemcpyHostToDevice));
+  CUDA_TRY(cudaMemcpyAsync(
+    d_buffer->data(), h_buffer.data(), memsize, cudaMemcpyHostToDevice, stream.value()));
   //
   auto deleter = [d_buffer, d_relists](reprog_device* t) {
     t->destroy();

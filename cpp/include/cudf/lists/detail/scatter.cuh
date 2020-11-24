@@ -16,18 +16,22 @@
 
 #pragma once
 
-#include <cuda_runtime.h>
-#include <thrust/binary_search.h>
-#include <cinttypes>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/null_mask.hpp>
+#include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+
 #include <rmm/device_uvector.hpp>
+
+#include <thrust/binary_search.h>
+
+#include <cinttypes>
 
 namespace cudf {
 namespace lists {
@@ -385,9 +389,9 @@ struct list_child_constructor {
         (unbound_list_row.label() == unbound_list_view::label_type::SOURCE ? source_lists
                                                                            : target_lists);
       auto const list_begin_offset =
-        bound_column.offsets().element<size_type>(unbound_list_row.row_index());
+        bound_column.offsets().template element<size_type>(unbound_list_row.row_index());
       auto const list_end_offset =
-        bound_column.offsets().element<size_type>(unbound_list_row.row_index() + 1);
+        bound_column.offsets().template element<size_type>(unbound_list_row.row_index() + 1);
 
 #ifndef NDEBUG
       printf(
@@ -493,10 +497,10 @@ struct list_child_constructor {
     // string_views should now have been populated with source and target references.
 
     auto string_offsets = cudf::strings::detail::child_offsets_from_string_iterator(
-      string_views.begin(), string_views.size(), mr, stream.value());
+      string_views.begin(), string_views.size(), stream, mr);
 
     auto string_chars = cudf::strings::detail::child_chars_from_string_vector(
-      string_views, string_offsets->view().template data<cudf::size_type>(), 0, mr, stream.value());
+      string_views, string_offsets->view().template data<cudf::size_type>(), 0, stream, mr);
     auto child_null_mask =
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
         ? construct_child_nullmask(
@@ -587,7 +591,7 @@ struct list_child_constructor {
       child_list_views.begin(), [] __device__(auto const& row) { return row.size(); });
 
     auto child_offsets = cudf::strings::detail::make_offsets_child_column(
-      begin, begin + child_list_views.size(), mr, stream.value());
+      begin, begin + child_list_views.size(), stream, mr);
 
     auto child_column =
       cudf::type_dispatcher(source_lists_column_view.child().child(1).type(),
@@ -695,7 +699,7 @@ std::unique_ptr<column> scatter(
   auto list_size_begin = thrust::make_transform_iterator(
     target_vector.begin(), [] __device__(unbound_list_view l) { return l.size(); });
   auto offsets_column = cudf::strings::detail::make_offsets_child_column(
-    list_size_begin, list_size_begin + target.size(), mr, stream.value());
+    list_size_begin, list_size_begin + target.size(), stream, mr);
 
   auto child_column = cudf::type_dispatcher(child_column_type,
                                             list_child_constructor{},

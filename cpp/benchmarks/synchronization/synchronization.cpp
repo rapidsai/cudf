@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,13 +15,15 @@
  */
 
 #include "synchronization.hpp"
+
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
 cuda_event_timer::cuda_event_timer(benchmark::State& state,
                                    bool flush_l2_cache,
-                                   cudaStream_t stream)
+                                   rmm::cuda_stream_view stream)
   : p_state(&state), stream(stream)
 {
   // flush all of L2$
@@ -35,18 +37,19 @@ cuda_event_timer::cuda_event_timer(benchmark::State& state,
     if (l2_cache_bytes > 0) {
       const int memset_value = 0;
       rmm::device_buffer l2_cache_buffer(l2_cache_bytes, stream);
-      CUDA_TRY(cudaMemsetAsync(l2_cache_buffer.data(), memset_value, l2_cache_bytes, stream));
+      CUDA_TRY(
+        cudaMemsetAsync(l2_cache_buffer.data(), memset_value, l2_cache_bytes, stream.value()));
     }
   }
 
   CUDA_TRY(cudaEventCreate(&start));
   CUDA_TRY(cudaEventCreate(&stop));
-  CUDA_TRY(cudaEventRecord(start, stream));
+  CUDA_TRY(cudaEventRecord(start, stream.value()));
 }
 
 cuda_event_timer::~cuda_event_timer()
 {
-  CUDA_TRY(cudaEventRecord(stop, stream));
+  CUDA_TRY(cudaEventRecord(stop, stream.value()));
   CUDA_TRY(cudaEventSynchronize(stop));
 
   float milliseconds = 0.0f;
