@@ -217,6 +217,9 @@ class DataFrame(Frame, Serializable):
             if isinstance(data, pd.DataFrame):
                 data = self.from_pandas(data)
 
+            if index is not None and not data.index.equals(index):
+                data = data.reindex(index)
+
             if columns is not None:
                 self._data = _get_columns_from_column_accessor(
                     column_accessor=data._data, columns=columns
@@ -225,7 +228,7 @@ class DataFrame(Frame, Serializable):
                 self._data = data._data
                 self.columns = data.columns
 
-            self._index = data._index if index is None else as_index(index)
+            self._index = data._index
         elif data is None:
             if index is None:
                 self._index = RangeIndex(0)
