@@ -25,7 +25,7 @@ def split(Column source_strings,
           size_type maxsplit):
     """
     Returns a Table by splitting the `source_strings`
-    column around the specified `delimiter`.
+    column around the specified `py_delimiter`.
     The split happens from beginning.
     """
 
@@ -55,7 +55,7 @@ def rsplit(Column source_strings,
            size_type maxsplit):
     """
     Returns a Table by splitting the `source_strings`
-    column around the specified `delimiter`.
+    column around the specified `py_delimiter`.
     The split happens from the end.
     """
 

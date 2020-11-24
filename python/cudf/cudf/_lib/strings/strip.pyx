@@ -21,7 +21,7 @@ def strip(Column source_strings,
     """
     Returns a Column by removing leading and trailing characters.
     The set of characters need be stripped from left and right side
-    can be specified by `repl`.
+    can be specified by `py_repl`.
     """
 
     cdef DeviceScalar repl = py_repl.device_value
@@ -48,7 +48,7 @@ def lstrip(Column source_strings,
     """
     Returns a Column by removing leading and trailing characters.
     The set of characters need be stripped from left side can
-    be specified by `repl`.
+    be specified by `py_repl`.
     """
 
     cdef DeviceScalar repl = py_repl.device_value
@@ -75,7 +75,7 @@ def rstrip(Column source_strings,
     """
     Returns a Column by removing leading and trailing characters.
     The set of characters need be stripped from right side can
-    be specified by `repl`.
+    be specified by `py_repl`.
     """
 
     cdef DeviceScalar repl = py_repl.device_value

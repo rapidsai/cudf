@@ -22,7 +22,7 @@ def replace_tokens(Column strings,
     """
     The `targets` tokens are searched for within each `strings`
     in the Column and replaced with the corresponding `replacements`
-    if found. Tokens are identified by the `delimiter` character
+    if found. Tokens are identified by the `py_delimiter` character
     provided.
     """
 
@@ -56,7 +56,7 @@ def filter_tokens(Column strings,
     """
     Tokens smaller than `min_token_length` are removed from `strings`
     in the Column and optionally replaced with the corresponding
-    `replacement` string. Tokens are identified by the `delimiter`
+    `py_replacement` string. Tokens are identified by the `py_delimiter`
     character provided.
     """
 

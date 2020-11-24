@@ -27,7 +27,7 @@ def slice_replace(Column source_strings,
                   object py_repl):
     """
     Returns a Column by replacing specified section
-    of each string with `repl`. Positions can be
+    of each string with `py_repl`. Positions can be
     specified with `start` and `stop` params.
     """
 
@@ -56,7 +56,7 @@ def insert(Column source_strings,
            object py_repl):
     """
     Returns a Column by inserting a specified
-    string `repl` at a specific position in all strings.
+    string `py_repl` at a specific position in all strings.
     """
 
     cdef DeviceScalar repl = py_repl.device_value
@@ -85,7 +85,7 @@ def replace(Column source_strings,
             int32_t maxrepl):
     """
     Returns a Column after replacing occurrences of
-    patterns `target` with `repl` in `source_strings`.
+    patterns `py_target` with `py_repl` in `source_strings`.
     `maxrepl` indicates number of replacements to make from start.
     """
     cdef DeviceScalar target = py_target.device_value

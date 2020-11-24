@@ -24,8 +24,8 @@ def concatenate(Table source_strings,
                 object py_narep):
     """
     Returns a Column by concatenating strings column-wise in `source_strings`
-    with the specified `separator` between each column and
-    `na`/`None` values are replaced by `narep`
+    with the specified `py_separator` between each column and
+    `na`/`None` values are replaced by `py_narep`
     """
     cdef DeviceScalar separator = py_separator.device_value
     cdef DeviceScalar narep = py_narep.device_value
@@ -54,8 +54,8 @@ def join(Column source_strings,
          object py_narep):
     """
     Returns a Column by concatenating strings row-wise in `source_strings`
-    with the specified `separator` between each column and
-    `na`/`None` values are replaced by `narep`
+    with the specified `py_separator` between each column and
+    `na`/`None` values are replaced by `py_narep`
     """
 
     cdef DeviceScalar separator = py_separator.device_value

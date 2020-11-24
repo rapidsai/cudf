@@ -24,7 +24,7 @@ def partition(Column source_strings,
               object py_delimiter):
     """
     Returns a Table by splitting the `source_strings`
-    column at the first occurrence of the specified `delimiter`.
+    column at the first occurrence of the specified `py_delimiter`.
     """
 
     cdef DeviceScalar delimiter = py_delimiter.device_value
@@ -51,7 +51,7 @@ def rpartition(Column source_strings,
                object py_delimiter):
     """
     Returns a Column by splitting the `source_strings`
-    column at the last occurrence of the specified `delimiter`.
+    column at the last occurrence of the specified `py_delimiter`.
     """
 
     cdef DeviceScalar delimiter = py_delimiter.device_value
