@@ -25,6 +25,7 @@
 - PR #6652 Add support for struct columns in concatenate
 - PR #6675 Add DecimalDtype to cuDF
 - PR #6739 Add Java bindings for is_timestamp
+- PR #6811 First class support for unbounded window function bounds
 - PR #6768 Add support for scatter() on list columns
 - PR #6796 Add create_metadata_file in dask_cudf
 - PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
