@@ -205,12 +205,8 @@ class DataFrame(Frame, Serializable):
 
         if isinstance(data, ColumnAccessor):
             if columns is not None:
-                data = ColumnAccessor(
-                    data=OrderedDict(
-                        (col_name, data[col_name]) for col_name in columns
-                    ),
-                    multiindex=data.multiindex,
-                    level_names=data.level_names,
+                data = _get_columns_from_column_accessor(
+                    data=data, columns=columns
                 )
 
             self._data = data
@@ -220,13 +216,16 @@ class DataFrame(Frame, Serializable):
             return None
 
         if isinstance(data, (DataFrame, pd.DataFrame)):
-            if columns is not None:
-                data = data[columns]
-
             if isinstance(data, pd.DataFrame):
                 data = self.from_pandas(data)
 
-            self._data = data._data
+            if columns is not None:
+                self._data = _get_columns_from_column_accessor(
+                    data=data._data, columns=columns
+                )
+            else:
+                self._data = data._data
+
             self._index = data._index if index is None else as_index(index)
             self.columns = data.columns
             return
@@ -7306,3 +7305,21 @@ def _get_host_unique(array):
         return [array]
     else:
         return set(array)
+
+
+def _get_columns_from_column_accessor(data, columns):
+    return ColumnAccessor(
+        data=OrderedDict(
+            (
+                col_name,
+                data[col_name]
+                if col_name in data
+                else cudf.core.column.column_empty(
+                    row_count=data.nrows, dtype="float64", masked=True
+                ),
+            )
+            for col_name in columns
+        ),
+        multiindex=data.multiindex,
+        level_names=data.level_names,
+    )

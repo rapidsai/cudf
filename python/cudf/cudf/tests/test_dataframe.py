@@ -7995,3 +7995,37 @@ def test_dataframe_from_pandas_duplicate_columns():
         ValueError, match="Duplicate column names are not allowed"
     ):
         gd.from_pandas(pdf)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(
+            {"a": [1, 2, 3], "b": [10, 11, 20], "c": ["a", "bcd", "xyz"]}
+        )
+    ],
+)
+@pytest.mark.parametrize(
+    "columns",
+    [
+        None,
+        ["a"],
+        ["c", "a"],
+        ["b", "a", "c"],
+        [],
+        pd.Index(["c", "a"]),
+        gd.Index(["c", "a"]),
+    ],
+)
+def test_dataframe_constructor_columns(df, columns):
+    gdf = gd.from_pandas(df)
+
+    expected = pd.DataFrame(
+        df,
+        columns=columns.to_pandas()
+        if isinstance(columns, gd.Index)
+        else columns,
+    )
+    actual = gd.DataFrame(gdf, columns=columns)
+
+    assert_eq(expected, actual)
