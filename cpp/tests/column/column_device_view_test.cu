@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,31 +14,33 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/types.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 struct ColumnDeviceViewTest : public cudf::test::BaseFixture {
 };
 
 TEST_F(ColumnDeviceViewTest, Sample)
 {
-  using T             = int32_t;
-  cudaStream_t stream = 0;
+  using T = int32_t;
+  rmm::cuda_stream_view stream{};
   cudf::test::fixed_width_column_wrapper<T> input({1, 2, 3, 4, 5, 6});
   auto output            = cudf::allocate_like(input);
   auto input_device_view = cudf::column_device_view::create(input, stream);
   auto output_device_view =
     cudf::mutable_column_device_view::create(output->mutable_view(), stream);
   auto exec = rmm::exec_policy(stream);
-  EXPECT_NO_THROW(thrust::copy(exec->on(stream),
+  EXPECT_NO_THROW(thrust::copy(exec->on(stream.value()),
                                input_device_view->begin<T>(),
                                input_device_view->end<T>(),
                                output_device_view->begin<T>()));
@@ -48,15 +50,15 @@ TEST_F(ColumnDeviceViewTest, Sample)
 
 TEST_F(ColumnDeviceViewTest, MismatchingType)
 {
-  using T             = int32_t;
-  cudaStream_t stream = 0;
+  using T = int32_t;
+  rmm::cuda_stream_view stream{};
   cudf::test::fixed_width_column_wrapper<T> input({1, 2, 3, 4, 5, 6});
   auto output            = cudf::allocate_like(input);
   auto input_device_view = cudf::column_device_view::create(input, stream);
   auto output_device_view =
     cudf::mutable_column_device_view::create(output->mutable_view(), stream);
   auto exec = rmm::exec_policy(stream);
-  EXPECT_THROW(thrust::copy(exec->on(stream),
+  EXPECT_THROW(thrust::copy(exec->on(stream.value()),
                             input_device_view->begin<T>(),
                             input_device_view->end<T>(),
                             output_device_view->begin<int64_t>()),

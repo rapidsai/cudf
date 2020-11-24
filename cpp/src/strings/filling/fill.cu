@@ -40,7 +40,7 @@ std::unique_ptr<column> fill(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(mr, stream.value());
+  if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
   CUDF_EXPECTS((begin >= 0) && (end <= strings_count),
                "Parameters [begin,end) are outside the range of the provided strings column");
   CUDF_EXPECTS(begin <= end, "Parameters [begin,end) have invalid range values");
@@ -74,13 +74,13 @@ std::unique_ptr<column> fill(
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0), offsets_transformer);
   auto offsets_column = detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream.value());
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // create the chars column
-  size_type bytes   = thrust::device_pointer_cast(d_offsets)[strings_count];
-  auto chars_column = strings::detail::create_chars_child_column(
-    strings_count, null_count, bytes, mr, stream.value());
+  size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
+  auto chars_column =
+    strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
   // fill the chars column
   auto d_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(

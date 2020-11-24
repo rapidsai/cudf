@@ -185,7 +185,7 @@ void copy_range(SourceValueIterator source_value_begin,
       nullptr);
   }
 
-  CHECK_CUDA(stream);
+  CHECK_CUDA(stream.value());
 }
 
 /**

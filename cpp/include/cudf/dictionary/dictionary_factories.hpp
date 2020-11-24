@@ -18,6 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 /**
  * @addtogroup column_factories Factories
@@ -54,15 +56,15 @@ namespace cudf {
  *
  * @param keys_column Column of unique, ordered values to use as the new dictionary column's keys.
  * @param indices_column Indices to use for the new dictionary column.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary column.
  */
 std::unique_ptr<column> make_dictionary_column(
   column_view const& keys_column,
   column_view const& indices_column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Construct a dictionary column by taking ownership of the provided keys
@@ -106,15 +108,15 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_colu
  *
  * @param keys Column of unique, ordered values to use as the new dictionary column's keys.
  * @param indices Indices values and null-mask to use for the new dictionary column.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary column.
  */
 std::unique_ptr<column> make_dictionary_column(
   std::unique_ptr<column> keys_column,
   std::unique_ptr<column> indices_column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

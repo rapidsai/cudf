@@ -26,6 +26,7 @@
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -38,8 +39,8 @@ namespace detail {
  */
 std::unique_ptr<column> encode(column_view const& input_column,
                                data_type indices_type,
-                               rmm::mr::device_memory_resource* mr,
-                               cudaStream_t stream)
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(is_unsigned(indices_type), "indices must be type unsigned integer");
   CUDF_EXPECTS(input_column.type().id() != type_id::DICTIONARY32,
@@ -63,11 +64,10 @@ std::unique_ptr<column> encode(column_view const& input_column,
     indices_column = cudf::detail::cast(indices_column->view(), indices_type, stream, mr);
 
   // create column with keys_column and indices_column
-  return make_dictionary_column(
-    std::move(keys_column),
-    std::move(indices_column),
-    cudf::detail::copy_bitmask(input_column, rmm::cuda_stream_view{stream}, mr),
-    input_column.null_count());
+  return make_dictionary_column(std::move(keys_column),
+                                std::move(indices_column),
+                                cudf::detail::copy_bitmask(input_column, stream, mr),
+                                input_column.null_count());
 }
 
 /**
@@ -89,7 +89,7 @@ std::unique_ptr<column> encode(column_view const& input_column,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::encode(input_column, indices_type, mr);
+  return detail::encode(input_column, indices_type, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace dictionary

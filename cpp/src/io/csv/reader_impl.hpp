@@ -28,6 +28,8 @@
 #include <cudf/io/detail/csv.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <memory>
 #include <string>
 #include <utility>
@@ -86,7 +88,7 @@ class reader::impl {
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(cudaStream_t stream);
+  table_with_metadata read(rmm::cuda_stream_view stream);
 
  private:
   /**
@@ -110,7 +112,7 @@ class reader::impl {
                           size_t skip_rows,
                           int64_t num_rows,
                           bool load_whole_file,
-                          cudaStream_t stream);
+                          rmm::cuda_stream_view stream);
 
   /**
    * @brief Find the start position of the first data row
@@ -128,7 +130,7 @@ class reader::impl {
    *
    * @return `std::vector<data_type>` List of column types
    */
-  std::vector<data_type> gather_column_types(cudaStream_t stream);
+  std::vector<data_type> gather_column_types(rmm::cuda_stream_view stream);
 
   /**
    * @brief Converts the row-column data and outputs to column bufferrs.
@@ -139,7 +141,7 @@ class reader::impl {
    * @return list of column buffers of decoded data, or ptr/size in the case of strings.
    */
   std::vector<column_buffer> decode_data(std::vector<data_type> const &column_types,
-                                         cudaStream_t stream);
+                                         rmm::cuda_stream_view stream);
 
  private:
   rmm::mr::device_memory_resource *mr_ = nullptr;
