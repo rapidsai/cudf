@@ -14,33 +14,28 @@
  * limitations under the License.
  */
 
-#include <cudf/copying.hpp>
-#include <cudf/lists/lists_column_view.hpp>
-#include <cudf/table/table.hpp>
-
-#include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/scan.h>
-#include <thrust/sequence.h>
-#include <algorithm>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/utilities/device_operators.cuh>
-#include <cudf/null_mask.hpp>
-#include <cudf/structs/structs_column_view.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
-#include <functional>
-#include <initializer_list>
-#include <iterator>
-#include <memory>
+
+#include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/lists/lists_column_view.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/structs/structs_column_view.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+
 #include <rmm/device_buffer.hpp>
-#include <tuple>
+
+#include <nvfunctional>
+
+#include <memory>
 
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 using cudf::size_type;
@@ -384,7 +379,7 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfStructsWithValidity)
   // Testing gather() on struct<struct<numeric>>
 
   // Factory to construct numeric column with configurable null-mask.
-  auto const numeric_column_exemplar = [](std::function<bool(size_type)> pred) {
+  auto const numeric_column_exemplar = [](nvstd::function<bool(size_type)> pred) {
     return fixed_width_column_wrapper<TypeParam, int32_t>{
       {5, 10, 15, 20, 25, 30, 35, 45, 50, 55, 60, 65, 70, 75},
       make_counting_transform_iterator(0, [=](auto i) { return pred(i); })};
