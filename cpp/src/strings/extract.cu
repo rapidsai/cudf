@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include <strings/regex/regex.cuh>
+#include <strings/utilities.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -23,8 +26,8 @@
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-#include <strings/regex/regex.cuh>
-#include <strings/utilities.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace strings {
@@ -70,8 +73,8 @@ struct extract_fn {
 std::unique_ptr<table> extract(
   strings_column_view const& strings,
   std::string const& pattern,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count  = strings.size();
   auto strings_column = column_device_view::create(strings.parent(), stream);
@@ -93,24 +96,24 @@ std::unique_ptr<table> extract(
     string_index_pair* d_indices = indices.data().get();
 
     if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
-      thrust::transform(execpol->on(stream),
+      thrust::transform(execpol->on(stream.value()),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
                         d_indices,
                         extract_fn<RX_STACK_SMALL>{d_prog, d_strings, column_index});
     else if (regex_insts <= RX_MEDIUM_INSTS)
-      thrust::transform(execpol->on(stream),
+      thrust::transform(execpol->on(stream.value()),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
                         d_indices,
                         extract_fn<RX_STACK_MEDIUM>{d_prog, d_strings, column_index});
     else
-      thrust::transform(execpol->on(stream),
+      thrust::transform(execpol->on(stream.value()),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
                         d_indices,
                         extract_fn<RX_STACK_LARGE>{d_prog, d_strings, column_index});
-    //
+
     results.emplace_back(make_strings_column(indices, stream, mr));
   }
   return std::make_unique<table>(std::move(results));
@@ -125,7 +128,7 @@ std::unique_ptr<table> extract(strings_column_view const& strings,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract(strings, pattern, mr);
+  return detail::extract(strings, pattern, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

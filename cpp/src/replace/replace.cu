@@ -397,8 +397,8 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   auto device_sizes             = cudf::mutable_column_device_view::create(sizes_view);
   auto device_indices           = cudf::mutable_column_device_view::create(indices_view);
 
-  rmm::device_buffer valid_bits = cudf::detail::create_null_mask(
-    input_col.size(), cudf::mask_state::UNINITIALIZED, rmm::cuda_stream_view{stream}, mr);
+  rmm::device_buffer valid_bits =
+    cudf::detail::create_null_mask(input_col.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
 
   // Call first pass kernel to get sizes in offsets
   cudf::detail::grid_1d grid{input_col.size(), BLOCK_SIZE, 1};
@@ -412,7 +412,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
     valid_count);
 
   std::unique_ptr<cudf::column> offsets = cudf::strings::detail::make_offsets_child_column(
-    sizes_view.begin<int32_t>(), sizes_view.end<int32_t>(), mr, stream.value());
+    sizes_view.begin<int32_t>(), sizes_view.end<int32_t>(), stream, mr);
   auto offsets_view   = offsets->mutable_view();
   auto device_offsets = cudf::mutable_column_device_view::create(offsets_view);
   int32_t size;
@@ -423,7 +423,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   // Allocate chars array and output null mask
   cudf::size_type null_count                 = input_col.size() - valid_counter.value(stream);
   std::unique_ptr<cudf::column> output_chars = cudf::strings::detail::create_chars_child_column(
-    input_col.size(), null_count, size, mr, stream.value());
+    input_col.size(), null_count, size, stream, mr);
 
   auto output_chars_view = output_chars->mutable_view();
   auto device_chars      = cudf::mutable_column_device_view::create(output_chars_view);
@@ -454,13 +454,12 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::diction
 
   auto matched_input = [&] {
     auto new_keys = cudf::detail::concatenate({values.keys(), replacements.keys()}, stream);
-    return cudf::dictionary::detail::add_keys(input, new_keys->view(), mr, stream.value());
+    return cudf::dictionary::detail::add_keys(input, new_keys->view(), stream, mr);
   }();
   auto matched_view   = cudf::dictionary_column_view(matched_input->view());
-  auto matched_values = cudf::dictionary::detail::set_keys(
-    values, matched_view.keys(), rmm::mr::get_current_device_resource(), stream.value());
-  auto matched_replacements = cudf::dictionary::detail::set_keys(
-    replacements, matched_view.keys(), rmm::mr::get_current_device_resource(), stream.value());
+  auto matched_values = cudf::dictionary::detail::set_keys(values, matched_view.keys(), stream);
+  auto matched_replacements =
+    cudf::dictionary::detail::set_keys(replacements, matched_view.keys(), stream);
 
   auto indices_type = matched_view.indices().type();
   auto new_indices  = cudf::type_dispatcher(

@@ -25,6 +25,7 @@
 - PR #6652 Add support for struct columns in concatenate
 - PR #6675 Add DecimalDtype to cuDF
 - PR #6739 Add Java bindings for is_timestamp
+- PR #6811 First class support for unbounded window function bounds
 - PR #6768 Add support for scatter() on list columns
 - PR #6796 Add create_metadata_file in dask_cudf
 - PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
@@ -71,6 +72,7 @@
 - PR #6612 Update JNI to new RMM cuda_stream_view API
 - PR #6646 Replace `cudaStream_t` with `rmm::cuda_stream_view` (part 1)
 - PR #6648 Replace `cudaStream_t` with `rmm::cuda_stream_view` (part 2)
+- PR #6744 Replace `cudaStream_t` with `rmm::cuda_stream_view` (part 3)
 - PR #6579 Update scatter APIs to use reference wrapper / const scalar
 - PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
 - PR #6622 Update `to_pandas` api docs
@@ -99,6 +101,7 @@
 - PR #6780 Move `cudf::cast` tests to separate test file
 - PR #6789 Rename `unary_op` to `unary_operator`
 - PR #6770 Support building decimal columns with Table.TestBuilder
+- PR #6813 Enable `expand=False` in `.str.split` and `.str.rsplit`
 - PR #6829 Enable workaround to write categorical columns in csv
 - PR #6819 Use CMake 3.19 for RMM when building cuDF jar
 - PR #6833 Use settings.xml if existing for internal build
@@ -188,6 +191,7 @@
 - PR #6301 Add JNI bindings to nvcomp
 - PR #6328 Java and JNI bindings for getMapValue/map_lookup
 - PR #6371 Use ColumnViewAccess on Host side
+- PR #6511 Add LogicalType to Parquet reader
 - PR #6297 cuDF Python Scalars
 - PR #6723 Support creating decimal vectors from scalar
 
