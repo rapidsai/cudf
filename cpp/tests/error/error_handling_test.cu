@@ -67,7 +67,7 @@ TEST(StreamCheck, FailedKernel)
 #ifdef NDEBUG
   stream.synchronize();
 #endif
-  EXPECT_THROW(CHECK_CUDA(stream.value), cudf::cuda_error);
+  EXPECT_THROW(CHECK_CUDA(stream.value()), cudf::cuda_error);
 }
 
 TEST(StreamCheck, CatchFailedKernel)
