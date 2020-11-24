@@ -50,6 +50,49 @@ constexpr uint32_t PARQUET_COLUMN_BUFFER_SCHEMA_MASK          = (0xffffff);
 constexpr uint32_t PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED = (1 << 24);
 
 namespace {
+
+parquet::ConvertedType logical_type_to_converted_type(parquet::LogicalType const &logical)
+{
+  if (logical.isset.STRING) {
+    return parquet::UTF8;
+  } else if (logical.isset.MAP) {
+    return parquet::MAP;
+  } else if (logical.isset.LIST) {
+    return parquet::LIST;
+  } else if (logical.isset.ENUM) {
+    return parquet::ENUM;
+  } else if (logical.isset.DECIMAL) {
+    return parquet::DECIMAL;  // TODO set decimal values
+  } else if (logical.isset.DATE) {
+    return parquet::DATE;
+  } else if (logical.isset.TIME) {
+    if (logical.TIME.unit.isset.MILLIS)
+      return parquet::TIME_MILLIS;
+    else if (logical.TIME.unit.isset.MICROS)
+      return parquet::TIME_MICROS;
+  } else if (logical.isset.TIMESTAMP) {
+    if (logical.TIMESTAMP.unit.isset.MILLIS)
+      return parquet::TIMESTAMP_MILLIS;
+    else if (logical.TIMESTAMP.unit.isset.MICROS)
+      return parquet::TIMESTAMP_MICROS;
+  } else if (logical.isset.INTEGER) {
+    switch (logical.INTEGER.bitWidth) {
+      case 8: return logical.INTEGER.isSigned ? INT_8 : UINT_8;
+      case 16: return logical.INTEGER.isSigned ? INT_16 : UINT_16;
+      case 32: return logical.INTEGER.isSigned ? INT_32 : UINT_32;
+      case 64: return logical.INTEGER.isSigned ? INT_64 : UINT_64;
+      default: break;
+    }
+  } else if (logical.isset.UNKNOWN) {
+    return parquet::NA;
+  } else if (logical.isset.JSON) {
+    return parquet::JSON;
+  } else if (logical.isset.BSON) {
+    return parquet::BSON;
+  }
+  return parquet::UNKNOWN;
+}
+
 /**
  * @brief Function that translates Parquet datatype to cuDF type enum
  */
@@ -57,13 +100,18 @@ type_id to_type_id(SchemaElement const &schema,
                    bool strings_to_categorical,
                    type_id timestamp_type_id)
 {
-  parquet::Type physical         = schema.type;
-  parquet::ConvertedType logical = schema.converted_type;
-  int32_t decimal_scale          = schema.decimal_scale;
+  parquet::Type physical                = schema.type;
+  parquet::ConvertedType converted_type = schema.converted_type;
+  int32_t decimal_scale                 = schema.decimal_scale;
 
   // Logical type used for actual data interpretation; the legacy converted type
   // is superceded by 'logical' type whenever available.
-  switch (logical) {
+  auto inferred_converted_type = logical_type_to_converted_type(schema.logical_type);
+  if (inferred_converted_type != parquet::UNKNOWN) converted_type = inferred_converted_type;
+  if (inferred_converted_type == parquet::DECIMAL && decimal_scale == 0)
+    decimal_scale = schema.logical_type.DECIMAL.scale;
+
+  switch (converted_type) {
     case parquet::UINT_8: return type_id::UINT8;
     case parquet::INT_8: return type_id::INT8;
     case parquet::UINT_16: return type_id::UINT16;
@@ -92,7 +140,8 @@ type_id to_type_id(SchemaElement const &schema,
     // maps are just List<Struct<>>.
     case parquet::MAP:
     case parquet::LIST: return type_id::LIST;
-
+    case parquet::NA: return type_id::STRING;
+    // return type_id::EMPTY; //TODO(kn): enable after Null/Empty column support
     default: break;
   }
 
