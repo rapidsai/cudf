@@ -1202,7 +1202,8 @@ cudaError_t __host__ gpuinflate(gpu_inflate_input_s *inputs,
 {
   constexpr int block_size = 128;  // Threads per block
   if (count > 0) {
-    inflate_kernel<block_size><<<count, block_size, 0, stream.value()>>>(inputs, outputs, parse_hdr);
+    inflate_kernel<block_size>
+      <<<count, block_size, 0, stream.value()>>>(inputs, outputs, parse_hdr);
   }
   return cudaSuccess;
 }
