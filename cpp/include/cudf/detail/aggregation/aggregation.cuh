@@ -21,6 +21,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -285,25 +286,25 @@ struct elementwise_aggregator {
  * `target[target_index] = d_dictionary.keys[d_dictionary.indices[source_index]]`
  */
 struct update_target_from_dictionary {
-  template <typename KeyType>
-  std::enable_if_t<is_fixed_width<KeyType>() && !is_fixed_point<KeyType>()> __device__
-  operator()(mutable_column_device_view& target,
-             size_type& target_index,
-             column_device_view& d_dictionary,
-             size_type& source_index) const noexcept
+  template <typename KeyType,
+            std::enable_if_t<is_fixed_width<KeyType>() && !is_fixed_point<KeyType>()>* = nullptr>
+  __device__ void operator()(mutable_column_device_view& target,
+                             size_type& target_index,
+                             column_device_view& d_dictionary,
+                             size_type& source_index) const noexcept
   {
-    auto const keys  = d_dictionary.child(1);
+    auto const keys  = d_dictionary.child(cudf::dictionary_column_view::keys_column_index);
     auto const value = keys.element<KeyType>(
       static_cast<cudf::size_type>(d_dictionary.element<dictionary32>(source_index)));
     using Target = target_type_t<KeyType, aggregation::SUM>;
     atomicAdd(&target.element<Target>(target_index), static_cast<Target>(value));
   }
-  template <typename KeyType>
-  std::enable_if_t<!is_fixed_width<KeyType>() || is_fixed_point<KeyType>()> __device__
-  operator()(mutable_column_device_view& target,
-             size_type& target_index,
-             column_device_view& d_dictionary,
-             size_type& source_index) const noexcept {};
+  template <typename KeyType,
+            std::enable_if_t<!is_fixed_width<KeyType>() || is_fixed_point<KeyType>()>* = nullptr>
+  __device__ void operator()(mutable_column_device_view& target,
+                             size_type& target_index,
+                             column_device_view& d_dictionary,
+                             size_type& source_index) const noexcept {};
 };
 
 /**
@@ -321,7 +322,7 @@ struct update_target_element<dictionary32, aggregation::SUM, target_has_nulls, s
   {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
-    type_dispatcher(source.child(1).type(),
+    type_dispatcher(source.child(cudf::dictionary_column_view::keys_column_index).type(),
                     update_target_from_dictionary{},
                     target,
                     target_index,
