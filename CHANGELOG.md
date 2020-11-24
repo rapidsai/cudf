@@ -72,6 +72,7 @@
 - PR #6612 Update JNI to new RMM cuda_stream_view API
 - PR #6646 Replace `cudaStream_t` with `rmm::cuda_stream_view` (part 1)
 - PR #6648 Replace `cudaStream_t` with `rmm::cuda_stream_view` (part 2)
+- PR #6744 Replace `cudaStream_t` with `rmm::cuda_stream_view` (part 3)
 - PR #6579 Update scatter APIs to use reference wrapper / const scalar
 - PR #6614 Add support for conversion to Pandas nullable dtypes and fix related issue in `cudf.to_json`
 - PR #6622 Update `to_pandas` api docs
@@ -100,6 +101,7 @@
 - PR #6780 Move `cudf::cast` tests to separate test file
 - PR #6789 Rename `unary_op` to `unary_operator`
 - PR #6770 Support building decimal columns with Table.TestBuilder
+- PR #6829 Enable workaround to write categorical columns in csv
 - PR #6819 Use CMake 3.19 for RMM when building cuDF jar
 - PR #6833 Use settings.xml if existing for internal build
 
@@ -149,10 +151,12 @@
 - PR #6632 Fix DataFrame initialization from list of dicts
 - PR #6767 Fix sort order of parameters in `test_scalar_invalid_implicit_conversion` pytest
 - PR #6787 Update java reduction APIs to reflect C++ changes
+- PR #6790 Fix result representation in groupby.apply
 - PR #6794 Fix AVRO reader issues with empty input
 - PR #6798 Fix `read_avro` docs
 - PR #6824 Fix JNI build
 - PR #6826 Fix resource management in Java ColumnBuilder
+- PR #6830 Fix categorical scalar insertion
 
 
 # cuDF 0.16.0 (21 Oct 2020)

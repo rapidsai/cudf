@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,12 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/timestamp_utilities.cuh>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -21,15 +27,12 @@
 #include <cudf/types.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/timestamp_utilities.cuh>
-#include <cudf_test/type_lists.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 template <typename T>
 struct ChronoColumnTest : public cudf::test::BaseFixture {
-  cudaStream_t stream() { return cudaStream_t(0); }
+  rmm::cuda_stream_view stream() { return rmm::cuda_stream_default; }
   cudf::size_type size() { return cudf::size_type(100); }
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };

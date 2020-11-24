@@ -19,23 +19,25 @@
  * @brief cuDF-IO parquet writer class implementation
  */
 
-#include <io/parquet/compact_protocol_writer.hpp>
 #include "writer_impl.hpp"
+
+#include <io/parquet/compact_protocol_writer.hpp>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
+#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
+#include <rmm/device_scalar.hpp>
+#include <rmm/device_uvector.hpp>
+
 #include <algorithm>
 #include <cstring>
 #include <numeric>
 #include <utility>
-
-#include <rmm/thrust_rmm_allocator.h>
-#include <rmm/device_buffer.hpp>
-#include <rmm/device_scalar.hpp>
-#include <rmm/device_uvector.hpp>
 
 namespace cudf {
 namespace io {
@@ -162,7 +164,7 @@ class parquet_column_view {
                                std::vector<bool> const &nullability,
                                const table_metadata *metadata,
                                bool int96_timestamps,
-                               cudaStream_t stream)
+                               rmm::cuda_stream_view stream)
     : _col(col),
       _leaf_col(get_leaf_col(col)),
       _id(id),
@@ -338,7 +340,7 @@ class parquet_column_view {
         _nullability.push_back(curr_col.null_mask() != nullptr);
       }
 
-      CUDA_TRY(cudaStreamSynchronize(stream));
+      stream.synchronize();
     } else {
       if (_nullability.empty()) { _nullability = {col.nullable()}; }
       _max_def_level = (_nullability[0]) ? 1 : 0;
@@ -346,14 +348,16 @@ class parquet_column_view {
     if (_string_type && _data_count > 0) {
       strings_column_view view{_leaf_col};
       _indexes = rmm::device_buffer(_data_count * sizeof(gpu::nvstrdesc_s), stream);
-      stringdata_to_nvstrdesc<<<((_data_count - 1) >> 8) + 1, 256, 0, stream>>>(
+
+      stringdata_to_nvstrdesc<<<((_data_count - 1) >> 8) + 1, 256, 0, stream.value()>>>(
         reinterpret_cast<gpu::nvstrdesc_s *>(_indexes.data()),
         view.offsets().data<size_type>() + leaf_col_offset,
         view.chars().data<char>(),
         _nulls,
         _data_count);
       _data = _indexes.data();
-      CUDA_TRY(cudaStreamSynchronize(stream));
+
+      stream.synchronize();
     }
 
     // Generating default name if name isn't present in metadata
@@ -467,13 +471,13 @@ void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &fra
                                        uint32_t num_fragments,
                                        uint32_t num_rows,
                                        uint32_t fragment_size,
-                                       cudaStream_t stream)
+                                       rmm::cuda_stream_view stream)
 {
   CUDA_TRY(cudaMemcpyAsync(col_desc.device_ptr(),
                            col_desc.host_ptr(),
                            col_desc.memory_size(),
                            cudaMemcpyHostToDevice,
-                           stream));
+                           stream.value()));
   gpu::InitPageFragments(frag.device_ptr(),
                          col_desc.device_ptr(),
                          num_fragments,
@@ -481,9 +485,12 @@ void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &fra
                          fragment_size,
                          num_rows,
                          stream);
-  CUDA_TRY(cudaMemcpyAsync(
-    frag.host_ptr(), frag.device_ptr(), frag.memory_size(), cudaMemcpyDeviceToHost, stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  CUDA_TRY(cudaMemcpyAsync(frag.host_ptr(),
+                           frag.device_ptr(),
+                           frag.memory_size(),
+                           cudaMemcpyDeviceToHost,
+                           stream.value()));
+  stream.synchronize();
 }
 
 void writer::impl::gather_fragment_statistics(statistics_chunk *frag_stats_chunk,
@@ -492,7 +499,7 @@ void writer::impl::gather_fragment_statistics(statistics_chunk *frag_stats_chunk
                                               uint32_t num_columns,
                                               uint32_t num_fragments,
                                               uint32_t fragment_size,
-                                              cudaStream_t stream)
+                                              rmm::cuda_stream_view stream)
 {
   rmm::device_vector<statistics_group> frag_stats_group(num_fragments * num_columns);
 
@@ -505,7 +512,7 @@ void writer::impl::gather_fragment_statistics(statistics_chunk *frag_stats_chunk
                               stream);
   GatherColumnStatistics(
     frag_stats_chunk, frag_stats_group.data().get(), num_fragments * num_columns, stream);
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  stream.synchronize();
 }
 
 void writer::impl::build_chunk_dictionaries(hostdevice_vector<gpu::EncColumnChunk> &chunks,
@@ -513,12 +520,15 @@ void writer::impl::build_chunk_dictionaries(hostdevice_vector<gpu::EncColumnChun
                                             uint32_t num_rowgroups,
                                             uint32_t num_columns,
                                             uint32_t num_dictionaries,
-                                            cudaStream_t stream)
+                                            rmm::cuda_stream_view stream)
 {
   size_t dict_scratch_size = (size_t)num_dictionaries * gpu::kDictScratchSize;
   rmm::device_vector<uint32_t> dict_scratch(dict_scratch_size / sizeof(uint32_t));
-  CUDA_TRY(cudaMemcpyAsync(
-    chunks.device_ptr(), chunks.host_ptr(), chunks.memory_size(), cudaMemcpyHostToDevice, stream));
+  CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(),
+                           chunks.host_ptr(),
+                           chunks.memory_size(),
+                           cudaMemcpyHostToDevice,
+                           stream.value()));
   gpu::BuildChunkDictionaries(chunks.device_ptr(),
                               dict_scratch.data().get(),
                               dict_scratch_size,
@@ -532,9 +542,12 @@ void writer::impl::build_chunk_dictionaries(hostdevice_vector<gpu::EncColumnChun
                         nullptr,
                         nullptr,
                         stream);
-  CUDA_TRY(cudaMemcpyAsync(
-    chunks.host_ptr(), chunks.device_ptr(), chunks.memory_size(), cudaMemcpyDeviceToHost, stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  CUDA_TRY(cudaMemcpyAsync(chunks.host_ptr(),
+                           chunks.device_ptr(),
+                           chunks.memory_size(),
+                           cudaMemcpyDeviceToHost,
+                           stream.value()));
+  stream.synchronize();
 }
 
 void writer::impl::init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
@@ -546,11 +559,14 @@ void writer::impl::init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk> &ch
                                       uint32_t num_columns,
                                       uint32_t num_pages,
                                       uint32_t num_stats_bfr,
-                                      cudaStream_t stream)
+                                      rmm::cuda_stream_view stream)
 {
   rmm::device_vector<statistics_merge_group> page_stats_mrg(num_stats_bfr);
-  CUDA_TRY(cudaMemcpyAsync(
-    chunks.device_ptr(), chunks.host_ptr(), chunks.memory_size(), cudaMemcpyHostToDevice, stream));
+  CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(),
+                           chunks.host_ptr(),
+                           chunks.memory_size(),
+                           cudaMemcpyHostToDevice,
+                           stream.value()));
   InitEncoderPages(chunks.device_ptr(),
                    pages,
                    col_desc.device_ptr(),
@@ -569,7 +585,7 @@ void writer::impl::init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk> &ch
                             stream);
     }
   }
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  stream.synchronize();
 }
 
 void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
@@ -583,7 +599,7 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
                                 gpu_inflate_status_s *comp_out,
                                 const statistics_chunk *page_stats,
                                 const statistics_chunk *chunk_stats,
-                                cudaStream_t stream)
+                                rmm::cuda_stream_view stream)
 {
   gpu::EncodePages(
     pages, chunks.device_ptr(), pages_in_batch, first_page_in_batch, comp_in, comp_out, stream);
@@ -617,8 +633,8 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
                            chunks.device_ptr() + first_rowgroup * num_columns,
                            rowgroups_in_batch * num_columns * sizeof(gpu::EncColumnChunk),
                            cudaMemcpyDeviceToHost,
-                           stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
+                           stream.value()));
+  stream.synchronize();
 }
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
@@ -638,7 +654,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
   bool return_filemetadata,
   const std::string &column_chunks_file_path,
   bool int96_timestamps,
-  cudaStream_t stream)
+  rmm::cuda_stream_view stream)
 {
   pq_chunked_state state{metadata, SingleWriteMode::YES, int96_timestamps, stream};
 
@@ -1121,8 +1137,8 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
               dev_bfr,
               ck->ck_stat_size,
               cudaMemcpyDeviceToHost,
-              state.stream));
-            CUDA_TRY(cudaStreamSynchronize(state.stream));
+              state.stream.value()));
+            state.stream.synchronize();
           }
         } else {
           // copy the full data
@@ -1130,8 +1146,8 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
                                    dev_bfr,
                                    ck->ck_stat_size + ck->compressed_size,
                                    cudaMemcpyDeviceToHost,
-                                   state.stream));
-          CUDA_TRY(cudaStreamSynchronize(state.stream));
+                                   state.stream.value()));
+          state.stream.synchronize();
           out_sink_->host_write(host_bfr.get() + ck->ck_stat_size, ck->compressed_size);
           if (ck->ck_stat_size != 0) {
             state.md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(
@@ -1204,7 +1220,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::write(table_view const &table,
                                                     bool return_filemetadata,
                                                     const std::string column_chunks_file_path,
                                                     bool int96_timestamps,
-                                                    cudaStream_t stream)
+                                                    rmm::cuda_stream_view stream)
 {
   return _impl->write(
     table, metadata, return_filemetadata, column_chunks_file_path, int96_timestamps, stream);

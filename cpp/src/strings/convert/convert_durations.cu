@@ -80,7 +80,8 @@ struct alignas(4) format_item {
 struct format_compiler {
   std::string format;
   rmm::device_uvector<format_item> d_items;
-  format_compiler(const char* format_, cudaStream_t stream) : format(format_), d_items(0, stream)
+  format_compiler(const char* format_, rmm::cuda_stream_view stream)
+    : format(format_), d_items(0, stream)
   {
     static std::map<char, int8_t> const specifier_lengths = {
       {'-', -1},  // '-' if negative
@@ -150,7 +151,7 @@ struct format_compiler {
                              items.data(),
                              items.size() * sizeof(items[0]),
                              cudaMemcpyHostToDevice,
-                             stream));
+                             stream.value()));
   }
 
   format_item const* compiled_format_items() { return d_items.data(); }
@@ -400,8 +401,8 @@ struct dispatch_from_durations_fn {
   template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& durations,
                                      std::string const& format,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
     CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
 
@@ -413,14 +414,13 @@ struct dispatch_from_durations_fn {
     auto d_column           = *column;
 
     // copy null mask
-    rmm::device_buffer null_mask =
-      cudf::detail::copy_bitmask(durations, rmm::cuda_stream_view{stream}, mr);
+    rmm::device_buffer null_mask = cudf::detail::copy_bitmask(durations, stream, mr);
     // build offsets column
     auto offsets_transformer_itr = thrust::make_transform_iterator(
       thrust::make_counting_iterator<int32_t>(0),
       duration_to_string_size_fn<T>{d_column, d_format_items, compiler.items_count()});
     auto offsets_column = detail::make_offsets_child_column(
-      offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
+      offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
     auto offsets_view  = offsets_column->view();
     auto d_new_offsets = offsets_view.template data<int32_t>();
 
@@ -428,17 +428,16 @@ struct dispatch_from_durations_fn {
     auto const chars_bytes =
       cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
     auto chars_column = detail::create_chars_child_column(
-      strings_count, durations.null_count(), chars_bytes, mr, stream);
+      strings_count, durations.null_count(), chars_bytes, stream, mr);
     auto chars_view = chars_column->mutable_view();
     auto d_chars    = chars_view.template data<char>();
 
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                        thrust::make_counting_iterator<size_type>(0),
                        strings_count,
                        duration_to_string_fn<T>{
                          d_column, d_format_items, compiler.items_count(), d_new_offsets, d_chars});
 
-    //
     return make_strings_column(strings_count,
                                std::move(offsets_column),
                                std::move(chars_column),
@@ -452,8 +451,8 @@ struct dispatch_from_durations_fn {
   template <typename T, std::enable_if_t<not cudf::is_duration<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
                                      std::string const& format,
-                                     rmm::mr::device_memory_resource*,
-                                     cudaStream_t) const
+                                     rmm::cuda_stream_view,
+                                     rmm::mr::device_memory_resource*) const
   {
     CUDF_FAIL("Values for from_durations function must be a duration type.");
   }
@@ -678,13 +677,13 @@ struct dispatch_to_durations_fn {
   void operator()(column_device_view const& d_strings,
                   std::string const& format,
                   mutable_column_view& results_view,
-                  cudaStream_t stream) const
+                  rmm::cuda_stream_view stream) const
   {
     format_compiler compiler(format.c_str(), stream);
     auto d_items   = compiler.compiled_format_items();
     auto d_results = results_view.data<T>();
     parse_duration<T> pfn{d_strings, d_items, compiler.items_count()};
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
+    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(results_view.size()),
                       d_results,
@@ -694,7 +693,7 @@ struct dispatch_to_durations_fn {
   void operator()(column_device_view const&,
                   std::string const&,
                   mutable_column_view&,
-                  cudaStream_t) const
+                  rmm::cuda_stream_view) const
   {
     CUDF_FAIL("Only durations type are expected for to_durations function");
   }
@@ -704,20 +703,20 @@ struct dispatch_to_durations_fn {
 
 std::unique_ptr<column> from_durations(column_view const& durations,
                                        std::string const& format,
-                                       cudaStream_t stream,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = durations.size();
-  if (strings_count == 0) return make_empty_strings_column(mr, stream);
+  if (strings_count == 0) return make_empty_strings_column(stream, mr);
 
   return type_dispatcher(
-    durations.type(), dispatch_from_durations_fn{}, durations, format, mr, stream);
+    durations.type(), dispatch_from_durations_fn{}, durations, format, stream, mr);
 }
 
 std::unique_ptr<column> to_durations(strings_column_view const& strings,
                                      data_type duration_type,
                                      std::string const& format,
-                                     cudaStream_t stream,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
@@ -728,13 +727,12 @@ std::unique_ptr<column> to_durations(strings_column_view const& strings,
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
 
-  auto results = make_duration_column(
-    duration_type,
-    strings_count,
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
-    strings.null_count(),
-    stream,
-    mr);
+  auto results      = make_duration_column(duration_type,
+                                      strings_count,
+                                      cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                      strings.null_count(),
+                                      stream,
+                                      mr);
   auto results_view = results->mutable_view();
   cudf::type_dispatcher(
     duration_type, dispatch_to_durations_fn(), d_column, format, results_view, stream);
@@ -749,7 +747,7 @@ std::unique_ptr<column> from_durations(column_view const& durations,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_durations(durations, format, cudaStream_t{}, mr);
+  return detail::from_durations(durations, format, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> to_durations(strings_column_view const& strings,
@@ -758,7 +756,7 @@ std::unique_ptr<column> to_durations(strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_durations(strings, duration_type, format, cudaStream_t{}, mr);
+  return detail::to_durations(strings, duration_type, format, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

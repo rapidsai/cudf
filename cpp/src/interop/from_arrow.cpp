@@ -209,9 +209,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  if (array.length() == 0) {
-    return cudf::strings::detail::make_empty_strings_column(mr, stream.value());
-  }
+  if (array.length() == 0) { return cudf::strings::detail::make_empty_strings_column(stream, mr); }
   auto str_array    = static_cast<arrow::StringArray const*>(&array);
   auto offset_array = std::make_unique<arrow::Int32Array>(
     str_array->value_offsets()->size() / sizeof(int32_t), str_array->value_offsets(), nullptr);
@@ -294,7 +292,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::struct_view>(
     out_mask = detail::copy_bitmask(static_cast<bitmask_type*>(out_mask.data()),
                                     array.offset(),
                                     array.offset() + array.length(),
-                                    rmm::cuda_stream_view{stream},
+                                    stream,
                                     mr);
   }
 

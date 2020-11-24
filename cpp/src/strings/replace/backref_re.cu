@@ -14,21 +14,24 @@
  * limitations under the License.
  */
 
+#include "backref_re.cuh"
+
+#include <strings/regex/regex.cuh>
+#include <strings/utilities.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-#include <strings/regex/regex.cuh>
-#include <strings/utilities.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <regex>
-
-#include "backref_re.cuh"
 
 namespace cudf {
 namespace strings {
@@ -81,11 +84,11 @@ std::unique_ptr<column> replace_with_backrefs(
   strings_column_view const& strings,
   std::string const& pattern,
   std::string const& repl,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(mr, stream);
+  if (strings_count == 0) return make_empty_strings_column(stream, mr);
 
   CUDF_EXPECTS(!pattern.empty(), "Parameter pattern must not be empty");
   CUDF_EXPECTS(!repl.empty(), "Parameter repl must not be empty");
@@ -105,7 +108,7 @@ std::unique_ptr<column> replace_with_backrefs(
   string_view d_repl_template{repl_scalar.data(), repl_scalar.size()};
 
   // copy null mask
-  auto null_mask  = copy_bitmask(strings.parent());
+  auto null_mask  = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
   auto null_count = strings.null_count();
 
   // create child columns
@@ -118,14 +121,14 @@ std::unique_ptr<column> replace_with_backrefs(
         d_strings, d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
       strings_count,
       null_count,
-      mr,
-      stream);
+      stream,
+      mr);
   } else if (regex_insts <= RX_MEDIUM_INSTS)
     children = replace_with_backrefs_medium(
-      d_strings, d_prog, d_repl_template, backrefs, null_count, mr, stream);
+      d_strings, d_prog, d_repl_template, backrefs, null_count, stream, mr);
   else
     children = replace_with_backrefs_large(
-      d_strings, d_prog, d_repl_template, backrefs, null_count, mr, stream);
+      d_strings, d_prog, d_repl_template, backrefs, null_count, stream, mr);
 
   return make_strings_column(strings_count,
                              std::move(children.first),
@@ -146,7 +149,7 @@ std::unique_ptr<column> replace_with_backrefs(strings_column_view const& strings
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_with_backrefs(strings, pattern, repl, mr);
+  return detail::replace_with_backrefs(strings, pattern, repl, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings
