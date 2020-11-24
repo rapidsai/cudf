@@ -149,6 +149,7 @@
 - PR #6632 Fix DataFrame initialization from list of dicts
 - PR #6767 Fix sort order of parameters in `test_scalar_invalid_implicit_conversion` pytest
 - PR #6787 Update java reduction APIs to reflect C++ changes
+- PR #6790 Fix result representation in groupby.apply
 - PR #6794 Fix AVRO reader issues with empty input
 - PR #6798 Fix `read_avro` docs
 - PR #6824 Fix JNI build
