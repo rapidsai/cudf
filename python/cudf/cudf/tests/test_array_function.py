@@ -119,7 +119,7 @@ def test_array_func_missing_cudf_multi_index(func):
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
-def test_output_func_with_unalligned_index():
+def test_list_input_array_func():
     ar = np.array([1, 2, 3])
 
     s = cudf.Series(ar)

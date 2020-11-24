@@ -508,9 +508,8 @@ def _cast_to_appropriate_cudf_type(val, index=None):
         if (index is None) or (len(index) == len(val)):
             return cudf.Series(val, index=index)
         else:
-            # if index is not None and is of a different
-            # length as val cupy dispatching behaviour
-            # is undefined
+            # if index is not None and is of a different length
+            # than the index cupy dispatching behaviour is undefined
             return NotImplemented
     else:
         return NotImplemented
@@ -518,8 +517,8 @@ def _cast_to_appropriate_cudf_type(val, index=None):
 
 def _get_cupy_compatible_args_index(args, ser_index=None):
     """
-     This function returns cupy function compatible arguments and index
-     if its not possible it return None
+     This function returns cupy compatible arguments and output index
+     if conversion is not possible it returns None
     """
 
     casted_ls = []
@@ -527,7 +526,7 @@ def _get_cupy_compatible_args_index(args, ser_index=None):
         if isinstance(arg, cp.ndarray):
             casted_ls.append(arg)
         elif isinstance(arg, cudf.Series):
-            if _are_indices_alligned(ser_index, arg.index):
+            if _are_indexes_alligned(ser_index, arg.index):
                 ser_index = arg.index
                 casted_ls.append(arg.values)
             else:
@@ -536,14 +535,14 @@ def _get_cupy_compatible_args_index(args, ser_index=None):
         elif isinstance(arg, Sequence):
             # we dont handle list of inputs for functions as
             # these form inputs for functions like
-            # np.concatenate, vstack which have abiguity around index allignment
+            # np.concatenate, vstack have abiguity around index allignment
             return None, ser_index
         else:
             casted_ls.append(arg)
     return casted_ls, ser_index
 
 
-def _are_indices_alligned(index_1, index_2=None):
+def _are_indexes_alligned(index_1, index_2=None):
     if index_1:
         return index_1.equals(index_2)
     else:

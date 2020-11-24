@@ -64,7 +64,18 @@ def test_ufunc_cudf_series_cupy_array(np_ar_tup, func):
 def test_error_with_null_cudf_series(func):
     s_1 = cudf.Series([1, 2])
     s_2 = cudf.Series([1, None])
+
+    # this thows a value error
+    # because of nulls in cudf.Series
     with pytest.raises(ValueError):
+        func(s_1, s_2)
+
+    s_1 = cudf.Series([1, 2])
+    s_2 = cudf.Series([1, 2, None])
+
+    # this throws a type-error because
+    # indexes are not aligned
+    with pytest.raises(TypeError):
         func(s_1, s_2)
 
 
