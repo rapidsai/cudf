@@ -158,6 +158,7 @@
 - PR #6824 Fix JNI build
 - PR #6826 Fix resource management in Java ColumnBuilder
 - PR #6830 Fix categorical scalar insertion
+- PR #6844 Fix uint32_t undefined errors
 
 
 # cuDF 0.16.0 (21 Oct 2020)
