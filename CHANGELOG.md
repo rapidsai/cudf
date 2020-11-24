@@ -16,6 +16,7 @@
 - PR #6568 Add function to create hashed vocabulary file from raw vocabulary
 - PR #6142 Add Python `read_orc_statistics` function for reading file- and stripe-level statistics
 - PR #6581 Add JNI API to check if PTDS is enabled
+- PR #6615 Add support for list and struct types to contiguous_split
 - PR #6625 Add INT96 timestamp writing option to parquet writer
 - PR #6592 Add `cudf.to_numeric` function
 - PR #6598 Add strings::contains API with target column parameter
@@ -27,6 +28,7 @@
 - PR #6768 Add support for scatter() on list columns
 - PR #6796 Add create_metadata_file in dask_cudf
 - PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
+- PR #6805 Implement `cudf::detail::copy_if` for `decimal32` and `decimal64`
 
 ## Improvements
 
@@ -98,7 +100,9 @@
 - PR #6789 Rename `unary_op` to `unary_operator`
 - PR #6770 Support building decimal columns with Table.TestBuilder
 - PR #6822 Split out `cudf::distinct_count` from `drop_duplicates.cu`
+- PR #6829 Enable workaround to write categorical columns in csv
 - PR #6819 Use CMake 3.19 for RMM when building cuDF jar
+- PR #6833 Use settings.xml if existing for internal build
 
 ## Bug Fixes
 
@@ -146,6 +150,7 @@
 - PR #6632 Fix DataFrame initialization from list of dicts
 - PR #6767 Fix sort order of parameters in `test_scalar_invalid_implicit_conversion` pytest
 - PR #6787 Update java reduction APIs to reflect C++ changes
+- PR #6790 Fix result representation in groupby.apply
 - PR #6794 Fix AVRO reader issues with empty input
 - PR #6798 Fix `read_avro` docs
 - PR #6824 Fix JNI build
