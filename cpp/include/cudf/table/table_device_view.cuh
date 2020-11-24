@@ -137,16 +137,14 @@ auto contiguous_copy_column_device_views(HostTableView source_view, rmm::cuda_st
   // We need this pointer in order to pass it down when creating the
   // ColumnDeviceViews so the column can set the pointer(s) for any
   // of its child objects.
+  // align both h_ptr, d_ptr
   auto descendant_storage = std::make_unique<rmm::device_buffer>(padded_views_size_bytes, stream);
-  void* h_ptr             = h_buffer.data();
-  void* d_ptr             = descendant_storage->data();
-  auto d_columns          = detail::child_columns_to_device_array<ColumnDeviceView>(
+  void* h_ptr             = detail::align_ptr_for_type<ColumnDeviceView>(h_buffer.data());
+  void* d_ptr    = detail::align_ptr_for_type<ColumnDeviceView>(descendant_storage->data());
+  auto d_columns = detail::child_columns_to_device_array<ColumnDeviceView>(
     source_view.begin(), source_view.end(), h_ptr, d_ptr);
 
-  // align h_ptr also, because both h_ptr, d_ptr alignment will not be same!
-  auto aligned_hptr = detail::align_ptr_for_type<ColumnDeviceView>(h_buffer.data());
-  CUDA_TRY(
-    cudaMemcpyAsync(d_columns, aligned_hptr, views_size_bytes, cudaMemcpyDefault, stream.value()));
+  CUDA_TRY(cudaMemcpyAsync(d_columns, hptr, views_size_bytes, cudaMemcpyDefault, stream.value()));
   stream.synchronize();
   return std::make_tuple(std::move(descendant_storage), d_columns);
 }
