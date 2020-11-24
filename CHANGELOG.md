@@ -102,6 +102,7 @@
 - PR #6829 Enable workaround to write categorical columns in csv
 - PR #6819 Use CMake 3.19 for RMM when building cuDF jar
 - PR #6833 Use settings.xml if existing for internal build
+- PR #6839 Handle index when dispatching __array_function__ and __array_ufunc__ to cupy for cudf.Series
 
 ## Bug Fixes
 
