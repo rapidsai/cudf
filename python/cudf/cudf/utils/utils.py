@@ -489,39 +489,65 @@ def get_appropriate_dispatched_func(
         if cupy_func is func:
             return NotImplemented
 
-        cupy_compatible_args = get_cupy_compatible_args(args)
-        cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
-        return cast_to_appropriate_cudf_type(cupy_output)
+        cupy_compatible_args, index = _get_cupy_compatible_args_index(args)
+        if cupy_compatible_args:
+            cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
+            return _cast_to_appropriate_cudf_type(cupy_output, index)
+        else:
+            return NotImplemented
     else:
         return NotImplemented
 
 
-def cast_to_appropriate_cudf_type(val):
+def _cast_to_appropriate_cudf_type(val, index=None):
     # TODO Handle scalar
     if val.ndim == 0:
         return cudf.Scalar(val).value
     # 1D array
     elif (val.ndim == 1) or (val.ndim == 2 and val.shape[1] == 1):
-        return cudf.Series(val)
+        if (index is None) or (len(index) == len(val)):
+            return cudf.Series(val, index=index)
+        else:
+            # if index is not None and is of a different
+            # length as val cupy dispatching behaviour
+            # is undefined
+            return NotImplemented
     else:
         return NotImplemented
 
 
-def get_cupy_compatible_args(args):
+def _get_cupy_compatible_args_index(args, ser_index=None):
+    """
+     This function returns cupy function compatible arguments and index
+     if its not possible it return None
+    """
+
     casted_ls = []
     for arg in args:
         if isinstance(arg, cp.ndarray):
             casted_ls.append(arg)
         elif isinstance(arg, cudf.Series):
-            casted_ls.append(arg.values)
+            if _are_indices_alligned(ser_index, arg.index):
+                ser_index = arg.index
+                casted_ls.append(arg.values)
+            else:
+                # dont dispatch if the index does not line up
+                return None, ser_index
         elif isinstance(arg, Sequence):
-            # handle list of inputs for functions like
-            # np.concatenate
-            casted_arg = get_cupy_compatible_args(arg)
-            casted_ls.append(casted_arg)
+            # we dont handle list of inputs for functions as
+            # these form inputs for functions like
+            # np.concatenate, vstack which have abiguity around index allignment
+            return None, ser_index
         else:
             casted_ls.append(arg)
-    return casted_ls
+    return casted_ls, ser_index
+
+
+def _are_indices_alligned(index_1, index_2=None):
+    if index_1:
+        return index_1.equals(index_2)
+    else:
+        return True
 
 
 def get_relevant_submodule(func, module):
