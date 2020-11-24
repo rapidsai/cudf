@@ -163,6 +163,7 @@ std::unique_ptr<column> copy_if_else(
   LeftIter lhs_end,
   RightIter rhs,
   FilterFn filter,
+  cudf::data_type output_type,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
 {
@@ -175,7 +176,7 @@ std::unique_ptr<column> copy_if_else(
   cudf::detail::grid_1d grid{num_els, block_size, 1};
 
   std::unique_ptr<column> out =
-    make_fixed_width_column(data_type(type_to_id<Element>()),
+    make_fixed_width_column(output_type,
                             size,
                             nullable ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED,
                             stream.value(),
