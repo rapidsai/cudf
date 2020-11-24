@@ -33,6 +33,7 @@ import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -3322,11 +3323,13 @@ public class TableTest extends CudfTestBase {
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(true, false, true, false, true);
          ColumnVector fromInts = ColumnVector.fromInts(1, 2, 3, 4, 5);
          ColumnVector fromStrings = ColumnVector.fromStrings("1", "2", "3", "4", "5");
-         Table input = new Table(fromInts, fromStrings);
+         ColumnVector fromDecimals = ColumnVector.decimalFromLongs(-3, 123L, -234L, 345L, 1000L, -2000L);
+         Table input = new Table(fromInts, fromStrings, fromDecimals);
          Table filteredTable = input.filter(mask);
          ColumnVector expectedInts = ColumnVector.fromInts(1, 3, 5);
          ColumnVector expectedStrings = ColumnVector.fromStrings("1", "3", "5");
-         Table expected = new Table(expectedInts, expectedStrings)) {
+         ColumnVector expectedDecimals = ColumnVector.decimalFromLongs(-3, 123L, 345L, -2000L);
+         Table expected = new Table(expectedInts, expectedStrings, expectedDecimals)) {
       assertTablesAreEqual(expected, filteredTable);
     }
   }
@@ -3378,10 +3381,18 @@ public class TableTest extends CudfTestBase {
     Arrays.fill(maskVals, false);
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
          ColumnVector fromInts = ColumnVector.fromBoxedInts(1, null, 2, 3, null);
-         Table input = new Table(fromInts);
+         ColumnVector fromDecimal32s = ColumnVector.decimalFromInts(-3, 1, 2, 3, 4, 5);
+         ColumnVector fromDecimal64s = ColumnVector.decimalFromLongs(-11, 1L, 2L, 3L, 4L, 5L);
+         Table input = new Table(fromInts, fromDecimal32s, fromDecimal64s);
          Table filteredTable = input.filter(mask)) {
       ColumnVector filtered = filteredTable.getColumn(0);
       assertEquals(DType.INT32, filtered.getType());
+      assertEquals(0, filtered.getRowCount());
+      filtered = filteredTable.getColumn(1);
+      assertEquals(DType.create(DType.DTypeEnum.DECIMAL32, -3), filtered.getType());
+      assertEquals(0, filtered.getRowCount());
+      filtered = filteredTable.getColumn(2);
+      assertEquals(DType.create(DType.DTypeEnum.DECIMAL64, -11), filtered.getType());
       assertEquals(0, filtered.getRowCount());
     }
   }
@@ -3396,10 +3407,18 @@ public class TableTest extends CudfTestBase {
       }
       try (ColumnVector mask = builder.buildAndPutOnDevice();
            ColumnVector fromInts = ColumnVector.fromBoxedInts(1, null, 2, 3, null);
-           Table input = new Table(fromInts);
+           ColumnVector fromDecimal32s = ColumnVector.decimalFromInts(-3, 1, 2, 3, 4, 5);
+           ColumnVector fromDecimal64s = ColumnVector.decimalFromLongs(-11, 1L, 2L, 3L, 4L, 5L);
+           Table input = new Table(fromInts, fromDecimal32s, fromDecimal64s);
            Table filteredTable = input.filter(mask)) {
         ColumnVector filtered = filteredTable.getColumn(0);
         assertEquals(DType.INT32, filtered.getType());
+        assertEquals(0, filtered.getRowCount());
+        filtered = filteredTable.getColumn(1);
+        assertEquals(DType.create(DType.DTypeEnum.DECIMAL32, -3), filtered.getType());
+        assertEquals(0, filtered.getRowCount());
+        filtered = filteredTable.getColumn(2);
+        assertEquals(DType.create(DType.DTypeEnum.DECIMAL64, -11), filtered.getType());
         assertEquals(0, filtered.getRowCount());
       }
     }
@@ -3422,11 +3441,13 @@ public class TableTest extends CudfTestBase {
     try (ColumnVector mask = ColumnVector.boolFromBytes(maskVals);
          ColumnVector fromInts = ColumnVector.fromBoxedInts(1, null, 2, 3, null);
          ColumnVector fromStrings = ColumnVector.fromStrings("one", "two", "three", null, "five");
-         Table input = new Table(fromInts, fromStrings);
+         ColumnVector fromDecimals = ColumnVector.fromDecimals(BigDecimal.ZERO, null, BigDecimal.ONE, null, BigDecimal.TEN);
+         Table input = new Table(fromInts, fromStrings, fromDecimals);
          Table filtered = input.filter(mask);
          ColumnVector expectedFromInts = ColumnVector.fromBoxedInts(null, 3, null);
          ColumnVector expectedFromStrings = ColumnVector.fromStrings("two", null, "five");
-         Table expected = new Table(expectedFromInts, expectedFromStrings)) {
+         ColumnVector expectedFromDecimals = ColumnVector.fromDecimals(null, null, BigDecimal.TEN);
+         Table expected = new Table(expectedFromInts, expectedFromStrings, expectedFromDecimals)) {
       assertTablesAreEqual(expected, filtered);
     }
   }

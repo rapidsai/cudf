@@ -44,12 +44,6 @@ git clone --recursive https://github.com/rapidsai/cudf.git -b branch-0.17
 ```bash
 cd cudf
 export WORKSPACE=`pwd`
-export PARALLEL_LEVEL=4
-export SKIP_JAVA_TESTS=true
-export BUILD_CPP_TESTS=OFF
-export OUT=out
-export ENABLE_PTDS=OFF
-
 scl enable devtoolset-7 "java/ci/build-in-docker.sh"
 ```
 
