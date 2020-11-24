@@ -11,6 +11,7 @@
 - PR #6777 Implement `cudf::unary_operation` for `decimal32` & `decimal64`
 - PR #6729 Implement `cudf::cast` for `decimal32/64` to/from different `type_id`
 - PR #6792 Implement `cudf::clamp` for `decimal32` and `decimal64`
+- PR #6845 Implement `cudf::copy_if_else` for `decimal32` and `decimal64`
 - PR #6528 Enable `fixed_point` binary operations
 - PR #6460 Add is_timestamp format check API
 - PR #6568 Add function to create hashed vocabulary file from raw vocabulary
