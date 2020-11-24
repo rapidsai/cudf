@@ -22,6 +22,8 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/sequence.h>
 
 namespace cudf {
@@ -32,11 +34,11 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
                                          size_type start,
                                          size_type end,
                                          size_type step,
-                                         cudaStream_t stream,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(mr, stream);
+  if (strings_count == 0) return make_empty_strings_column(stream, mr);
   if (step == 0) step = 1;
   CUDF_EXPECTS(step > 0, "Parameter step must be positive integer.");
   if (end < 0 || end > strings_count) end = strings_count;
@@ -46,7 +48,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
   auto execpol = rmm::exec_policy(stream);
   // build indices
   rmm::device_vector<size_type> indices(strings_count);
-  thrust::sequence(execpol->on(stream), indices.begin(), indices.end(), start, step);
+  thrust::sequence(execpol->on(stream.value()), indices.begin(), indices.end(), start, step);
   // create a column_view as a wrapper of these indices
   column_view indices_view(
     data_type{type_id::INT32}, strings_count, indices.data().get(), nullptr, 0);

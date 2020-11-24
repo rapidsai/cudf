@@ -154,11 +154,11 @@ struct codepoint_to_utf8_fn {
 
 }  // namespace
 
-// details API
+// detail API
 std::unique_ptr<cudf::column> normalize_spaces(
   cudf::strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   cudf::size_type strings_count = strings.size();
   if (strings_count == 0) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
@@ -167,30 +167,29 @@ std::unique_ptr<cudf::column> normalize_spaces(
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // copy bitmask
-  rmm::device_buffer null_mask =
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
 
   // create offsets by calculating size of each string for output
   auto offsets_transformer_itr =
     thrust::make_transform_iterator(thrust::make_counting_iterator<int32_t>(0),
                                     normalize_spaces_fn{d_strings});  // this does size-only calc
   auto offsets_column = cudf::strings::detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build the chars column
   cudf::size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
   auto chars_column     = cudf::strings::detail::create_chars_child_column(
-    strings_count, strings.null_count(), bytes, mr, stream);
+    strings_count, strings.null_count(), bytes, stream, mr);
   auto d_chars = chars_column->mutable_view().data<char>();
 
   // copy tokens to the chars buffer
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,
                      normalize_spaces_fn{d_strings, d_offsets, d_chars});
   chars_column->set_null_count(0);  // reset null count for child column
-  //
+
   return cudf::make_strings_column(strings_count,
                                    std::move(offsets_column),
                                    std::move(chars_column),
@@ -205,7 +204,7 @@ std::unique_ptr<cudf::column> normalize_spaces(
  */
 std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view const& strings,
                                                    bool do_lower_case,
-                                                   cudaStream_t stream,
+                                                   rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
 {
   auto const strings_count = strings.size();
@@ -236,32 +235,31 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
     thrust::make_transform_iterator(thrust::make_counting_iterator<int32_t>(0),
                                     codepoint_to_utf8_fn{*strings_column, cp_chars, cp_offsets});
   auto offsets_column = cudf::strings::detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // create the output chars column
   cudf::size_type output_bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column = cudf::strings::detail::create_chars_child_column(
-    strings_count, strings.null_count(), output_bytes, mr, stream);
+    strings_count, strings.null_count(), output_bytes, stream, mr);
   auto d_chars = chars_column->mutable_view().data<char>();
 
   // build the chars output data: convert the 4-byte code-point values into UTF-8 chars
   thrust::for_each_n(
-    rmm::exec_policy(stream)->on(stream),
+    rmm::exec_policy(stream)->on(stream.value()),
     thrust::make_counting_iterator<cudf::size_type>(0),
     strings_count,
     codepoint_to_utf8_fn{*strings_column, cp_chars, cp_offsets, d_offsets, d_chars});
   chars_column->set_null_count(0);  // reset null count for child column
 
-  return cudf::make_strings_column(
-    strings_count,
-    std::move(offsets_column),
-    std::move(chars_column),
-    strings.null_count(),
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
-    stream,
-    mr);
+  return cudf::make_strings_column(strings_count,
+                                   std::move(offsets_column),
+                                   std::move(chars_column),
+                                   strings.null_count(),
+                                   cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                   stream,
+                                   mr);
 }
 
 }  // namespace detail
@@ -272,7 +270,7 @@ std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& 
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::normalize_spaces(strings, mr);
+  return detail::normalize_spaces(strings, rmm::cuda_stream_default, mr);
 }
 
 /**
@@ -283,7 +281,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
                                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::normalize_characters(strings, do_lower_case, 0, mr);
+  return detail::normalize_characters(strings, do_lower_case, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace nvtext

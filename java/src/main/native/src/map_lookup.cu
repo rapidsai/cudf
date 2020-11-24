@@ -119,7 +119,7 @@ get_gather_map_for_map_values(column_view const &input, string_scalar &lookup_ke
   gpu_find_first<block_size, has_nulls><<<grid.num_blocks, block_size, 0, stream.value()>>>(
       *input_device_view, *output_view, lookup_key_device_view);
 
-  CHECK_CUDA(stream);
+  CHECK_CUDA(stream.value());
 
   return gather_map;
 }
