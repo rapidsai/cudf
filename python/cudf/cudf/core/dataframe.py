@@ -204,33 +204,29 @@ class DataFrame(Frame, Serializable):
             columns = columns.to_pandas()
 
         if isinstance(data, ColumnAccessor):
+            if index is None:
+                index = as_index(range(data.nrows))
+
             if columns is not None:
                 data = _get_columns_from_column_accessor(
-                    data=data, columns=columns
+                    column_accessor=data, columns=columns
                 )
-
             self._data = data
-            if index is None:
-                index = as_index(range(self._data.nrows))
             self.index = as_index(index)
-            return None
-
-        if isinstance(data, (DataFrame, pd.DataFrame)):
+        elif isinstance(data, (DataFrame, pd.DataFrame)):
             if isinstance(data, pd.DataFrame):
                 data = self.from_pandas(data)
 
             if columns is not None:
                 self._data = _get_columns_from_column_accessor(
-                    data=data._data, columns=columns
+                    column_accessor=data._data, columns=columns
                 )
             else:
                 self._data = data._data
+                self.columns = data.columns
 
             self._index = data._index if index is None else as_index(index)
-            self.columns = data.columns
-            return
-
-        if data is None:
+        elif data is None:
             if index is None:
                 self._index = RangeIndex(0)
             else:
@@ -7307,19 +7303,21 @@ def _get_host_unique(array):
         return set(array)
 
 
-def _get_columns_from_column_accessor(data, columns):
+def _get_columns_from_column_accessor(column_accessor, columns):
     return ColumnAccessor(
         data=OrderedDict(
             (
                 col_name,
-                data[col_name]
-                if col_name in data
+                column_accessor[col_name]
+                if col_name in column_accessor
                 else cudf.core.column.column_empty(
-                    row_count=data.nrows, dtype="float64", masked=True
+                    row_count=column_accessor.nrows,
+                    dtype="object",
+                    masked=True,
                 ),
             )
             for col_name in columns
         ),
-        multiindex=data.multiindex,
-        level_names=data.level_names,
+        multiindex=column_accessor.multiindex,
+        level_names=column_accessor.level_names,
     )

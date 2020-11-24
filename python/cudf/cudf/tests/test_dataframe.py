@@ -8015,17 +8015,29 @@ def test_dataframe_from_pandas_duplicate_columns():
         [],
         pd.Index(["c", "a"]),
         gd.Index(["c", "a"]),
+        ["abc", "a"],
+        ["column_not_exists1", "column_not_exists2"],
     ],
 )
 def test_dataframe_constructor_columns(df, columns):
-    gdf = gd.from_pandas(df)
+    def assert_local_eq(actual, df, expected, host_columns):
+        if host_columns is not None and any(
+            col not in df.columns for col in host_columns
+        ):
+            assert_eq(expected, actual, check_dtype=False)
+        else:
+            assert_eq(expected, actual)
 
-    expected = pd.DataFrame(
-        df,
-        columns=columns.to_pandas()
-        if isinstance(columns, gd.Index)
-        else columns,
+    gdf = gd.from_pandas(df)
+    host_columns = (
+        columns.to_pandas() if isinstance(columns, gd.Index) else columns
     )
+
+    expected = pd.DataFrame(df, columns=host_columns)
     actual = gd.DataFrame(gdf, columns=columns)
 
-    assert_eq(expected, actual)
+    assert_local_eq(actual, df, expected, host_columns)
+
+    actual = gd.DataFrame(gdf._data, columns=columns)
+
+    assert_local_eq(actual, df, expected, host_columns)
