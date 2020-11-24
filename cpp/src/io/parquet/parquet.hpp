@@ -669,7 +669,7 @@ class ParquetFieldUnionFunctor {
       return true;
     } else {
       is_set = true;
-      return cpr->read(&val);
+      return !cpr->read(&val);
     }
   }
 
