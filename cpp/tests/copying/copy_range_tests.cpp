@@ -466,12 +466,12 @@ TEST_F(CopyRangeErrorTestFixture, DTypeMismatch)
 }
 
 template <typename T>
-struct FixedPointTypes : public cudf::test::BaseFixture {
+struct FixedPointTypesCopyRange : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTypes, cudf::test::FixedPointTypes);
+TYPED_TEST_CASE(FixedPointTypesCopyRange, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTypes, FixedPointSimple)
+TYPED_TEST(FixedPointTypesCopyRange, FixedPointSimple)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -486,7 +486,7 @@ TYPED_TEST(FixedPointTypes, FixedPointSimple)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointTypes, FixedPointLarge)
+TYPED_TEST(FixedPointTypesCopyRange, FixedPointLarge)
 {
   using namespace numeric;
   using namespace cudf::test;
@@ -506,7 +506,7 @@ TYPED_TEST(FixedPointTypes, FixedPointLarge)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-TYPED_TEST(FixedPointTypes, FixedPointScaleMismatch)
+TYPED_TEST(FixedPointTypesCopyRange, FixedPointScaleMismatch)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
