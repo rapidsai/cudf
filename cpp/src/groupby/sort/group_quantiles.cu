@@ -78,8 +78,8 @@ struct quantiles_functor {
     size_type const num_groups,
     rmm::device_vector<double> const& quantile,
     interpolation interpolation,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0)
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
   {
     using ResultType = cudf::detail::target_type_t<T, aggregation::QUANTILE>;
 
@@ -100,7 +100,7 @@ struct quantiles_functor {
     // For each group, calculate quantile
     if (!cudf::is_dictionary(values.type())) {
       auto values_iter = values_view->begin<T>();
-      thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+      thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                          thrust::make_counting_iterator(0),
                          num_groups,
                          calculate_quantile_fn<ResultType, decltype(values_iter)>{
@@ -113,7 +113,7 @@ struct quantiles_functor {
                            interpolation});
     } else {
       auto values_iter = cudf::dictionary::detail::make_dictionary_iterator<T>(*values_view);
-      thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+      thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                          thrust::make_counting_iterator(0),
                          num_groups,
                          calculate_quantile_fn<ResultType, decltype(values_iter)>{
@@ -146,8 +146,8 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
                                         size_type const num_groups,
                                         std::vector<double> const& quantiles,
                                         interpolation interp,
-                                        rmm::mr::device_memory_resource* mr,
-                                        cudaStream_t stream)
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
 {
   rmm::device_vector<double> dv_quantiles(quantiles);
 
@@ -163,8 +163,8 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
                          num_groups,
                          dv_quantiles,
                          interp,
-                         mr,
-                         stream);
+                         stream,
+                         mr);
 }
 
 }  // namespace detail

@@ -67,8 +67,8 @@ auto create_strings_device_views(std::vector<column_view> const& views,
                                  rmm::cuda_stream_view stream)
 {
   // Create device views for each input view
-  using CDViewPtr =
-    decltype(column_device_view::create(std::declval<column_view>(), std::declval<cudaStream_t>()));
+  using CDViewPtr = decltype(
+    column_device_view::create(std::declval<column_view>(), std::declval<rmm::cuda_stream_view>()));
   auto device_view_owners = std::vector<CDViewPtr>(views.size());
   std::transform(
     views.cbegin(), views.cend(), device_view_owners.begin(), [stream](auto const& col) {
@@ -228,7 +228,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
   auto const total_bytes          = std::get<5>(device_views);
   auto const offsets_count        = strings_count + 1;
 
-  if (strings_count == 0) { return make_empty_strings_column(mr, stream.value()); }
+  if (strings_count == 0) { return make_empty_strings_column(stream, mr); }
 
   CUDF_EXPECTS(offsets_count <= std::numeric_limits<size_type>::max(),
                "total number of strings is too large for cudf column");

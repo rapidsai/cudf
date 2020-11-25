@@ -17,20 +17,22 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <groupby/sort/group_single_pass_reduction_util.cuh>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace groupby {
 namespace detail {
 std::unique_ptr<column> group_sum(column_view const& values,
                                   size_type num_groups,
                                   rmm::device_vector<size_type> const& group_labels,
-                                  rmm::mr::device_memory_resource* mr,
-                                  cudaStream_t stream)
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   auto values_type = cudf::is_dictionary(values.type())
                        ? dictionary_column_view(values).keys().type()
                        : values.type();
   return type_dispatcher(
-    values_type, reduce_functor<aggregation::SUM>{}, values, num_groups, group_labels, mr, stream);
+    values_type, reduce_functor<aggregation::SUM>{}, values, num_groups, group_labels, stream, mr);
 }
 
 }  // namespace detail

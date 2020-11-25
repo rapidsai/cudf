@@ -61,7 +61,7 @@ std::unique_ptr<column> scatter(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = target.size();
-  if (strings_count == 0) return make_empty_strings_column(mr, stream.value());
+  if (strings_count == 0) return make_empty_strings_column(stream, mr);
 
   // create null mask -- caller must update this
   rmm::device_buffer null_mask{0, stream, mr};
@@ -75,10 +75,10 @@ std::unique_ptr<column> scatter(
     rmm::exec_policy(stream)->on(stream.value()), begin, end, scatter_map, target_vector.begin());
 
   // build offsets column
-  auto offsets_column = child_offsets_from_string_vector(target_vector, mr, stream.value());
+  auto offsets_column = child_offsets_from_string_vector(target_vector, stream, mr);
   // build chars column
   auto chars_column = child_chars_from_string_vector(
-    target_vector, offsets_column->view().data<int32_t>(), 0, mr, stream.value());
+    target_vector, offsets_column->view().data<int32_t>(), 0, stream, mr);
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),

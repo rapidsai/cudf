@@ -16,15 +16,15 @@
 
 #pragma once
 
+#include <cudf/io/types.hpp>
+#include <cudf/utilities/error.hpp>
+
 #include <arrow/buffer.h>
 #include <arrow/io/file.h>
 #include <arrow/io/interfaces.h>
 #include <arrow/io/memory.h>
 
 #include <memory>
-
-#include <cudf/io/types.hpp>
-#include <cudf/utilities/error.hpp>
 
 namespace cudf {
 //! IO interfaces

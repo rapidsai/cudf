@@ -25,6 +25,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/reduce.h>
@@ -69,14 +70,14 @@ void reduce_by_key_fn(Iterator values_iter,
                       size_type const* d_group_sizes,
                       size_type ddof,
                       ResultType* d_result,
-                      cudaStream_t stream)
+                      rmm::cuda_stream_view stream)
 {
   auto var_iter = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
     var_transform<ResultType, decltype(values_iter)>{
       values_iter, d_means, d_group_sizes, group_labels.data().get(), ddof});
 
-  thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
+  thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream.value()),
                         group_labels.begin(),
                         group_labels.end(),
                         var_iter,
@@ -92,8 +93,8 @@ struct var_functor {
     column_view const& group_sizes,
     rmm::device_vector<size_type> const& group_labels,
     size_type ddof,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream)
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
   {
 // Running this in debug build causes a runtime error:
 // `reduce_by_key failed on 2nd step: invalid device function`
@@ -136,7 +137,7 @@ struct var_functor {
 
     // set nulls
     auto result_view = mutable_column_device_view::create(*result, stream);
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                        thrust::make_counting_iterator(0),
                        group_sizes.size(),
                        [d_result = *result_view, d_group_sizes, ddof] __device__(size_type i) {
@@ -168,15 +169,15 @@ std::unique_ptr<column> group_var(column_view const& values,
                                   column_view const& group_sizes,
                                   rmm::device_vector<size_type> const& group_labels,
                                   size_type ddof,
-                                  rmm::mr::device_memory_resource* mr,
-                                  cudaStream_t stream)
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   auto values_type = cudf::is_dictionary(values.type())
                        ? dictionary_column_view(values).keys().type()
                        : values.type();
 
   return type_dispatcher(
-    values_type, var_functor{}, values, group_means, group_sizes, group_labels, ddof, mr, stream);
+    values_type, var_functor{}, values, group_means, group_sizes, group_labels, ddof, stream, mr);
 }
 
 }  // namespace detail

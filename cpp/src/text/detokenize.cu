@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#include <nvtext/tokenize.hpp>
+
+#include <strings/utilities.cuh>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -27,12 +31,12 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <nvtext/tokenize.hpp>
-#include <strings/utilities.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/count.h>
-#include <rmm/device_uvector.hpp>
 
 namespace nvtext {
 namespace detail {
@@ -98,17 +102,18 @@ struct token_row_offsets_fn {
   cudf::size_type const tokens_counts;
 
   template <typename T, std::enable_if_t<cudf::is_index_type<T>()>* = nullptr>
-  std::unique_ptr<rmm::device_uvector<cudf::size_type>> operator()(cudaStream_t stream) const
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> operator()(
+    rmm::cuda_stream_view stream) const
   {
     index_changed_fn<T> pfn{row_indices.data<T>(), sorted_indices.template data<int32_t>()};
     auto const output_count =
-      thrust::count_if(rmm::exec_policy(stream)->on(stream),
+      thrust::count_if(rmm::exec_policy(stream)->on(stream.value()),
                        thrust::make_counting_iterator<cudf::size_type>(0),
                        thrust::make_counting_iterator<cudf::size_type>(tokens_counts),
                        pfn);
     auto tokens_offsets =
       std::make_unique<rmm::device_uvector<cudf::size_type>>(output_count + 1, stream);
-    thrust::copy_if(rmm::exec_policy(stream)->on(stream),
+    thrust::copy_if(rmm::exec_policy(stream)->on(stream.value()),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(tokens_counts),
                     tokens_offsets->begin(),
@@ -134,7 +139,7 @@ struct token_row_offsets_fn {
 std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& strings,
                                          cudf::column_view const& row_indices,
                                          cudf::string_scalar const& separator,
-                                         cudaStream_t stream,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be valid");
@@ -164,17 +169,17 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
     thrust::make_counting_iterator<cudf::size_type>(0),
     detokenizer_fn{*strings_column, d_row_map, tokens_offsets->data(), d_separator});
   auto offsets_column = cudf::strings::detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + output_count, mr, stream);
+    offsets_transformer_itr, offsets_transformer_itr + output_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build the chars column - append each source token to the appropriate output row
   cudf::size_type const total_bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), output_count, stream);
   auto chars_column =
-    cudf::strings::detail::create_chars_child_column(output_count, 0, total_bytes, mr, stream);
+    cudf::strings::detail::create_chars_child_column(output_count, 0, total_bytes, stream, mr);
   auto d_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
-    rmm::exec_policy(stream)->on(stream),
+    rmm::exec_policy(stream)->on(stream.value()),
     thrust::make_counting_iterator<cudf::size_type>(0),
     output_count,
     detokenizer_fn{
@@ -199,7 +204,7 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::detokenize(strings, row_indices, separator, 0, mr);
+  return detail::detokenize(strings, row_indices, separator, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace nvtext
