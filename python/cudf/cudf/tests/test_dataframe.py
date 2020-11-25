@@ -8002,7 +8002,8 @@ def test_dataframe_from_pandas_duplicate_columns():
     [
         pd.DataFrame(
             {"a": [1, 2, 3], "b": [10, 11, 20], "c": ["a", "bcd", "xyz"]}
-        )
+        ),
+        pd.DataFrame(),
     ],
 )
 @pytest.mark.parametrize(
@@ -8019,15 +8020,21 @@ def test_dataframe_from_pandas_duplicate_columns():
         ["column_not_exists1", "column_not_exists2"],
     ],
 )
-@pytest.mark.parametrize("index", [None, ["abc", "def", "ghi"]])
+@pytest.mark.parametrize("index", [["abc", "def", "ghi"]])
 def test_dataframe_constructor_columns(df, columns, index):
     def assert_local_eq(actual, df, expected, host_columns):
+        check_index_type = False if expected.empty else True
         if host_columns is not None and any(
             col not in df.columns for col in host_columns
         ):
-            assert_eq(expected, actual, check_dtype=False)
+            assert_eq(
+                expected,
+                actual,
+                check_dtype=False,
+                check_index_type=check_index_type,
+            )
         else:
-            assert_eq(expected, actual)
+            assert_eq(expected, actual, check_index_type=check_index_type)
 
     gdf = gd.from_pandas(df)
     host_columns = (
@@ -8042,5 +8049,8 @@ def test_dataframe_constructor_columns(df, columns, index):
     expected = pd.DataFrame(df, columns=host_columns)
     actual = gd.DataFrame(gdf._data, columns=columns, index=index)
     if index is not None:
-        expected.index = index
+        if df.shape == (0, 0):
+            expected = pd.DataFrame(columns=host_columns, index=index)
+        else:
+            expected.index = index
     assert_local_eq(actual, df, expected, host_columns)

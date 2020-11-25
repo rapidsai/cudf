@@ -206,12 +206,18 @@ class DataFrame(Frame, Serializable):
         if isinstance(data, ColumnAccessor):
             if index is None:
                 index = as_index(range(data.nrows))
+            else:
+                index = as_index(index)
 
             if columns is not None:
-                data = _get_columns_from_column_accessor(
-                    column_accessor=data, columns=columns
+                self._data = _get_columns_from_column_accessor(
+                    column_accessor=data,
+                    columns=columns,
+                    nrows=len(index) if data.nrows == 0 else data.nrows,
                 )
-            self._data = data
+            else:
+                self._data = data
+
             self.index = as_index(index)
         elif isinstance(data, (DataFrame, pd.DataFrame)):
             if isinstance(data, pd.DataFrame):
@@ -219,16 +225,21 @@ class DataFrame(Frame, Serializable):
 
             if index is not None and not data.index.equals(index):
                 data = data.reindex(index)
+                index = data._index
 
             if columns is not None:
                 self._data = _get_columns_from_column_accessor(
-                    column_accessor=data._data, columns=columns
+                    column_accessor=data._data,
+                    columns=columns,
+                    nrows=len(index)
+                    if data._data.nrows == 0
+                    else data._data.nrows,
                 )
             else:
                 self._data = data._data
                 self.columns = data.columns
 
-            self._index = data._index
+            self._index = index
         elif data is None:
             if index is None:
                 self._index = RangeIndex(0)
@@ -7306,7 +7317,7 @@ def _get_host_unique(array):
         return set(array)
 
 
-def _get_columns_from_column_accessor(column_accessor, columns):
+def _get_columns_from_column_accessor(column_accessor, columns, nrows):
     return ColumnAccessor(
         data=OrderedDict(
             (
@@ -7314,9 +7325,7 @@ def _get_columns_from_column_accessor(column_accessor, columns):
                 column_accessor[col_name]
                 if col_name in column_accessor
                 else cudf.core.column.column_empty(
-                    row_count=column_accessor.nrows,
-                    dtype="object",
-                    masked=True,
+                    row_count=nrows, dtype="object", masked=True,
                 ),
             )
             for col_name in columns
