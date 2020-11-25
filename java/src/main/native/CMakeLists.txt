@@ -146,7 +146,10 @@ endif(CUDA_STATIC_RUNTIME)
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
 
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
+set(CMAKE_MODULE_PATH
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/"
+    "${PROJECT_SOURCE_DIR}/../../../../cpp/cmake/Modules/"
+    ${CMAKE_MODULE_PATH})
 
 include(FeatureSummary)
 include(CheckIncludeFiles)
@@ -349,5 +352,4 @@ target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni ${CUDF_LIBS} ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda nvrtc
-                      "$<$<BOOL:${cuFile_FOUND}>:${cuFile_LIBRARIES}>")
+target_link_libraries(cudfjni ${CUDF_LIBS} ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda nvrtc)
