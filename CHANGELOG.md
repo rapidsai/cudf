@@ -11,6 +11,8 @@
 - PR #6777 Implement `cudf::unary_operation` for `decimal32` & `decimal64`
 - PR #6729 Implement `cudf::cast` for `decimal32/64` to/from different `type_id`
 - PR #6792 Implement `cudf::clamp` for `decimal32` and `decimal64`
+- PR #6805 Implement `cudf::detail::copy_if` for `decimal32` and `decimal64`
+- PR #6843 Implement `cudf::copy_range` for `decimal32` and `decimal64`
 - PR #6528 Enable `fixed_point` binary operations
 - PR #6460 Add is_timestamp format check API
 - PR #6568 Add function to create hashed vocabulary file from raw vocabulary
@@ -29,7 +31,6 @@
 - PR #6768 Add support for scatter() on list columns
 - PR #6796 Add create_metadata_file in dask_cudf
 - PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
-- PR #6805 Implement `cudf::detail::copy_if` for `decimal32` and `decimal64`
 
 ## Improvements
 
