@@ -263,9 +263,13 @@ endif(NVCOMP_FOUND)
 add_library(nvcomp STATIC IMPORTED ${NVCOMP_LIB})
 
 ###################################################################################################
-# - cufile ----------------------------------------------------------------------------------------
+# - GDS/cufile ------------------------------------------------------------------------------------
 
-find_package(cuFile)
+option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
+if(USE_GDS)
+    message(STATUS "Building with GPUDirect Storage (GDS)/cuFile support")
+    find_package(cuFile REQUIRED)
+endif(USE_GDS)
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
