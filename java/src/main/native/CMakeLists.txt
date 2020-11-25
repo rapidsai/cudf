@@ -263,6 +263,11 @@ endif(NVCOMP_FOUND)
 add_library(nvcomp STATIC IMPORTED ${NVCOMP_LIB})
 
 ###################################################################################################
+# - cufile ----------------------------------------------------------------------------------------
+
+find_package(cuFile)
+
+###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
 include_directories("${THRUST_INCLUDE}"
@@ -277,7 +282,8 @@ include_directories("${THRUST_INCLUDE}"
                     "${JNI_INCLUDE_DIRS}"
                     "${CUDF_INCLUDE}"
                     "${RMM_INCLUDE}"
-                    "${ARROW_INCLUDE}")
+                    "${ARROW_INCLUDE}"
+                    "$<$<BOOL:${cuFile_FOUND}>:${cuFile_INCLUDE_DIRS}>")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -339,4 +345,5 @@ target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni ${CUDF_LIBS} ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda nvrtc)
+target_link_libraries(cudfjni ${CUDF_LIBS} ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda nvrtc
+                      "$<$<BOOL:${cuFile_FOUND}>:${cuFile_LIBRARIES}>")
