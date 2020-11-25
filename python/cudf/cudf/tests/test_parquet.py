@@ -1644,6 +1644,23 @@ def test_parquet_nullable_boolean(tmpdir, engine):
     assert_eq(actual_gdf, expected_gdf)
 
 
+@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
+def test_parquet_allnull_str(tmpdir, engine):
+    pandas_path = tmpdir.join("pandas_allnulls.parquet")
+
+    pdf = pd.DataFrame(
+        {"a": pd.Series([None, None, None, None, None], dtype="str")}
+    )
+    expected_gdf = cudf.DataFrame(
+        {"a": cudf.Series([None, None, None, None, None], dtype="str")}
+    )
+
+    pdf.to_parquet(pandas_path)
+    actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
+
+    assert_eq(actual_gdf, expected_gdf)
+
+
 def normalized_equals(value1, value2):
     if isinstance(value1, pd.Timestamp):
         value1 = value1.to_pydatetime()

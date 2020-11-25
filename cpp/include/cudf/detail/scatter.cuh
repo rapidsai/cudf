@@ -24,6 +24,7 @@
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
+#include <cudf/lists/detail/scatter.cuh>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/traits.hpp>
@@ -121,6 +122,20 @@ struct column_scatterer_impl<string_view, MapIterator> {
 };
 
 template <typename MapIterator>
+struct column_scatterer_impl<list_view, MapIterator> {
+  std::unique_ptr<column> operator()(column_view const& source,
+                                     MapIterator scatter_map_begin,
+                                     MapIterator scatter_map_end,
+                                     column_view const& target,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
+  {
+    return cudf::lists::detail::scatter(
+      source, scatter_map_begin, scatter_map_end, target, stream, mr);
+  }
+};
+
+template <typename MapIterator>
 struct column_scatterer {
   template <typename Element>
   std::unique_ptr<column> operator()(column_view const& source,
@@ -156,10 +171,9 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
                  "scatter dictionary keys must be the same type");
 
     // first combine keys so both dictionaries have the same set
-    auto target_matched = dictionary::detail::add_keys(target, source.keys(), mr, stream.value());
+    auto target_matched    = dictionary::detail::add_keys(target, source.keys(), stream, mr);
     auto const target_view = dictionary_column_view(target_matched->view());
-    auto source_matched    = dictionary::detail::set_keys(
-      source, target_view.keys(), rmm::mr::get_current_device_resource(), stream.value());
+    auto source_matched    = dictionary::detail::set_keys(source, target_view.keys(), stream);
     auto const source_view = dictionary_column_view(source_matched->view());
 
     // now build the new indices by doing a scatter on just the matched indices

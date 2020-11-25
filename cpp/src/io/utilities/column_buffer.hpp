@@ -51,13 +51,13 @@ namespace detail {
 inline rmm::device_buffer create_data(
   data_type type,
   size_type size,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   std::size_t data_size = size_of(type) * size;
 
   rmm::device_buffer data(data_size, stream, mr);
-  CUDA_TRY(cudaMemsetAsync(data.data(), 0, data_size, stream));
+  CUDA_TRY(cudaMemsetAsync(data.data(), 0, data_size, stream.value()));
 
   return data;
 }
@@ -84,7 +84,7 @@ struct column_buffer {
   column_buffer(data_type _type,
                 size_type _size,
                 bool _is_nullable                   = true,
-                cudaStream_t stream                 = 0,
+                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : type(_type), is_nullable(_is_nullable), _null_count(0)
   {
@@ -102,7 +102,7 @@ struct column_buffer {
   // instantiate a column of known type with a specified size.  Allows deferred creation for
   // preprocessing steps such as in the Parquet reader
   void create(size_type _size,
-              cudaStream_t stream                 = 0,
+              rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {
     size = _size;
@@ -164,9 +164,9 @@ namespace {
  */
 std::unique_ptr<column> make_column(
   column_buffer& buffer,
-  cudaStream_t stream                 = 0,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  column_name_info* schema_info       = nullptr)
+  column_name_info* schema_info       = nullptr,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   using str_pair = thrust::pair<const char*, size_type>;
 
@@ -194,7 +194,7 @@ std::unique_ptr<column> make_column(
 
       // make child column
       CUDF_EXPECTS(buffer.children.size() > 0, "Encountered malformed column_buffer");
-      auto child = make_column(buffer.children[0], stream, mr, child_info);
+      auto child = make_column(buffer.children[0], child_info, stream, mr);
 
       // make the final list column (note : size is the # of offsets, so our actual # of rows is 1
       // less)
@@ -219,7 +219,7 @@ std::unique_ptr<column> make_column(
                          schema_info->children.push_back(column_name_info{""});
                          child_info = &schema_info->children.back();
                        }
-                       return make_column(col, stream, mr, child_info);
+                       return make_column(col, child_info, stream, mr);
                      });
 
       return make_structs_column(buffer.size,

@@ -223,12 +223,12 @@ auto create_hash_map(table_device_view const& d_keys,
   row_equality_comparator<keys_have_nulls> rows_equal{d_keys, d_keys, null_keys_are_equal};
 
   return map_type::create(compute_hash_table_size(d_keys.num_rows()),
+                          stream,
                           unused_key,
                           unused_value,
                           hasher,
                           rows_equal,
-                          allocator_type(),
-                          stream.value());
+                          allocator_type());
 }
 
 /**
@@ -273,8 +273,8 @@ void compute_single_pass_aggs(table_view const& keys,
   cudf::detail::initialize_with_identity(table_view, aggs, stream);
 
   // prepare to launch kernel to do the actual aggregation
-  auto d_sparse_table = mutable_table_device_view::create(sparse_table);
-  auto d_values       = table_device_view::create(flattened_values);
+  auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
+  auto d_values       = table_device_view::create(flattened_values, stream);
   rmm::device_vector<aggregation::Kind> d_aggs(aggs);
 
   bool skip_key_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
@@ -372,7 +372,7 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
-  auto d_keys = table_device_view::create(keys);
+  auto d_keys = table_device_view::create(keys, stream);
   auto map    = create_hash_map<keys_have_nulls>(*d_keys, include_null_keys, stream);
 
   // Cache of sparse results where the location of aggregate value in each

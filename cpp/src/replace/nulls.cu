@@ -236,7 +236,7 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
     valid_count);
 
   std::unique_ptr<cudf::column> offsets = cudf::strings::detail::make_offsets_child_column(
-    sizes_view.begin<int32_t>(), sizes_view.end<int32_t>(), mr, stream.value());
+    sizes_view.begin<int32_t>(), sizes_view.end<int32_t>(), stream, mr);
   auto offsets_view = offsets->mutable_view();
 
   int32_t size;
@@ -244,9 +244,9 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
     &size, offsets_view.end<int32_t>() - 1, sizeof(int32_t), cudaMemcpyDefault, stream.value()));
 
   // Allocate chars array and output null mask
-  cudf::size_type null_count                 = input.size() - valid_counter.value(stream);
-  std::unique_ptr<cudf::column> output_chars = cudf::strings::detail::create_chars_child_column(
-    input.size(), null_count, size, mr, stream.value());
+  cudf::size_type null_count = input.size() - valid_counter.value(stream);
+  std::unique_ptr<cudf::column> output_chars =
+    cudf::strings::detail::create_chars_child_column(input.size(), null_count, size, stream, mr);
 
   auto output_chars_view = output_chars->mutable_view();
 
