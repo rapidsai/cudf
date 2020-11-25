@@ -420,7 +420,7 @@ public class ColumnVectorTest extends CudfTestBase {
            "in the MD5 hash function. This string needed to be longer.A 60 character string to " +
            "test MD5's message padding algorithm",
            "hiJ\ud720\ud721\ud720\ud721", null);
-         ColumnVector result = ColumnVector.serial32BitMurmurHash3(42, v0);
+         ColumnVector result = ColumnVector.serial32BitMurmurHash3(42, new ColumnVector[]{v0});
          ColumnVector expected = ColumnVector.fromBoxedInts(-1293573533, 1163854319, 1247767417, 1504480835, 1249086584, 42)) {
       assertColumnsAreEqual(expected, result);
     }
@@ -430,7 +430,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void test32BitMurmur3HashInts() {
     try (ColumnVector v0 = ColumnVector.fromBoxedInts(0, 100, null, null, Integer.MIN_VALUE, null);
          ColumnVector v1 = ColumnVector.fromBoxedInts(0, null, -100, null, null, Integer.MAX_VALUE);
-         ColumnVector result = ColumnVector.serial32BitMurmurHash3(42, v0, v1);
+         ColumnVector result = ColumnVector.serial32BitMurmurHash3(42, new ColumnVector[]{v0, v1});
          ColumnVector expected = ColumnVector.fromBoxedInts(59727262, 751823303, -1080202046, 42, 723455942, 133916647)) {
       assertColumnsAreEqual(expected, result);
     }
@@ -443,7 +443,7 @@ public class ColumnVectorTest extends CudfTestBase {
           POSITIVE_DOUBLE_NAN_UPPER_RANGE, POSITIVE_DOUBLE_NAN_LOWER_RANGE,
           NEGATIVE_DOUBLE_NAN_UPPER_RANGE, NEGATIVE_DOUBLE_NAN_LOWER_RANGE,
           Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
-         ColumnVector result = ColumnVector.serial32BitMurmurHash3(v);
+         ColumnVector result = ColumnVector.serial32BitMurmurHash3(new ColumnVector[]{v});
          ColumnVector expected = ColumnVector.fromBoxedInts(1669671676, 0, -544903190, -1831674681, 150502665, 474144502, 1428788237, 1428788237, 1428788237, 1428788237, 420913893, 1915664072)) {
       assertColumnsAreEqual(expected, result);
     }
@@ -456,7 +456,7 @@ public class ColumnVectorTest extends CudfTestBase {
           POSITIVE_FLOAT_NAN_LOWER_RANGE, POSITIVE_FLOAT_NAN_UPPER_RANGE,
           NEGATIVE_FLOAT_NAN_LOWER_RANGE, NEGATIVE_FLOAT_NAN_UPPER_RANGE,
           Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY);
-         ColumnVector result = ColumnVector.serial32BitMurmurHash3(411, v);
+         ColumnVector result = ColumnVector.serial32BitMurmurHash3(411, new ColumnVector[]{v});
          ColumnVector expected = ColumnVector.fromBoxedInts(-235179434, 1812056886, 2028471189, 1775092689, -1531511762, 411, -1053523253, -1053523253, -1053523253, -1053523253, -1526256646, 930080402)){
       assertColumnsAreEqual(expected, result);
     }
@@ -466,7 +466,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void test32BitMurmur3HashBools() {
     try (ColumnVector v0 = ColumnVector.fromBoxedBooleans(null, true, false, true, null, false);
          ColumnVector v1 = ColumnVector.fromBoxedBooleans(null, true, false, null, false, true);
-         ColumnVector result = ColumnVector.serial32BitMurmurHash3(0, v0, v1);
+         ColumnVector result = ColumnVector.serial32BitMurmurHash3(0, new ColumnVector[]{v0, v1});
          ColumnVector expected = ColumnVector.fromBoxedInts(0, 884701402, 1032769583, -463810133, 1364076727, -991270669)) {
       assertColumnsAreEqual(expected, result);
     }
@@ -485,7 +485,7 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector floats = ColumnVector.fromBoxedFloats(
           0f, 100f, -100f, NEGATIVE_FLOAT_NAN_LOWER_RANGE, NEGATIVE_FLOAT_NAN_UPPER_RANGE, null);
          ColumnVector bools = ColumnVector.fromBoxedBooleans(true, false, null, false, true, null);
-         ColumnVector result = ColumnVector.serial32BitMurmurHash3(1868, strings, integers, doubles, floats, bools);
+         ColumnVector result = ColumnVector.serial32BitMurmurHash3(1868, new ColumnVector[]{strings, integers, doubles, floats, bools});
          ColumnVector expected = ColumnVector.fromBoxedInts(387200465, 1988790727, 1843539474, 814731646, -1073686048, 1868)) {
       assertColumnsAreEqual(expected, result);
     }
