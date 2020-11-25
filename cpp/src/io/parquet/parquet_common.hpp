@@ -72,6 +72,7 @@ enum ConvertedType {
   BSON             = 20,  // A BSON document embedded within a single BINARY column.
   INTERVAL = 21,  // This type annotates a time interval stored as a FIXED_LEN_BYTE_ARRAY of length
                   // 12 for 3 integers {months,days,milliseconds}
+  NA = 25,        // No Type information, For eg, all-nulls.
 };
 
 /**

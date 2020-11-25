@@ -128,7 +128,7 @@ std::unique_ptr<column> replace_indices(column_view const& input,
 
 /**
  * @copydoc cudf::dictionary::detail::replace_nulls(cudf::column_view const&,cudf::column_view
- * const&,rmm::mr::device_memory_resource*,cudaStream_t)
+ * const& rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
  */
 std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
                                       dictionary_column_view const& replacement,
@@ -141,7 +141,7 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
   CUDF_EXPECTS(replacement.size() == input.size(), "column sizes must match");
 
   // first combine the keys so both input dictionaries have the same set
-  auto matched = match_dictionaries({input, replacement}, mr, stream.value());
+  auto matched = match_dictionaries({input, replacement}, stream, mr);
 
   // now build the new indices by doing replace-null using the updated input indices
   auto const input_indices =
@@ -153,16 +153,13 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
       : replace_indices(
           input_indices, make_nullable_index_iterator<false>(repl_indices), stream, mr);
 
-  // auto keys_column = ;
-  return make_dictionary_column(std::move(matched.front()->release().children.back()),
-                                std::move(new_indices),
-                                mr,
-                                stream.value());
+  return make_dictionary_column(
+    std::move(matched.front()->release().children.back()), std::move(new_indices), stream, mr);
 }
 
 /**
  * @copydoc cudf::dictionary::detail::replace_nulls(cudf::column_view const&,cudf::scalar
- * const&,rmm::mr::device_memory_resource*,cudaStream_t)
+ * const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
  */
 std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
                                       scalar const& replacement,
@@ -176,11 +173,10 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
   CUDF_EXPECTS(input.keys().type() == replacement.type(), "keys must match scalar type");
 
   // first add the replacment to the keys so only the indices need to be processed
-  auto const default_mr = rmm::mr::get_current_device_resource();
-  auto input_matched    = dictionary::detail::add_keys(
-    input, make_column_from_scalar(replacement, 1, stream, default_mr)->view(), mr, stream.value());
+  auto input_matched = dictionary::detail::add_keys(
+    input, make_column_from_scalar(replacement, 1, stream)->view(), stream, mr);
   auto const input_view   = dictionary_column_view(input_matched->view());
-  auto const scalar_index = get_index(input_view, replacement, stream, default_mr);
+  auto const scalar_index = get_index(input_view, replacement, stream);
 
   // now build the new indices by doing replace-null on the updated indices
   auto const input_indices = input_view.get_indices_annotated();
@@ -188,10 +184,8 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
     replace_indices(input_indices, make_scalar_iterator(*scalar_index), stream, mr);
   new_indices->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
 
-  return make_dictionary_column(std::move(input_matched->release().children.back()),
-                                std::move(new_indices),
-                                mr,
-                                stream.value());
+  return make_dictionary_column(
+    std::move(input_matched->release().children.back()), std::move(new_indices), stream, mr);
 }
 
 }  // namespace detail

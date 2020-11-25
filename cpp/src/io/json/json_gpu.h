@@ -25,6 +25,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/optional.h>
 
 using cudf::detail::device_span;
@@ -57,7 +59,7 @@ void convert_json_to_columns(parse_options_view const &options,
                              device_span<void *const> output_columns,
                              device_span<bitmask_type *const> valid_fields,
                              device_span<cudf::size_type> num_valid_fields,
-                             cudaStream_t stream = 0);
+                             rmm::cuda_stream_view stream);
 
 /**
  * @brief Process a buffer of data and determine information about the column types within.
@@ -79,7 +81,7 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
   bool do_set_null_count,
   int num_columns,
   col_map_type *col_map,
-  cudaStream_t stream = 0);
+  rmm::cuda_stream_view stream);
 
 /**
  * @brief Collects information about JSON object keys in the file.
@@ -96,7 +98,7 @@ void collect_keys_info(parse_options_view const &options,
                        device_span<uint64_t const> row_offsets,
                        unsigned long long int *keys_cnt,
                        thrust::optional<mutable_table_device_view> keys_info,
-                       cudaStream_t stream = 0);
+                       rmm::cuda_stream_view stream);
 
 }  // namespace gpu
 }  // namespace json
