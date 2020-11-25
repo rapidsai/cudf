@@ -3744,8 +3744,8 @@ class DataFrame(Frame, Serializable):
         Returns
         -------
         Aggregation Result : ``Series`` or ``DataFrame``
-            When DataFrame.agg is called with a single aggregation, a ``Series`` is returned
-            When DataFrame.agg is called with several aggregations, a ``DataFrame`` is returned
+            When df.agg is called with single agg,``Series`` is returned
+            When df.agg is called with several aggs,``DataFrame``is returned
 
         Notes
         -----
@@ -3753,17 +3753,19 @@ class DataFrame(Frame, Serializable):
           * Not supporting: axis, *args, **kwargs
 
         """
-        # TODO: Remove this typecasting once https://github.com/rapidsai/cudf/issues/6846 is fixed 
+        # TODO: Remove the typecasting below once issue #6846 is fixed
+        # link <https://github.com/rapidsai/cudf/issues/6846>
         dtypes = [self[col].dtype for col in self._column_names]
         common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
         df_normalized = self.astype(common_dtype)
-        
-        if axis is 0 or axis is not None:
+
+        if axis == 0 or axis is not None:
             raise NotImplementedError("axis not implemented yet")
 
         if isinstance(aggs, Iterable) and not isinstance(aggs, (str, dict)):
             result = cudf.DataFrame()
-            # TODO : Allow simultaneous pass for multi-aggregation as a future optimization
+            # TODO : Allow simultaneous pass for multi-aggregation as
+            # a future optimization
             for agg in aggs:
                 result[agg] = getattr(df_normalized, agg)()
             return result.T.sort_index(axis=1, ascending=True)
@@ -3771,11 +3773,12 @@ class DataFrame(Frame, Serializable):
         elif isinstance(aggs, str):
             if not hasattr(df_normalized, aggs):
                 raise AttributeError(
-                    f"{aggs} is not a valid function for 'DataFrame' object"
+                    f"{aggs} is not a valid function for "
+                    f"'DataFrame' object"
                 )
             result = cudf.DataFrame()
             result[aggs] = getattr(df_normalized, aggs)()
-            result = result.iloc[:,0]
+            result = result.iloc[:, 0]
             result.name = None
             return result
 
@@ -3791,7 +3794,8 @@ class DataFrame(Frame, Serializable):
                     col = df_normalized[key]
                     if not hasattr(col, value):
                         raise AttributeError(
-                            f"{value} is not a valid function for 'Series' object"
+                            f"{value} is not a valid function for "
+                            f"'Series' object"
                         )
                     result[key] = getattr(col, value)()
             elif all([isinstance(val, Iterable) for val in aggs.values()]):
@@ -3815,17 +3819,20 @@ class DataFrame(Frame, Serializable):
                     )
                     ans = cudf.Series(data=col_empty, index=idxs)
                     if isinstance(aggs.get(key), Iterable):
-                        # TODO : Allow simultaneous pass for multi-aggregation as a future optimization
+                        # TODO : Allow simultaneous pass for multi-aggregation
+                        # as a future optimization
                         for agg in aggs.get(key):
                             if not hasattr(col, agg):
                                 raise AttributeError(
-                                    f"{agg} is not a valid function for 'Series' object"
+                                    f"{agg} is not a valid function for "
+                                    f"'Series' object"
                                 )
                             ans[agg] = getattr(col, agg)()
                     elif isinstance(aggs.get(key), str):
                         if not hasattr(col, aggs.get(key)):
                             raise AttributeError(
-                                f"{aggs.get(key)} is not a valid function for 'Series' object"
+                                f"{aggs.get(key)} is not a valid function for "
+                                f"'Series' object"
                             )
                         ans[aggs.get(key)] = getattr(col, agg)()
                     result[key] = ans
