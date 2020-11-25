@@ -722,7 +722,7 @@ std::unique_ptr<column> md5_hash(table_view const& input,
 
 std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
                                                uint32_t seed,
-                                               cudaStream_t stream,
+                                               rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
 {
   auto output = make_numeric_column(
@@ -737,7 +737,7 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
 
   if (nullable) {
     thrust::for_each(
-      rmm::exec_policy(stream)->on(stream),
+      rmm::exec_policy(stream)->on(stream.value()),
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(input.num_rows()),
       [d_hashes, device_input = *device_input, original_seed = seed] __device__(auto row_index) {
@@ -753,7 +753,7 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
       });
   } else {
     thrust::for_each(
-      rmm::exec_policy(stream)->on(stream),
+      rmm::exec_policy(stream)->on(stream.value()),
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(input.num_rows()),
       [d_hashes, device_input = *device_input, original_seed = seed] __device__(auto row_index) {

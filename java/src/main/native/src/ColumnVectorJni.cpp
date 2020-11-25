@@ -109,11 +109,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv *env
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env,
-                                                                  jobject j_object,
-                                                                  jlongArray column_handles,
-                                                                  jint hash_function_id,
-                                                                  jintArray initial_values,
-                                                                  jint seed) {
+                                                              jobject j_object,
+                                                              jlongArray column_handles,
+                                                              jint hash_function_id,
+                                                              jintArray initial_values,
+                                                              jint seed) {
   JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
   JNI_NULL_CHECK(env, initial_values, "array of initial values is null", 0);
 

@@ -437,10 +437,11 @@ public final class ColumnVector extends ColumnView {
   /**
    * Create a new vector containing the MD5 hash of each row in the table.
    *
+   * @param seed integer seed for the murmur3 hash function
    * @param columns array of columns to hash, must have identical number of rows.
    * @return the new ColumnVector of 32 character hex strings representing each row's hash value.
    */
-  public static ColumnVector serial32BitMurmurHash3(int seed, ColumnVector... columns) {
+  public static ColumnVector serial32BitMurmurHash3(int seed, ColumnView columns[]) {
     if (columns.length < 1) {
       throw new IllegalArgumentException("MD5 hashing requires at least 1 column of input");
     }
@@ -458,7 +459,13 @@ public final class ColumnVector extends ColumnView {
     return new ColumnVector(hash(columnViews, HashType.HASH_SERIAL_MURMUR3.getNativeId(), new int[0], seed));
   }
 
-  public static ColumnVector serial32BitMurmurHash3(ColumnVector... columns) {
+  /**
+   * Create a new vector containing the MD5 hash of each row in the table, seed defaulted to 0.
+   *
+   * @param columns array of columns to hash, must have identical number of rows.
+   * @return the new ColumnVector of 32 character hex strings representing each row's hash value.
+   */
+  public static ColumnVector serial32BitMurmurHash3(ColumnView columns[]) {
     return serial32BitMurmurHash3(0, columns);
   }
 
