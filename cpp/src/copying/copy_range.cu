@@ -108,8 +108,9 @@ struct out_of_place_copy_range_dispatch {
     }
 
     if (source_end != source_begin) {  // otherwise no-op
+      using Type    = cudf::device_storage_type_t<T>;
       auto ret_view = p_ret->mutable_view();
-      in_place_copy_range<T>(source, ret_view, source_begin, source_end, target_begin, stream);
+      in_place_copy_range<Type>(source, ret_view, source_begin, source_end, target_begin, stream);
     }
 
     return p_ret;
@@ -147,28 +148,6 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
       stream,
       mr);
   }
-}
-
-template <>
-std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<numeric::decimal64>(
-  cudf::size_type source_begin,
-  cudf::size_type source_end,
-  cudf::size_type target_begin,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FAIL("decimal64 type not supported");
-}
-
-template <>
-std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<numeric::decimal32>(
-  cudf::size_type source_begin,
-  cudf::size_type source_end,
-  cudf::size_type target_begin,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FAIL("decimal32 type not supported");
 }
 
 template <>

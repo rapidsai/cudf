@@ -144,7 +144,7 @@ void copy_range(SourceValueIterator source_value_begin,
   using T = typename std::iterator_traits<SourceValueIterator>::value_type;
 
   // this code assumes that source and target have the same type.
-  CUDF_EXPECTS(type_to_id<T>() == target.type().id(), "the data type mismatch");
+  CUDF_EXPECTS(type_id_matches_device_storage_type<T>(target.type().id()), "data type mismatch");
 
   auto warp_aligned_begin_lower_bound = cudf::util::round_down_safe(target_begin, warp_size);
   auto warp_aligned_end_upper_bound   = cudf::util::round_up_safe(target_end, warp_size);
