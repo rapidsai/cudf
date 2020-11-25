@@ -37,11 +37,6 @@
  *
  **/
 
-/**
- * @brief Forward declaration of cudaStream_t
- **/
-using cudaStream_t = struct CUstream_st*;
-
 namespace bit_mask {
 using bit_mask_t = uint32_t;
 }

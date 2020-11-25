@@ -13,9 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <io/utilities/block_utils.cuh>
+
 #include "orc_common.h"
 #include "orc_gpu.h"
+
+#include <io/utilities/block_utils.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
@@ -384,11 +388,11 @@ void orc_init_statistics_groups(statistics_group *groups,
                                 uint32_t num_columns,
                                 uint32_t num_rowgroups,
                                 uint32_t row_index_stride,
-                                cudaStream_t stream)
+                                rmm::cuda_stream_view stream)
 {
   dim3 dim_grid((num_rowgroups + init_groups_per_block - 1) / init_groups_per_block, num_columns);
   dim3 dim_block(init_threads_per_group, init_groups_per_block);
-  gpu_init_statistics_groups<<<dim_grid, dim_block, 0, stream>>>(
+  gpu_init_statistics_groups<<<dim_grid, dim_block, 0, stream.value()>>>(
     groups, cols, num_columns, num_rowgroups, row_index_stride);
 }
 
@@ -403,10 +407,11 @@ void orc_init_statistics_groups(statistics_group *groups,
 void orc_init_statistics_buffersize(statistics_merge_group *groups,
                                     const statistics_chunk *chunks,
                                     uint32_t statistics_count,
-                                    cudaStream_t stream)
+                                    rmm::cuda_stream_view stream)
 {
   dim3 dim_block(buffersize_reduction_dim, buffersize_reduction_dim);
-  gpu_init_statistics_buffersize<<<1, dim_block, 0, stream>>>(groups, chunks, statistics_count);
+  gpu_init_statistics_buffersize<<<1, dim_block, 0, stream.value()>>>(
+    groups, chunks, statistics_count);
 }
 
 /**
@@ -421,12 +426,12 @@ void orc_encode_statistics(uint8_t *blob_bfr,
                            statistics_merge_group *groups,
                            const statistics_chunk *chunks,
                            uint32_t statistics_count,
-                           cudaStream_t stream)
+                           rmm::cuda_stream_view stream)
 {
   unsigned int num_blocks =
     (statistics_count + encode_chunks_per_block - 1) / encode_chunks_per_block;
   dim3 dim_block(encode_threads_per_chunk, encode_chunks_per_block);
-  gpu_encode_statistics<<<num_blocks, dim_block, 0, stream>>>(
+  gpu_encode_statistics<<<num_blocks, dim_block, 0, stream.value()>>>(
     blob_bfr, groups, chunks, statistics_count);
 }
 

@@ -15,7 +15,8 @@ def _align_objs(objs, how="outer"):
     Parameters
     ----------
     objs : list of DataFrame, Series, or Index
-
+    how : How to handle indexes on other axis (or axes),
+    similar to join in concat
     Returns
     -------
     A bool for if indexes have matched and a set of
@@ -26,25 +27,46 @@ def _align_objs(objs, how="outer"):
     # Then check for duplicate index value.
     i_objs = iter(objs)
     first = next(i_objs)
-    match_index = all(first.index.equals(rest.index) for rest in i_objs)
+    not_matching_index = any(
+        not first.index.equals(rest.index) for rest in i_objs
+    )
 
-    if match_index:
-        return objs, True
-    else:
+    if not_matching_index:
         if not all(o.index.is_unique for o in objs):
             raise ValueError("cannot reindex from a duplicate axis")
 
         index = objs[0].index
-        for obj in objs[1:]:
-            name = index.name
-            index = (
-                cudf.DataFrame(index=obj.index)
-                .join(cudf.DataFrame(index=index), how=how)
-                .index
-            )
-            index.name = name
+        name = index.name
+        if how == "inner" or isinstance(index, cudf.MultiIndex):
+            for obj in objs[1:]:
+                index = (
+                    cudf.DataFrame(index=obj.index)
+                    .join(cudf.DataFrame(index=index), how=how)
+                    .index
+                )
+                index.name = name
+            return [obj.reindex(index) for obj in objs], False
 
-        return [obj.reindex(index) for obj in objs], False
+        else:
+            all_index_objs = [obj.index for obj in objs]
+            appended_index = all_index_objs[0].append(all_index_objs[1:])
+            df = cudf.DataFrame(
+                {
+                    "idxs": appended_index,
+                    "order": cudf.core.column.arange(
+                        start=0, stop=len(appended_index)
+                    ),
+                }
+            )
+            df = df.drop_duplicates(subset=["idxs"]).sort_values(
+                by=["order"], ascending=True
+            )
+            final_index = df["idxs"]
+            final_index.name = name
+
+            return [obj.reindex(final_index) for obj in objs], False
+    else:
+        return objs, True
 
 
 def _normalize_series_and_dataframe(objs, axis):
@@ -62,7 +84,7 @@ def _normalize_series_and_dataframe(objs, axis):
             objs[idx] = o.to_frame(name=name)
 
 
-def concat(objs, axis=0, ignore_index=False, sort=None):
+def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     """Concatenate DataFrames, Series, or Indices row-wise.
 
     Parameters
@@ -70,6 +92,8 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     objs : list of DataFrame, Series, or Index
     axis : {0/'index', 1/'columns'}, default 0
         The axis to concatenate along.
+    join : {'inner', 'outer'}, default 'outer'
+        How to handle indexes on other axis (or axes).
     ignore_index : bool, default False
         Set True to ignore the index of the *objs* and provide a
         default range index instead.
@@ -150,6 +174,17 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     0      c       3    cat
     1      d       4    dog
 
+    Combine ``DataFrame`` objects with overlapping columns
+    and return only those that are shared by passing ``inner`` to
+    the ``join`` keyword argument.
+
+    >>> cudf.concat([df1, df3], join="inner")
+      letter  number
+    0      a       1
+    1      b       2
+    0      c       3
+    1      d       4
+
     Combine ``DataFrame`` objects horizontally along the
     x axis by passing in ``axis=1``.
 
@@ -169,17 +204,37 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         raise ValueError("No objects to concatenate")
 
     objs = [obj for obj in objs if obj is not None]
-
     # Return for single object
     if len(objs) == 1:
         if ignore_index:
-            result = cudf.DataFrame(
-                data=objs[0]._data.copy(deep=True),
-                index=cudf.RangeIndex(len(objs[0])),
-            )
+            if axis == 1:
+                result = cudf.DataFrame(
+                    data=objs[0]._data.copy(deep=True),
+                    index=objs[0].index.copy(deep=True),
+                )
+                # TODO: Move following columns setting into
+                # above constructor after following issue is fixed:
+                # https://github.com/rapidsai/cudf/issues/6821
+                result.columns = pd.RangeIndex(len(objs[0]._data.names))
+            elif axis == 0:
+                result = cudf.DataFrame(
+                    data=objs[0]._data.copy(deep=True),
+                    index=cudf.RangeIndex(len(objs[0])),
+                )
         else:
             result = objs[0].copy()
-        return result
+        if sort:
+            if axis == 0:
+                return result.sort_index()
+            elif not result.columns.is_monotonic:
+                # TODO: Sorting by columns can be done
+                # once the following issue is fixed:
+                # https://github.com/rapidsai/cudf/issues/6821
+                raise NotImplementedError(
+                    "Sorting by columns is not yet supported"
+                )
+        else:
+            return result
 
     if len(objs) == 0:
         raise ValueError("All objects passed were None")
@@ -212,15 +267,27 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
 
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
-
-        assert typs.issubset(allowed_typs)
+        if not typs.issubset(allowed_typs):
+            raise TypeError(
+                "Can only concatenate Series and DataFrame objects when axis=1"
+            )
         df = cudf.DataFrame()
         _normalize_series_and_dataframe(objs, axis=axis)
 
-        objs, match_index = _align_objs(objs)
+        old_objs = objs
+        objs = [obj for obj in objs if obj.shape != (0, 0)]
+        if len(objs) == 0:
+            return df
+        empty_inner = False
+        if join == "inner":
+            # don't filter out empty df's
+            if any(obj.empty for obj in old_objs):
+                empty_inner = True
+
+        objs, match_index = _align_objs(objs, how=join)
 
         for idx, o in enumerate(objs):
-            if not ignore_index and idx == 0:
+            if idx == 0:
                 df.index = o.index
             for col in o._data.names:
                 if col in df._data:
@@ -234,12 +301,21 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
         result_columns = objs[0].columns
         for o in objs[1:]:
             result_columns = result_columns.append(o.columns)
-
-        df.columns = result_columns.unique()
         if ignore_index:
-            df.index = cudf.RangeIndex(len(objs[0]))
-            return df
-        elif not match_index:
+            # with ignore_index the column names change to numbers
+            df.columns = pd.RangeIndex(len(result_columns.unique()))
+        else:
+            df.columns = result_columns.unique()
+        if empty_inner:
+            # if join is inner and it contains an empty df
+            # we return an empty df
+            return df.head(0)
+        if not match_index and sort is not False:
+            return df.sort_index()
+        if sort or join == "inner":
+            # when join='outer' and sort=False string indexes
+            # are returned unsorted. Everything else seems
+            # to be returned sorted when axis = 1
             return df.sort_index()
         else:
             return df
@@ -259,24 +335,37 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
             )
 
     if typ is cudf.DataFrame:
+        old_objs = objs
         objs = [obj for obj in objs if obj.shape != (0, 0)]
         if len(objs) == 0:
             # If objs is empty, that indicates all of
             # objs are empty dataframes.
             return cudf.DataFrame()
         elif len(objs) == 1:
-            if ignore_index:
-                result = cudf.DataFrame(
-                    data=objs[0]._data.copy(deep=True),
-                    index=cudf.RangeIndex(len(objs[0])),
-                )
+            if join == "inner":
+                data = None
             else:
-                result = objs[0].copy()
+                data = objs[0]._data.copy(deep=True)
+            result = cudf.DataFrame(
+                data=data,
+                index=cudf.RangeIndex(len(objs[0]))
+                if ignore_index
+                else objs[0].index.copy(deep=True),
+            )
             return result
         else:
-            return cudf.DataFrame._concat(
-                objs, axis=axis, ignore_index=ignore_index, sort=sort
+            if join == "inner" and len(old_objs) != len(objs):
+                # don't filter out empty df's
+                objs = old_objs
+            result = cudf.DataFrame._concat(
+                objs,
+                axis=axis,
+                join=join,
+                ignore_index=ignore_index,
+                sort=sort,
             )
+        return result
+
     elif typ is cudf.Series:
         objs = [obj for obj in objs if len(obj)]
         if len(objs) == 0:

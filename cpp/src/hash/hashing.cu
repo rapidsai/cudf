@@ -677,14 +677,14 @@ std::unique_ptr<column> md5_hash(table_view const& input,
     "MD5 unsupported column type");
 
   // Result column allocation and creation
-  auto begin          = thrust::make_constant_iterator(32);
-  auto offsets_column = cudf::strings::detail::make_offsets_child_column(
-    begin, begin + input.num_rows(), mr, stream.value());
+  auto begin = thrust::make_constant_iterator(32);
+  auto offsets_column =
+    cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
   auto offsets_view  = offsets_column->view();
   auto d_new_offsets = offsets_view.data<int32_t>();
 
   auto chars_column = strings::detail::create_chars_child_column(
-    input.num_rows(), 0, input.num_rows() * 32, mr, stream.value());
+    input.num_rows(), 0, input.num_rows() * 32, stream, mr);
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.data<char>();
 

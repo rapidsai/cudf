@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-20, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,10 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <math_constants.h>
-#include <cub/cub.cuh>
-#include <io/utilities/block_utils.cuh>
+
 #include "column_stats.h"
+
+#include <io/utilities/block_utils.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <cub/cub.cuh>
+
+#include <math_constants.h>
 
 namespace cudf {
 namespace io {
@@ -754,9 +760,9 @@ __global__ void __launch_bounds__(block_size, 1)
 void GatherColumnStatistics(statistics_chunk *chunks,
                             const statistics_group *groups,
                             uint32_t num_chunks,
-                            cudaStream_t stream)
+                            rmm::cuda_stream_view stream)
 {
-  gpuGatherColumnStatistics<1024><<<num_chunks, 1024, 0, stream>>>(chunks, groups);
+  gpuGatherColumnStatistics<1024><<<num_chunks, 1024, 0, stream.value()>>>(chunks, groups);
 }
 
 /**
@@ -772,9 +778,10 @@ void MergeColumnStatistics(statistics_chunk *chunks_out,
                            const statistics_chunk *chunks_in,
                            const statistics_merge_group *groups,
                            uint32_t num_chunks,
-                           cudaStream_t stream)
+                           rmm::cuda_stream_view stream)
 {
-  gpuMergeColumnStatistics<1024><<<num_chunks, 1024, 0, stream>>>(chunks_out, chunks_in, groups);
+  gpuMergeColumnStatistics<1024>
+    <<<num_chunks, 1024, 0, stream.value()>>>(chunks_out, chunks_in, groups);
 }
 
 }  // namespace io
