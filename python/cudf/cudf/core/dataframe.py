@@ -3753,10 +3753,11 @@ class DataFrame(Frame, Serializable):
           * Not supporting: axis, *args, **kwargs
 
         """
+        # TODO: Remove this typecasting once https://github.com/rapidsai/cudf/issues/6846 is fixed 
         dtypes = [self[col].dtype for col in self._column_names]
         common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
         df_normalized = self.astype(common_dtype)
-
+        
         if axis is 0 or axis is not None:
             raise NotImplementedError("axis not implemented yet")
 
@@ -3774,7 +3775,7 @@ class DataFrame(Frame, Serializable):
                 )
             result = cudf.DataFrame()
             result[aggs] = getattr(df_normalized, aggs)()
-            result = result.T.loc[aggs]
+            result = result.iloc[:,0]
             result.name = None
             return result
 
