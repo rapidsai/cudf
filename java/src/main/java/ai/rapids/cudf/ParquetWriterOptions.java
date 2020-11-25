@@ -82,7 +82,7 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
   /**
    * Returns true if the writer is expected to write timestamps in INT96
    */
-  public boolean isInt96() {
+  public boolean isTimestampTypeInt96() {
     return isTimestampTypeInt96;
   }
 
