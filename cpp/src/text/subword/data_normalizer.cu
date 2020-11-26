@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 
+#include <text/subword/detail/data_normalizer.hpp>
+#include <text/subword/detail/tokenizer_utils.cuh>
+
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/error.hpp>
-#include <text/subword/detail/data_normalizer.hpp>
-#include <text/subword/detail/tokenizer_utils.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/remove.h>
@@ -258,7 +261,7 @@ __global__ void kernel_data_normalizer(unsigned char const* strings,
 
 }  // namespace
 
-data_normalizer::data_normalizer(cudaStream_t stream, bool do_lower_case)
+data_normalizer::data_normalizer(rmm::cuda_stream_view stream, bool do_lower_case)
   : do_lower_case(do_lower_case)
 {
   d_cp_metadata = detail::get_codepoint_metadata(stream);
@@ -268,7 +271,7 @@ data_normalizer::data_normalizer(cudaStream_t stream, bool do_lower_case)
 uvector_pair data_normalizer::normalize(char const* d_strings,
                                         uint32_t const* d_offsets,
                                         uint32_t num_strings,
-                                        cudaStream_t stream)
+                                        rmm::cuda_stream_view stream)
 {
   if (num_strings == 0)
     return std::make_pair(std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
@@ -278,7 +281,7 @@ uvector_pair data_normalizer::normalize(char const* d_strings,
   // copy offsets to working memory
   size_t const num_offsets = num_strings + 1;
   auto d_strings_offsets   = std::make_unique<rmm::device_uvector<uint32_t>>(num_offsets, stream);
-  thrust::transform(execpol->on(stream),
+  thrust::transform(execpol->on(stream.value()),
                     thrust::make_counting_iterator<uint32_t>(0),
                     thrust::make_counting_iterator<uint32_t>(num_offsets),
                     d_strings_offsets->begin(),
@@ -298,7 +301,7 @@ uvector_pair data_normalizer::normalize(char const* d_strings,
   auto d_code_points = std::make_unique<rmm::device_uvector<uint32_t>>(max_new_char_total, stream);
   rmm::device_uvector<uint32_t> d_chars_per_thread(threads_on_device, stream);
 
-  kernel_data_normalizer<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
+  kernel_data_normalizer<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     reinterpret_cast<const unsigned char*>(d_strings),
     bytes_count,
     d_cp_metadata,
@@ -308,19 +311,21 @@ uvector_pair data_normalizer::normalize(char const* d_strings,
     d_chars_per_thread.data());
 
   // Remove the 'empty' code points from the vector
-  thrust::remove(
-    execpol->on(stream), d_code_points->begin(), d_code_points->end(), uint32_t{1 << FILTER_BIT});
+  thrust::remove(execpol->on(stream.value()),
+                 d_code_points->begin(),
+                 d_code_points->end(),
+                 uint32_t{1 << FILTER_BIT});
 
   // We also need to prefix sum the number of characters up to an including
   // the current character in order to get the new strings lengths.
-  thrust::inclusive_scan(execpol->on(stream),
+  thrust::inclusive_scan(execpol->on(stream.value()),
                          d_chars_per_thread.begin(),
                          d_chars_per_thread.end(),
                          d_chars_per_thread.begin());
 
   // This will reset the offsets to the new generated code point values
   thrust::for_each_n(
-    execpol->on(stream),
+    execpol->on(stream.value()),
     thrust::make_counting_iterator<uint32_t>(1),
     num_strings,
     update_strings_lengths_fn{d_chars_per_thread.data(), d_strings_offsets->data()});

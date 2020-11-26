@@ -18,6 +18,7 @@
 
 #include <text/subword/detail/cp_data.h>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
 using uvector_pair = std::pair<std::unique_ptr<rmm::device_uvector<uint32_t>>,
@@ -54,7 +55,7 @@ class data_normalizer {
    *        input stream to lower case and strip accents from those characters.
    *        If false, accented and uppercase characters are not transformed.
    */
-  data_normalizer(cudaStream_t stream, bool do_lower_case = true);
+  data_normalizer(rmm::cuda_stream_view stream, bool do_lower_case = true);
 
   /**
    * @brief Normalize a vector of strings.
@@ -83,7 +84,7 @@ class data_normalizer {
   uvector_pair normalize(char const* d_strings,
                          uint32_t const* d_offsets,
                          uint32_t num_strings,
-                         cudaStream_t stream);
+                         rmm::cuda_stream_view stream);
 
  private:
   bool const do_lower_case;

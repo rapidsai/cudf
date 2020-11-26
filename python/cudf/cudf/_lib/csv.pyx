@@ -487,6 +487,15 @@ cpdef write_csv(
 
 
 def _get_cudf_compatible_str_from_dtype(dtype):
+    # TODO: Remove this Error message once the
+    # following issue is fixed:
+    # https://github.com/rapidsai/cudf/issues/3960
+    if cudf.utils.dtypes.is_categorical_dtype(dtype):
+        raise NotImplementedError(
+            "CategoricalDtype as dtype is not yet "
+            "supported in CSV reader"
+        )
+
     if (
         str(dtype) in cudf.utils.dtypes.ALL_TYPES or
         str(dtype) in {

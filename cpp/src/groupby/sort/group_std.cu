@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/reduce.h>
@@ -63,17 +64,17 @@ struct var_functor {
     column_view const& group_sizes,
     rmm::device_vector<size_type> const& group_labels,
     size_type ddof,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream)
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
   {
 // Running this in debug build causes a runtime error:
 // `reduce_by_key failed on 2nd step: invalid device function`
 #if !defined(__CUDACC_DEBUG__)
     using ResultType                = cudf::detail::target_type_t<T, aggregation::Kind::VARIANCE>;
     size_type const* d_group_labels = group_labels.data().get();
-    auto values_view                = column_device_view::create(values);
-    auto means_view                 = column_device_view::create(group_means);
-    auto group_size_view            = column_device_view::create(group_sizes);
+    auto values_view                = column_device_view::create(values, stream);
+    auto means_view                 = column_device_view::create(group_means, stream);
+    auto group_size_view            = column_device_view::create(group_sizes, stream);
 
     std::unique_ptr<column> result = make_numeric_column(data_type(type_to_id<ResultType>()),
                                                          group_sizes.size(),
@@ -89,7 +90,7 @@ struct var_functor {
       thrust::make_counting_iterator(0),
       var_transform<ResultType, T>{d_values, d_means, d_group_sizes, d_group_labels, ddof});
 
-    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
+    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream.value()),
                           group_labels.begin(),
                           group_labels.end(),
                           values_it,
@@ -97,10 +98,10 @@ struct var_functor {
                           result->mutable_view().data<ResultType>());
 
     // set nulls
-    auto result_view = mutable_column_device_view::create(*result);
+    auto result_view = mutable_column_device_view::create(*result, stream);
 
     thrust::for_each_n(
-      rmm::exec_policy(stream)->on(stream),
+      rmm::exec_policy(stream)->on(stream.value()),
       thrust::make_counting_iterator(0),
       group_sizes.size(),
       [d_result = *result_view, d_group_sizes = *group_size_view, ddof] __device__(size_type i) {
@@ -132,11 +133,11 @@ std::unique_ptr<column> group_var(column_view const& values,
                                   column_view const& group_sizes,
                                   rmm::device_vector<size_type> const& group_labels,
                                   size_type ddof,
-                                  rmm::mr::device_memory_resource* mr,
-                                  cudaStream_t stream)
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   return type_dispatcher(
-    values.type(), var_functor{}, values, group_means, group_sizes, group_labels, ddof, mr, stream);
+    values.type(), var_functor{}, values, group_means, group_sizes, group_labels, ddof, stream, mr);
 }
 
 }  // namespace detail

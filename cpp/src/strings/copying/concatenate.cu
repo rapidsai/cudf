@@ -218,7 +218,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
   auto const total_bytes          = std::get<5>(device_views);
   auto const offsets_count        = strings_count + 1;
 
-  if (strings_count == 0) { return make_empty_strings_column(mr, stream.value()); }
+  if (strings_count == 0) { return make_empty_strings_column(stream, mr); }
 
   CUDF_EXPECTS(offsets_count <= std::numeric_limits<size_type>::max(),
                "total number of strings is too large for cudf column");

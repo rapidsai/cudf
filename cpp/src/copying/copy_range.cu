@@ -108,8 +108,9 @@ struct out_of_place_copy_range_dispatch {
     }
 
     if (source_end != source_begin) {  // otherwise no-op
+      using Type    = cudf::device_storage_type_t<T>;
       auto ret_view = p_ret->mutable_view();
-      in_place_copy_range<T>(source, ret_view, source_begin, source_end, target_begin, stream);
+      in_place_copy_range<Type>(source, ret_view, source_begin, source_end, target_begin, stream);
     }
 
     return p_ret;
@@ -150,28 +151,6 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
 }
 
 template <>
-std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<numeric::decimal64>(
-  cudf::size_type source_begin,
-  cudf::size_type source_end,
-  cudf::size_type target_begin,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FAIL("decimal64 type not supported");
-}
-
-template <>
-std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<numeric::decimal32>(
-  cudf::size_type source_begin,
-  cudf::size_type source_end,
-  cudf::size_type target_begin,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FAIL("decimal32 type not supported");
-}
-
-template <>
 std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf::dictionary32>(
   cudf::size_type source_begin,
   cudf::size_type source_end,
@@ -187,10 +166,9 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
 
   // combine keys so both dictionaries have the same set
   auto target_matched =
-    cudf::dictionary::detail::add_keys(dict_target, dict_source.keys(), mr, stream.value());
+    cudf::dictionary::detail::add_keys(dict_target, dict_source.keys(), stream, mr);
   auto const target_view = cudf::dictionary_column_view(target_matched->view());
-  auto source_matched    = cudf::dictionary::detail::set_keys(
-    dict_source, target_view.keys(), rmm::mr::get_current_device_resource(), stream.value());
+  auto source_matched = cudf::dictionary::detail::set_keys(dict_source, target_view.keys(), stream);
   auto const source_view = cudf::dictionary_column_view(source_matched->view());
 
   // build the new indices by calling in_place_copy_range on just the indices
