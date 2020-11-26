@@ -47,23 +47,27 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  // reduction by iterator
-  auto dcol = cudf::column_device_view::create(col, stream);
-  std::unique_ptr<scalar> result;
-  Op simple_op{};
+  using Type    = device_storage_type_t<ElementType>;
+  using ResType = device_storage_type_t<ResultType>;
 
-  if (col.has_nulls()) {
-    auto it = thrust::make_transform_iterator(
-      dcol->pair_begin<ElementType, true>(),
-      simple_op.template get_null_replacing_element_transformer<ResultType>());
-    result = detail::reduce(it, col.size(), Op{}, stream, mr);
-  } else {
-    auto it = thrust::make_transform_iterator(
-      dcol->begin<ElementType>(), simple_op.template get_element_transformer<ResultType>());
-    result = detail::reduce(it, col.size(), Op{}, stream, mr);
-  }
+  // reduction by iterator
+  auto dcol      = cudf::column_device_view::create(col, stream);
+  auto simple_op = Op{};
+
+  auto result = [&]() -> std::unique_ptr<scalar> {
+    if (col.has_nulls()) {
+      auto f  = simple_op.template get_null_replacing_element_transformer<ResType>();
+      auto it = thrust::make_transform_iterator(dcol->pair_begin<Type, true>(), f);
+      return detail::reduce(it, col.size(), simple_op, stream, mr);
+    } else {
+      auto f  = simple_op.template get_element_transformer<ResType>();
+      auto it = thrust::make_transform_iterator(dcol->begin<Type>(), f);
+      return detail::reduce(it, col.size(), simple_op, stream, mr);
+    }
+  }();
+
   // set scalar is valid
-  result->set_valid((col.null_count() < col.size()), stream);
+  result->set_valid((col.null_count() < col.size()), stream);  // TODO see if we can fix this
   return result;
 };
 
@@ -174,8 +178,7 @@ struct same_element_type_dispatcher {
   template <typename ElementType>
   static constexpr bool is_supported_v()
   {
-    return !(cudf::is_fixed_point<ElementType>() ||
-             std::is_same<ElementType, cudf::list_view>::value ||
+    return !(std::is_same<ElementType, cudf::list_view>::value ||
              std::is_same<ElementType, cudf::struct_view>::value);
   }
 
@@ -230,6 +233,28 @@ struct element_type_dispatcher {
   }
 
   template <typename ElementType,
+            typename std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& col,
+                                     data_type const output_type,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    // if (output_type == col.type())
+
+    return cudf::reduction::simple::simple_reduction<ElementType, ElementType, Op>(col, stream, mr);
+
+    // auto result =
+    // cudf::reduction::simple::simple_reduction<ElementType, double, Op>(col, stream, mr);
+    // if (output_type == result->type()) return result;
+    // // this will cast the result to the output_type
+    // return cudf::type_dispatcher(output_type,
+    //                        simple::cast_numeric_scalar_fn<double>{},
+    //                        static_cast<numeric_scalar<double>*>(result.get()),
+    //                        stream,
+    //                        mr);
+  }
+
+  template <typename ElementType,
             typename std::enable_if_t<std::is_integral<ElementType>::value>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      data_type const output_type,
@@ -253,7 +278,8 @@ struct element_type_dispatcher {
 
   template <typename ElementType,
             typename std::enable_if_t<!std::is_floating_point<ElementType>::value and
-                                      !std::is_integral<ElementType>::value>* = nullptr>
+                                      !std::is_integral<ElementType>::value and
+                                      !cudf::is_fixed_point<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      data_type const output_type,
                                      rmm::cuda_stream_view stream,
