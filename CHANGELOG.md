@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #6116 Add `filters` parameter to Python `read_orc` function or filtering
+- PR #6848 Added Java bindings for writing parquet files with INT96 timestamps
 - PR #6460 Add is_timestamp format check API
 - PR #6647 Implement `cudf::round` floating point and integer types (`HALF_EVEN`)
 - PR #6562 Implement `cudf::round` floating point and integer types (`HALF_UP`)
@@ -11,6 +12,7 @@
 - PR #6777 Implement `cudf::unary_operation` for `decimal32` & `decimal64`
 - PR #6729 Implement `cudf::cast` for `decimal32/64` to/from different `type_id`
 - PR #6792 Implement `cudf::clamp` for `decimal32` and `decimal64`
+- PR #6845 Implement `cudf::copy_if_else` for `decimal32` and `decimal64`
 - PR #6805 Implement `cudf::detail::copy_if` for `decimal32` and `decimal64`
 - PR #6843 Implement `cudf::copy_range` for `decimal32` and `decimal64`
 - PR #6528 Enable `fixed_point` binary operations
@@ -109,6 +111,7 @@
 - PR #6829 Enable workaround to write categorical columns in csv
 - PR #6819 Use CMake 3.19 for RMM when building cuDF jar
 - PR #6833 Use settings.xml if existing for internal build
+- PR #6837 Avoid gather when copying strings view from start of strings column
 
 ## Bug Fixes
 
