@@ -261,11 +261,13 @@ struct element_type_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    if (output_type == col.type())
-      return cudf::reduction::simple::simple_reduction<ElementType, ElementType, Op>(
-        col, stream, mr);
-    auto result =
-      cudf::reduction::simple::simple_reduction<ElementType, int64_t, Op>(col, stream, mr);
+    using namespace cudf::reduction::simple;
+
+    if (output_type == col.type()) {
+      return simple_reduction<ElementType, ElementType, Op>(col, stream, mr);
+    }
+
+    auto result = simple_reduction<ElementType, int64_t, Op>(col, stream, mr);
     if (output_type == result->type()) return result;
     // this will cast the result to the output_type
     return cudf::type_dispatcher(output_type,
