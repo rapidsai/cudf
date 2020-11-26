@@ -39,12 +39,12 @@ class max_aggregation;
 class aggregation_finalizer {  // Declares the interface for the finalizer
  public:
   // Declare overloads for each kind of a agg to dispatch
-  virtual void visit(aggregation& agg)      = 0;
-  virtual void visit(min_aggregation& agg)  = 0;
-  virtual void visit(max_aggregation& agg)  = 0;
-  virtual void visit(mean_aggregation& agg) = 0;
-  virtual void visit(var_aggregation& agg)  = 0;
-  virtual void visit(std_aggregation& agg)  = 0;
+  virtual void visit(aggregation const& agg)      = 0;
+  virtual void visit(min_aggregation const& agg)  = 0;
+  virtual void visit(max_aggregation const& agg)  = 0;
+  virtual void visit(mean_aggregation const& agg) = 0;
+  virtual void visit(var_aggregation const& agg)  = 0;
+  virtual void visit(std_aggregation const& agg)  = 0;
 };
 
 /**

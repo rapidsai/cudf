@@ -30,14 +30,14 @@ namespace detail {
 
 template <typename Map, bool target_has_nulls = true, bool source_has_nulls = true>
 struct var_hash_functor {
-  Map map;
+  Map const map;
   bitmask_type const* __restrict__ row_bitmask;
   mutable_column_device_view target;
   column_device_view source;
   column_device_view sum;
   column_device_view count;
   size_type ddof;
-  var_hash_functor(Map map,
+  var_hash_functor(Map const map,
                    bitmask_type const* row_bitmask,
                    mutable_column_device_view target,
                    column_device_view source,

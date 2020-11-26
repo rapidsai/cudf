@@ -107,7 +107,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   cudf::detail::result_cache* dense_results;
   rmm::device_vector<size_type> const& gather_map;
   size_type const map_size;
-  Map& map;
+  Map const& map;
   bitmask_type const* __restrict__ row_bitmask;
   rmm::mr::device_memory_resource* mr;
   rmm::cuda_stream_view stream;
@@ -119,7 +119,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
                               cudf::detail::result_cache* dense_results,
                               rmm::device_vector<size_type> const& gather_map,
                               size_type map_size,
-                              Map& map,
+                              Map const& map,
                               bitmask_type const* row_bitmask,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
@@ -170,13 +170,13 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   };
 
   // Declare overloads for each kind of aggregation to dispatch
-  void visit(cudf::aggregation& agg) override
+  void visit(cudf::aggregation const& agg) override
   {
     if (dense_results->has_result(col_idx, agg)) return;
     dense_results->add_result(col_idx, agg, to_dense_agg_result(agg));
   }
 
-  void visit(cudf::detail::min_aggregation& agg) override
+  void visit(cudf::detail::min_aggregation const& agg) override
   {
     if (dense_results->has_result(col_idx, agg)) return;
     if (col.type().id() == type_id::STRING)
@@ -185,7 +185,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
       dense_results->add_result(col_idx, agg, to_dense_agg_result(agg));
   }
 
-  void visit(cudf::detail::max_aggregation& agg) override
+  void visit(cudf::detail::max_aggregation const& agg) override
   {
     if (dense_results->has_result(col_idx, agg)) return;
 
@@ -195,7 +195,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
       dense_results->add_result(col_idx, agg, to_dense_agg_result(agg));
   }
 
-  void visit(cudf::detail::mean_aggregation& agg) override
+  void visit(cudf::detail::mean_aggregation const& agg) override
   {
     if (dense_results->has_result(col_idx, agg)) return;
 
@@ -216,7 +216,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
     dense_results->add_result(col_idx, agg, std::move(result));
   }
 
-  void visit(cudf::detail::var_aggregation& agg) override
+  void visit(cudf::detail::var_aggregation const& agg) override
   {
     if (dense_results->has_result(col_idx, agg)) return;
 
@@ -247,7 +247,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
     dense_results->add_result(col_idx, agg, to_dense_agg_result(agg));
   }
 
-  void visit(cudf::detail::std_aggregation& agg) override
+  void visit(cudf::detail::std_aggregation const& agg) override
   {
     if (dense_results->has_result(col_idx, agg)) return;
     auto var_agg = make_variance_aggregation(agg._ddof);
@@ -301,7 +301,7 @@ void sparse_to_dense_results(table_view const& keys,
                              cudf::detail::result_cache* dense_results,
                              rmm::device_vector<size_type> const& gather_map,
                              size_type map_size,
-                             Map& map,
+                             Map const& map,
                              bool keys_have_nulls,
                              null_policy include_null_keys,
                              rmm::cuda_stream_view stream,
