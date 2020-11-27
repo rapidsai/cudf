@@ -31,7 +31,7 @@ namespace detail {
 std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
                                          size_type start,
                                          size_type end,
-                                         cudaStream_t stream,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   if (lists.is_empty()) { return cudf::empty_like(lists.parent()); }
@@ -54,7 +54,7 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
 
   // Compute the offsets column of the result:
   thrust::transform(
-    execpol->on(stream),
+    execpol->on(stream.value()),
     offsets_data + start,
     offsets_data + end + 1,  // size of offsets column is 1 greater than slice length
     out_offsets.data(),
@@ -73,8 +73,7 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
           cudf::detail::slice(lists.child(), {start_offset, end_offset}, stream).front());
 
   // Compute the null mask of the result:
-  auto null_mask =
-    cudf::detail::copy_bitmask(lists.null_mask(), start, end, rmm::cuda_stream_view{stream}, mr);
+  auto null_mask = cudf::detail::copy_bitmask(lists.null_mask(), start, end, stream, mr);
 
   return make_lists_column(lists_count,
                            std::move(offsets),

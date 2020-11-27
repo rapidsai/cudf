@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ std::unique_ptr<cudf::column> gather(
 {
   auto output_count  = std::distance(begin, end);
   auto strings_count = strings.size();
-  if (output_count == 0) return make_empty_strings_column(mr, stream.value());
+  if (output_count == 0) return make_empty_strings_column(stream, mr);
 
   auto execpol        = rmm::exec_policy(stream);
   auto strings_column = column_device_view::create(strings.parent(), stream);
@@ -82,13 +82,13 @@ std::unique_ptr<cudf::column> gather(
   };
   auto offsets_transformer_itr = thrust::make_transform_iterator(begin, offsets_transformer);
   auto offsets_column          = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + output_count, mr, stream.value());
+    offsets_transformer_itr, offsets_transformer_itr + output_count, stream, mr);
   auto offsets_view = offsets_column->view();
   auto d_offsets    = offsets_view.template data<int32_t>();
 
   // build chars column
   size_type bytes   = thrust::device_pointer_cast(d_offsets)[output_count];
-  auto chars_column = create_chars_child_column(output_count, 0, bytes, mr, stream.value());
+  auto chars_column = create_chars_child_column(output_count, 0, bytes, stream, mr);
   auto chars_view   = chars_column->mutable_view();
   auto d_chars      = chars_view.template data<char>();
   // fill in chars

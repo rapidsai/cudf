@@ -17,6 +17,8 @@
 
 #include <io/utilities/block_utils.cuh>
 
+#include <rmm/cuda_stream_view.hpp>
+
 using cudf::detail::device_span;
 
 namespace cudf {
@@ -310,32 +312,32 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
  * @param[in] first_row Crop all rows below first_row
  * @param[in] min_row_size Minimum size in bytes of a row
  * @param[in] stream CUDA stream to use, default 0
- */
-void __host__ DecodeAvroColumnData(block_desc_s *blocks,
-                                   schemadesc_s *schema,
-                                   device_span<nvstrdesc_s> global_dictionary,
-                                   const uint8_t *avro_data,
-                                   uint32_t num_blocks,
-                                   uint32_t schema_len,
-                                   size_t max_rows,
-                                   size_t first_row,
-                                   uint32_t min_row_size,
-                                   cudaStream_t stream)
+ **/
+void DecodeAvroColumnData(block_desc_s *blocks,
+                          schemadesc_s *schema,
+                          device_span<nvstrdesc_s> global_dictionary,
+                          const uint8_t *avro_data,
+                          uint32_t num_blocks,
+                          uint32_t schema_len,
+                          size_t max_rows,
+                          size_t first_row,
+                          uint32_t min_row_size,
+                          rmm::cuda_stream_view stream)
 {
   // NWARPS warps per threadblock
   dim3 const dim_block(32, NWARPS);
   // 1 warp per datablock, NWARPS datablocks per threadblock
   dim3 const dim_grid((num_blocks + NWARPS - 1) / NWARPS, 1);
 
-  gpuDecodeAvroColumnData<<<dim_grid, dim_block, 0, stream>>>(blocks,
-                                                              schema,
-                                                              global_dictionary,
-                                                              avro_data,
-                                                              num_blocks,
-                                                              schema_len,
-                                                              min_row_size,
-                                                              max_rows,
-                                                              first_row);
+  gpuDecodeAvroColumnData<<<dim_grid, dim_block, 0, stream.value()>>>(blocks,
+                                                                      schema,
+                                                                      global_dictionary,
+                                                                      avro_data,
+                                                                      num_blocks,
+                                                                      schema_len,
+                                                                      min_row_size,
+                                                                      max_rows,
+                                                                      first_row);
 }
 
 }  // namespace gpu

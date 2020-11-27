@@ -63,6 +63,7 @@ struct replace_nans_functor {
                             input_pair_iterator + size,
                             replacement_pair_iterator,
                             predicate,
+                            input.type(),
                             stream,
                             mr);
       } else {
@@ -72,6 +73,7 @@ struct replace_nans_functor {
                             input_pair_iterator + size,
                             replacement_pair_iterator,
                             predicate,
+                            input.type(),
                             stream,
                             mr);
       }
@@ -84,6 +86,7 @@ struct replace_nans_functor {
                             input_pair_iterator + size,
                             replacement_pair_iterator,
                             predicate,
+                            input.type(),
                             stream,
                             mr);
       } else {
@@ -93,6 +96,7 @@ struct replace_nans_functor {
                             input_pair_iterator + size,
                             replacement_pair_iterator,
                             predicate,
+                            input.type(),
                             stream,
                             mr);
       }
