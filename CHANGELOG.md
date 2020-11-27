@@ -151,6 +151,7 @@
 - PR #6798 Fix `read_avro` docs
 - PR #6824 Fix JNI build
 - PR #6826 Fix resource management in Java ColumnBuilder
+- PR #6855 Fix `.str.replace_with_backrefs` docs examples
 
 
 # cuDF 0.16.0 (21 Oct 2020)
