@@ -781,7 +781,7 @@ class StringMethods(ColumnMethodsMixin):
         --------
         >>> import cudf
         >>> s = cudf.Series(["A543","Z756"])
-        >>> s.str.replace_with_backrefs('(\\d)(\\d)', 'V\\2\\1')
+        >>> s.str.replace_with_backrefs('(\\\\d)(\\\\d)', 'V\\\\2\\\\1')
         0    AV453
         1    ZV576
         dtype: object
