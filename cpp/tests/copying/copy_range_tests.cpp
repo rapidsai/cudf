@@ -25,6 +25,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/dictionary/encode.hpp>
 
+#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
 auto all_valid  = [](cudf::size_type row) { return true; };
@@ -462,4 +463,58 @@ TEST_F(CopyRangeErrorTestFixture, DTypeMismatch)
   auto dict_source = cudf::dictionary::encode(source);
   EXPECT_THROW(cudf::copy_range(dict_source->view(), dict_target->view(), 0, 100, 0),
                cudf::logic_error);
+}
+
+template <typename T>
+struct FixedPointTypesCopyRange : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(FixedPointTypesCopyRange, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTypesCopyRange, FixedPointSimple)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const source   = fp_wrapper{{110, 220, 330, 440, 550, 660}, scale_type{-2}};
+  auto const target   = fp_wrapper{{0, 0, 0, 0, 0, 0}, scale_type{-2}};
+  auto const expected = fp_wrapper{{0, 220, 330, 440, 0, 0}, scale_type{-2}};
+  auto const result   = cudf::copy_range(source, target, 1, 4, 1);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTypesCopyRange, FixedPointLarge)
+{
+  using namespace numeric;
+  using namespace cudf::test;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto s = thrust::make_counting_iterator(-1000);
+  auto t = thrust::make_constant_iterator(0);
+  auto e = make_counting_transform_iterator(500, [](int i) { return i < 1000 ? i : 0; });
+
+  auto const source   = fp_wrapper{s, s + 2000, scale_type{-1}};
+  auto const target   = fp_wrapper{t, t + 2000, scale_type{-1}};
+  auto const expected = fp_wrapper{e, e + 2000, scale_type{-1}};
+  auto const result   = cudf::copy_range(source, target, 1500, 2000, 0);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTypesCopyRange, FixedPointScaleMismatch)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const source = fp_wrapper{{110, 220, 330, 440, 550, 660}, scale_type{-2}};
+  auto const target = fp_wrapper{{0, 0, 0, 0, 0, 0}, scale_type{-3}};
+
+  EXPECT_THROW(cudf::copy_range(source, target, 1, 4, 1), cudf::logic_error);
 }

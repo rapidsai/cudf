@@ -106,11 +106,11 @@ std::unique_ptr<column> strip(
   strings_column_view const& strings,
   strip_type stype                    = strip_type::BOTH,
   string_scalar const& to_strip       = string_scalar(""),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(mr, stream);
+  if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
 
   CUDF_EXPECTS(to_strip.is_valid(), "Parameter to_strip must be valid");
   string_view d_to_strip(to_strip.data(), to_strip.size());
@@ -121,27 +121,26 @@ std::unique_ptr<column> strip(
   size_type null_count = strings.null_count();
 
   // copy null mask
-  rmm::device_buffer null_mask =
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
 
   // build offsets column -- calculate the size of each output string
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0), strip_fn<SizeOnly>{d_column, stype, d_to_strip});
   auto offsets_column = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto offsets_view = offsets_column->view();
   auto d_offsets    = offsets_view.data<int32_t>();
 
   // build the chars column -- convert characters based on case_flag parameter
   size_type bytes   = thrust::device_pointer_cast(d_offsets)[strings_count];
-  auto chars_column = create_chars_child_column(strings_count, null_count, bytes, mr, stream);
+  auto chars_column = create_chars_child_column(strings_count, null_count, bytes, stream, mr);
   auto chars_view   = chars_column->mutable_view();
   auto d_chars      = chars_view.data<char>();
-  thrust::for_each_n(execpol->on(stream),
+  thrust::for_each_n(execpol->on(stream.value()),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      strip_fn<ExecuteOp>{d_column, stype, d_to_strip, d_offsets, d_chars});
-  //
+
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              std::move(chars_column),
@@ -161,7 +160,7 @@ std::unique_ptr<column> strip(strings_column_view const& strings,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::strip(strings, stype, to_strip, mr);
+  return detail::strip(strings, stype, to_strip, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

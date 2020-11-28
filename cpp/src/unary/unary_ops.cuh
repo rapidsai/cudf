@@ -71,7 +71,7 @@ struct launcher {
                       output_view.begin<Tout>(),
                       F{});
 
-    CHECK_CUDA(stream);
+    CHECK_CUDA(stream.value());
 
     return output;
   }

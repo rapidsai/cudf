@@ -466,3 +466,480 @@ TYPED_TEST(TypedScatterListsTest, NullListsOfLists)
       make_counting_transform_iterator(0, [](auto i) { return i != 4; })},
     ret->get_column(0));
 }
+
+TYPED_TEST(TypedScatterListsTest, ListsOfStructs)
+{
+  using namespace cudf::test;
+  using T               = TypeParam;
+  using offsets_column  = fixed_width_column_wrapper<cudf::size_type>;
+  using numerics_column = fixed_width_column_wrapper<T>;
+
+  // clang-format off
+  auto source_numerics = numerics_column{
+    9, 9, 9, 9, 
+    8, 8, 8
+  };
+
+  auto source_strings = strings_column_wrapper{
+    "nine", "nine", "nine", "nine", 
+    "eight", "eight", "eight"
+  };
+  // clang-format on
+
+  auto source_structs = structs_column_wrapper{{source_numerics, source_strings}};
+
+  auto source_lists =
+    cudf::make_lists_column(2, offsets_column{0, 4, 7}.release(), source_structs.release(), 0, {});
+
+  // clang-format off
+  auto target_ints    = numerics_column{
+    0, 0, 
+    1, 1, 
+    2, 2, 
+    3, 3, 
+    4, 4, 
+    5, 5
+  };
+
+  auto target_strings = strings_column_wrapper{
+    "zero",  "zero", 
+    "one",   "one", 
+    "two",   "two", 
+    "three", "three", 
+    "four",  "four", 
+    "five",  "five"
+  };
+  // clang-format on
+
+  auto target_structs = structs_column_wrapper{{target_ints, target_strings}};
+
+  auto target_lists = cudf::make_lists_column(
+    6, offsets_column{0, 2, 4, 6, 8, 10, 12}.release(), target_structs.release(), 0, {});
+
+  auto scatter_map = offsets_column{2, 0};
+
+  auto scatter_result = cudf::scatter(cudf::table_view({source_lists->view()}),
+                                      scatter_map,
+                                      cudf::table_view({target_lists->view()}));
+
+  // clang-format off
+  auto expected_numerics = numerics_column{
+    8, 8, 8, 
+    1, 1, 
+    9, 9, 9, 9, 
+    3, 3, 4, 4, 5, 5
+  };
+
+  auto expected_strings = strings_column_wrapper{
+    "eight", "eight", "eight",
+    "one", "one",
+    "nine", "nine", "nine", "nine",
+    "three", "three",
+    "four", "four",
+    "five", "five"
+  };
+  // clang-format on
+
+  auto expected_structs = structs_column_wrapper{{expected_numerics, expected_strings}};
+
+  auto expected_lists = cudf::make_lists_column(
+    6, offsets_column{0, 3, 5, 9, 11, 13, 15}.release(), expected_structs.release(), 0, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_lists->view(), scatter_result->get_column(0));
+}
+
+TYPED_TEST(TypedScatterListsTest, ListsOfStructsWithNullMembers)
+{
+  using namespace cudf::test;
+  using T               = TypeParam;
+  using offsets_column  = fixed_width_column_wrapper<cudf::size_type>;
+  using numerics_column = fixed_width_column_wrapper<T>;
+
+  // clang-format off
+  auto source_numerics = numerics_column{
+    { 
+      9, 9, 9, 9, 
+      8, 8, 8    
+    }, 
+    make_counting_transform_iterator(0, [](auto i) { return i != 3; })
+  };
+
+  auto source_strings = strings_column_wrapper{
+    {
+      "nine",  "nine",  "nine", "nine", 
+      "eight", "eight", "eight"
+    }, 
+    make_counting_transform_iterator(0, [](auto i) { return i != 5; })
+  };
+  // clang-format on
+
+  auto source_structs = structs_column_wrapper{{source_numerics, source_strings}};
+
+  auto source_lists =
+    cudf::make_lists_column(2, offsets_column{0, 4, 7}.release(), source_structs.release(), 0, {});
+
+  // clang-format off
+  auto target_ints    = numerics_column{
+    0, 0, 
+    1, 1, 
+    2, 2, 
+    3, 3, 
+    4, 4, 
+    5, 5
+  };
+
+  auto target_strings = strings_column_wrapper{
+    "zero", "zero", 
+    "one",  "one", 
+    "two",  "two", 
+    "three","three", 
+    "four", "four", 
+    "five", "five"
+  };
+  // clang-format on
+
+  auto target_structs = structs_column_wrapper{{target_ints, target_strings}};
+
+  auto target_lists = cudf::make_lists_column(
+    6, offsets_column{0, 2, 4, 6, 8, 10, 12}.release(), target_structs.release(), 0, {});
+  // clang-format on
+
+  auto scatter_map = offsets_column{2, 0};
+
+  auto scatter_result = cudf::scatter(cudf::table_view({source_lists->view()}),
+                                      scatter_map,
+                                      cudf::table_view({target_lists->view()}));
+
+  // clang-format off
+  auto expected_numerics = numerics_column{
+    {
+      8, 8, 8, 
+      1, 1, 
+      9, 9, 9, 9, 
+      3, 3, 
+      4, 4, 
+      5, 5
+    }, 
+    make_counting_transform_iterator(0, [](auto i) { return i != 8; })
+  };
+
+  auto expected_strings = strings_column_wrapper{
+    {
+      "eight", "eight", "eight",
+      "one",   "one",
+      "nine",  "nine",  "nine", "nine",
+      "three", "three",
+      "four",  "four",
+      "five",  "five"
+    },
+    make_counting_transform_iterator(0, [](auto i) { return i != 1; })
+  };
+  // clang-format on
+
+  auto expected_structs = structs_column_wrapper{{expected_numerics, expected_strings}};
+
+  auto expected_lists = cudf::make_lists_column(
+    6, offsets_column{0, 3, 5, 9, 11, 13, 15}.release(), expected_structs.release(), 0, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_lists->view(), scatter_result->get_column(0));
+}
+
+TYPED_TEST(TypedScatterListsTest, ListsOfNullStructs)
+{
+  using namespace cudf::test;
+  using T               = TypeParam;
+  using offsets_column  = fixed_width_column_wrapper<cudf::size_type>;
+  using numerics_column = fixed_width_column_wrapper<T>;
+
+  // clang-format off
+  auto source_numerics = numerics_column{
+    {
+      9, 9, 9, 9, 
+      8, 8, 8
+    }, 
+    make_counting_transform_iterator(0, [](auto i) { return i != 3; })
+  };
+
+  auto source_strings = strings_column_wrapper{
+    {
+      "nine",  "nine",  "nine", "nine", 
+      "eight", "eight", "eight"
+    }, 
+    make_counting_transform_iterator(0, [](auto i) { return i != 5; })
+  };
+  // clang-format on
+
+  auto source_structs =
+    structs_column_wrapper{{source_numerics, source_strings},
+                           make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
+
+  auto source_lists =
+    cudf::make_lists_column(2, offsets_column{0, 4, 7}.release(), source_structs.release(), 0, {});
+
+  // clang-format off
+  auto target_ints    = numerics_column{
+    0, 0, 
+    1, 1, 
+    2, 2, 
+    3, 3, 
+    4, 4, 
+    5, 5
+  };
+
+  auto target_strings = strings_column_wrapper{
+    "zero",  "zero", 
+    "one",   "one", 
+    "two",   "two", 
+    "three", "three", 
+    "four",  "four", 
+    "five",  "five"
+  };
+  // clang-format on
+
+  auto target_structs = structs_column_wrapper{{target_ints, target_strings}};
+
+  auto target_lists = cudf::make_lists_column(
+    6, offsets_column{0, 2, 4, 6, 8, 10, 12}.release(), target_structs.release(), 0, {});
+
+  auto scatter_map = offsets_column{2, 0};
+
+  auto scatter_result = cudf::scatter(cudf::table_view({source_lists->view()}),
+                                      scatter_map,
+                                      cudf::table_view({target_lists->view()}));
+
+  // clang-format off
+  auto expected_numerics = numerics_column{
+    {
+      8, 8, 8, 
+      1, 1, 
+      9, 9, 9, 9, 
+      3, 3, 
+      4, 4, 
+      5, 5
+    }, 
+    make_counting_transform_iterator(0, [](auto i) { return (i != 6) && (i != 8); })
+  };
+
+  auto expected_strings = strings_column_wrapper{
+    {
+      "eight", "eight", "eight",
+      "one",   "one",
+      "nine",  "nine",  "nine", "nine",
+      "three", "three",
+      "four",  "four",
+      "five",  "five"
+    },
+    make_counting_transform_iterator(0, [](auto i) { return (i != 1) && (i != 6); })
+  };
+  // clang-format on
+
+  auto expected_structs = structs_column_wrapper{{expected_numerics, expected_strings}};
+
+  auto expected_lists = cudf::make_lists_column(
+    6, offsets_column{0, 3, 5, 9, 11, 13, 15}.release(), expected_structs.release(), 0, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_lists->view(), scatter_result->get_column(0));
+}
+
+TYPED_TEST(TypedScatterListsTest, EmptyListsOfStructs)
+{
+  using namespace cudf::test;
+  using T               = TypeParam;
+  using offsets_column  = fixed_width_column_wrapper<cudf::size_type>;
+  using numerics_column = fixed_width_column_wrapper<T>;
+
+  // clang-format off
+  auto source_numerics = numerics_column{
+    {
+      9, 9, 9, 9, 
+      8, 8, 8
+    }, 
+    make_counting_transform_iterator(0, [](auto i) { return i != 3; })
+  };
+
+  auto source_strings = strings_column_wrapper{
+    {
+      "nine",  "nine",  "nine", "nine", 
+      "eight", "eight", "eight"
+    }, 
+    make_counting_transform_iterator(0, [](auto i) { return i != 5; })
+  };
+  // clang-format on
+
+  auto source_structs =
+    structs_column_wrapper{{source_numerics, source_strings},
+                           make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
+
+  auto source_lists = cudf::make_lists_column(
+    3, offsets_column{0, 4, 7, 7}.release(), source_structs.release(), 0, {});
+
+  // clang-format off
+  auto target_ints    = numerics_column{
+    0, 0, 
+    1, 1, 
+    2, 2, 
+    3, 3, 
+    4, 4, 
+    5, 5
+  };
+
+  auto target_strings = strings_column_wrapper{
+    "zero",  "zero", 
+    "one",   "one", 
+    "two",   "two", 
+    "three", "three", 
+    "four",  "four", 
+    "five",  "five"
+  };
+  // clang-format on
+
+  auto target_structs = structs_column_wrapper{{target_ints, target_strings}};
+
+  auto target_lists = cudf::make_lists_column(
+    6, offsets_column{0, 2, 4, 6, 8, 10, 12}.release(), target_structs.release(), 0, {});
+
+  auto scatter_map = offsets_column{2, 0, 4};
+
+  auto scatter_result = cudf::scatter(cudf::table_view({source_lists->view()}),
+                                      scatter_map,
+                                      cudf::table_view({target_lists->view()}));
+
+  // clang-format off
+  auto expected_numerics = numerics_column{
+    {
+      8, 8, 8, 
+      1, 1, 
+      9, 9, 9, 9, 
+      3, 3, 
+      5, 5
+    },
+    make_counting_transform_iterator(0, [](auto i) { return (i != 6) && (i != 8); })
+  };
+
+  auto expected_strings = strings_column_wrapper{
+    {
+      "eight", "eight", "eight",
+      "one",   "one",
+      "nine",  "nine",  "nine", "nine",
+      "three", "three",
+      "five",  "five"
+    },
+    make_counting_transform_iterator(0, [](auto i) { return (i != 1) && (i != 6); })
+  };
+  // clang-format on
+
+  auto expected_structs = structs_column_wrapper{{expected_numerics, expected_strings}};
+
+  auto expected_lists = cudf::make_lists_column(
+    6, offsets_column{0, 3, 5, 9, 11, 11, 13}.release(), expected_structs.release(), 0, {});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_lists->view(), scatter_result->get_column(0));
+}
+
+TYPED_TEST(TypedScatterListsTest, NullListsOfStructs)
+{
+  using namespace cudf::test;
+  using T               = TypeParam;
+  using offsets_column  = fixed_width_column_wrapper<cudf::size_type>;
+  using numerics_column = fixed_width_column_wrapper<T>;
+
+  // clang-format off
+  auto source_numerics = numerics_column{
+    {
+      9, 9, 9, 9, 
+      8, 8, 8
+    }, 
+    make_counting_transform_iterator(0, [](auto i) { return i != 3; })
+  };
+
+  auto source_strings = strings_column_wrapper{
+    {
+      "nine",  "nine",  "nine", "nine", 
+      "eight", "eight", "eight"
+    }, 
+    make_counting_transform_iterator(0, [](auto i) { return i != 5; })
+  };
+  // clang-format on
+
+  auto source_structs =
+    structs_column_wrapper{{source_numerics, source_strings},
+                           make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
+
+  auto source_list_null_mask_begin =
+    make_counting_transform_iterator(0, [](auto i) { return i != 2; });
+
+  auto source_lists = cudf::make_lists_column(
+    3,
+    offsets_column{0, 4, 7, 7}.release(),
+    source_structs.release(),
+    1,
+    detail::make_null_mask(source_list_null_mask_begin, source_list_null_mask_begin + 3));
+
+  // clang-format off
+  auto target_ints    = numerics_column{
+    0, 0, 
+    1, 1, 
+    2, 2, 
+    3, 3, 
+    4, 4, 
+    5, 5
+  };
+  auto target_strings = strings_column_wrapper{
+    "zero",  "zero", 
+    "one",   "one", 
+    "two",   "two", 
+    "three", "three", 
+    "four",  "four", 
+    "five",  "five"
+  };
+  // clang-format on
+
+  auto target_structs = structs_column_wrapper{{target_ints, target_strings}};
+
+  auto target_lists = cudf::make_lists_column(
+    6, offsets_column{0, 2, 4, 6, 8, 10, 12}.release(), target_structs.release(), 0, {});
+
+  auto scatter_map = offsets_column{2, 0, 4};
+
+  auto scatter_result = cudf::scatter(cudf::table_view({source_lists->view()}),
+                                      scatter_map,
+                                      cudf::table_view({target_lists->view()}));
+
+  // clang-format off
+  auto expected_numerics = numerics_column{
+    {
+      8, 8, 8, 
+      1, 1, 
+      9, 9, 9, 9, 
+      3, 3, 
+      5, 5
+    },
+    make_counting_transform_iterator(0, [](auto i) { return (i != 6) && (i != 8); })
+  };
+
+  auto expected_strings = strings_column_wrapper{
+    {
+      "eight", "eight", "eight",
+      "one",   "one",
+      "nine",  "nine",  "nine", "nine",
+      "three", "three",
+      "five",  "five"
+    },
+    make_counting_transform_iterator(0, [](auto i) { return i != 1 && i != 6; })
+  };
+  // clang-format on
+
+  auto expected_structs = structs_column_wrapper{{expected_numerics, expected_strings}};
+
+  auto expected_lists_null_mask_begin =
+    make_counting_transform_iterator(0, [](auto i) { return i != 4; });
+
+  auto expected_lists = cudf::make_lists_column(
+    6,
+    offsets_column{0, 3, 5, 9, 11, 11, 13}.release(),
+    expected_structs.release(),
+    1,
+    detail::make_null_mask(expected_lists_null_mask_begin, expected_lists_null_mask_begin + 6));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_lists->view(), scatter_result->get_column(0));
+}

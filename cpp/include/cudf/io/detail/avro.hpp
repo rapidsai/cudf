@@ -23,6 +23,8 @@
 
 #include <cudf/io/avro.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace io {
 namespace detail {
@@ -71,7 +73,8 @@ class reader {
    *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read(avro_reader_options const &options, cudaStream_t stream = 0);
+  table_with_metadata read(avro_reader_options const &options,
+                           rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 };
 }  // namespace avro
 }  // namespace detail

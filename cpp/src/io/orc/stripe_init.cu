@@ -13,9 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <io/utilities/block_utils.cuh>
+
 #include "orc_common.h"
 #include "orc_gpu.h"
+
+#include <io/utilities/block_utils.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
@@ -459,21 +463,22 @@ void __host__ ParseCompressedStripeData(CompressedStreamInfo *strm_info,
                                         int32_t num_streams,
                                         uint32_t compression_block_size,
                                         uint32_t log2maxcr,
-                                        cudaStream_t stream)
+                                        rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_streams + 3) >> 2, 1);  // 1 stream per warp, 4 warps per block
-  gpuParseCompressedStripeData<<<dim_grid, dim_block, 0, stream>>>(
+  gpuParseCompressedStripeData<<<dim_grid, dim_block, 0, stream.value()>>>(
     strm_info, num_streams, compression_block_size, log2maxcr);
 }
 
 void __host__ PostDecompressionReassemble(CompressedStreamInfo *strm_info,
                                           int32_t num_streams,
-                                          cudaStream_t stream)
+                                          rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_streams + 3) >> 2, 1);  // 1 stream per warp, 4 warps per block
-  gpuPostDecompressionReassemble<<<dim_grid, dim_block, 0, stream>>>(strm_info, num_streams);
+  gpuPostDecompressionReassemble<<<dim_grid, dim_block, 0, stream.value()>>>(strm_info,
+                                                                             num_streams);
 }
 
 /**
@@ -494,11 +499,11 @@ void __host__ ParseRowGroupIndex(RowGroup *row_groups,
                                  uint32_t num_stripes,
                                  uint32_t num_rowgroups,
                                  uint32_t rowidx_stride,
-                                 cudaStream_t stream)
+                                 rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid(num_columns, num_stripes);  // 1 column chunk per block
-  gpuParseRowGroupIndex<<<dim_grid, dim_block, 0, stream>>>(
+  gpuParseRowGroupIndex<<<dim_grid, dim_block, 0, stream.value()>>>(
     row_groups, strm_info, chunks, num_columns, num_stripes, num_rowgroups, rowidx_stride);
 }
 
