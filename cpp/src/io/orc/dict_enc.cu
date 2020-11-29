@@ -31,7 +31,7 @@ namespace io {
 namespace orc {
 namespace gpu {
 constexpr uint32_t max_dict_entries = default_row_index_stride;
-#define INIT_HASH_BITS 12
+constexpr int init_hash_bits        = 12;
 
 struct dictinit_state_s {
   uint32_t nnz;
@@ -40,8 +40,8 @@ struct dictinit_state_s {
   volatile uint32_t scratch_red[32];
   uint32_t dict[max_dict_entries];
   union {
-    uint16_t u16[1 << (INIT_HASH_BITS)];
-    uint32_t u32[1 << (INIT_HASH_BITS - 1)];
+    uint16_t u16[1 << (init_hash_bits)];
+    uint32_t u32[1 << (init_hash_bits - 1)];
   } map;
 };
 
@@ -51,7 +51,7 @@ struct dictinit_state_s {
 static inline __device__ uint32_t nvstr_init_hash(char const *ptr, uint32_t len)
 {
   if (len != 0) {
-    return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << INIT_HASH_BITS) - 1);
+    return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
   } else {
     return 0;
   }
@@ -86,7 +86,7 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
     }
     __syncthreads();
     is_valid = (i + t < s->chunk.num_rows) ? (s->scratch_red[t >> 5] >> (t & 0x1f)) & 1 : 0;
-    nz_map   = BALLOT(is_valid);
+    nz_map   = ballot(is_valid);
     nz_pos   = s->nnz + __popc(nz_map & (0x7fffffffu >> (0x1fu - ((uint32_t)t & 0x1f))));
     if (!(t & 0x1f)) { s->scratch_red[16 + (t >> 5)] = __popc(nz_map); }
     __syncthreads();
@@ -170,9 +170,7 @@ __global__ void __launch_bounds__(block_size, 2)
     __syncthreads();
   }
   // Reorder the 16-bit local indices according to the hash value of the strings
-#if (INIT_HASH_BITS != 12)
-#error "Hardcoded for INIT_HASH_BITS=12"
-#endif
+  static_assert((init_hash_bits == 12), "Hardcoded for init_hash_bits=12");
   {
     // Cumulative sum of hash map counts
     uint32_t count01 = s->map.u32[t * 4 + 0];
@@ -256,7 +254,7 @@ __global__ void __launch_bounds__(block_size, 2)
         dict_char_count += (is_dupe) ? 0 : len1;
       }
     }
-    dupe_mask    = BALLOT(is_dupe);
+    dupe_mask    = ballot(is_dupe);
     dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
     if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(dupe_mask); }
     __syncthreads();
@@ -400,7 +398,7 @@ __global__ void __launch_bounds__(block_size)
       is_dupe       = nvstr_is_equal(cur_ptr, cur_len, str_data[prev].ptr, str_data[prev].count);
     }
     dict_char_count += (is_dupe) ? 0 : cur_len;
-    dupe_mask    = BALLOT(is_dupe);
+    dupe_mask    = ballot(is_dupe);
     dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
     if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(dupe_mask); }
     __syncthreads();

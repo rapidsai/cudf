@@ -168,6 +168,7 @@
 - PR #6826 Fix resource management in Java ColumnBuilder
 - PR #6830 Fix categorical scalar insertion
 - PR #6854 Fix the parameter order of writeParquetBufferBegin
+- PR #6855 Fix `.str.replace_with_backrefs` docs examples
 
 
 # cuDF 0.16.0 (21 Oct 2020)
@@ -311,6 +312,7 @@
 - PR #6653 Replaced SHFL_XOR calls with cub::WarpReduce
 - PR #6751 Rework ColumnViewAccess and its usage
 - PR #6698 Remove macros from ORC reader and writer
+- PR #6782 Replace cuio macros with constexpr and inline functions
 
 ## Bug Fixes
 
