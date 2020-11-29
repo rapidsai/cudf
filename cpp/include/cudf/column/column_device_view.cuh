@@ -720,7 +720,7 @@ struct index_element_fn {
                                  std::is_unsigned<IndexType>::value)>* = nullptr>
   __device__ size_type operator()(Args&&... args)
   {
-    release_assert(false and "indices must be an integral type");
+    release_assert(false and "dictionary indices must be an unsigned integral type");
     return 0;
   }
 };
