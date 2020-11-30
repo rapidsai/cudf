@@ -35,6 +35,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 
 #include <thrust/optional.h>
@@ -108,11 +109,12 @@ std::unique_ptr<table> aggregate_keys_info(std::unique_ptr<table> info)
 /**
  * @brief Initializes the (key hash -> column index) hash map.
  */
-col_map_ptr_type create_col_names_hash_map(column_view column_name_hashes, cudaStream_t stream)
+col_map_ptr_type create_col_names_hash_map(column_view column_name_hashes,
+                                           rmm::cuda_stream_view stream)
 {
-  auto key_col_map{col_map_type::create(column_name_hashes.size())};
+  auto key_col_map{col_map_type::create(column_name_hashes.size(), stream)};
   auto const column_data = column_name_hashes.data<uint32_t>();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<size_type>(0),
                      column_name_hashes.size(),
                      [map = *key_col_map, column_data] __device__(size_type idx) mutable {
@@ -136,7 +138,7 @@ col_map_ptr_type create_col_names_hash_map(column_view column_name_hashes, cudaS
 std::unique_ptr<table> create_json_keys_info_table(const parse_options_view &options,
                                                    device_span<char const> const data,
                                                    device_span<uint64_t const> const row_offsets,
-                                                   cudaStream_t stream)
+                                                   rmm::cuda_stream_view stream)
 {
   // Count keys
   rmm::device_scalar<unsigned long long int> key_counter(0, stream);
@@ -166,7 +168,7 @@ std::unique_ptr<table> create_json_keys_info_table(const parse_options_view &opt
  */
 std::vector<std::string> create_key_strings(char const *h_data,
                                             table_view sorted_info,
-                                            cudaStream_t stream)
+                                            rmm::cuda_stream_view stream)
 {
   auto const num_cols = sorted_info.num_rows();
   std::vector<uint64_t> h_offsets(num_cols);
@@ -174,14 +176,14 @@ std::vector<std::string> create_key_strings(char const *h_data,
                   sorted_info.column(0).data<uint64_t>(),
                   sizeof(uint64_t) * num_cols,
                   cudaMemcpyDefault,
-                  stream);
+                  stream.value());
 
   std::vector<uint16_t> h_lens(num_cols);
   cudaMemcpyAsync(h_lens.data(),
                   sorted_info.column(1).data<uint16_t>(),
                   sizeof(uint16_t) * num_cols,
                   cudaMemcpyDefault,
-                  stream);
+                  stream.value());
 
   std::vector<std::string> names(num_cols);
   std::transform(h_offsets.cbegin(),
@@ -206,7 +208,7 @@ auto sort_keys_info_by_offset(std::unique_ptr<table> info)
  * @return Names of JSON object keys in the file
  */
 std::pair<std::vector<std::string>, col_map_ptr_type> reader::impl::get_json_object_keys_hashes(
-  cudaStream_t stream)
+  rmm::cuda_stream_view stream)
 {
   auto info = create_json_keys_info_table(
     opts_.view(),
@@ -259,7 +261,7 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
  * Sets the uncomp_data_ and uncomp_size_ data members
  * Loads the data into device memory if byte range parameters are not used
  */
-void reader::impl::decompress_input(cudaStream_t stream)
+void reader::impl::decompress_input(rmm::cuda_stream_view stream)
 {
   const auto compression_type =
     infer_compression_type(options_.get_compression(),
@@ -289,7 +291,7 @@ void reader::impl::decompress_input(cudaStream_t stream)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-void reader::impl::set_record_starts(cudaStream_t stream)
+void reader::impl::set_record_starts(rmm::cuda_stream_view stream)
 {
   std::vector<char> chars_to_count{'\n'};
   // Currently, ignoring lineterminations within quotes is handled by recording the records of both,
@@ -310,7 +312,7 @@ void reader::impl::set_record_starts(cudaStream_t stream)
   // Manually adding an extra row to account for the first row in the file
   if (byte_range_offset_ == 0) {
     find_result_ptr++;
-    CUDA_TRY(cudaMemsetAsync(rec_starts_.data().get(), 0ull, sizeof(uint64_t), stream));
+    CUDA_TRY(cudaMemsetAsync(rec_starts_.data().get(), 0ull, sizeof(uint64_t), stream.value()));
   }
 
   std::vector<char> chars_to_find{'\n'};
@@ -325,7 +327,7 @@ void reader::impl::set_record_starts(cudaStream_t stream)
   // Previous call stores the record pinput_file.typeositions as encountered by all threads
   // Sort the record positions as subsequent processing may require filtering
   // certain rows or other processing on specific records
-  thrust::sort(rmm::exec_policy()->on(stream), rec_starts_.begin(), rec_starts_.end());
+  thrust::sort(rmm::exec_policy()->on(stream.value()), rec_starts_.begin(), rec_starts_.end());
 
   auto filtered_count = prefilter_count;
   if (allow_newlines_in_strings_) {
@@ -343,7 +345,7 @@ void reader::impl::set_record_starts(cudaStream_t stream)
     }
 
     rec_starts_ = h_rec_starts;
-    thrust::sort(rmm::exec_policy()->on(stream), rec_starts_.begin(), rec_starts_.end());
+    thrust::sort(rmm::exec_policy()->on(stream.value()), rec_starts_.begin(), rec_starts_.end());
   }
 
   // Exclude the ending newline as it does not precede a record start
@@ -360,7 +362,7 @@ void reader::impl::set_record_starts(cudaStream_t stream)
  * Also updates the array of record starts to match the device data offset.
  *
  */
-void reader::impl::upload_data_to_device(cudaStream_t stream)
+void reader::impl::upload_data_to_device(rmm::cuda_stream_view stream)
 {
   size_t start_offset = 0;
   size_t end_offset   = uncomp_size_;
@@ -382,7 +384,7 @@ void reader::impl::upload_data_to_device(cudaStream_t stream)
     // Adjust row start positions to account for the data subcopy
     start_offset = h_rec_starts.front();
     rec_starts_.resize(h_rec_starts.size());
-    thrust::transform(rmm::exec_policy()->on(stream),
+    thrust::transform(rmm::exec_policy()->on(stream.value()),
                       rec_starts_.begin(),
                       rec_starts_.end(),
                       thrust::make_constant_iterator(start_offset),
@@ -405,7 +407,7 @@ void reader::impl::upload_data_to_device(cudaStream_t stream)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-void reader::impl::set_column_names(cudaStream_t stream)
+void reader::impl::set_column_names(rmm::cuda_stream_view stream)
 {
   // If file only contains one row, use the file size for the row size
   uint64_t first_row_len = data_.size() / sizeof(char);
@@ -415,12 +417,15 @@ void reader::impl::set_column_names(cudaStream_t stream)
                              rec_starts_.data().get() + 1,
                              sizeof(uint64_t),
                              cudaMemcpyDeviceToHost,
-                             stream));
+                             stream.value()));
   }
   std::vector<char> first_row(first_row_len);
-  CUDA_TRY(cudaMemcpyAsync(
-    first_row.data(), data_.data(), first_row_len * sizeof(char), cudaMemcpyDeviceToHost, stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  CUDA_TRY(cudaMemcpyAsync(first_row.data(),
+                           data_.data(),
+                           first_row_len * sizeof(char),
+                           cudaMemcpyDeviceToHost,
+                           stream.value()));
+  stream.synchronize();
 
   // Determine the row format between:
   //   JSON array - [val1, val2, ...] and
@@ -459,7 +464,7 @@ void reader::impl::set_column_names(cudaStream_t stream)
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-void reader::impl::set_data_types(cudaStream_t stream)
+void reader::impl::set_data_types(rmm::cuda_stream_view stream)
 {
   auto const dtype = options_.get_dtypes();
   if (!dtype.empty()) {
@@ -555,7 +560,7 @@ void reader::impl::set_data_types(cudaStream_t stream)
  *
  * @return table_with_metadata struct
  */
-table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
+table_with_metadata reader::impl::convert_data_to_table(rmm::cuda_stream_view stream)
 {
   const auto num_columns = dtypes_.size();
   const auto num_records = rec_starts_.size();
@@ -592,8 +597,7 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
     d_valid_counts,
     stream);
 
-  CUDA_TRY(cudaStreamSynchronize(stream));
-  CUDA_TRY(cudaGetLastError());
+  stream.synchronize();
 
   // postprocess columns
   auto target = make_strings_column(
@@ -605,11 +609,11 @@ table_with_metadata reader::impl::convert_data_to_table(cudaStream_t stream)
   for (size_t i = 0; i < num_columns; ++i) {
     out_buffers[i].null_count() = num_records - h_valid_counts[i];
 
-    auto out_column = make_column(out_buffers[i], stream, mr_);
+    auto out_column = make_column(out_buffers[i], nullptr, stream, mr_);
     if (out_column->type().id() == type_id::STRING) {
       // Need to remove escape character in case of '\"' and '\\'
       out_columns.emplace_back(cudf::strings::detail::replace(
-        out_column->view(), target->view(), repl->view(), mr_, stream));
+        out_column->view(), target->view(), repl->view(), stream, mr_));
     } else {
       out_columns.emplace_back(std::move(out_column));
     }
@@ -624,7 +628,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
                    std::string filepath,
                    json_reader_options const &options,
                    rmm::mr::device_memory_resource *mr)
-  : source_(std::move(source)), filepath_(filepath), options_(options), mr_(mr)
+  : options_(options), mr_(mr), source_(std::move(source)), filepath_(filepath)
 {
   CUDF_EXPECTS(options_.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
 
@@ -644,7 +648,8 @@ reader::impl::impl(std::unique_ptr<datasource> source,
  *
  * @return Table and its metadata
  */
-table_with_metadata reader::impl::read(json_reader_options const &options, cudaStream_t stream)
+table_with_metadata reader::impl::read(json_reader_options const &options,
+                                       rmm::cuda_stream_view stream)
 {
   auto range_offset = options.get_byte_range_offset();
   auto range_size   = options.get_byte_range_size();
@@ -695,7 +700,7 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read(json_reader_options const &options, cudaStream_t stream)
+table_with_metadata reader::read(json_reader_options const &options, rmm::cuda_stream_view stream)
 {
   return table_with_metadata{_impl->read(options, stream)};
 }

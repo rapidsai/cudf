@@ -3,6 +3,7 @@
 import csv
 import gzip
 import os
+import re
 import shutil
 from collections import OrderedDict
 from io import BytesIO, StringIO
@@ -1841,3 +1842,90 @@ def test_csv_reader_datetime_dtypes(dtype):
     actual = cudf.read_csv(StringIO(buf), dtype=dtype)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        cudf.DataFrame(
+            {
+                "a": cudf.Series([1, 2, 3, 1, 2], dtype="category"),
+                "b": cudf.Series(["a", "c", "a", "b", "a"], dtype="category"),
+            }
+        ),
+        cudf.DataFrame(
+            {
+                "a": cudf.Series([1.1, 2, 3, 1.1, 2], dtype="category"),
+                "b": cudf.Series(
+                    [None, "c", None, "b", "a"], dtype="category"
+                ),
+            }
+        ),
+        cudf.DataFrame(
+            {
+                "b": cudf.Series(
+                    [1.1, 2, 3, 1.1, 2],
+                    dtype="category",
+                    index=cudf.CategoricalIndex(
+                        ["abc", "def", "ghi", "jkl", "xyz"]
+                    ),
+                )
+            }
+        ),
+    ],
+)
+def test_csv_writer_category(df):
+    pdf = df.to_pandas()
+
+    expected = pdf.to_csv()
+    actual = df.to_csv()
+
+    assert expected == actual
+
+
+def test_csv_reader_category_error():
+    # TODO: Remove this test once following
+    # issue is fixed: https://github.com/rapidsai/cudf/issues/3960
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+    csv_buf = df.to_csv()
+
+    with pytest.raises(
+        NotImplementedError,
+        match=re.escape(
+            "CategoricalDtype as dtype is not yet " "supported in CSV reader"
+        ),
+    ):
+        cudf.read_csv(StringIO(csv_buf), dtype="category")
+
+
+def test_csv_reader_keep_default_na_error():
+    # TODO: Remove this test once following
+    # issue is fixed: https://github.com/rapidsai/cudf/issues/6680
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+    csv_buf = df.to_csv()
+
+    with pytest.raises(
+        NotImplementedError,
+        match=re.escape(
+            "keep_default_na=False is currently not supported, please refer "
+            "to: https://github.com/rapidsai/cudf/issues/6680"
+        ),
+    ):
+        cudf.read_csv(StringIO(csv_buf), keep_default_na=False)
+
+
+def test_csv_writer_datetime_sep_error():
+    # TODO: Remove this test once following
+    # issues is fixed: https://github.com/rapidsai/cudf/issues/6699
+    df = cudf.DataFrame(
+        {"a": cudf.Series([22343, 2323423, 234324234], dtype="datetime64[ns]")}
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "sep cannot be '-' when writing a datetime64 dtype to csv, "
+            "refer to: https://github.com/rapidsai/cudf/issues/6699"
+        ),
+    ):
+        df.to_csv(sep="-")

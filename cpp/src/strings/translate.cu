@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <strings/utilities.cuh>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -24,7 +26,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/translate.hpp>
 
-#include <strings/utilities.cuh>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/find.h>
 
@@ -76,11 +78,11 @@ struct translate_fn {
 std::unique_ptr<column> translate(
   strings_column_view const& strings,
   std::vector<std::pair<char_utf8, char_utf8>> const& chars_table,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(mr, stream);
+  if (strings_count == 0) return make_empty_strings_column(stream, mr);
 
   size_type table_size = static_cast<size_type>(chars_table.size());
   // convert input table
@@ -95,26 +97,25 @@ std::unique_ptr<column> translate(
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // create null mask
-  rmm::device_buffer null_mask =
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
   // create offsets column
   auto offsets_transformer_itr =
     thrust::make_transform_iterator(thrust::make_counting_iterator<int32_t>(0),
                                     translate_fn{d_strings, table.begin(), table.end()});
   auto offsets_column = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build chars column
   size_type bytes   = thrust::device_pointer_cast(d_offsets)[strings_count];
   auto chars_column = strings::detail::create_chars_child_column(
-    strings_count, strings.null_count(), bytes, mr, stream);
+    strings_count, strings.null_count(), bytes, stream, mr);
   auto d_chars = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,
                      translate_fn{d_strings, table.begin(), table.end(), d_offsets, d_chars});
-  //
+
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              std::move(chars_column),
@@ -133,7 +134,7 @@ std::unique_ptr<column> translate(strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::translate(strings, chars_table);
+  return detail::translate(strings, chars_table, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

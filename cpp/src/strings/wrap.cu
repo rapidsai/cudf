@@ -28,6 +28,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -90,13 +92,13 @@ template <typename device_execute_functor>
 std::unique_ptr<column> wrap(
   strings_column_view const& strings,
   size_type width,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(width > 0, "Positive wrap width required");
 
   auto strings_count = strings.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(mr, stream);
+  if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
 
   auto execpol = rmm::exec_policy(stream);
 
@@ -105,8 +107,7 @@ std::unique_ptr<column> wrap(
   size_type null_count = strings.null_count();
 
   // copy null mask
-  rmm::device_buffer null_mask =
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
 
   // build offsets column
   auto offsets_column = std::make_unique<column>(strings.offsets(), stream, mr);  // makes a copy
@@ -117,7 +118,7 @@ std::unique_ptr<column> wrap(
 
   device_execute_functor d_execute_fctr{d_column, d_new_offsets, d_chars, width};
 
-  thrust::for_each_n(execpol->on(stream),
+  thrust::for_each_n(execpol->on(stream.value()),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      d_execute_fctr);
@@ -138,7 +139,7 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::wrap<detail::execute_wrap>(strings, width, mr);
+  return detail::wrap<detail::execute_wrap>(strings, width, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

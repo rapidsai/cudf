@@ -23,6 +23,8 @@
 #include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/table/table_device_view.cuh>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace detail {
 /**
@@ -409,15 +411,17 @@ struct identity_initializer {
  public:
   template <typename T, aggregation::Kind k>
   std::enable_if_t<is_supported<T, k>(), void> operator()(mutable_column_view const& col,
-                                                          cudaStream_t stream = 0)
+                                                          rmm::cuda_stream_view stream)
   {
-    thrust::fill(
-      rmm::exec_policy(stream)->on(stream), col.begin<T>(), col.end<T>(), get_identity<T, k>());
+    thrust::fill(rmm::exec_policy(stream)->on(stream.value()),
+                 col.begin<T>(),
+                 col.end<T>(),
+                 get_identity<T, k>());
   }
 
   template <typename T, aggregation::Kind k>
   std::enable_if_t<not is_supported<T, k>(), void> operator()(mutable_column_view const& col,
-                                                              cudaStream_t stream = 0)
+                                                              rmm::cuda_stream_view stream)
   {
     CUDF_FAIL("Unsupported aggregation for initializing values");
   }
@@ -436,10 +440,11 @@ struct identity_initializer {
  * @param table The table of columns to initialize.
  * @param aggs A vector of aggregation operations corresponding to the table
  * columns. The aggregations determine the identity value for each column.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 void initialize_with_identity(mutable_table_view& table,
                               std::vector<aggregation::Kind> const& aggs,
-                              cudaStream_t stream = 0);
+                              rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace cudf

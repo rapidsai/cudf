@@ -28,7 +28,7 @@ filepath_or_buffer : str, path object, bytes, or file-like object
     `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
     Python bytes of raw binary data, or any object with a `read()` method
     (such as builtin `open()` file handler function or `BytesIO`).
-engine : {{ 'cudf', 'fastavro' }}, default 'cudf'
+engine : ['cudf'], default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read.
@@ -47,13 +47,23 @@ Notes
 
 Examples
 --------
+>>> import pandavro
+>>> import pandas as pd
 >>> import cudf
->>> df = cudf.read_avro(filename)
->>> df
-  num1                datetime text
-0  123 2018-11-13T12:00:00.000 5451
-1  456 2018-11-14T12:35:01.000 5784
-2  789 2018-11-15T18:02:59.000 6117
+>>> pandas_df = pd.DataFrame()
+>>> pandas_df['numbers'] = [10, 20, 30]
+>>> pandas_df['text'] = ["hello", "rapids", "ai"]
+>>> pandas_df
+   numbers    text
+0       10   hello
+1       20  rapids
+2       30      ai
+>>> pandavro.to_avro("data.avro", pandas_df)
+>>> cudf.read_avro("data.avro")
+   numbers    text
+0       10   hello
+1       20  rapids
+2       30      ai
 
 See Also
 --------
@@ -193,6 +203,13 @@ partition_file_name : str, optional, default None
     will be written to different directories, but all files will
     have this name.  If nothing is specified, a random uuid4 hex string
     will be used for each file.
+int96_timestamps : bool, default False
+    If ``True``, write timestamps in int96 format. This will convert
+    timestamps from timestamp[ns], timestamp[ms], timestamp[s], and
+    timestamp[us] to the int96 format, which is the number of Julian
+    days and the number of nanoseconds since midnight. If ``False``,
+    timestamps will not be altered.
+
 
 See Also
 --------

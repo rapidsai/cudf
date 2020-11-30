@@ -16,6 +16,8 @@
 #pragma once
 #include <stdint.h>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace io {
 
@@ -96,7 +98,7 @@ struct statistics_merge_group {
 void GatherColumnStatistics(statistics_chunk *chunks,
                             const statistics_group *groups,
                             uint32_t num_chunks,
-                            cudaStream_t stream = (cudaStream_t)0);
+                            rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel to merge column statistics
@@ -111,7 +113,7 @@ void MergeColumnStatistics(statistics_chunk *chunks_out,
                            const statistics_chunk *chunks_in,
                            const statistics_merge_group *groups,
                            uint32_t num_chunks,
-                           cudaStream_t stream = (cudaStream_t)0);
+                           rmm::cuda_stream_view stream);
 
 }  // namespace io
 }  // namespace cudf

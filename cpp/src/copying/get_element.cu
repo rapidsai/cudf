@@ -16,11 +16,12 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 
-#include <cudf/detail/utilities/cuda.cuh>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {
@@ -32,7 +33,7 @@ struct get_element_functor {
   std::unique_ptr<scalar> operator()(
     column_view const &input,
     size_type index,
-    cudaStream_t stream                 = 0,
+    rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
     auto s = make_fixed_width_scalar(data_type(type_to_id<T>()), stream, mr);
@@ -56,7 +57,7 @@ struct get_element_functor {
   std::unique_ptr<scalar> operator()(
     column_view const &input,
     size_type index,
-    cudaStream_t stream                 = 0,
+    rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
     auto device_col = column_device_view::create(input, stream);
@@ -81,7 +82,7 @@ struct get_element_functor {
   std::unique_ptr<scalar> operator()(
     column_view const &input,
     size_type index,
-    cudaStream_t stream                 = 0,
+    rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
     auto dict_view = dictionary_column_view(input);
@@ -109,7 +110,7 @@ struct get_element_functor {
   std::unique_ptr<scalar> operator()(
     column_view const &input,
     size_type index,
-    cudaStream_t stream                 = 0,
+    rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
     CUDF_FAIL("get_element_functor not supported for list_view");
@@ -119,7 +120,7 @@ struct get_element_functor {
   std::unique_ptr<scalar> operator()(
     column_view const &input,
     size_type index,
-    cudaStream_t stream                 = 0,
+    rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
     CUDF_FAIL("get_element_functor not supported for decimal32");
@@ -129,7 +130,7 @@ struct get_element_functor {
   std::unique_ptr<scalar> operator()(
     column_view const &input,
     size_type index,
-    cudaStream_t stream                 = 0,
+    rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
     CUDF_FAIL("get_element_functor not supported for decimal64");
@@ -139,7 +140,7 @@ struct get_element_functor {
   std::unique_ptr<scalar> operator()(
     column_view const &input,
     size_type index,
-    cudaStream_t stream                 = 0,
+    rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
     CUDF_FAIL("get_element_functor not supported for struct_view");
@@ -150,7 +151,7 @@ struct get_element_functor {
 
 std::unique_ptr<scalar> get_element(column_view const &input,
                                     size_type index,
-                                    cudaStream_t stream,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(index >= 0 and index < input.size(), "Index out of bounds");
@@ -163,7 +164,7 @@ std::unique_ptr<scalar> get_element(column_view const &input,
                                     size_type index,
                                     rmm::mr::device_memory_resource *mr)
 {
-  return detail::get_element(input, index, 0, mr);
+  return detail::get_element(input, index, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

@@ -268,13 +268,12 @@ struct create_column_from_view {
 
     auto num_rows = children.empty() ? 0 : children.front()->size();
 
-    return make_structs_column(
-      num_rows,
-      std::move(children),
-      view.null_count(),
-      cudf::detail::copy_bitmask(view.null_mask(), begin, end, rmm::cuda_stream_view{stream}, mr),
-      stream.value(),
-      mr);
+    return make_structs_column(num_rows,
+                               std::move(children),
+                               view.null_count(),
+                               cudf::detail::copy_bitmask(view.null_mask(), begin, end, stream, mr),
+                               stream.value(),
+                               mr);
   }
 };
 }  // anonymous namespace

@@ -229,7 +229,7 @@ struct base_indexalator {
  * @code
  *  auto begin = indexalator_factory::create_input_iterator(gather_map);
  *  auto end   = begin + gather_map.size();
- *  auto result = detail::gather( source, begin, end, IGNORE, mr, stream );
+ *  auto result = detail::gather( source, begin, end, IGNORE, stream, mr );
  * @endcode
  *
  * @code
