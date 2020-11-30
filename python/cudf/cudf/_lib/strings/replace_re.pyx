@@ -24,7 +24,7 @@ def replace_re(Column source_strings,
                size_type n):
     """
     Returns a Column after replacing occurrences regular
-    expressions `pattern` with `repl` in `source_strings`.
+    expressions `pattern` with `py_repl` in `source_strings`.
     `n` indicates the number of resplacements to be made from
     start. (-1 indicates all)
     """
