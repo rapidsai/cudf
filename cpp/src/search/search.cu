@@ -26,8 +26,11 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
-#include <thrust/binary_search.h>
 #include <hash/unordered_multiset.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/binary_search.h>
 
 namespace cudf {
 namespace {
@@ -42,10 +45,10 @@ void launch_search(DataIterator it_data,
                    OutputIterator it_output,
                    Comparator comp,
                    bool find_first,
-                   cudaStream_t stream)
+                   rmm::cuda_stream_view stream)
 {
   if (find_first) {
-    thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
+    thrust::lower_bound(rmm::exec_policy(stream)->on(stream.value()),
                         it_data,
                         it_data + data_size,
                         it_vals,
@@ -53,7 +56,7 @@ void launch_search(DataIterator it_data,
                         it_output,
                         comp);
   } else {
-    thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
+    thrust::upper_bound(rmm::exec_policy(stream)->on(stream.value()),
                         it_data,
                         it_data + data_size,
                         it_vals,
@@ -68,8 +71,8 @@ std::unique_ptr<column> search_ordered(table_view const& t,
                                        bool find_first,
                                        std::vector<order> const& column_order,
                                        std::vector<null_order> const& null_precedence,
-                                       rmm::mr::device_memory_resource* mr,
-                                       cudaStream_t stream = 0)
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
   // Allocate result column
   std::unique_ptr<column> result = make_numeric_column(
@@ -79,7 +82,8 @@ std::unique_ptr<column> search_ordered(table_view const& t,
 
   // Handle empty inputs
   if (t.num_rows() == 0) {
-    CUDA_TRY(cudaMemset(result_view.data<size_type>(), 0, values.num_rows() * sizeof(size_type)));
+    CUDA_TRY(cudaMemsetAsync(
+      result_view.data<size_type>(), 0, values.num_rows() * sizeof(size_type), stream.value()));
     return result;
   }
 
@@ -95,8 +99,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
 
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
-  auto matched = dictionary::detail::match_dictionaries(
-    {t, values}, rmm::mr::get_current_device_resource(), stream);
+  auto matched  = dictionary::detail::match_dictionaries({t, values}, stream);
   auto d_t      = table_device_view::create(matched.second.front(), stream);
   auto d_values = table_device_view::create(matched.second.back(), stream);
   auto count_it = thrust::make_counting_iterator<size_type>(0);
@@ -143,7 +146,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
 
 struct contains_scalar_dispatch {
   template <typename Element>
-  bool operator()(column_view const& col, scalar const& value, cudaStream_t stream)
+  bool operator()(column_view const& col, scalar const& value, rmm::cuda_stream_view stream)
   {
     CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
 
@@ -153,14 +156,14 @@ struct contains_scalar_dispatch {
     auto s           = static_cast<const ScalarType*>(&value);
 
     if (col.has_nulls()) {
-      auto found_iter = thrust::find(rmm::exec_policy(stream)->on(stream),
+      auto found_iter = thrust::find(rmm::exec_policy(stream)->on(stream.value()),
                                      d_col->pair_begin<Type, true>(),
                                      d_col->pair_end<Type, true>(),
                                      thrust::make_pair(s->value(), true));
 
       return found_iter != d_col->pair_end<Type, true>();
     } else {
-      auto found_iter = thrust::find(rmm::exec_policy(stream)->on(stream),  //
+      auto found_iter = thrust::find(rmm::exec_policy(stream)->on(stream.value()),  //
                                      d_col->begin<Type>(),
                                      d_col->end<Type>(),
                                      s->value());
@@ -173,7 +176,7 @@ struct contains_scalar_dispatch {
 template <>
 bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const& col,
                                                            scalar const& value,
-                                                           cudaStream_t stream)
+                                                           rmm::cuda_stream_view stream)
 {
   CUDF_FAIL("list_view type not supported yet");
 }
@@ -181,7 +184,7 @@ bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const& co
 template <>
 bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& col,
                                                              scalar const& value,
-                                                             cudaStream_t stream)
+                                                             rmm::cuda_stream_view stream)
 {
   CUDF_FAIL("struct_view type not supported yet");
 }
@@ -189,12 +192,11 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
 template <>
 bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const& col,
                                                               scalar const& value,
-                                                              cudaStream_t stream)
+                                                              rmm::cuda_stream_view stream)
 {
   auto dict_col = cudf::dictionary_column_view(col);
   // first, find the value in the dictionary's key set
-  auto index = cudf::dictionary::detail::get_index(
-    dict_col, value, rmm::mr::get_current_device_resource(), stream);
+  auto index = cudf::dictionary::detail::get_index(dict_col, value, stream);
   // if found, check the index is actually in the indices column
   return index->is_valid() ? cudf::type_dispatcher(dict_col.indices().type(),
                                                    contains_scalar_dispatch{},
@@ -207,7 +209,7 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
 }  // namespace
 
 namespace detail {
-bool contains(column_view const& col, scalar const& value, cudaStream_t stream)
+bool contains(column_view const& col, scalar const& value, rmm::cuda_stream_view stream)
 {
   if (col.is_empty()) { return false; }
 
@@ -220,8 +222,8 @@ struct multi_contains_dispatch {
   template <typename Element>
   std::unique_ptr<column> operator()(column_view const& haystack,
                                      column_view const& needles,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     std::unique_ptr<column> result = make_numeric_column(data_type{type_to_id<bool>()},
                                                          haystack.size(),
@@ -235,21 +237,21 @@ struct multi_contains_dispatch {
     mutable_column_view result_view = result.get()->mutable_view();
 
     if (needles.is_empty()) {
-      thrust::fill(rmm::exec_policy(stream)->on(stream),
+      thrust::fill(rmm::exec_policy(stream)->on(stream.value()),
                    result_view.begin<bool>(),
                    result_view.end<bool>(),
                    false);
       return result;
     }
 
-    auto hash_set        = cudf::detail::unordered_multiset<Element>::create(needles, stream);
+    auto hash_set = cudf::detail::unordered_multiset<Element>::create(needles, stream.value());
     auto device_hash_set = hash_set.to_device();
 
     auto d_haystack_ptr = column_device_view::create(haystack, stream);
     auto d_haystack     = *d_haystack_ptr;
 
     if (haystack.has_nulls()) {
-      thrust::transform(rmm::exec_policy(stream)->on(stream),
+      thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(haystack.size()),
                         result_view.begin<bool>(),
@@ -258,7 +260,7 @@ struct multi_contains_dispatch {
                                  device_hash_set.contains(d_haystack.element<Element>(index));
                         });
     } else {
-      thrust::transform(rmm::exec_policy(stream)->on(stream),
+      thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(haystack.size()),
                         result_view.begin<bool>(),
@@ -275,8 +277,8 @@ template <>
 std::unique_ptr<column> multi_contains_dispatch::operator()<list_view>(
   column_view const& haystack,
   column_view const& needles,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FAIL("list_view type not supported");
 }
@@ -285,8 +287,8 @@ template <>
 std::unique_ptr<column> multi_contains_dispatch::operator()<struct_view>(
   column_view const& haystack,
   column_view const& needles,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FAIL("struct_view type not supported");
 }
@@ -295,18 +297,16 @@ template <>
 std::unique_ptr<column> multi_contains_dispatch::operator()<dictionary32>(
   column_view const& haystack_in,
   column_view const& needles_in,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   dictionary_column_view const haystack(haystack_in);
   dictionary_column_view const needles(needles_in);
   // first combine keys so both dictionaries have the same set
-  auto haystack_matched = dictionary::detail::add_keys(
-    haystack, needles.keys(), rmm::mr::get_current_device_resource(), stream);
+  auto haystack_matched    = dictionary::detail::add_keys(haystack, needles.keys(), stream);
   auto const haystack_view = dictionary_column_view(haystack_matched->view());
-  auto needles_matched     = dictionary::detail::set_keys(
-    needles, haystack_view.keys(), rmm::mr::get_current_device_resource(), stream);
-  auto const needles_view = dictionary_column_view(needles_matched->view());
+  auto needles_matched     = dictionary::detail::set_keys(needles, haystack_view.keys(), stream);
+  auto const needles_view  = dictionary_column_view(needles_matched->view());
 
   // now just use the indices for the contains
   column_view const haystack_indices = haystack_view.get_indices_annotated();
@@ -315,39 +315,39 @@ std::unique_ptr<column> multi_contains_dispatch::operator()<dictionary32>(
                                multi_contains_dispatch{},
                                haystack_indices,
                                needles_indices,
-                               mr,
-                               stream);
+                               stream,
+                               mr);
 }
 
 std::unique_ptr<column> contains(column_view const& haystack,
                                  column_view const& needles,
-                                 rmm::mr::device_memory_resource* mr,
-                                 cudaStream_t stream)
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(haystack.type() == needles.type(), "DTYPE mismatch");
 
   return cudf::type_dispatcher(
-    haystack.type(), multi_contains_dispatch{}, haystack, needles, mr, stream);
+    haystack.type(), multi_contains_dispatch{}, haystack, needles, stream, mr);
 }
 
 std::unique_ptr<column> lower_bound(table_view const& t,
                                     table_view const& values,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
-                                    rmm::mr::device_memory_resource* mr,
-                                    cudaStream_t stream)
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
-  return search_ordered(t, values, true, column_order, null_precedence, mr, stream);
+  return search_ordered(t, values, true, column_order, null_precedence, stream, mr);
 }
 
 std::unique_ptr<column> upper_bound(table_view const& t,
                                     table_view const& values,
                                     std::vector<order> const& column_order,
                                     std::vector<null_order> const& null_precedence,
-                                    rmm::mr::device_memory_resource* mr,
-                                    cudaStream_t stream)
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
-  return search_ordered(t, values, false, column_order, null_precedence, mr, stream);
+  return search_ordered(t, values, false, column_order, null_precedence, stream, mr);
 }
 
 }  // namespace detail
@@ -361,7 +361,8 @@ std::unique_ptr<column> lower_bound(table_view const& t,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::lower_bound(t, values, column_order, null_precedence, mr);
+  return detail::lower_bound(
+    t, values, column_order, null_precedence, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> upper_bound(table_view const& t,
@@ -371,13 +372,14 @@ std::unique_ptr<column> upper_bound(table_view const& t,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::upper_bound(t, values, column_order, null_precedence, mr);
+  return detail::upper_bound(
+    t, values, column_order, null_precedence, rmm::cuda_stream_default, mr);
 }
 
 bool contains(column_view const& col, scalar const& value)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(col, value);
+  return detail::contains(col, value, rmm::cuda_stream_default);
 }
 
 std::unique_ptr<column> contains(column_view const& haystack,
@@ -385,7 +387,7 @@ std::unique_ptr<column> contains(column_view const& haystack,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(haystack, needles, mr);
+  return detail::contains(haystack, needles, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

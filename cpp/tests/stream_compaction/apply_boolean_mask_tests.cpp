@@ -143,6 +143,83 @@ TEST_F(ApplyBooleanMask, withoutNullString)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expect_cudf_table_view, tableView);
 }
 
+TEST_F(ApplyBooleanMask, FixedPointColumnTest)
+{
+  using namespace numeric;
+  using decimal32_wrapper = cudf::test::fixed_point_column_wrapper<int32_t>;
+  using decimal64_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
+
+  auto const col1 = decimal32_wrapper{{10, 40, 70, 5, 2, 10, -123}, scale_type{-1}};
+  auto const col2 = decimal64_wrapper{{10, 40, 70, 5, 2, 10, -123}, scale_type{-10}};
+  cudf::table_view cudf_table_in_view{{col1, col2}};
+
+  cudf::test::fixed_width_column_wrapper<bool> bool_filter{{1, 1, 0, 0, 1, 0, 0}};
+  cudf::column_view bool_filter_col(bool_filter);
+
+  std::unique_ptr<cudf::table> filteredTable =
+    cudf::apply_boolean_mask(cudf_table_in_view, bool_filter_col);
+  cudf::table_view tableView = filteredTable->view();
+
+  auto const expect_col1 = decimal32_wrapper{{10, 40, 2}, scale_type{-1}};
+  auto const expect_col2 = decimal64_wrapper{{10, 40, 2}, scale_type{-10}};
+  cudf::table_view expect_cudf_table_view{{expect_col1, expect_col2}};
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expect_cudf_table_view, tableView);
+}
+
+TEST_F(ApplyBooleanMask, FixedPointLargeColumnTest)
+{
+  cudf::size_type const num_rows = 10000;
+
+  using decimal32_wrapper = cudf::test::fixed_point_column_wrapper<int32_t>;
+  using decimal64_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
+
+  std::vector<int32_t> dec32_data(num_rows);
+  std::vector<int64_t> dec64_data(num_rows);
+  std::vector<bool> mask_data(num_rows);
+
+  cudf::test::UniformRandomGenerator<int32_t> rng32(-10000000, 10000000);
+  cudf::test::UniformRandomGenerator<int64_t> rng64(-1000000000000, 1000000000000);
+  cudf::test::UniformRandomGenerator<bool> rbg;
+  std::generate(dec32_data.begin(), dec32_data.end(), [&rng32]() { return rng32.generate(); });
+  std::generate(dec64_data.begin(), dec64_data.end(), [&rng64]() { return rng64.generate(); });
+  std::generate(mask_data.begin(), mask_data.end(), [&rbg]() { return rbg.generate(); });
+
+  decimal32_wrapper col32(dec32_data.begin(), dec32_data.end(), numeric::scale_type{-3});
+  decimal64_wrapper col64(dec64_data.begin(), dec64_data.end(), numeric::scale_type{-10});
+  cudf::table_view cudf_table_in_view{{col32, col64}};
+
+  cudf::test::fixed_width_column_wrapper<bool> bool_filter(mask_data.begin(), mask_data.end());
+  cudf::column_view bool_filter_col(bool_filter);
+
+  std::unique_ptr<cudf::table> filteredTable =
+    cudf::apply_boolean_mask(cudf_table_in_view, bool_filter_col);
+  cudf::table_view tableView = filteredTable->view();
+
+  std::vector<int32_t> expect_dec32_data;
+  std::vector<int64_t> expect_dec64_data;
+  thrust::copy_if(thrust::host,
+                  dec32_data.cbegin(),
+                  dec32_data.cend(),
+                  mask_data.cbegin(),
+                  std::back_inserter(expect_dec32_data),
+                  thrust::identity<bool>());
+  thrust::copy_if(thrust::host,
+                  dec64_data.cbegin(),
+                  dec64_data.cend(),
+                  mask_data.cbegin(),
+                  std::back_inserter(expect_dec64_data),
+                  thrust::identity<bool>());
+
+  decimal32_wrapper expect_col32(
+    expect_dec32_data.begin(), expect_dec32_data.end(), numeric::scale_type{-3});
+  decimal64_wrapper expect_col64(
+    expect_dec64_data.begin(), expect_dec64_data.end(), numeric::scale_type{-10});
+  cudf::table_view expect_cudf_table_view{{expect_col32, expect_col64}};
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expect_cudf_table_view, tableView);
+}
+
 TEST_F(ApplyBooleanMask, NoNullInput)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col(

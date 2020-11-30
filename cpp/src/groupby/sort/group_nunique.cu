@@ -20,6 +20,8 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 
@@ -35,8 +37,8 @@ struct nunique_functor {
              size_type const num_groups,
              rmm::device_vector<size_type> const& group_offsets,
              null_policy null_handling,
-             rmm::mr::device_memory_resource* mr,
-             cudaStream_t stream)
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr)
   {
     auto result = make_numeric_column(
       data_type(type_to_id<size_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
@@ -61,7 +63,7 @@ struct nunique_functor {
           return static_cast<size_type>(is_unique);
         });
 
-      thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
+      thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream.value()),
                             group_labels.begin(),
                             group_labels.end(),
                             is_unique_iterator,
@@ -79,7 +81,7 @@ struct nunique_functor {
                            (not equal.operator()<T>(i, i - 1));    // new unique value in sorted
           return static_cast<size_type>(is_unique);
         });
-      thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
+      thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream.value()),
                             group_labels.begin(),
                             group_labels.end(),
                             is_unique_iterator,
@@ -96,8 +98,8 @@ struct nunique_functor {
              size_type const num_groups,
              rmm::device_vector<size_type> const& group_offsets,
              null_policy null_handling,
-             rmm::mr::device_memory_resource* mr,
-             cudaStream_t stream)
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr)
   {
     CUDF_FAIL("list_view group_nunique not supported yet");
   }
@@ -108,8 +110,8 @@ std::unique_ptr<column> group_nunique(column_view const& values,
                                       size_type const num_groups,
                                       rmm::device_vector<size_type> const& group_offsets,
                                       null_policy null_handling,
-                                      rmm::mr::device_memory_resource* mr,
-                                      cudaStream_t stream)
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(num_groups >= 0, "number of groups cannot be negative");
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
@@ -122,8 +124,8 @@ std::unique_ptr<column> group_nunique(column_view const& values,
                          num_groups,
                          group_offsets,
                          null_handling,
-                         mr,
-                         stream);
+                         stream,
+                         mr);
 }
 
 }  // namespace detail

@@ -19,6 +19,8 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <cstring>
 
 namespace cudf {
@@ -74,8 +76,8 @@ auto make_strings_children(
   SizeAndExecuteFunction size_and_exec_fn,
   size_type strings_count,
   size_type null_count,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto offsets_column = make_numeric_column(
     data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
@@ -86,7 +88,7 @@ auto make_strings_children(
   // This is called twice -- once for offsets and once for chars.
   // Reducing the number of places size_and_exec_fn is inlined speeds up compile time.
   auto for_each_fn = [strings_count, stream](SizeAndExecuteFunction& size_and_exec_fn) {
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                        thrust::make_counting_iterator<size_type>(0),
                        strings_count,
                        size_and_exec_fn);
@@ -94,12 +96,14 @@ auto make_strings_children(
 
   // Compute the offsets values
   for_each_fn(size_and_exec_fn);
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream)->on(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+  thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
+                         d_offsets,
+                         d_offsets + strings_count + 1,
+                         d_offsets);
 
   // Now build the chars column
   std::unique_ptr<column> chars_column = create_chars_child_column(
-    strings_count, null_count, thrust::device_pointer_cast(d_offsets)[strings_count], mr, stream);
+    strings_count, null_count, thrust::device_pointer_cast(d_offsets)[strings_count], stream, mr);
   size_and_exec_fn.d_chars = chars_column->mutable_view().template data<char>();
   for_each_fn(size_and_exec_fn);
 

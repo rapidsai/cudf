@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <strings/utilities.cuh>
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -28,7 +30,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/substring.hpp>
 
-#include <strings/utilities.cuh>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace strings {
@@ -98,11 +100,11 @@ std::unique_ptr<column> slice_strings(
   numeric_scalar<size_type> const& start = numeric_scalar<size_type>(0, false),
   numeric_scalar<size_type> const& stop  = numeric_scalar<size_type>(0, false),
   numeric_scalar<size_type> const& step  = numeric_scalar<size_type>(1),
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                    = 0)
+  rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource())
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(mr, stream);
+  if (strings_count == 0) return make_empty_strings_column(stream, mr);
 
   if (step.is_valid()) CUDF_EXPECTS(step.value(stream) != 0, "Step parameter must not be 0");
 
@@ -113,22 +115,21 @@ std::unique_ptr<column> slice_strings(
   auto d_step         = get_scalar_device_view(const_cast<numeric_scalar<size_type>&>(step));
 
   // copy the null mask
-  rmm::device_buffer null_mask =
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
 
   // build offsets column
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<int32_t>(0), substring_fn{d_column, d_start, d_stop, d_step});
   auto offsets_column = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_new_offsets = offsets_column->view().data<int32_t>();
 
   // build chars column
   auto bytes = cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column = strings::detail::create_chars_child_column(
-    strings_count, strings.null_count(), bytes, mr, stream);
+    strings_count, strings.null_count(), bytes, stream, mr);
   auto d_chars = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      substring_fn{d_column, d_start, d_stop, d_step, d_new_offsets, d_chars});
@@ -153,7 +154,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice_strings(strings, start, stop, step, mr);
+  return detail::slice_strings(strings, start, stop, step, rmm::cuda_stream_default, mr);
 }
 
 namespace detail {
@@ -205,8 +206,8 @@ std::unique_ptr<column> compute_substrings_from_fn(column_device_view const& d_c
                                                    size_type null_count,
                                                    cudf::detail::input_indexalator starts,
                                                    cudf::detail::input_indexalator stops,
-                                                   rmm::mr::device_memory_resource* mr,
-                                                   cudaStream_t stream)
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::mr::device_memory_resource* mr)
 {
   auto strings_count = d_column.size();
 
@@ -220,16 +221,16 @@ std::unique_ptr<column> compute_substrings_from_fn(column_device_view const& d_c
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0), substring_from_fn{d_column, starts, stops});
   auto offsets_column = cudf::strings::detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_new_offsets = offsets_column->view().data<int32_t>();
 
   // Build chars column
   auto bytes = cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column =
-    cudf::strings::detail::create_chars_child_column(strings_count, null_count, bytes, mr, stream);
+    cudf::strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.template data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,
                      substring_from_fn{d_column, starts, stops, d_new_offsets, d_chars});
@@ -255,13 +256,13 @@ void compute_substring_indices(column_device_view const& d_column,
                                size_type delimiter_count,
                                size_type* start_char_pos,
                                size_type* end_char_pos,
-                               rmm::mr::device_memory_resource* mr,
-                               cudaStream_t stream)
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   auto strings_count = d_column.size();
 
   thrust::for_each_n(
-    rmm::exec_policy(stream)->on(stream),
+    rmm::exec_policy(stream)->on(stream.value()),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     [delim_itr, delimiter_count, start_char_pos, end_char_pos, d_column] __device__(size_type idx) {
@@ -313,11 +314,11 @@ std::unique_ptr<column> slice_strings(
   strings_column_view const& strings,
   column_view const& starts_column,
   column_view const& stops_column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(mr, stream);
+  if (strings_count == 0) return make_empty_strings_column(stream, mr);
   CUDF_EXPECTS(starts_column.size() == strings_count,
                "Parameter starts must have the same number of rows as strings.");
   CUDF_EXPECTS(stops_column.size() == strings_count,
@@ -334,15 +335,15 @@ std::unique_ptr<column> slice_strings(
   auto starts_iter    = cudf::detail::indexalator_factory::make_input_iterator(starts_column);
   auto stops_iter     = cudf::detail::indexalator_factory::make_input_iterator(stops_column);
   return compute_substrings_from_fn(
-    *strings_column, strings.null_count(), starts_iter, stops_iter, mr, stream);
+    *strings_column, strings.null_count(), starts_iter, stops_iter, stream, mr);
 }
 
 template <typename DelimiterItrT>
 std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       DelimiterItrT const delimiter_itr,
                                       size_type count,
-                                      rmm::mr::device_memory_resource* mr,
-                                      cudaStream_t stream = 0)
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   auto strings_count = strings.size();
   // If there aren't any rows, return an empty strings column
@@ -351,12 +352,12 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
   // Compute the substring indices first
   auto start_chars_pos_vec = make_column_from_scalar(numeric_scalar<size_type>(0, true, stream),
                                                      strings_count,
-                                                     rmm::mr::get_current_device_resource(),
-                                                     stream);
+                                                     stream,
+                                                     rmm::mr::get_current_device_resource());
   auto stop_chars_pos_vec  = make_column_from_scalar(numeric_scalar<size_type>(0, true, stream),
                                                     strings_count,
-                                                    rmm::mr::get_current_device_resource(),
-                                                    stream);
+                                                    stream,
+                                                    rmm::mr::get_current_device_resource());
 
   auto start_char_pos = start_chars_pos_vec->mutable_view().data<size_type>();
   auto end_char_pos   = stop_chars_pos_vec->mutable_view().data<size_type>();
@@ -368,7 +369,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
   if (count != 0) {
     // Compute the substring indices first
     compute_substring_indices(
-      d_column, delimiter_itr, count, start_char_pos, end_char_pos, mr, stream);
+      d_column, delimiter_itr, count, start_char_pos, end_char_pos, stream, mr);
   }
 
   // Extract the substrings using the indices next
@@ -377,7 +378,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
   auto stops_iter =
     cudf::detail::indexalator_factory::make_input_iterator(stop_chars_pos_vec->view());
   return compute_substrings_from_fn(
-    d_column, strings.null_count(), starts_iter, stops_iter, mr, stream);
+    d_column, strings.null_count(), starts_iter, stops_iter, stream, mr);
 }
 
 }  // namespace detail
@@ -390,7 +391,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice_strings(strings, starts_column, stops_column, mr);
+  return detail::slice_strings(strings, starts_column, stops_column, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> slice_strings(strings_column_view const& strings,
@@ -399,8 +400,11 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice_strings(
-    strings, cudf::detail::make_pair_iterator<string_view>(delimiter), count, mr, nullptr);
+  return detail::slice_strings(strings,
+                               cudf::detail::make_pair_iterator<string_view>(delimiter),
+                               count,
+                               rmm::cuda_stream_default,
+                               mr);
 }
 
 std::unique_ptr<column> slice_strings(strings_column_view const& strings,
@@ -419,11 +423,13 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                strings,
                cudf::detail::make_pair_iterator<string_view, true>(delimiters_dev_view),
                count,
+               rmm::cuda_stream_default,
                mr)
            : detail::slice_strings(
                strings,
                cudf::detail::make_pair_iterator<string_view, false>(delimiters_dev_view),
                count,
+               rmm::cuda_stream_default,
                mr);
 }
 

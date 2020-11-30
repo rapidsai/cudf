@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 
@@ -28,8 +30,8 @@ namespace detail {
 std::unique_ptr<column> group_count_valid(column_view const& values,
                                           rmm::device_vector<size_type> const& group_labels,
                                           size_type num_groups,
-                                          rmm::mr::device_memory_resource* mr,
-                                          cudaStream_t stream)
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(num_groups >= 0, "number of groups cannot be negative");
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
@@ -49,14 +51,14 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
       thrust::make_transform_iterator(cudf::detail::make_validity_iterator(*values_view),
                                       [] __device__(auto b) { return static_cast<size_type>(b); });
 
-    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
+    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream.value()),
                           group_labels.begin(),
                           group_labels.end(),
                           bitmask_iterator,
                           thrust::make_discard_iterator(),
                           result->mutable_view().begin<size_type>());
   } else {
-    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
+    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream.value()),
                           group_labels.begin(),
                           group_labels.end(),
                           thrust::make_constant_iterator(1),
@@ -69,8 +71,8 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
 
 std::unique_ptr<column> group_count_all(rmm::device_vector<size_type> const& group_offsets,
                                         size_type num_groups,
-                                        rmm::mr::device_memory_resource* mr,
-                                        cudaStream_t stream)
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(num_groups >= 0, "number of groups cannot be negative");
 
@@ -79,7 +81,7 @@ std::unique_ptr<column> group_count_all(rmm::device_vector<size_type> const& gro
 
   if (num_groups == 0) { return result; }
 
-  thrust::adjacent_difference(rmm::exec_policy(stream)->on(stream),
+  thrust::adjacent_difference(rmm::exec_policy(stream)->on(stream.value()),
                               group_offsets.begin() + 1,
                               group_offsets.end(),
                               result->mutable_view().begin<size_type>());

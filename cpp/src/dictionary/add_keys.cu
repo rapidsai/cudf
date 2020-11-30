@@ -49,24 +49,24 @@ namespace detail {
 std::unique_ptr<column> add_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& new_keys,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(!new_keys.has_nulls(), "Keys must not have nulls");
   auto old_keys = dictionary_column.keys();  // [a,b,c,d,f]
   CUDF_EXPECTS(new_keys.type() == old_keys.type(), "Keys must be the same type");
   // first, concatenate the keys together
   // [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
-  auto combined_keys = cudf::detail::concatenate(
-    std::vector<column_view>{old_keys, new_keys}, rmm::mr::get_current_device_resource(), stream);
+  auto combined_keys =
+    cudf::detail::concatenate(std::vector<column_view>{old_keys, new_keys}, stream);
   // sort and remove any duplicates from the combined keys
   // drop_duplicates([a,b,c,d,f,d,b,e]) = [a,b,c,d,e,f]
-  auto table_keys = cudf::detail::drop_duplicates(table_view{{*combined_keys}},
+  auto table_keys = cudf::detail::drop_duplicates(table_view{{combined_keys->view()}},
                                                   std::vector<size_type>{0},  // only one key column
                                                   duplicate_keep_option::KEEP_FIRST,
                                                   null_equality::EQUAL,
-                                                  mr,
-                                                  stream)
+                                                  stream,
+                                                  mr)
                       ->release();
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
   // create a map for the indices
@@ -76,8 +76,8 @@ std::unique_ptr<column> add_keys(
     table_view{{old_keys}},
     std::vector<order>{order::ASCENDING},
     std::vector<null_order>{null_order::AFTER},  // should be no nulls here
-    mr,
-    stream);
+    stream,
+    mr);
   // now create the indices column -- map old values to the new ones
   // gather([4,0,3,1,2,2,2,4,0],[0,1,2,3,5]) = [5,0,3,1,2,2,2,5,0]
   column_view indices_view(dictionary_column.indices().type(),
@@ -92,8 +92,8 @@ std::unique_ptr<column> add_keys(
                                             indices_view,
                                             cudf::detail::out_of_bounds_policy::IGNORE,
                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                            mr,
-                                            stream)
+                                            stream,
+                                            mr)
                          ->release();
   // The output of lower_bound is INT32 but we need to convert to unsigned indices.
   auto const indices_type = get_indices_type_for_size(keys_column->size());
@@ -111,16 +111,15 @@ std::unique_ptr<column> add_keys(
     }
     // otherwise we need to convert the gather result
     column_view cast_view(gather_result.type(), indices_size, gather_result.head(), nullptr, 0);
-    return cudf::detail::cast(cast_view, indices_type, mr, stream);
+    return cudf::detail::cast(cast_view, indices_type, stream, mr);
   }();
 
   // create new dictionary column with keys_column and indices_column
   // null mask has not changed
-  return make_dictionary_column(
-    std::move(keys_column),
-    std::move(indices_column),
-    cudf::detail::copy_bitmask(dictionary_column.parent(), rmm::cuda_stream_view{stream}, mr),
-    dictionary_column.null_count());
+  return make_dictionary_column(std::move(keys_column),
+                                std::move(indices_column),
+                                cudf::detail::copy_bitmask(dictionary_column.parent(), stream, mr),
+                                dictionary_column.null_count());
 }
 
 }  // namespace detail
@@ -130,7 +129,7 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::add_keys(dictionary_column, keys, mr);
+  return detail::add_keys(dictionary_column, keys, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace dictionary
