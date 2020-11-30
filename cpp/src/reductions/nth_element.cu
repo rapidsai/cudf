@@ -53,9 +53,9 @@ std::unique_ptr<cudf::scalar> cudf::reduction::nth_element(column_view const& co
                                      null_skipped_index.end(),
                                      n);
     auto null_skipped_n = n_pos - null_skipped_index.begin();
-    return cudf::detail::get_element(col, null_skipped_n, stream.value(), mr);
+    return cudf::detail::get_element(col, null_skipped_n, stream, mr);
   } else {
     n = wrap_n(col.size());
-    return cudf::detail::get_element(col, n, stream.value(), mr);
+    return cudf::detail::get_element(col, n, stream, mr);
   }
 }

@@ -225,7 +225,7 @@ struct same_element_type_dispatcher {
                                       rmm::mr::device_memory_resource* mr)
   {
     auto index = static_cast<numeric_scalar<IndexType> const&>(keys_index);
-    return cudf::detail::get_element(keys, index.value(stream.value()), stream.value(), mr);
+    return cudf::detail::get_element(keys, index.value(stream), stream, mr);
   }
 
   template <typename IndexType,

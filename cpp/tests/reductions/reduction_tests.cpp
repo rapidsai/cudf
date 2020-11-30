@@ -1330,7 +1330,7 @@ TYPED_TEST(DictionaryReductionTest, SumOfSquare)
   };
 
   // test without nulls
-  cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
+  cudf::test::dictionary_column_wrapper<T> col(v.begin(), v.end());
 
   this->reduction_test(col,
                        calc_reduction(v),

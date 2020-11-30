@@ -70,7 +70,7 @@ struct reduce_dispatch_functor {
         auto valid_sorted_indices = split(*sorted_indices, {col.size() - col.null_count()})[0];
         auto col_ptr =
           quantile(col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, stream, mr);
-        return get_element(*col_ptr, 0, stream.value(), mr);
+        return get_element(*col_ptr, 0, stream, mr);
       } break;
       case aggregation::QUANTILE: {
         auto quantile_agg = static_cast<quantile_aggregation const *>(agg.get());
@@ -86,14 +86,14 @@ struct reduce_dispatch_functor {
                                 true,
                                 stream,
                                 mr);
-        return get_element(*col_ptr, 0, stream.value(), mr);
+        return get_element(*col_ptr, 0, stream, mr);
       } break;
       case aggregation::NUNIQUE: {
         auto nunique_agg = static_cast<nunique_aggregation const *>(agg.get());
         return make_fixed_width_scalar(
           detail::distinct_count(
-            col, nunique_agg->_null_handling, nan_policy::NAN_IS_VALID, stream.value()),
-          stream.value(),
+            col, nunique_agg->_null_handling, nan_policy::NAN_IS_VALID, stream),
+          stream,
           mr);
       } break;
       case aggregation::NTH_ELEMENT: {
