@@ -4,8 +4,8 @@ from collections import OrderedDict
 from collections.abc import Sequence
 from math import floor, isinf, isnan
 
-import numpy as np
 import cupy as cp
+import numpy as np
 import pandas as pd
 from numba import njit
 
@@ -472,8 +472,14 @@ def search_range(start, stop, x, step=1, side="left"):
     length = (stop - start) // step
     return max(min(length, i), 0)
 
+
 def is_cudf_pyscalar(obj):
+    """
+    Workaround for checking if an object is a cudf.Scalar
+    from within cython without having to import it there
+    """
     return isinstance(obj, cudf.Scalar)
+
 
 # Utils for using appropriate dispatch for array functions
 def get_appropriate_dispatched_func(

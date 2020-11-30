@@ -17,6 +17,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 from cudf.utils.utils import is_cudf_pyscalar
 
+
 def tokenize(Column strings, object delimiter):
     if is_cudf_pyscalar(delimiter):
         return _tokenize_scalar(strings, delimiter)
