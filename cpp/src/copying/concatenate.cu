@@ -365,7 +365,7 @@ void bounds_and_type_check(ColIter begin, ColIter end)
     begin, [](column_view const& c) { return static_cast<size_t>(c.size()); });
   size_t const total_row_count =
     std::accumulate(size_iter, size_iter + std::distance(begin, end), static_cast<size_t>(0));
-  CUDF_EXPECTS(total_row_count < std::numeric_limits<size_type>::max(),
+  CUDF_EXPECTS(total_row_count <= std::numeric_limits<size_type>::max(),
                "Total number of concatenated rows exceeds size_type range");
 
   // march each child
