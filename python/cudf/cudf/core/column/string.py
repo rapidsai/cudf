@@ -2102,14 +2102,14 @@ class StringMethods(ColumnMethodsMixin):
                 result_table = [self._column.copy()]
             else:
                 result_table = cpp_split(
-                    self._column, as_device_scalar(pat, "str"), n
+                    self._column, cudf.Scalar(pat, "str"), n
                 )
                 if len(result_table._data) == 1:
                     if result_table._data[0].null_count == len(self._parent):
                         result_table = []
         else:
             result_table = cpp_split_record(
-                self._column, as_device_scalar(pat, "str"), n
+                self._column, cudf.Scalar(pat, "str"), n
             )
 
         return self._return_or_inplace(result_table, **kwargs,)
@@ -2255,16 +2255,12 @@ class StringMethods(ColumnMethodsMixin):
             if self._column.null_count == len(self._column):
                 result_table = [self._column.copy()]
             else:
-                result_table = cpp_rsplit(
-                    self._column, as_device_scalar(pat), n
-                )
+                result_table = cpp_rsplit(self._column, cudf.Scalar(pat), n)
                 if len(result_table._data) == 1:
                     if result_table._data[0].null_count == len(self._parent):
                         result_table = []
         else:
-            result_table = cpp_rsplit_record(
-                self._column, as_device_scalar(pat), n
-            )
+            result_table = cpp_rsplit_record(self._column, cudf.Scalar(pat), n)
 
         return self._return_or_inplace(result_table, **kwargs)
 
