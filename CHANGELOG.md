@@ -171,6 +171,7 @@
 
 - PR #6853 Fix contiguous split of null string columns
 
+
 # cuDF 0.16.0 (21 Oct 2020)
 
 ## New Features
