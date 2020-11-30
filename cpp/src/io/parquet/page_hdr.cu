@@ -18,6 +18,8 @@
 #include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace io {
 namespace parquet {
@@ -370,7 +372,7 @@ extern "C" __global__ void __launch_bounds__(128)
     num_dict_pages = bs->ck.num_dict_pages;
     max_num_pages  = (page_info) ? bs->ck.max_num_pages : 0;
     values_found   = 0;
-    SYNCWARP();
+    __syncwarp();
     while (values_found < num_values && bs->cur < bs->end) {
       int index_out = -1;
 
@@ -406,11 +408,11 @@ extern "C" __global__ void __launch_bounds__(128)
           bs->cur = bs->end;
         }
       }
-      index_out = SHFL0(index_out);
+      index_out = shuffle(index_out);
       if (index_out >= 0 && index_out < max_num_pages && lane_id == 0)
         page_info[index_out] = bs->page;
-      num_values = SHFL0(num_values);
-      SYNCWARP();
+      num_values = shuffle(num_values);
+      __syncwarp();
     }
     if (lane_id == 0) {
       chunks[chunk].num_data_pages = data_page_count;
@@ -468,24 +470,22 @@ extern "C" __global__ void __launch_bounds__(128)
   }
 }
 
-cudaError_t __host__ DecodePageHeaders(ColumnChunkDesc *chunks,
-                                       int32_t num_chunks,
-                                       cudaStream_t stream)
+void __host__ DecodePageHeaders(ColumnChunkDesc *chunks,
+                                int32_t num_chunks,
+                                rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
-  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream>>>(chunks, num_chunks);
-  return cudaSuccess;
+  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks);
 }
 
-cudaError_t __host__ BuildStringDictionaryIndex(ColumnChunkDesc *chunks,
-                                                int32_t num_chunks,
-                                                cudaStream_t stream)
+void __host__ BuildStringDictionaryIndex(ColumnChunkDesc *chunks,
+                                         int32_t num_chunks,
+                                         rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
-  gpuBuildStringDictionaryIndex<<<dim_grid, dim_block, 0, stream>>>(chunks, num_chunks);
-  return cudaSuccess;
+  gpuBuildStringDictionaryIndex<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks);
 }
 
 }  // namespace gpu

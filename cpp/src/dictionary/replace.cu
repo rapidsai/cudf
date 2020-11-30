@@ -24,6 +24,8 @@
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
@@ -104,19 +106,24 @@ auto make_scalar_iterator(scalar const& input)
 template <typename ReplacementIter>
 std::unique_ptr<column> replace_indices(column_view const& input,
                                         ReplacementIter replacement_iter,
-                                        rmm::mr::device_memory_resource* mr,
-                                        cudaStream_t stream)
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
 {
   auto const input_view = column_device_view::create(input, stream);
   auto const d_input    = *input_view;
   auto predicate        = [d_input] __device__(auto i) { return d_input.is_valid(i); };
 
+  using Element = typename thrust::
+    tuple_element<0, typename thrust::iterator_traits<ReplacementIter>::value_type>::type;
+
   auto input_pair_iterator = make_nullable_index_iterator<true>(input);
+
   return cudf::detail::copy_if_else(true,
                                     input_pair_iterator,
                                     input_pair_iterator + input.size(),
                                     replacement_iter,
                                     predicate,
+                                    data_type{type_to_id<Element>()},
                                     stream,
                                     mr);
 }
@@ -125,12 +132,12 @@ std::unique_ptr<column> replace_indices(column_view const& input,
 
 /**
  * @copydoc cudf::dictionary::detail::replace_nulls(cudf::column_view const&,cudf::column_view
- * const&,rmm::mr::device_memory_resource*,cudaStream_t)
+ * const& rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
  */
 std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
                                       dictionary_column_view const& replacement,
-                                      rmm::mr::device_memory_resource* mr,
-                                      cudaStream_t stream)
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) { return cudf::empty_like(input.parent()); }
   if (!input.has_nulls()) { return std::make_unique<cudf::column>(input.parent()); }
@@ -138,7 +145,7 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
   CUDF_EXPECTS(replacement.size() == input.size(), "column sizes must match");
 
   // first combine the keys so both input dictionaries have the same set
-  auto matched = match_dictionaries({input, replacement}, mr, stream);
+  auto matched = match_dictionaries({input, replacement}, stream, mr);
 
   // now build the new indices by doing replace-null using the updated input indices
   auto const input_indices =
@@ -146,23 +153,22 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
   auto const repl_indices = dictionary_column_view(matched.back()->view()).get_indices_annotated();
   auto new_indices =
     repl_indices.has_nulls()
-      ? replace_indices(input_indices, make_nullable_index_iterator<true>(repl_indices), mr, stream)
+      ? replace_indices(input_indices, make_nullable_index_iterator<true>(repl_indices), stream, mr)
       : replace_indices(
-          input_indices, make_nullable_index_iterator<false>(repl_indices), mr, stream);
+          input_indices, make_nullable_index_iterator<false>(repl_indices), stream, mr);
 
-  // auto keys_column = ;
   return make_dictionary_column(
-    std::move(matched.front()->release().children.back()), std::move(new_indices), mr, stream);
+    std::move(matched.front()->release().children.back()), std::move(new_indices), stream, mr);
 }
 
 /**
  * @copydoc cudf::dictionary::detail::replace_nulls(cudf::column_view const&,cudf::scalar
- * const&,rmm::mr::device_memory_resource*,cudaStream_t)
+ * const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
  */
 std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
                                       scalar const& replacement,
-                                      rmm::mr::device_memory_resource* mr,
-                                      cudaStream_t stream)
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) { return cudf::empty_like(input.parent()); }
   if (!input.has_nulls() || !replacement.is_valid()) {
@@ -171,20 +177,19 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
   CUDF_EXPECTS(input.keys().type() == replacement.type(), "keys must match scalar type");
 
   // first add the replacment to the keys so only the indices need to be processed
-  auto const default_mr = rmm::mr::get_current_device_resource();
-  auto input_matched    = dictionary::detail::add_keys(
-    input, make_column_from_scalar(replacement, 1, default_mr, stream)->view(), mr, stream);
+  auto input_matched = dictionary::detail::add_keys(
+    input, make_column_from_scalar(replacement, 1, stream)->view(), stream, mr);
   auto const input_view   = dictionary_column_view(input_matched->view());
-  auto const scalar_index = get_index(input_view, replacement, default_mr, stream);
+  auto const scalar_index = get_index(input_view, replacement, stream);
 
   // now build the new indices by doing replace-null on the updated indices
   auto const input_indices = input_view.get_indices_annotated();
   auto new_indices =
-    replace_indices(input_indices, make_scalar_iterator(*scalar_index), mr, stream);
+    replace_indices(input_indices, make_scalar_iterator(*scalar_index), stream, mr);
   new_indices->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
 
   return make_dictionary_column(
-    std::move(input_matched->release().children.back()), std::move(new_indices), mr, stream);
+    std::move(input_matched->release().children.back()), std::move(new_indices), stream, mr);
 }
 
 }  // namespace detail

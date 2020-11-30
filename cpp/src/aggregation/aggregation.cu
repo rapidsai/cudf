@@ -16,11 +16,13 @@
 
 #include <cudf/detail/aggregation/aggregation.cuh>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace detail {
 void initialize_with_identity(mutable_table_view& table,
                               std::vector<aggregation::Kind> const& aggs,
-                              cudaStream_t stream)
+                              rmm::cuda_stream_view stream)
 {
   // TODO: Initialize all the columns in a single kernel instead of invoking one
   // kernel per column

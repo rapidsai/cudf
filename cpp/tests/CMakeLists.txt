@@ -277,7 +277,8 @@ ConfigureTest(FIXED_POINT_TEST "${FIXED_POINT_TEST_SRC}")
 
 set(UNARY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/unary/math_ops_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unary/unary_ops_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/unary/unary_ops_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/unary/cast_tests.cpp")
 
 ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
 
@@ -378,6 +379,7 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_struct_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/detail_gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_list_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cpp"

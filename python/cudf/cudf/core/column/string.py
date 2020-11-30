@@ -120,7 +120,9 @@ from cudf._lib.strings.split.partition import (
 )
 from cudf._lib.strings.split.split import (
     rsplit as cpp_rsplit,
+    rsplit_record as cpp_rsplit_record,
     split as cpp_split,
+    split_record as cpp_split_record,
 )
 from cudf._lib.strings.strip import (
     lstrip as cpp_lstrip,
@@ -781,7 +783,7 @@ class StringMethods(ColumnMethodsMixin):
         --------
         >>> import cudf
         >>> s = cudf.Series(["A543","Z756"])
-        >>> s.str.replace_with_backrefs('(\\d)(\\d)', 'V\\2\\1')
+        >>> s.str.replace_with_backrefs('(\\\\d)(\\\\d)', 'V\\\\2\\\\1')
         0    AV453
         1    ZV576
         dtype: object
@@ -1972,7 +1974,7 @@ class StringMethods(ColumnMethodsMixin):
             cpp_string_get(self._column, i), **kwargs
         )
 
-    def split(self, pat=None, n=-1, expand=None, **kwargs):
+    def split(self, pat=None, n=-1, expand=False, **kwargs):
         """
         Split strings around given separator/delimiter.
 
@@ -1987,11 +1989,18 @@ class StringMethods(ColumnMethodsMixin):
         n : int, default -1 (all)
             Limit number of splits in output. `None`, 0, and -1 will all be
             interpreted as "all splits".
+        expand : bool, default False
+            Expand the split strings into separate columns.
+
+            * If ``True``, return DataFrame/MultiIndex expanding
+              dimensionality.
+            * If ``False``, return Series/Index, containing lists
+              of strings.
 
         Returns
         -------
-        DataFrame
-            Returns a DataFrame with each split as a column.
+        Series, Index, DataFrame or MultiIndex
+            Type matches caller unless ``expand=True`` (see Notes).
 
         See also
         --------
@@ -2007,15 +2016,17 @@ class StringMethods(ColumnMethodsMixin):
 
         Notes
         -----
-        The parameter `expand` is not yet supported and will raise a
-        NotImplementedError if anything other than the default value
-        is set. The handling of the n keyword depends on the number
+        The handling of the n keyword depends on the number
         of found splits:
 
             - If found splits > n, make first n splits only
             - If found splits <= n, make all splits
             - If for a certain row the number of found
               splits < n, append None for padding up to n
+              if ``expand=True``.
+
+        If using ``expand=True``, Series and Index callers return
+        DataFrame and MultiIndex objects, respectively.
 
         Examples
         --------
@@ -2026,32 +2037,61 @@ class StringMethods(ColumnMethodsMixin):
         >>> s
         0            this is a regular sentence
         1    https://docs.python.org/index.html
-        2                                  None
+        2                                  <NA>
         dtype: object
+
+        In the default setting, the string is split by whitespace.
+
+        >>> s.str.split()
+        0        [this, is, a, regular, sentence]
+        1    [https://docs.python.org/index.html]
+        2                                    None
+        dtype: list
+
+        Without the ``n`` parameter, the outputs of ``rsplit``
+        and ``split`` are identical.
+
+        >>> s.str.rsplit()
+        0        [this, is, a, regular, sentence]
+        1    [https://docs.python.org/index.html]
+        2                                    None
+        dtype: list
 
         The `n` parameter can be used to limit the number of
         splits on the delimiter.
 
         >>> s.str.split(n=2)
-                                            0     1                   2
-        0                                this    is  a regular sentence
-        1  https://docs.python.org/index.html  None                None
-        2                                None  None                None
+        0          [this, is, a regular sentence]
+        1    [https://docs.python.org/index.html]
+        2                                    None
+        dtype: list
 
         The `pat` parameter can be used to split by other characters.
 
-        >>> s.str.split(pat = "/")
-                                    0     1                2           3
-        0  this is a regular sentence  None             None        None
-        1                      https:        docs.python.org  index.html
-        2                        None  None             None        None
+        >>> s.str.split(pat="/")
+        0               [this is a regular sentence]
+        1    [https:, , docs.python.org, index.html]
+        2                                       None
+        dtype: list
+
+        When using ``expand=True``, the split elements will expand out
+        into separate columns. If ``<NA>`` value is present, it is propagated
+        throughout the columns during the split.
+
+        >>> s.str.split(expand=True)
+                                            0     1     2        3         4
+        0                                this    is     a  regular  sentence
+        1  https://docs.python.org/index.html  <NA>  <NA>     <NA>      <NA>
+        2                                <NA>  <NA>  <NA>     <NA>      <NA>
         """
+
         if expand is None:
-            expand = True
-            warnings.warn("`expand` parameter defatults to True.")
-        elif expand is not True:
-            raise NotImplementedError(
-                "`expand=False` setting is not supported yet"
+            expand = False
+
+        if expand not in (True, False):
+            raise ValueError(
+                f"expand parameter accepts only : [True, False], "
+                f"got {expand}"
             )
 
         # Pandas treats 0 as all
@@ -2062,16 +2102,24 @@ class StringMethods(ColumnMethodsMixin):
         if pat is None:
             pat = ""
 
-        result_table = cpp_split(self._column, as_device_scalar(pat, "str"), n)
-        if len(result_table._data) == 1:
-            if result_table._data[0].null_count == len(self._parent):
-                result_table = []
+        if expand:
             if self._column.null_count == len(self._column):
                 result_table = [self._column.copy()]
+            else:
+                result_table = cpp_split(
+                    self._column, as_device_scalar(pat, "str"), n
+                )
+                if len(result_table._data) == 1:
+                    if result_table._data[0].null_count == len(self._parent):
+                        result_table = []
+        else:
+            result_table = cpp_split_record(
+                self._column, as_device_scalar(pat, "str"), n
+            )
 
         return self._return_or_inplace(result_table, **kwargs,)
 
-    def rsplit(self, pat=None, n=-1, expand=None, **kwargs):
+    def rsplit(self, pat=None, n=-1, expand=False, **kwargs):
         """
         Split strings around given separator/delimiter.
 
@@ -2086,11 +2134,18 @@ class StringMethods(ColumnMethodsMixin):
         n : int, default -1 (all)
             Limit number of splits in output. `None`, 0, and -1 will all be
             interpreted as "all splits".
+        expand : bool, default False
+            Expand the split strings into separate columns.
+
+            * If ``True``, return DataFrame/MultiIndex expanding
+              dimensionality.
+            * If ``False``, return Series/Index, containing lists
+              of strings.
 
         Returns
         -------
-        DataFrame or MultiIndex
-            Returns a DataFrame/MultiIndex with each split as a column.
+        Series, Index, DataFrame or MultiIndex
+            Type matches caller unless ``expand=True`` (see Notes).
 
         See also
         --------
@@ -2105,28 +2160,73 @@ class StringMethods(ColumnMethodsMixin):
 
         Notes
         -----
-        The parameter `expand` is not yet supported and will raise a
-        `NotImplementedError` if anything other than the default value is
-        set. The handling of the n keyword depends on the number of
+        The handling of the n keyword depends on the number of
         found splits:
 
             - If found splits > n, make first n splits only
             - If found splits <= n, make all splits
             - If for a certain row the number of found splits < n,
-              append None for padding up to n.
+              append None for padding up to n if ``expand=True``.
+
+        If using ``expand=True``, Series and Index callers return
+        DataFrame and MultiIndex objects, respectively.
 
         Examples
         --------
         >>> import cudf
-        >>> data = ["this is a regular sentence",
-        ... "https://docs.python.org/3/tutorial/index.html",
-        ... None]
-        >>> s = cudf.Series(data)
+        >>> s = cudf.Series(
+        ...     [
+        ...         "this is a regular sentence",
+        ...         "https://docs.python.org/3/tutorial/index.html",
+        ...         None
+        ...     ]
+        ... )
+        >>> s
+        0                       this is a regular sentence
+        1    https://docs.python.org/3/tutorial/index.html
+        2                                             <NA>
+        dtype: object
+
+        In the default setting, the string is split by whitespace.
+
+        >>> s.str.rsplit()
+        0                   [this, is, a, regular, sentence]
+        1    [https://docs.python.org/3/tutorial/index.html]
+        2                                               None
+        dtype: list
+
+        Without the ``n`` parameter, the outputs of ``rsplit``
+        and ``split`` are identical.
+
+        >>> s.str.split()
+        0                   [this, is, a, regular, sentence]
+        1    [https://docs.python.org/3/tutorial/index.html]
+        2                                               None
+        dtype: list
+
+        The n parameter can be used to limit the number of
+        splits on the delimiter. The outputs of split and rsplit are different.
+
         >>> s.str.rsplit(n=2)
+        0                     [this is a, regular, sentence]
+        1    [https://docs.python.org/3/tutorial/index.html]
+        2                                               None
+        dtype: list
+        >>> s.str.split(n=2)
+        0                     [this, is, a regular sentence]
+        1    [https://docs.python.org/3/tutorial/index.html]
+        2                                               None
+        dtype: list
+
+        When using ``expand=True``, the split elements will expand
+        out into separate columns. If ``<NA>`` value is present,
+        it is propagated throughout the columns during the split.
+
+        >>> s.str.rsplit(n=2, expand=True)
                                                        0        1         2
         0                                      this is a  regular  sentence
-        1  https://docs.python.org/3/tutorial/index.html     None      None
-        2                                           None     None      None
+        1  https://docs.python.org/3/tutorial/index.html     <NA>      <NA>
+        2                                           <NA>     <NA>      <NA>
 
         For slightly more complex use cases like splitting the
         html document name from a url, a combination of parameter
@@ -2134,16 +2234,18 @@ class StringMethods(ColumnMethodsMixin):
 
         >>> s.str.rsplit("/", n=1, expand=True)
                                             0           1
-        0          this is a regular sentence        None
+        0          this is a regular sentence        <NA>
         1  https://docs.python.org/3/tutorial  index.html
-        2                                None        None
+        2                                <NA>        <NA>
         """
+
         if expand is None:
-            expand = True
-            warnings.warn("`expand` parameter defatults to True.")
-        elif expand is not True:
-            raise NotImplementedError(
-                "`expand=False` setting is not supported yet"
+            expand = False
+
+        if expand not in (True, False):
+            raise ValueError(
+                f"expand parameter accepts only : [True, False], "
+                f"got {expand}"
             )
 
         # Pandas treats 0 as all
@@ -2154,12 +2256,20 @@ class StringMethods(ColumnMethodsMixin):
         if pat is None:
             pat = ""
 
-        result_table = cpp_rsplit(self._column, as_device_scalar(pat), n)
-        if len(result_table._data) == 1:
-            if result_table._data[0].null_count == len(self._parent):
-                result_table = []
-            elif self._parent.null_count == len(self._parent):
+        if expand:
+            if self._column.null_count == len(self._column):
                 result_table = [self._column.copy()]
+            else:
+                result_table = cpp_rsplit(
+                    self._column, as_device_scalar(pat), n
+                )
+                if len(result_table._data) == 1:
+                    if result_table._data[0].null_count == len(self._parent):
+                        result_table = []
+        else:
+            result_table = cpp_rsplit_record(
+                self._column, as_device_scalar(pat), n
+            )
 
         return self._return_or_inplace(result_table, **kwargs)
 

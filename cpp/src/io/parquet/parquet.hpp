@@ -45,6 +45,104 @@ struct file_ender_s {
   uint32_t magic;
 };
 
+// thrift generated code simplified.
+struct StringType {
+};
+struct MapType {
+};
+struct ListType {
+};
+struct EnumType {
+};
+struct DecimalType {
+  int32_t scale     = 0;
+  int32_t precision = 0;
+};
+struct DateType {
+};
+
+struct MilliSeconds {
+};
+struct MicroSeconds {
+};
+typedef struct TimeUnit_isset {
+  TimeUnit_isset() : MILLIS(false), MICROS(false) {}
+  bool MILLIS;
+  bool MICROS;
+} TimeUnit_isset;
+
+struct TimeUnit {
+  TimeUnit_isset isset;
+  MilliSeconds MILLIS;
+  MicroSeconds MICROS;
+};
+
+struct TimeType {
+  bool isAdjustedToUTC = false;
+  TimeUnit unit;
+};
+struct TimestampType {
+  bool isAdjustedToUTC = false;
+  TimeUnit unit;
+};
+struct IntType {
+  int8_t bitWidth = 0;
+  bool isSigned   = false;
+};
+struct NullType {
+};
+struct JsonType {
+};
+struct BsonType {
+};
+
+// thrift generated code simplified.
+typedef struct LogicalType_isset {
+  LogicalType_isset()
+    : STRING(false),
+      MAP(false),
+      LIST(false),
+      ENUM(false),
+      DECIMAL(false),
+      DATE(false),
+      TIME(false),
+      TIMESTAMP(false),
+      INTEGER(false),
+      UNKNOWN(false),
+      JSON(false),
+      BSON(false)
+  {
+  }
+  bool STRING;
+  bool MAP;
+  bool LIST;
+  bool ENUM;
+  bool DECIMAL;
+  bool DATE;
+  bool TIME;
+  bool TIMESTAMP;
+  bool INTEGER;
+  bool UNKNOWN;
+  bool JSON;
+  bool BSON;
+} LogicalType_isset;
+
+struct LogicalType {
+  LogicalType_isset isset;
+  StringType STRING;
+  MapType MAP;
+  ListType LIST;
+  EnumType ENUM;
+  DecimalType DECIMAL;
+  DateType DATE;
+  TimeType TIME;
+  TimestampType TIMESTAMP;
+  IntType INTEGER;
+  NullType UNKNOWN;
+  JsonType JSON;
+  BsonType BSON;
+};
+
 /**
  * @brief Struct for describing an element/field in the Parquet format schema
  *
@@ -54,6 +152,7 @@ struct file_ender_s {
 struct SchemaElement {
   Type type                    = UNDEFINED_TYPE;
   ConvertedType converted_type = UNKNOWN;
+  LogicalType logical_type;
   int32_t type_length =
     0;  // Byte length of FIXED_LENGTH_BYTE_ARRAY elements, or maximum bit length for other types
   FieldRepetitionType repetition_type = REQUIRED;
@@ -315,6 +414,12 @@ class CompactProtocolReader {
   // Generate Thrift structure parsing routines
   bool read(FileMetaData *f);
   bool read(SchemaElement *s);
+  bool read(LogicalType *l);
+  bool read(DecimalType *d);
+  bool read(TimeType *t);
+  bool read(TimeUnit *u);
+  bool read(TimestampType *t);
+  bool read(IntType *t);
   bool read(RowGroup *r);
   bool read(ColumnChunk *c);
   bool read(ColumnChunkMetaData *c);
@@ -342,6 +447,8 @@ class CompactProtocolReader {
   const uint8_t *m_cur  = nullptr;
   const uint8_t *m_end  = nullptr;
 
+  friend class ParquetFieldBool;
+  friend class ParquetFieldInt8;
   friend class ParquetFieldInt32;
   friend class ParquetFieldInt64;
   template <typename T>
@@ -349,12 +456,56 @@ class CompactProtocolReader {
   friend class ParquetFieldString;
   template <typename T>
   friend class ParquetFieldStructFunctor;
+  template <typename T, bool>
+  friend class ParquetFieldUnionFunctor;
   template <typename T>
   friend class ParquetFieldEnum;
   template <typename T>
   friend class ParquetFieldEnumListFunctor;
   friend class ParquetFieldStringList;
   friend class ParquetFieldStructBlob;
+};
+
+/**
+ * @brief Functor to set value to bool read from CompactProtocolReader
+ *
+ * @return True if field type is not bool
+ */
+class ParquetFieldBool {
+  int field_val;
+  bool &val;
+
+ public:
+  ParquetFieldBool(int f, bool &v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    return (field_type != ST_FLD_TRUE && field_type != ST_FLD_FALSE) ||
+           !(val = (field_type == ST_FLD_TRUE), true);
+  }
+
+  int field() { return field_val; }
+};
+
+/**
+ * @brief Functor to set value to 8 bit integer read from CompactProtocolReader
+ *
+ * @return True if field type is not int8
+ */
+class ParquetFieldInt8 {
+  int field_val;
+  int8_t &val;
+
+ public:
+  ParquetFieldInt8(int f, int8_t &v) : field_val(f), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    val = cpr->getb();
+    return (field_type != ST_FLD_BYTE);
+  }
+
+  int field() { return field_val; }
 };
 
 /**
@@ -493,6 +644,65 @@ template <typename T>
 ParquetFieldStructFunctor<T> ParquetFieldStruct(int f, T &v)
 {
   return ParquetFieldStructFunctor<T>(f, v);
+}
+
+/**
+ * @brief Functor to read a union member from CompactProtocolReader
+ *
+ * @tparam is_empty True if tparam `T` type is empty type, else false.
+ *
+ * @return True if field types mismatch or if the process of reading a
+ * union member fails
+ */
+template <typename T, bool is_empty = false>
+class ParquetFieldUnionFunctor {
+  int field_val;
+  bool &is_set;
+  T &val;
+
+ public:
+  ParquetFieldUnionFunctor(int f, bool &b, T &v) : field_val(f), is_set(b), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    if (field_type != ST_FLD_STRUCT) {
+      return true;
+    } else {
+      is_set = true;
+      return !cpr->read(&val);
+    }
+  }
+
+  int field() { return field_val; }
+};
+
+template <typename T>
+struct ParquetFieldUnionFunctor<T, true> {
+  int field_val;
+  bool &is_set;
+  T &val;
+
+ public:
+  ParquetFieldUnionFunctor(int f, bool &b, T &v) : field_val(f), is_set(b), val(v) {}
+
+  inline bool operator()(CompactProtocolReader *cpr, int field_type)
+  {
+    if (field_type != ST_FLD_STRUCT) {
+      return true;
+    } else {
+      is_set = true;
+      cpr->skip_struct_field(field_type);
+      return false;
+    }
+  }
+
+  int field() { return field_val; }
+};
+
+template <typename T>
+ParquetFieldUnionFunctor<T, std::is_empty<T>::value> ParquetFieldUnion(int f, bool &b, T &v)
+{
+  return ParquetFieldUnionFunctor<T, std::is_empty<T>::value>(f, b, v);
 }
 
 /**

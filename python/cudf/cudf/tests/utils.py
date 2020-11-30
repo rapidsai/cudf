@@ -11,6 +11,7 @@ import pytest
 from pandas import testing as tm
 
 import cudf
+from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf.utils import dtypes as dtypeutils
 
@@ -259,8 +260,20 @@ def gen_rand(dtype, size, **kwargs):
         return np.random.randint(low=low, high=high, size=size).astype(dtype)
     elif dtype.kind == "b":
         low = kwargs.get("low", 0)
-        high = kwargs.get("high", 1)
+        high = kwargs.get("high", 2)
         return np.random.randint(low=low, high=high, size=size).astype(np.bool)
+    elif dtype.kind == "M":
+        low = kwargs.get("low", 0)
+        time_unit, _ = np.datetime_data(dtype)
+        high = kwargs.get(
+            "high",
+            1000000000000000000 / _numpy_to_pandas_conversion[time_unit],
+        )
+        return pd.to_datetime(
+            np.random.randint(low=low, high=high, size=size), unit=time_unit
+        )
+    elif dtype.kind == "U":
+        return pd.util.testing.rands_array(10, size)
     raise NotImplementedError(f"dtype.kind={dtype.kind}")
 
 

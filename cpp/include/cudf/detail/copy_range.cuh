@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 
 #include <cub/cub.cuh>
@@ -134,7 +136,7 @@ void copy_range(SourceValueIterator source_value_begin,
                 mutable_column_view& target,
                 size_type target_begin,
                 size_type target_end,
-                cudaStream_t stream = 0)
+                rmm::cuda_stream_view stream = rmm::cuda_stream_default)
 {
   CUDF_EXPECTS((target_begin <= target_end) && (target_begin >= 0) &&
                  (target_begin < target.size()) && (target_end <= target.size()),
@@ -142,7 +144,7 @@ void copy_range(SourceValueIterator source_value_begin,
   using T = typename std::iterator_traits<SourceValueIterator>::value_type;
 
   // this code assumes that source and target have the same type.
-  CUDF_EXPECTS(type_to_id<T>() == target.type().id(), "the data type mismatch");
+  CUDF_EXPECTS(type_id_matches_device_storage_type<T>(target.type().id()), "data type mismatch");
 
   auto warp_aligned_begin_lower_bound = cudf::util::round_down_safe(target_begin, warp_size);
   auto warp_aligned_end_upper_bound   = cudf::util::round_up_safe(target_end, warp_size);
@@ -162,7 +164,7 @@ void copy_range(SourceValueIterator source_value_begin,
 
     auto kernel =
       copy_range_kernel<block_size, SourceValueIterator, SourceValidityIterator, T, true>;
-    kernel<<<grid.num_blocks, block_size, 0, stream>>>(
+    kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
       source_value_begin,
       source_validity_begin,
       *mutable_column_device_view::create(target, stream),
@@ -174,7 +176,7 @@ void copy_range(SourceValueIterator source_value_begin,
   } else {
     auto kernel =
       copy_range_kernel<block_size, SourceValueIterator, SourceValidityIterator, T, false>;
-    kernel<<<grid.num_blocks, block_size, 0, stream>>>(
+    kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
       source_value_begin,
       source_validity_begin,
       *mutable_column_device_view::create(target, stream),
@@ -183,7 +185,7 @@ void copy_range(SourceValueIterator source_value_begin,
       nullptr);
   }
 
-  CHECK_CUDA(stream);
+  CHECK_CUDA(stream.value());
 }
 
 /**
@@ -195,7 +197,7 @@ void copy_range_in_place(column_view const& source,
                          size_type source_begin,
                          size_type source_end,
                          size_type target_begin,
-                         cudaStream_t stream = 0);
+                         rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @copydoc cudf::copy_range
@@ -208,8 +210,8 @@ std::unique_ptr<column> copy_range(
   size_type source_begin,
   size_type source_end,
   size_type target_begin,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace cudf
