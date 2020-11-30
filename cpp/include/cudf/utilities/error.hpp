@@ -125,7 +125,11 @@ inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int l
  *
  **/
 #ifndef NDEBUG
-#define CHECK_CUDA(stream) CUDA_TRY(cudaStreamSynchronize(stream));
+#define CHECK_CUDA(stream)                   \
+  do {                                       \
+    CUDA_TRY(cudaStreamSynchronize(stream)); \
+    CUDA_TRY(cudaPeekAtLastError());         \
+  } while (0);
 #else
 #define CHECK_CUDA(stream) CUDA_TRY(cudaPeekAtLastError());
 #endif

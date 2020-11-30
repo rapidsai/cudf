@@ -13,9 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <io/utilities/block_utils.cuh>
+
 #include "orc_common.h"
 #include "orc_gpu.h"
+
+#include <io/utilities/block_utils.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
@@ -356,7 +360,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional sint64 maximumUtc = 4;
         // }
         if (s->chunk.has_minmax) {
-          cur[0] = 7 * 8 + PB_TYPE_FIXEDLEN;
+          cur[0] = 9 * 8 + PB_TYPE_FIXEDLEN;
           cur += 2;
           cur          = pb_put_int(cur, 3, s->chunk.min_value.i_val);  // minimumUtc
           cur          = pb_put_int(cur, 4, s->chunk.max_value.i_val);  // maximumUtc
@@ -378,22 +382,18 @@ __global__ void __launch_bounds__(encode_threads_per_block)
  * @param[in] num_rowgroups Number of rowgroups
  * @param[in] row_index_stride Rowgroup size in rows
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t orc_init_statistics_groups(statistics_group *groups,
-                                       const stats_column_desc *cols,
-                                       uint32_t num_columns,
-                                       uint32_t num_rowgroups,
-                                       uint32_t row_index_stride,
-                                       cudaStream_t stream)
+ */
+void orc_init_statistics_groups(statistics_group *groups,
+                                const stats_column_desc *cols,
+                                uint32_t num_columns,
+                                uint32_t num_rowgroups,
+                                uint32_t row_index_stride,
+                                rmm::cuda_stream_view stream)
 {
   dim3 dim_grid((num_rowgroups + init_groups_per_block - 1) / init_groups_per_block, num_columns);
   dim3 dim_block(init_threads_per_group, init_groups_per_block);
-  gpu_init_statistics_groups<<<dim_grid, dim_block, 0, stream>>>(
+  gpu_init_statistics_groups<<<dim_grid, dim_block, 0, stream.value()>>>(
     groups, cols, num_columns, num_rowgroups, row_index_stride);
-
-  return cudaSuccess;
 }
 
 /**
@@ -403,17 +403,15 @@ cudaError_t orc_init_statistics_groups(statistics_group *groups,
  * @param[in] chunks Statistics chunks
  * @param[in] statistics_count Number of statistics buffers to encode
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t orc_init_statistics_buffersize(statistics_merge_group *groups,
-                                           const statistics_chunk *chunks,
-                                           uint32_t statistics_count,
-                                           cudaStream_t stream)
+ */
+void orc_init_statistics_buffersize(statistics_merge_group *groups,
+                                    const statistics_chunk *chunks,
+                                    uint32_t statistics_count,
+                                    rmm::cuda_stream_view stream)
 {
   dim3 dim_block(buffersize_reduction_dim, buffersize_reduction_dim);
-  gpu_init_statistics_buffersize<<<1, dim_block, 0, stream>>>(groups, chunks, statistics_count);
-  return cudaSuccess;
+  gpu_init_statistics_buffersize<<<1, dim_block, 0, stream.value()>>>(
+    groups, chunks, statistics_count);
 }
 
 /**
@@ -423,21 +421,18 @@ cudaError_t orc_init_statistics_buffersize(statistics_merge_group *groups,
  * @param[in,out] groups Statistics merge groups
  * @param[in,out] chunks Statistics data
  * @param[in] statistics_count Number of statistics buffers
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t orc_encode_statistics(uint8_t *blob_bfr,
-                                  statistics_merge_group *groups,
-                                  const statistics_chunk *chunks,
-                                  uint32_t statistics_count,
-                                  cudaStream_t stream)
+ */
+void orc_encode_statistics(uint8_t *blob_bfr,
+                           statistics_merge_group *groups,
+                           const statistics_chunk *chunks,
+                           uint32_t statistics_count,
+                           rmm::cuda_stream_view stream)
 {
   unsigned int num_blocks =
     (statistics_count + encode_chunks_per_block - 1) / encode_chunks_per_block;
   dim3 dim_block(encode_threads_per_chunk, encode_chunks_per_block);
-  gpu_encode_statistics<<<num_blocks, dim_block, 0, stream>>>(
+  gpu_encode_statistics<<<num_blocks, dim_block, 0, stream.value()>>>(
     blob_bfr, groups, chunks, statistics_count);
-  return cudaSuccess;
 }
 
 }  // namespace gpu

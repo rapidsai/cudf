@@ -15,11 +15,14 @@
  */
 #pragma once
 
-#include <thrust/transform_scan.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/lists/lists_column_view.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <thrust/transform_scan.h>
 
 namespace cudf {
 namespace lists {
@@ -48,7 +51,7 @@ struct gather_data {
  * @copydoc cudf::make_gather_data(cudf::lists_column_view const& source_column,
  *                                 MapItType gather_map,
  *                                 size_type gather_map_size,
- *                                 cudaStream_t stream,
+ *                                 rmm::cuda_stream_view stream,
  *                                 rmm::mr::device_memory_resource* mr)
  *
  * @param prev_base_offsets The buffer backing the base offsets used in the gather map. We can
@@ -59,9 +62,9 @@ template <bool NullifyOutOfBounds, typename MapItType>
 gather_data make_gather_data(cudf::lists_column_view const& source_column,
                              MapItType gather_map,
                              size_type gather_map_size,
-                             cudaStream_t stream,
-                             rmm::mr::device_memory_resource* mr,
-                             rmm::device_uvector<int32_t>&& prev_base_offsets)
+                             rmm::device_uvector<int32_t>&& prev_base_offsets,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   // size of the gather map is the # of output rows
   size_type output_count = gather_map_size;
@@ -79,7 +82,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
   // generate the compacted outgoing offsets.
   auto count_iter = thrust::make_counting_iterator<int32_t>(0);
   thrust::transform_exclusive_scan(
-    rmm::exec_policy(stream)->on(stream),
+    rmm::exec_policy(stream)->on(stream.value()),
     count_iter,
     count_iter + offset_count,
     dst_offsets_v.begin<int32_t>(),
@@ -103,7 +106,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
 
   // generate the base offsets
   rmm::device_uvector<int32_t> base_offsets = rmm::device_uvector<int32_t>(output_count, stream);
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
+  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                     gather_map,
                     gather_map + output_count,
                     base_offsets.data(),
@@ -234,16 +237,16 @@ template <bool NullifyOutOfBounds, typename MapItType>
 gather_data make_gather_data(cudf::lists_column_view const& source_column,
                              MapItType gather_map,
                              size_type gather_map_size,
-                             cudaStream_t stream,
+                             rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
   return make_gather_data<NullifyOutOfBounds, MapItType>(
     source_column,
     gather_map,
     gather_map_size,
+    rmm::device_uvector<int32_t>{0, stream, mr},
     stream,
-    mr,
-    rmm::device_uvector<int32_t>{0, stream, mr});
+    mr);
 }
 
 /**
@@ -262,7 +265,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
 std::unique_ptr<column> gather_list_nested(
   lists_column_view const& list,
   gather_data& gd,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -281,7 +284,7 @@ std::unique_ptr<column> gather_list_nested(
 std::unique_ptr<column> gather_list_leaf(
   column_view const& column,
   gather_data const& gd,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

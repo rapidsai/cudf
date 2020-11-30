@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-19, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,19 @@
  * limitations under the License.
  */
 
-#include <cudf/types.hpp>
-#include <cudf_test/base_fixture.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 
-#include <gtest/gtest.h>
+#include <cudf/types.hpp>
+#include <cudf_test/base_fixture.hpp>
+
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/device_vector.h>
 #include <thrust/logical.h>
+
+#include <gtest/gtest.h>
+
 #include <cstdlib>
 #include <iostream>
 #include <limits>
@@ -51,7 +56,7 @@ struct InsertTest : public cudf::test::BaseFixture {
       std::min(static_cast<key_type>(size), std::numeric_limits<key_type>::max());
     pairs.resize(input_size);
     map = std::move(map_type::create(compute_hash_table_size(size)));
-    CUDA_TRY(cudaStreamSynchronize(0));
+    rmm::cuda_stream_default.synchronize();
   }
 
   const cudf::size_type size{10000};

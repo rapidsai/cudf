@@ -28,6 +28,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -65,7 +67,7 @@ class writer::impl {
    **/
   void write(table_view const& table,
              const table_metadata* metadata = nullptr,
-             cudaStream_t stream            = nullptr);
+             rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
 
   /**
    * @brief Write the header of a CSV format.
@@ -76,7 +78,7 @@ class writer::impl {
    **/
   void write_chunked_begin(table_view const& table,
                            const table_metadata* metadata = nullptr,
-                           cudaStream_t stream            = nullptr);
+                           rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
 
   /**
    * @brief Write dataset to CSV format without header.
@@ -87,7 +89,7 @@ class writer::impl {
    **/
   void write_chunked(strings_column_view const& strings_column,
                      const table_metadata* metadata = nullptr,
-                     cudaStream_t stream            = nullptr);
+                     rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
 
   /**
    * @brief Write footer of CSV format (typically, empty).
@@ -98,7 +100,7 @@ class writer::impl {
    **/
   void write_chunked_end(table_view const& table,
                          const table_metadata* metadata = nullptr,
-                         cudaStream_t stream            = nullptr)
+                         rmm::cuda_stream_view stream   = rmm::cuda_stream_default)
   {
     // purposely no-op (for now);
   }
@@ -111,7 +113,7 @@ class writer::impl {
 
 std::unique_ptr<column> pandas_format_durations(
   column_view const& durations,
-  cudaStream_t stream,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace csv

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 
@@ -61,12 +63,12 @@ std::unique_ptr<cudf::column> gather(
   strings_column_view const& strings,
   MapIterator begin,
   MapIterator end,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto output_count  = std::distance(begin, end);
   auto strings_count = strings.size();
-  if (output_count == 0) return make_empty_strings_column(mr, stream);
+  if (output_count == 0) return make_empty_strings_column(stream, mr);
 
   auto execpol        = rmm::exec_policy(stream);
   auto strings_column = column_device_view::create(strings.parent(), stream);
@@ -80,13 +82,13 @@ std::unique_ptr<cudf::column> gather(
   };
   auto offsets_transformer_itr = thrust::make_transform_iterator(begin, offsets_transformer);
   auto offsets_column          = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + output_count, mr, stream);
+    offsets_transformer_itr, offsets_transformer_itr + output_count, stream, mr);
   auto offsets_view = offsets_column->view();
   auto d_offsets    = offsets_view.template data<int32_t>();
 
   // build chars column
   size_type bytes   = thrust::device_pointer_cast(d_offsets)[output_count];
-  auto chars_column = create_chars_child_column(output_count, 0, bytes, mr, stream);
+  auto chars_column = create_chars_child_column(output_count, 0, bytes, stream, mr);
   auto chars_view   = chars_column->mutable_view();
   auto d_chars      = chars_view.template data<char>();
   // fill in chars
@@ -102,8 +104,10 @@ std::unique_ptr<cudf::column> gather(
       string_view d_str = d_strings.element<string_view>(index);
       memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes());
     };
-  thrust::for_each_n(
-    execpol->on(stream), thrust::make_counting_iterator<size_type>(0), output_count, gather_chars);
+  thrust::for_each_n(execpol->on(stream.value()),
+                     thrust::make_counting_iterator<size_type>(0),
+                     output_count,
+                     gather_chars);
 
   return make_strings_column(output_count,
                              std::move(offsets_column),
@@ -143,11 +147,11 @@ std::unique_ptr<cudf::column> gather(
   MapIterator begin,
   MapIterator end,
   bool nullify_out_of_bounds,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  if (nullify_out_of_bounds) return gather<true>(strings, begin, end, mr, stream);
-  return gather<false>(strings, begin, end, mr, stream);
+  if (nullify_out_of_bounds) return gather<true>(strings, begin, end, stream, mr);
+  return gather<false>(strings, begin, end, stream, mr);
 }
 
 }  // namespace detail

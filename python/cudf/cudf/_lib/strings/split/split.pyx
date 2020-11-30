@@ -17,6 +17,8 @@ from libcpp.string cimport string
 from cudf._lib.cpp.strings.split.split cimport (
     split as cpp_split,
     rsplit as cpp_rsplit,
+    split_record as cpp_split_record,
+    rsplit_record as cpp_rsplit_record
 )
 
 
@@ -47,6 +49,32 @@ def split(Column source_strings,
     )
 
 
+def split_record(Column source_strings,
+                 DeviceScalar delimiter,
+                 size_type maxsplit):
+    """
+    Returns a Column by splitting the `source_strings`
+    column around the specified `delimiter`.
+    The split happens from beginning.
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        delimiter.get_raw_ptr()
+    )
+
+    with nogil:
+        c_result = move(cpp_split_record(
+            source_view,
+            scalar_str[0],
+            maxsplit
+        ))
+
+    return Column.from_unique_ptr(
+        move(c_result),
+    )
+
+
 def rsplit(Column source_strings,
            DeviceScalar delimiter,
            size_type maxsplit):
@@ -71,4 +99,30 @@ def rsplit(Column source_strings,
     return Table.from_unique_ptr(
         move(c_result),
         column_names=range(0, c_result.get()[0].num_columns())
+    )
+
+
+def rsplit_record(Column source_strings,
+                  DeviceScalar delimiter,
+                  size_type maxsplit):
+    """
+    Returns a Column by splitting the `source_strings`
+    column around the specified `delimiter`.
+    The split happens from the end.
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view source_view = source_strings.view()
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        delimiter.get_raw_ptr()
+    )
+
+    with nogil:
+        c_result = move(cpp_rsplit_record(
+            source_view,
+            scalar_str[0],
+            maxsplit
+        ))
+
+    return Column.from_unique_ptr(
+        move(c_result),
     )

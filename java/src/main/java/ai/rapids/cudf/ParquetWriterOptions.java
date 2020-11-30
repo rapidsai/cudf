@@ -41,9 +41,18 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
 
   public static class Builder extends CMWriterBuilder<Builder> {
     private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
+    private boolean isTimestampTypeInt96 = false;
 
     public Builder withStatisticsFrequency(StatisticsFrequency statsGranularity) {
       this.statsGranularity = statsGranularity;
+      return this;
+    }
+
+    /**
+     * Set whether the timestamps should be written in INT96
+     */
+    public Builder withTimestampInt96(boolean int96) {
+      this.isTimestampTypeInt96 = int96;
       return this;
     }
 
@@ -63,9 +72,19 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
   private ParquetWriterOptions(Builder builder) {
     super(builder);
     this.statsGranularity = builder.statsGranularity;
+    this.isTimestampTypeInt96 = builder.isTimestampTypeInt96;
   }
 
   public StatisticsFrequency getStatisticsFrequency() {
     return statsGranularity;
   }
+
+  /**
+   * Returns true if the writer is expected to write timestamps in INT96
+   */
+  public boolean isTimestampTypeInt96() {
+    return isTimestampTypeInt96;
+  }
+
+  private boolean isTimestampTypeInt96;
 }

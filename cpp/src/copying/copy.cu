@@ -41,24 +41,30 @@ struct copy_if_else_functor_impl {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
+    using Type = device_storage_type_t<T>;
+
     if (left_nullable) {
       if (right_nullable) {
-        auto lhs_iter = cudf::detail::make_pair_iterator<T, true>(lhs);
-        auto rhs_iter = cudf::detail::make_pair_iterator<T, true>(rhs);
-        return detail::copy_if_else(true, lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
+        auto lhs_iter = cudf::detail::make_pair_iterator<Type, true>(lhs);
+        auto rhs_iter = cudf::detail::make_pair_iterator<Type, true>(rhs);
+        return detail::copy_if_else(
+          true, lhs_iter, lhs_iter + size, rhs_iter, filter, lhs.type(), stream, mr);
       }
-      auto lhs_iter = cudf::detail::make_pair_iterator<T, true>(lhs);
-      auto rhs_iter = cudf::detail::make_pair_iterator<T, false>(rhs);
-      return detail::copy_if_else(true, lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
+      auto lhs_iter = cudf::detail::make_pair_iterator<Type, true>(lhs);
+      auto rhs_iter = cudf::detail::make_pair_iterator<Type, false>(rhs);
+      return detail::copy_if_else(
+        true, lhs_iter, lhs_iter + size, rhs_iter, filter, lhs.type(), stream, mr);
     }
     if (right_nullable) {
-      auto lhs_iter = cudf::detail::make_pair_iterator<T, false>(lhs);
-      auto rhs_iter = cudf::detail::make_pair_iterator<T, true>(rhs);
-      return detail::copy_if_else(true, lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
+      auto lhs_iter = cudf::detail::make_pair_iterator<Type, false>(lhs);
+      auto rhs_iter = cudf::detail::make_pair_iterator<Type, true>(rhs);
+      return detail::copy_if_else(
+        true, lhs_iter, lhs_iter + size, rhs_iter, filter, lhs.type(), stream, mr);
     }
-    auto lhs_iter = cudf::detail::make_pair_iterator<T, false>(lhs);
-    auto rhs_iter = cudf::detail::make_pair_iterator<T, false>(rhs);
-    return detail::copy_if_else(false, lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
+    auto lhs_iter = cudf::detail::make_pair_iterator<Type, false>(lhs);
+    auto rhs_iter = cudf::detail::make_pair_iterator<Type, false>(rhs);
+    return detail::copy_if_else(
+      false, lhs_iter, lhs_iter + size, rhs_iter, filter, lhs.type(), stream, mr);
   }
 };
 
@@ -130,42 +136,6 @@ struct copy_if_else_functor_impl<struct_view, Left, Right, Filter> {
                                      rmm::mr::device_memory_resource* mr)
   {
     CUDF_FAIL("copy_if_else not supported for struct_view yet");
-  }
-};
-
-/**
- * @brief Specialization of copy_if_else_functor for decimal32.
- */
-template <typename Left, typename Right, typename Filter>
-struct copy_if_else_functor_impl<numeric::decimal32, Left, Right, Filter> {
-  std::unique_ptr<column> operator()(Left const& lhs,
-                                     Right const& rhs,
-                                     size_type size,
-                                     bool left_nullable,
-                                     bool right_nullable,
-                                     Filter filter,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
-  {
-    CUDF_FAIL("copy_if_else not supported for decimal32 yet");
-  }
-};
-
-/**
- * @brief Specialization of copy_if_else_functor for decimal64.
- */
-template <typename Left, typename Right, typename Filter>
-struct copy_if_else_functor_impl<numeric::decimal64, Left, Right, Filter> {
-  std::unique_ptr<column> operator()(Left const& lhs,
-                                     Right const& rhs,
-                                     size_type size,
-                                     bool left_nullable,
-                                     bool right_nullable,
-                                     Filter filter,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
-  {
-    CUDF_FAIL("copy_if_else not supported for decimal64 yet");
   }
 };
 
