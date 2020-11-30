@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cudf_test/base_fixture.hpp>
@@ -1273,6 +1274,21 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitTable)
 
   for (unsigned long index = 0; index < result.size(); index++) {
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected[index], result[index].table.column(0));
+  }
+}
+
+TEST_F(ContiguousSplitTableCornerCases, NestedEmptyStrings)
+{
+  {
+    auto empty_string = cudf::strings::detail::make_empty_strings_column();
+    auto offsets      = cudf::test::fixed_width_column_wrapper<int>({0, 1});
+    auto list         = cudf::make_lists_column(
+      1, offsets.release(), std::move(empty_string), 0, rmm::device_buffer{0});
+
+    cudf::table_view src_table({static_cast<cudf::column_view>(*list)});
+
+    std::vector<cudf::size_type> splits({0});
+    EXPECT_NO_THROW(contiguous_split(src_table, splits));
   }
 }
 

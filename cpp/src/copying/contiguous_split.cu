@@ -419,38 +419,43 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
   int parent_offset_index,
   int offset_depth)
 {
-  strings_column_view scv(col);
-
   if (col.nullable()) {
     std::tie(current, offset_stack_pos) =
       add_null_buffer(col, current, offset_stack_pos, parent_offset_index, offset_depth);
   }
 
-  auto offset_col = current;
+  // string columns can have no children and still be valid
+  if (col.num_children() > 0) {
+    strings_column_view scv(col);
 
-  // info for the offsets buffer
-  *current = src_buf_info(type_id::INT32,
-                          scv.offsets().begin<cudf::id_to_type<type_id::INT32>>(),
-                          offset_stack_pos,
-                          parent_offset_index,
-                          false,
-                          col.offset());
+    auto offset_col = current;
 
-  // prevent appending buf_info for non-exist chars buffer
-  if (scv.chars_size() > 0) {
+    // info for the offsets buffer
+    *current = src_buf_info(type_id::INT32,
+                            scv.offsets().begin<cudf::id_to_type<type_id::INT32>>(),
+                            offset_stack_pos,
+                            parent_offset_index,
+                            false,
+                            col.offset());
+
     current++;
     offset_stack_pos += offset_depth;
 
-    // since we are crossing an offset boundary, our offset_depth and parent_offset_index go up.
-    offset_depth++;
-    parent_offset_index = offset_col - head;
+    // prevent appending buf_info for non-exist chars buffer
+    if (scv.chars_size() > 0) {
+      // since we are crossing an offset boundary, our offset_depth and parent_offset_index go up.
+      offset_depth++;
+      parent_offset_index = offset_col - head;
 
-    // info for the chars buffer
-    *current = src_buf_info(
-      type_id::INT8, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+      // info for the chars buffer
+      *current = src_buf_info(
+        type_id::INT8, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+      current++;
+      offset_stack_pos += offset_depth;
+    }
   }
 
-  return {current + 1, offset_stack_pos + offset_depth};
+  return {current, offset_stack_pos};
 }
 
 template <>
