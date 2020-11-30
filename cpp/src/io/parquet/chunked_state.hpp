@@ -21,8 +21,11 @@
 
 #pragma once
 
-#include <cudf/io/detail/parquet.hpp>
 #include <io/parquet/parquet.hpp>
+
+#include <cudf/io/detail/parquet.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
@@ -37,7 +40,7 @@ struct pq_chunked_state {
   /// The writer to be used
   std::unique_ptr<cudf::io::detail::parquet::writer> wp;
   /// Cuda stream to be used
-  cudaStream_t stream;
+  rmm::cuda_stream_view stream;
   /// Overall file metadata.  Filled in during the process and written during write_chunked_end()
   cudf::io::parquet::FileMetaData md;
   /// current write position for rowgroups/chunks
@@ -50,13 +53,19 @@ struct pq_chunked_state {
   /// only used in the write_chunked() case. copied from the (optionally) user supplied
   /// argument to write_parquet_chunked_begin()
   bool single_write_mode;
+  ///  timestamps should be written as int96 types
+  bool int96_timestamps;
 
   pq_chunked_state() = default;
 
   pq_chunked_state(table_metadata const* metadata,
-                   SingleWriteMode mode = SingleWriteMode::NO,
-                   cudaStream_t str     = 0)
-    : user_metadata{metadata}, single_write_mode{mode == SingleWriteMode::YES}, stream{str}
+                   SingleWriteMode mode         = SingleWriteMode::NO,
+                   bool write_int96_timestamps  = false,
+                   rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+    : stream{stream},
+      user_metadata{metadata},
+      single_write_mode{mode == SingleWriteMode::YES},
+      int96_timestamps(write_int96_timestamps)
   {
   }
 };

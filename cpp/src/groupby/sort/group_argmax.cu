@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/gather.hpp>
 #include <groupby/sort/group_single_pass_reduction_util.cuh>
+
+#include <cudf/detail/gather.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/transform.h>
 
@@ -26,16 +29,16 @@ std::unique_ptr<column> group_argmax(column_view const& values,
                                      size_type num_groups,
                                      rmm::device_vector<size_type> const& group_labels,
                                      column_view const& key_sort_order,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
 {
   auto indices = type_dispatcher(values.type(),
                                  reduce_functor<aggregation::ARGMAX>{},
                                  values,
                                  num_groups,
                                  group_labels,
-                                 rmm::mr::get_current_device_resource(),
-                                 stream);
+                                 stream,
+                                 rmm::mr::get_current_device_resource());
 
   // The functor returns the index of maximum in the sorted values.
   // We need the index of maximum in the original unsorted values.
@@ -54,8 +57,8 @@ std::unique_ptr<column> group_argmax(column_view const& values,
                          indices->nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
                                              : cudf::detail::out_of_bounds_policy::NULLIFY,
                          cudf::detail::negative_index_policy::NOT_ALLOWED,
-                         mr,
-                         stream);
+                         stream,
+                         mr);
 
   return std::move(result_table->release()[0]);
 }

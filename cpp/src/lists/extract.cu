@@ -18,6 +18,8 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/lists/extract.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -57,7 +59,7 @@ struct map_index_fn {
  */
 std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                              size_type index,
-                                             cudaStream_t stream,
+                                             rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
   if (lists_column.is_empty()) return empty_like(lists_column.parent());
@@ -80,13 +82,13 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
   // build the gather map using the offsets and the provided index
   auto const d_column = column_device_view::create(annotated_offsets, stream);
   if (index < 0)
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
+    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(gather_map->size()),
                       d_gather_map,
                       map_index_fn<false>{*d_column, index, child_column.size()});
   else
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
+    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(gather_map->size()),
                       d_gather_map,
@@ -97,8 +99,8 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                      d_gather_map,
                                      d_gather_map + gather_map->size(),
                                      true,  // nullify-out-of-bounds
-                                     mr,
-                                     stream)
+                                     stream,
+                                     mr)
                   ->release();
   if (result.front()->null_count() == 0)
     result.front()->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
@@ -114,7 +116,7 @@ std::unique_ptr<column> extract_list_element(lists_column_view const& lists_colu
                                              size_type index,
                                              rmm::mr::device_memory_resource* mr)
 {
-  return detail::extract_list_element(lists_column, index, 0, mr);
+  return detail::extract_list_element(lists_column, index, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace lists

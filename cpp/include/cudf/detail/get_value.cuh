@@ -16,9 +16,12 @@
 
 #pragma once
 
+#include <cudf/column/column_view.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {
@@ -39,16 +42,19 @@ namespace detail {
  * @return Value from the `col_view[element_index]`
  */
 template <typename T>
-T get_value(column_view const& col_view, size_type element_index, cudaStream_t stream)
+T get_value(column_view const& col_view, size_type element_index, rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(cudf::is_fixed_width(col_view.type()), "get_value supports only fixed-width types");
   CUDF_EXPECTS(data_type(type_to_id<T>()) == col_view.type(), "get_value data type mismatch");
   CUDF_EXPECTS(element_index >= 0 && element_index < col_view.size(),
                "invalid element_index value");
   T result;
-  CUDA_TRY(cudaMemcpyAsync(
-    &result, col_view.data<T>() + element_index, sizeof(T), cudaMemcpyDeviceToHost, stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  CUDA_TRY(cudaMemcpyAsync(&result,
+                           col_view.data<T>() + element_index,
+                           sizeof(T),
+                           cudaMemcpyDeviceToHost,
+                           stream.value()));
+  stream.synchronize();
   return result;
 }
 

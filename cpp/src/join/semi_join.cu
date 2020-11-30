@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include <hash/concurrent_unordered_map.cuh>
+#include <join/join_common_utils.hpp>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -22,8 +25,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <hash/concurrent_unordered_map.cuh>
-#include <join/join_common_utils.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {
@@ -73,8 +75,8 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
   std::vector<cudf::size_type> const& right_on,
   std::vector<cudf::size_type> const& return_columns,
   null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(0 != left.num_columns(), "Left table is empty");
   CUDF_EXPECTS(0 != right.num_columns(), "Right table is empty");
@@ -98,8 +100,9 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
   // This will return any new dictionary columns created as well as updated table_views.
   auto matched = cudf::dictionary::detail::match_dictionaries(
     {left.select(left_on), right.select(right_on)},
-    rmm::mr::get_current_device_resource(),  // temporary objects returned
-    stream);
+    stream,
+    rmm::mr::get_current_device_resource());  // temporary objects returned
+
   auto const left_selected  = matched.second.front();
   auto const right_selected = matched.second.back();
 
@@ -118,13 +121,14 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
   row_equality equality_probe{*left_rows_d, *right_rows_d, compare_nulls == null_equality::EQUAL};
 
   auto hash_table_ptr = hash_table_type::create(hash_table_size,
+                                                stream,
                                                 std::numeric_limits<bool>::max(),
                                                 std::numeric_limits<cudf::size_type>::max(),
                                                 hash_build,
                                                 equality_build);
   auto hash_table     = *hash_table_ptr;
 
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<size_type>(0),
                      right_num_rows,
                      [hash_table] __device__(size_type idx) mutable {
@@ -143,7 +147,7 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
 
   // gather_map_end will be the end of valid data in gather_map
   auto gather_map_end = thrust::copy_if(
-    rmm::exec_policy(stream)->on(stream),
+    rmm::exec_policy(stream)->on(stream.value()),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(left_num_rows),
     gather_map.begin(),
@@ -155,7 +159,7 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
   // rebuild left table for call to gather
   auto const left_updated = scatter_columns(left_selected, left_on, left);
   return cudf::detail::gather(
-    left_updated.select(return_columns), gather_map.begin(), gather_map_end, false, mr);
+    left_updated.select(return_columns), gather_map.begin(), gather_map_end, false, stream, mr);
 }
 }  // namespace detail
 
@@ -169,7 +173,7 @@ std::unique_ptr<cudf::table> left_semi_join(cudf::table_view const& left,
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join<detail::join_kind::LEFT_SEMI_JOIN>(
-    left, right, left_on, right_on, return_columns, compare_nulls, mr, 0);
+    left, right, left_on, right_on, return_columns, compare_nulls, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<cudf::table> left_anti_join(cudf::table_view const& left,
@@ -182,7 +186,7 @@ std::unique_ptr<cudf::table> left_anti_join(cudf::table_view const& left,
 {
   CUDF_FUNC_RANGE();
   return detail::left_semi_anti_join<detail::join_kind::LEFT_ANTI_JOIN>(
-    left, right, left_on, right_on, return_columns, compare_nulls, mr, 0);
+    left, right, left_on, right_on, return_columns, compare_nulls, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf
