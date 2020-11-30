@@ -26,9 +26,7 @@ def tokenize(Column strings, object delimiter):
         return _tokenize_column(strings, delimiter)
 
     raise TypeError(
-        "Expected a Scalar or Column for delimiters, but got {}".format(
-            type(delimiter)
-        )
+        f"Expected a Scalar or Column for delimiters, but got {type(delimiter)}"
     )
 
 
