@@ -21,6 +21,7 @@
 - PR #6652 Add support for struct columns in concatenate
 - PR #6675 Add DecimalDtype to cuDF
 - PR #6739 Add Java bindings for is_timestamp
+- PR #6808 Add support for reading decimal32 and decimal64 from parquet
 
 ## Improvements
 
