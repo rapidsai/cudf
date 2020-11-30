@@ -15,6 +15,9 @@
  */
 
 #include <strings/char_types/is_flags.h>
+#include <strings/utilities.cuh>
+#include <strings/utilities.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -25,8 +28,8 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
-#include <strings/utilities.cuh>
-#include <strings/utilities.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace strings {
@@ -257,14 +260,15 @@ std::unique_ptr<column> capitalize(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::modify_strings<detail::probe_capitalize, detail::execute_capitalize>(
-    strings, mr, nullptr);
+    strings, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> title(strings_column_view const& strings,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::modify_strings<detail::probe_title, detail::execute_title>(strings, mr, nullptr);
+  return detail::modify_strings<detail::probe_title, detail::execute_title>(
+    strings, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

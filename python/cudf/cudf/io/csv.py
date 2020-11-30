@@ -4,6 +4,7 @@ from io import BytesIO, StringIO
 
 from nvtx import annotate
 
+import cudf
 from cudf import _lib as libcudf
 from cudf.utils import ioutils
 from cudf.utils.dtypes import is_scalar
@@ -57,6 +58,14 @@ def read_csv(
 
     if na_values is not None and is_scalar(na_values):
         na_values = [na_values]
+
+    if keep_default_na is False:
+        # TODO: Remove this error once the following issue is fixed:
+        # https://github.com/rapidsai/cudf/issues/6680
+        raise NotImplementedError(
+            "keep_default_na=False is currently not supported, please refer "
+            "to: https://github.com/rapidsai/cudf/issues/6680"
+        )
 
     return libcudf.csv.read_csv(
         filepath_or_buffer,
@@ -126,6 +135,34 @@ def to_csv(
             raise NameError(
                 "Dataframe doesn't have the labels provided in columns"
             )
+
+    if sep == "-":
+        # TODO: Remove this error once following issue is fixed:
+        # https://github.com/rapidsai/cudf/issues/6699
+        if any(
+            isinstance(col, cudf.core.column.DatetimeColumn)
+            for col in df._data.columns
+        ):
+            raise ValueError(
+                "sep cannot be '-' when writing a datetime64 dtype to csv, "
+                "refer to: https://github.com/rapidsai/cudf/issues/6699"
+            )
+
+    # TODO: Need to typecast categorical columns to the underlying
+    # categories dtype to write the actual data to csv. Remove this
+    # workaround once following issue is fixed:
+    # https://github.com/rapidsai/cudf/issues/6661
+    if any(
+        isinstance(col, cudf.core.column.CategoricalColumn)
+        for col in df._data.columns
+    ) or isinstance(df.index, cudf.CategoricalIndex):
+        df = df.copy(deep=False)
+        for col_name, col in df._data.items():
+            if isinstance(col, cudf.core.column.CategoricalColumn):
+                df._data[col_name] = col.astype(col.cat().categories.dtype)
+
+        if isinstance(df.index, cudf.CategoricalIndex):
+            df.index = df.index.astype(df.index.categories.dtype)
 
     rows_per_chunk = chunksize if chunksize else len(df)
 

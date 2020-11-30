@@ -19,6 +19,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <vector>
 
 namespace cudf {
@@ -396,7 +398,7 @@ class hash_join {
    */
   hash_join(cudf::table_view const& build,
             std::vector<size_type> const& build_on,
-            cudaStream_t stream = 0);
+            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   /**
    * @brief Controls where common columns will be output for a inner join.
@@ -449,8 +451,8 @@ class hash_join {
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     common_columns_output_side common_columns_output_side = common_columns_output_side::PROBE,
     null_equality compare_nulls                           = null_equality::EQUAL,
-    rmm::mr::device_memory_resource* mr                   = rmm::mr::get_current_device_resource(),
-    cudaStream_t stream                                   = 0) const;
+    rmm::cuda_stream_view stream                          = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
   /**
    * @brief Performs a left join by probing in the internal hash table.
@@ -479,8 +481,8 @@ class hash_join {
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     null_equality compare_nulls         = null_equality::EQUAL,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-    cudaStream_t stream                 = 0) const;
+    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
   /**
    * @brief Performs a full join by probing in the internal hash table.
@@ -509,8 +511,8 @@ class hash_join {
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     null_equality compare_nulls         = null_equality::EQUAL,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-    cudaStream_t stream                 = 0) const;
+    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
   struct hash_join_impl;
