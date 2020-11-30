@@ -18,6 +18,8 @@
 
 #include <text/subword/detail/data_normalizer.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace nvtext {
 
 struct hashed_vocabulary;
@@ -70,7 +72,7 @@ class wordpiece_tokenizer {
                       uint32_t stride,
                       bool do_truncate,
                       bool do_lower_case,
-                      cudaStream_t stream      = 0,
+                      rmm::cuda_stream_view stream,
                       uint32_t max_word_length = 200);
 
   /**
@@ -88,7 +90,7 @@ class wordpiece_tokenizer {
   uvector_pair tokenize(char const* d_strings,
                         uint32_t const* d_offsets,
                         uint32_t num_strings,
-                        cudaStream_t stream);
+                        rmm::cuda_stream_view stream);
 
  private:
   /**
@@ -100,7 +102,7 @@ class wordpiece_tokenizer {
    *        per string.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void tokenize(uvector_pair& cps_and_offsets, cudaStream_t stream);
+  void tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stream_view stream);
 
   hashed_vocabulary const& vocab_table;
   data_normalizer normalizer;  // removes punctuation, accents, etc

@@ -99,7 +99,7 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
                                 rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(mr, stream.value());
+  if (strings_count == 0) return make_empty_strings_column(stream, mr);
   CUDF_EXPECTS(repl.is_valid(), "Parameter repl must be valid.");
   CUDF_EXPECTS(target.is_valid(), "Parameter target must be valid.");
   CUDF_EXPECTS(target.size() > 0, "Parameter target must not be empty string.");
@@ -117,20 +117,20 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
     thrust::make_counting_iterator<int32_t>(0),
     replace_fn<two_pass::SIZE_ONLY>{d_strings, d_target, d_repl, maxrepl});
   auto offsets_column = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream.value());
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build chars column
   size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
   auto chars_column =
-    create_chars_child_column(strings_count, strings.null_count(), bytes, mr, stream.value());
+    create_chars_child_column(strings_count, strings.null_count(), bytes, stream, mr);
   auto d_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
     rmm::exec_policy(stream)->on(stream.value()),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     replace_fn<two_pass::EXECUTE_OP>{d_strings, d_target, d_repl, maxrepl, d_offsets, d_chars});
-  //
+
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              std::move(chars_column),
@@ -187,7 +187,7 @@ std::unique_ptr<column> replace_slice(strings_column_view const& strings,
                                       rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(mr, stream.value());
+  if (strings_count == 0) return make_empty_strings_column(stream, mr);
   CUDF_EXPECTS(repl.is_valid(), "Parameter repl must be valid.");
   if (stop > 0) CUDF_EXPECTS(start <= stop, "Parameter start must be less than or equal to stop.");
 
@@ -197,21 +197,20 @@ std::unique_ptr<column> replace_slice(strings_column_view const& strings,
   auto d_strings      = *strings_column;
 
   // copy the null mask
-  rmm::device_buffer null_mask =
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
   // build offsets column
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<int32_t>(0),
     replace_slice_fn<two_pass::SIZE_ONLY>{d_strings, d_repl, start, stop});
   auto offsets_column = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream.value());
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto offsets_view = offsets_column->view();
   auto d_offsets    = offsets_view.data<int32_t>();
 
   // build chars column
   size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
   auto chars_column =
-    create_chars_child_column(strings_count, strings.null_count(), bytes, mr, stream.value());
+    create_chars_child_column(strings_count, strings.null_count(), bytes, stream, mr);
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.data<char>();
   thrust::for_each_n(
@@ -291,7 +290,7 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
                                 rmm::mr::device_memory_resource* mr)
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(mr, stream.value());
+  if (strings_count == 0) return make_empty_strings_column(stream, mr);
   CUDF_EXPECTS(((targets.size() > 0) && (targets.null_count() == 0)),
                "Parameters targets must not be empty and must not have nulls");
   CUDF_EXPECTS(((repls.size() > 0) && (repls.null_count() == 0)),
@@ -313,20 +312,20 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
     thrust::make_counting_iterator<int32_t>(0),
     replace_multi_fn<two_pass::SIZE_ONLY>{d_strings, d_targets, d_repls});
   auto offsets_column = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream.value());
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build chars column
   size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
   auto chars_column =
-    create_chars_child_column(strings_count, strings.null_count(), bytes, mr, stream.value());
+    create_chars_child_column(strings_count, strings.null_count(), bytes, stream, mr);
   auto d_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
     rmm::exec_policy(stream)->on(stream.value()),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     replace_multi_fn<two_pass::EXECUTE_OP>{d_strings, d_targets, d_repls, d_offsets, d_chars});
-  //
+
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              std::move(chars_column),
@@ -342,7 +341,7 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
                                       rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(mr, stream.value());
+  if (strings_count == 0) return make_empty_strings_column(stream, mr);
   CUDF_EXPECTS(repl.is_valid(), "Parameter repl must be valid.");
 
   string_view d_repl(repl.data(), repl.size());
@@ -357,13 +356,13 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
                                     : d_strings.element<string_view>(idx).size_bytes();
     });
   auto offsets_column = make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream.value());
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build chars column
   size_type bytes   = thrust::device_pointer_cast(d_offsets)[strings_count];
   auto chars_column = strings::detail::create_chars_child_column(
-    strings_count, strings.null_count(), bytes, mr, stream.value());
+    strings_count, strings.null_count(), bytes, stream, mr);
   auto d_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<size_type>(0),
