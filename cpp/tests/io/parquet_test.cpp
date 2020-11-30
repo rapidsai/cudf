@@ -1562,6 +1562,10 @@ TEST_F(ParquetReaderTest, DecimalRead)
     cudf::test::fixed_width_column_wrapper<double> col2(std::begin(col2_data), std::end(col2_data),
     validity); cudf::test::expect_columns_equal(result.tbl->view().column(2), col2);
     */
-}
 
+  cudf_io::parquet_reader_options read_strict_opts =
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).use_strict_decimal_types(true);
+  EXPECT_THROW(cudf_io::read_parquet(read_strict_opts), cudf::logic_error);
+
+}
 CUDF_TEST_PROGRAM_MAIN()
