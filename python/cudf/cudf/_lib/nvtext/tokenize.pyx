@@ -15,10 +15,10 @@ from cudf._lib.cpp.nvtext.tokenize cimport (
 )
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
-from cudf import Scalar
+from cudf.utils.utils import is_cudf_pyscalar
 
 def tokenize(Column strings, object delimiter):
-    if isinstance(delimiter, Scalar):
+    if is_cudf_pyscalar(delimiter):
         return _tokenize_scalar(strings, delimiter)
 
     if isinstance(delimiter, Column):
@@ -68,7 +68,7 @@ def _tokenize_column(Column strings, Column delimiters):
 
 
 def count_tokens(Column strings, object delimiter):
-    if isinstance(delimiter, Scalar):
+    if is_cudf_pyscalar(delimiter):
         return _count_tokens_scalar(strings, delimiter)
 
     if isinstance(delimiter, Column):

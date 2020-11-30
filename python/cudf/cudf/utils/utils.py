@@ -464,3 +464,6 @@ def search_range(start, stop, x, step=1, side="left"):
 
     length = (stop - start) // step
     return max(min(length, i), 0)
+
+def is_cudf_pyscalar(obj):
+    return isinstance(obj, cudf.Scalar)
