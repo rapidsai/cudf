@@ -473,14 +473,6 @@ def search_range(start, stop, x, step=1, side="left"):
     return max(min(length, i), 0)
 
 
-def is_cudf_pyscalar(obj):
-    """
-    Workaround for checking if an object is a cudf.Scalar
-    from within cython without having to import it there
-    """
-    return isinstance(obj, cudf.Scalar)
-
-
 # Utils for using appropriate dispatch for array functions
 def get_appropriate_dispatched_func(
     cudf_submodule, cudf_ser_submodule, cupy_submodule, func, args, kwargs

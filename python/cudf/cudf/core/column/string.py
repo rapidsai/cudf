@@ -37,10 +37,12 @@ from cudf._lib.nvtext.subword_tokenize import (
     subword_tokenize as cpp_subword_tokenize,
 )
 from cudf._lib.nvtext.tokenize import (
+    _count_tokens_column as cpp_count_tokens_column,
+    _count_tokens_scalar as cpp_count_tokens_scalar,
+    _tokenize_column as cpp_tokenize_column,
+    _tokenize_scalar as cpp_tokenize_scalar,
     character_tokenize as cpp_character_tokenize,
-    count_tokens as cpp_count_tokens,
     detokenize as cpp_detokenize,
-    tokenize as cpp_tokenize,
 )
 from cudf._lib.strings.attributes import (
     code_points as cpp_code_points,
@@ -3940,9 +3942,20 @@ class StringMethods(ColumnMethodsMixin):
         """
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
         kwargs.setdefault("retain_index", False)
-        return self._return_or_inplace(
-            cpp_tokenize(self._column, delimiter), **kwargs
-        )
+
+        if isinstance(delimiter, Column):
+            return self._return_or_inplace(
+                cpp_tokenize_column(self._column, delimiter), **kwargs
+            )
+        elif isinstance(delimiter, cudf.Scalar):
+            return self._return_or_inplace(
+                cpp_tokenize_scalar(self._column, delimiter), **kwargs
+            )
+        else:
+            raise TypeError(
+                f"Expected a Scalar or Column\
+                for delimiters, but got {type(delimiter)}"
+            )
 
     def detokenize(self, indices, separator=" ", **kwargs):
         """
@@ -4061,9 +4074,20 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
-        return self._return_or_inplace(
-            cpp_count_tokens(self._column, delimiter), **kwargs
-        )
+        if isinstance(delimiter, Column):
+            return self._return_or_inplace(
+                cpp_count_tokens_column(self._column, delimiter)
+            )
+
+        elif isinstance(delimiter, cudf.Scalar):
+            return self._return_or_inplace(
+                cpp_count_tokens_scalar(self._column, delimiter)
+            )
+        else:
+            raise TypeError(
+                f"Expected a Scalar or Column\
+                for delimiters, but got {type(delimiter)}"
+            )
 
     def ngrams(self, n=2, separator="_", **kwargs):
         """

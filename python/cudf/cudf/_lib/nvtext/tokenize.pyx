@@ -15,21 +15,6 @@ from cudf._lib.cpp.nvtext.tokenize cimport (
 )
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
-from cudf.utils.utils import is_cudf_pyscalar
-
-
-def tokenize(Column strings, object delimiter):
-    if is_cudf_pyscalar(delimiter):
-        return _tokenize_scalar(strings, delimiter)
-
-    if isinstance(delimiter, Column):
-        return _tokenize_column(strings, delimiter)
-
-    raise TypeError(
-        "Expected a Scalar or Column for delimiters, but got {}".format(
-            type(delimiter)
-        )
-    )
 
 
 def _tokenize_scalar(Column strings, object py_delimiter):
@@ -66,20 +51,6 @@ def _tokenize_column(Column strings, Column delimiters):
         )
 
     return Column.from_unique_ptr(move(c_result))
-
-
-def count_tokens(Column strings, object delimiter):
-    if is_cudf_pyscalar(delimiter):
-        return _count_tokens_scalar(strings, delimiter)
-
-    if isinstance(delimiter, Column):
-        return _count_tokens_column(strings, delimiter)
-
-    raise TypeError(
-        "Expected a Scalar or Column for delimiters, but got {}".format(
-            type(delimiter)
-        )
-    )
 
 
 def _count_tokens_scalar(Column strings, object py_delimiter):
