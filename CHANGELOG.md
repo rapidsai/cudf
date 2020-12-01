@@ -86,6 +86,7 @@
 - PR #6644 Cover different CSV reader/writer options in benchmarks
 - PR #6741 Cover different ORC and Parquet reader/writer options in benchmarks
 - PR #6651 Add cudf::dictionary::make_dictionary_pair_iterator
+- PR #6666 Add dictionary support to `cudf::reduce`
 - PR #6635 Add cudf::test::dictionary_column_wrapper class
 - PR #6702 Fix orc read corruption on boolean column
 - PR #6676 Add dictionary support to `cudf::quantile`
@@ -114,6 +115,7 @@
 - PR #6833 Use settings.xml if existing for internal build
 - PR #6835 Move template param to member var to improve compile of hash/groupby.cu
 - PR #6837 Avoid gather when copying strings view from start of strings column
+- PR #6859 Move align_ptr_for_type() from cuda.cuh to alignment.hpp
 
 ## Bug Fixes
 
@@ -167,9 +169,11 @@
 - PR #6824 Fix JNI build
 - PR #6826 Fix resource management in Java ColumnBuilder
 - PR #6830 Fix categorical scalar insertion
+- PR #6844 Fix uint32_t undefined errors
 - PR #6854 Fix the parameter order of writeParquetBufferBegin
 - PR #6855 Fix `.str.replace_with_backrefs` docs examples
 - PR #6853 Fix contiguous split of null string columns
+- PR #6861 Fix compile error in type_dispatch_benchmark.cu
 - PR #6864 Handle contiguous_split corner case for nested string columns with no children
 
 
