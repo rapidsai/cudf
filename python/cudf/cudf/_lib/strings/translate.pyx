@@ -54,11 +54,14 @@ def translate(Column source_strings,
 def filter_characters(Column source_strings,
                       object mapping_table,
                       bool keep,
-                      DeviceScalar repl):
+                      object py_repl):
     """
     Removes or keeps individual characters within each string
     using the provided mapping_table.
     """
+
+    cdef DeviceScalar repl = py_repl.device_value
+
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
     cdef const string_scalar* scalar_repl = <const string_scalar*>(

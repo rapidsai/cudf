@@ -4,8 +4,8 @@ from collections import OrderedDict
 from collections.abc import Sequence
 from math import floor, isinf, isnan
 
-import numpy as np
 import cupy as cp
+import numpy as np
 import pandas as pd
 from numba import njit
 
