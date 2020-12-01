@@ -35,8 +35,8 @@ struct byte_list_conversion {
   std::enable_if_t<!std::is_integral<T>::value and !is_floating_point<T>(), std::unique_ptr<column>>
   operator()(column_view const& input_column,
              flip_endianness configuration,
-             rmm::mr::device_memory_resource* mr,
-             cudaStream_t stream) const
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr) const
   {
     CUDF_FAIL("Unsupported non-numeric and non-string column");
   }
@@ -45,8 +45,8 @@ struct byte_list_conversion {
   std::enable_if_t<is_floating_point<T>() or std::is_integral<T>::value, std::unique_ptr<column>>
   operator()(column_view const& input_column,
              flip_endianness configuration,
-             rmm::mr::device_memory_resource* mr,
-             cudaStream_t stream) const
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr) const
   {
     size_type num_bytes = input_column.size() * sizeof(T);
     auto byte_column    = make_numeric_column(
@@ -57,22 +57,21 @@ struct byte_list_conversion {
     size_type mask     = sizeof(T) - 1;
 
     if (configuration == flip_endianness::YES) {
-      thrust::for_each(rmm::exec_policy(stream)->on(stream),
+      thrust::for_each(rmm::exec_policy(stream)->on(stream.value()),
                        thrust::make_counting_iterator(0),
                        thrust::make_counting_iterator(num_bytes),
                        [d_chars, d_data, mask] __device__(auto index) {
                          d_chars[index] = d_data[index + mask - ((index & mask) << 1)];
                        });
     } else {
-      thrust::copy_n(rmm::exec_policy(stream)->on(stream), d_data, num_bytes, d_chars);
+      thrust::copy_n(rmm::exec_policy(stream)->on(stream.value()), d_data, num_bytes, d_chars);
     }
 
     auto begin          = thrust::make_constant_iterator(cudf::size_of(input_column.type()));
     auto offsets_column = cudf::strings::detail::make_offsets_child_column(
-      begin, begin + input_column.size(), mr, stream);
+      begin, begin + input_column.size(), stream, mr);
 
-    rmm::device_buffer null_mask =
-      detail::copy_bitmask(input_column, rmm::cuda_stream_view{stream}, mr);
+    rmm::device_buffer null_mask = detail::copy_bitmask(input_column, stream, mr);
 
     return make_lists_column(input_column.size(),
                              std::move(offsets_column),
@@ -88,8 +87,8 @@ template <>
 std::unique_ptr<cudf::column> byte_list_conversion::operator()<string_view>(
   column_view const& input_column,
   flip_endianness configuration,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream) const
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr) const
 {
   strings_column_view input_strings(input_column);
   auto strings_count = input_strings.size();
@@ -101,7 +100,7 @@ std::unique_ptr<cudf::column> byte_list_conversion::operator()<string_view>(
     std::move(contents.children[cudf::strings_column_view::offsets_column_index]),
     std::move(contents.children[cudf::strings_column_view::chars_column_index]),
     input_column.null_count(),
-    detail::copy_bitmask(input_column, rmm::cuda_stream_view{stream}, mr),
+    detail::copy_bitmask(input_column, stream, mr),
     stream,
     mr);
 }
@@ -114,11 +113,11 @@ std::unique_ptr<cudf::column> byte_list_conversion::operator()<string_view>(
  */
 std::unique_ptr<column> byte_cast(column_view const& input_column,
                                   flip_endianness endian_configuration,
-                                  rmm::mr::device_memory_resource* mr,
-                                  cudaStream_t stream)
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   return type_dispatcher(
-    input_column.type(), byte_list_conversion{}, input_column, endian_configuration, mr, stream);
+    input_column.type(), byte_list_conversion{}, input_column, endian_configuration, stream, mr);
 }
 
 }  // namespace detail
@@ -131,7 +130,7 @@ std::unique_ptr<column> byte_cast(column_view const& input_column,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::byte_cast(input_column, endian_configuration, mr, cudaStreamDefault);
+  return detail::byte_cast(input_column, endian_configuration, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

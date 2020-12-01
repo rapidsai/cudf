@@ -26,6 +26,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
@@ -53,8 +55,8 @@ template <typename KeysKeeper>
 std::unique_ptr<column> remove_keys_fn(
   dictionary_column_view const& dictionary_column,
   KeysKeeper keys_to_keep_fn,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto const keys_view    = dictionary_column.keys();
   auto execpol            = rmm::exec_policy(stream);
@@ -67,7 +69,7 @@ std::unique_ptr<column> remove_keys_fn(
   auto map_itr =
     cudf::detail::indexalator_factory::make_output_iterator(map_indices->mutable_view());
   // init to max to identify new nulls
-  thrust::fill(execpol->on(stream),
+  thrust::fill(execpol->on(stream.value()),
                map_itr,
                map_itr + keys_view.size(),
                max_size);  // all valid indices are less than this value
@@ -79,13 +81,13 @@ std::unique_ptr<column> remove_keys_fn(
       auto positions = make_fixed_width_column(
         indices_type, keys_view.size(), cudf::mask_state::UNALLOCATED, stream);
       auto itr = cudf::detail::indexalator_factory::make_output_iterator(positions->mutable_view());
-      thrust::sequence(execpol->on(stream), itr, itr + keys_view.size());
+      thrust::sequence(execpol->on(stream.value()), itr, itr + keys_view.size());
       return positions;
     }();
     // copy the non-removed keys ( keys_to_keep_fn(idx)==true )
     auto table_keys =
       cudf::detail::copy_if(
-        table_view{{keys_view, keys_positions->view()}}, keys_to_keep_fn, mr, stream)
+        table_view{{keys_view, keys_positions->view()}}, keys_to_keep_fn, stream, mr)
         ->release();
     auto const filtered_view = table_keys[1]->view();
     auto filtered_itr = cudf::detail::indexalator_factory::make_input_iterator(filtered_view);
@@ -93,7 +95,7 @@ std::unique_ptr<column> remove_keys_fn(
       cudf::detail::indexalator_factory::make_input_iterator(keys_positions->view());
     // build indices mapper
     // Example scatter([0,1,2][0,2,4][max,max,max,max,max]) => [0,max,1,max,2]
-    thrust::scatter(execpol->on(stream),
+    thrust::scatter(execpol->on(stream.value()),
                     positions_itr,
                     positions_itr + filtered_view.size(),
                     filtered_itr,
@@ -114,8 +116,8 @@ std::unique_ptr<column> remove_keys_fn(
                                             indices_view,
                                             cudf::detail::out_of_bounds_policy::NULLIFY,
                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                            mr,
-                                            stream)
+                                            stream,
+                                            mr)
                          ->release();
   std::unique_ptr<column> indices_column(std::move(table_indices.front()));
 
@@ -145,25 +147,25 @@ std::unique_ptr<column> remove_keys_fn(
 std::unique_ptr<column> remove_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& keys_to_remove,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(!keys_to_remove.has_nulls(), "keys_to_remove must not have nulls");
   auto const keys_view = dictionary_column.keys();
   CUDF_EXPECTS(keys_view.type() == keys_to_remove.type(), "keys types must match");
 
   // locate keys to remove by searching the keys column
-  auto const matches = cudf::detail::contains(keys_view, keys_to_remove, mr, stream);
+  auto const matches = cudf::detail::contains(keys_view, keys_to_remove, stream, mr);
   auto d_matches     = matches->view().data<bool>();
   // call common utility method to keep the keys not matched to keys_to_remove
   auto key_matcher = [d_matches] __device__(size_type idx) { return !d_matches[idx]; };
-  return remove_keys_fn(dictionary_column, key_matcher, mr, stream);
+  return remove_keys_fn(dictionary_column, key_matcher, stream, mr);
 }
 
 std::unique_ptr<column> remove_unused_keys(
   dictionary_column_view const& dictionary_column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   // locate the keys to remove
   auto const keys_size     = dictionary_column.keys_size();
@@ -174,16 +176,16 @@ std::unique_ptr<column> remove_unused_keys(
     // build keys index to verify against indices values
     rmm::device_uvector<uint32_t> keys_positions(keys_size, stream);
     thrust::sequence(
-      rmm::exec_policy(stream)->on(stream), keys_positions.begin(), keys_positions.end());
+      rmm::exec_policy(stream)->on(stream.value()), keys_positions.begin(), keys_positions.end());
     // wrap the indices for comparison in contains()
     column_view keys_positions_view(data_type{type_id::UINT32}, keys_size, keys_positions.data());
-    return cudf::detail::contains(keys_positions_view, indices_view, mr, stream);
+    return cudf::detail::contains(keys_positions_view, indices_view, stream, mr);
   }();
   auto d_matches = matches->view().data<bool>();
 
   // call common utility method to keep the keys that match
   auto key_matcher = [d_matches] __device__(size_type idx) { return d_matches[idx]; };
-  return remove_keys_fn(dictionary_column, key_matcher, mr, stream);
+  return remove_keys_fn(dictionary_column, key_matcher, stream, mr);
 }
 
 }  // namespace detail
@@ -195,14 +197,14 @@ std::unique_ptr<column> remove_keys(dictionary_column_view const& dictionary_col
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::remove_keys(dictionary_column, keys_to_remove, mr);
+  return detail::remove_keys(dictionary_column, keys_to_remove, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> remove_unused_keys(dictionary_column_view const& dictionary_column,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::remove_unused_keys(dictionary_column, mr);
+  return detail::remove_unused_keys(dictionary_column, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace dictionary

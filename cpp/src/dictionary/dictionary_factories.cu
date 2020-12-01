@@ -29,8 +29,8 @@ namespace {
 struct dispatch_create_indices {
   template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& indices,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     CUDF_EXPECTS(std::is_unsigned<IndexType>(), "indices must be an unsigned type");
     column_view indices_view{
@@ -39,8 +39,8 @@ struct dispatch_create_indices {
   }
   template <typename IndexType, std::enable_if_t<!is_index_type<IndexType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
-                                     rmm::mr::device_memory_resource*,
-                                     cudaStream_t)
+                                     rmm::cuda_stream_view,
+                                     rmm::mr::device_memory_resource*)
   {
     CUDF_FAIL("indices must be an integer type.");
   }
@@ -49,19 +49,18 @@ struct dispatch_create_indices {
 
 std::unique_ptr<column> make_dictionary_column(column_view const& keys_column,
                                                column_view const& indices_column,
-                                               rmm::mr::device_memory_resource* mr,
-                                               cudaStream_t stream)
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(!keys_column.has_nulls(), "keys column must not have nulls");
   if (keys_column.is_empty()) return make_empty_column(data_type{type_id::DICTIONARY32});
 
   auto keys_copy = std::make_unique<column>(keys_column, stream, mr);
   auto indices_copy =
-    type_dispatcher(indices_column.type(), dispatch_create_indices{}, indices_column, mr, stream);
+    type_dispatcher(indices_column.type(), dispatch_create_indices{}, indices_column, stream, mr);
   rmm::device_buffer null_mask{0, stream, mr};
   auto null_count = indices_column.null_count();
-  if (null_count)
-    null_mask = detail::copy_bitmask(indices_column, rmm::cuda_stream_view{stream}, mr);
+  if (null_count) null_mask = detail::copy_bitmask(indices_column, stream, mr);
 
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(indices_copy));
@@ -117,8 +116,8 @@ struct make_unsigned_fn {
 
 std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys,
                                                std::unique_ptr<column> indices,
-                                               rmm::mr::device_memory_resource* mr,
-                                               cudaStream_t stream)
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(!keys->has_nulls(), "keys column must not have nulls");
 
@@ -139,7 +138,7 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys,
     }
     // If the new type does not match, then convert the data.
     cudf::column_view cast_view{cudf::data_type{indices_type}, indices_size, contents.data->data()};
-    return cudf::detail::cast(cast_view, new_type, mr, stream);
+    return cudf::detail::cast(cast_view, new_type, stream, mr);
   }();
 
   return make_dictionary_column(std::move(keys),

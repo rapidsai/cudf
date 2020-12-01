@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 std::unique_ptr<column> is_null(cudf::column_view const& input, rmm::mr::device_memory_resource* mr)
 {
@@ -32,6 +34,7 @@ std::unique_ptr<column> is_null(cudf::column_view const& input, rmm::mr::device_
                          thrust::make_counting_iterator(input.size()),
                          input.size(),
                          predicate,
+                         rmm::cuda_stream_default,
                          mr);
 }
 
@@ -46,6 +49,7 @@ std::unique_ptr<column> is_valid(cudf::column_view const& input,
                          thrust::make_counting_iterator(input.size()),
                          input.size(),
                          predicate,
+                         rmm::cuda_stream_default,
                          mr);
 }
 

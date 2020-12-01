@@ -23,12 +23,14 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace detail {
 std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
                                       size_type begin_bit,
                                       size_type end_bit,
-                                      cudaStream_t stream,
+                                      rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   auto const length = end_bit - begin_bit;
@@ -41,7 +43,7 @@ std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
   if (length > 0) {
     auto mutable_view = out_col->mutable_view();
 
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
+    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                       thrust::make_counting_iterator<cudf::size_type>(begin_bit),
                       thrust::make_counting_iterator<cudf::size_type>(end_bit),
                       mutable_view.begin<bool>(),
@@ -57,6 +59,6 @@ std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
                                       size_type end_bit,
                                       rmm::mr::device_memory_resource* mr)
 {
-  return detail::mask_to_bools(bitmask, begin_bit, end_bit, 0, mr);
+  return detail::mask_to_bools(bitmask, begin_bit, end_bit, rmm::cuda_stream_default, mr);
 }
 }  // namespace cudf

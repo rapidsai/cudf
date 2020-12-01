@@ -57,28 +57,28 @@ std::unique_ptr<column> scatter(
   SourceIterator end,
   MapIterator scatter_map,
   strings_column_view const& target,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = target.size();
-  if (strings_count == 0) return make_empty_strings_column(mr, stream);
+  if (strings_count == 0) return make_empty_strings_column(stream, mr);
 
   // create null mask -- caller must update this
   rmm::device_buffer null_mask{0, stream, mr};
-  if (target.has_nulls())
-    null_mask = cudf::detail::copy_bitmask(target.parent(), rmm::cuda_stream_view{stream}, mr);
+  if (target.has_nulls()) null_mask = cudf::detail::copy_bitmask(target.parent(), stream, mr);
 
   // create string vectors
-  rmm::device_vector<string_view> target_vector = create_string_vector_from_column(target, stream);
+  rmm::device_vector<string_view> target_vector =
+    create_string_vector_from_column(target, stream.value());
   // do the scatter
   thrust::scatter(
-    rmm::exec_policy(stream)->on(stream), begin, end, scatter_map, target_vector.begin());
+    rmm::exec_policy(stream)->on(stream.value()), begin, end, scatter_map, target_vector.begin());
 
   // build offsets column
-  auto offsets_column = child_offsets_from_string_vector(target_vector, mr, stream);
+  auto offsets_column = child_offsets_from_string_vector(target_vector, stream, mr);
   // build chars column
   auto chars_column = child_chars_from_string_vector(
-    target_vector, offsets_column->view().data<int32_t>(), 0, mr, stream);
+    target_vector, offsets_column->view().data<int32_t>(), 0, stream, mr);
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),

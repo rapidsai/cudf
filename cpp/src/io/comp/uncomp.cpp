@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,22 @@
  * limitations under the License.
  */
 
-#include <cuda_runtime.h>
-#include <string.h>  // memset
-#include <zlib.h>    // uncompress
 #include "io_uncomp.h"
 #include "unbz2.h"  // bz2 uncompress
 
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <cuda_runtime.h>
+
+#include <string.h>  // memset
+
+#include <zlib.h>  // uncompress
+
 using cudf::detail::host_span;
 
 namespace cudf {
 namespace io {
-#define GZ_FLG_FTEXT 0x01     // ASCII text hint
-#define GZ_FLG_FHCRC 0x02     // Header CRC present
-#define GZ_FLG_FEXTRA 0x04    // Extra fields present
-#define GZ_FLG_FNAME 0x08     // Original file name present
-#define GZ_FLG_FCOMMENT 0x10  // Comment present
 
 #pragma pack(push, 1)
 
@@ -39,7 +37,7 @@ struct gz_file_header_s {
   uint8_t id1;        // 0x1f
   uint8_t id2;        // 0x8b
   uint8_t comp_mthd;  // compression method (0-7=reserved, 8=deflate)
-  uint8_t flags;      // flags (GZ_FLG_XXX)
+  uint8_t flags;      // flags (GZIPHeaderFlag)
   uint8_t mtime[4];   // If non-zero: modification time (Unix format)
   uint8_t xflags;     // Extra compressor-specific flags
   uint8_t os;         // OS id
@@ -138,7 +136,7 @@ bool ParseGZArchive(gz_archive_s *dst, const uint8_t *raw, size_t len)
   dst->fhdr = fhdr;
   raw += sizeof(gz_file_header_s);
   len -= sizeof(gz_file_header_s);
-  if (fhdr->flags & GZ_FLG_FEXTRA) {
+  if (fhdr->flags & GZIPHeaderFlag::fextra) {
     uint32_t xlen;
 
     if (len < 2) return false;
@@ -151,7 +149,7 @@ bool ParseGZArchive(gz_archive_s *dst, const uint8_t *raw, size_t len)
     raw += xlen;
     len -= xlen;
   }
-  if (fhdr->flags & GZ_FLG_FNAME) {
+  if (fhdr->flags & GZIPHeaderFlag::fname) {
     size_t l = 0;
     uint8_t c;
     do {
@@ -163,7 +161,7 @@ bool ParseGZArchive(gz_archive_s *dst, const uint8_t *raw, size_t len)
     raw += l;
     len -= l;
   }
-  if (fhdr->flags & GZ_FLG_FCOMMENT) {
+  if (fhdr->flags & GZIPHeaderFlag::fcomment) {
     size_t l = 0;
     uint8_t c;
     do {
@@ -175,7 +173,7 @@ bool ParseGZArchive(gz_archive_s *dst, const uint8_t *raw, size_t len)
     raw += l;
     len -= l;
   }
-  if (fhdr->flags & GZ_FLG_FHCRC) {
+  if (fhdr->flags & GZIPHeaderFlag::fhcrc) {
     if (len < 2) return false;
     dst->hcrc16 = raw[0] | (raw[1] << 8);
     raw += 2;

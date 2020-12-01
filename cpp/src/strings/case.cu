@@ -128,17 +128,17 @@ struct upper_lower_fn {
  *
  * @param strings Strings to convert.
  * @param case_flag The character type to convert (upper, lower, or both)
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column with characters converted.
  */
 std::unique_ptr<column> convert_case(strings_column_view const& strings,
                                      character_flags_table_type case_flag,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(mr, stream);
+  if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
 
   auto execpol         = rmm::exec_policy(stream);
   auto strings_column  = column_device_view::create(strings.parent(), stream);
@@ -146,8 +146,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& strings,
   size_type null_count = strings.null_count();
 
   // copy null mask
-  rmm::device_buffer null_mask =
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr);
+  rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
   // get the lookup tables used for case conversion
   auto d_flags = get_character_flags_table();
 
@@ -159,24 +158,24 @@ std::unique_ptr<column> convert_case(strings_column_view const& strings,
     thrust::make_counting_iterator<size_type>(0),
     upper_lower_fn<SizeOnly>{d_column, case_flag, d_flags, d_case_table, d_special_case_mapping});
   auto offsets_column = detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, mr, stream);
+    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto offsets_view  = offsets_column->view();
   auto d_new_offsets = offsets_view.data<int32_t>();
 
   // build the chars column -- convert characters based on case_flag parameter
   size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
   auto chars_column =
-    strings::detail::create_chars_child_column(strings_count, null_count, bytes, mr, stream);
+    strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.data<char>();
 
   thrust::for_each_n(
-    execpol->on(stream),
+    execpol->on(stream.value()),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     upper_lower_fn<ExecuteOp>{
       d_column, case_flag, d_flags, d_case_table, d_special_case_mapping, d_new_offsets, d_chars});
-  //
+
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              std::move(chars_column),
@@ -190,32 +189,32 @@ std::unique_ptr<column> convert_case(strings_column_view const& strings,
 
 std::unique_ptr<column> to_lower(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   character_flags_table_type case_flag = IS_UPPER(0xFF);  // convert only upper case characters
-  return convert_case(strings, case_flag, mr, stream);
+  return convert_case(strings, case_flag, stream, mr);
 }
 
 //
 std::unique_ptr<column> to_upper(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   character_flags_table_type case_flag = IS_LOWER(0xFF);  // convert only lower case characters
-  return convert_case(strings, case_flag, mr, stream);
+  return convert_case(strings, case_flag, stream, mr);
 }
 
 //
 std::unique_ptr<column> swapcase(
   strings_column_view const& strings,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   // convert only upper or lower case characters
   character_flags_table_type case_flag = IS_LOWER(0xFF) | IS_UPPER(0xFF);
-  return convert_case(strings, case_flag, mr, stream);
+  return convert_case(strings, case_flag, stream, mr);
 }
 
 }  // namespace detail
@@ -226,21 +225,21 @@ std::unique_ptr<column> to_lower(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_lower(strings, mr);
+  return detail::to_lower(strings, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> to_upper(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_upper(strings, mr);
+  return detail::to_upper(strings, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> swapcase(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::swapcase(strings, mr);
+  return detail::swapcase(strings, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

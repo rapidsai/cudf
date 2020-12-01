@@ -39,58 +39,6 @@ column_device_view::column_device_view(column_view source)
 void column_device_view::destroy() { delete this; }
 
 namespace {
-/**
- * @brief Helper function for use by column_device_view and mutable_column_device_view constructors
- * to build device_views from views.
- *
- * It is used to build the array of child columns in device memory. Since child columns can
- * also have child columns, this uses recursion to build up the flat device buffer to contain
- * all the children and set the member pointers appropriately.
- *
- * This is accomplished by laying out all the children and grand-children into a flat host
- * buffer first but also keep a running device pointer to but used when setting the
- * d_children array result.
- *
- * This function is provided both the host pointer in which to insert its children (and
- * by recursion its grand-children) and the device pointer to be used when calculating
- * ultimate device pointer for the d_children member.
- *
- * @tparam ColumnView is either column_view or mutable_column_view
- * @tparam ColumnDeviceView is either column_device_view or mutable_column_device_view
- *
- * @param source The column view to make into a device view
- * @param h_ptr The host memory where to place any child data
- * @param d_ptr The device pointer for calculating the d_children member of any child data
- * @return The device pointer to be used for the d_children member of the given column
- */
-template <typename ColumnView, typename ColumnDeviceView>
-ColumnDeviceView* child_columns_to_device_array(ColumnView const& source, void* h_ptr, void* d_ptr)
-{
-  ColumnDeviceView* d_children = nullptr;
-  size_type num_children       = source.num_children();
-  if (num_children > 0) {
-    // The beginning of the memory must be the fixed-sized ColumnDeviceView
-    // struct objects in order for d_children to be used as an array.
-    auto h_column = reinterpret_cast<ColumnDeviceView*>(h_ptr);
-    auto d_column = reinterpret_cast<ColumnDeviceView*>(d_ptr);
-    // Any child data is assigned past the end of this array: h_end and d_end.
-    auto h_end = reinterpret_cast<int8_t*>(h_column + num_children);
-    auto d_end = reinterpret_cast<int8_t*>(d_column + num_children);
-    d_children = d_column;  // set children pointer for return
-    for (size_type idx = 0; idx < num_children; ++idx) {
-      // inplace-new each child into host memory
-      auto child = source.child(idx);
-      new (h_column) ColumnDeviceView(child, h_end, d_end);
-      h_column++;  // advance to next child
-      // update the pointers for holding this child column's child data
-      auto col_child_data_size = ColumnDeviceView::extent(child) - sizeof(ColumnDeviceView);
-      h_end += col_child_data_size;
-      d_end += col_child_data_size;
-    }
-  }
-  return d_children;
-}
-
 // helper function for column_device_view::create and mutable_column_device::create methods
 template <typename ColumnView, typename ColumnDeviceView>
 std::unique_ptr<ColumnDeviceView, std::function<void(ColumnDeviceView*)>>
@@ -104,8 +52,9 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
     thrust::make_counting_iterator(0),
     [&source](auto i) { return ColumnDeviceView::extent(source.child(i)); });
 
-  auto const descendant_storage_bytes =
-    std::accumulate(get_extent, get_extent + num_children, std::size_t{0});
+  // pad the allocation for aligning the first pointer
+  auto const descendant_storage_bytes = std::accumulate(
+    get_extent, get_extent + num_children, std::size_t{alignof(ColumnDeviceView) - 1});
 
   // A buffer of CPU memory is allocated to hold the ColumnDeviceView
   // objects. Once filled, the CPU memory is copied to device memory
@@ -133,7 +82,7 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
                            cudaMemcpyDefault,
                            stream.value()));
 
-  CUDA_TRY(cudaStreamSynchronize(stream.value()));
+  stream.synchronize();
 
   return result;
 }
@@ -150,7 +99,8 @@ column_device_view::column_device_view(column_view source, void* h_ptr, void* d_
                                     source.offset()},
     _num_children{source.num_children()}
 {
-  d_children = child_columns_to_device_array<column_view, column_device_view>(source, h_ptr, d_ptr);
+  d_children = detail::child_columns_to_device_array<column_device_view>(
+    source.child_begin(), source.child_end(), h_ptr, d_ptr);
 }
 
 // Construct a unique_ptr that invokes `destroy()` as it's deleter
@@ -196,8 +146,8 @@ mutable_column_device_view::mutable_column_device_view(mutable_column_view sourc
                                     source.offset()},
     _num_children{source.num_children()}
 {
-  d_children = child_columns_to_device_array<mutable_column_view, mutable_column_device_view>(
-    source, h_ptr, d_ptr);
+  d_children = detail::child_columns_to_device_array<mutable_column_device_view>(
+    source.child_begin(), source.child_end(), h_ptr, d_ptr);
 }
 
 // Handle freeing children

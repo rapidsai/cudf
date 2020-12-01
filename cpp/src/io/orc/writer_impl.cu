@@ -24,12 +24,13 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
+#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
+
 #include <algorithm>
 #include <cstring>
 #include <utility>
-
-#include <rmm/thrust_rmm_allocator.h>
-#include <rmm/device_buffer.hpp>
 
 namespace cudf {
 namespace io {
@@ -148,7 +149,7 @@ class orc_column_view {
                            size_t str_id,
                            column_view const &col,
                            const table_metadata *metadata,
-                           cudaStream_t stream)
+                           rmm::cuda_stream_view stream)
     : _id(id),
       _str_id(str_id),
       _string_type(col.type().id() == type_id::STRING),
@@ -163,14 +164,16 @@ class orc_column_view {
     if (_string_type && _data_count > 0) {
       strings_column_view view{col};
       _indexes = rmm::device_buffer(_data_count * sizeof(gpu::nvstrdesc_s), stream);
-      stringdata_to_nvstrdesc<<<((_data_count - 1) >> 8) + 1, 256, 0, stream>>>(
+
+      stringdata_to_nvstrdesc<<<((_data_count - 1) >> 8) + 1, 256, 0, stream.value()>>>(
         static_cast<gpu::nvstrdesc_s *>(_indexes.data()),
         view.offsets().data<size_type>() + view.offset(),
         view.chars().data<char>(),
         _nulls,
         _data_count);
       _data = _indexes.data();
-      CUDA_TRY(cudaStreamSynchronize(stream));
+
+      stream.synchronize();
     }
     // Generating default name if name isn't present in metadata
     if (metadata && _id < metadata->column_names.size()) {
@@ -261,7 +264,7 @@ void writer::impl::init_dictionaries(orc_column_view *columns,
                                      uint32_t *dict_data,
                                      uint32_t *dict_index,
                                      hostdevice_vector<gpu::DictionaryChunk> &dict,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream)
 {
   const size_t num_rowgroups = dict.size() / str_col_ids.size();
 
@@ -287,12 +290,18 @@ void writer::impl::init_dictionaries(orc_column_view *columns,
     }
   }
 
-  CUDA_TRY(cudaMemcpyAsync(
-    dict.device_ptr(), dict.host_ptr(), dict.memory_size(), cudaMemcpyHostToDevice, stream));
+  CUDA_TRY(cudaMemcpyAsync(dict.device_ptr(),
+                           dict.host_ptr(),
+                           dict.memory_size(),
+                           cudaMemcpyHostToDevice,
+                           stream.value()));
   gpu::InitDictionaryIndices(dict.device_ptr(), str_col_ids.size(), num_rowgroups, stream);
-  CUDA_TRY(cudaMemcpyAsync(
-    dict.host_ptr(), dict.device_ptr(), dict.memory_size(), cudaMemcpyDeviceToHost, stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  CUDA_TRY(cudaMemcpyAsync(dict.host_ptr(),
+                           dict.device_ptr(),
+                           dict.memory_size(),
+                           cudaMemcpyDeviceToHost,
+                           stream.value()));
+  stream.synchronize();
 }
 
 void writer::impl::build_dictionaries(orc_column_view *columns,
@@ -302,7 +311,7 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
                                       hostdevice_vector<gpu::DictionaryChunk> const &dict,
                                       uint32_t *dict_index,
                                       hostdevice_vector<gpu::StripeDictionary> &stripe_dict,
-                                      cudaStream_t stream)
+                                      rmm::cuda_stream_view stream)
 {
   const auto num_rowgroups = dict.size() / str_col_ids.size();
 
@@ -344,7 +353,7 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
                            stripe_dict.host_ptr(),
                            stripe_dict.memory_size(),
                            cudaMemcpyHostToDevice,
-                           stream));
+                           stream.value()));
   gpu::BuildStripeDictionaries(stripe_dict.device_ptr(),
                                stripe_dict.host_ptr(),
                                dict.device_ptr(),
@@ -356,8 +365,8 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
                            stripe_dict.device_ptr(),
                            stripe_dict.memory_size(),
                            cudaMemcpyDeviceToHost,
-                           stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
+                           stream.value()));
+  stream.synchronize();
 }
 
 std::vector<Stream> writer::impl::gather_streams(orc_column_view *columns,
@@ -529,7 +538,7 @@ rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
                                                 std::vector<Stream> const &streams,
                                                 std::vector<int32_t> const &strm_ids,
                                                 hostdevice_vector<gpu::EncChunk> &chunks,
-                                                cudaStream_t stream)
+                                                rmm::cuda_stream_view stream)
 {
   // Allocate combined buffer for RLE data and string data output
   std::vector<size_t> strm_offsets(streams.size());
@@ -634,8 +643,11 @@ rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
     }
   }
 
-  CUDA_TRY(cudaMemcpyAsync(
-    chunks.device_ptr(), chunks.host_ptr(), chunks.memory_size(), cudaMemcpyHostToDevice, stream));
+  CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(),
+                           chunks.host_ptr(),
+                           chunks.memory_size(),
+                           cudaMemcpyHostToDevice,
+                           stream.value()));
   if (!str_col_ids.empty()) {
     auto d_stripe_dict = columns[str_col_ids[0]].device_stripe_dict();
     gpu::EncodeStripeDictionaries(d_stripe_dict,
@@ -646,7 +658,7 @@ rmm::device_buffer writer::impl::encode_columns(orc_column_view *columns,
                                   stream);
   }
   gpu::EncodeOrcColumnData(chunks.device_ptr(), num_columns, num_rowgroups, stream);
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  stream.synchronize();
 
   return output;
 }
@@ -659,7 +671,7 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
   std::vector<uint32_t> const &stripe_list,
   hostdevice_vector<gpu::EncChunk> &chunks,
   hostdevice_vector<gpu::StripeStream> &strm_desc,
-  cudaStream_t stream)
+  rmm::cuda_stream_view stream)
 {
   std::vector<StripeInformation> stripes(stripe_list.size());
   size_t group        = 0;
@@ -694,17 +706,20 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
                            strm_desc.host_ptr(),
                            strm_desc.memory_size(),
                            cudaMemcpyHostToDevice,
-                           stream));
+                           stream.value()));
   gpu::CompactOrcDataStreams(
     strm_desc.device_ptr(), chunks.device_ptr(), strm_desc.size(), num_columns, stream);
   CUDA_TRY(cudaMemcpyAsync(strm_desc.host_ptr(),
                            strm_desc.device_ptr(),
                            strm_desc.memory_size(),
                            cudaMemcpyDeviceToHost,
-                           stream));
-  CUDA_TRY(cudaMemcpyAsync(
-    chunks.host_ptr(), chunks.device_ptr(), chunks.memory_size(), cudaMemcpyDeviceToHost, stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
+                           stream.value()));
+  CUDA_TRY(cudaMemcpyAsync(chunks.host_ptr(),
+                           chunks.device_ptr(),
+                           chunks.memory_size(),
+                           cudaMemcpyDeviceToHost,
+                           stream.value()));
+  stream.synchronize();
 
   return stripes;
 }
@@ -717,7 +732,7 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   std::vector<uint32_t> const &stripe_list,
   std::vector<StripeInformation> const &stripes,
   hostdevice_vector<gpu::EncChunk> &chunks,
-  cudaStream_t stream)
+  rmm::cuda_stream_view stream)
 {
   size_t num_stat_blobs = (1 + stripe_list.size()) * num_columns;
   size_t num_chunks     = chunks.size();
@@ -743,6 +758,7 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
       default: desc->stats_dtype = dtype_none; break;
     }
     desc->num_rows         = columns[i].data_count();
+    desc->num_values       = columns[i].data_count();
     desc->valid_map_base   = columns[i].nulls();
     desc->column_data_base = columns[i].data();
     if (desc->stats_dtype == dtype_timestamp64) {
@@ -773,12 +789,12 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
                            stat_desc.host_ptr(),
                            stat_desc.memory_size(),
                            cudaMemcpyHostToDevice,
-                           stream));
+                           stream.value()));
   CUDA_TRY(cudaMemcpyAsync(stat_merge.device_ptr(),
                            stat_merge.host_ptr(),
                            stat_merge.memory_size(),
                            cudaMemcpyHostToDevice,
-                           stream));
+                           stream.value()));
   gpu::orc_init_statistics_groups(stat_groups.data().get(),
                                   stat_desc.device_ptr(),
                                   num_columns,
@@ -804,8 +820,8 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
                            stat_merge.device_ptr(),
                            stat_merge.memory_size(),
                            cudaMemcpyDeviceToHost,
-                           stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
+                           stream.value()));
+  stream.synchronize();
 
   hostdevice_vector<uint8_t> blobs(stat_merge[num_stat_blobs - 1].start_chunk +
                                    stat_merge[num_stat_blobs - 1].num_chunks);
@@ -818,10 +834,13 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
                            stat_merge.device_ptr(),
                            stat_merge.memory_size(),
                            cudaMemcpyDeviceToHost,
-                           stream));
-  CUDA_TRY(cudaMemcpyAsync(
-    blobs.host_ptr(), blobs.device_ptr(), blobs.memory_size(), cudaMemcpyDeviceToHost, stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
+                           stream.value()));
+  CUDA_TRY(cudaMemcpyAsync(blobs.host_ptr(),
+                           blobs.device_ptr(),
+                           blobs.memory_size(),
+                           cudaMemcpyDeviceToHost,
+                           stream.value()));
+  stream.synchronize();
 
   for (size_t i = 0; i < num_stat_blobs; i++) {
     const uint8_t *stat_begin = blobs.host_ptr(stat_merge[i].start_chunk);
@@ -927,15 +946,16 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
                                      uint8_t *stream_out,
                                      StripeInformation &stripe,
                                      std::vector<Stream> &streams,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream)
 {
   const auto length                                    = strm_desc.stream_size;
   streams[chunk.strm_id[strm_desc.stream_type]].length = length;
   if (length != 0) {
     const auto *stream_in = (compression_kind_ == NONE) ? chunk.streams[strm_desc.stream_type]
                                                         : (compressed_data + strm_desc.bfr_offset);
-    CUDA_TRY(cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDeviceToHost, stream));
-    CUDA_TRY(cudaStreamSynchronize(stream));
+    CUDA_TRY(
+      cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDeviceToHost, stream.value()));
+    stream.synchronize();
 
     out_sink_->host_write(stream_out, length);
   }
@@ -974,7 +994,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 
 void writer::impl::write(table_view const &table,
                          const table_metadata *metadata,
-                         cudaStream_t stream)
+                         rmm::cuda_stream_view stream)
 {
   orc_chunked_state state;
   state.user_metadata     = metadata;
@@ -1164,7 +1184,7 @@ void writer::impl::write_chunk(table_view const &table, orc_chunked_state &state
                              strm_desc.host_ptr(),
                              strm_desc.memory_size(),
                              cudaMemcpyHostToDevice,
-                             state.stream));
+                             state.stream.value()));
     gpu::CompressOrcDataStreams(static_cast<uint8_t *>(compressed_data.data()),
                                 strm_desc.device_ptr(),
                                 chunks.device_ptr(),
@@ -1179,13 +1199,13 @@ void writer::impl::write_chunk(table_view const &table, orc_chunked_state &state
                              strm_desc.device_ptr(),
                              strm_desc.memory_size(),
                              cudaMemcpyDeviceToHost,
-                             state.stream));
+                             state.stream.value()));
     CUDA_TRY(cudaMemcpyAsync(comp_out.host_ptr(),
                              comp_out.device_ptr(),
                              comp_out.memory_size(),
                              cudaMemcpyDeviceToHost,
-                             state.stream));
-    CUDA_TRY(cudaStreamSynchronize(state.stream));
+                             state.stream.value()));
+    state.stream.synchronize();
   }
 
   ProtobufWriter pbw_(&buffer_);
@@ -1370,7 +1390,9 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::~writer() = default;
 
 // Forward to implementation
-void writer::write(table_view const &table, const table_metadata *metadata, cudaStream_t stream)
+void writer::write(table_view const &table,
+                   const table_metadata *metadata,
+                   rmm::cuda_stream_view stream)
 {
   _impl->write(table, metadata, stream);
 }
