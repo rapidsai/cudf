@@ -435,16 +435,20 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
                           parent_offset_index,
                           false,
                           col.offset());
-  current++;
-  offset_stack_pos += offset_depth;
 
-  // since we are crossing an offset boundary, our offset_depth and parent_offset_index go up.
-  offset_depth++;
-  parent_offset_index = offset_col - head;
+  // prevent appending buf_info for non-exist chars buffer
+  if (scv.chars_size() > 0) {
+    current++;
+    offset_stack_pos += offset_depth;
 
-  // info for the chars buffer
-  *current = src_buf_info(
-    type_id::INT8, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+    // since we are crossing an offset boundary, our offset_depth and parent_offset_index go up.
+    offset_depth++;
+    parent_offset_index = offset_col - head;
+
+    // info for the chars buffer
+    *current = src_buf_info(
+      type_id::INT8, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+  }
 
   return {current + 1, offset_stack_pos + offset_depth};
 }
@@ -598,9 +602,10 @@ BufInfo build_output_columns(InputIter begin,
         return std::make_pair(ptr, size);
       }
       // Parent columns w/o data (e.g., strings, lists) don't have an associated `dst_buf_info`,
-      // therefore, use the first child's info. their num_rows value will be correct (also see
-      // comment above)
-      return std::make_pair(static_cast<uint8_t const*>(nullptr), current_info->num_rows);
+      // therefore, use the first child's info if it has at least one child. Their num_rows value
+      // will be correct (also see comment above)
+      auto const size = (src.num_children() == 0) ? 0 : current_info->num_rows;
+      return std::make_pair(static_cast<uint8_t const*>(nullptr), size);
     }();
     auto children = std::vector<column_view>{};
     children.reserve(src.num_children());
@@ -608,6 +613,7 @@ BufInfo build_output_columns(InputIter begin,
       src.child_begin(), src.child_end(), current_info, std::back_inserter(children), base_ptr);
     return column_view{src.type(), size, data_ptr, bitmask_ptr, null_count, 0, std::move(children)};
   });
+
   return current_info;
 }
 

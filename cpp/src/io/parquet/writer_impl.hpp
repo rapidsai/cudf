@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include "chunked_state.hpp"
+
 #include <io/parquet/parquet.hpp>
 #include <io/parquet/parquet_gpu.hpp>
 
@@ -33,11 +35,11 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <memory>
 #include <string>
 #include <vector>
-
-#include "chunked_state.hpp"
 
 namespace cudf {
 namespace io {
@@ -87,7 +89,7 @@ class writer::impl {
                                               bool return_filemetadata,
                                               const std::string& column_chunks_file_path,
                                               bool int96_timestamps,
-                                              cudaStream_t stream);
+                                              rmm::cuda_stream_view stream);
 
   /**
    * @brief Begins the chunked/streamed write process.
@@ -136,7 +138,7 @@ class writer::impl {
                            uint32_t num_fragments,
                            uint32_t num_rows,
                            uint32_t fragment_size,
-                           cudaStream_t stream);
+                           rmm::cuda_stream_view stream);
   /**
    * @brief Gather per-fragment statistics
    *
@@ -154,7 +156,7 @@ class writer::impl {
                                   uint32_t num_columns,
                                   uint32_t num_fragments,
                                   uint32_t fragment_size,
-                                  cudaStream_t stream);
+                                  rmm::cuda_stream_view stream);
   /**
    * @brief Build per-chunk dictionaries and count data pages
    *
@@ -170,7 +172,7 @@ class writer::impl {
                                 uint32_t num_rowgroups,
                                 uint32_t num_columns,
                                 uint32_t num_dictionaries,
-                                cudaStream_t stream);
+                                rmm::cuda_stream_view stream);
   /**
    * @brief Initialize encoder pages
    *
@@ -192,7 +194,7 @@ class writer::impl {
                           uint32_t num_columns,
                           uint32_t num_pages,
                           uint32_t num_stats_bfr,
-                          cudaStream_t stream);
+                          rmm::cuda_stream_view stream);
   /**
    * @brief Encode a batch pages
    *
@@ -220,7 +222,7 @@ class writer::impl {
                     gpu_inflate_status_s* comp_out,
                     const statistics_chunk* page_stats,
                     const statistics_chunk* chunk_stats,
-                    cudaStream_t stream);
+                    rmm::cuda_stream_view stream);
 
  private:
   // TODO : figure out if we want to keep this. It is currently unused.

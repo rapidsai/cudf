@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,9 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/utilities/error.hpp>
 
 #include <cudf_test/base_fixture.hpp>
+
+#include <cudf/utilities/error.hpp>
+
+#include <rmm/cuda_stream.hpp>
 
 #include <cstring>
 
@@ -58,30 +61,26 @@ void __global__ test_kernel(int* data) { data[threadIdx.x] = threadIdx.x; }
 // calls.
 TEST(StreamCheck, FailedKernel)
 {
-  cudaStream_t stream;
-  CUDA_TRY(cudaStreamCreate(&stream));
+  rmm::cuda_stream stream;
   int a;
-  test_kernel<<<0, 0, 0, stream>>>(&a);
+  test_kernel<<<0, 0, 0, stream.value()>>>(&a);
 #ifdef NDEBUG
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  stream.synchronize();
 #endif
-  EXPECT_THROW(CHECK_CUDA(stream), cudf::cuda_error);
-  CUDA_TRY(cudaStreamDestroy(stream));
+  EXPECT_THROW(CHECK_CUDA(stream.value()), cudf::cuda_error);
 }
 
 TEST(StreamCheck, CatchFailedKernel)
 {
-  cudaStream_t stream;
-  CUDA_TRY(cudaStreamCreate(&stream));
+  rmm::cuda_stream stream;
   int a;
-  test_kernel<<<0, 0, 0, stream>>>(&a);
+  test_kernel<<<0, 0, 0, stream.value()>>>(&a);
 #ifndef NDEBUG
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  stream.synchronize();
 #endif
-  CUDA_EXPECT_THROW_MESSAGE(CHECK_CUDA(stream),
+  CUDA_EXPECT_THROW_MESSAGE(CHECK_CUDA(stream.value()),
                             "cudaErrorInvalidConfiguration "
                             "invalid configuration argument");
-  CUDA_TRY(cudaStreamDestroy(stream));
 }
 
 __global__ void assert_false_kernel() { release_assert(false && "this kernel should die"); }

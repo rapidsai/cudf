@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,18 @@
  * limitations under the License.
  */
 
-#include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/type_lists.hpp>
 
-class ScalarFactoryTest : public cudf::test::BaseFixture {
-  cudaStream_t _stream{0};
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
+class ScalarFactoryTest : public cudf::test::BaseFixture {
  public:
-  cudaStream_t stream() { return _stream; }
+  rmm::cuda_stream_view stream() { return rmm::cuda_stream_default; }
 };
 
 template <typename T>
