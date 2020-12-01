@@ -271,16 +271,44 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     if index_col is not None and len(index_col) > 0:
         if is_range_index:
             range_index_meta = index_col[0]
-            idx = cudf.RangeIndex(
-                start=range_index_meta['start'],
-                stop=range_index_meta['stop'],
-                step=range_index_meta['step'],
-                name=range_index_meta['name']
-            )
-            if skiprows is not None:
-                idx = idx[skiprows:]
-            if num_rows is not None:
-                idx = idx[:num_rows]
+            if row_groups is not None:
+                per_file_metadata = []
+                for s in filepaths_or_buffers:
+                    per_file_metadata.append(pa.parquet.read_metadata(s))
+
+                filtered_idx = []
+                for i, file_meta in enumerate(per_file_metadata):
+                    row_groups_i = []
+                    start = 0
+                    for row_group in range(file_meta.num_row_groups):
+                        stop = start + file_meta.row_group(row_group).num_rows
+                        row_groups_i.append((start, stop))
+                        start = stop
+
+                    for rg in row_groups[i]:
+                        filtered_idx.append(
+                            cudf.RangeIndex(
+                                start=rg[k][0],
+                                stop=rg[k][1],
+                                step=range_index_meta['step']
+                            )
+                        )
+
+                if len(filtered_idx) > 0:
+                    idx = cudf.concat(filtered_idx)
+                else:
+                    idx = cudf.Index([])
+            else:
+                idx = cudf.RangeIndex(
+                    start=range_index_meta['start'],
+                    stop=range_index_meta['stop'],
+                    step=range_index_meta['step'],
+                    name=range_index_meta['name']
+                )
+                if skiprows is not None:
+                    idx = idx[skiprows:]
+                if num_rows is not None:
+                    idx = idx[:num_rows]
             df.index = idx
         elif set(index_col).issubset(column_names):
             index_data = df[index_col]

@@ -460,7 +460,10 @@ def test_parquet_read_filtered_multiple_files(tmpdir):
         [fname_0, fname_1, fname_2], filters=[("x", "==", 2)]
     )
     assert_eq(
-        filtered_df, cudf.DataFrame({"x": [2, 3, 2, 3], "y": list("bbcc")})
+        filtered_df,
+        cudf.DataFrame(
+            {"x": [2, 3, 2, 3], "y": list("bbcc")}, index=[2, 3, 2, 3]
+        ),
     )
 
 
