@@ -340,7 +340,7 @@ class DateOffset(object):
 
     def _generate_column(self, size, op):
         # libcudf assumes we are adding
-        if op == 'sub':
+        if op == "sub":
             months = -self._months
         else:
             months = self._months
