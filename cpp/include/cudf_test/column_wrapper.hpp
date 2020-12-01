@@ -552,6 +552,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    * @param begin The beginning of the sequence of elements
    * @param end The end of the sequence of elements
    * @param v The beginning of the sequence of validity indicators
+   * @param scale The scale of the elements in the column
    */
   template <typename FixedPointRepIterator, typename ValidityIterator>
   fixed_point_column_wrapper(FixedPointRepIterator begin,
