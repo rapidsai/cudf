@@ -13,6 +13,7 @@
 - PR #6838 Fix `columns` & `index` handling in dataframe constructor
 - PR #6750 Remove **kwargs from string/categorical methods
 - PR #6939 Use simplified `rmm::exec_policy`
+- PR #6512 Refactor rolling.cu to reduce compile time
 
 ## Bug Fixes
 
