@@ -10,13 +10,7 @@ from cudf.tests.utils import assert_eq
     "np_ar_tup", [(np.random.random(100), np.random.random(100))]
 )
 @pytest.mark.parametrize(
-    "func",
-    [
-        lambda x, y: np.greater(x, y),
-        lambda x, y: np.less(x, y),
-        lambda x, y: np.less_equal(x, y),
-        lambda x, y: np.subtract(x, y),
-    ],
+    "func", [np.greater, np.less, np.less_equal, np.subtract],
 )
 def test_ufunc_cudf_series(np_ar_tup, func):
     x, y = np_ar_tup[0], np_ar_tup[1]
@@ -33,12 +27,7 @@ def test_ufunc_cudf_series(np_ar_tup, func):
     "np_ar_tup", [(np.random.random(100), np.random.random(100))]
 )
 @pytest.mark.parametrize(
-    "func",
-    [
-        lambda x, y: np.greater(x, y),
-        lambda x, y: np.less(x, y),
-        lambda x, y: np.less_equal(x, y),
-    ],
+    "func", [np.greater, np.less, np.less_equal],
 )
 def test_ufunc_cudf_series_cupy_array(np_ar_tup, func):
     x, y = np_ar_tup[0], np_ar_tup[1]
@@ -54,12 +43,7 @@ def test_ufunc_cudf_series_cupy_array(np_ar_tup, func):
 
 
 @pytest.mark.parametrize(
-    "func",
-    [
-        lambda x, y: np.greater(x, y),
-        lambda x, y: np.less(x, y),
-        lambda x, y: np.less_equal(x, y),
-    ],
+    "func", [np.greater, np.less, np.less_equal],
 )
 def test_error_with_null_cudf_series(func):
     s_1 = cudf.Series([1, 2])
@@ -73,9 +57,11 @@ def test_error_with_null_cudf_series(func):
     s_1 = cudf.Series([1, 2])
     s_2 = cudf.Series([1, 2, None])
 
-    # this throws a type-error because
-    # indexes are not aligned
-    with pytest.raises(TypeError):
+    # this throws a value-error if indexes are not aligned
+    # following pandas behavior for ufunc numpy dispatching
+    with pytest.raises(
+        ValueError, match="Can only compare identically-labeled Series objects"
+    ):
         func(s_1, s_2)
 
 
@@ -95,11 +81,15 @@ def test_ufunc_cudf_series_with_index(func):
 
 
 @pytest.mark.parametrize(
-    "func", [lambda x, y: np.greater(x, y), lambda x, y: np.logaddexp(x, y)],
+    "func", [np.greater, np.logaddexp],
 )
 def test_ufunc_cudf_series_with_nonaligned_index(func):
     cudf_s1 = cudf.Series(data=[-1, 2, 3, 0], index=[2, 3, 1, 0])
     cudf_s2 = cudf.Series(data=[-1, 2, 3, 0], index=[3, 1, 0, 2])
 
-    with pytest.raises(TypeError):
+    # this throws a value-error if indexes are not aligned
+    # following pandas behavior for ufunc numpy dispatching
+    with pytest.raises(
+        ValueError, match="Can only compare identically-labeled Series objects"
+    ):
         func(cudf_s1, cudf_s2)

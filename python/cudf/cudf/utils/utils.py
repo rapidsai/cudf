@@ -528,8 +528,11 @@ def _get_cupy_compatible_args_index(args, ser_index=None):
                 ser_index = arg.index
                 casted_ls.append(arg.values)
             else:
-                # dont dispatch if the index does not line up
-                return None, ser_index
+                # this throws a value-error if indexes are not aligned
+                # following pandas behavior for ufunc numpy dispatching
+                raise ValueError(
+                    "Can only compare identically-labeled Series objects"
+                )
         elif isinstance(arg, Sequence):
             # we dont handle list of inputs for functions as
             # these form inputs for functions like
