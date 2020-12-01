@@ -1564,8 +1564,8 @@ TEST_F(ParquetReaderTest, DecimalRead)
     */
 
   cudf_io::parquet_reader_options read_strict_opts =
-    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath}).use_strict_decimal_types(true);
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
+      .use_strict_decimal_types(true);
   EXPECT_THROW(cudf_io::read_parquet(read_strict_opts), cudf::logic_error);
-
 }
 CUDF_TEST_PROGRAM_MAIN()
