@@ -82,7 +82,7 @@ enum class column_selection { ALL, ALTERNATE, FIRST_HALF, SECOND_HALF };
  *
  * Not all strategies are applicable to all readers.
  */
-enum class row_selection { ALL, BYTE_RANGE, NROWS, SKIPFOOTER };
+enum class row_selection { ALL, BYTE_RANGE, NROWS, SKIPFOOTER, STRIPES, ROW_GROUPS };
 
 /**
  * @brief Modify data types such that total selected columns size is a fix fraction of the total
@@ -98,9 +98,23 @@ enum class row_selection { ALL, BYTE_RANGE, NROWS, SKIPFOOTER };
  * @return The duplicated/rearranged array of type IDs
  */
 std::vector<cudf::type_id> dtypes_for_column_selection(std::vector<cudf::type_id> const& ids,
-                                                       column_selection cs);
+                                                       column_selection col_sel);
 
 /**
- * @brief Select a subset of columns based on the input enumerator.
+ * @brief Selects a subset of columns based on the input enumerator.
  */
-std::vector<int> select_columns(column_selection cs, int num_cols);
+std::vector<int> select_column_indexes(int num_cols, column_selection col_sel);
+
+/**
+ * @brief Selects a subset of columns from the array of names, based on the input enumerator.
+ */
+std::vector<std::string> select_column_names(std::vector<std::string> const& col_names,
+                                             column_selection col_sel);
+
+/**
+ * @brief Returns file segments that belong to the given chunk if the file is split into a given
+ * number of chunks.
+ *
+ * The segments could be Parquet row groups or ORC stripes.
+ */
+std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks, int chunk);

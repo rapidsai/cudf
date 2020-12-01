@@ -27,6 +27,8 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace {
 
@@ -43,23 +45,23 @@ namespace detail {
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
                              std::vector<uint32_t> const& initial_hash,
-                             rmm::mr::device_memory_resource* mr,
-                             cudaStream_t stream)
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   switch (hash_function) {
-    case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, initial_hash, mr, stream);
-    case (hash_id::HASH_MD5): return md5_hash(input, mr, stream);
+    case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, initial_hash, stream, mr);
+    case (hash_id::HASH_MD5): return md5_hash(input, stream, mr);
     default: return nullptr;
   }
 }
 
 std::unique_ptr<column> md5_hash(table_view const& input,
-                                 rmm::mr::device_memory_resource* mr,
-                                 cudaStream_t stream)
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   if (input.num_columns() == 0 || input.num_rows() == 0) {
     const string_scalar string_128bit("d41d8cd98f00b204e9orig98ecf8427e");
-    auto output = make_column_from_scalar(string_128bit, input.num_rows(), mr, stream);
+    auto output = make_column_from_scalar(string_128bit, input.num_rows(), stream, mr);
     return output;
   }
 
@@ -76,12 +78,12 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   // Result column allocation and creation
   auto begin = thrust::make_constant_iterator(32);
   auto offsets_column =
-    cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), mr, stream);
+    cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
   auto offsets_view  = offsets_column->view();
   auto d_new_offsets = offsets_view.data<int32_t>();
 
   auto chars_column = strings::detail::create_chars_child_column(
-    input.num_rows(), 0, input.num_rows() * 32, mr, stream);
+    input.num_rows(), 0, input.num_rows() * 32, stream, mr);
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.data<char>();
 
@@ -90,7 +92,7 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   auto const device_input = table_device_view::create(input, stream);
 
   // Hash each row, hashing each element sequentially left to right
-  thrust::for_each(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each(rmm::exec_policy(stream)->on(stream.value()),
                    thrust::make_counting_iterator(0),
                    thrust::make_counting_iterator(input.num_rows()),
                    [d_chars, device_input = *device_input] __device__(auto row_index) {
@@ -119,8 +121,8 @@ std::unique_ptr<column> md5_hash(table_view const& input,
 
 std::unique_ptr<column> murmur_hash3_32(table_view const& input,
                                         std::vector<uint32_t> const& initial_hash,
-                                        rmm::mr::device_memory_resource* mr,
-                                        cudaStream_t stream)
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
 {
   // TODO this should be UINT32
   auto output = make_numeric_column(
@@ -140,13 +142,13 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
     auto device_initial_hash = rmm::device_vector<uint32_t>(initial_hash);
 
     if (nullable) {
-      thrust::tabulate(rmm::exec_policy(stream)->on(stream),
+      thrust::tabulate(rmm::exec_policy(stream)->on(stream.value()),
                        output_view.begin<int32_t>(),
                        output_view.end<int32_t>(),
                        row_hasher_initial_values<MurmurHash3_32, true>(
                          *device_input, device_initial_hash.data().get()));
     } else {
-      thrust::tabulate(rmm::exec_policy(stream)->on(stream),
+      thrust::tabulate(rmm::exec_policy(stream)->on(stream.value()),
                        output_view.begin<int32_t>(),
                        output_view.end<int32_t>(),
                        row_hasher_initial_values<MurmurHash3_32, false>(
@@ -154,12 +156,12 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
     }
   } else {
     if (nullable) {
-      thrust::tabulate(rmm::exec_policy(stream)->on(stream),
+      thrust::tabulate(rmm::exec_policy(stream)->on(stream.value()),
                        output_view.begin<int32_t>(),
                        output_view.end<int32_t>(),
                        row_hasher<MurmurHash3_32, true>(*device_input));
     } else {
-      thrust::tabulate(rmm::exec_policy(stream)->on(stream),
+      thrust::tabulate(rmm::exec_policy(stream)->on(stream.value()),
                        output_view.begin<int32_t>(),
                        output_view.end<int32_t>(),
                        row_hasher<MurmurHash3_32, false>(*device_input));
@@ -177,7 +179,7 @@ std::unique_ptr<column> hash(table_view const& input,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hash(input, hash_function, initial_hash, mr);
+  return detail::hash(input, hash_function, initial_hash, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> murmur_hash3_32(table_view const& input,
@@ -185,7 +187,7 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::murmur_hash3_32(input, initial_hash, mr);
+  return detail::murmur_hash3_32(input, initial_hash, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

@@ -169,7 +169,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
   public ColumnVector copyToDevice() {
     if (rows == 0) {
       if (type.isNestedType()) {
-        return ColumnVector.createNestedColumnVector(type, 0,
+        return ColumnView.NestedColumnVector.createColumnVector(type, 0,
                 null, null, null, Optional.of(0L), children);
       } else {
         return new ColumnVector(type, 0, Optional.of(0L), null, null, null);
@@ -198,7 +198,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
         }
         HostMemoryBuffer hvalid = this.offHeap.valid;
         if (hvalid != null) {
-          long validLen = ColumnVector.getNativeValidPointerSize((int) rows);
+          long validLen = ColumnView.getNativeValidPointerSize((int) rows);
           valid = DeviceMemoryBuffer.allocate(validLen);
           valid.copyFromHostBuffer(hvalid, 0, validLen);
         }
@@ -216,7 +216,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
         offsets = null;
         return ret;
       } else {
-        return ColumnVector.createNestedColumnVector(type, (int) rows, offHeap.data, offHeap.valid, offHeap.offsets, nullCount, children);
+        return ColumnView.NestedColumnVector.createColumnVector(
+            type, (int) rows, offHeap.data, offHeap.valid, offHeap.offsets, nullCount, children);
       }
     } finally {
       if (data != null) {
@@ -281,22 +282,25 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   public static<T> HostColumnVector fromLists(DataType dataType, List<T>... values) {
-    ColumnBuilder cb = new ColumnBuilder(dataType, values.length);
-    cb.appendLists(values);
-    return cb.build();
+    try (ColumnBuilder cb = new ColumnBuilder(dataType, values.length)) {
+      cb.appendLists(values);
+      return cb.build();
+    }
   }
 
   public static HostColumnVector fromStructs(DataType dataType,
                                              List<StructData> values) {
-    ColumnBuilder cb = new ColumnBuilder(dataType, values.size());
-    cb.appendStructValues(values);
-    return cb.build();
+    try (ColumnBuilder cb = new ColumnBuilder(dataType, values.size())) {
+      cb.appendStructValues(values);
+      return cb.build();
+    }
   }
 
   public static HostColumnVector fromStructs(DataType dataType, StructData... values) {
-    ColumnBuilder cb = new ColumnBuilder(dataType, values.length);
-    cb.appendStructValues(values);
-    return cb.build();
+    try (ColumnBuilder cb = new ColumnBuilder(dataType, values.length)) {
+      cb.appendStructValues(values);
+      return cb.build();
+    }
   }
 
   /**
@@ -544,8 +548,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
     BigDecimal maxDec = Arrays.stream(values).filter(Objects::nonNull)
         .max(Comparator.comparingInt(BigDecimal::precision))
         .orElse(BigDecimal.ZERO);
-    int maxScale = Arrays.stream(values)
-        .map(decimal -> (decimal == null) ? 0 : decimal.scale())
+    int maxScale = Arrays.stream(values).filter(Objects::nonNull)
+        .map(decimal -> decimal.scale())
         .max(Comparator.naturalOrder())
         .orElse(0);
     maxDec = maxDec.setScale(maxScale, RoundingMode.UNNECESSARY);
@@ -793,6 +797,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       }
       HostColumnVector hostColumnVector = new HostColumnVector(type, rows, Optional.of(nullCount), data, valid, offsets,
           hostColumnVectorCoreList);
+      built = true;
       return hostColumnVector;
     }
 
@@ -884,10 +889,10 @@ public final class HostColumnVector extends HostColumnVectorCore {
       }
       if (hasNull || nullCount > 0) {
         if (valid == null) {
-          long targetValidSize = ColumnVector.getNativeValidPointerSize((int)estimatedRows);
+          long targetValidSize = ColumnView.getNativeValidPointerSize((int)estimatedRows);
           valid = HostMemoryBuffer.allocate(targetValidSize);
           valid.setMemory(0, targetValidSize, (byte) 0xFF);
-        } else if (valid.length < ColumnVector.getNativeValidPointerSize((int)rows)) {
+        } else if (valid.length < ColumnView.getNativeValidPointerSize((int)rows)) {
           long newValidLen = valid.length * 2;
           HostMemoryBuffer newValid = HostMemoryBuffer.allocate(newValidLen);
           newValid.setMemory(0, newValidLen, (byte) 0xFF);
@@ -925,7 +930,12 @@ public final class HostColumnVector extends HostColumnVectorCore {
       currentIndex++;
       currentByteIndex += type.getSizeInBytes();
       if (type.hasOffsets()) {
-        offsets.setInt(currentIndex * OFFSET_SIZE, currentByteIndex);
+        if (type.getTypeId() == DType.DTypeEnum.LIST) {
+          offsets.setInt(currentIndex * OFFSET_SIZE, childBuilders.get(0).getCurrentIndex());
+        } else {
+          // It is a String
+          offsets.setInt(currentIndex * OFFSET_SIZE, currentByteIndex);
+        }
       } else if (type == DType.STRUCT) {
         // structs propagate nulls to children and even further down if needed
         for (ColumnBuilder childBuilder : childBuilders) {
@@ -942,33 +952,70 @@ public final class HostColumnVector extends HostColumnVectorCore {
         if (structData == null || structData.dataRecord == null) {
           return appendNull();
         } else {
-          growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
           for (int i = 0; i < structData.getNumFields(); i++) {
             ColumnBuilder childBuilder = childBuilders.get(i);
             appendChildOrNull(childBuilder, structData.dataRecord.get(i));
           }
-          currentIndex++;
+          endStruct();
         }
       }
       return this;
     }
 
+    private boolean allChildrenHaveSameIndex() {
+      if (childBuilders.size() > 0) {
+        int expected = childBuilders.get(0).getCurrentIndex();
+        for (ColumnBuilder child: childBuilders) {
+          if (child.getCurrentIndex() != expected) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    /**
+     * If you want to build up a struct column you can get each child `builder.getChild(N)` and
+     * append to all of them, then when you are done call `endStruct` to update this builder.
+     * Do not start to append to the child and then append a null to this without ending the struct
+     * first or you might not get the results that you expected.
+     * @return this for chaining.
+     */
+    public ColumnBuilder endStruct() {
+      assert type.getTypeId() == DType.DTypeEnum.STRUCT : "This only works for structs";
+      assert allChildrenHaveSameIndex() : "Appending structs data appears to be off " +
+          childBuilders + " should all have the same currentIndex " + type;
+      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+      currentIndex++;
+      return this;
+    }
+
+    /**
+     * If you want to build up a list column you can get `builder.getChild(0)` and append to than,
+     * then when you are done call `endList` and everything that was appended to that builder
+     * will now be in the next list. Do not start to append to the child and then append a null
+     * to this without ending the list first or you might not get the results that you expected.
+     * @return this for chaining.
+     */
+    public ColumnBuilder endList() {
+      assert type.getTypeId() == DType.DTypeEnum.LIST;
+      growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+      currentIndex++;
+      offsets.setInt(currentIndex * OFFSET_SIZE, childBuilders.get(0).getCurrentIndex());
+      return this;
+    }
+
     // For lists
     private <T> ColumnBuilder append(List<T> inputList) {
-      assert type.isNestedType();
-      // We know lists have only 1 children
-      ColumnBuilder childBuilder = childBuilders.get(0);
       if (inputList == null) {
-        growBuffersAndRows(true, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
-        setNullAt(currentIndex);
+        appendNull();
       } else {
-        growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
+        ColumnBuilder childBuilder = childBuilders.get(0);
         for (Object listElement : inputList) {
           appendChildOrNull(childBuilder, listElement);
         }
+        endList();
       }
-      currentIndex++;
-      offsets.setInt(currentIndex * OFFSET_SIZE, childBuilder.getCurrentIndex());
       return this;
     }
 
@@ -1002,6 +1049,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       }
     }
 
+    @Deprecated
     public void incrCurrentIndex() {
       currentIndex =  currentIndex + 1;
     }
@@ -1154,6 +1202,9 @@ public final class HostColumnVector extends HostColumnVectorCore {
         if (offsets != null) {
           offsets.close();
           offsets = null;
+        }
+        for (ColumnBuilder childBuilder : childBuilders) {
+          childBuilder.close();
         }
         built = true;
       }
@@ -1321,8 +1372,10 @@ public final class HostColumnVector extends HostColumnVectorCore {
       assert currentIndex < rows;
       BigInteger unscaledValue = value.setScale(-type.getScale(), roundingMode).unscaledValue();
       if (type.typeId == DType.DTypeEnum.DECIMAL32) {
+        assert value.precision() <= DType.DECIMAL32_MAX_PRECISION : "value exceeds maximum precision for DECIMAL32";
         data.setInt(currentIndex * type.getSizeInBytes(), unscaledValue.intValueExact());
       } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
+        assert value.precision() <= DType.DECIMAL64_MAX_PRECISION : "value exceeds maximum precision for DECIMAL64 ";
         data.setLong(currentIndex * type.getSizeInBytes(), unscaledValue.longValueExact());
       } else {
         throw new IllegalStateException(type + " is not a supported decimal type.");
@@ -1648,7 +1701,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     private void allocateBitmaskAndSetDefaultValues() {
-      long bitmaskSize = ColumnVector.getNativeValidPointerSize((int) rows);
+      long bitmaskSize = ColumnView.getNativeValidPointerSize((int) rows);
       valid = HostMemoryBuffer.allocate(bitmaskSize);
       valid.setMemory(0, bitmaskSize, (byte) 0xFF);
     }

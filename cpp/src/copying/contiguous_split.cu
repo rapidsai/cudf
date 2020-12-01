@@ -20,458 +20,944 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+
+#include <thrust/iterator/discard_iterator.h>
 
 #include <numeric>
 
 namespace cudf {
-namespace detail {
 namespace {
-/**
- * @brief Copies contents of `in` to `out`.  Copies validity if present
- * but does not compute null count.
- *
- * @param in column_view to copy from
- * @param out mutable_column_view to copy to.
- */
-template <size_type block_size, typename T, bool has_validity>
-__launch_bounds__(block_size) __global__
-  void copy_in_place_kernel(column_device_view const in, mutable_column_device_view out)
-{
-  const size_type tid            = threadIdx.x + blockIdx.x * block_size;
-  const int warp_id              = tid / cudf::detail::warp_size;
-  const size_type warps_per_grid = gridDim.x * block_size / cudf::detail::warp_size;
-
-  // begin/end indices for the column data
-  size_type begin = 0;
-  size_type end   = in.size();
-  // warp indices.  since 1 warp == 32 threads == sizeof(bit_mask_t) * 8,
-  // each warp will process one (32 bit) of the validity mask via
-  // __ballot_sync()
-  size_type warp_begin = cudf::word_index(begin);
-  size_type warp_end   = cudf::word_index(end - 1);
-
-  // lane id within the current warp
-  const int lane_id = threadIdx.x % cudf::detail::warp_size;
-
-  // current warp.
-  size_type warp_cur = warp_begin + warp_id;
-  size_type index    = tid;
-  while (warp_cur <= warp_end) {
-    bool in_range = (index >= begin && index < end);
-
-    bool valid = true;
-    if (has_validity) { valid = in_range && in.is_valid(index); }
-    if (in_range) { out.element<T>(index) = in.element<T>(index); }
-
-    // update validity
-    if (has_validity) {
-      // the final validity mask for this warp
-      int warp_mask = __ballot_sync(0xFFFF'FFFF, valid && in_range);
-      // only one guy in the warp needs to update the mask and count
-      if (lane_id == 0) { out.set_mask_word(warp_cur, warp_mask); }
-    }
-
-    // next grid
-    warp_cur += warps_per_grid;
-    index += block_size * gridDim.x;
-  }
-}
-
-/**
- * @brief Copies contents of one string column to another.  Copies validity if present
- * but does not compute null count.
- *
- * The purpose of this kernel is to reduce the number of
- * kernel calls for copying a string column from 2 to 1, since number of kernel calls is the
- * dominant factor in large scale contiguous_split() calls.  To do this, the kernel is
- * invoked with using max(num_chars, num_offsets) threads and then doing separate
- * bounds checking on offset, chars and validity indices.
- *
- * Outgoing offset values are shifted down to account for the new base address
- * each column gets as a result of the contiguous_split() process.
- *
- * @param in num_strings number of strings (rows) in the column
- * @param in offsets_in pointer to incoming offsets to be copied
- * @param out offsets_out pointer to output offsets
- * @param in validity_in_offset offset into validity buffer to add to element indices
- * @param in validity_in pointer to incoming validity vector to be copied
- * @param out validity_out pointer to output validity vector
- * @param in offset_shift value to shift copied offsets down by
- * @param in num_chars number of chars to copy
- * @param in chars_in input chars to be copied
- * @param out chars_out output chars to be copied.
- */
-template <size_type block_size, bool has_validity>
-__launch_bounds__(block_size) __global__
-  void copy_in_place_strings_kernel(size_type num_strings,
-                                    size_type const* __restrict__ offsets_in,
-                                    size_type* __restrict__ offsets_out,
-                                    size_type validity_in_offset,
-                                    bitmask_type const* __restrict__ validity_in,
-                                    bitmask_type* __restrict__ validity_out,
-                                    size_type offset_shift,
-                                    size_type num_chars,
-                                    char const* __restrict__ chars_in,
-                                    char* __restrict__ chars_out)
-{
-  const size_type tid            = threadIdx.x + blockIdx.x * block_size;
-  const int warp_id              = tid / cudf::detail::warp_size;
-  const size_type warps_per_grid = gridDim.x * block_size / cudf::detail::warp_size;
-
-  // how many warps we'll be processing. with strings, the chars and offsets
-  // lengths may be different.  so we'll just march the worst case.
-  size_type warp_begin = cudf::word_index(0);
-  size_type warp_end   = cudf::word_index(std::max(num_chars, num_strings + 1) - 1);
-
-  // end indices for chars
-  size_type chars_end = num_chars;
-  // end indices for offsets
-  size_type offsets_end = num_strings + 1;
-  // end indices for validity and the last warp that actually should
-  // be updated
-  size_type validity_end      = num_strings;
-  size_type validity_warp_end = cudf::word_index(num_strings - 1);
-
-  // lane id within the current warp
-  const int lane_id = threadIdx.x % cudf::detail::warp_size;
-
-  size_type warp_cur = warp_begin + warp_id;
-  size_type index    = tid;
-  while (warp_cur <= warp_end) {
-    if (index < chars_end) { chars_out[index] = chars_in[index]; }
-
-    if (index < offsets_end) {
-      // each output column starts at a new base pointer. so we have to
-      // shift every offset down by the point (in chars) at which it was split.
-      offsets_out[index] = offsets_in[index] - offset_shift;
-    }
-
-    // if we're still in range of validity at all
-    if (has_validity && warp_cur <= validity_warp_end) {
-      bool valid = (index < validity_end) && bit_is_set(validity_in, validity_in_offset + index);
-
-      // the final validity mask for this warp
-      int warp_mask = __ballot_sync(0xFFFF'FFFF, valid);
-      // only one guy in the warp needs to update the mask and count
-      if (lane_id == 0) { validity_out[warp_cur] = warp_mask; }
-    }
-
-    // next grid
-    warp_cur += warps_per_grid;
-    index += block_size * gridDim.x;
-  }
-}
 
 // align all column size allocations to this boundary so that all output column buffers
 // start at that alignment.
 static constexpr size_t split_align = 64;
-
-/**
- * @brief Information about the split for a given column. Bundled together
- *        into a struct because tuples were getting pretty unreadable.
- */
-struct column_split_info {
-  size_t data_buf_size;      // size of the data (including padding)
-  size_t validity_buf_size;  // validity vector size (including padding)
-
-  size_t offsets_buf_size;  // (strings only) size of offset column (including padding)
-  size_type num_chars;      // (strings only) number of chars in the column
-  size_type chars_offset;   // (strings only) offset from head of chars data
-};
-
-/**
- * @brief Functor called by the `type_dispatcher` to incrementally compute total
- * memory buffer size needed to allocate a contiguous copy of all columns within
- * a source table.
- */
-struct column_buffer_size_functor {
-  template <typename T>
-  size_t operator()(column_view const& c, column_split_info& split_info)
-  {
-    split_info.data_buf_size = cudf::util::round_up_safe(c.size() * sizeof(T), split_align);
-    split_info.validity_buf_size =
-      (c.has_nulls() ? cudf::bitmask_allocation_size_bytes(c.size(), split_align) : 0);
-    return split_info.data_buf_size + split_info.validity_buf_size;
-  }
-};
-template <>
-size_t column_buffer_size_functor::operator()<string_view>(column_view const& c,
-                                                           column_split_info& split_info)
+inline __device__ size_t _round_up_safe(size_t number_to_round, size_t modulus)
 {
-  // this has already been precomputed in an earlier step. return the sum.
-  return split_info.data_buf_size + split_info.validity_buf_size + split_info.offsets_buf_size;
+  auto remainder = number_to_round % modulus;
+  if (remainder == 0) { return number_to_round; }
+  auto rounded_up = number_to_round - remainder + modulus;
+  return rounded_up;
 }
 
 /**
- * @brief Functor called by the `type_dispatcher` to copy a column into a contiguous
- * buffer of output memory.
+ * @brief Struct which contains information on a source buffer.
  *
- * Used for copying each column in a source table into one contiguous buffer of memory.
+ * The definition of "buffer" used throughout this module is a component piece of a
+ * cudf column. So for example, a fixed-width column with validity would have 2 associated
+ * buffers : the data itself and the validity buffer.  contiguous_split operates by breaking
+ * each column up into it's individual components and copying each one as a seperate kernel
+ * block.
  */
-struct column_copy_functor {
-  template <typename T>
-  void operator()(column_view const& in,
-                  column_split_info const& split_info,
-                  char*& dst,
-                  std::vector<column_view>& out_cols)
+struct src_buf_info {
+  src_buf_info(cudf::type_id _type,
+               const int* _offsets,
+               int _offset_stack_pos,
+               int _parent_offsets_index,
+               bool _is_validity,
+               int _column_offset)
+    : type(_type),
+      offsets(_offsets),
+      offset_stack_pos(_offset_stack_pos),
+      parent_offsets_index(_parent_offsets_index),
+      is_validity(_is_validity),
+      column_offset(_column_offset)
   {
-    // outgoing pointers
-    char* data             = dst;
-    bitmask_type* validity = split_info.validity_buf_size == 0
-                               ? nullptr
-                               : reinterpret_cast<bitmask_type*>(dst + split_info.data_buf_size);
+  }
 
-    // increment working buffer
-    dst += (split_info.data_buf_size + split_info.validity_buf_size);
+  cudf::type_id type;
+  const int* offsets;        // a pointer to device memory offsets if I am an offset buffer
+  int offset_stack_pos;      // position in the offset stack buffer
+  int parent_offsets_index;  // immediate parent that has offsets, or -1 if none
+  bool is_validity;          // if I am a validity buffer
+  size_type column_offset;   // offset in the case of a sliced column
+};
 
-    // no work to do
-    if (in.is_empty()) {
-      out_cols.push_back(column_view{in.type(), 0, nullptr});
-      return;
+/**
+ * @brief Struct which contains information on a destination buffer.
+ *
+ * Similar to src_buf_info, dst_buf_info contains information on a destination buffer we
+ * are going to copy to.  If we have N input buffers (which come from X columns), and
+ * M partitions, then we have N*M destination buffers.
+ */
+struct dst_buf_info {
+  size_t buf_size;   // total size of buffer, including padding
+  int num_elements;  // # of elements to be copied
+  int element_size;  // size of each element in bytes
+  int num_rows;  // # of rows (which may be different from num_elements in the case of validity or
+                 // offset buffers)
+  int src_row_index;  // row index to start reading from from my associated source buffer
+  int dst_offset;     // my offset into the per-partition allocation
+  int value_shift;    // amount to shift values down by (for offset buffers)
+  int bit_shift;      // # of bits to shift right by (for validity buffers)
+};
+
+/**
+ * @brief Copy a single buffer of column data, shifting values (for offset columns),
+ * and validity (for validity buffers) as necessary.
+ *
+ * Copies a single partition of a source column buffer to a destination buffer. Shifts
+ * element values by value_shift in the case of a buffer of offsets (value_shift will
+ * only ever be > 0 in that case).  Shifts elements bitwise by bit_shift in the case of
+ * a validity buffer (bif_shift will only ever be > 0 in that case).  This function assumes
+ * value_shift and bit_shift will never be > 0 at the same time.
+ *
+ * This function expects:
+ * - src may be a misaligned address
+ * - dst must be an aligned address
+ *
+ * This function always does the ALU work related to value_shift and bit_shift because it is
+ * entirely memory-bandwidth bound.
+ *
+ * @param dst Destination buffer
+ * @param src Source buffer
+ * @param t Thread index
+ * @param num_elements Number of elements to copy
+ * @param element_size Size of each element in bytes
+ * @param src_row_index Row index to start copying at
+ * @param stride Size of the kernel block
+ * @param value_shift Shift incoming 4-byte offset values down by this amount
+ * @param bit_shift Shift incoming data right by this many bits
+ *
+ */
+__device__ void copy_buffer(uint8_t* __restrict__ dst,
+                            uint8_t* __restrict__ src,
+                            int t,
+                            int num_elements,
+                            int element_size,
+                            int src_row_index,
+                            uint32_t stride,
+                            int value_shift,
+                            int bit_shift)
+{
+  src += (src_row_index * element_size);
+
+  // handle misalignment. read 16 bytes in 4 byte reads. write in a single 16 byte store.
+  const size_t num_bytes = num_elements * element_size;
+  // how many bytes we're misaligned from 4-byte alignment
+  const uint32_t ofs = reinterpret_cast<uintptr_t>(src) % 4;
+  size_t pos         = t * 16;
+  stride *= 16;
+  while (pos + 20 <= num_bytes) {
+    // read from the nearest aligned address.
+    const uint32_t* in32 = reinterpret_cast<const uint32_t*>((src + pos) - ofs);
+    uint4 v              = uint4{in32[0], in32[1], in32[2], in32[3]};
+    if (ofs || bit_shift) {
+      v.x = __funnelshift_r(v.x, v.y, ofs * 8 + bit_shift);
+      v.y = __funnelshift_r(v.y, v.z, ofs * 8 + bit_shift);
+      v.z = __funnelshift_r(v.z, v.w, ofs * 8 + bit_shift);
+      v.w = __funnelshift_r(v.w, in32[4], ofs * 8 + bit_shift);
     }
+    v.x -= value_shift;
+    v.y -= value_shift;
+    v.z -= value_shift;
+    v.w -= value_shift;
+    reinterpret_cast<uint4*>(dst)[pos / 16] = v;
+    pos += stride;
+  }
 
-    // custom copy kernel (which could probably just be an in-place copy() function in cudf).
-    cudf::size_type num_els  = cudf::util::round_up_safe(in.size(), cudf::detail::warp_size);
-    constexpr int block_size = 256;
-    cudf::detail::grid_1d grid{num_els, block_size, 1};
+  // copy trailing bytes
+  if (t == 0) {
+    size_t remainder = num_bytes < 16 ? num_bytes : 16 + (num_bytes % 16);
 
-    // output copied column
-    mutable_column_view mcv{in.type(), in.size(), data, validity, in.null_count()};
-    if (in.has_nulls()) {
-      copy_in_place_kernel<block_size, T, true><<<grid.num_blocks, block_size, 0, 0>>>(
-        *column_device_view::create(in), *mutable_column_device_view::create(mcv));
+    // if we're performing a value shift (offsets), or a bit shift (validity) the # of bytes and
+    // alignment must be a multiple of 4. value shifting and bit shifting are mututally exclusive
+    // and will never both be true at the same time.
+    if (value_shift || bit_shift) {
+      int idx    = (num_bytes - remainder) / 4;
+      uint32_t v = remainder > 0 ? (reinterpret_cast<uint32_t*>(src)[idx] - value_shift) : 0;
+      while (remainder) {
+        uint32_t next =
+          remainder > 0 ? (reinterpret_cast<uint32_t*>(src)[idx + 1] - value_shift) : 0;
+        reinterpret_cast<uint32_t*>(dst)[idx] = (v >> bit_shift) | (next << (32 - bit_shift));
+        v                                     = next;
+        idx++;
+        remainder -= 4;
+      }
     } else {
-      copy_in_place_kernel<block_size, T, false><<<grid.num_blocks, block_size, 0, 0>>>(
-        *column_device_view::create(in), *mutable_column_device_view::create(mcv));
+      while (remainder) {
+        int idx                              = num_bytes - remainder--;
+        reinterpret_cast<uint8_t*>(dst)[idx] = reinterpret_cast<uint8_t*>(src)[idx];
+      }
     }
-
-    out_cols.push_back(mcv);
   }
-};
-template <>
-void column_copy_functor::operator()<string_view>(column_view const& in,
-                                                  column_split_info const& split_info,
-                                                  char*& dst,
-                                                  std::vector<column_view>& out_cols)
-{
-  // outgoing pointers
-  char* chars_buf            = dst;
-  bitmask_type* validity_buf = split_info.validity_buf_size == 0
-                                 ? nullptr
-                                 : reinterpret_cast<bitmask_type*>(dst + split_info.data_buf_size);
-  size_type* offsets_buf =
-    reinterpret_cast<size_type*>(dst + split_info.data_buf_size + split_info.validity_buf_size);
-
-  // increment working buffer
-  dst += (split_info.data_buf_size + split_info.validity_buf_size + split_info.offsets_buf_size);
-
-  // offsets column.
-  strings_column_view strings_c(in);
-  column_view in_offsets = strings_c.offsets();
-  // note, incoming columns are sliced, so their size is fundamentally different from their child
-  // offset columns, which are unsliced.
-  size_type num_offsets = in.size() + 1;
-  cudf::size_type num_threads =
-    cudf::util::round_up_safe(std::max(split_info.num_chars, num_offsets), cudf::detail::warp_size);
-  column_view in_chars = strings_c.chars();
-
-  // a column with no strings will still have a single offset.
-  CUDF_EXPECTS(num_offsets > 0, "Invalid offsets child column");
-
-  // 1 combined kernel call that copies chars, offsets and validity in one pass. see notes on why
-  // this exists in the kernel brief.
-  constexpr int block_size = 256;
-  cudf::detail::grid_1d grid{num_threads, block_size, 1};
-  if (in.has_nulls()) {
-    copy_in_place_strings_kernel<block_size, true><<<grid.num_blocks, block_size, 0, 0>>>(
-      in.size(),                                        // num_rows
-      in_offsets.head<size_type>() + in.offset(),       // offsets_in
-      offsets_buf,                                      // offsets_out
-      in.offset(),                                      // validity_in_offset
-      in.null_mask(),                                   // validity_in
-      validity_buf,                                     // validity_out
-      split_info.chars_offset,                          // offset_shift
-      split_info.num_chars,                             // num_chars
-      in_chars.head<char>() + split_info.chars_offset,  // chars_in
-      chars_buf);
-  } else {
-    copy_in_place_strings_kernel<block_size, false><<<grid.num_blocks, block_size, 0, 0>>>(
-      in.size(),                                        // num_rows
-      in_offsets.head<size_type>() + in.offset(),       // offsets_in
-      offsets_buf,                                      // offsets_out
-      0,                                                // validity_in_offset
-      nullptr,                                          // validity_in
-      nullptr,                                          // validity_out
-      split_info.chars_offset,                          // offset_shift
-      split_info.num_chars,                             // num_chars
-      in_chars.head<char>() + split_info.chars_offset,  // chars_in
-      chars_buf);
-  }
-
-  // output child columns
-  column_view out_offsets{in_offsets.type(), num_offsets, offsets_buf};
-  column_view out_chars{in_chars.type(), static_cast<size_type>(split_info.num_chars), chars_buf};
-
-  // result
-  out_cols.push_back(column_view(
-    in.type(), in.size(), nullptr, validity_buf, in.null_count(), 0, {out_offsets, out_chars}));
 }
 
 /**
- * @brief Information about a string column in a table view.
+ * @brief Kernel which copies a single buffer from a set of partitioned
+ * column buffers.
  *
- * Used internally by preprocess_string_column_info as part of a device-accessible
- * vector for computing final string information in a single kernel call.
+ * When doing a contiguous_split on X columns comprising N total internal buffers
+ * with M splits, we end up having to copy N*M source/destination buffer pairs.
+ * This kernel is arranged such that each block copies 1 source/destination pair.
+ * This function retrieves the relevant buffers and then calls copy_buffer to perform
+ * the actual copy.
+ *
+ * @param num_src_bufs Total number of source buffers (N)
+ * @param num_partitions Number of partitions the each source buffer is split into (M)
+ * @param src_bufs Input source buffers (N)
+ * @param dst_bufs Desination buffers (N*M)
+ * @param buf_info Information on the range of values to be copied for each destination buffer.
+ *
  */
-struct column_preprocess_info {
-  size_type index;
-  size_type offset;
-  size_type size;
-  bool has_nulls;
-  cudf::column_device_view offsets;
-};
+__global__ void copy_partition(int num_src_bufs,
+                               int num_partitions,
+                               uint8_t** src_bufs,
+                               uint8_t** dst_bufs,
+                               dst_buf_info* buf_info)
+{
+  int const partition_index = blockIdx.x / num_src_bufs;
+  int const src_buf_index   = blockIdx.x % num_src_bufs;
+  size_t const buf_index    = (partition_index * num_src_bufs) + src_buf_index;
+
+  // copy, shifting offsets and validity bits as needed
+  copy_buffer(dst_bufs[partition_index] + buf_info[buf_index].dst_offset,
+              src_bufs[src_buf_index],
+              threadIdx.x,
+              buf_info[buf_index].num_elements,
+              buf_info[buf_index].element_size,
+              buf_info[buf_index].src_row_index,
+              blockDim.x,
+              buf_info[buf_index].value_shift,
+              buf_info[buf_index].bit_shift);
+}
+
+// The block of functions below are all related:
+//
+// compute_offset_stack_size()
+// setup_src_buf_data()
+// count_src_bufs()
+// setup_source_buf_info()
+// build_output_columns()
+//
+// Critically, they all traverse the hierarchy of source columns and their children
+// in a specific order to guarantee they produce various outputs in a consistent
+// way.  For example, setup_src_buf_info() produces a series of information
+// structs that must appear in the same order that setup_src_buf_data() produces
+// buffers.
+//
+// So please be careful if you change the way in which these functions and
+// functors traverse the hierarchy.
 
 /**
- * @brief Preprocess information about all strings columns in a table view.
- *
- * In order to minimize how often we touch the gpu, we need to preprocess various pieces of
- * information about the string columns in a table as a batch process.  This function builds a list
- * of the offset columns for all input string columns and computes this information with a single
- * thrust call.  In addition, the vector returned is allocated for -all- columns in the table so
- * further processing of non-string columns can happen afterwards.
- *
- * The key things this function avoids
- * - avoiding reaching into gpu memory on the cpu to retrieve offsets to compute string sizes.
- * - creating column_device_views on the base string_column_view itself as that causes gpu memory
- * allocation.
+ * @brief Returns whether or not the specified type is a column that contains offsets.
  */
-thrust::host_vector<column_split_info> preprocess_string_column_info(
-  cudf::table_view const& t,
-  rmm::device_vector<column_split_info>& device_split_info,
-  cudaStream_t stream)
-{
-  // build a list of all the offset columns and their indices for all input string columns and put
-  // them on the gpu
-  thrust::host_vector<column_preprocess_info> offset_columns;
-  offset_columns.reserve(t.num_columns());  // worst case
+bool is_offset_type(type_id id) { return (id == type_id::STRING or id == type_id::LIST); }
 
-  // collect only string columns
-  size_type column_index = 0;
-  std::for_each(t.begin(), t.end(), [&offset_columns, &column_index](cudf::column_view const& c) {
-    if (c.type().id() == type_id::STRING) {
-      cudf::column_device_view cdv((strings_column_view(c)).offsets(), 0, 0);
-      offset_columns.push_back(
-        column_preprocess_info{column_index, c.offset(), c.size(), c.has_nulls(), cdv});
-    }
-    column_index++;
+/**
+ * @brief Compute total device memory stack size needed to process nested
+ * offsets per-output buffer.
+ *
+ * When determining the range of rows to be copied for each output buffer
+ * we have to recursively apply the stack of offsets from our parent columns
+ * (lists or strings).  We want to do this computation on the gpu because offsets
+ * are stored in device memory.  However we don't want to do recursion on the gpu, so
+ * each destination buffer gets a "stack" of space to work with equal in size to
+ * it's offset nesting depth.  This function computes the total size of all of those
+ * stacks.
+ *
+ * This function is called recursively in the case of nested types.
+ *
+ * @param begin Beginning of input columns
+ * @param end End of input columns
+ * @param offset_depth Current offset nesting depth
+ *
+ * @returns Total offset stack size needed for this range of columns.
+ */
+template <typename InputIter>
+size_t compute_offset_stack_size(InputIter begin, InputIter end, int offset_depth = 0)
+{
+  return std::accumulate(begin, end, 0, [offset_depth](auto stack_size, column_view const& col) {
+    auto const num_buffers = (col.head() != nullptr ? 1 : 0) + (col.nullable() ? 1 : 0);
+    return stack_size + (offset_depth * num_buffers) +
+           compute_offset_stack_size(
+             col.child_begin(), col.child_end(), offset_depth + is_offset_type(col.type().id()));
   });
-  rmm::device_vector<column_preprocess_info> device_offset_columns = offset_columns;
-
-  // compute column split information
-  rmm::device_vector<thrust::pair<size_type, size_type>> device_offsets(t.num_columns());
-  auto* offsets_p = device_offsets.data().get();
-  thrust::for_each(rmm::exec_policy(stream)->on(stream),
-                   device_offset_columns.begin(),
-                   device_offset_columns.end(),
-                   [offsets_p] __device__(column_preprocess_info const& cpi) {
-                     offsets_p[cpi.index] =
-                       thrust::make_pair(cpi.offsets.head<int32_t>()[cpi.offset],
-                                         cpi.offsets.head<int32_t>()[cpi.offset + cpi.size]);
-                   });
-  thrust::host_vector<thrust::pair<size_type, size_type>> host_offsets(device_offsets);
-  thrust::host_vector<column_split_info> split_info(t.num_columns());
-  std::for_each(offset_columns.begin(),
-                offset_columns.end(),
-                [&split_info, &host_offsets](column_preprocess_info const& cpi) {
-                  int32_t offset_start = host_offsets[cpi.index].first;
-                  int32_t offset_end   = host_offsets[cpi.index].second;
-                  auto num_chars       = offset_end - offset_start;
-                  split_info[cpi.index].data_buf_size =
-                    cudf::util::round_up_safe(static_cast<size_t>(num_chars), split_align);
-                  split_info[cpi.index].validity_buf_size =
-                    cpi.has_nulls ? cudf::bitmask_allocation_size_bytes(cpi.size, split_align) : 0;
-                  split_info[cpi.index].offsets_buf_size =
-                    cudf::util::round_up_safe((cpi.size + 1) * sizeof(size_type), split_align);
-                  split_info[cpi.index].num_chars    = num_chars;
-                  split_info[cpi.index].chars_offset = offset_start;
-                });
-  return split_info;
 }
 
 /**
- * @brief Creates a contiguous_split_result object which contains a deep-copy of the input
- * table_view into a single contiguous block of memory.
+ * @brief Retrieve all buffers for a range of source columns.
  *
- * The table_view contained within the contiguous_split_result will pass an expect_tables_equal()
- * call with the input table.  The memory referenced by the table_view and its internal column_views
- * is entirely contained in single block of memory.
+ * Retrieve the individual buffers that make up a range of input columns.
+ *
+ * This function is called recursively in the case of nested types.
+ *
+ * @param begin Beginning of input columns
+ * @param end End of input columns
+ * @param out_buf Iterator into output buffer infos
+ *
+ * @returns next output buffer iterator
  */
-contiguous_split_result alloc_and_copy(cudf::table_view const& t,
-                                       rmm::device_vector<column_split_info>& device_split_info,
-                                       rmm::mr::device_memory_resource* mr,
-                                       cudaStream_t stream)
+template <typename InputIter, typename OutputIter>
+OutputIter setup_src_buf_data(InputIter begin, InputIter end, OutputIter out_buf)
 {
-  // preprocess column split information for string columns.
-  thrust::host_vector<column_split_info> split_info =
-    preprocess_string_column_info(t, device_split_info, stream);
-
-  // compute the rest of the column sizes (non-string columns, and total buffer size)
-  size_t total_size      = 0;
-  size_type column_index = 0;
-  std::for_each(
-    t.begin(), t.end(), [&total_size, &column_index, &split_info](cudf::column_view const& c) {
-      total_size +=
-        cudf::type_dispatcher(c.type(), column_buffer_size_functor{}, c, split_info[column_index]);
-      column_index++;
-    });
-
-  // allocate
-  auto device_buf = std::make_unique<rmm::device_buffer>(total_size, stream, mr);
-  char* buf       = static_cast<char*>(device_buf->data());
-
-  // copy (this would be cleaner with a std::transform, but there's an nvcc compiler issue in the
-  // way)
-  std::vector<column_view> out_cols;
-  out_cols.reserve(t.num_columns());
-
-  column_index = 0;
-  std::for_each(
-    t.begin(), t.end(), [&out_cols, &buf, &column_index, &split_info](cudf::column_view const& c) {
-      cudf::type_dispatcher(
-        c.type(), column_copy_functor{}, c, split_info[column_index], buf, out_cols);
-      column_index++;
-    });
-
-  return contiguous_split_result{cudf::table_view{out_cols}, std::move(device_buf)};
+  std::for_each(begin, end, [&out_buf](column_view const& col) {
+    if (col.nullable()) {
+      *out_buf = reinterpret_cast<uint8_t*>(const_cast<bitmask_type*>(col.null_mask()));
+      out_buf++;
+    }
+    // NOTE: we're always returning the base pointer here.  column-level offset is accounted
+    // for later.
+    if (col.head() != nullptr) {
+      *out_buf = const_cast<uint8_t*>(col.head<uint8_t>());
+      out_buf++;
+    }
+    out_buf = setup_src_buf_data(col.child_begin(), col.child_end(), out_buf);
+  });
+  return out_buf;
 }
+
+/**
+ * @brief Count the total number of source buffers we will be copying
+ * from.
+ *
+ * This count includes buffers for all input columns. For example a
+ * fixed-width column with validity would be 2 buffers (data, validity).
+ * A string column with validity would be 3 buffers (chars, offsets, validity).
+ *
+ * This function is called recursively in the case of nested types.
+ *
+ * @param begin Beginning of input columns
+ * @param end End of input columns
+ *
+ * @returns total number of source buffers for this range of columns
+ */
+template <typename InputIter>
+size_type count_src_bufs(InputIter begin, InputIter end)
+{
+  auto buf_iter = thrust::make_transform_iterator(begin, [](column_view const& col) {
+    return (col.head() != nullptr ? 1 : 0) + (col.nullable() ? 1 : 0) +
+           count_src_bufs(col.child_begin(), col.child_end());
+  });
+  return std::accumulate(buf_iter, buf_iter + std::distance(begin, end), 0);
+}
+
+/**
+ * @brief Computes source buffer information for the copy kernel.
+ *
+ * For each input column to be split we need to know several pieces of information
+ * in the copy kernel.  This function traverses the input columns and prepares this
+ * information for the gpu.
+ *
+ * This function is called recursively in the case of nested types.
+ *
+ * @param begin Beginning of input columns
+ * @param end End of input columns
+ * @param head Beginning of source buffer info array
+ * @param current Current source buffer info to be written to
+ * @param offset_stack_pos Integer representing our current offset nesting depth
+ * (how many list or string levels deep we are)
+ * @param parent_offset_index Index into src_buf_info output array indicating our nearest
+ * containing list parent. -1 if we have no list parent
+ * @param offset_depth Current offset nesting depth (how many list levels deep we are)
+ *
+ * @returns next src_buf_output after processing this range of input columns
+ */
+// setup source buf info
+template <typename InputIter>
+std::pair<src_buf_info*, size_type> setup_source_buf_info(InputIter begin,
+                                                          InputIter end,
+                                                          src_buf_info* head,
+                                                          src_buf_info* current,
+                                                          int offset_stack_pos    = 0,
+                                                          int parent_offset_index = -1,
+                                                          int offset_depth        = 0);
+
+/**
+ * @brief Functor that builds source buffer information based on input columns.
+ *
+ * Called by setup_source_buf_info to build information for a single source column.  This function
+ * will recursively call setup_source_buf_info in the case of nested types.
+ */
+struct buf_info_functor {
+  src_buf_info* head;
+
+  template <typename T>
+  std::pair<src_buf_info*, size_type> operator()(column_view const& col,
+                                                 src_buf_info* current,
+                                                 int offset_stack_pos,
+                                                 int parent_offset_index,
+                                                 int offset_depth)
+  {
+    if (col.nullable()) {
+      std::tie(current, offset_stack_pos) =
+        add_null_buffer(col, current, offset_stack_pos, parent_offset_index, offset_depth);
+    }
+
+    // info for the data buffer
+    *current = src_buf_info(
+      col.type().id(), nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+
+    return {current + 1, offset_stack_pos + offset_depth};
+  }
+
+ private:
+  std::pair<src_buf_info*, size_type> add_null_buffer(column_view const& col,
+                                                      src_buf_info* current,
+                                                      int offset_stack_pos,
+                                                      int parent_offset_index,
+                                                      int offset_depth)
+  {
+    // info for the validity buffer
+    *current = src_buf_info(
+      type_id::INT32, nullptr, offset_stack_pos, parent_offset_index, true, col.offset());
+
+    return {current + 1, offset_stack_pos + offset_depth};
+  }
+};
+
+template <>
+std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_view>(
+  column_view const& col,
+  src_buf_info* current,
+  int offset_stack_pos,
+  int parent_offset_index,
+  int offset_depth)
+{
+  strings_column_view scv(col);
+
+  if (col.nullable()) {
+    std::tie(current, offset_stack_pos) =
+      add_null_buffer(col, current, offset_stack_pos, parent_offset_index, offset_depth);
+  }
+
+  auto offset_col = current;
+
+  // info for the offsets buffer
+  *current = src_buf_info(type_id::INT32,
+                          scv.offsets().begin<cudf::id_to_type<type_id::INT32>>(),
+                          offset_stack_pos,
+                          parent_offset_index,
+                          false,
+                          col.offset());
+
+  // prevent appending buf_info for non-exist chars buffer
+  if (scv.chars_size() > 0) {
+    current++;
+    offset_stack_pos += offset_depth;
+
+    // since we are crossing an offset boundary, our offset_depth and parent_offset_index go up.
+    offset_depth++;
+    parent_offset_index = offset_col - head;
+
+    // info for the chars buffer
+    *current = src_buf_info(
+      type_id::INT8, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
+  }
+
+  return {current + 1, offset_stack_pos + offset_depth};
+}
+
+template <>
+std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::list_view>(
+  column_view const& col,
+  src_buf_info* current,
+  int offset_stack_pos,
+  int parent_offset_index,
+  int offset_depth)
+{
+  lists_column_view lcv(col);
+
+  if (col.nullable()) {
+    std::tie(current, offset_stack_pos) =
+      add_null_buffer(col, current, offset_stack_pos, parent_offset_index, offset_depth);
+  }
+
+  auto offset_col = current;
+
+  // info for the offsets buffer
+  *current = src_buf_info(type_id::INT32,
+                          lcv.offsets().begin<cudf::id_to_type<type_id::INT32>>(),
+                          offset_stack_pos,
+                          parent_offset_index,
+                          false,
+                          col.offset());
+  current++;
+  offset_stack_pos += offset_depth;
+
+  // since we are crossing an offset boundary, our offset_depth and parent_offset_index go up.
+  offset_depth++;
+  parent_offset_index = offset_col - head;
+
+  return setup_source_buf_info(col.child_begin() + 1,
+                               col.child_end(),
+                               head,
+                               current,
+                               offset_stack_pos,
+                               parent_offset_index,
+                               offset_depth);
+}
+
+template <>
+std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::struct_view>(
+  column_view const& col,
+  src_buf_info* current,
+  int offset_stack_pos,
+  int parent_offset_index,
+  int offset_depth)
+{
+  if (col.nullable()) {
+    std::tie(current, offset_stack_pos) =
+      add_null_buffer(col, current, offset_stack_pos, parent_offset_index, offset_depth);
+  }
+
+  // recurse on children
+  return setup_source_buf_info(col.child_begin(),
+                               col.child_end(),
+                               head,
+                               current,
+                               offset_stack_pos,
+                               parent_offset_index,
+                               offset_depth);
+}
+
+template <>
+std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::dictionary32>(
+  column_view const& col,
+  src_buf_info* current,
+  int offset_stack_pos,
+  int parent_offset_index,
+  int offset_depth)
+{
+  CUDF_FAIL("Unsupported type");
+}
+
+template <typename InputIter>
+std::pair<src_buf_info*, size_type> setup_source_buf_info(InputIter begin,
+                                                          InputIter end,
+                                                          src_buf_info* head,
+                                                          src_buf_info* current,
+                                                          int offset_stack_pos,
+                                                          int parent_offset_index,
+                                                          int offset_depth)
+{
+  std::for_each(begin, end, [&](column_view const& col) {
+    std::tie(current, offset_stack_pos) = cudf::type_dispatcher(col.type(),
+                                                                buf_info_functor{head},
+                                                                col,
+                                                                current,
+                                                                offset_stack_pos,
+                                                                parent_offset_index,
+                                                                offset_depth);
+  });
+  return {current, offset_stack_pos};
+}
+
+/**
+ * @brief Given a set of input columns and processed split buffers, produce
+ * output columns.
+ *
+ * After performing the split we are left with 1 large buffer per incoming split
+ * partition.  We need to traverse this buffer and distribute the individual
+ * subpieces that represent individual columns and children to produce the final
+ * output columns.
+ *
+ * This function is called recursively in the case of nested types.
+ *
+ * @param begin Beginning of input columns
+ * @param end End of input columns
+ * @param info_begin Iterator of dst_buf_info structs containing information about each
+ * copied buffer
+ * @param out_begin Output iterator of column views
+ * @param base_ptr Pointer to the base address of copied data for the working partition
+ *
+ * @returns new dst_buf_info iterator after processing this range of input columns
+ */
+template <typename InputIter, typename BufInfo, typename Output>
+BufInfo build_output_columns(InputIter begin,
+                             InputIter end,
+                             BufInfo info_begin,
+                             Output out_begin,
+                             uint8_t const* const base_ptr)
+{
+  auto current_info = info_begin;
+  std::transform(begin, end, out_begin, [&current_info, base_ptr](column_view const& src) {
+    // Use C++17 structured bindings
+    bitmask_type const* bitmask_ptr;
+    size_type null_count;
+    std::tie(bitmask_ptr, null_count) = [&]() {
+      if (src.nullable()) {
+        auto const ptr = reinterpret_cast<bitmask_type const*>(base_ptr + current_info->dst_offset);
+        ++current_info;
+        return std::make_pair(ptr, UNKNOWN_NULL_COUNT);
+      }
+      return std::make_pair(static_cast<bitmask_type const*>(nullptr), 0);
+    }();
+    uint8_t const* data_ptr;
+    size_type size;
+    std::tie(data_ptr, size) = [&]() {
+      if (src.head()) {
+        auto const ptr = base_ptr + current_info->dst_offset;
+        // if we have data, num_elements will always be the correct size.
+        // we don't want to use num_rows because if we are an offset column, num_rows
+        // represents the # of rows of our owning parent. num_elements always represents
+        // the proper size for this column
+        auto const size = current_info->num_elements;
+        ++current_info;
+        return std::make_pair(ptr, size);
+      }
+      // Parent columns w/o data (e.g., strings, lists) don't have an associated `dst_buf_info`,
+      // therefore, use the first child's info if it has at least one child. Their num_rows value
+      // will be correct (also see comment above)
+      auto const size = (src.num_children() == 0) ? 0 : current_info->num_rows;
+      return std::make_pair(static_cast<uint8_t const*>(nullptr), size);
+    }();
+    auto children = std::vector<column_view>{};
+    children.reserve(src.num_children());
+    current_info = build_output_columns(
+      src.child_begin(), src.child_end(), current_info, std::back_inserter(children), base_ptr);
+    return column_view{src.type(), size, data_ptr, bitmask_ptr, null_count, 0, std::move(children)};
+  });
+
+  return current_info;
+}
+
+/**
+ * @brief Functor that retrieves the size of a destination buffer
+ */
+struct buf_size_functor {
+  dst_buf_info const* ci;
+  size_t operator() __device__(int index) { return static_cast<size_t>(ci[index].buf_size); }
+};
+
+/**
+ * @brief Functor that retrieves the split "key" for a given output
+ * buffer index.
+ *
+ * The key is simply the partition index.
+ */
+struct split_key_functor {
+  int num_columns;
+  int operator() __device__(int buf_index) { return buf_index / num_columns; }
+};
+
+/**
+ * @brief Output iterator for writing values to the dst_offset field of the
+ * dst_buf_info struct
+ */
+struct dst_offset_output_iterator {
+  dst_buf_info* c;
+  using value_type        = int;
+  using difference_type   = int;
+  using pointer           = int*;
+  using reference         = int&;
+  using iterator_category = thrust::output_device_iterator_tag;
+
+  dst_offset_output_iterator operator+ __host__ __device__(int i)
+  {
+    return dst_offset_output_iterator{c + i};
+  }
+
+  void operator++ __host__ __device__() { c++; }
+
+  reference operator[] __device__(int i) { return dereference(c + i); }
+  reference operator* __device__() { return dereference(c); }
+
+ private:
+  reference __device__ dereference(dst_buf_info* c) { return c->dst_offset; }
+};
+
+/**
+ * @brief Functor for computing size of data elements for a given cudf type.
+ *
+ * Note: columns types which themselves inherently have no data (strings, lists,
+ * structs) return 0.
+ *
+ */
+struct size_of_helper {
+  template <typename T>
+  constexpr std::enable_if_t<not is_fixed_width<T>(), int> __device__ operator()() const
+  {
+    return 0;
+  }
+
+  template <typename T>
+  constexpr std::enable_if_t<is_fixed_width<T>(), int> __device__ operator()() const noexcept
+  {
+    return sizeof(cudf::device_storage_type_t<T>);
+  }
+};
 
 };  // anonymous namespace
 
+namespace detail {
+
 std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& input,
                                                       std::vector<size_type> const& splits,
-                                                      rmm::mr::device_memory_resource* mr,
-                                                      cudaStream_t stream)
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::mr::device_memory_resource* mr)
 {
-  auto subtables = cudf::split(input, splits);
+  if (input.num_columns() == 0) { return {}; }
+  if (splits.size() > 0) {
+    CUDF_EXPECTS(splits.back() <= input.column(0).size(),
+                 "splits can't exceed size of input columns");
+  }
+  {
+    size_type begin = 0;
+    for (size_t i = 0; i < splits.size(); i++) {
+      size_type end = splits[i];
+      CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
+      CUDF_EXPECTS(end >= begin, "End index cannot be smaller than the starting index.");
+      CUDF_EXPECTS(end <= input.column(0).size(), "Slice range out of bounds.");
+      begin = end;
+    }
+  }
 
-  // optimization : for large numbers of splits this allocation can dominate total time
-  //                spent if done inside alloc_and_copy().  so we'll allocate it once
-  //                and reuse it.
-  //
-  //                benchmark:        1 GB data, 10 columns, 256 splits.
-  //                no optimization:  106 ms (8 GB/s)
-  //                optimization:     20 ms (48 GB/s)
-  rmm::device_vector<column_split_info> device_split_info(input.num_columns());
+  size_t const num_partitions = splits.size() + 1;
 
-  std::vector<contiguous_split_result> result;
-  std::transform(subtables.begin(),
-                 subtables.end(),
-                 std::back_inserter(result),
-                 [mr, stream, &device_split_info](table_view const& t) {
-                   return alloc_and_copy(t, device_split_info, mr, stream);
+  // if inputs are empty, just return num_partitions empty tables
+  if (input.column(0).size() == 0) {
+    std::vector<contiguous_split_result> result;
+    result.reserve(num_partitions);
+
+    auto iter = thrust::make_counting_iterator(0);
+    std::transform(
+      iter, iter + num_partitions, std::back_inserter(result), [&input](int partition_index) {
+        return contiguous_split_result{input, std::make_unique<rmm::device_buffer>()};
+      });
+
+    return result;
+  }
+
+  size_t const num_root_columns = input.num_columns();
+
+  // compute # of source buffers (column data, validity, children), # of partitions
+  // and total # of buffers
+  size_type const num_src_bufs = count_src_bufs(input.begin(), input.end());
+  size_t const num_bufs        = num_src_bufs * num_partitions;
+
+  // packed block of memory 1. split indices and src_buf_info structs
+  size_t const indices_size =
+    cudf::util::round_up_safe((num_partitions + 1) * sizeof(size_type), split_align);
+  size_t const src_buf_info_size =
+    cudf::util::round_up_safe(num_src_bufs * sizeof(src_buf_info), split_align);
+  // host-side
+  std::vector<uint8_t> h_indices_and_source_info(indices_size + src_buf_info_size);
+  size_type* h_indices = reinterpret_cast<size_type*>(h_indices_and_source_info.data());
+  src_buf_info* h_src_buf_info =
+    reinterpret_cast<src_buf_info*>(h_indices_and_source_info.data() + indices_size);
+  // device-side
+  // gpu-only : stack space needed for nested list offset calculation
+  int const offset_stack_partition_size = compute_offset_stack_size(input.begin(), input.end());
+  size_t const offset_stack_size = offset_stack_partition_size * num_partitions * sizeof(size_type);
+  rmm::device_buffer d_indices_and_source_info(indices_size + src_buf_info_size + offset_stack_size,
+                                               stream,
+                                               rmm::mr::get_current_device_resource());
+  size_type* d_indices         = reinterpret_cast<size_type*>(d_indices_and_source_info.data());
+  src_buf_info* d_src_buf_info = reinterpret_cast<src_buf_info*>(
+    reinterpret_cast<uint8_t*>(d_indices_and_source_info.data()) + indices_size);
+  size_type* d_offset_stack =
+    reinterpret_cast<size_type*>(reinterpret_cast<uint8_t*>(d_indices_and_source_info.data()) +
+                                 indices_size + src_buf_info_size);
+
+  // compute splits -> indices.
+  h_indices[0]              = 0;
+  h_indices[num_partitions] = input.column(0).size();
+  std::copy(splits.begin(), splits.end(), std::next(h_indices));
+
+  // setup source buf info
+  setup_source_buf_info(input.begin(), input.end(), h_src_buf_info, h_src_buf_info);
+
+  // HtoD indices and source buf info to device
+  CUDA_TRY(cudaMemcpyAsync(d_indices,
+                           h_indices,
+                           indices_size + src_buf_info_size,
+                           cudaMemcpyHostToDevice,
+                           stream.value()));
+
+  // packed block of memory 2. partition buffer sizes and dst_buf_info structs
+  size_t const buf_sizes_size =
+    cudf::util::round_up_safe(num_partitions * sizeof(size_t), split_align);
+  size_t const dst_buf_info_size =
+    cudf::util::round_up_safe(num_bufs * sizeof(dst_buf_info), split_align);
+  // host-side
+  std::vector<uint8_t> h_buf_sizes_and_dst_info(buf_sizes_size + dst_buf_info_size);
+  size_t* h_buf_sizes = reinterpret_cast<size_t*>(h_buf_sizes_and_dst_info.data());
+  dst_buf_info* h_dst_buf_info =
+    reinterpret_cast<dst_buf_info*>(h_buf_sizes_and_dst_info.data() + buf_sizes_size);
+  // device-side
+  rmm::device_buffer d_buf_sizes_and_dst_info(
+    buf_sizes_size + dst_buf_info_size, stream, rmm::mr::get_current_device_resource());
+  size_t* d_buf_sizes          = reinterpret_cast<size_t*>(d_buf_sizes_and_dst_info.data());
+  dst_buf_info* d_dst_buf_info = reinterpret_cast<dst_buf_info*>(
+    static_cast<uint8_t*>(d_buf_sizes_and_dst_info.data()) + buf_sizes_size);
+
+  // compute sizes of each column in each partition, including alignment.
+  thrust::transform(
+    rmm::exec_policy(stream)->on(stream.value()),
+    thrust::make_counting_iterator<size_t>(0),
+    thrust::make_counting_iterator<size_t>(num_bufs),
+    d_dst_buf_info,
+    [num_src_bufs,
+     d_indices,
+     d_src_buf_info,
+     d_offset_stack,
+     offset_stack_partition_size] __device__(size_t t) {
+      int const split_index   = t / num_src_bufs;
+      int const src_buf_index = t % num_src_bufs;
+      auto const& src_info    = d_src_buf_info[src_buf_index];
+
+      // apply nested offsets (lists and string columns).
+      //
+      // We can't just use the incoming row indices to figure out where to read from in a
+      // nested list situation.  We have to apply offsets every time we cross a boundary
+      // (list or string).  This loop applies those offsets so that our incoming row_index_start
+      // and row_index_end get transformed to our final values.
+      //
+      int const stack_pos = src_info.offset_stack_pos + (split_index * offset_stack_partition_size);
+      size_type* offset_stack  = &d_offset_stack[stack_pos];
+      int parent_offsets_index = src_info.parent_offsets_index;
+      int stack_size           = 0;
+      while (parent_offsets_index >= 0) {
+        offset_stack[stack_size++] = parent_offsets_index;
+        parent_offsets_index       = d_src_buf_info[parent_offsets_index].parent_offsets_index;
+      }
+      // make sure to include the -column- offset in our calculations
+      int row_start = d_indices[split_index] + src_info.column_offset;
+      int row_end   = d_indices[split_index + 1] + src_info.column_offset;
+      while (stack_size > 0) {
+        stack_size--;
+        row_start = d_src_buf_info[offset_stack[stack_size]].offsets[row_start];
+        row_end   = d_src_buf_info[offset_stack[stack_size]].offsets[row_end];
+      }
+
+      // final row indices and row count
+      int const out_row_index = src_info.is_validity ? row_start / 32 : row_start;
+      int const num_rows      = row_end - row_start;
+      // if I am an offsets column, all my values need to be shifted
+      int const value_shift = src_info.offsets == nullptr ? 0 : src_info.offsets[row_start];
+      // if I am a validity column, we may need to shift bits
+      int const bit_shift = src_info.is_validity ? row_start % 32 : 0;
+      // # of rows isn't necessarily the same as # of elements to be copied.
+      auto const num_elements = [&]() {
+        if (src_info.offsets != nullptr) {
+          return num_rows + 1;
+        } else if (src_info.is_validity) {
+          return (num_rows + 31) / 32;
+        }
+        return num_rows;
+      }();
+      int const element_size = cudf::type_dispatcher(data_type{src_info.type}, size_of_helper{});
+      size_t const bytes     = num_elements * element_size;
+      return dst_buf_info{_round_up_safe(bytes, 64),
+                          num_elements,
+                          element_size,
+                          num_rows,
+                          out_row_index,
+                          0,
+                          value_shift,
+                          bit_shift};
+    });
+
+  // compute total size of each partition
+  {
+    // key is split index
+    auto keys   = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
+                                                split_key_functor{static_cast<int>(num_src_bufs)});
+    auto values = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
+                                                  buf_size_functor{d_dst_buf_info});
+
+    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream.value()),
+                          keys,
+                          keys + num_bufs,
+                          values,
+                          thrust::make_discard_iterator(),
+                          d_buf_sizes);
+  }
+
+  // compute start offset for each output buffer
+  {
+    auto keys   = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
+                                                split_key_functor{static_cast<int>(num_src_bufs)});
+    auto values = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
+                                                  buf_size_functor{d_dst_buf_info});
+    thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream.value()),
+                                  keys,
+                                  keys + num_bufs,
+                                  values,
+                                  dst_offset_output_iterator{d_dst_buf_info},
+                                  0);
+  }
+
+  // DtoH buf sizes and col info back to the host
+  CUDA_TRY(cudaMemcpyAsync(h_buf_sizes,
+                           d_buf_sizes,
+                           buf_sizes_size + dst_buf_info_size,
+                           cudaMemcpyDeviceToHost,
+                           stream.value()));
+  stream.synchronize();
+
+  // allocate output partition buffers
+  std::vector<rmm::device_buffer> out_buffers;
+  out_buffers.reserve(num_partitions);
+  std::transform(h_buf_sizes,
+                 h_buf_sizes + num_partitions,
+                 std::back_inserter(out_buffers),
+                 [stream, mr](size_t bytes) {
+                   return rmm::device_buffer{bytes, stream, mr};
                  });
+
+  // packed block of memory 3. pointers to source and destination buffers (and stack space on the
+  // gpu for offset computation)
+  size_t const src_bufs_size =
+    cudf::util::round_up_safe(num_src_bufs * sizeof(uint8_t*), split_align);
+  size_t const dst_bufs_size =
+    cudf::util::round_up_safe(num_partitions * sizeof(uint8_t*), split_align);
+  // host-side
+  std::vector<uint8_t> h_src_and_dst_buffers(src_bufs_size + dst_bufs_size);
+  uint8_t** h_src_bufs = reinterpret_cast<uint8_t**>(h_src_and_dst_buffers.data());
+  uint8_t** h_dst_bufs = reinterpret_cast<uint8_t**>(h_src_and_dst_buffers.data() + src_bufs_size);
+  // device-side
+  rmm::device_buffer d_src_and_dst_buffers(src_bufs_size + dst_bufs_size + offset_stack_size,
+                                           stream,
+                                           rmm::mr::get_current_device_resource());
+  uint8_t** d_src_bufs = reinterpret_cast<uint8_t**>(d_src_and_dst_buffers.data());
+  uint8_t** d_dst_bufs = reinterpret_cast<uint8_t**>(
+    reinterpret_cast<uint8_t*>(d_src_and_dst_buffers.data()) + src_bufs_size);
+
+  // setup src buffers
+  setup_src_buf_data(input.begin(), input.end(), h_src_bufs);
+
+  // setup dst buffers
+  std::transform(out_buffers.begin(), out_buffers.end(), h_dst_bufs, [](auto& buf) {
+    return static_cast<uint8_t*>(buf.data());
+  });
+
+  // HtoD src and dest buffers
+  CUDA_TRY(cudaMemcpyAsync(
+    d_src_bufs, h_src_bufs, src_bufs_size + dst_bufs_size, cudaMemcpyHostToDevice, stream.value()));
+
+  // copy.  1 block per buffer
+  {
+    constexpr int block_size = 512;
+    copy_partition<<<num_bufs, block_size, 0, stream.value()>>>(
+      num_src_bufs, num_partitions, d_src_bufs, d_dst_bufs, d_dst_buf_info);
+  }
+
+  // build the output.
+  std::vector<contiguous_split_result> result;
+  result.reserve(num_partitions);
+  std::vector<column_view> cols;
+  cols.reserve(num_root_columns);
+  auto cur_dst_buf_info = h_dst_buf_info;
+  for (size_t idx = 0; idx < num_partitions; idx++) {
+    cur_dst_buf_info = build_output_columns(
+      input.begin(), input.end(), cur_dst_buf_info, std::back_inserter(cols), h_dst_bufs[idx]);
+    result.push_back(contiguous_split_result{
+      cudf::table_view{cols}, std::make_unique<rmm::device_buffer>(std::move(out_buffers[idx]))});
+    cols.clear();
+  }
+
+  // we need to synchronize, as the HtoD memcpy before the copy kernel could still be in-flight as
+  // we exit the function and our stack frame disappears. also of note : we're overlapping
+  // construction of the output columns on the cpu while the data they point to is still being
+  // copied. this can be a significant time savings.
+  stream.synchronize();
 
   return result;
 }
@@ -483,7 +969,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
                                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::contiguous_split(input, splits, mr, (cudaStream_t)0);
+  return cudf::detail::contiguous_split(input, splits, rmm::cuda_stream_default, mr);
 }
 
 };  // namespace cudf

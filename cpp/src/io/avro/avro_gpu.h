@@ -19,6 +19,8 @@
 
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace io {
 namespace avro {
@@ -61,10 +63,10 @@ void DecodeAvroColumnData(block_desc_s *blocks,
                           const uint8_t *avro_data,
                           uint32_t num_blocks,
                           uint32_t schema_len,
-                          size_t max_rows       = ~0,
-                          size_t first_row      = 0,
-                          uint32_t min_row_size = 0,
-                          cudaStream_t stream   = (cudaStream_t)0);
+                          size_t max_rows              = ~0,
+                          size_t first_row             = 0,
+                          uint32_t min_row_size        = 0,
+                          rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 }  // namespace gpu
 }  // namespace avro

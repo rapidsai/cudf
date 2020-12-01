@@ -1,9 +1,12 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
+
 import random
+from collections import OrderedDict
 
 import fastavro
 import numpy as np
 import pandas as pd
+import pyorc
 
 import cudf
 from cudf.tests.utils import assert_eq
@@ -33,6 +36,26 @@ _PANDAS_TO_AVRO_SCHEMA_MAP = {
     np.dtype("<M8[ns]"): {"type": "long", "logicalType": "timestamp-millis"},
     np.dtype("<M8[ms]"): {"type": "long", "logicalType": "timestamp-millis"},
     np.dtype("<M8[us]"): {"type": "long", "logicalType": "timestamp-micros"},
+}
+
+PANDAS_TO_ORC_TYPES = {
+    np.dtype("int8"): pyorc.TinyInt(),
+    pd.Int8Dtype(): pyorc.TinyInt(),
+    pd.Int16Dtype(): pyorc.SmallInt(),
+    pd.Int32Dtype(): pyorc.Int(),
+    pd.Int64Dtype(): pyorc.BigInt(),
+    pd.BooleanDtype(): pyorc.Boolean(),
+    np.dtype("bool_"): pyorc.Boolean(),
+    np.dtype("int16"): pyorc.SmallInt(),
+    np.dtype("int32"): pyorc.Int(),
+    np.dtype("int64"): pyorc.BigInt(),
+    np.dtype("O"): pyorc.String(),
+    pd.StringDtype(): pyorc.String(),
+    np.dtype("float32"): pyorc.Float(),
+    np.dtype("float64"): pyorc.Double(),
+    np.dtype("<M8[ns]"): pyorc.Timestamp(),
+    np.dtype("<M8[ms]"): pyorc.Timestamp(),
+    np.dtype("<M8[us]"): pyorc.Timestamp(),
 }
 
 
@@ -111,18 +134,6 @@ def pyarrow_to_pandas(table):
     return df
 
 
-def cudf_to_pandas(df):
-    pdf = df.to_pandas()
-    for col in pdf.columns:
-        if df[col].dtype in cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes:
-            pdf[col] = pdf[col].astype(
-                cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes[df[col].dtype]
-            )
-        elif cudf.utils.dtypes.is_categorical_dtype(df[col].dtype):
-            pdf[col] = pdf[col].astype("category")
-    return pdf
-
-
 def compare_content(a, b):
     if a == b:
         return
@@ -142,13 +153,31 @@ def get_avro_dtype_info(dtype):
         )
 
 
-def get_avro_schema(df):
+def get_orc_dtype_info(dtype):
+    if dtype in PANDAS_TO_ORC_TYPES:
+        return PANDAS_TO_ORC_TYPES[dtype]
+    else:
+        raise TypeError(
+            f"Unsupported dtype({dtype}) according to orc spec:"
+            f" https://orc.apache.org/specification/"
+        )
 
+
+def get_avro_schema(df):
     fields = [
         {"name": col_name, "type": get_avro_dtype_info(col_dtype)}
         for col_name, col_dtype in df.dtypes.items()
     ]
     schema = {"type": "record", "name": "Root", "fields": fields}
+    return schema
+
+
+def get_orc_schema(df):
+    ordered_dict = OrderedDict(
+        (col_name, col_dtype) for col_name, col_dtype in df.dtypes.items()
+    )
+
+    schema = pyorc.Struct(**ordered_dict)
     return schema
 
 
@@ -192,11 +221,77 @@ def pandas_to_avro(df, file_name=None, file_io_obj=None):
         fastavro.writer(file_io_obj, avro_schema, records)
 
 
+def _preprocess_to_orc_tuple(df):
+    def _null_to_None(value):
+        if value is pd.NA or value is pd.NaT:
+            return None
+        else:
+            return value
+
+    has_nulls_or_nullable_dtype = any(
+        [
+            True
+            if df[col].dtype in pandas_dtypes_to_cudf_dtypes
+            or df[col].isnull().any()
+            else False
+            for col in df.columns
+        ]
+    )
+
+    tuple_list = [
+        tuple(map(_null_to_None, tup)) if has_nulls_or_nullable_dtype else tup
+        for tup in df.itertuples(index=False, name=None)
+    ]
+
+    return tuple_list
+
+
+def pandas_to_orc(df, file_name=None, file_io_obj=None, stripe_size=67108864):
+    schema = get_orc_schema(df)
+
+    tuple_list = _preprocess_to_orc_tuple(df)
+
+    if file_name is not None:
+        with open(file_name, "wb") as data:
+            with pyorc.Writer(
+                data, str(schema), stripe_size=stripe_size
+            ) as writer:
+                writer.writerows(tuple_list)
+    elif file_io_obj is not None:
+        with pyorc.Writer(
+            file_io_obj, str(schema), stripe_size=stripe_size
+        ) as writer:
+            writer.writerows(tuple_list)
+
+
+def orc_to_pandas(file_name=None, file_io_obj=None, stripes=None):
+    if file_name is not None:
+        f = open(file_name, "rb")
+    elif file_io_obj is not None:
+        f = file_io_obj
+
+    reader = pyorc.Reader(f)
+
+    if stripes is None:
+        df = pd.DataFrame.from_records(
+            reader, columns=reader.schema.fields.keys()
+        )
+    else:
+        records = [
+            record for i in stripes for record in list(reader.read_stripe(i))
+        ]
+        df = pd.DataFrame.from_records(
+            records, columns=reader.schema.fields.keys()
+        )
+
+    return df
+
+
 def compare_dataframe(left, right, nullable=True):
     if nullable and isinstance(left, cudf.DataFrame):
-        left = cudf_to_pandas(left)
+        left = left.to_pandas(nullable=True)
     if nullable and isinstance(right, cudf.DataFrame):
-        right = cudf_to_pandas(right)
+        right = right.to_pandas(nullable=True)
 
     if len(left.index) == 0 and len(right.index) == 0:
         check_index_type = False

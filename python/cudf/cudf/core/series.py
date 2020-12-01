@@ -24,6 +24,8 @@ from cudf.core.column import (
     as_column,
     column,
     column_empty_like,
+    arange,
+    full,
 )
 from cudf.core.column.categorical import (
     CategoricalAccessor as CategoricalAccessor,
@@ -48,6 +50,8 @@ from cudf.utils.dtypes import (
     min_scalar_type,
     numeric_normalize_types,
 )
+from cudf.utils.utils import get_relevant_submodule
+from cudf.utils.utils import get_appropriate_dispatched_func
 
 
 class Series(Frame, Serializable):
@@ -559,7 +563,7 @@ class Series(Frame, Serializable):
 
         See Also
         --------
-        cudf.concat : General function to concatenate DataFrame or
+        cudf.core.reshape.concat : General function to concatenate DataFrame or
             Series objects.
 
         Examples
@@ -781,39 +785,132 @@ class Series(Frame, Serializable):
         return len(self._column)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        if method == "__call__" and hasattr(cudf, ufunc.__name__):
-            func = getattr(cudf, ufunc.__name__)
-            return func(*inputs)
+        if method == "__call__":
+            return get_appropriate_dispatched_func(
+                cudf, cudf.Series, cupy, ufunc, inputs, kwargs
+            )
         else:
             return NotImplemented
 
     def __array_function__(self, func, types, args, kwargs):
-
-        cudf_series_module = Series
-        for submodule in func.__module__.split(".")[1:]:
-            # point cudf to the correct submodule
-            if hasattr(cudf_series_module, submodule):
-                cudf_series_module = getattr(cudf_series_module, submodule)
-            else:
-                return NotImplemented
-
-        fname = func.__name__
-
-        handled_types = [cudf_series_module]
+        handled_types = [cudf.Series]
         for t in types:
             if t not in handled_types:
                 return NotImplemented
 
-        if hasattr(cudf_series_module, fname):
-            cudf_func = getattr(cudf_series_module, fname)
-            # Handle case if cudf_func is same as numpy function
-            if cudf_func is func:
-                return NotImplemented
-            else:
-                return cudf_func(*args, **kwargs)
+        cudf_submodule = get_relevant_submodule(func, cudf)
+        cudf_ser_submodule = get_relevant_submodule(func, cudf.Series)
+        cupy_submodule = get_relevant_submodule(func, cupy)
 
+        return get_appropriate_dispatched_func(
+            cudf_submodule,
+            cudf_ser_submodule,
+            cupy_submodule,
+            func,
+            args,
+            kwargs,
+        )
+
+    def map(self, arg, na_action=None) -> "Series":
+        """
+        Map values of Series according to input correspondence.
+
+        Used for substituting each value in a Series with another value,
+        that may be derived from a function, a ``dict`` or
+        a :class:`Series`.
+
+        Parameters
+        ----------
+        arg : function, collections.abc.Mapping subclass or Series
+            Mapping correspondence.
+        na_action : {None, 'ignore'}, default None
+            If 'ignore', propagate NaN values, without passing them to the
+            mapping correspondence.
+
+        Returns
+        -------
+        Series
+            Same index as caller.
+
+        Examples
+        --------
+        >>> s = cudf.Series(['cat', 'dog', np.nan, 'rabbit'])
+        >>> s
+        0      cat
+        1      dog
+        2     <NA>
+        3   rabbit
+        dtype: object
+
+        ``map`` accepts a ``dict`` or a ``Series``. Values that are not found
+        in the ``dict`` are converted to ``NaN``, default values in dicts are
+        currently not supported.:
+
+        >>> s.map({'cat': 'kitten', 'dog': 'puppy'})
+        0   kitten
+        1    puppy
+        2     <NA>
+        3     <NA>
+        dtype: object
+
+        It also accepts numeric functions:
+
+        >>> s = cudf.Series([1, 2, 3, 4, np.nan])
+        >>> s.map(lambda x: x ** 2)
+        0       1
+        1       4
+        2       9
+        3       16
+        4     <NA>
+        dtype: int64
+
+        Notes
+        -----
+        Please note map currently only supports fixed-width numeric
+        type functions.
+        """
+        if isinstance(arg, dict):
+            if hasattr(arg, "__missing__"):
+                raise NotImplementedError(
+                    "default values in dicts are currently not supported."
+                )
+            lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
+            rhs = cudf.DataFrame(
+                {
+                    "x": arg.keys(),
+                    "s": arg.values(),
+                    "bool": full(len(arg), True, dtype=self.dtype),
+                }
+            )
+            res = lhs.merge(rhs, on="x", how="left").sort_values(
+                by="orig_order"
+            )
+            result = res["s"]
+            result.name = self.name
+            result.index = self.index
+        elif isinstance(arg, cudf.Series):
+            if not arg.index.is_unique:
+                raise ValueError(
+                    "Reindexing only valid with"
+                    " uniquely valued Index objects"
+                )
+            lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
+            rhs = cudf.DataFrame(
+                {
+                    "x": arg.keys(),
+                    "s": arg,
+                    "bool": full(len(arg), True, dtype=self.dtype),
+                }
+            )
+            res = lhs.merge(rhs, on="x", how="left").sort_values(
+                by="orig_order"
+            )
+            result = res["s"]
+            result.name = self.name
+            result.index = self.index
         else:
-            return NotImplemented
+            result = self.applymap(arg)
+        return result
 
     def __getitem__(self, arg):
         if isinstance(arg, slice):
@@ -2509,7 +2606,7 @@ class Series(Frame, Serializable):
             The mask and index are preserved.
 
         Notes
-        --------
+        -----
         The supported Python features are listed in
 
           https://numba.pydata.org/numba-doc/dev/cuda/cudapysupported.html

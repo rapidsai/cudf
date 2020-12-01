@@ -3,6 +3,7 @@
 import csv
 import gzip
 import os
+import re
 import shutil
 from collections import OrderedDict
 from io import BytesIO, StringIO
@@ -306,27 +307,27 @@ def test_csv_reader_dtype_dict(use_names):
     # Save with the column header if not explicitly specifying a list of names
     df, gdf_dtypes, pdf_dtypes = make_all_numeric_dataframe()
     buffer = df.to_csv(index=False, header=(not use_names))
-
+    dtypes = df.dtypes.to_dict()
     gdf_names = list(gdf_dtypes.keys()) if use_names else None
     pdf_names = list(pdf_dtypes.keys()) if use_names else None
 
-    gdf = read_csv(StringIO(buffer), dtype=gdf_dtypes, names=gdf_names)
-    pdf = pd.read_csv(StringIO(buffer), dtype=pdf_dtypes, names=pdf_names)
+    gdf = read_csv(StringIO(buffer), dtype=dtypes, names=gdf_names)
+    pdf = pd.read_csv(StringIO(buffer), dtype=dtypes, names=pdf_names)
 
     assert_eq(gdf, pdf)
 
 
-@pytest.mark.parametrize("use_names", [True])
+@pytest.mark.parametrize("use_names", [True, False])
 def test_csv_reader_dtype_extremes(use_names):
     # Save with the column header if not explicitly specifying a list of names
     df, gdf_dtypes, pdf_dtypes = make_all_numeric_extremes_dataframe()
     buffer = df.to_csv(index=False, header=(not use_names))
-
+    dtypes = df.dtypes.to_dict()
     gdf_names = list(gdf_dtypes.keys()) if use_names else None
     pdf_names = list(pdf_dtypes.keys()) if use_names else None
 
-    gdf = read_csv(StringIO(buffer), dtype=gdf_dtypes, names=gdf_names)
-    pdf = pd.read_csv(StringIO(buffer), dtype=pdf_dtypes, names=pdf_names)
+    gdf = read_csv(StringIO(buffer), dtype=dtypes, names=gdf_names)
+    pdf = pd.read_csv(StringIO(buffer), dtype=dtypes, names=pdf_names)
 
     assert_eq(gdf, pdf)
 
@@ -410,7 +411,7 @@ def test_csv_reader_strings(tmpdir):
 
     assert len(df.columns) == 2
     assert df["text"].dtype == np.dtype("object")
-    assert df["int"].dtype == np.dtype("int32")
+    assert df["int"].dtype == np.dtype("int64")
     assert df["text"][0] == "a"
     assert df["text"][1] == "b"
     assert df["text"][2] == "c"
@@ -438,7 +439,7 @@ def test_csv_reader_strings_quotechars(tmpdir):
 
     assert len(df.columns) == 2
     assert df["text"].dtype == np.dtype("object")
-    assert df["int"].dtype == np.dtype("int32")
+    assert df["int"].dtype == np.dtype("int64")
     assert df["text"][0] == "a,\n"
     assert df["text"][1] == 'b "c" d'
     assert df["text"][2] == "e"
@@ -560,7 +561,9 @@ def test_csv_reader_NaN_values():
         na_values=custom_na_values,
     )
     assert df_int8.dtypes[0] == "int8"
-    assert all(df_int8["0"][idx] is None for idx in range(len(df_int8["0"])))
+    assert all(
+        df_int8["0"][idx] is cudf.NA for idx in range(len(df_int8["0"]))
+    )
 
     # data type detection should evaluate the column to object;
     # for data type detection, cells need to be completely empty,
@@ -622,7 +625,7 @@ def test_csv_reader_buffer_strings():
     df = read_csv(StringIO(buffer), names=names, dtype=dtypes, skiprows=1)
     assert len(df.columns) == 2
     assert df["text"].dtype == np.dtype("object")
-    assert df["int"].dtype == np.dtype("int32")
+    assert df["int"].dtype == np.dtype("int64")
     assert df["text"][0] == "a"
     assert df["text"][1] == "b"
     assert df["text"][2] == "c"
@@ -633,7 +636,7 @@ def test_csv_reader_buffer_strings():
     )
     assert len(df2.columns) == 2
     assert df2["text"].dtype == np.dtype("object")
-    assert df2["int"].dtype == np.dtype("int32")
+    assert df2["int"].dtype == np.dtype("int64")
     assert df2["text"][0] == "a"
     assert df2["text"][1] == "b"
     assert df2["text"][2] == "c"
@@ -847,7 +850,7 @@ def test_csv_reader_gzip_compression_strings(tmpdir):
 
     assert len(df.columns) == 2
     assert df["text"].dtype == np.dtype("object")
-    assert df["int"].dtype == np.dtype("int32")
+    assert df["int"].dtype == np.dtype("int64")
     assert df["text"][0] == "a"
     assert df["text"][1] == "b"
     assert df["text"][2] == "c"
@@ -1368,7 +1371,7 @@ def test_csv_empty_file(tmpdir, contents):
 
     col_names = ["col1", "col2", "col3", "col4"]
     in_dtypes = ["int", "str", "float", "short"]
-    out_dtypes = ["int32", "object", "float32", "int16"]
+    out_dtypes = ["int64", "object", "float64", "int16"]
 
     # Empty dataframe if no columns names specified or inferred
     df = read_csv(str(fname))
@@ -1384,7 +1387,7 @@ def test_csv_empty_file(tmpdir, contents):
 def test_csv_empty_buffer(tmpdir, contents):
     col_names = ["col1", "col2", "col3", "col4"]
     in_dtypes = ["int", "str", "float", "short"]
-    out_dtypes = ["int32", "object", "float32", "int16"]
+    out_dtypes = ["int64", "object", "float64", "int16"]
 
     # Empty dataframe if no columns names specified or inferred
     df = read_csv(StringIO(contents))
@@ -1411,7 +1414,7 @@ def test_csv_reader_partial_dtype(dtype):
     )
 
     assert names_df == header_df
-    assert all(names_df.dtypes == ["int16", "int32"])
+    assert all(names_df.dtypes == ["int16", "int64"])
 
 
 def test_csv_writer_file_handle(tmpdir):
@@ -1779,3 +1782,150 @@ def test_csv_write_dataframe_na_rep(df, na_rep):
     actual = gdf.to_csv(na_rep=na_rep)
 
     assert expected == actual
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "int",
+        "str",
+        "float",
+        np.int32,
+        np.dtype("float32"),
+        {"a": "int32", "b": "float64", "c": "uint8"},
+        int,
+        str,
+        object,
+    ],
+)
+def test_csv_reader_dtypes(dtype):
+    buf = "a,b,c\n1,10,111\n2,11,112\n3,12,113\n4,13,114\n"
+
+    expected = pd.read_csv(StringIO(buf), dtype=dtype)
+    actual = cudf.read_csv(StringIO(buf), dtype=dtype)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "dtype", ["Int64", "UInt32", {"a": "UInt64", "b": "float64", "c": "Int32"}]
+)
+def test_csv_reader_nullable_dtypes(dtype):
+    buf = "a,b,c\n1,10,111\n2,11,112\n3,12,113\n4,13,114\n"
+
+    expected = pd.read_csv(StringIO(buf), dtype=dtype)
+    actual = cudf.read_csv(StringIO(buf), dtype=dtype)
+
+    assert_eq(expected, actual.to_pandas(nullable=True))
+
+
+@pytest.mark.parametrize(
+    "dtype", sorted(list(cudf.utils.dtypes.TIMEDELTA_TYPES))
+)
+def test_csv_reader_timedetla_dtypes(dtype):
+    buf = "a,b,c\n1,10,111\n2,11,112\n3,12,113\n43432423,13342,13243214\n"
+
+    expected = pd.read_csv(StringIO(buf)).astype(dtype)
+    actual = cudf.read_csv(StringIO(buf), dtype=dtype)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/6719")
+@pytest.mark.parametrize(
+    "dtype", sorted(list(cudf.utils.dtypes.DATETIME_TYPES))
+)
+def test_csv_reader_datetime_dtypes(dtype):
+    buf = "a,b,c\n1,10,111\n2,11,112\n3,12,113\n43432423,13342,13243214\n"
+
+    expected = pd.read_csv(StringIO(buf)).astype(dtype)
+    actual = cudf.read_csv(StringIO(buf), dtype=dtype)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        cudf.DataFrame(
+            {
+                "a": cudf.Series([1, 2, 3, 1, 2], dtype="category"),
+                "b": cudf.Series(["a", "c", "a", "b", "a"], dtype="category"),
+            }
+        ),
+        cudf.DataFrame(
+            {
+                "a": cudf.Series([1.1, 2, 3, 1.1, 2], dtype="category"),
+                "b": cudf.Series(
+                    [None, "c", None, "b", "a"], dtype="category"
+                ),
+            }
+        ),
+        cudf.DataFrame(
+            {
+                "b": cudf.Series(
+                    [1.1, 2, 3, 1.1, 2],
+                    dtype="category",
+                    index=cudf.CategoricalIndex(
+                        ["abc", "def", "ghi", "jkl", "xyz"]
+                    ),
+                )
+            }
+        ),
+    ],
+)
+def test_csv_writer_category(df):
+    pdf = df.to_pandas()
+
+    expected = pdf.to_csv()
+    actual = df.to_csv()
+
+    assert expected == actual
+
+
+def test_csv_reader_category_error():
+    # TODO: Remove this test once following
+    # issue is fixed: https://github.com/rapidsai/cudf/issues/3960
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+    csv_buf = df.to_csv()
+
+    with pytest.raises(
+        NotImplementedError,
+        match=re.escape(
+            "CategoricalDtype as dtype is not yet " "supported in CSV reader"
+        ),
+    ):
+        cudf.read_csv(StringIO(csv_buf), dtype="category")
+
+
+def test_csv_reader_keep_default_na_error():
+    # TODO: Remove this test once following
+    # issue is fixed: https://github.com/rapidsai/cudf/issues/6680
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+    csv_buf = df.to_csv()
+
+    with pytest.raises(
+        NotImplementedError,
+        match=re.escape(
+            "keep_default_na=False is currently not supported, please refer "
+            "to: https://github.com/rapidsai/cudf/issues/6680"
+        ),
+    ):
+        cudf.read_csv(StringIO(csv_buf), keep_default_na=False)
+
+
+def test_csv_writer_datetime_sep_error():
+    # TODO: Remove this test once following
+    # issues is fixed: https://github.com/rapidsai/cudf/issues/6699
+    df = cudf.DataFrame(
+        {"a": cudf.Series([22343, 2323423, 234324234], dtype="datetime64[ns]")}
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "sep cannot be '-' when writing a datetime64 dtype to csv, "
+            "refer to: https://github.com/rapidsai/cudf/issues/6699"
+        ),
+    ):
+        df.to_csv(sep="-")

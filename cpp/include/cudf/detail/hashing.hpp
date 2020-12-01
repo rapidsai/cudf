@@ -17,6 +17,8 @@
 
 #include <cudf/hashing.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace detail {
 
@@ -29,19 +31,19 @@ std::unique_ptr<column> hash(
   table_view const& input,
   hash_id hash_function                     = hash_id::HASH_MURMUR3,
   std::vector<uint32_t> const& initial_hash = {},
-  rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                       = 0);
+  rmm::cuda_stream_view stream              = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> murmur_hash3_32(
   table_view const& input,
   std::vector<uint32_t> const& initial_hash = {},
-  rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                       = 0);
+  rmm::cuda_stream_view stream              = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> md5_hash(
   table_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace cudf

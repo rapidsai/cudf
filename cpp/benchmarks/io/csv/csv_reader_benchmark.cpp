@@ -71,7 +71,7 @@ void BM_csv_read_varying_options(benchmark::State& state)
                                                    int32_t(type_group_id::TIMESTAMP),
                                                    int32_t(cudf::type_id::STRING)}),
                                 col_sel);
-  auto const cols_to_read = select_columns(col_sel, data_types.size());
+  auto const cols_to_read = select_column_indexes(data_types.size(), col_sel);
 
   auto const tbl  = create_random_table(data_types, data_types.size(), table_size_bytes{data_size});
   auto const view = tbl->view();
@@ -102,6 +102,7 @@ void BM_csv_read_varying_options(benchmark::State& state)
 
       auto const is_last_chunk = chunk == (num_chunks - 1);
       switch (row_sel) {
+        case row_selection::ALL: break;
         case row_selection::BYTE_RANGE:
           read_options.set_byte_range_offset(chunk * chunk_size);
           read_options.set_byte_range_size(chunk_size);
@@ -116,6 +117,8 @@ void BM_csv_read_varying_options(benchmark::State& state)
           read_options.set_skiprows(chunk * chunk_row_cnt);
           read_options.set_skipfooter(view.num_rows() - (chunk + 1) * chunk_row_cnt);
           if (is_last_chunk) read_options.set_skipfooter(0);
+          break;
+        default: CUDF_FAIL("Unsupported row selection method");
       }
 
       cudf_io::read_csv(read_options);

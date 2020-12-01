@@ -9,10 +9,8 @@ from libcpp.utility cimport move
 from libc.stdint cimport int32_t, int64_t
 
 from cudf._lib.column cimport Column
-from cudf._lib.scalar import as_scalar
-from cudf._lib.scalar cimport Scalar
-from cudf._lib.table cimport Table
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar import as_device_scalar
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.table cimport Table
 
 from cudf._lib.cpp.column.column cimport column
@@ -204,11 +202,11 @@ def _scatter_scalar(scalars, Column scatter_map,
     cdef vector[reference_wrapper[constscalar]] source_scalars
     source_scalars.reserve(len(scalars))
     cdef bool c_bounds_check = bounds_check
-    cdef Scalar slr
+    cdef DeviceScalar slr
     for val, col in zip(scalars, target_table._columns):
-        slr = as_scalar(val, col.dtype)
+        slr = as_device_scalar(val, col.dtype)
         source_scalars.push_back(reference_wrapper[constscalar](
-            slr.c_value.get()[0]))
+            slr.get_raw_ptr()[0]))
     cdef column_view scatter_map_view = scatter_map.view()
     cdef table_view target_table_view = target_table.data_view()
 
@@ -471,9 +469,11 @@ def _copy_if_else_column_column(Column lhs, Column rhs, Column boolean_mask):
     return Column.from_unique_ptr(move(c_result))
 
 
-def _copy_if_else_scalar_column(Scalar lhs, Column rhs, Column boolean_mask):
+def _copy_if_else_scalar_column(DeviceScalar lhs,
+                                Column rhs,
+                                Column boolean_mask):
 
-    cdef scalar* lhs_scalar = lhs.c_value.get()
+    cdef const scalar* lhs_scalar = lhs.get_raw_ptr()
     cdef column_view rhs_view = rhs.view()
     cdef column_view boolean_mask_view = boolean_mask.view()
 
@@ -491,10 +491,12 @@ def _copy_if_else_scalar_column(Scalar lhs, Column rhs, Column boolean_mask):
     return Column.from_unique_ptr(move(c_result))
 
 
-def _copy_if_else_column_scalar(Column lhs, Scalar rhs, Column boolean_mask):
+def _copy_if_else_column_scalar(Column lhs,
+                                DeviceScalar rhs,
+                                Column boolean_mask):
 
     cdef column_view lhs_view = lhs.view()
-    cdef scalar* rhs_scalar = rhs.c_value.get()
+    cdef const scalar* rhs_scalar = rhs.get_raw_ptr()
     cdef column_view boolean_mask_view = boolean_mask.view()
 
     cdef unique_ptr[column] c_result
@@ -511,10 +513,12 @@ def _copy_if_else_column_scalar(Column lhs, Scalar rhs, Column boolean_mask):
     return Column.from_unique_ptr(move(c_result))
 
 
-def _copy_if_else_scalar_scalar(Scalar lhs, Scalar rhs, Column boolean_mask):
+def _copy_if_else_scalar_scalar(DeviceScalar lhs,
+                                DeviceScalar rhs,
+                                Column boolean_mask):
 
-    cdef scalar* lhs_scalar = lhs.c_value.get()
-    cdef scalar* rhs_scalar = rhs.c_value.get()
+    cdef const scalar* lhs_scalar = lhs.get_raw_ptr()
+    cdef const scalar* rhs_scalar = rhs.get_raw_ptr()
     cdef column_view boolean_mask_view = boolean_mask.view()
 
     cdef unique_ptr[column] c_result
@@ -538,17 +542,17 @@ def copy_if_else(object lhs, object rhs, Column boolean_mask):
             return _copy_if_else_column_column(lhs, rhs, boolean_mask)
         else:
             return _copy_if_else_column_scalar(
-                lhs, as_scalar(rhs, lhs.dtype), boolean_mask)
+                lhs, as_device_scalar(rhs, lhs.dtype), boolean_mask)
     else:
         if isinstance(rhs, Column):
             return _copy_if_else_scalar_column(
-                as_scalar(lhs, rhs.dtype), rhs, boolean_mask)
+                as_device_scalar(lhs, rhs.dtype), rhs, boolean_mask)
         else:
             if lhs is None and rhs is None:
                 return lhs
 
             return _copy_if_else_scalar_scalar(
-                as_scalar(lhs), as_scalar(rhs), boolean_mask)
+                as_device_scalar(lhs), as_device_scalar(rhs), boolean_mask)
 
 
 def _boolean_mask_scatter_table(Table input_table, Table target_table,
@@ -581,10 +585,10 @@ def _boolean_mask_scatter_scalar(list input_scalars, Table target_table,
 
     cdef vector[reference_wrapper[constscalar]] input_scalar_vector
     input_scalar_vector.reserve(len(input_scalars))
-    cdef Scalar scl
+    cdef DeviceScalar scl
     for scl in input_scalars:
         input_scalar_vector.push_back(reference_wrapper[constscalar](
-            scl.c_value.get()[0]))
+            scl.get_raw_ptr()[0]))
     cdef table_view target_table_view = target_table.view()
     cdef column_view boolean_mask_view = boolean_mask.view()
 
@@ -616,7 +620,7 @@ def boolean_mask_scatter(object input, Table target_table,
             boolean_mask
         )
     else:
-        scalar_list = [as_scalar(i) for i in input]
+        scalar_list = [as_device_scalar(i) for i in input]
         return _boolean_mask_scatter_scalar(
             scalar_list,
             target_table,
@@ -626,16 +630,16 @@ def boolean_mask_scatter(object input, Table target_table,
 
 def shift(Column input, int offset, object fill_value=None):
 
-    cdef Scalar fill
+    cdef DeviceScalar fill
 
-    if isinstance(fill_value, Scalar):
+    if isinstance(fill_value, DeviceScalar):
         fill = fill_value
     else:
-        fill = as_scalar(fill_value, input.dtype)
+        fill = as_device_scalar(fill_value, input.dtype)
 
     cdef column_view c_input = input.view()
     cdef int32_t c_offset = offset
-    cdef scalar* c_fill_value = fill.c_value.get()
+    cdef const scalar* c_fill_value = fill.get_raw_ptr()
     cdef unique_ptr[column] c_output
 
     with nogil:
@@ -659,7 +663,7 @@ def get_element(Column input_column, size_type index):
             cpp_copying.get_element(col_view, index)
         )
 
-    return Scalar.from_unique_ptr(move(c_output))
+    return DeviceScalar.from_unique_ptr(move(c_output))
 
 
 def sample(Table input, size_type n,

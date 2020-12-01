@@ -13,11 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <io/utilities/block_utils.cuh>
+
 #include "orc_common.h"
 #include "orc_gpu.h"
 
+#include <io/utilities/block_utils.cuh>
+
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
@@ -28,7 +31,7 @@ namespace io {
 namespace orc {
 namespace gpu {
 constexpr uint32_t max_dict_entries = default_row_index_stride;
-#define INIT_HASH_BITS 12
+constexpr int init_hash_bits        = 12;
 
 struct dictinit_state_s {
   uint32_t nnz;
@@ -37,8 +40,8 @@ struct dictinit_state_s {
   volatile uint32_t scratch_red[32];
   uint32_t dict[max_dict_entries];
   union {
-    uint16_t u16[1 << (INIT_HASH_BITS)];
-    uint32_t u32[1 << (INIT_HASH_BITS - 1)];
+    uint16_t u16[1 << (init_hash_bits)];
+    uint32_t u32[1 << (init_hash_bits - 1)];
   } map;
 };
 
@@ -48,7 +51,7 @@ struct dictinit_state_s {
 static inline __device__ uint32_t nvstr_init_hash(char const *ptr, uint32_t len)
 {
   if (len != 0) {
-    return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << INIT_HASH_BITS) - 1);
+    return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
   } else {
     return 0;
   }
@@ -83,7 +86,7 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
     }
     __syncthreads();
     is_valid = (i + t < s->chunk.num_rows) ? (s->scratch_red[t >> 5] >> (t & 0x1f)) & 1 : 0;
-    nz_map   = BALLOT(is_valid);
+    nz_map   = ballot(is_valid);
     nz_pos   = s->nnz + __popc(nz_map & (0x7fffffffu >> (0x1fu - ((uint32_t)t & 0x1f))));
     if (!(t & 0x1f)) { s->scratch_red[16 + (t >> 5)] = __popc(nz_map); }
     __syncthreads();
@@ -127,10 +130,7 @@ __global__ void __launch_bounds__(block_size, 2)
   uint32_t nnz, start_row, dict_char_count;
   int t = threadIdx.x;
 
-  if (t < sizeof(DictionaryChunk) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&s->chunk)[t] =
-      ((const uint32_t *)&chunks[group_id * num_columns + col_id])[t];
-  }
+  if (t == 0) s->chunk = chunks[group_id * num_columns + col_id];
   for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += block_size) {
     if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
   }
@@ -170,9 +170,7 @@ __global__ void __launch_bounds__(block_size, 2)
     __syncthreads();
   }
   // Reorder the 16-bit local indices according to the hash value of the strings
-#if (INIT_HASH_BITS != 12)
-#error "Hardcoded for INIT_HASH_BITS=12"
-#endif
+  static_assert((init_hash_bits == 12), "Hardcoded for init_hash_bits=12");
   {
     // Cumulative sum of hash map counts
     uint32_t count01 = s->map.u32[t * 4 + 0];
@@ -256,7 +254,7 @@ __global__ void __launch_bounds__(block_size, 2)
         dict_char_count += (is_dupe) ? 0 : len1;
       }
     }
-    dupe_mask    = BALLOT(is_dupe);
+    dupe_mask    = ballot(is_dupe);
     dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
     if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(dupe_mask); }
     __syncthreads();
@@ -317,16 +315,10 @@ extern "C" __global__ void __launch_bounds__(1024)
   const uint32_t *src;
   uint32_t *dst;
 
-  if (t < sizeof(StripeDictionary) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&stripe_g)[t] =
-      ((const uint32_t *)&stripes[stripe_id * num_columns + col_id])[t];
-  }
+  if (t == 0) stripe_g = stripes[stripe_id * num_columns + col_id];
   __syncthreads();
   if (!stripe_g.dict_data) { return; }
-  if (t < sizeof(DictionaryChunk) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&chunk_g)[t] =
-      ((const uint32_t *)&chunks[stripe_g.start_chunk * num_columns + col_id])[t];
-  }
+  if (t == 0) chunk_g = chunks[stripe_g.start_chunk * num_columns + col_id];
   __syncthreads();
   dst = stripe_g.dict_data + chunk_g.num_dict_strings;
   for (uint32_t g = 1; g < stripe_g.num_chunks; g++) {
@@ -374,19 +366,16 @@ __global__ void __launch_bounds__(block_size)
   using warp_reduce = cub::WarpReduce<uint32_t>;
   __shared__ typename warp_reduce::TempStorage temp_storage[block_size / 32];
 
-  volatile build_state_s *const s = &state_g;
-  uint32_t col_id                 = blockIdx.x;
-  uint32_t stripe_id              = blockIdx.y;
+  build_state_s *const s = &state_g;
+  uint32_t col_id        = blockIdx.x;
+  uint32_t stripe_id     = blockIdx.y;
   uint32_t num_strings;
   uint32_t *dict_data, *dict_index;
   uint32_t dict_char_count;
   const nvstrdesc_s *str_data;
   int t = threadIdx.x;
 
-  if (t < sizeof(StripeDictionary) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&s->stripe)[t] =
-      ((const uint32_t *)&stripes[stripe_id * num_columns + col_id])[t];
-  }
+  if (t == 0) s->stripe = stripes[stripe_id * num_columns + col_id];
   if (t == 31 * 32) { s->total_dupes = 0; }
   __syncthreads();
   num_strings = s->stripe.num_strings;
@@ -409,7 +398,7 @@ __global__ void __launch_bounds__(block_size)
       is_dupe       = nvstr_is_equal(cur_ptr, cur_len, str_data[prev].ptr, str_data[prev].count);
     }
     dict_char_count += (is_dupe) ? 0 : cur_len;
-    dupe_mask    = BALLOT(is_dupe);
+    dupe_mask    = ballot(is_dupe);
     dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
     if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(dupe_mask); }
     __syncthreads();
@@ -444,18 +433,15 @@ __global__ void __launch_bounds__(block_size)
  * @param[in] num_columns Number of columns
  * @param[in] num_rowgroups Number of row groups
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t InitDictionaryIndices(DictionaryChunk *chunks,
-                                  uint32_t num_columns,
-                                  uint32_t num_rowgroups,
-                                  cudaStream_t stream)
+ */
+void InitDictionaryIndices(DictionaryChunk *chunks,
+                           uint32_t num_columns,
+                           uint32_t num_rowgroups,
+                           rmm::cuda_stream_view stream)
 {
   dim3 dim_block(512, 1);  // 512 threads per chunk
   dim3 dim_grid(num_columns, num_rowgroups);
-  gpuInitDictionaryIndices<512><<<dim_grid, dim_block, 0, stream>>>(chunks, num_columns);
-  return cudaSuccess;
+  gpuInitDictionaryIndices<512><<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_columns);
 }
 
 /**
@@ -468,20 +454,18 @@ cudaError_t InitDictionaryIndices(DictionaryChunk *chunks,
  * @param[in] num_rowgroups Number of row groups
  * @param[in] num_columns Number of columns
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t BuildStripeDictionaries(StripeDictionary *stripes,
-                                    StripeDictionary *stripes_host,
-                                    DictionaryChunk const *chunks,
-                                    uint32_t num_stripes,
-                                    uint32_t num_rowgroups,
-                                    uint32_t num_columns,
-                                    cudaStream_t stream)
+ */
+void BuildStripeDictionaries(StripeDictionary *stripes,
+                             StripeDictionary *stripes_host,
+                             DictionaryChunk const *chunks,
+                             uint32_t num_stripes,
+                             uint32_t num_rowgroups,
+                             uint32_t num_columns,
+                             rmm::cuda_stream_view stream)
 {
   dim3 dim_block(1024, 1);  // 1024 threads per chunk
   dim3 dim_grid_build(num_columns, num_stripes);
-  gpuCompactChunkDictionaries<<<dim_grid_build, dim_block, 0, stream>>>(
+  gpuCompactChunkDictionaries<<<dim_grid_build, dim_block, 0, stream.value()>>>(
     stripes, chunks, num_columns);
   for (uint32_t i = 0; i < num_stripes * num_columns; i++) {
     if (stripes_host[i].dict_data != nullptr) {
@@ -489,7 +473,7 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes,
       const nvstrdesc_s *str_data =
         static_cast<const nvstrdesc_s *>(stripes_host[i].column_data_base);
       // NOTE: Requires the --expt-extended-lambda nvcc flag
-      thrust::sort(rmm::exec_policy(stream)->on(stream),
+      thrust::sort(rmm::exec_policy(stream)->on(stream.value()),
                    p,
                    p + stripes_host[i].num_strings,
                    [str_data] __device__(const uint32_t &lhs, const uint32_t &rhs) {
@@ -500,8 +484,8 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes,
                    });
     }
   }
-  gpuBuildStripeDictionaries<1024><<<dim_grid_build, dim_block, 0, stream>>>(stripes, num_columns);
-  return cudaSuccess;
+  gpuBuildStripeDictionaries<1024>
+    <<<dim_grid_build, dim_block, 0, stream.value()>>>(stripes, num_columns);
 }
 
 }  // namespace gpu

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,16 @@
 
 #include "group_reductions.hpp"
 
+#include <quantiles/quantiles_util.hpp>
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/types.hpp>
-#include <quantiles/quantiles_util.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/for_each.h>
 
@@ -40,8 +42,8 @@ struct quantiles_functor {
     size_type const num_groups,
     rmm::device_vector<double> const& quantile,
     interpolation interpolation,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0)
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
   {
     using ResultType = cudf::detail::target_type_t<T, aggregation::QUANTILE>;
 
@@ -60,7 +62,7 @@ struct quantiles_functor {
     auto result_view     = mutable_column_device_view::create(result->mutable_view());
 
     // For each group, calculate quantile
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                        thrust::make_counting_iterator(0),
                        num_groups,
                        [d_values       = *values_view,
@@ -125,8 +127,8 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
                                         size_type const num_groups,
                                         std::vector<double> const& quantiles,
                                         interpolation interp,
-                                        rmm::mr::device_memory_resource* mr,
-                                        cudaStream_t stream)
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
 {
   rmm::device_vector<double> dv_quantiles(quantiles);
 
@@ -138,8 +140,8 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
                          num_groups,
                          dv_quantiles,
                          interp,
-                         mr,
-                         stream);
+                         stream,
+                         mr);
 }
 
 }  // namespace detail

@@ -65,6 +65,7 @@ std::string container::get_encoded()
  */
 bool container::parse(file_metadata *md, size_t max_num_rows, size_t first_row)
 {
+  constexpr uint32_t avro_magic = (('O' << 0) | ('b' << 8) | ('j' << 16) | (0x01 << 24));
   uint32_t sig4, max_block_size;
   size_t total_object_count;
 
@@ -72,7 +73,7 @@ bool container::parse(file_metadata *md, size_t max_num_rows, size_t first_row)
   sig4 |= get_raw<uint8_t>() << 8;
   sig4 |= get_raw<uint8_t>() << 16;
   sig4 |= get_raw<uint8_t>() << 24;
-  if (sig4 != AVRO_MAGIC) { return false; }
+  if (sig4 != avro_magic) { return false; }
   for (;;) {
     uint32_t num_md_items = static_cast<uint32_t>(get_encoded<int64_t>());
     if (num_md_items == 0) { break; }
@@ -196,6 +197,9 @@ enum {
  */
 bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &json_str)
 {
+  // Empty schema
+  if (json_str == "[]") return true;
+
   char depthbuf[MAX_SCHEMA_DEPTH];
   int depth = 0, parent_idx = -1, entry_idx = -1;
   json_state_e state = state_attrname;
