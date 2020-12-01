@@ -1636,8 +1636,7 @@ def test_parquet_nullable_boolean(tmpdir, engine):
         pytest.param(
             pd.DataFrame(index=pd.RangeIndex(0, 10, 1)),
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/37897"
-                "https://github.com/pandas-dev/pandas/issues/37896"
+                reason="https://issues.apache.org/jira/browse/ARROW-10643"
             ),
         ),
         pd.DataFrame({"a": [1, 2, 3]}, index=[0.43534, 345, 0.34534]),

@@ -272,9 +272,9 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         if is_range_index:
             range_index_meta = index_col[0]
             if row_groups is not None:
-                per_file_metadata = []
-                for s in filepaths_or_buffers:
-                    per_file_metadata.append(pa.parquet.read_metadata(s))
+                per_file_metadata = [
+                    pa.parquet.read_metadata(s) for s in filepaths_or_buffers
+                ]
 
                 filtered_idx = []
                 for i, file_meta in enumerate(per_file_metadata):
@@ -288,8 +288,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                     for rg in row_groups[i]:
                         filtered_idx.append(
                             cudf.RangeIndex(
-                                start=rg[k][0],
-                                stop=rg[k][1],
+                                start=row_groups_i[rg][0],
+                                stop=row_groups_i[rg][1],
                                 step=range_index_meta['step']
                             )
                         )
@@ -297,7 +297,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                 if len(filtered_idx) > 0:
                     idx = cudf.concat(filtered_idx)
                 else:
-                    idx = cudf.Index([])
+                    idx = cudf.Index(cudf.core.column.column_empty(0))
             else:
                 idx = cudf.RangeIndex(
                     start=range_index_meta['start'],
