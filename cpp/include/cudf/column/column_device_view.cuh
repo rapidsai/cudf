@@ -17,7 +17,7 @@
 
 #include <algorithm>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/alignment.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -707,17 +707,20 @@ __device__ inline string_view const column_device_view::element<string_view>(
  * The basic dictionary elements are the indices which can be any index type.
  */
 struct index_element_fn {
-  template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
+  template <
+    typename IndexType,
+    std::enable_if_t<is_index_type<IndexType>() and std::is_unsigned<IndexType>::value>* = nullptr>
   __device__ size_type operator()(column_device_view const& input, size_type index)
   {
     return static_cast<size_type>(input.element<IndexType>(index));
   }
   template <typename IndexType,
             typename... Args,
-            std::enable_if_t<not is_index_type<IndexType>()>* = nullptr>
+            std::enable_if_t<not(is_index_type<IndexType>() and
+                                 std::is_unsigned<IndexType>::value)>* = nullptr>
   __device__ size_type operator()(Args&&... args)
   {
-    release_assert(false and "indices must be an integral type");
+    release_assert(false and "dictionary indices must be an unsigned integral type");
     return 0;
   }
 };

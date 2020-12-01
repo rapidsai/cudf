@@ -17,12 +17,10 @@
 #pragma once
 
 #include <cudf/detail/reduction.cuh>
-
+#include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
 
 namespace cudf {
 namespace reduction {
@@ -58,23 +56,37 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
   std::unique_ptr<scalar> result;
   Op compound_op{};
 
-  if (col.has_nulls()) {
-    auto it = thrust::make_transform_iterator(
-      dcol->pair_begin<ElementType, true>(),
-      compound_op.template get_null_replacing_element_transformer<ResultType>());
-    result = detail::reduce<Op, decltype(it), ResultType>(
-      it, col.size(), compound_op, valid_count, ddof, stream, mr);
+  if (!cudf::is_dictionary(col.type())) {
+    if (col.has_nulls()) {
+      auto it = thrust::make_transform_iterator(
+        dcol->pair_begin<ElementType, true>(),
+        compound_op.template get_null_replacing_element_transformer<ResultType>());
+      result = detail::reduce<Op, decltype(it), ResultType>(
+        it, col.size(), compound_op, valid_count, ddof, stream, mr);
+    } else {
+      auto it = thrust::make_transform_iterator(
+        dcol->begin<ElementType>(), compound_op.template get_element_transformer<ResultType>());
+      result = detail::reduce<Op, decltype(it), ResultType>(
+        it, col.size(), compound_op, valid_count, ddof, stream, mr);
+    }
   } else {
-    auto it = thrust::make_transform_iterator(
-      dcol->begin<ElementType>(), compound_op.template get_element_transformer<ResultType>());
-    result = detail::reduce<Op, decltype(it), ResultType>(
-      it, col.size(), compound_op, valid_count, ddof, stream, mr);
+    if (col.has_nulls()) {
+      auto it = thrust::make_transform_iterator(
+        cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType, true>(*dcol),
+        compound_op.template get_null_replacing_element_transformer<ResultType>());
+      result = detail::reduce<Op, decltype(it), ResultType>(
+        it, col.size(), compound_op, valid_count, ddof, stream, mr);
+    } else {
+      auto it = thrust::make_transform_iterator(
+        cudf::dictionary::detail::make_dictionary_iterator<ElementType>(*dcol),
+        compound_op.template get_element_transformer<ResultType>());
+      result = detail::reduce<Op, decltype(it), ResultType>(
+        it, col.size(), compound_op, valid_count, ddof, stream, mr);
+    }
   }
+
   // set scalar is valid
-  if (col.null_count() < col.size())
-    result->set_valid(true, stream);
-  else
-    result->set_valid(false, stream);
+  result->set_valid(col.null_count() < col.size(), stream);
   return result;
 };
 

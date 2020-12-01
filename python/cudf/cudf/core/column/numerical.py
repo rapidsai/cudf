@@ -81,9 +81,7 @@ class NumericalColumn(column.ColumnBase):
         tmp = rhs
         if reflect:
             tmp = self
-        if isinstance(
-            rhs, (NumericalColumn, cudf.Scalar, cudf._lib.scalar.DeviceScalar)
-        ) or np.isscalar(rhs):
+        if isinstance(rhs, (NumericalColumn, cudf.Scalar)) or np.isscalar(rhs):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
                 if (tmp.dtype in int_dtypes) and (
