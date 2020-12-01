@@ -96,7 +96,7 @@ def merge_quantiles(finalq, qs, vals):
     index = lower  # alias; we no longer need lower
     index[mask] = upper[mask]
     rv = combined_vals.iloc[index]
-    return rv.reset_index(drop=True)._data
+    return rv.reset_index(drop=True)
 
 
 def _approximate_quantile(df, q):
