@@ -4940,10 +4940,7 @@ class DataFrame(Frame, Serializable):
             df.columns = dataframe.columns
 
         # Set index
-        if isinstance(dataframe.index, pd.MultiIndex):
-            index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
-        else:
-            index = dataframe.index
+        index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
         result = df.set_index(index)
 
         return result
