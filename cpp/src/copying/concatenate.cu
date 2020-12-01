@@ -361,10 +361,10 @@ void bounds_and_type_check(ColIter begin, ColIter end)
                "Type mismatch in columns to concatenate.");
 
   // total size of all concatenated rows
-  auto size_iter = thrust::make_transform_iterator(
-    begin, [](column_view const& c) { return static_cast<size_t>(c.size()); });
   size_t const total_row_count =
-    std::accumulate(size_iter, size_iter + std::distance(begin, end), static_cast<size_t>(0));
+    std::accumulate(begin, end, std::size_t{}, [](size_t a, auto const& b) {
+      return a + static_cast<size_t>(b.size());
+    });
   CUDF_EXPECTS(total_row_count <= std::numeric_limits<size_type>::max(),
                "Total number of concatenated rows exceeds size_type range");
 
