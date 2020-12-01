@@ -174,23 +174,5 @@ void device_single_thread(Functor functor, rmm::cuda_stream_view stream = rmm::c
   single_thread_kernel<<<1, 1, 0, stream.value()>>>(functor);
 }
 
-/**
- * @brief Returns the aligned address for holding array of type T in pre-allocated memory
- * @param destination pointer to pre-allocated contiguous storage to store type T.
- * @return Pointer of type T, aligned to alignment of type T.
- */
-template <typename T>
-T* align_ptr_for_type(void* destination)
-{
-  constexpr std::size_t bytes_needed{sizeof(T)};
-  constexpr std::size_t alignment{alignof(T)};
-
-  // pad the allocation for aligning the first pointer
-  auto padded_bytes_needed = bytes_needed + (alignment - 1);
-  // std::align captures last argument by reference and modifies it, but we don't want it modified
-  return reinterpret_cast<T*>(
-    std::align(alignment, bytes_needed, destination, padded_bytes_needed));
-}
-
 }  // namespace detail
 }  // namespace cudf
