@@ -17,7 +17,7 @@
 
 #include <algorithm>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/alignment.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
