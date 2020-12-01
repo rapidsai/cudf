@@ -3733,19 +3733,18 @@ class DataFrame(Frame, Serializable):
         Parameters
         ----------
         aggs : Iterable (set, list, string, tuple or dict)
-            Function to use for aggregating data. Accepted combinations are:
-                string name (ex: "sum")
-                list of functions  (ex: ["sum", "min", "max"])
-                dict of axis labels specified operations per column
-                function name: must pass to DataFrame or DataFrame.apply
-
+            Function to use for aggregating data. Accepted types are:
+                string name, e.g. ``"sum"``
+                list of functions, e.g. ``["sum", "min", "max"]``
+                dict of axis labels specified operations per column, e.g. ``{"a": "sum"}``
+                
         axis : not yet supported
 
         Returns
         -------
         Aggregation Result : ``Series`` or ``DataFrame``
-            When df.agg is called with single agg,``Series`` is returned
-            When df.agg is called with several aggs,``DataFrame``is returned
+            When ``DataFrame.agg`` is called with single agg,``Series`` is returned
+            When ``DataFrame.agg`` is called with several aggs,``DataFrame``is returned
 
         Notes
         -----
