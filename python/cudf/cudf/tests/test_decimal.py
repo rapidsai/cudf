@@ -1,15 +1,23 @@
+from decimal import Decimal
+
 import pyarrow as pa
+import pytest
 
 from cudf.core.column import DecimalColumn
 
 
 @pytest.mark.parametrize(
-    "data", [[1.1, 2.2, 3.3, 4.4], [1, 2, 3, 4], [42, 1729, 4104]]
+    "data",
+    [
+        [Decimal("1.1"), Decimal("2.2"), Decimal("3.3"), Decimal("4.4")],
+        [1, 2, 3, 4],
+        [42, 1729, 4104],
+        # [1, 2, None, 4]  TODO
+    ],
 )
 @pytest.mark.parametrize(
     "typ",
     [
-        pa.decimal128(precision=3, scale=1),
         pa.decimal128(precision=4, scale=2),
         pa.decimal128(precision=5, scale=3),
         pa.decimal128(precision=6, scale=4),
