@@ -523,7 +523,7 @@ def _get_cupy_compatible_args_index(args, ser_index=None):
         if isinstance(arg, cp.ndarray):
             casted_ls.append(arg)
         elif isinstance(arg, cudf.Series):
-            ## check if indexes can be aligned
+            # check if indexes can be aligned
             if (ser_index is None) or (ser_index.equals(arg.index)):
                 ser_index = arg.index
                 casted_ls.append(arg.values)
