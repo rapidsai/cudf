@@ -80,7 +80,7 @@ def test_error_with_null_cudf_series(func):
 
 
 @pytest.mark.parametrize(
-    "func", [lambda x: np.absolute(x), lambda x: np.sign(x)],
+    "func", [np.absolute,  np.sign],
 )
 def test_ufunc_cudf_series_with_index(func):
     data = [-1, 2, 3, 0]

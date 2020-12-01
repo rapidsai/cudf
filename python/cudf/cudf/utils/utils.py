@@ -493,26 +493,23 @@ def get_appropriate_dispatched_func(
         if cupy_compatible_args:
             cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
             return _cast_to_appropriate_cudf_type(cupy_output, index)
-        else:
-            return NotImplemented
-    else:
-        return NotImplemented
+
+    return NotImplemented
 
 
 def _cast_to_appropriate_cudf_type(val, index=None):
-    # TODO Handle scalar
+    # Handle scalar
     if val.ndim == 0:
         return cudf.Scalar(val).value
     # 1D array
     elif (val.ndim == 1) or (val.ndim == 2 and val.shape[1] == 1):
+        # if index is not None and is of a different length
+        # than the index, cupy dispatching behaviour is undefined
+        # so we dont impliment it
         if (index is None) or (len(index) == len(val)):
             return cudf.Series(val, index=index)
-        else:
-            # if index is not None and is of a different length
-            # than the index cupy dispatching behaviour is undefined
-            return NotImplemented
-    else:
-        return NotImplemented
+
+    return NotImplemented
 
 
 def _get_cupy_compatible_args_index(args, ser_index=None):
@@ -526,7 +523,8 @@ def _get_cupy_compatible_args_index(args, ser_index=None):
         if isinstance(arg, cp.ndarray):
             casted_ls.append(arg)
         elif isinstance(arg, cudf.Series):
-            if _are_indexes_alligned(ser_index, arg.index):
+            ## check if indexes can be aligned
+            if (ser_index is None) or (ser_index.equals(arg.index)):
                 ser_index = arg.index
                 casted_ls.append(arg.values)
             else:
@@ -535,18 +533,11 @@ def _get_cupy_compatible_args_index(args, ser_index=None):
         elif isinstance(arg, Sequence):
             # we dont handle list of inputs for functions as
             # these form inputs for functions like
-            # np.concatenate, vstack have abiguity around index allignment
+            # np.concatenate, vstack have ambiguity around index alignment
             return None, ser_index
         else:
             casted_ls.append(arg)
     return casted_ls, ser_index
-
-
-def _are_indexes_alligned(index_1, index_2=None):
-    if index_1:
-        return index_1.equals(index_2)
-    else:
-        return True
 
 
 def get_relevant_submodule(func, module):
