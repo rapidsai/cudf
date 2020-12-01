@@ -529,17 +529,19 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
   }
 
   /**
-   * @brief Construct a nullable column of the fixed-point elements in the range
-   * `[begin,end)` using the range `[v, v + distance(begin,end))` interpreted
-   * as booleans to indicate the validity of each element.
+   * @brief Construct a nullable column of the fixed-point elements from a range.
+   *
+   * Constructs a nullable column of the fixed-point elements in the range `[begin,end)` using the range 
+   * `[v, v + distance(begin,end))` interpreted as Booleans to indicate the validity of each element.
    *
    * If `v[i] == true`, element `i` is valid, else it is null.
    *
    * Example:
    * @code{.cpp}
    * // Creates a nullable column of DECIMAL32 elements with 5 elements: {null, 100, null, 300,
-   * null} auto elements = make_counting_transform_iterator(0, [](auto i){return i;}); auto validity
-   * = make_counting_transform_iterator(0, [](auto i){return i%2;})
+   * null}
+   * auto elements = make_counting_transform_iterator(0, [](auto i){ return i; });
+   * auto validity = make_counting_transform_iterator(0, [](auto i){ return i%2; });
    * fixed_point_column_wrapper<int32_t> w(elements, elements + 5, validity, 2);
    * @endcode
    *

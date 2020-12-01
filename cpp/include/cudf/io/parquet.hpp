@@ -211,9 +211,10 @@ class parquet_reader_options {
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
 
   /**
-   * @brief Sets strict decimal types. If true, cudf will error if reading
-   * a decimal type that is unsupported. If false, cudf will convert unsupported
-   * types to double.
+   * @brief Enables/disables strict decimal type checking.
+   *
+   * @param val If true, cudf will error if reading a decimal type that is unsupported. If false,
+   * cudf will convert unsupported types to double.
    */
   void set_strict_decimal_types(bool val) { _strict_decimal_types = val; }
 };
