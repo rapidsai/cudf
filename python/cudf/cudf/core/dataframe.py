@@ -200,52 +200,34 @@ class DataFrame(Frame, Serializable):
         """
         super().__init__()
 
-        if isinstance(columns, (Series, cudf.Index)):
-            columns = columns.to_pandas()
-
         if isinstance(data, ColumnAccessor):
+            self._data = data
             if index is None:
-                index = as_index(range(data.nrows))
-            else:
-                index = as_index(index)
-
-            if columns is not None:
-                self._data = _get_columns_from_column_accessor(
-                    column_accessor=data,
-                    columns=columns,
-                    nrows=len(index) if data.nrows == 0 else data.nrows,
-                )
-            else:
-                self._data = data
-
+                index = as_index(range(self._data.nrows))
             self.index = as_index(index)
-        elif isinstance(data, (DataFrame, pd.DataFrame)):
-            if isinstance(data, pd.DataFrame):
-                data = self.from_pandas(data)
+            return None
 
-            if index is not None and not data.index.equals(index):
-                data = data.reindex(index)
-                index = data._index
+        if isinstance(data, DataFrame):
+            self._data = data._data
+            self._index = data._index
+            self.columns = data.columns
+            return
 
-            if columns is not None:
-                self._data = _get_columns_from_column_accessor(
-                    column_accessor=data._data,
-                    columns=columns,
-                    nrows=len(index)
-                    if data._data.nrows == 0
-                    else data._data.nrows,
-                )
-            else:
-                self._data = data._data
-                self.columns = data.columns
+        if isinstance(data, pd.DataFrame):
+            data = self.from_pandas(data)
+            self._data = data._data
+            self._index = data._index
+            self.columns = data.columns
+            return
 
-            self._index = index
-        elif data is None:
+        if data is None:
             if index is None:
                 self._index = RangeIndex(0)
             else:
                 self._index = as_index(index)
             if columns is not None:
+                if isinstance(columns, (Series, cudf.Index)):
+                    columns = columns.to_pandas()
 
                 self._data = ColumnAccessor(
                     OrderedDict.fromkeys(
@@ -4958,7 +4940,10 @@ class DataFrame(Frame, Serializable):
             df.columns = dataframe.columns
 
         # Set index
-        index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
+        if isinstance(dataframe.index, pd.MultiIndex):
+            index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
+        else:
+            index = dataframe.index
         result = df.set_index(index)
 
         return result
@@ -7310,21 +7295,3 @@ def _get_host_unique(array):
         return [array]
     else:
         return set(array)
-
-
-def _get_columns_from_column_accessor(column_accessor, columns, nrows):
-    return ColumnAccessor(
-        data=OrderedDict(
-            (
-                col_name,
-                column_accessor[col_name]
-                if col_name in column_accessor
-                else cudf.core.column.column_empty(
-                    row_count=nrows, dtype="object", masked=True,
-                ),
-            )
-            for col_name in columns
-        ),
-        multiindex=column_accessor.multiindex,
-        level_names=column_accessor.level_names,
-    )

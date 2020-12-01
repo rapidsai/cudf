@@ -176,7 +176,6 @@
 - PR #6855 Fix `.str.replace_with_backrefs` docs examples
 - PR #6853 Fix contiguous split of null string columns
 - PR #6861 Fix compile error in type_dispatch_benchmark.cu
-- PR #6838 Fix `columns` & `index` handling in dataframe constructor
 
 
 # cuDF 0.16.0 (21 Oct 2020)
