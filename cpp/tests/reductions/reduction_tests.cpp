@@ -1084,28 +1084,28 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSum)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  // for (int i = -2; i < 3; ++i) {
-  auto const scale = scale_type{0};
+  for (int i = -3; i <= 0; ++i) {
+    auto const scale = scale_type{i};
 
-  auto const ZERO  = decimalXX{0, scale};
-  auto const ONE   = decimalXX{1, scale};
-  auto const TWO   = decimalXX{2, scale};
-  auto const THREE = decimalXX{3, scale};
-  auto const FOUR  = decimalXX{4, scale};
-  auto const TEN   = decimalXX{10, scale};
+    auto const ZERO  = decimalXX{0, scale};
+    auto const ONE   = decimalXX{1, scale};
+    auto const TWO   = decimalXX{2, scale};
+    auto const THREE = decimalXX{3, scale};
+    auto const FOUR  = decimalXX{4, scale};
+    auto const TEN   = decimalXX{10, scale};
 
-  auto const in       = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
-  auto const column   = fp_wrapper{{1, 2, 3, 4}, scale};
-  auto const expected = std::accumulate(in.cbegin(), in.cend(), ZERO, std::plus<decimalXX>());
-  auto const out_type = static_cast<cudf::column_view>(column).type();
+    auto const in       = std::vector<decimalXX>{ONE, TWO, THREE, FOUR};
+    auto const column   = fp_wrapper{{1, 2, 3, 4}, scale};
+    auto const expected = std::accumulate(in.cbegin(), in.cend(), ZERO, std::plus<decimalXX>());
+    auto const out_type = static_cast<cudf::column_view>(column).type();
 
-  auto const result        = cudf::reduce(column, cudf::make_sum_aggregation(), out_type);
-  auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
-  auto const result_fp     = decimalXX{result_scalar->value(), scale};
+    auto const result        = cudf::reduce(column, cudf::make_sum_aggregation(), out_type);
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+    auto const result_fp     = decimalXX{result_scalar->value(), scale};
 
-  EXPECT_EQ(result_fp, expected);
-  EXPECT_EQ(result_fp, TEN);
-  // }
+    EXPECT_EQ(result_fp, expected);
+    EXPECT_EQ(result_fp, TEN);
+  }
 }
 
 TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumAlternate)

@@ -239,19 +239,9 @@ struct element_type_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    // if (output_type == col.type())
+    CUDF_EXPECTS(output_type == col.type(), "Output type must be same as input column type.");
 
     return cudf::reduction::simple::simple_reduction<ElementType, ElementType, Op>(col, stream, mr);
-
-    // auto result =
-    // cudf::reduction::simple::simple_reduction<ElementType, double, Op>(col, stream, mr);
-    // if (output_type == result->type()) return result;
-    // // this will cast the result to the output_type
-    // return cudf::type_dispatcher(output_type,
-    //                        simple::cast_numeric_scalar_fn<double>{},
-    //                        static_cast<numeric_scalar<double>*>(result.get()),
-    //                        stream,
-    //                        mr);
   }
 
   template <typename ElementType,
