@@ -32,6 +32,8 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/detail/copy.h>
 #include <thrust/transform.h>
 
@@ -738,7 +740,7 @@ inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
 template <uint32_t lanemask, uint32_t tmask, uint32_t base, uint32_t level_scale>
 inline __device__ void ctx_merge(uint64_t *ctxtree, packed_rowctx_t *ctxb, uint32_t t)
 {
-  uint64_t tmp = SHFL_XOR(*ctxb, lanemask);
+  uint64_t tmp = shuffle_xor(*ctxb, lanemask);
   if (!(t & tmask)) {
     *ctxb                              = merge_row_contexts(*ctxb, tmp);
     ctxtree[base + (t >> level_scale)] = *ctxb;
@@ -809,7 +811,7 @@ static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
     ctx_merge<4, 0x7, 4, 3>(ctxtree, &ctxb, t);
     ctx_merge<8, 0xf, 2, 4>(ctxtree, &ctxb, t);
     // Final stage
-    uint64_t tmp = SHFL_XOR(ctxb, 16);
+    uint64_t tmp = shuffle_xor(ctxb, 16);
     if (t == 0) { ctxtree[1] = merge_row_contexts(ctxb, tmp); }
   }
 }
@@ -1009,13 +1011,13 @@ __global__ void __launch_bounds__(rowofs_block_dim)
 size_t __host__ count_blank_rows(const cudf::io::parse_options_view &opts,
                                  device_span<char const> const data,
                                  device_span<uint64_t const> const row_offsets,
-                                 cudaStream_t stream)
+                                 rmm::cuda_stream_view stream)
 {
   const auto newline  = opts.skipblanklines ? opts.terminator : opts.comment;
   const auto comment  = opts.comment != '\0' ? opts.comment : newline;
   const auto carriage = (opts.skipblanklines && opts.terminator == '\n') ? '\r' : comment;
   return thrust::count_if(
-    rmm::exec_policy(stream)->on(stream),
+    rmm::exec_policy(stream)->on(stream.value()),
     row_offsets.begin(),
     row_offsets.end(),
     [data = data, newline, comment, carriage] __device__(const uint64_t pos) {
@@ -1027,14 +1029,14 @@ size_t __host__ count_blank_rows(const cudf::io::parse_options_view &opts,
 void __host__ remove_blank_rows(cudf::io::parse_options_view const &options,
                                 device_span<char const> const data,
                                 rmm::device_vector<uint64_t> &row_offsets,
-                                cudaStream_t stream)
+                                rmm::cuda_stream_view stream)
 {
   size_t d_size       = data.size();
   const auto newline  = options.skipblanklines ? options.terminator : options.comment;
   const auto comment  = options.comment != '\0' ? options.comment : newline;
   const auto carriage = (options.skipblanklines && options.terminator == '\n') ? '\r' : comment;
   auto new_end        = thrust::remove_if(
-    rmm::exec_policy(stream)->on(stream),
+    rmm::exec_policy(stream)->on(stream.value()),
     row_offsets.begin(),
     row_offsets.end(),
     [data = data, d_size, newline, comment, carriage] __device__(const uint64_t pos) {
@@ -1050,7 +1052,7 @@ thrust::host_vector<column_type_histogram> detect_column_types(
   device_span<column_parse::flags const> const column_flags,
   device_span<uint64_t const> const row_starts,
   size_t const num_active_columns,
-  cudaStream_t stream)
+  rmm::cuda_stream_view stream)
 {
   // Calculate actual block count to use based on records count
   const int block_size = csvparse_block_dim;
@@ -1058,7 +1060,7 @@ thrust::host_vector<column_type_histogram> detect_column_types(
 
   auto d_stats = rmm::device_vector<column_type_histogram>(num_active_columns);
 
-  data_type_detection<<<grid_size, block_size, 0, stream>>>(
+  data_type_detection<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_flags, row_starts, d_stats);
 
   return thrust::host_vector<column_type_histogram>(d_stats);
@@ -1071,14 +1073,14 @@ void __host__ decode_row_column_data(cudf::io::parse_options_view const &options
                                      device_span<cudf::data_type const> const dtypes,
                                      device_span<void *> const columns,
                                      device_span<cudf::bitmask_type *> const valids,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream)
 {
   // Calculate actual block count to use based on records count
   auto const block_size = csvparse_block_dim;
   auto const num_rows   = row_offsets.size() - 1;
   auto const grid_size  = (num_rows + block_size - 1) / block_size;
 
-  convert_csv_to_cudf<<<grid_size, block_size, 0, stream>>>(
+  convert_csv_to_cudf<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_flags, row_offsets, dtypes, columns, valids);
 }
 
@@ -1093,11 +1095,11 @@ uint32_t __host__ gather_row_offsets(const parse_options_view &options,
                                      size_t byte_range_start,
                                      size_t byte_range_end,
                                      size_t skip_rows,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream)
 {
   uint32_t dim_grid = 1 + (chunk_size / rowofs_block_bytes);
 
-  gather_row_offsets_gpu<<<dim_grid, rowofs_block_dim, 0, stream>>>(
+  gather_row_offsets_gpu<<<dim_grid, rowofs_block_dim, 0, stream.value()>>>(
     row_ctx,
     offsets_out,
     data,

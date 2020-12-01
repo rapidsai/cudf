@@ -13,12 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cub/cub.cuh>
+
 #include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
 
 #include <chrono>
 #include <cudf/detail/utilities/cuda.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <cub/cub.cuh>
 
 #include <thrust/gather.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -34,7 +38,8 @@ constexpr bool enable_bool_rle = true;
 constexpr bool enable_bool_rle = false;
 #endif
 
-#define INIT_HASH_BITS 12
+constexpr int init_hash_bits       = 12;
+constexpr uint32_t rle_buffer_size = (1 << 9);
 
 struct frag_init_state_s {
   EncColumnDesc col;
@@ -42,16 +47,12 @@ struct frag_init_state_s {
   uint32_t total_dupes;
   size_type start_value_idx;
   volatile uint32_t scratch_red[32];
-  uint32_t dict[MAX_PAGE_FRAGMENT_SIZE];
+  uint32_t dict[max_page_fragment_size];
   union {
-    uint16_t u16[1 << (INIT_HASH_BITS)];
-    uint32_t u32[1 << (INIT_HASH_BITS - 1)];
+    uint16_t u16[1 << (init_hash_bits)];
+    uint32_t u32[1 << (init_hash_bits - 1)];
   } map;
 };
-
-#define LOG2_RLE_BFRSZ 9
-#define RLE_BFRSZ (1 << LOG2_RLE_BFRSZ)
-#define RLE_MAX_LIT_RUN 0xfff8  // Maximum literal run for 2-byte run code
 
 struct page_enc_state_s {
   uint8_t *cur;          //!< current output ptr
@@ -70,7 +71,7 @@ struct page_enc_state_s {
   EncColumnDesc col;
   gpu_inflate_input_s comp_in;
   gpu_inflate_status_s comp_out;
-  uint16_t vals[RLE_BFRSZ];
+  uint16_t vals[rle_buffer_size];
 };
 
 /**
@@ -79,7 +80,7 @@ struct page_enc_state_s {
 inline __device__ uint32_t nvstr_init_hash(const uint8_t *ptr, uint32_t len)
 {
   if (len != 0) {
-    return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << INIT_HASH_BITS) - 1);
+    return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
   } else {
     return 0;
   }
@@ -87,7 +88,7 @@ inline __device__ uint32_t nvstr_init_hash(const uint8_t *ptr, uint32_t len)
 
 inline __device__ uint32_t uint32_init_hash(uint32_t v)
 {
-  return (v + (v >> 11) + (v >> 22)) & ((1 << INIT_HASH_BITS) - 1);
+  return (v + (v >> 11) + (v >> 22)) & ((1 << init_hash_bits) - 1);
 }
 
 inline __device__ uint32_t uint64_init_hash(uint64_t v)
@@ -195,7 +196,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     uint32_t is_valid     = (i + t < nvals && val_idx < s->col.num_values)
                           ? (valid) ? (valid[val_idx >> 5] >> (val_idx & 0x1f)) & 1 : 1
                           : 0;
-    uint32_t valid_warp = BALLOT(is_valid);
+    uint32_t valid_warp = ballot(is_valid);
     uint32_t len, nz_pos, hash;
     if (is_valid) {
       len = dtype_len;
@@ -232,7 +233,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     __syncthreads();
     if (t < 32) {
       uint32_t warp_pos  = WarpReducePos16((t < 16) ? s->scratch_red[t] : 0, t);
-      uint32_t non_nulls = SHFL(warp_pos, 0xf);
+      uint32_t non_nulls = shuffle(warp_pos, 0xf);
       len = half_warp_reduce(temp_storage.half).Sum((t < 16) ? s->scratch_red[t + 16] : 0);
       if (t < 16) { s->scratch_red[t] = warp_pos; }
       if (!t) {
@@ -247,7 +248,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
       if (dict_index) {
         atomicAdd(&s->map.u32[hash >> 1], (hash & 1) ? 1 << 16 : 1);
         dict_index[start_value_idx + nz_pos] =
-          ((i + t) << INIT_HASH_BITS) |
+          ((i + t) << init_hash_bits) |
           hash;  // Store the hash along with the index, so we don't have to recompute it
       }
     }
@@ -256,9 +257,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
   __syncthreads();
   // Reorder the 16-bit local indices according to the hash values
   if (s->col.dict_index) {
-#if (INIT_HASH_BITS != 12)
-#error "Hardcoded for INIT_HASH_BITS=12"
-#endif
+    static_assert((init_hash_bits == 12), "Hardcoded for init_hash_bits=12");
     // Cumulative sum of hash map counts
     uint32_t count01 = s->map.u32[t * 4 + 0];
     uint32_t count23 = s->map.u32[t * 4 + 1];
@@ -298,7 +297,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
       bool collision;
       if (i + t < nnz) {
         val     = dict_index[i + t];
-        hash    = val & ((1 << INIT_HASH_BITS) - 1);
+        hash    = val & ((1 << init_hash_bits) - 1);
         sh      = (hash & 1) ? 16 : 0;
         pos_old = s->map.u16[hash];
       }
@@ -331,9 +330,9 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
       uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0, dupe_mask, dupes_before;
       if (i + t < nnz) {
         uint32_t dict_val = s->dict[i + t];
-        uint32_t hash     = dict_val & ((1 << INIT_HASH_BITS) - 1);
-        ck_row            = start_row + (dict_val >> INIT_HASH_BITS);
-        ck_row_ref = start_row + (s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0] >> INIT_HASH_BITS);
+        uint32_t hash     = dict_val & ((1 << init_hash_bits) - 1);
+        ck_row            = start_row + (dict_val >> init_hash_bits);
+        ck_row_ref = start_row + (s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0] >> init_hash_bits);
         if (ck_row_ref != ck_row) {
           if (dtype == BYTE_ARRAY) {
             const nvstrdesc_s *ck_data = static_cast<const nvstrdesc_s *>(col_data);
@@ -367,7 +366,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
           }
         }
       }
-      dupe_mask    = BALLOT(is_dupe);
+      dupe_mask    = ballot(is_dupe);
       dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
       if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(dupe_mask); }
       __syncthreads();
@@ -487,14 +486,14 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
         page_offset += page_g.max_hdr_size + page_g.max_data_size;
         comp_page_offset += page_g.max_hdr_size + GetMaxCompressedBfrSize(page_g.max_data_size);
       }
-      SYNCWARP();
+      __syncwarp();
       if (t == 0) {
         if (pages) pages[ck_g.first_page] = page_g;
         if (page_grstats) page_grstats[ck_g.first_page] = pagestats_g;
       }
       num_pages = 1;
     }
-    SYNCWARP();
+    __syncwarp();
     // This loop goes over one page fragment at a time and adds it to page.
     // When page size crosses a particular limit, then it moves on to the next page and then next
     // page fragment gets added to that one.
@@ -503,7 +502,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
     // page size.
     do {
       uint32_t fragment_data_size, max_page_size, minmax_len = 0;
-      SYNCWARP();
+      __syncwarp();
       if (num_rows < ck_g.num_rows) {
         if (t == 0) { frag_g = ck_g.fragments[fragments_in_chunk]; }
         if (!t && ck_g.stats && col_g.stats_dtype == dtype_string) {
@@ -514,7 +513,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
         frag_g.fragment_data_size = 0;
         frag_g.num_rows           = 0;
       }
-      SYNCWARP();
+      __syncwarp();
       if (ck_g.has_dictionary && fragments_in_chunk < ck_g.num_dict_fragments) {
         fragment_data_size =
           frag_g.num_leaf_values * 2;  // Assume worst-case of 2-bytes per dictionary index
@@ -594,7 +593,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
           cur_row += rows_in_page;
           ck_max_stats_len = max(ck_max_stats_len, max_stats_len);
         }
-        SYNCWARP();
+        __syncwarp();
         if (t == 0) {
           if (pages) { pages[ck_g.first_page + num_pages] = page_g; }
 
@@ -618,7 +617,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
       num_rows += frag_g.num_rows;
       fragments_in_chunk++;
     } while (frag_g.num_rows != 0);
-    SYNCWARP();
+    __syncwarp();
     if (!t) {
       if (ck_g.ck_stat_size == 0 && ck_g.stats) {
         uint32_t ck_stat_size = 48 + 2 * ck_max_stats_len;
@@ -671,16 +670,16 @@ inline __device__ void PackLiterals(
       if (w == 1 || w == 2 || w == 4) {
         uint32_t mask = 0;
         if (w == 1) {
-          v |= SHFL_XOR(v, 1) << 1;
-          v |= SHFL_XOR(v, 2) << 2;
-          v |= SHFL_XOR(v, 4) << 4;
+          v |= shuffle_xor(v, 1) << 1;
+          v |= shuffle_xor(v, 2) << 2;
+          v |= shuffle_xor(v, 4) << 4;
           mask = 0x7;
         } else if (w == 2) {
-          v |= SHFL_XOR(v, 1) << 2;
-          v |= SHFL_XOR(v, 2) << 4;
+          v |= shuffle_xor(v, 1) << 2;
+          v |= shuffle_xor(v, 2) << 4;
           mask = 0x3;
         } else if (w == 4) {
-          v |= SHFL_XOR(v, 1) << 4;
+          v |= shuffle_xor(v, 1) << 4;
           mask = 0x1;
         }
         if (t < count && mask && !(t & mask)) { dst[(t * w) >> 3] = v; }
@@ -689,7 +688,7 @@ inline __device__ void PackLiterals(
         if (t < count) { dst[t] = v; }
         return;
       } else if (w == 12) {
-        v |= SHFL_XOR(v, 1) << 12;
+        v |= shuffle_xor(v, 1) << 12;
         if (t < count && !(t & 1)) {
           dst[(t >> 1) * 3 + 0] = v;
           dst[(t >> 1) * 3 + 1] = v >> 8;
@@ -757,12 +756,12 @@ static __device__ void RleEncode(
     uint32_t pos = rle_pos + t;
     if (rle_run > 0 && !(rle_run & 1)) {
       // Currently in a long repeat run
-      uint32_t mask = BALLOT(pos < numvals && s->vals[pos & (RLE_BFRSZ - 1)] == s->run_val);
+      uint32_t mask = ballot(pos < numvals && s->vals[pos & (rle_buffer_size - 1)] == s->run_val);
       uint32_t rle_rpt_count, max_rpt_count;
       if (!(t & 0x1f)) { s->rpt_map[t >> 5] = mask; }
       __syncthreads();
       if (t < 32) {
-        uint32_t c32 = BALLOT(t >= 4 || s->rpt_map[t] != 0xffffffffu);
+        uint32_t c32 = ballot(t >= 4 || s->rpt_map[t] != 0xffffffffu);
         if (!t) {
           uint32_t last_idx = __ffs(c32) - 1;
           s->rle_rpt_count =
@@ -786,9 +785,9 @@ static __device__ void RleEncode(
       }
     } else {
       // New run or in a literal run
-      uint32_t v0      = s->vals[pos & (RLE_BFRSZ - 1)];
-      uint32_t v1      = s->vals[(pos + 1) & (RLE_BFRSZ - 1)];
-      uint32_t mask    = BALLOT(pos + 1 < numvals && v0 == v1);
+      uint32_t v0      = s->vals[pos & (rle_buffer_size - 1)];
+      uint32_t v1      = s->vals[(pos + 1) & (rle_buffer_size - 1)];
+      uint32_t mask    = ballot(pos + 1 < numvals && v0 == v1);
       uint32_t maxvals = min(numvals - rle_pos, 128);
       uint32_t rle_lit_count, rle_rpt_count;
       if (!(t & 0x1f)) { s->rpt_map[t >> 5] = mask; }
@@ -800,7 +799,7 @@ static __device__ void RleEncode(
         uint32_t m0          = (idx8 < 4) ? s->rpt_map[idx8] : 0;
         uint32_t m1          = (idx8 < 3) ? s->rpt_map[idx8 + 1] : 0;
         uint32_t needed_mask = kRleRunMask[nbits - 1];
-        mask                 = BALLOT((__funnelshift_r(m0, m1, pos8) & needed_mask) == needed_mask);
+        mask                 = ballot((__funnelshift_r(m0, m1, pos8) & needed_mask) == needed_mask);
         if (!t) {
           uint32_t rle_run_start = (mask != 0) ? min((__ffs(mask) - 1) * 8, maxvals) : maxvals;
           uint32_t rpt_len       = 0;
@@ -896,13 +895,13 @@ static __device__ void PlainBoolEncode(page_enc_state_s *s,
 
   while (rle_pos < numvals) {
     uint32_t pos    = rle_pos + t;
-    uint32_t v      = (pos < numvals) ? s->vals[pos & (RLE_BFRSZ - 1)] : 0;
+    uint32_t v      = (pos < numvals) ? s->vals[pos & (rle_buffer_size - 1)] : 0;
     uint32_t n      = min(numvals - rle_pos, 128);
     uint32_t nbytes = (n + ((flush) ? 7 : 0)) >> 3;
     if (!nbytes) { break; }
-    v |= SHFL_XOR(v, 1) << 1;
-    v |= SHFL_XOR(v, 2) << 2;
-    v |= SHFL_XOR(v, 4) << 4;
+    v |= shuffle_xor(v, 1) << 1;
+    v |= shuffle_xor(v, 2) << 2;
+    v |= shuffle_xor(v, 4) << 4;
     if (t < n && !(t & 7)) { dst[t >> 3] = v; }
     rle_pos = min(rle_pos + nbytes * 8, numvals);
     dst += nbytes;
@@ -987,7 +986,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         uint32_t def_lvl = (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
                              ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1
                              : 0;
-        s->vals[(rle_numvals + t) & (RLE_BFRSZ - 1)] = def_lvl;
+        s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = def_lvl;
         __syncthreads();
         rle_numvals += nrows;
         RleEncode(s, rle_numvals, def_lvl_bits, (rle_numvals == s->page.num_rows), t);
@@ -1000,7 +999,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
           uint32_t rle_bytes = (uint32_t)(rle_out - cur) - 4;
           cur[t]             = rle_bytes >> (t * 8);
         }
-        SYNCWARP();
+        __syncwarp();
         if (t == 0) { s->cur = rle_out; }
       }
     }
@@ -1023,7 +1022,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         uint32_t idx         = page_first_val_idx + rle_numvals + t;
         uint32_t lvl_val =
           (rle_numvals + t < s->page.num_values && idx < col_last_val_idx) ? lvl_val_data[idx] : 0;
-        s->vals[(rle_numvals + t) & (RLE_BFRSZ - 1)] = lvl_val;
+        s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = lvl_val;
         __syncthreads();
         rle_numvals += nvals;
         RleEncode(s, rle_numvals, nbits, (rle_numvals == s->page.num_values), t);
@@ -1036,7 +1035,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
           uint32_t rle_bytes = (uint32_t)(rle_out - cur) - 4;
           cur[t]             = rle_bytes >> (t * 8);
         }
-        SYNCWARP();
+        __syncwarp();
         if (t == 0) { s->cur = rle_out; }
       }
     };
@@ -1087,7 +1086,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
                    ? (valid) ? (valid[val_idx >> 5] >> (val_idx & 0x1f)) & 1 : 1
                    : 0;
     }
-    warp_valids = BALLOT(is_valid);
+    warp_valids = ballot(is_valid);
     cur_val_idx += nvals;
     if (dict_bits >= 0) {
       // Dictionary encoding
@@ -1108,7 +1107,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
           } else {
             v = s->col.dict_index[val_idx];
           }
-          s->vals[(rle_numvals + pos) & (RLE_BFRSZ - 1)] = v;
+          s->vals[(rle_numvals + pos) & (rle_buffer_size - 1)] = v;
         }
         rle_numvals += s->scratch_red[3];
         __syncthreads();
@@ -1667,7 +1666,7 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
  *
  * Similarly we merge up all the way till level 0 offsets
  */
-dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
+dremel_data get_dremel_data(column_view h_col, rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(h_col.type().id() == type_id::LIST,
                "Can only get rep/def levels for LIST type column");
@@ -1679,12 +1678,12 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
     auto d_off = lcv.offsets().data<size_type>();
 
     auto empties_idx_end =
-      thrust::copy_if(rmm::exec_policy(stream)->on(stream),
+      thrust::copy_if(rmm::exec_policy(stream)->on(stream.value()),
                       thrust::make_counting_iterator(start),
                       thrust::make_counting_iterator(end),
                       empties_idx.begin(),
                       [d_off] __device__(auto i) { return d_off[i] == d_off[i + 1]; });
-    auto empties_end = thrust::gather(rmm::exec_policy(stream)->on(stream),
+    auto empties_end = thrust::gather(rmm::exec_policy(stream)->on(stream.value()),
                                       empties_idx.begin(),
                                       empties_idx_end,
                                       lcv.offsets().begin<size_type>(),
@@ -1794,7 +1793,7 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
     auto output_zip_it =
       thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
 
-    auto ends = thrust::merge_by_key(rmm::exec_policy(stream)->on(stream),
+    auto ends = thrust::merge_by_key(rmm::exec_policy(stream)->on(stream.value()),
                                      empties.begin(),
                                      empties.begin() + empties_size,
                                      thrust::make_counting_iterator(column_offsets[level + 1]),
@@ -1812,14 +1811,14 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
                                       [off = lcv.offsets().data<size_type>()] __device__(
                                         auto i) -> int { return off[i] == off[i + 1]; });
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
-    thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream),
+    thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
                            scan_it,
                            scan_it + offset_size_at_level,
                            scan_out.begin());
 
     // Add scan output to existing offsets to get new offsets into merged rep level values
     new_offsets = rmm::device_uvector<size_type>(offset_size_at_level, stream);
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                        thrust::make_counting_iterator(0),
                        offset_size_at_level,
                        [off      = lcv.offsets().data<size_type>() + column_offsets[level],
@@ -1830,7 +1829,7 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
 
     // Set rep level values at level starts to appropriate rep level
     auto scatter_it = thrust::make_constant_iterator(level);
-    thrust::scatter(rmm::exec_policy(stream)->on(stream),
+    thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
                     scatter_it,
                     scatter_it + new_offsets.size() - 1,
                     new_offsets.begin(),
@@ -1881,7 +1880,7 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
     auto output_zip_it =
       thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
 
-    auto ends = thrust::merge_by_key(rmm::exec_policy(stream)->on(stream),
+    auto ends = thrust::merge_by_key(rmm::exec_policy(stream)->on(stream.value()),
                                      transformed_empties,
                                      transformed_empties + empties_size,
                                      thrust::make_counting_iterator(0),
@@ -1900,14 +1899,14 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
                                       [off = lcv.offsets().data<size_type>()] __device__(
                                         auto i) -> int { return off[i] == off[i + 1]; });
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
-    thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream),
+    thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
                            scan_it,
                            scan_it + offset_size_at_level,
                            scan_out.begin());
 
     // Add scan output to existing offsets to get new offsets into merged rep level values
     rmm::device_uvector<size_type> temp_new_offsets(offset_size_at_level, stream);
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                        thrust::make_counting_iterator(0),
                        offset_size_at_level,
                        [off      = lcv.offsets().data<size_type>() + column_offsets[level],
@@ -1920,7 +1919,7 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
 
     // Set rep level values at level starts to appropriate rep level
     auto scatter_it = thrust::make_constant_iterator(level);
-    thrust::scatter(rmm::exec_policy(stream)->on(stream),
+    thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
                     scatter_it,
                     scatter_it + new_offsets.size() - 1,
                     new_offsets.begin(),
@@ -1931,7 +1930,7 @@ dremel_data get_dremel_data(column_view h_col, cudaStream_t stream)
   rep_level.resize(level_vals_size, stream);
   def_level.resize(level_vals_size, stream);
 
-  CUDA_TRY(cudaStreamSynchronize(stream));
+  stream.synchronize();
 
   size_type leaf_col_offset = column_offsets[column_offsets.size() - 1];
   size_type leaf_data_size  = column_ends[column_ends.size() - 1] - leaf_col_offset;
@@ -1958,10 +1957,10 @@ void InitPageFragments(PageFragment *frag,
                        int32_t num_columns,
                        uint32_t fragment_size,
                        uint32_t num_rows,
-                       cudaStream_t stream)
+                       rmm::cuda_stream_view stream)
 {
   dim3 dim_grid(num_columns, num_fragments);  // 1 threadblock per fragment
-  gpuInitPageFragments<512><<<dim_grid, 512, 0, stream>>>(
+  gpuInitPageFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
     frag, col_desc, num_fragments, num_columns, fragment_size, num_rows);
 }
 
@@ -1982,10 +1981,10 @@ void InitFragmentStatistics(statistics_group *groups,
                             int32_t num_fragments,
                             int32_t num_columns,
                             uint32_t fragment_size,
-                            cudaStream_t stream)
+                            rmm::cuda_stream_view stream)
 {
   dim3 dim_grid(num_columns, (num_fragments + 3) >> 2);  // 1 warp per fragment
-  gpuInitFragmentStats<<<dim_grid, 128, 0, stream>>>(
+  gpuInitFragmentStats<<<dim_grid, 128, 0, stream.value()>>>(
     groups, fragments, col_desc, num_fragments, num_columns, fragment_size);
 }
 
@@ -2008,10 +2007,10 @@ void InitEncoderPages(EncColumnChunk *chunks,
                       int32_t num_columns,
                       statistics_merge_group *page_grstats,
                       statistics_merge_group *chunk_grstats,
-                      cudaStream_t stream)
+                      rmm::cuda_stream_view stream)
 {
   dim3 dim_grid(num_columns, num_rowgroups);  // 1 threadblock per rowgroup
-  gpuInitPages<<<dim_grid, 128, 0, stream>>>(
+  gpuInitPages<<<dim_grid, 128, 0, stream.value()>>>(
     chunks, pages, col_desc, page_grstats, chunk_grstats, num_rowgroups, num_columns);
 }
 
@@ -2032,11 +2031,12 @@ void EncodePages(EncPage *pages,
                  uint32_t start_page,
                  gpu_inflate_input_s *comp_in,
                  gpu_inflate_status_s *comp_out,
-                 cudaStream_t stream)
+                 rmm::cuda_stream_view stream)
 {
   // A page is part of one column. This is launching 1 block per page. 1 block will exclusively
   // deal with one datatype.
-  gpuEncodePages<<<num_pages, 128, 0, stream>>>(pages, chunks, comp_in, comp_out, start_page);
+  gpuEncodePages<<<num_pages, 128, 0, stream.value()>>>(
+    pages, chunks, comp_in, comp_out, start_page);
 }
 
 /**
@@ -2054,9 +2054,9 @@ void DecideCompression(EncColumnChunk *chunks,
                        uint32_t num_chunks,
                        uint32_t start_page,
                        const gpu_inflate_status_s *comp_out,
-                       cudaStream_t stream)
+                       rmm::cuda_stream_view stream)
 {
-  gpuDecideCompression<<<num_chunks, 128, 0, stream>>>(chunks, pages, comp_out, start_page);
+  gpuDecideCompression<<<num_chunks, 128, 0, stream.value()>>>(chunks, pages, comp_out, start_page);
 }
 
 /**
@@ -2078,9 +2078,9 @@ void EncodePageHeaders(EncPage *pages,
                        const gpu_inflate_status_s *comp_out,
                        const statistics_chunk *page_stats,
                        const statistics_chunk *chunk_stats,
-                       cudaStream_t stream)
+                       rmm::cuda_stream_view stream)
 {
-  gpuEncodePageHeaders<<<num_pages, 128, 0, stream>>>(
+  gpuEncodePageHeaders<<<num_pages, 128, 0, stream.value()>>>(
     pages, chunks, comp_out, page_stats, chunk_stats, start_page);
 }
 
@@ -2095,9 +2095,9 @@ void EncodePageHeaders(EncPage *pages,
 void GatherPages(EncColumnChunk *chunks,
                  const EncPage *pages,
                  uint32_t num_chunks,
-                 cudaStream_t stream)
+                 rmm::cuda_stream_view stream)
 {
-  gpuGatherPages<<<num_chunks, 1024, 0, stream>>>(chunks, pages);
+  gpuGatherPages<<<num_chunks, 1024, 0, stream.value()>>>(chunks, pages);
 }
 
 }  // namespace gpu

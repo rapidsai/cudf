@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,22 +16,24 @@
 
 #include <groupby/sort/group_single_pass_reduction_util.cuh>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace groupby {
 namespace detail {
 std::unique_ptr<column> group_sum(column_view const& values,
                                   size_type num_groups,
                                   rmm::device_vector<size_type> const& group_labels,
-                                  rmm::mr::device_memory_resource* mr,
-                                  cudaStream_t stream)
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   return type_dispatcher(values.type(),
                          reduce_functor<aggregation::SUM>{},
                          values,
                          num_groups,
                          group_labels,
-                         mr,
-                         stream);
+                         stream,
+                         mr);
 }
 
 }  // namespace detail

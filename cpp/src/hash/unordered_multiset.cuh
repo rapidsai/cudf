@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,12 @@
 
 #pragma once
 
+#include <hash/helper_functions.cuh>
+
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
-#include <hash/helper_functions.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {
@@ -68,7 +71,7 @@ class unordered_multiset {
   /**
    * @brief Factory to construct a new unordered_multiset
    **/
-  static unordered_multiset<Element> create(column_view const &col, cudaStream_t stream)
+  static unordered_multiset<Element> create(column_view const &col, rmm::cuda_stream_view stream)
   {
     auto d_column = column_device_view::create(col, stream);
     auto d_col    = *d_column;
@@ -82,7 +85,7 @@ class unordered_multiset {
     size_type *d_hash_bins_end   = hash_bins_end.data().get();
     Element *d_hash_data         = hash_data.data().get();
 
-    thrust::for_each(rmm::exec_policy(stream)->on(stream),
+    thrust::for_each(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<size_type>(0),
                      thrust::make_counting_iterator<size_type>(col.size()),
                      [d_hash_bins_start, d_col, hasher] __device__(size_t idx) {
@@ -93,17 +96,17 @@ class unordered_multiset {
                        }
                      });
 
-    thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream),
+    thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
                            hash_bins_start.begin(),
                            hash_bins_start.end(),
                            hash_bins_end.begin());
 
-    thrust::copy(rmm::exec_policy(stream)->on(stream),
+    thrust::copy(rmm::exec_policy(stream)->on(stream.value()),
                  hash_bins_end.begin(),
                  hash_bins_end.end(),
                  hash_bins_start.begin());
 
-    thrust::for_each(rmm::exec_policy(stream)->on(stream),
+    thrust::for_each(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<size_type>(0),
                      thrust::make_counting_iterator<size_type>(col.size()),
                      [d_hash_bins_end, d_hash_data, d_col, hasher] __device__(size_t idx) {

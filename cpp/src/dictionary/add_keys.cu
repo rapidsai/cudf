@@ -49,8 +49,8 @@ namespace detail {
 std::unique_ptr<column> add_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& new_keys,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(!new_keys.has_nulls(), "Keys must not have nulls");
   auto old_keys = dictionary_column.keys();  // [a,b,c,d,f]
@@ -116,11 +116,10 @@ std::unique_ptr<column> add_keys(
 
   // create new dictionary column with keys_column and indices_column
   // null mask has not changed
-  return make_dictionary_column(
-    std::move(keys_column),
-    std::move(indices_column),
-    cudf::detail::copy_bitmask(dictionary_column.parent(), rmm::cuda_stream_view{stream}, mr),
-    dictionary_column.null_count());
+  return make_dictionary_column(std::move(keys_column),
+                                std::move(indices_column),
+                                cudf::detail::copy_bitmask(dictionary_column.parent(), stream, mr),
+                                dictionary_column.null_count());
 }
 
 }  // namespace detail
@@ -130,7 +129,7 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::add_keys(dictionary_column, keys, mr);
+  return detail::add_keys(dictionary_column, keys, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace dictionary

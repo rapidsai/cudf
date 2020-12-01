@@ -30,6 +30,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
 #include <thrust/detail/copy.h>
@@ -795,7 +796,7 @@ void convert_json_to_columns(parse_options_view const &opts,
                              device_span<void *const> const output_columns,
                              device_span<bitmask_type *const> const valid_fields,
                              device_span<cudf::size_type> num_valid_fields,
-                             cudaStream_t stream)
+                             rmm::cuda_stream_view stream)
 {
   int block_size;
   int min_grid_size;
@@ -804,7 +805,7 @@ void convert_json_to_columns(parse_options_view const &opts,
 
   const int grid_size = (row_offsets.size() + block_size - 1) / block_size;
 
-  convert_data_to_columns_kernel<<<grid_size, block_size, 0, stream>>>(
+  convert_data_to_columns_kernel<<<grid_size, block_size, 0, stream.value()>>>(
     opts, data, row_offsets, column_types, col_map, output_columns, valid_fields, num_valid_fields);
 
   CUDA_TRY(cudaGetLastError());
@@ -821,7 +822,7 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
   bool do_set_null_count,
   int num_columns,
   col_map_type *col_map,
-  cudaStream_t stream)
+  rmm::cuda_stream_view stream)
 {
   int block_size;
   int min_grid_size;
@@ -834,7 +835,7 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
   if (do_set_null_count) {
     // Set the null count to the row count (all fields assumes to be null).
     thrust::for_each(
-      rmm::exec_policy(stream)->on(stream),
+      rmm::exec_policy(stream)->on(stream.value()),
       d_column_infos.begin(),
       d_column_infos.end(),
       [num_records = row_offsets.size()] __device__(auto &info) { info.null_count = num_records; });
@@ -843,7 +844,7 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
   // Calculate actual block count to use based on records count
   const int grid_size = (row_offsets.size() + block_size - 1) / block_size;
 
-  detect_data_types_kernel<<<grid_size, block_size, 0, stream>>>(
+  detect_data_types_kernel<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, row_offsets, col_map, num_columns, d_column_infos);
 
   CUDA_TRY(cudaGetLastError());
@@ -863,7 +864,7 @@ void collect_keys_info(parse_options_view const &options,
                        device_span<uint64_t const> const row_offsets,
                        unsigned long long int *keys_cnt,
                        thrust::optional<mutable_table_device_view> keys_info,
-                       cudaStream_t stream)
+                       rmm::cuda_stream_view stream)
 {
   int block_size;
   int min_grid_size;
@@ -873,7 +874,7 @@ void collect_keys_info(parse_options_view const &options,
   // Calculate actual block count to use based on records count
   const int grid_size = (row_offsets.size() + block_size - 1) / block_size;
 
-  collect_keys_info_kernel<<<grid_size, block_size, 0, stream>>>(
+  collect_keys_info_kernel<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, row_offsets, keys_cnt, keys_info);
 
   CUDA_TRY(cudaGetLastError());

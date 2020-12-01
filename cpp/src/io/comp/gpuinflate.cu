@@ -18,7 +18,7 @@
 
   Derived from zlib's contrib/puff.c, original copyright notice below
 
-**/
+*/
 
 /*
 Copyright (C) 2002-2013 Mark Adler, all rights reserved
@@ -43,74 +43,81 @@ misrepresented as being the original software.
 Mark Adler    madler@alumni.caltech.edu
 */
 
-#include <io/utilities/block_utils.cuh>
 #include "gpuinflate.h"
+#include "io_uncomp.h"
+
+#include <io/utilities/block_utils.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
-#define NUMTHREADS 128  // Threads per block
 
-#define MAXBITS 15                        // maximum bits in a code
-#define MAXLCODES 286                     // maximum number of literal/length codes
-#define MAXDCODES 30                      // maximum number of distance codes
-#define MAXCODES (MAXLCODES + MAXDCODES)  // maximum codes lengths to read
-#define FIXLCODES 288                     // number of fixed literal/length codes
+constexpr int max_bits    = 15;   // maximum bits in a code
+constexpr int max_l_codes = 286;  // maximum number of literal/length codes
+constexpr int max_d_codes = 30;   // maximum number of distance codes
+constexpr int fix_l_codes = 288;  // number of fixed literal/length codes
 
-#define LOG2LENLUT 10
-#define LOG2DISTLUT 8
+constexpr int log2_len_lut  = 10;
+constexpr int log2_dist_lut = 8;
 
 /**
  * @brief Intermediate arrays for building huffman tables
- **/
+ */
 struct scratch_arr {
-  int16_t lengths[MAXCODES];  ///< descriptor code lengths
-  int16_t offs[MAXBITS + 1];  ///< offset in symbol table for each length (scratch)
+  int16_t lengths[max_l_codes + max_d_codes];  ///< descriptor code lengths
+  int16_t offs[max_bits + 1];                  ///< offset in symbol table for each length (scratch)
 };
 
 /**
  * @brief Huffman LUTs for length and distance codes
- **/
+ */
 struct lut_arr {
-  int32_t lenlut[1 << LOG2LENLUT];    ///< LUT for length decoding
-  int32_t distlut[1 << LOG2DISTLUT];  ///< LUT for fast distance decoding
+  int32_t lenlut[1 << log2_len_lut];    ///< LUT for length decoding
+  int32_t distlut[1 << log2_dist_lut];  ///< LUT for fast distance decoding
 };
 
 /// 4 batches of 32 symbols
-#define LOG2_BATCH_COUNT 2  // 1..5
-#define LOG2_BATCH_SIZE 5
-#define BATCH_COUNT (1 << LOG2_BATCH_COUNT)
-#define BATCH_SIZE (1 << LOG2_BATCH_SIZE)
+constexpr int log2_batch_count = 2;  // 1..5
+constexpr int log2_batch_size  = 5;
+constexpr int batch_count      = (1 << log2_batch_count);
+constexpr int batch_size       = (1 << log2_batch_size);
 
 /**
  * @brief Inter-warp communication queue
- **/
+ */
 struct xwarp_s {
-  int32_t batch_len[BATCH_COUNT];  //< Length of each batch - <0:end, 0:not ready, >0:symbol count
+  int32_t batch_len[batch_count];  //< Length of each batch - <0:end, 0:not ready, >0:symbol count
   union {
-    uint32_t symqueue[BATCH_COUNT * BATCH_SIZE];
-    uint8_t symqueue8[BATCH_COUNT * BATCH_SIZE * 4];
+    uint32_t symqueue[batch_count * batch_size];
+    uint8_t symqueue8[batch_count * batch_size * 4];
   } u;
 };
 
 #define ENABLE_PREFETCH 1
 
 #if ENABLE_PREFETCH
-#define LOG2_PREFETCH_SIZE 9  // Must be at least LOG2_BATCH_SIZE+3
-#define PREFETCH_SIZE (1 << LOG2_PREFETCH_SIZE)
+constexpr int log2_prefetch_size = 9;  // Must be at least LOG2_BATCH_SIZE+3
+constexpr int prefetch_size      = (1 << log2_prefetch_size);
 
-#define PREFETCH_ADDR32(q, p) (uint32_t *)(&q.pref_data[(PREFETCH_SIZE - 4) & (size_t)(p)])
 /// @brief Prefetcher state
 struct prefetch_queue_s {
   const uint8_t *cur_p;  ///< Prefetch location
   int run;               ///< prefetcher will exit when run=0
-  uint8_t pref_data[PREFETCH_SIZE];
+  uint8_t pref_data[prefetch_size];
 };
+
+template <typename T>
+inline __device__ volatile uint32_t *prefetch_addr32(volatile prefetch_queue_s &q, T *ptr)
+{
+  return reinterpret_cast<volatile uint32_t *>(&q.pref_data[(prefetch_size - 4) & (size_t)(ptr)]);
+}
 
 #endif  // ENABLE_PREFETCH
 
 /**
  * @brief Inflate decompressor state
- **/
+ */
 struct inflate_state_s {
   // output state
   uint8_t *out;      ///< output buffer
@@ -138,10 +145,10 @@ struct inflate_state_s {
   volatile prefetch_queue_s pref;
 #endif
 
-  int16_t lencnt[MAXBITS + 1];
-  int16_t lensym[FIXLCODES];  // Assumes FIXLCODES >= MAXLCODES
-  int16_t distcnt[MAXBITS + 1];
-  int16_t distsym[MAXDCODES];
+  int16_t lencnt[max_bits + 1];
+  int16_t lensym[fix_l_codes];  // Assumes fix_l_codes >= max_l_codes
+  int16_t distcnt[max_bits + 1];
+  int16_t distsym[max_d_codes];
 
   union {
     scratch_arr scratch;
@@ -196,7 +203,7 @@ __device__ uint32_t getbits(inflate_state_s *s, uint32_t n)
  * Return the symbol or a negative value if there is an error.
  * If all of the lengths are zero, i.e. an empty code, or if the code is
  * incomplete and an invalid code is received, then -10 is returned after
- * reading MAXBITS bits.
+ * reading max_bits bits.
  *
  * Format notes:
  *
@@ -214,7 +221,7 @@ __device__ uint32_t getbits(inflate_state_s *s, uint32_t n)
  *
  * - Incomplete codes are handled by this decoder, since they are permitted
  *   in the deflate format.  See the format notes for fixed() and dynamic().
- **/
+ */
 __device__ int decode(inflate_state_s *s, const int16_t *counts, const int16_t *symbols)
 {
   unsigned int len;    // current number of bits in code
@@ -224,7 +231,7 @@ __device__ int decode(inflate_state_s *s, const int16_t *counts, const int16_t *
   uint32_t next32r = __brev(nextbits32(s));
 
   first = 0;
-  for (len = 1; len <= MAXBITS; len++) {
+  for (len = 1; len <= max_bits; len++) {
     code  = (next32r >> (32 - len)) - first;
     count = counts[len];
     if (code < count)  // if length len, return symbol
@@ -258,7 +265,7 @@ __device__ int decode(inflate_state_s *s, const int16_t *counts, const int16_t *
  * codes.  This is useful for checking for incomplete codes that have more than
  * one symbol, which is an error in a dynamic block.
  *
- * Assumption: for all i in 0..n-1, 0 <= length[i] <= MAXBITS
+ * Assumption: for all i in 0..n-1, 0 <= length[i] <= max_bits
  * This is assured by the construction of the length arrays in dynamic() and
  * fixed() and is not verified by construct().
  *
@@ -270,7 +277,7 @@ __device__ int decode(inflate_state_s *s, const int16_t *counts, const int16_t *
  *
  * - Within a given code length, the symbols are kept in ascending order for
  *   the code bits definition.
- **/
+ */
 __device__ int construct(
   inflate_state_s *s, int16_t *counts, int16_t *symbols, const int16_t *length, int n)
 {
@@ -280,7 +287,7 @@ __device__ int construct(
   int16_t *offs = s->u.scratch.offs;
 
   // count number of codes of each length
-  for (len = 0; len <= MAXBITS; len++) counts[len] = 0;
+  for (len = 0; len <= max_bits; len++) counts[len] = 0;
   for (symbol = 0; symbol < n; symbol++)
     (counts[length[symbol]])++;  // assumes lengths are within bounds
   if (counts[0] == n)            // no codes!
@@ -288,7 +295,7 @@ __device__ int construct(
 
   // check for an over-subscribed or incomplete set of lengths
   left = 1;  // one possible code of zero length
-  for (len = 1; len <= MAXBITS; len++) {
+  for (len = 1; len <= max_bits; len++) {
     left <<= 1;                 // one more bit, double codes left
     left -= counts[len];        // deduct count from possible codes
     if (left < 0) return left;  // over-subscribed--return negative
@@ -296,7 +303,7 @@ __device__ int construct(
 
   // generate offsets into symbol table for each length for sorting
   offs[1] = 0;
-  for (len = 1; len < MAXBITS; len++) offs[len + 1] = offs[len] + counts[len];
+  for (len = 1; len < max_bits; len++) offs[len + 1] = offs[len] + counts[len];
 
   // put symbols in table sorted by length, by symbol order within each length
   for (symbol = 0; symbol < n; symbol++)
@@ -322,7 +329,7 @@ __device__ int init_dynamic(inflate_state_s *s)
   nlen  = getbits(s, 5) + 257;
   ndist = getbits(s, 5) + 1;
   ncode = getbits(s, 4) + 4;
-  if (nlen > MAXLCODES || ndist > MAXDCODES) {
+  if (nlen > max_l_codes || ndist > max_d_codes) {
     return -3;  // bad counts
   }
   // read code length code lengths (really), missing lengths are zero
@@ -396,7 +403,7 @@ __device__ int init_dynamic(inflate_state_s *s)
  *   in an error if received.  Since all of the distance codes are the same
  *   length, this can be implemented as an incomplete code.  Then the invalid
  *   codes are detected while decoding.
- **/
+ */
 __device__ int init_fixed(inflate_state_s *s)
 {
   int16_t *lengths = s->u.scratch.lengths;
@@ -406,14 +413,14 @@ __device__ int init_fixed(inflate_state_s *s)
   for (symbol = 0; symbol < 144; symbol++) lengths[symbol] = 8;
   for (; symbol < 256; symbol++) lengths[symbol] = 9;
   for (; symbol < 280; symbol++) lengths[symbol] = 7;
-  for (; symbol < FIXLCODES; symbol++) lengths[symbol] = 8;
-  construct(s, s->lencnt, s->lensym, lengths, FIXLCODES);
+  for (; symbol < fix_l_codes; symbol++) lengths[symbol] = 8;
+  construct(s, s->lencnt, s->lensym, lengths, fix_l_codes);
 
   // distance table
-  for (symbol = 0; symbol < MAXDCODES; symbol++) lengths[symbol] = 5;
+  for (symbol = 0; symbol < max_d_codes; symbol++) lengths[symbol] = 5;
 
   // build huffman table for distance codes
-  construct(s, s->distcnt, s->distsym, lengths, MAXDCODES);
+  construct(s, s->distcnt, s->distsym, lengths, max_d_codes);
 
   return 0;
 }
@@ -472,7 +479,7 @@ __device__ int init_fixed(inflate_state_s *s)
  *   defined for overlapped arrays.  You should not use memmove() or bcopy()
  *   since though their behavior -is- defined for overlapping arrays, it is
  *   defined to do the wrong thing in this case.
- **/
+ */
 
 /// permutation of code length codes
 static const __device__ __constant__ uint16_t g_lens[29] = {  // Size base for length codes 257..285
@@ -500,17 +507,17 @@ __device__ void decode_symbols(inflate_state_s *s)
   int32_t sym, batch_len;
 
   do {
-    volatile uint32_t *b = &s->x.u.symqueue[batch * BATCH_SIZE];
+    volatile uint32_t *b = &s->x.u.symqueue[batch * batch_size];
     // Wait for the next batch entry to be empty
 #if ENABLE_PREFETCH
     // Wait for prefetcher to fetch a worst-case of 48 bits per symbol
-    while ((*(volatile int32_t *)&s->pref.cur_p - (int32_t)(size_t)cur < BATCH_SIZE * 6) ||
+    while ((*(volatile int32_t *)&s->pref.cur_p - (int32_t)(size_t)cur < batch_size * 6) ||
            (s->x.batch_len[batch] != 0))
 #else
     while (s->x.batch_len[batch] != 0)
 #endif
     {
-      NANOSLEEP(100);
+      nanosleep(100);
     }
     batch_len = 0;
 #if ENABLE_PREFETCH
@@ -523,7 +530,7 @@ __device__ void decode_symbols(inflate_state_s *s)
     do {
       uint32_t next32 = __funnelshift_rc(bitbuf.x, bitbuf.y, bitpos);  // nextbits32(s);
       uint32_t len;
-      sym = s->u.lut.lenlut[next32 & ((1 << LOG2LENLUT) - 1)];
+      sym = s->u.lut.lenlut[next32 & ((1 << log2_len_lut) - 1)];
       if ((uint32_t)sym < (uint32_t)(0x100 << 5)) {
         // We can lookup a second symbol if this was a short literal
         len = sym & 0x1f;
@@ -531,7 +538,7 @@ __device__ void decode_symbols(inflate_state_s *s)
         b[batch_len++] = sym;
         next32 >>= len;
         bitpos += len;
-        sym = s->u.lut.lenlut[next32 & ((1 << LOG2LENLUT) - 1)];
+        sym = s->u.lut.lenlut[next32 & ((1 << log2_len_lut) - 1)];
       }
       if (sym > 0)  // short symbol
       {
@@ -544,7 +551,7 @@ __device__ void decode_symbols(inflate_state_s *s)
         unsigned int first     = s->first_slow_len;
         int lext;
 #pragma unroll 1
-        for (len = LOG2LENLUT + 1; len <= MAXBITS; len++) {
+        for (len = log2_len_lut + 1; len <= max_bits; len++) {
           unsigned int code  = (next32r >> (32 - len)) - first;
           unsigned int count = s->lencnt[len];
           if (code < count)  // if length len, return symbol
@@ -556,7 +563,7 @@ __device__ void decode_symbols(inflate_state_s *s)
           first += count;
           first <<= 1;
         }
-        if (len > MAXBITS) {
+        if (len > max_bits) {
           s->err = -10;
           sym    = 256;
           len    = 0;
@@ -575,7 +582,7 @@ __device__ void decode_symbols(inflate_state_s *s)
         if (bitpos >= 32) {
           bitbuf.x = bitbuf.y;
 #if ENABLE_PREFETCH
-          bitbuf.y = *PREFETCH_ADDR32(s->pref, cur + 8);
+          bitbuf.y = *prefetch_addr32(s->pref, cur + 8);
           cur += 4;
 #else
           cur += 8;
@@ -586,7 +593,7 @@ __device__ void decode_symbols(inflate_state_s *s)
         }
         // get distance
         next32 = __funnelshift_rc(bitbuf.x, bitbuf.y, bitpos);  // nextbits32(s);
-        dist   = s->u.lut.distlut[next32 & ((1 << LOG2DISTLUT) - 1)];
+        dist   = s->u.lut.distlut[next32 & ((1 << log2_dist_lut) - 1)];
         if (dist > 0) {
           len  = dist & 0x1f;
           dext = bfe(dist, 20, 5);
@@ -598,7 +605,7 @@ __device__ void decode_symbols(inflate_state_s *s)
           const int16_t *symbols = &s->distsym[s->index_slow_dist];
           unsigned int first     = s->first_slow_dist;
 #pragma unroll 1
-          for (len = LOG2DISTLUT + 1; len <= MAXBITS; len++) {
+          for (len = log2_dist_lut + 1; len <= max_bits; len++) {
             unsigned int code  = (next32r >> (32 - len)) - first;
             unsigned int count = s->distcnt[len];
             if (code < count)  // if length len, return symbol
@@ -610,7 +617,7 @@ __device__ void decode_symbols(inflate_state_s *s)
             first += count;
             first <<= 1;
           }
-          if (len > MAXBITS) {
+          if (len > max_bits) {
             s->err = -10;
             sym    = 256;
             len    = 0;
@@ -627,7 +634,7 @@ __device__ void decode_symbols(inflate_state_s *s)
       if (bitpos >= 32) {
         bitbuf.x = bitbuf.y;
 #if ENABLE_PREFETCH
-        bitbuf.y = *PREFETCH_ADDR32(s->pref, cur + 8);
+        bitbuf.y = *prefetch_addr32(s->pref, cur + 8);
         cur += 4;
 #else
         cur += 8;
@@ -647,15 +654,15 @@ __device__ void decode_symbols(inflate_state_s *s)
       }
       if (sym == 256) break;
       b[batch_len++] = sym;
-    } while (batch_len < BATCH_SIZE - 1);
+    } while (batch_len < batch_size - 1);
     s->x.batch_len[batch] = batch_len;
 #if ENABLE_PREFETCH
     ((volatile inflate_state_s *)s)->cur = cur;
 #endif
-    if (batch_len != 0) batch = (batch + 1) & (BATCH_COUNT - 1);
+    if (batch_len != 0) batch = (batch + 1) & (batch_count - 1);
   } while (sym != 256);
 
-  while (s->x.batch_len[batch] != 0) { NANOSLEEP(150); }
+  while (s->x.batch_len[batch] != 0) { nanosleep(150); }
   s->x.batch_len[batch] = -1;
   s->bitbuf             = bitbuf;
   s->bitpos             = bitpos;
@@ -667,19 +674,19 @@ __device__ void decode_symbols(inflate_state_s *s)
 /**
  * @brief Build lookup tables for faster decode
  * LUT format is symbols*16+length
- **/
+ */
 __device__ void init_length_lut(inflate_state_s *s, int t)
 {
   int32_t *lut = s->u.lut.lenlut;
 
-  for (uint32_t bits = t; bits < (1 << LOG2LENLUT); bits += NUMTHREADS) {
+  for (uint32_t bits = t; bits < (1 << log2_len_lut); bits += blockDim.x) {
     const int16_t *cnt     = s->lencnt;
     const int16_t *symbols = s->lensym;
     int sym                = -10 << 5;
     unsigned int first     = 0;
-    unsigned int rbits     = __brev(bits) >> (32 - LOG2LENLUT);
-    for (unsigned int len = 1; len <= LOG2LENLUT; len++) {
-      unsigned int code  = (rbits >> (LOG2LENLUT - len)) - first;
+    unsigned int rbits     = __brev(bits) >> (32 - log2_len_lut);
+    for (unsigned int len = 1; len <= log2_len_lut; len++) {
+      unsigned int code  = (rbits >> (log2_len_lut - len)) - first;
       unsigned int count = cnt[len];
       if (code < count) {
         sym = symbols[code];
@@ -701,7 +708,7 @@ __device__ void init_length_lut(inflate_state_s *s, int t)
     unsigned int first = 0;
     unsigned int index = 0;
     const int16_t *cnt = s->lencnt;
-    for (unsigned int len = 1; len <= LOG2LENLUT; len++) {
+    for (unsigned int len = 1; len <= log2_len_lut; len++) {
       unsigned int count = cnt[len];
       index += count;
       first += count;
@@ -715,19 +722,19 @@ __device__ void init_length_lut(inflate_state_s *s, int t)
 /**
  * @brief Build lookup tables for faster decode of distance symbol
  * LUT format is symbols*16+length
- **/
+ */
 __device__ void init_distance_lut(inflate_state_s *s, int t)
 {
   int32_t *lut = s->u.lut.distlut;
 
-  for (uint32_t bits = t; bits < (1 << LOG2DISTLUT); bits += NUMTHREADS) {
+  for (uint32_t bits = t; bits < (1 << log2_dist_lut); bits += blockDim.x) {
     const int16_t *cnt     = s->distcnt;
     const int16_t *symbols = s->distsym;
     int sym                = 0;
     unsigned int first     = 0;
-    unsigned int rbits     = __brev(bits) >> (32 - LOG2DISTLUT);
-    for (unsigned int len = 1; len <= LOG2DISTLUT; len++) {
-      unsigned int code  = (rbits >> (LOG2DISTLUT - len)) - first;
+    unsigned int rbits     = __brev(bits) >> (32 - log2_dist_lut);
+    for (unsigned int len = 1; len <= log2_dist_lut; len++) {
+      unsigned int code  = (rbits >> (log2_dist_lut - len)) - first;
       unsigned int count = cnt[len];
       if (code < count) {
         int dist = symbols[code];
@@ -746,7 +753,7 @@ __device__ void init_distance_lut(inflate_state_s *s, int t)
     unsigned int first = 0;
     unsigned int index = 0;
     const int16_t *cnt = s->distcnt;
-    for (unsigned int len = 1; len <= LOG2DISTLUT; len++) {
+    for (unsigned int len = 1; len <= log2_dist_lut; len++) {
       unsigned int count = cnt[len];
       index += count;
       first += count;
@@ -766,21 +773,21 @@ __device__ void process_symbols(inflate_state_s *s, int t)
   int batch              = 0;
 
   do {
-    volatile uint32_t *b = &s->x.u.symqueue[batch * BATCH_SIZE];
+    volatile uint32_t *b = &s->x.u.symqueue[batch * batch_size];
     int batch_len, pos;
     int32_t symt;
     uint32_t lit_mask;
 
     if (t == 0) {
-      while ((batch_len = s->x.batch_len[batch]) == 0) { NANOSLEEP(100); }
+      while ((batch_len = s->x.batch_len[batch]) == 0) { nanosleep(100); }
     } else {
       batch_len = 0;
     }
-    batch_len = SHFL0(batch_len);
+    batch_len = shuffle(batch_len);
     if (batch_len < 0) { break; }
 
     symt     = (t < batch_len) ? b[t] : 256;
-    lit_mask = BALLOT(symt >= 256);
+    lit_mask = ballot(symt >= 256);
     pos      = min((__ffs(lit_mask) - 1) & 0xff, 32);
     if (t == 0) { s->x.batch_len[batch] = 0; }
     if (t < pos && out + t < outend) { out[t] = symt; }
@@ -790,7 +797,7 @@ __device__ void process_symbols(inflate_state_s *s, int t)
       int dist, len, symbol;
 
       // Process a non-literal symbol
-      symbol = SHFL(symt, pos);
+      symbol = shuffle(symt, pos);
       len    = max((symbol & 0xffff) - 256, 0);  // max should be unnecessary, but just in case
       dist   = symbol >> 16;
       for (int i = t; i < len; i += 32) {
@@ -804,14 +811,14 @@ __device__ void process_symbols(inflate_state_s *s, int t)
       // Process subsequent literals, if any
       if (!((lit_mask >> pos) & 1)) {
         len    = min((__ffs(lit_mask >> pos) - 1) & 0xff, batch_len);
-        symbol = SHFL(symt, (pos + t) & 0x1f);
+        symbol = shuffle(symt, (pos + t) & 0x1f);
         if (t < len && out + t < outend) { out[t] = symbol; }
         out += len;
         pos += len;
         batch_len -= len;
       }
     }
-    batch = (batch + 1) & (BATCH_COUNT - 1);
+    batch = (batch + 1) & (batch_count - 1);
   } while (1);
 
   if (t == 0) { s->out = out; }
@@ -833,7 +840,7 @@ __device__ void process_symbols(inflate_state_s *s, int t)
  *
  * - A stored block can have zero length.  This is sometimes used to byte-align
  *   subsets of the compressed data for random access or partial recovery.
- **/
+ */
 __device__ int init_stored(inflate_state_s *s)
 {
   uint32_t len, nlen;  // length of stored block
@@ -871,7 +878,7 @@ __device__ void copy_stored(inflate_state_s *s, int t)
 
   // Slow copy until output is 16B aligned
   if (slow_bytes) {
-    for (int i = t; i < slow_bytes; i += NUMTHREADS) {
+    for (int i = t; i < slow_bytes; i += blockDim.x) {
       if (out + i < outend) {
         out[i] = cur[i];  // Input range has already been validated in init_stored()
       }
@@ -887,7 +894,7 @@ __device__ void copy_stored(inflate_state_s *s, int t)
   cur4   = cur - (bitpos >> 3);
   if (out < outend) {
     // Fast copy 16 bytes at a time
-    for (int i = t * 16; i < fast_bytes; i += NUMTHREADS * 16) {
+    for (int i = t * 16; i < fast_bytes; i += blockDim.x * 16) {
       uint4 u;
       u.x = *reinterpret_cast<const uint32_t *>(cur4 + i + 0 * 4);
       u.y = *reinterpret_cast<const uint32_t *>(cur4 + i + 1 * 4);
@@ -907,7 +914,7 @@ __device__ void copy_stored(inflate_state_s *s, int t)
   out += fast_bytes;
   len -= fast_bytes;
   // Slow copy for remaining bytes
-  for (int i = t; i < len; i += NUMTHREADS) {
+  for (int i = t; i < len; i += blockDim.x) {
     if (out + i < outend) {
       out[i] = cur[i];  // Input range has already been validated in init_stored()
     }
@@ -941,41 +948,31 @@ __device__ void prefetch_warp(volatile inflate_state_s *s, int t)
 {
   const uint8_t *cur_p = s->pref.cur_p;
   const uint8_t *end   = s->end;
-  while (SHFL0((t == 0) ? s->pref.run : 0)) {
+  while (shuffle((t == 0) ? s->pref.run : 0)) {
     int32_t cur_lo = (int32_t)(size_t)cur_p;
     int do_pref =
-      SHFL0((t == 0) ? (cur_lo - *(volatile int32_t *)&s->cur < PREFETCH_SIZE - 32 * 4 - 4) : 0);
+      shuffle((t == 0) ? (cur_lo - *(volatile int32_t *)&s->cur < prefetch_size - 32 * 4 - 4) : 0);
     if (do_pref) {
       const uint8_t *p             = cur_p + 4 * t;
-      *PREFETCH_ADDR32(s->pref, p) = (p < end) ? *reinterpret_cast<const uint32_t *>(p) : 0;
+      *prefetch_addr32(s->pref, p) = (p < end) ? *reinterpret_cast<const uint32_t *>(p) : 0;
       cur_p += 4 * 32;
       __threadfence_block();
-      SYNCWARP();
+      __syncwarp();
       if (!t) {
         s->pref.cur_p = cur_p;
         __threadfence_block();
       }
     } else if (t == 0) {
-      NANOSLEEP(150);
+      nanosleep(150);
     }
   }
 }
 #endif  // ENABLE_PREFETCH
 
 /**
- * @brief GZIP header flags
- * See https://tools.ietf.org/html/rfc1952
- **/
-#define GZ_FLG_FTEXT 0x01     // ASCII text hint
-#define GZ_FLG_FHCRC 0x02     // Header CRC present
-#define GZ_FLG_FEXTRA 0x04    // Extra fields present
-#define GZ_FLG_FNAME 0x08     // Original file name present
-#define GZ_FLG_FCOMMENT 0x10  // Comment present
-
-/**
  * @brief Parse GZIP header
  * See https://tools.ietf.org/html/rfc1952
- **/
+ */
 __device__ int parse_gzip_header(const uint8_t *src, size_t src_size)
 {
   int hdr_len = -1;
@@ -984,29 +981,29 @@ __device__ int parse_gzip_header(const uint8_t *src, size_t src_size)
     uint32_t sig = (src[0] << 16) | (src[1] << 8) | src[2];
     if (sig == 0x1f8b08)  // 24-bit GZIP inflate signature {0x1f, 0x8b, 0x08}
     {
-      uint32_t flags = src[3];
-      hdr_len        = 10;
-      if (flags & GZ_FLG_FEXTRA)  // Extra fields present
+      uint8_t flags = src[3];
+      hdr_len       = 10;
+      if (flags & GZIPHeaderFlag::fextra)  // Extra fields present
       {
         int xlen = src[hdr_len] | (src[hdr_len + 1] << 8);
         hdr_len += xlen;
         if (hdr_len >= src_size) return -1;
       }
-      if (flags & GZ_FLG_FNAME)  // Original file name present
+      if (flags & GZIPHeaderFlag::fname)  // Original file name present
       {
         // Skip zero-terminated string
         do {
           if (hdr_len >= src_size) return -1;
         } while (src[hdr_len++] != 0);
       }
-      if (flags & GZ_FLG_FCOMMENT)  // Comment present
+      if (flags & GZIPHeaderFlag::fcomment)  // Comment present
       {
         // Skip zero-terminated string
         do {
           if (hdr_len >= src_size) return -1;
         } while (src[hdr_len++] != 0);
       }
-      if (flags & GZ_FLG_FHCRC)  // Header CRC present
+      if (flags & GZIPHeaderFlag::fhcrc)  // Header CRC present
       {
         hdr_len += 2;
       }
@@ -1019,13 +1016,15 @@ __device__ int parse_gzip_header(const uint8_t *src, size_t src_size)
 /**
  * @brief INFLATE decompression kernel
  *
- * blockDim {NUMTHREADS,1,1}
+ * blockDim {block_size,1,1}
  *
+ * @tparam block_size Thread block dimension for this call
  * @param inputs Source and destination buffer information per block
  * @param outputs Decompression status buffer per block
  * @param parse_hdr If nonzero, indicates that the compressed bitstream includes a GZIP header
- **/
-__global__ void __launch_bounds__(NUMTHREADS)
+ */
+template <int block_size>
+__global__ void __launch_bounds__(block_size)
   inflate_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int parse_hdr)
 {
   __shared__ __align__(16) inflate_state_s state_g;
@@ -1092,7 +1091,7 @@ __global__ void __launch_bounds__(NUMTHREADS)
       // Initialize prefetcher
       init_prefetcher(state, t);
 #endif
-      if (t < BATCH_COUNT) { state->x.batch_len[t] = 0; }
+      if (t < batch_count) { state->x.batch_len[t] = 0; }
       __syncthreads();
       // decode data until end-of-block code
       if (t < 1 * 32) {
@@ -1144,7 +1143,7 @@ __global__ void __launch_bounds__(NUMTHREADS)
  * blockDim {1024,1,1}
  *
  * @param inputs Source and destination information per block
- **/
+ */
 __global__ void __launch_bounds__(1024) copy_uncompressed_kernel(gpu_inflate_input_s *inputs)
 {
   __shared__ const uint8_t *volatile src_g;
@@ -1199,17 +1198,21 @@ cudaError_t __host__ gpuinflate(gpu_inflate_input_s *inputs,
                                 gpu_inflate_status_s *outputs,
                                 int count,
                                 int parse_hdr,
-                                cudaStream_t stream)
+                                rmm::cuda_stream_view stream)
 {
-  if (count > 0) { inflate_kernel<<<count, NUMTHREADS, 0, stream>>>(inputs, outputs, parse_hdr); }
+  constexpr int block_size = 128;  // Threads per block
+  if (count > 0) {
+    inflate_kernel<block_size>
+      <<<count, block_size, 0, stream.value()>>>(inputs, outputs, parse_hdr);
+  }
   return cudaSuccess;
 }
 
 cudaError_t __host__ gpu_copy_uncompressed_blocks(gpu_inflate_input_s *inputs,
                                                   int count,
-                                                  cudaStream_t stream)
+                                                  rmm::cuda_stream_view stream)
 {
-  if (count > 0) { copy_uncompressed_kernel<<<count, 1024, 0, stream>>>(inputs); }
+  if (count > 0) { copy_uncompressed_kernel<<<count, 1024, 0, stream.value()>>>(inputs); }
   return cudaSuccess;
 }
 

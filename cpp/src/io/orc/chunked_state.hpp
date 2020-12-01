@@ -29,6 +29,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -43,7 +45,7 @@ struct orc_chunked_state {
   /// The writer to be used
   std::unique_ptr<detail::orc::writer> wp;
   /// Cuda stream to be used
-  cudaStream_t stream;
+  rmm::cuda_stream_view stream;
   /// Overall file metadata.  Filled in during the process and written during write_chunked_end()
   cudf::io::orc::FileFooter ff;
   cudf::io::orc::Metadata md;
