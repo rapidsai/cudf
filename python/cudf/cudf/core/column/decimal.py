@@ -1,8 +1,9 @@
+import more_itertools
+import pyarrow as pa
+
+from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase
 from cudf.core.dtypes import DecimalDtype
-from cudf.core.buffer import Buffer
-import pyarrow as pa
-import more_itertools
 
 
 class DecimalColumn(ColumnBase):
@@ -14,4 +15,21 @@ class DecimalColumn(ColumnBase):
             data=Buffer.from_bytes(bts),
             size=len(data),
             dtype=DecimalDtype.from_arrow(data.type),
+        )
+
+    def to_arrow(self):
+        data_buf_64 = self.base_data.to_host_array()
+        zeros_buf = bytes(data_buf_64.size)
+        data_buf_128 = bytes(
+            more_itertools.flatten(
+                more_itertools.interleave(
+                    more_itertools.chunked(data_buf_64, 8),
+                    more_itertools.chunked(zeros_buf, 8),
+                )
+            )
+        )
+        return pa.Array.from_buffers(
+            type=self.dtype.to_arrow(),
+            length=self.size,
+            buffers=[None, pa.py_buffer(data_buf_128)],
         )
