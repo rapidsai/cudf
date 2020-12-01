@@ -256,6 +256,7 @@ public final class Table implements AutoCloseable {
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
    * @param statsFreq       native statistics frequency ID
+   * @param isInt96         true if timestamp type is int96
    * @param consumer        consumer of host buffers produced.
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
@@ -265,6 +266,7 @@ public final class Table implements AutoCloseable {
                                                      String[] metadataValues,
                                                      int compression,
                                                      int statsFreq,
+                                                     boolean isInt96,
                                                      HostBufferConsumer consumer) throws CudfException;
 
   /**
@@ -782,6 +784,7 @@ public final class Table implements AutoCloseable {
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
+          options.isTimestampTypeInt96(),
           consumer);
       this.consumer = consumer;
     }
