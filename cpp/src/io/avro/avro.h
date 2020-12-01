@@ -30,7 +30,6 @@
 namespace cudf {
 namespace io {
 namespace avro {
-#define AVRO_MAGIC (('O' << 0) | ('b' << 8) | ('j' << 16) | (0x01 << 24))
 
 /**
  * @Brief AVRO schema entry

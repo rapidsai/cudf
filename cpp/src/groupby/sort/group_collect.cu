@@ -20,14 +20,16 @@
 #include <cudf/detail/gather.cuh>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace groupby {
 namespace detail {
 std::unique_ptr<column> group_collect(column_view const &values,
                                       rmm::device_vector<size_type> const &group_offsets,
                                       size_type num_groups,
-                                      rmm::mr::device_memory_resource *mr,
-                                      cudaStream_t stream)
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource *mr)
 {
   rmm::device_buffer offsets_data(
     group_offsets.data().get(), group_offsets.size() * sizeof(cudf::size_type), stream, mr);

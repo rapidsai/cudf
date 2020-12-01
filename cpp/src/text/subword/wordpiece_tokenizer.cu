@@ -14,12 +14,16 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/utilities/error.hpp>
-#include <nvtext/subword_tokenize.hpp>
 #include <text/subword/detail/hash_utils.cuh>
 #include <text/subword/detail/tokenizer_utils.cuh>
 #include <text/subword/detail/wordpiece_tokenizer.hpp>
+
+#include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/utilities/error.hpp>
+
+#include <nvtext/subword_tokenize.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/remove.h>
@@ -270,21 +274,21 @@ wordpiece_tokenizer::wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
                                          uint32_t stride,
                                          bool do_truncate,
                                          bool do_lower_case,
-                                         cudaStream_t stream,
+                                         rmm::cuda_stream_view stream,
                                          uint32_t max_word_length)
   : vocab_table(vocab_table),
+    normalizer(stream, do_lower_case),
     max_sequence_length{max_sequence_length},
-    max_word_length{max_word_length},
     stride(stride),
     do_truncate(do_truncate),
-    normalizer(stream, do_lower_case)
+    max_word_length{max_word_length}
 {
 }
 
 uvector_pair wordpiece_tokenizer::tokenize(char const* d_strings,
                                            uint32_t const* d_offsets,
                                            uint32_t num_strings,
-                                           cudaStream_t stream)
+                                           rmm::cuda_stream_view stream)
 {
   auto cps_and_offsets = normalizer.normalize(d_strings, d_offsets, num_strings, stream);
   tokenize(cps_and_offsets, stream);
@@ -299,7 +303,7 @@ struct tranform_fn {  // just converting uint8 value to uint32
   __device__ uint32_t operator()(uint8_t count) { return count; }
 };
 
-void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, cudaStream_t stream)
+void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stream_view stream)
 {
   uint32_t* device_code_points     = cps_and_offsets.first->data();
   size_t const num_code_points     = cps_and_offsets.first->size();
@@ -321,32 +325,32 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, cudaStream_t s
   detail::init_data_and_mark_word_start_and_ends<<<grid_init.num_blocks,
                                                    grid_init.num_threads_per_block,
                                                    0,
-                                                   stream>>>(device_code_points,
-                                                             device_start_word_indices,
-                                                             device_end_word_indices,
-                                                             num_code_points,
-                                                             device_token_ids.data(),
-                                                             device_tokens_per_word.data());
-  CHECK_CUDA(stream);
+                                                   stream.value()>>>(device_code_points,
+                                                                     device_start_word_indices,
+                                                                     device_end_word_indices,
+                                                                     num_code_points,
+                                                                     device_token_ids.data(),
+                                                                     device_tokens_per_word.data());
+  CHECK_CUDA(stream.value());
 
   cudf::detail::grid_1d const grid_mark{static_cast<cudf::size_type>(num_strings + 1),
                                         THREADS_PER_BLOCK};
   detail::mark_string_start_and_ends<<<grid_mark.num_blocks,
                                        grid_mark.num_threads_per_block,
                                        0,
-                                       stream>>>(device_code_points,
-                                                 device_strings_offsets,
-                                                 device_start_word_indices,
-                                                 device_end_word_indices,
-                                                 num_strings);
-  CHECK_CUDA(stream);
+                                       stream.value()>>>(device_code_points,
+                                                         device_strings_offsets,
+                                                         device_start_word_indices,
+                                                         device_end_word_indices,
+                                                         num_strings);
+  CHECK_CUDA(stream.value());
 
   // Now start_word_indices has the word starts scattered throughout the array. We need to select
   // all values not equal to the max uint32_t and place them at the start of the array. We leverage
   // the fact that the start_word_indices and the end_word indices are contiguous to only launch one
   // device select kernel.
   auto const execpol = rmm::exec_policy(stream);
-  auto itr_end       = thrust::remove(execpol->on(stream),
+  auto itr_end       = thrust::remove(execpol->on(stream.value()),
                                 device_word_indices.begin(),
                                 device_word_indices.end(),
                                 std::numeric_limits<uint32_t>::max());
@@ -359,27 +363,28 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, cudaStream_t s
   device_end_word_indices = device_start_word_indices + num_words;
 
   cudf::detail::grid_1d const grid{static_cast<cudf::size_type>(num_words), THREADS_PER_BLOCK};
-  detail::kernel_wordpiece_tokenizer<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
-    device_code_points,
-    vocab_table.table->view().data<uint64_t>(),
-    vocab_table.bin_coefficients->view().data<uint64_t>(),
-    vocab_table.bin_offsets->view().data<uint16_t>(),
-    vocab_table.unknown_token_id,
-    vocab_table.outer_hash_a,
-    vocab_table.outer_hash_b,
-    vocab_table.num_bins,
-    device_start_word_indices,
-    device_end_word_indices,
-    max_word_length,
-    num_words,
-    device_token_ids.data(),
-    device_tokens_per_word.data());
-  CHECK_CUDA(stream);
+  detail::
+    kernel_wordpiece_tokenizer<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+      device_code_points,
+      vocab_table.table->view().data<uint64_t>(),
+      vocab_table.bin_coefficients->view().data<uint64_t>(),
+      vocab_table.bin_offsets->view().data<uint16_t>(),
+      vocab_table.unknown_token_id,
+      vocab_table.outer_hash_a,
+      vocab_table.outer_hash_b,
+      vocab_table.num_bins,
+      device_start_word_indices,
+      device_end_word_indices,
+      max_word_length,
+      num_words,
+      device_token_ids.data(),
+      device_tokens_per_word.data());
+  CHECK_CUDA(stream.value());
 
   // Repurpose the input array for the token ids. In the worst case, each code point ends up being a
   // token so this will always have enough memory to store the contiguous tokens.
   uint32_t* contiguous_token_ids = device_code_points;
-  thrust::copy_if(execpol->on(stream),
+  thrust::copy_if(execpol->on(stream.value()),
                   device_token_ids.begin(),
                   device_token_ids.end(),
                   contiguous_token_ids,
@@ -387,7 +392,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, cudaStream_t s
 
   // Repurpose start word indices since it is the same size and type as the required output.
   uint32_t* token_id_counts = device_start_word_indices;
-  thrust::transform_inclusive_scan(execpol->on(stream),
+  thrust::transform_inclusive_scan(execpol->on(stream.value()),
                                    device_tokens_per_word.data(),
                                    device_tokens_per_word.data() + num_code_points,
                                    token_id_counts,
@@ -395,7 +400,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, cudaStream_t s
                                    thrust::plus<uint32_t>());
 
   // Update the device_strings_offsets using the token_id_counts
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<uint32_t>(1),
                      num_strings,
                      update_strings_lengths_fn{token_id_counts, device_strings_offsets});
