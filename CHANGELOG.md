@@ -1,6 +1,7 @@
 # cuDF 0.18.0 (Date TBD)
 
 ## New Features
+- PR #6856 Add groupby idxmin, idxmax aggregation
 
 ## Improvements
 
