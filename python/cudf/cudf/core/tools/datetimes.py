@@ -339,11 +339,14 @@ class DateOffset(object):
         self._months = months
 
     def _generate_column(self, size, op):
+        if op == 'sub':
+            months = -self._months
+        else:
+            months = self._months
         col = cudf.core.column.as_column(
-            self._months, dtype=np.dtype("int16"), length=size
+            months, dtype=np.dtype("int16"), length=size
         )
         return col
 
     def __repr__(self):
-        # TODO: generalize this, test this
         return f"<DateOffset: months={self._months}>"
