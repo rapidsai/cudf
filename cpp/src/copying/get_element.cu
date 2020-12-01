@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
+#include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
@@ -85,25 +86,33 @@ struct get_element_functor {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
-    auto dict_view = dictionary_column_view(input);
-    auto key_index_scalar =
-      get_element_functor{}.operator()<int32_t>(dict_view.indices(), index, stream);
+    auto dict_view    = dictionary_column_view(input);
+    auto indices_iter = detail::indexalator_factory::make_input_iterator(dict_view.indices());
+    numeric_scalar<size_type> key_index_scalar{index, true, stream};
+    auto d_key_index = get_scalar_device_view(key_index_scalar);
+    auto d_col       = column_device_view::create(input, stream);
 
-    size_type key_index =
-      static_cast<numeric_scalar<int32_t> const *>(key_index_scalar.get())->value(stream);
-    auto result = type_dispatcher(
-      dict_view.keys().type(), get_element_functor{}, dict_view.keys(), key_index, stream, mr);
-
-    auto result_validity = result->validity_data();
-    auto device_col      = column_device_view::create(input, stream);
-
+    // retrieve the indices value at index
     device_single_thread(
-      [result_validity, d_col = *device_col, index] __device__() mutable {
-        *result_validity = d_col.is_valid(index);
+      [d_key_index, d_col = *d_col, indices_iter, index] __device__() mutable {
+        d_key_index.set_value(indices_iter[index]);
+        d_key_index.set_valid(d_col.is_valid(index));
       },
       stream);
 
-    return result;
+    if (!key_index_scalar.is_valid(stream)) {
+      auto null_result = make_default_constructed_scalar(dict_view.keys().type());
+      null_result->set_valid(false, stream);
+      return null_result;
+    }
+
+    // retrieve the key element using the key-index
+    return type_dispatcher(dict_view.keys().type(),
+                           get_element_functor{},
+                           dict_view.keys(),
+                           key_index_scalar.value(stream),
+                           stream,
+                           mr);
   }
 
   template <typename T, std::enable_if_t<std::is_same<T, list_view>::value> *p = nullptr>

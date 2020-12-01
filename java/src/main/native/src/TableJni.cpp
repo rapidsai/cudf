@@ -832,7 +832,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     JNIEnv *env, jclass, jobjectArray j_col_names, jbooleanArray j_col_nullability,
     jobjectArray j_metadata_keys, jobjectArray j_metadata_values, jint j_compression,
-    jint j_stats_freq, jobject consumer) {
+    jint j_stats_freq, jboolean j_isInt96, jobject consumer) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
@@ -863,6 +863,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
             .nullable_metadata(&metadata)
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
+            .int96_timestamps(static_cast<bool>(j_isInt96))
             .build();
     std::shared_ptr<pq_chunked_state> state = write_parquet_chunked_begin(opts);
     cudf::jni::native_parquet_writer_handle *ret =

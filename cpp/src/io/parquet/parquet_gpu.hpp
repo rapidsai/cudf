@@ -231,7 +231,7 @@ struct EncColumnDesc : stats_column_desc {
   uint8_t const *def_values;       //!< Pre-calculated definition level values
 };
 
-#define MAX_PAGE_FRAGMENT_SIZE 5000  //!< Max number of rows in a page fragment
+constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment
 
 /**
  * @brief Struct describing an encoder page fragment
