@@ -86,6 +86,7 @@
 - PR #6644 Cover different CSV reader/writer options in benchmarks
 - PR #6741 Cover different ORC and Parquet reader/writer options in benchmarks
 - PR #6651 Add cudf::dictionary::make_dictionary_pair_iterator
+- PR #6666 Add dictionary support to `cudf::reduce`
 - PR #6635 Add cudf::test::dictionary_column_wrapper class
 - PR #6702 Fix orc read corruption on boolean column
 - PR #6676 Add dictionary support to `cudf::quantile`
