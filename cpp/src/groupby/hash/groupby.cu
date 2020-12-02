@@ -140,8 +140,12 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   auto to_dense_agg_result(cudf::aggregation const& agg)
   {
     auto s                  = sparse_results->get_result(col_idx, agg);
-    auto dense_result_table = cudf::detail::gather(
-      table_view({s}), gather_map.begin(), gather_map.begin() + map_size, out_of_bounds_policy::DONT_CHECK, stream, mr);
+    auto dense_result_table = cudf::detail::gather(table_view({s}),
+                                                   gather_map.begin(),
+                                                   gather_map.begin() + map_size,
+                                                   out_of_bounds_policy::DONT_CHECK,
+                                                   stream,
+                                                   mr);
     return std::move(dense_result_table->release()[0]);
   }
 
