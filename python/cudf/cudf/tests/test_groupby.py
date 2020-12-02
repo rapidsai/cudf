@@ -339,10 +339,25 @@ def test_series_groupby_agg(agg):
 
 
 @pytest.mark.parametrize(
-    "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "mean"]
+    "agg",
+    [
+        "min",
+        "max",
+        "count",
+        "sum",
+        "mean",
+        pytest.param(
+            "idxmin",
+            marks=pytest.mark.xfail(reason="gather needed for idxmin"),
+        ),
+        pytest.param(
+            "idxmax",
+            marks=pytest.mark.xfail(reason="gather needed for idxmax"),
+        ),
+    ],
 )
 def test_groupby_level_zero(agg):
-    pdf = pd.DataFrame({"x": [1, 2, 3]}, index=[0, 1, 1])
+    pdf = pd.DataFrame({"x": [1, 2, 3]}, index=[2, 5, 5])
     gdf = DataFrame.from_pandas(pdf)
     pdg = pdf.groupby(level=0)
     gdg = gdf.groupby(level=0)
@@ -353,10 +368,25 @@ def test_groupby_level_zero(agg):
 
 
 @pytest.mark.parametrize(
-    "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "mean"]
+    "agg",
+    [
+        "min",
+        "max",
+        "count",
+        "sum",
+        "mean",
+        pytest.param(
+            "idxmin",
+            marks=pytest.mark.xfail(reason="gather needed for idxmin"),
+        ),
+        pytest.param(
+            "idxmax",
+            marks=pytest.mark.xfail(reason="gather needed for idxmax"),
+        ),
+    ],
 )
 def test_groupby_series_level_zero(agg):
-    pdf = pd.Series([1, 2, 3], index=[0, 1, 1])
+    pdf = pd.Series([1, 2, 3], index=[2, 5, 5])
     gdf = Series.from_pandas(pdf)
     pdg = pdf.groupby(level=0)
     gdg = gdf.groupby(level=0)
