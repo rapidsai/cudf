@@ -3302,7 +3302,7 @@ class Frame(libcudf.table.Table):
         return keys, indices
 
     def _reindex_frame_by_columns(
-        self, existing_column_names, index, num_rows, dtypes=None, deep=False
+        self, existing_column_names, num_rows, dtypes=None, deep=False
     ):
         if dtypes is None:
             dtypes = {}
@@ -3318,7 +3318,7 @@ class Frame(libcudf.table.Table):
                     dtype=dtype, masked=True, row_count=num_rows
                 )
 
-        return self.__class__._from_table(Frame(data=cols, index=index))
+        return self.__class__._from_table(Frame(data=cols))
 
 
 def _get_replacement_values(to_replace, replacement, col_name, column):

@@ -208,24 +208,22 @@ class DataFrame(Frame, Serializable):
                 index = as_index(range(data.nrows))
             else:
                 index = as_index(index)
+            self._index = index
 
             if columns is not None:
                 self._data = data.copy(deep=False)
                 df = self._reindex_frame_by_columns(
                     existing_column_names=columns,
-                    num_rows=len(index) if data.nrows == 0 else data.nrows,
                     deep=True,
-                    index=index,
+                    num_rows=len(index),
                 )
                 self._data = ColumnAccessor(
                     data=df._data,
                     multiindex=data.multiindex,
                     level_names=data.level_names,
                 )
-                self._index = df._index
             else:
                 self._data = data
-                self._index = index
 
         elif isinstance(data, (DataFrame, pd.DataFrame)):
             if isinstance(data, pd.DataFrame):
@@ -240,13 +238,12 @@ class DataFrame(Frame, Serializable):
             else:
                 index = data._index
 
+            self._index = index
+
             if columns is not None:
                 df = data._reindex_frame_by_columns(
                     existing_column_names=columns,
-                    index=index,
-                    num_rows=len(index)
-                    if data._data.nrows == 0
-                    else data._data.nrows,
+                    num_rows=len(index),
                     deep=False,
                 )
                 self._data = df._data
@@ -254,7 +251,6 @@ class DataFrame(Frame, Serializable):
                 self._data = data._data
                 self.columns = data.columns
 
-            self._index = index
         elif data is None:
             if index is None:
                 self._index = RangeIndex(0)
@@ -2617,15 +2613,15 @@ class DataFrame(Frame, Serializable):
         idx = idx if idx is not None else df.index
         names = cols if cols is not None else list(df.columns)
 
-        length = len(idx)
-
-        return df._reindex_frame_by_columns(
+        result = df._reindex_frame_by_columns(
             existing_column_names=names,
-            num_rows=length,
             dtypes=dtypes,
             deep=copy,
-            index=idx,
+            num_rows=len(idx),
         )
+        result._index = idx
+
+        return result
 
     def _set_index(
         self, index, to_drop=None, inplace=False, verify_integrity=False,
