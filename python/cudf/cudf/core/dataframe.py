@@ -1434,6 +1434,10 @@ class DataFrame(Frame, Serializable):
 
         return self._apply_op("add", other, fill_value)
 
+
+    def update():
+
+        
     def __add__(self, other):
         return self._apply_op("__add__", other)
 
