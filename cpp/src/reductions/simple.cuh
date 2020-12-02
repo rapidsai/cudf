@@ -300,6 +300,9 @@ struct element_type_dispatcher {
                                  mr);
   }
 
+  /**
+   * @brief Specialization for reducing integer column types to any output type.
+   */
   template <typename ElementType,
             typename std::enable_if_t<std::is_integral<ElementType>::value>* = nullptr>
   std::unique_ptr<scalar> reduce_numeric(column_view const& col,
