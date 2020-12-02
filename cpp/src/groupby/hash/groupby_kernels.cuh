@@ -20,6 +20,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/utilities/bit.hpp>
+#include "multi_pass_kernels.cuh"
 
 namespace cudf {
 namespace groupby {
