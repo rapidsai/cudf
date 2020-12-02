@@ -63,7 +63,7 @@ static inline int64_t __device__ avro_decode_zigzag_varint(const uint8_t *&cur, 
  * @param[in] max_rows Total number of rows
  * @param[in] cur Current input data pointer
  * @param[in] end End of input data
- * @param[in] global_Dictionary Global dictionary entries
+ * @param[in] global_dictionary Global dictionary entries
  *
  * @return data pointer at the end of the row (start of next row)
  *

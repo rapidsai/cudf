@@ -243,6 +243,7 @@ std::vector<std::unique_ptr<cudf::column>> reader::impl::decode_data(
   device_span<uint8_t const> const block_data,
   const std::vector<std::pair<uint32_t, uint32_t>> &dict,
   device_span<gpu::nvstrdesc_s const> global_dictionary,
+  device_span<char const> global_dictionary_data,
   size_t num_rows,
   std::vector<std::pair<int, std::string>> selection,
   std::vector<data_type> const &column_types,
@@ -418,8 +419,8 @@ table_with_metadata reader::impl::read(avro_reader_options const &options,
         for (const auto &sym : col_schema.symbols) { dictionary_data_size += sym.length(); }
       }
 
-      hostdevice_vector<gpu::nvstrdesc_s> global_dictionary(total_dictionary_entries +
-                                                            dictionary_data_size);
+      rmm::device_uvector<gpu::nvstrdesc_s> d_global_dict(total_dictionary_entries, stream);
+      rmm::device_uvector<char> d_global_dict_data(dictionary_data_size, stream);
 
       if (total_dictionary_entries > 0) {
         std::vector<gpu::nvstrdesc_s> h_global_dict(total_dictionary_entries);
@@ -442,15 +443,33 @@ table_with_metadata reader::impl::read(avro_reader_options const &options,
           }
         }
 
-        global_dictionary.host_to_device(stream);
+        CUDA_TRY(cudaMemcpyAsync(d_global_dict.data(),
+                                 h_global_dict.data(),
+                                 h_global_dict.size() * sizeof(gpu::nvstrdesc_s),
+                                 cudaMemcpyDefault,
+                                 stream.value()));
+
+        CUDA_TRY(cudaMemcpyAsync(d_global_dict_data.data(),
+                                 h_global_dict_data.data(),
+                                 h_global_dict_data.size() * sizeof(char),
+                                 cudaMemcpyDefault,
+                                 stream.value()));
+
+        stream.synchronize();
       }
 
       auto block_data_span = device_span<uint8_t const>(  //
         static_cast<uint8_t const *>(block_data.data()),
         block_data.size());
 
-      out_columns = decode_data(
-        block_data_span, dict, global_dictionary, num_rows, selected_columns, column_types, stream);
+      out_columns = decode_data(block_data_span,
+                                dict,
+                                d_global_dict,
+                                d_global_dict_data,
+                                num_rows,
+                                selected_columns,
+                                column_types,
+                                stream);
     }
   }
 

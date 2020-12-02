@@ -99,6 +99,7 @@ class reader::impl {
     device_span<uint8_t const> block_data,
     std::vector<std::pair<uint32_t, uint32_t>> const &dict,
     device_span<gpu::nvstrdesc_s const> global_dictionary,
+    device_span<char const> global_dictionary_data,
     size_t num_rows,
     std::vector<std::pair<int, std::string>> selection,
     std::vector<data_type> const &column_types,
