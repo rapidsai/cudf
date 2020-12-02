@@ -16,7 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/reduction_functions.hpp>
 
@@ -53,9 +53,9 @@ std::unique_ptr<cudf::scalar> cudf::reduction::nth_element(column_view const& co
                                      null_skipped_index.end(),
                                      n);
     auto null_skipped_n = n_pos - null_skipped_index.begin();
-    return get_element(col, null_skipped_n, mr);
+    return cudf::detail::get_element(col, null_skipped_n, stream, mr);
   } else {
     n = wrap_n(col.size());
-    return get_element(col, n, mr);
+    return cudf::detail::get_element(col, n, stream, mr);
   }
 }

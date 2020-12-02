@@ -15,7 +15,10 @@ from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 
 
-def generate_ngrams(Column strings, int ngrams, DeviceScalar separator):
+def generate_ngrams(Column strings, int ngrams, object py_separator):
+
+    cdef DeviceScalar separator = py_separator.device_value
+
     cdef column_view c_strings = strings.view()
     cdef size_type c_ngrams = ngrams
     cdef const string_scalar* c_separator = <const string_scalar*>separator\
