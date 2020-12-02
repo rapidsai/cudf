@@ -29,7 +29,7 @@ _GROUPBY_AGGS = {
     "min",
     "max",
     "mean",
-    "variance",
+    "var",
     "std",
     "quantile",
     "median",

@@ -835,9 +835,10 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
   // iteratively reduce this value if the largest fragment exceeds the max page size limit (we
   // ideally want the page size to be below 1MB so as to have enough pages to get good
   // compression/decompression performance).
+  using cudf::io::parquet::gpu::max_page_fragment_size;
   constexpr uint32_t fragment_size = 5000;
-  static_assert(fragment_size <= MAX_PAGE_FRAGMENT_SIZE,
-                "fragment size cannot be greater than MAX_PAGE_FRAGMENT_SIZE");
+  static_assert(fragment_size <= max_page_fragment_size,
+                "fragment size cannot be greater than max_page_fragment_size");
 
   uint32_t num_fragments = (uint32_t)((num_rows + fragment_size - 1) / fragment_size);
   hostdevice_vector<gpu::PageFragment> fragments(num_columns * num_fragments);
