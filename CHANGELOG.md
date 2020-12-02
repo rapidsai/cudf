@@ -34,6 +34,8 @@
 - PR #6768 Add support for scatter() on list columns
 - PR #6796 Add create_metadata_file in dask_cudf
 - PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
+- PR #6817 Add support for scatter() on lists-of-struct columns
+- PR #6805 Implement `cudf::detail::copy_if` for `decimal32` and `decimal64`
 
 ## Improvements
 
@@ -71,6 +73,7 @@
 - PR #6597 Use thread-local to track CUDA device in JNI
 - PR #6599 Replace `size()==0` with `empty()`, `is_empty()`
 - PR #6514 Initial work for decimal type in Java/JNI
+- PR #6605 Reduce HtoD copies in `cudf::concatenate` of string columns
 - PR #6608 Improve subword tokenizer docs
 - PR #6610 Add ability to set scalar values in `cudf.DataFrame`
 - PR #6612 Update JNI to new RMM cuda_stream_view API
@@ -84,6 +87,7 @@
 - PR #6644 Cover different CSV reader/writer options in benchmarks
 - PR #6741 Cover different ORC and Parquet reader/writer options in benchmarks
 - PR #6651 Add cudf::dictionary::make_dictionary_pair_iterator
+- PR #6666 Add dictionary support to `cudf::reduce`
 - PR #6635 Add cudf::test::dictionary_column_wrapper class
 - PR #6702 Fix orc read corruption on boolean column
 - PR #6676 Add dictionary support to `cudf::quantile`
@@ -105,11 +109,15 @@
 - PR #6780 Move `cudf::cast` tests to separate test file
 - PR #6789 Rename `unary_op` to `unary_operator`
 - PR #6770 Support building decimal columns with Table.TestBuilder
+- PR #6800 Push DeviceScalar to cython-only
 - PR #6822 Split out `cudf::distinct_count` from `drop_duplicates.cu`
 - PR #6813 Enable `expand=False` in `.str.split` and `.str.rsplit`
 - PR #6829 Enable workaround to write categorical columns in csv
 - PR #6819 Use CMake 3.19 for RMM when building cuDF jar
 - PR #6833 Use settings.xml if existing for internal build
+- PR #6835 Move template param to member var to improve compile of hash/groupby.cu
+- PR #6837 Avoid gather when copying strings view from start of strings column
+- PR #6859 Move align_ptr_for_type() from cuda.cuh to alignment.hpp
 
 ## Bug Fixes
 
@@ -163,6 +171,11 @@
 - PR #6824 Fix JNI build
 - PR #6826 Fix resource management in Java ColumnBuilder
 - PR #6830 Fix categorical scalar insertion
+- PR #6844 Fix uint32_t undefined errors
+- PR #6854 Fix the parameter order of writeParquetBufferBegin
+- PR #6855 Fix `.str.replace_with_backrefs` docs examples
+- PR #6853 Fix contiguous split of null string columns
+- PR #6861 Fix compile error in type_dispatch_benchmark.cu
 
 
 # cuDF 0.16.0 (21 Oct 2020)
@@ -306,6 +319,7 @@
 - PR #6653 Replaced SHFL_XOR calls with cub::WarpReduce
 - PR #6751 Rework ColumnViewAccess and its usage
 - PR #6698 Remove macros from ORC reader and writer
+- PR #6782 Replace cuio macros with constexpr and inline functions
 
 ## Bug Fixes
 
