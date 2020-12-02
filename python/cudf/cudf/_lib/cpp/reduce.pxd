@@ -30,4 +30,4 @@ cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:
     cdef pair[unique_ptr[scalar],
               unique_ptr[scalar]] cpp_minmax "cudf::minmax" (
         column_view col
-    )
+    ) except +
