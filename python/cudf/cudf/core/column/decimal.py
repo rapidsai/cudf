@@ -1,6 +1,7 @@
 import more_itertools
 import pyarrow as pa
 
+from cudf import _lib as libcudf
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase
 from cudf.core.dtypes import DecimalDtype
@@ -33,3 +34,8 @@ class DecimalColumn(ColumnBase):
             length=self.size,
             buffers=[None, pa.py_buffer(data_buf_128)],
         )
+
+    def binary_operator(self, op, other, reflect=False):
+        if reflect:
+            self, other = other, self
+        return libcudf.binaryop.binaryop(self, other, op, "int32")

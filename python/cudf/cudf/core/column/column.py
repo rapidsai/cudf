@@ -1200,6 +1200,9 @@ class ColumnBase(Column, Serializable):
             mask = Buffer.deserialize(header["mask"], [frames[1]])
         return build_column(data=data, dtype=dtype, mask=mask)
 
+    def binary_operator(self, op, other, reflect=False):
+        raise NotImplementedError
+
     def min(self, skipna=None, dtype=None):
         result_col = self._process_for_reduction(skipna=skipna)
         if isinstance(result_col, ColumnBase):
