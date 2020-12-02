@@ -1,3 +1,11 @@
+# cuDF 0.18.0 (Date TBD)
+
+## New Features
+
+## Improvements
+
+## Bug Fixes
+
 # cuDF 0.17.0 (Date TBD)
 
 ## New Features
@@ -35,6 +43,7 @@
 - PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
 - PR #6817 Add support for scatter() on lists-of-struct columns
 - PR #6805 Implement `cudf::detail::copy_if` for `decimal32` and `decimal64`
+- PR #6847 Add a cmake find module for cuFile in JNI code
 
 ## Improvements
 
@@ -107,6 +116,7 @@
 - PR #6776 Use `void` return type for kernel wrapper functions instead of returning `cudaError_t`
 - PR #6786 Add nested type support to ColumnVector#getDeviceMemorySize
 - PR #6780 Move `cudf::cast` tests to separate test file
+- PR #6809 size_type overflow checking when concatenating columns
 - PR #6789 Rename `unary_op` to `unary_operator`
 - PR #6770 Support building decimal columns with Table.TestBuilder
 - PR #6800 Push DeviceScalar to cython-only
@@ -118,6 +128,7 @@
 - PR #6835 Move template param to member var to improve compile of hash/groupby.cu
 - PR #6837 Avoid gather when copying strings view from start of strings column
 - PR #6859 Move align_ptr_for_type() from cuda.cuh to alignment.hpp
+- PR #6807 Refactor `std::array` usage in row group index writing in ORC
 
 ## Bug Fixes
 
@@ -164,6 +175,7 @@
 - PR #6742 Fix concat bug in dask_cudf Series/Index creation
 - PR #6632 Fix DataFrame initialization from list of dicts
 - PR #6767 Fix sort order of parameters in `test_scalar_invalid_implicit_conversion` pytest
+- PR #6771 Fix index handling in parquet reader and writer
 - PR #6787 Update java reduction APIs to reflect C++ changes
 - PR #6790 Fix result representation in groupby.apply
 - PR #6794 Fix AVRO reader issues with empty input
@@ -176,6 +188,7 @@
 - PR #6855 Fix `.str.replace_with_backrefs` docs examples
 - PR #6853 Fix contiguous split of null string columns
 - PR #6861 Fix compile error in type_dispatch_benchmark.cu
+- PR #6869 Avoid dependency resolution failure in latest version of pip by explicitly specifying versions for dask and distributed
 
 
 # cuDF 0.16.0 (21 Oct 2020)

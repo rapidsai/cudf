@@ -29,6 +29,8 @@
 #include <cudf/table/table.hpp>
 #include <string>
 
+#include <rmm/device_uvector.hpp>
+
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
 
@@ -323,6 +325,100 @@ TEST_F(TableTest, ConcatenateTablesWithOffsetsAndNulls)
                                               {0, 1, 1, 1, 1, 0, 1});
     cudf::table_view table_view_exp1{{exp1_1, exp2_1}};
     CUDF_TEST_EXPECT_TABLES_EQUAL(concatenated_tables->view(), table_view_exp1);
+  }
+}
+
+TEST_F(TableTest, SizeOverflowTest)
+{
+  // primitive column
+  {
+    constexpr cudf::size_type size =
+      static_cast<cudf::size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+
+    // try and concatenate 6 char columns of size 1 billion each
+    auto many_chars = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, size);
+
+    cudf::table_view tbl({*many_chars});
+    EXPECT_THROW(cudf::concatenate({tbl, tbl, tbl, tbl, tbl, tbl}), cudf::logic_error);
+  }
+
+  // string column, overflow on chars
+  {
+    constexpr cudf::size_type size =
+      static_cast<cudf::size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+
+    // try and concatenate 6 string columns of with 1 billion chars in each
+    auto offsets    = cudf::test::fixed_width_column_wrapper<int>{0, size};
+    auto many_chars = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, size);
+    auto col        = cudf::make_strings_column(
+      1, offsets.release(), std::move(many_chars), 0, rmm::device_buffer{0});
+
+    cudf::table_view tbl({*col});
+    EXPECT_THROW(cudf::concatenate({tbl, tbl, tbl, tbl, tbl, tbl}), cudf::logic_error);
+  }
+
+  // string column, overflow on offsets (rows)
+  {
+    constexpr cudf::size_type size =
+      static_cast<cudf::size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
+
+    // try and concatenate 6 string columns 1 billion rows each
+    auto many_offsets =
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, size + 1);
+    auto chars = cudf::test::fixed_width_column_wrapper<int8_t>{0, 1, 2};
+    auto col   = cudf::make_strings_column(
+      size, std::move(many_offsets), chars.release(), 0, rmm::device_buffer{0});
+
+    cudf::table_view tbl({*col});
+    EXPECT_THROW(cudf::concatenate({tbl, tbl, tbl, tbl, tbl, tbl}), cudf::logic_error);
+  }
+
+  // list<struct>, structs too long
+  {
+    constexpr cudf::size_type inner_size =
+      static_cast<cudf::size_type>(static_cast<uint32_t>(512) * 1024 * 1024);
+
+    // struct
+    std::vector<std::unique_ptr<column>> children;
+    children.push_back(
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size));
+    children.push_back(
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size));
+    auto struct_col =
+      cudf::make_structs_column(inner_size, std::move(children), 0, rmm::device_buffer{0});
+
+    // list
+    auto offsets = cudf::test::fixed_width_column_wrapper<int>{0, inner_size};
+    auto col     = cudf::make_lists_column(
+      1, offsets.release(), std::move(struct_col), 0, rmm::device_buffer{0});
+
+    cudf::table_view tbl({*col});
+    EXPECT_THROW(cudf::concatenate({tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl}),
+                 cudf::logic_error);
+  }
+
+  // struct<int, list>, list child too long
+  {
+    constexpr cudf::size_type inner_size =
+      static_cast<cudf::size_type>(static_cast<uint32_t>(512) * 1024 * 1024);
+    constexpr cudf::size_type size = 3;
+
+    // list
+    auto offsets = cudf::test::fixed_width_column_wrapper<int>{0, 0, 0, inner_size};
+    auto many_chars =
+      cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size);
+    auto list_col = cudf::make_lists_column(
+      3, offsets.release(), std::move(many_chars), 0, rmm::device_buffer{0});
+
+    // struct
+    std::vector<std::unique_ptr<column>> children;
+    children.push_back(cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, size));
+    children.push_back(std::move(list_col));
+    auto col = cudf::make_structs_column(size, std::move(children), 0, rmm::device_buffer{0});
+
+    cudf::table_view tbl({*col});
+    EXPECT_THROW(cudf::concatenate({tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl}),
+                 cudf::logic_error);
   }
 }
 
