@@ -85,6 +85,7 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         data_type() except +
         data_type(const data_type&) except +
         data_type(type_id id) except +
+        data_type(type_id id, int32_t scale) except +
         type_id id() except +
         int32_t scale() except +
 

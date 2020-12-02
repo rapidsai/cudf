@@ -32,6 +32,7 @@ from cudf.utils.dtypes import (
     cudf_dtypes_to_pandas_dtypes,
     get_time_unit,
     is_categorical_dtype,
+    is_decimal_dtype,
     is_list_dtype,
     is_numerical_dtype,
     is_scalar,
@@ -1471,6 +1472,15 @@ def build_column(
         )
     elif is_struct_dtype(dtype):
         return cudf.core.column.StructColumn(
+            data=data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            null_count=null_count,
+            children=children,
+        )
+    elif is_decimal_dtype(dtype):
+        return cudf.core.column.DecimalColumn(
             data=data,
             size=size,
             dtype=dtype,
