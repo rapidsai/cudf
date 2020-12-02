@@ -188,7 +188,7 @@
 - PR #6853 Fix contiguous split of null string columns
 - PR #6861 Fix compile error in type_dispatch_benchmark.cu
 - PR #6869 Avoid dependency resolution failure in latest version of pip by explicitly specifying versions for dask and distributed
-
+- PR #6806 Force install of local conda artifacts
 
 # cuDF 0.16.0 (21 Oct 2020)
 
