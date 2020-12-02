@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/unary.hpp>
 #include "rolling_detail.cuh"
 
 namespace cudf {
@@ -227,11 +228,12 @@ std::tuple<size_type, size_type> get_null_bounds_for_timestamp_column(
                            : std::make_tuple(num_rows - num_nulls, num_rows);
 }
 
+using TimeT = int64_t;  // Timestamp representations normalized to int64_t.
+
 /// Time-range window computation, with
 ///   1. no grouping keys specified
 ///   2. timetamps in ASCENDING order.
 /// Treat as one single group.
-template <typename TimeT>
 std::unique_ptr<column> time_range_window_ASC(column_view const& input,
                                               column_view const& timestamp_column,
                                               TimeT preceding_window,
@@ -392,7 +394,6 @@ get_null_bounds_for_timestamp_column(column_view const& timestamp_column,
 }
 
 // Time-range window computation, for timestamps in ASCENDING order.
-template <typename TimeT>
 std::unique_ptr<column> time_range_window_ASC(
   column_view const& input,
   column_view const& timestamp_column,
@@ -507,7 +508,6 @@ std::unique_ptr<column> time_range_window_ASC(
 ///   1. no grouping keys specified
 ///   2. timetamps in DESCENDING order.
 /// Treat as one single group.
-template <typename TimeT>
 std::unique_ptr<column> time_range_window_DESC(column_view const& input,
                                                column_view const& timestamp_column,
                                                TimeT preceding_window,
@@ -601,7 +601,6 @@ std::unique_ptr<column> time_range_window_DESC(column_view const& input,
 }
 
 // Time-range window computation, for timestamps in DESCENDING order.
-template <typename TimeT>
 std::unique_ptr<column> time_range_window_DESC(
   column_view const& input,
   column_view const& timestamp_column,
@@ -717,7 +716,6 @@ std::unique_ptr<column> time_range_window_DESC(
   }
 }
 
-template <typename TimeT>
 std::unique_ptr<column> grouped_time_range_rolling_window_impl(
   column_view const& input,
   column_view const& timestamp_column,
@@ -836,27 +834,21 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
   CUDF_EXPECTS(is_supported_range_frame_unit(timestamp_column.type()),
                "Unsupported data-type for `timestamp`-based rolling window operation!");
 
-  return timestamp_column.type().id() == cudf::type_id::TIMESTAMP_DAYS
-           ? grouped_time_range_rolling_window_impl<int32_t>(input,
-                                                             timestamp_column,
-                                                             timestamp_order,
-                                                             group_offsets,
-                                                             group_labels,
-                                                             preceding_window_in_days,
-                                                             following_window_in_days,
-                                                             min_periods,
-                                                             aggr,
-                                                             mr)
-           : grouped_time_range_rolling_window_impl<int64_t>(input,
-                                                             timestamp_column,
-                                                             timestamp_order,
-                                                             group_offsets,
-                                                             group_labels,
-                                                             preceding_window_in_days,
-                                                             following_window_in_days,
-                                                             min_periods,
-                                                             aggr,
-                                                             mr);
+  auto is_timestamp_in_days = timestamp_column.type().id() == cudf::type_id::TIMESTAMP_DAYS;
+
+  return grouped_time_range_rolling_window_impl(
+    input,
+    is_timestamp_in_days
+      ? cudf::cast(timestamp_column, cudf::data_type(cudf::type_id::TIMESTAMP_SECONDS), mr)->view()
+      : timestamp_column,
+    timestamp_order,
+    group_offsets,
+    group_labels,
+    preceding_window_in_days,
+    following_window_in_days,
+    min_periods,
+    aggr,
+    mr);
 }
 
 }  // namespace cudf
