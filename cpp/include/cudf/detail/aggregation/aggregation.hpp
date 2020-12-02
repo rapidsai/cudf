@@ -27,6 +27,58 @@
 
 namespace cudf {
 namespace detail {
+
+// Forward declare compound aggregations.
+class mean_aggregation;
+class var_aggregation;
+class std_aggregation;
+class min_aggregation;
+class max_aggregation;
+
+// Visitor pattern
+class aggregation_finalizer {  // Declares the interface for the finalizer
+ public:
+  // Declare overloads for each kind of a agg to dispatch
+  virtual void visit(aggregation const& agg)      = 0;
+  virtual void visit(min_aggregation const& agg)  = 0;
+  virtual void visit(max_aggregation const& agg)  = 0;
+  virtual void visit(mean_aggregation const& agg) = 0;
+  virtual void visit(var_aggregation const& agg)  = 0;
+  virtual void visit(std_aggregation const& agg)  = 0;
+};
+
+/**
+ * @brief Derived class for specifying a min aggregation
+ */
+struct min_aggregation final : aggregation {
+  min_aggregation() : aggregation{MIN} {}
+
+  std::vector<aggregation::Kind> get_simple_aggregations(data_type col_type) const override
+  {
+    if (col_type.id() == type_id::STRING)
+      return {aggregation::ARGMIN};
+    else
+      return {this->kind};
+  }
+  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+};
+
+/**
+ * @brief Derived class for specifying a max aggregation
+ */
+struct max_aggregation final : aggregation {
+  max_aggregation() : aggregation{MAX} {}
+
+  std::vector<aggregation::Kind> get_simple_aggregations(data_type col_type) const override
+  {
+    if (col_type.id() == type_id::STRING)
+      return {aggregation::ARGMAX};
+    else
+      return {this->kind};
+  }
+  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+};
+
 /**
  * @brief A wrapper to simplify inheritance of virtual methods from aggregation
  *
@@ -110,11 +162,29 @@ struct lead_lag_aggregation final : derived_aggregation<lead_lag_aggregation> {
 };
 
 /**
+ * @brief Derived class for specifying a mean aggregation
+ */
+struct mean_aggregation final : aggregation {
+  mean_aggregation() : aggregation{MEAN} {}
+
+  std::vector<aggregation::Kind> get_simple_aggregations(data_type col_type) const override
+  {
+    CUDF_EXPECTS(is_fixed_width(col_type), "MEAN aggregation expects fixed width type");
+    return {aggregation::SUM, aggregation::COUNT_VALID};
+  }
+  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+};
+
+/**
  * @brief Derived class for specifying a standard deviation/variance aggregation
  */
-struct std_var_aggregation final : derived_aggregation<std_var_aggregation> {
-  std_var_aggregation(aggregation::Kind k, size_type ddof) : derived_aggregation{k}, _ddof{ddof} {}
+struct std_var_aggregation : derived_aggregation<std_var_aggregation> {
   size_type _ddof;  ///< Delta degrees of freedom
+
+  virtual std::vector<aggregation::Kind> get_simple_aggregations(data_type col_type) const override
+  {
+    return {aggregation::SUM, aggregation::COUNT_VALID};
+  }
 
  protected:
   friend class derived_aggregation<std_var_aggregation>;
@@ -122,14 +192,36 @@ struct std_var_aggregation final : derived_aggregation<std_var_aggregation> {
   bool operator==(std_var_aggregation const& other) const { return _ddof == other._ddof; }
 
   size_t hash_impl() const { return std::hash<size_type>{}(_ddof); }
+
+  std_var_aggregation(aggregation::Kind k, size_type ddof) : derived_aggregation{k}, _ddof{ddof}
+  {
+    CUDF_EXPECTS(k == aggregation::STD or k == aggregation::VARIANCE,
+                 "std_var_aggregation can accept only STD, VARIANCE");
+  }
+};
+
+/**
+ * @brief Derived class for specifying a standard deviation aggregation
+ */
+struct std_aggregation final : std_var_aggregation {
+  std_aggregation(size_type ddof) : std_var_aggregation{aggregation::STD, ddof} {}
+  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+};
+
+/**
+ * @brief Derived class for specifying a variance aggregation
+ */
+struct var_aggregation final : std_var_aggregation {
+  var_aggregation(size_type ddof) : std_var_aggregation{aggregation::VARIANCE, ddof} {}
+  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
 
 /**
  * @brief Derived class for specifying a nunique aggregation
  */
 struct nunique_aggregation final : derived_aggregation<nunique_aggregation> {
-  nunique_aggregation(aggregation::Kind k, null_policy null_handling)
-    : derived_aggregation{k}, _null_handling{null_handling}
+  nunique_aggregation(null_policy null_handling)
+    : derived_aggregation{NUNIQUE}, _null_handling{null_handling}
   {
   }
   null_policy _null_handling;  ///< include or exclude nulls
@@ -149,8 +241,8 @@ struct nunique_aggregation final : derived_aggregation<nunique_aggregation> {
  * @brief Derived class for specifying a nth element aggregation
  */
 struct nth_element_aggregation final : derived_aggregation<nth_element_aggregation> {
-  nth_element_aggregation(aggregation::Kind k, size_type n, null_policy null_handling)
-    : derived_aggregation{k}, _n{n}, _null_handling{null_handling}
+  nth_element_aggregation(size_type n, null_policy null_handling)
+    : derived_aggregation{NTH_ELEMENT}, _n{n}, _null_handling{null_handling}
   {
   }
   size_type _n;                ///< nth index to return
@@ -184,6 +276,8 @@ struct udf_aggregation final : derived_aggregation<udf_aggregation> {
       _function_name{"rolling_udf"},
       _output_type{output_type}
   {
+    CUDF_EXPECTS(type == aggregation::PTX or type == aggregation::CUDA,
+                 "udf_aggregation can accept only PTX, CUDA");
   }
   std::string const _source;
   std::string const _operator_name;
@@ -417,8 +511,8 @@ using kind_to_type = typename kind_to_type_impl<k>::type;
 #endif
 
 AGG_KIND_MAPPING(aggregation::QUANTILE, quantile_aggregation);
-AGG_KIND_MAPPING(aggregation::STD, std_var_aggregation);
-AGG_KIND_MAPPING(aggregation::VARIANCE, std_var_aggregation);
+AGG_KIND_MAPPING(aggregation::STD, std_aggregation);
+AGG_KIND_MAPPING(aggregation::VARIANCE, var_aggregation);
 
 /**
  * @brief Dispatches `k` as a non-type template parameter to a callable,  `f`.
