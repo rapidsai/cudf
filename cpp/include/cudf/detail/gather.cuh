@@ -615,7 +615,7 @@ struct column_gatherer_impl<struct_view, MapItRoot> {
  * corresponds to out-of-bound indices in the gather map to be null elements. Callers should
  * use `DONT_CHECK` when they are certain that the gather_map contains only valid indices for
  * better performance. In case there are out-of-bound indices in the gather map, the behavior
- * is undefined. Defaults to `NULLIFY`.
+ * is undefined. Defaults to `DONT_CHECK`.
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @return cudf::table Result of the gather
