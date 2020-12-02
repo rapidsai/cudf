@@ -958,37 +958,38 @@ TEST_F(ParquetChunkedWriterTest, ListColumn)
   // []
   // [4, 5]
   // NULL
-  lcw col00{{{{1, 2, 3}, valids}, {}, {4, 5}, {}}, valids2};
+  lcw col0_tbl0{{{{1, 2, 3}, valids}, {}, {4, 5}, {}}, valids2};
 
   // [7, 8, 9]
   // []
   // [NULL, 11]
   // NULL
-  lcw col01{{{7, 8, 9}, {}, {{10, 11}, valids}, {}}, valids2};
+  lcw col0_tbl1{{{7, 8, 9}, {}, {{10, 11}, valids}, {}}, valids2};
 
   // COL1 (Nullability different in different chunks, test of merging nullability in writer)
   // [NULL, 2, NULL]
   // []
   // [4, 5]
   // []
-  lcw col10{{{1, 2, 3}, valids}, {}, {4, 5}, {}};
+  lcw col1_tbl0{{{1, 2, 3}, valids}, {}, {4, 5}, {}};
 
   // [7, 8, 9]
   // []
   // [10, 11]
   // NULL
-  lcw col11{{{7, 8, 9}, {}, {10, 11}, {}}, valids2};
+  lcw col1_tbl1{{{7, 8, 9}, {}, {10, 11}, {}}, valids2};
 
   // COL2 (non-nested columns to test proper schema construction)
-  size_t num_rows = static_cast<cudf::column_view>(col00).size();
-  auto seq_col0   = random_values<int>(num_rows);
-  auto seq_col1   = random_values<int>(num_rows);
+  size_t num_rows_tbl0 = static_cast<cudf::column_view>(col0_tbl0).size();
+  size_t num_rows_tbl1 = static_cast<cudf::column_view>(col0_tbl1).size();
+  auto seq_col0        = random_values<int>(num_rows_tbl0);
+  auto seq_col1        = random_values<int>(num_rows_tbl1);
 
-  column_wrapper<int> col20{seq_col0.begin(), seq_col0.end(), valids};
-  column_wrapper<int> col21{seq_col1.begin(), seq_col1.end(), valids2};
+  column_wrapper<int> col2_tbl0{seq_col0.begin(), seq_col0.end(), valids};
+  column_wrapper<int> col2_tbl1{seq_col1.begin(), seq_col1.end(), valids2};
 
-  auto tbl0 = table_view({col00, col10, col20});
-  auto tbl1 = table_view({col01, col11, col21});
+  auto tbl0 = table_view({col0_tbl0, col1_tbl0, col2_tbl0});
+  auto tbl1 = table_view({col0_tbl1, col1_tbl1, col2_tbl1});
 
   auto expected = cudf::concatenate({tbl0, tbl1});
 

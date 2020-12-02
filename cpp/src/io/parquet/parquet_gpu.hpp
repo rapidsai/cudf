@@ -423,8 +423,8 @@ struct dremel_data {
  * @return A struct containing dremel data
  */
 dremel_data get_dremel_data(column_view h_col,
-                            std::vector<bool> const &level_nullablility = {},
-                            rmm::cuda_stream_view stream                = rmm::cuda_stream_default);
+                            std::vector<bool> const &level_nullability = {},
+                            rmm::cuda_stream_view stream               = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel for initializing encoder page fragments

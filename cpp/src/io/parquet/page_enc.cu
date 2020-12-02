@@ -1706,20 +1706,22 @@ dremel_data get_dremel_data(column_view h_col,
   size_t max_vals_size = 0;
   std::vector<column_view> nesting_levels;
   std::vector<uint8_t> def_at_level;
-  size_type level = 0;
+  size_type level       = 0;
+  auto add_def_at_level = [&](size_type level) {
+    auto is_level_nullable =
+      curr_col.nullable() or (not level_nullability.empty() and level_nullability[level]);
+    def_at_level.push_back(is_level_nullable ? 2 : 1);
+  };
   while (curr_col.type().id() == type_id::LIST) {
     nesting_levels.push_back(curr_col);
-    def_at_level.push_back(
-      curr_col.nullable() or (not level_nullablility.empty() and level_nullablility[level]) ? 2
-                                                                                            : 1);
+    add_def_at_level(level);
     auto lcv = lists_column_view(curr_col);
     max_vals_size += lcv.offsets().size();
     curr_col = lcv.child();
     level++;
   }
   // One more entry for leaf col
-  def_at_level.push_back(
-    curr_col.nullable() or (not level_nullablility.empty() and level_nullablility[level]) ? 2 : 1);
+  add_def_at_level(level);
   max_vals_size += curr_col.size();
 
   // Add one more value at the end so that we can have the max def level
@@ -1797,7 +1799,7 @@ dremel_data get_dremel_data(column_view h_col,
       thrust::make_counting_iterator(0),
       [idx            = empties_idx.data(),
        mask           = lcv.null_mask(),
-       level_nullable = level_nullablility.empty() ? false : level_nullablility[level],
+       level_nullable = level_nullability.empty() ? false : level_nullability[level],
        curr_def_level = def_at_level[level]] __device__(auto i) {
         return curr_def_level +
                ((mask && bit_is_set(mask, idx[i]) or (!mask && level_nullable)) ? 1 : 0);
@@ -1807,7 +1809,7 @@ dremel_data get_dremel_data(column_view h_col,
     auto input_child_def_it = thrust::make_transform_iterator(
       thrust::make_counting_iterator(column_offsets[level + 1]),
       [mask           = lcv.child().null_mask(),
-       level_nullable = level_nullablility.empty() ? false : level_nullablility[level + 1],
+       level_nullable = level_nullability.empty() ? false : level_nullability[level + 1],
        curr_def_level = def_at_level[level + 1]] __device__(auto i) {
         return curr_def_level +
                ((mask && bit_is_set(mask, i) or (!mask && level_nullable)) ? 1 : 0);
@@ -1896,7 +1898,7 @@ dremel_data get_dremel_data(column_view h_col,
       thrust::make_counting_iterator(0),
       [idx            = empties_idx.data(),
        mask           = lcv.null_mask(),
-       level_nullable = level_nullablility.empty() ? false : level_nullablility[level],
+       level_nullable = level_nullability.empty() ? false : level_nullability[level],
        curr_def_level = def_at_level[level]] __device__(auto i) {
         return curr_def_level +
                ((mask && bit_is_set(mask, idx[i]) or (!mask && level_nullable)) ? 1 : 0);

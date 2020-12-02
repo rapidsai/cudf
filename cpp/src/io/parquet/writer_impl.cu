@@ -85,7 +85,7 @@ std::vector<std::vector<bool>> get_per_column_nullability(table_view const &tabl
   std::vector<std::vector<bool>> per_column_nullability;
   auto null_it  = col_nullable.begin();
   auto const_it = thrust::make_constant_iterator(true);
-  for (auto &&col : table) {
+  for (auto const &col : table) {
     uint16_t depth = get_depth(col);
     if (col_nullable.empty()) {
       // If no per-column nullability is specified then assume that all columns are nullable
@@ -378,7 +378,7 @@ class parquet_column_view {
   bool nullable() const { return _nullability.back(); }
   void const *data() const noexcept { return _data; }
   uint32_t const *nulls() const noexcept { return _nulls; }
-  bool level_nullable(size_t level) { return _nullability[level]; }
+  bool level_nullable(size_t level) const { return _nullability[level]; }
 
   // List related data
   column_view cudf_col() const noexcept { return _col; }
@@ -689,7 +689,7 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
   // in the multiple write_chunk() case.  so we'll do some special handling.
   // The user can pass in information about the nullability of a column to be enforced across
   // write_chunk() calls, in a flattened bool vector. Figure out that per column.
-  std::vector<std::vector<bool>> per_column_nullability =
+  auto per_column_nullability =
     (state.single_write_mode)
       ? std::vector<std::vector<bool>>{}
       : get_per_column_nullability(table, state.user_metadata_with_nullability.column_nullable);
@@ -852,7 +852,7 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
       int16_t nbits = 0;
       while (number > 0) {
         nbits++;
-        number = number >> 1;
+        number >>= 1;
       }
       return nbits;
     };
