@@ -5,6 +5,7 @@
 ## Improvements
 
 ## Bug Fixes
+- PR #6884 Correct the sampling range when sampling with replacement
 
 # cuDF 0.17.0 (Date TBD)
 
