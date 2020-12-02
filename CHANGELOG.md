@@ -106,6 +106,7 @@
 - PR #6776 Use `void` return type for kernel wrapper functions instead of returning `cudaError_t`
 - PR #6786 Add nested type support to ColumnVector#getDeviceMemorySize
 - PR #6780 Move `cudf::cast` tests to separate test file
+- PR #6809 size_type overflow checking when concatenating columns
 - PR #6789 Rename `unary_op` to `unary_operator`
 - PR #6770 Support building decimal columns with Table.TestBuilder
 - PR #6800 Push DeviceScalar to cython-only
@@ -117,6 +118,7 @@
 - PR #6835 Move template param to member var to improve compile of hash/groupby.cu
 - PR #6837 Avoid gather when copying strings view from start of strings column
 - PR #6859 Move align_ptr_for_type() from cuda.cuh to alignment.hpp
+- PR #6807 Refactor `std::array` usage in row group index writing in ORC
 
 ## Bug Fixes
 
@@ -163,6 +165,7 @@
 - PR #6742 Fix concat bug in dask_cudf Series/Index creation
 - PR #6632 Fix DataFrame initialization from list of dicts
 - PR #6767 Fix sort order of parameters in `test_scalar_invalid_implicit_conversion` pytest
+- PR #6771 Fix index handling in parquet reader and writer
 - PR #6787 Update java reduction APIs to reflect C++ changes
 - PR #6790 Fix result representation in groupby.apply
 - PR #6794 Fix AVRO reader issues with empty input
@@ -177,6 +180,8 @@
 - PR #6861 Fix compile error in type_dispatch_benchmark.cu
 - PR #6864 Handle contiguous_split corner case for nested string columns with no children
 
+- PR #6869 Avoid dependency resolution failure in latest version of pip by explicitly specifying versions for dask and distributed
+- PR #6806 Force install of local conda artifacts
 
 # cuDF 0.16.0 (21 Oct 2020)
 
@@ -209,6 +214,7 @@
 - PR #6301 Add JNI bindings to nvcomp
 - PR #6328 Java and JNI bindings for getMapValue/map_lookup
 - PR #6371 Use ColumnViewAccess on Host side
+- PR #6392 add hash based groupby mean aggregation
 - PR #6511 Add LogicalType to Parquet reader
 - PR #6297 cuDF Python Scalars
 - PR #6723 Support creating decimal vectors from scalar
