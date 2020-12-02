@@ -40,7 +40,7 @@ namespace cudf {
  * `DONT_CHECK` means do not check whether the indices are out-of-bounds, for better performance.
  */
 
-enum class out_of_bounds_policy : int8_t {
+enum class out_of_bounds_policy : bool {
   NULLIFY,    /// Output values corresponding to out-of-bounds indices are null
   DONT_CHECK  /// No bounds checking is performed, better performance
 };
