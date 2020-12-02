@@ -320,9 +320,10 @@ void __host__ decode_avro_column_data(device_span<block_desc_s const> const bloc
                                       uint32_t min_row_size,
                                       rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(32, num_warps);  // num_warps warps per threadblock
-  dim3 dim_grid((blocks.size() + num_warps - 1) / num_warps,
-                1);  // 1 warp per datablock, num_warps datablocks per threadblock
+  // num_warps warps per threadblock
+  dim3 dim_block(32, num_warps);
+  // 1 warp per datablock, num_warps datablocks per threadblock
+  dim3 dim_grid((blocks.size() + num_warps - 1) / num_warps, 1);
   decode_avro_column_data_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(
     blocks, global_dictionary, avro_data, schema, min_row_size, max_rows, first_row);
 }
