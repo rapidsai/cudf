@@ -281,7 +281,7 @@ void store_result_functor::operator()<aggregation::VARIANCE>(aggregation const& 
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto var_agg   = static_cast<cudf::detail::std_var_aggregation const&>(agg);
+  auto var_agg   = static_cast<cudf::detail::var_aggregation const&>(agg);
   auto mean_agg  = make_mean_aggregation();
   auto count_agg = make_count_aggregation();
   operator()<aggregation::MEAN>(*mean_agg);
@@ -304,7 +304,7 @@ void store_result_functor::operator()<aggregation::STD>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto std_agg = static_cast<cudf::detail::std_var_aggregation const&>(agg);
+  auto std_agg = static_cast<cudf::detail::std_aggregation const&>(agg);
   auto var_agg = make_variance_aggregation(std_agg._ddof);
   operator()<aggregation::VARIANCE>(*var_agg);
   column_view var_result = cache.get_result(col_idx, *var_agg);

@@ -58,11 +58,11 @@ struct reduce_dispatch_functor {
         break;
       case aggregation::MEAN: return reduction::mean(col, output_dtype, stream, mr); break;
       case aggregation::VARIANCE: {
-        auto var_agg = static_cast<std_var_aggregation const *>(agg.get());
+        auto var_agg = static_cast<var_aggregation const *>(agg.get());
         return reduction::variance(col, output_dtype, var_agg->_ddof, stream, mr);
       } break;
       case aggregation::STD: {
-        auto var_agg = static_cast<std_var_aggregation const *>(agg.get());
+        auto var_agg = static_cast<std_aggregation const *>(agg.get());
         return reduction::standard_deviation(col, output_dtype, var_agg->_ddof, stream, mr);
       } break;
       case aggregation::MEDIAN: {

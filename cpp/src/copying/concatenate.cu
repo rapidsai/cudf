@@ -39,6 +39,7 @@
 
 namespace cudf {
 namespace detail {
+
 // From benchmark data, the fused kernel optimization appears to perform better
 // when there are more than a trivial number of columns, or when the null mask
 // can also be computed at the same time
@@ -335,6 +336,64 @@ std::unique_ptr<column> concatenate_dispatch::operator()<cudf::struct_view>()
   return cudf::structs::detail::concatenate(views, stream, mr);
 }
 
+namespace {
+
+/**
+ * @brief Verifies that the sum of the sizes of all the columns to be concatenated
+ * will not exceed the max value of size_type, and verifies all column types match
+ *
+ * @param begin Beginning of range of columns to check
+ * @param end End of range of columns to check
+ *
+ * @throws cudf::logic_error if the total length of the concatenated columns would
+ * exceed the max value of size_type
+ *
+ * @throws cudf::logic_error if all of the input column types don't match
+ */
+template <typename ColIter>
+void bounds_and_type_check(ColIter begin, ColIter end)
+{
+  CUDF_EXPECTS(std::all_of(begin,
+                           end,
+                           [expected_type = (*begin).type()](auto const& c) {
+                             return c.type() == expected_type;
+                           }),
+               "Type mismatch in columns to concatenate.");
+
+  // total size of all concatenated rows
+  size_t const total_row_count =
+    std::accumulate(begin, end, std::size_t{}, [](size_t a, auto const& b) {
+      return a + static_cast<size_t>(b.size());
+    });
+  CUDF_EXPECTS(total_row_count <= std::numeric_limits<size_type>::max(),
+               "Total number of concatenated rows exceeds size_type range");
+
+  // march each child
+  auto child_iter         = thrust::make_counting_iterator(0);
+  auto const num_children = (*begin).num_children();
+  std::for_each(child_iter, child_iter + num_children, [&](auto child_index) {
+    std::vector<column_view> nth_children;
+    nth_children.reserve(std::distance(begin, end));
+
+    // we cannot do this via a transform iterator + std::copy_if because some columns
+    // can have no children if they are empty.  so if we had 3 input string columns
+    // and 1 of them was empty, 2 of them would have 2 children, and 1 of them would have
+    // 0 children. so it is not safe to index col.child() directly.
+    std::for_each(begin, end, [child_index, &nth_children](column_view const& col) {
+      if (col.num_children() <= child_index) {
+        CUDF_EXPECTS(col.num_children() == 0,
+                     "Encountered a child column with an unexpected # of children");
+      } else {
+        nth_children.push_back(col.child(child_index));
+      }
+    });
+
+    bounds_and_type_check(nth_children.begin(), nth_children.end());
+  });
+}
+
+}  // anonymous namespace
+
 // Concatenates the elements from a vector of column_views
 std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_concat,
                                     rmm::cuda_stream_view stream,
@@ -342,11 +401,8 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
 {
   CUDF_EXPECTS(not columns_to_concat.empty(), "Unexpected empty list of columns to concatenate.");
 
-  data_type const type = columns_to_concat.front().type();
-  CUDF_EXPECTS(std::all_of(columns_to_concat.begin(),
-                           columns_to_concat.end(),
-                           [&type](auto const& c) { return c.type() == type; }),
-               "Type mismatch in columns to concatenate.");
+  // verify all types match and that we won't overflow size_type in output size
+  bounds_and_type_check(columns_to_concat.begin(), columns_to_concat.end());
 
   if (std::all_of(columns_to_concat.begin(), columns_to_concat.end(), [](column_view const& c) {
         return c.is_empty();
@@ -354,7 +410,8 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns_to_c
     return empty_like(columns_to_concat.front());
   }
 
-  return type_dispatcher(type, concatenate_dispatch{columns_to_concat, stream, mr});
+  return type_dispatcher(columns_to_concat.front().type(),
+                         concatenate_dispatch{columns_to_concat, stream, mr});
 }
 
 std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_concat,
@@ -367,8 +424,7 @@ std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_conc
   CUDF_EXPECTS(std::all_of(tables_to_concat.cbegin(),
                            tables_to_concat.cend(),
                            [&first_table](auto const& t) {
-                             return t.num_columns() == first_table.num_columns() &&
-                                    have_same_types(first_table, t);
+                             return t.num_columns() == first_table.num_columns();
                            }),
                "Mismatch in table columns to concatenate.");
 
@@ -379,6 +435,9 @@ std::unique_ptr<table> concatenate(std::vector<table_view> const& tables_to_conc
                    tables_to_concat.cend(),
                    std::back_inserter(cols),
                    [i](auto const& t) { return t.column(i); });
+
+    // verify all types match and that we won't overflow size_type in output size
+    bounds_and_type_check(cols.begin(), cols.end());
     concat_columns.emplace_back(detail::concatenate(cols, stream, mr));
   }
   return std::make_unique<table>(std::move(concat_columns));
