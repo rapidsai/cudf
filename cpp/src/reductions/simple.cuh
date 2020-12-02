@@ -71,8 +71,39 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
   }();
 
   // set scalar is valid0
-  result->set_valid((col.null_count() < col.size()), stream);  // TODO see if we can fix this
+  result->set_valid((col.null_count() < col.size()), stream);
   return result;
+}
+
+template <typename ElementType, typename Op>
+std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr)
+{
+  using Type = device_storage_type_t<ElementType>;
+
+  auto dcol      = cudf::column_device_view::create(col, stream);
+  auto simple_op = Op{};
+
+  auto result = [&] {
+    if (col.has_nulls()) {
+      auto f  = simple_op.template get_null_replacing_element_transformer<Type>();
+      auto it = thrust::make_transform_iterator(dcol->pair_begin<Type, true>(), f);
+      return detail::reduce(it, col.size(), simple_op, stream, mr);
+    } else {
+      auto f  = simple_op.template get_element_transformer<Type>();
+      auto it = thrust::make_transform_iterator(dcol->begin<Type>(), f);
+      return detail::reduce(it, col.size(), simple_op, stream, mr);
+    }
+  }();
+
+  auto const val   = static_cast<cudf::scalar_type_t<Type>*>(result.get());
+  auto const scale = numeric::scale_type{col.type().scale()};
+  return cudf::make_fixed_point_scalar<ElementType>(val->value(), scale);
+
+  // set scalar is valid0
+  // result->set_valid((col.null_count() < col.size()), stream);
+  // return result;
 }
 
 /**
@@ -244,7 +275,9 @@ struct same_element_type_dispatcher {
   }
 
  public:
-  template <typename ElementType, std::enable_if_t<is_supported<ElementType>()>* = nullptr>
+  template <typename ElementType,
+            std::enable_if_t<is_supported<ElementType>() &&
+                             not cudf::is_fixed_point<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
@@ -257,6 +290,14 @@ struct same_element_type_dispatcher {
       stream,
       rmm::mr::get_current_device_resource());
     return resolve_key<ElementType>(dictionary_column_view(col).keys(), *index, stream, mr);
+  }
+
+  template <typename ElementType, std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& col,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    return fixed_point_reduction<ElementType, Op>(col, stream, mr);
   }
 
   template <typename ElementType, std::enable_if_t<not is_supported<ElementType>()>* = nullptr>
@@ -364,7 +405,7 @@ struct element_type_dispatcher {
   {
     CUDF_EXPECTS(output_type == col.type(), "Output type must be same as input column type.");
 
-    return cudf::reduction::simple::simple_reduction<ElementType, ElementType, Op>(col, stream, mr);
+    return fixed_point_reduction<ElementType, Op>(col, stream, mr);
   }
 
   // DISALLOWING

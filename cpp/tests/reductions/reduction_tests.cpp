@@ -1083,10 +1083,9 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSum)
 
     auto const result        = cudf::reduce(column, cudf::make_sum_aggregation(), out_type);
     auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
-    auto const result_fp     = decimalXX{result_scalar->value(), scale};
 
-    EXPECT_EQ(result_fp, expected);
-    EXPECT_EQ(result_fp, TEN);
+    EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+    EXPECT_EQ(result_scalar->fixed_point_value(), TEN);
   }
 }
 
@@ -1109,10 +1108,9 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumAlternate)
 
   auto const result        = cudf::reduce(column, cudf::make_sum_aggregation(), out_type);
   auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
-  auto const result_fp     = decimalXX{result_scalar->value()};
 
-  EXPECT_EQ(result_fp, expected);
-  EXPECT_EQ(result_fp, TEN);
+  EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+  EXPECT_EQ(result_scalar->fixed_point_value(), TEN);
 }
 
 TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMin)
@@ -1130,9 +1128,8 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMin)
 
     auto const result        = cudf::reduce(column, cudf::make_min_aggregation(), out_type);
     auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
-    auto const result_fp     = decimalXX{result_scalar->value(), scale};
 
-    EXPECT_EQ(result_fp, ONE);
+    EXPECT_EQ(result_scalar->fixed_point_value(), ONE);
   }
 }
 
@@ -1151,9 +1148,8 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMax)
 
     auto const result        = cudf::reduce(column, cudf::make_max_aggregation(), out_type);
     auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
-    auto const result_fp     = decimalXX{result_scalar->value(), scale};
 
-    EXPECT_EQ(result_fp, FOUR);
+    EXPECT_EQ(result_scalar->fixed_point_value(), FOUR);
   }
 }
 
