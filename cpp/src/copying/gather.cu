@@ -52,8 +52,8 @@ std::unique_ptr<table> gather(table_view const& source_table,
                   thrust::make_transform_iterator(map_begin, idx_converter),
                   thrust::make_transform_iterator(map_end, idx_converter),
                   bounds_policy,
-                  mr,
-                  stream);
+                  stream,
+                  mr);
   }
   return gather(source_table, map_begin, map_end, bounds_policy, stream, mr);
 }
