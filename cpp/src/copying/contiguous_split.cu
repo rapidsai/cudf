@@ -390,7 +390,7 @@ struct buf_info_functor {
     }
 
     // info for the data buffer
-    if(col.head()){
+    if (col.head()) {
       *current = src_buf_info(
         col.type().id(), nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
 
@@ -436,7 +436,7 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
     auto offset_col = current;
 
     // info for the offsets buffer
-    if(scv.offsets().head()){
+    if (scv.offsets().head()) {
       CUDF_EXPECTS(scv.offsets().nullable() == false, "Encountered nullable string offsets column");
       *current = src_buf_info(type_id::INT32,
                               scv.offsets().begin<cudf::id_to_type<type_id::INT32>>(),
@@ -450,7 +450,7 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
     }
 
     // prevent appending buf_info for non-exist chars buffer
-    if (scv.chars().head()){
+    if (scv.chars().head()) {
       CUDF_EXPECTS(scv.chars().nullable() == false, "Encountered nullable string chars column");
 
       // since we are crossing an offset boundary, our offset_depth and parent_offset_index go up.
