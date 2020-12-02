@@ -210,10 +210,15 @@ class DataFrame(Frame, Serializable):
                 index = as_index(index)
 
             if columns is not None:
-                self._data = _get_columns_from_column_accessor(
-                    column_accessor=data,
-                    columns=columns,
-                    nrows=len(index) if data.nrows == 0 else data.nrows,
+                self._data = ColumnAccessor(
+                    data=_reindex_by_columns(
+                        existing_column_names=columns,
+                        data=data,
+                        num_rows=len(index) if data.nrows == 0 else data.nrows,
+                        deep=True,
+                    ),
+                    multiindex=data.multiindex,
+                    level_names=data.level_names,
                 )
             else:
                 self._data = data
@@ -223,17 +228,27 @@ class DataFrame(Frame, Serializable):
             if isinstance(data, pd.DataFrame):
                 data = self.from_pandas(data)
 
-            if index is not None and not data.index.equals(index):
-                data = data.reindex(index)
+            if index is not None:
+                if not data.index.equals(index):
+                    data = data.reindex(index)
+                    index = data._index
+                else:
+                    index = as_index(index)
+            else:
                 index = data._index
 
             if columns is not None:
-                self._data = _get_columns_from_column_accessor(
-                    column_accessor=data._data,
-                    columns=columns,
-                    nrows=len(index)
-                    if data._data.nrows == 0
-                    else data._data.nrows,
+                self._data = ColumnAccessor(
+                    data=_reindex_by_columns(
+                        existing_column_names=columns,
+                        data=data._data,
+                        num_rows=len(index)
+                        if data._data.nrows == 0
+                        else data._data.nrows,
+                        deep=False,
+                    ),
+                    multiindex=data._data.multiindex,
+                    level_names=data._data.level_names,
                 )
             else:
                 self._data = data._data
@@ -2576,7 +2591,6 @@ class DataFrame(Frame, Serializable):
 
         df = self
         cols = columns
-        original_cols = df._data
         dtypes = OrderedDict(df.dtypes)
         idx = labels if index is None and axis in (0, "index") else index
         cols = labels if cols is None and axis in (1, "columns") else cols
@@ -2604,18 +2618,13 @@ class DataFrame(Frame, Serializable):
         names = cols if cols is not None else list(df.columns)
 
         length = len(idx)
-        cols = OrderedDict()
-
-        for name in names:
-            if name in df:
-                cols[name] = df._data[name].copy(deep=copy)
-            else:
-                dtype = dtypes.get(name, np.float64)
-                col = original_cols.get(name, Series(dtype=dtype)._column)
-                col = column.column_empty_like(
-                    col, dtype=dtype, masked=True, newsize=length
-                )
-                cols[name] = col
+        cols = _reindex_by_columns(
+            existing_column_names=names,
+            data=df._data,
+            num_rows=length,
+            dtypes=dtypes,
+            deep=copy,
+        )
 
         return DataFrame(cols, idx)
 
@@ -7317,19 +7326,20 @@ def _get_host_unique(array):
         return set(array)
 
 
-def _get_columns_from_column_accessor(column_accessor, columns, nrows):
-    return ColumnAccessor(
-        data=OrderedDict(
-            (
-                col_name,
-                column_accessor[col_name]
-                if col_name in column_accessor
-                else cudf.core.column.column_empty(
-                    row_count=nrows, dtype="object", masked=True,
-                ),
+def _reindex_by_columns(
+    existing_column_names, data, num_rows, dtypes=None, deep=False
+):
+    if dtypes is None:
+        dtypes = {}
+
+    cols = OrderedDict()
+
+    for name in existing_column_names:
+        if name in data:
+            cols[name] = data[name].copy(deep=deep)
+        else:
+            dtype = dtypes.get(name, np.float64)
+            cols[name] = column.column_empty(
+                dtype=dtype, masked=True, row_count=num_rows
             )
-            for col_name in columns
-        ),
-        multiindex=column_accessor.multiindex,
-        level_names=column_accessor.level_names,
-    )
+    return cols
