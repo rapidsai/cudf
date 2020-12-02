@@ -1,9 +1,9 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import copy
 import functools
+import operator
 import warnings
 from collections import OrderedDict, abc as abc
-import operator
 
 import cupy
 import numpy as np
@@ -3300,6 +3300,25 @@ class Frame(libcudf.table.Table):
         keys, indices = libcudf.transform.table_encode(self)
         keys = self.__class__._from_table(keys)
         return keys, indices
+
+    def _reindex_frame_by_columns(
+        self, existing_column_names, index, num_rows, dtypes=None, deep=False
+    ):
+        if dtypes is None:
+            dtypes = {}
+
+        cols = OrderedDict()
+
+        for name in existing_column_names:
+            if name in self._data:
+                cols[name] = self._data[name].copy(deep=deep)
+            else:
+                dtype = dtypes.get(name, np.float64)
+                cols[name] = column_empty(
+                    dtype=dtype, masked=True, row_count=num_rows
+                )
+
+        return self.__class__._from_table(Frame(data=cols, index=index))
 
 
 def _get_replacement_values(to_replace, replacement, col_name, column):

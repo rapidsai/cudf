@@ -210,20 +210,23 @@ class DataFrame(Frame, Serializable):
                 index = as_index(index)
 
             if columns is not None:
+                self._data = data.copy(deep=False)
+                df = self._reindex_frame_by_columns(
+                    existing_column_names=columns,
+                    num_rows=len(index) if data.nrows == 0 else data.nrows,
+                    deep=True,
+                    index=index,
+                )
                 self._data = ColumnAccessor(
-                    data=_reindex_by_columns(
-                        existing_column_names=columns,
-                        data=data,
-                        num_rows=len(index) if data.nrows == 0 else data.nrows,
-                        deep=True,
-                    ),
+                    data=df._data,
                     multiindex=data.multiindex,
                     level_names=data.level_names,
                 )
+                self._index = df._index
             else:
                 self._data = data
+                self._index = index
 
-            self.index = as_index(index)
         elif isinstance(data, (DataFrame, pd.DataFrame)):
             if isinstance(data, pd.DataFrame):
                 data = self.from_pandas(data)
@@ -238,18 +241,15 @@ class DataFrame(Frame, Serializable):
                 index = data._index
 
             if columns is not None:
-                self._data = ColumnAccessor(
-                    data=_reindex_by_columns(
-                        existing_column_names=columns,
-                        data=data._data,
-                        num_rows=len(index)
-                        if data._data.nrows == 0
-                        else data._data.nrows,
-                        deep=False,
-                    ),
-                    multiindex=data._data.multiindex,
-                    level_names=data._data.level_names,
+                df = data._reindex_frame_by_columns(
+                    existing_column_names=columns,
+                    index=index,
+                    num_rows=len(index)
+                    if data._data.nrows == 0
+                    else data._data.nrows,
+                    deep=False,
                 )
+                self._data = df._data
             else:
                 self._data = data._data
                 self.columns = data.columns
@@ -2618,15 +2618,14 @@ class DataFrame(Frame, Serializable):
         names = cols if cols is not None else list(df.columns)
 
         length = len(idx)
-        cols = _reindex_by_columns(
+
+        return df._reindex_frame_by_columns(
             existing_column_names=names,
-            data=df._data,
             num_rows=length,
             dtypes=dtypes,
             deep=copy,
+            index=idx,
         )
-
-        return DataFrame(cols, idx)
 
     def _set_index(
         self, index, to_drop=None, inplace=False, verify_integrity=False,
@@ -7319,22 +7318,3 @@ def _get_host_unique(array):
         return [array]
     else:
         return set(array)
-
-
-def _reindex_by_columns(
-    existing_column_names, data, num_rows, dtypes=None, deep=False
-):
-    if dtypes is None:
-        dtypes = {}
-
-    cols = OrderedDict()
-
-    for name in existing_column_names:
-        if name in data:
-            cols[name] = data[name].copy(deep=deep)
-        else:
-            dtype = dtypes.get(name, np.float64)
-            cols[name] = column.column_empty(
-                dtype=dtype, masked=True, row_count=num_rows
-            )
-    return cols
