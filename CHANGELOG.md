@@ -118,7 +118,6 @@
 - PR #6835 Move template param to member var to improve compile of hash/groupby.cu
 - PR #6837 Avoid gather when copying strings view from start of strings column
 - PR #6859 Move align_ptr_for_type() from cuda.cuh to alignment.hpp
-- PR #6523 Remove bound check for `cudf::gather`
 
 ## Bug Fixes
 
