@@ -93,10 +93,10 @@ struct dispatch_hex_to_integers_fn {
   template <typename IntegerType, std::enable_if_t<std::is_integral<IntegerType>::value>* = nullptr>
   void operator()(column_device_view const& strings_column,
                   mutable_column_view& output_column,
-                  cudaStream_t stream) const
+                  rmm::cuda_stream_view stream) const
   {
     auto d_results = output_column.data<IntegerType>();
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
+    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_column.size()),
                       d_results,
@@ -104,7 +104,7 @@ struct dispatch_hex_to_integers_fn {
   }
   // non-integral types throw an exception
   template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
-  void operator()(column_device_view const&, mutable_column_view&, cudaStream_t) const
+  void operator()(column_device_view const&, mutable_column_view&, rmm::cuda_stream_view) const
   {
     CUDF_FAIL("Output for hex_to_integers must be an integral type.");
   }
@@ -113,7 +113,7 @@ struct dispatch_hex_to_integers_fn {
 template <>
 void dispatch_hex_to_integers_fn::operator()<bool>(column_device_view const&,
                                                    mutable_column_view&,
-                                                   cudaStream_t) const
+                                                   rmm::cuda_stream_view) const
 {
   CUDF_FAIL("Output for hex_to_integers must not be a boolean type.");
 }
@@ -124,21 +124,20 @@ void dispatch_hex_to_integers_fn::operator()<bool>(column_device_view const&,
 std::unique_ptr<column> hex_to_integers(
   strings_column_view const& strings,
   data_type output_type,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   size_type strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(output_type);
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // create integer output column copying the strings null-mask
-  auto results = make_numeric_column(
-    output_type,
-    strings_count,
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
-    strings.null_count(),
-    stream,
-    mr);
+  auto results      = make_numeric_column(output_type,
+                                     strings_count,
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                     strings.null_count(),
+                                     stream,
+                                     mr);
   auto results_view = results->mutable_view();
   // fill output column with integers
   type_dispatcher(output_type, dispatch_hex_to_integers_fn{}, d_strings, results_view, stream);
@@ -147,21 +146,20 @@ std::unique_ptr<column> hex_to_integers(
 }
 
 std::unique_ptr<column> is_hex(strings_column_view const& strings,
-                               cudaStream_t stream,
+                               rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
   // create output column
-  auto results = make_numeric_column(
-    data_type{type_id::BOOL8},
-    strings.size(),
-    cudf::detail::copy_bitmask(strings.parent(), rmm::cuda_stream_view{stream}, mr),
-    strings.null_count(),
-    stream,
-    mr);
+  auto results   = make_numeric_column(data_type{type_id::BOOL8},
+                                     strings.size(),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                     strings.null_count(),
+                                     stream,
+                                     mr);
   auto d_results = results->mutable_view().data<bool>();
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
+  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings.size()),
                     d_results,
@@ -193,14 +191,14 @@ std::unique_ptr<column> hex_to_integers(strings_column_view const& strings,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hex_to_integers(strings, output_type, mr);
+  return detail::hex_to_integers(strings, output_type, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> is_hex(strings_column_view const& strings,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_hex(strings, 0, mr);
+  return detail::is_hex(strings, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

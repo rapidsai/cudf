@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,13 +20,16 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace {
 struct scalar_construction_helper {
   template <typename T,
             typename ScalarType = scalar_type_t<T>,
             typename std::enable_if_t<is_fixed_width<T>() and not is_fixed_point<T>()>* = nullptr>
-  std::unique_ptr<scalar> operator()(cudaStream_t stream, rmm::mr::device_memory_resource* mr) const
+  std::unique_ptr<scalar> operator()(rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
     using Type = device_storage_type_t<T>;
     auto s     = new ScalarType(Type{}, false, stream, mr);
@@ -36,7 +39,8 @@ struct scalar_construction_helper {
   template <typename T,
             typename ScalarType                             = scalar_type_t<T>,
             typename std::enable_if_t<is_fixed_point<T>()>* = nullptr>
-  std::unique_ptr<scalar> operator()(cudaStream_t stream, rmm::mr::device_memory_resource* mr) const
+  std::unique_ptr<scalar> operator()(rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
     using Type = device_storage_type_t<T>;
     auto s     = new ScalarType(Type{}, numeric::scale_type{0}, false, stream, mr);
@@ -55,7 +59,7 @@ struct scalar_construction_helper {
 
 // Allocate storage for a single numeric element
 std::unique_ptr<scalar> make_numeric_scalar(data_type type,
-                                            cudaStream_t stream,
+                                            rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
@@ -65,7 +69,7 @@ std::unique_ptr<scalar> make_numeric_scalar(data_type type,
 
 // Allocate storage for a single timestamp element
 std::unique_ptr<scalar> make_timestamp_scalar(data_type type,
-                                              cudaStream_t stream,
+                                              rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(is_timestamp(type), "Invalid, non-timestamp type.");
@@ -75,7 +79,7 @@ std::unique_ptr<scalar> make_timestamp_scalar(data_type type,
 
 // Allocate storage for a single duration element
 std::unique_ptr<scalar> make_duration_scalar(data_type type,
-                                             cudaStream_t stream,
+                                             rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(is_duration(type), "Invalid, non-duration type.");
@@ -85,7 +89,7 @@ std::unique_ptr<scalar> make_duration_scalar(data_type type,
 
 // Allocate storage for a single fixed width element
 std::unique_ptr<scalar> make_fixed_width_scalar(data_type type,
-                                                cudaStream_t stream,
+                                                rmm::cuda_stream_view stream,
                                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(is_fixed_width(type), "Invalid, non-fixed-width type.");

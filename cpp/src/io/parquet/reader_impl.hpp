@@ -31,6 +31,8 @@
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <memory>
 #include <string>
 #include <utility>
@@ -75,7 +77,7 @@ class reader::impl {
   table_with_metadata read(size_type skip_rows,
                            size_type num_rows,
                            std::vector<std::vector<size_type>> const &row_group_indices,
-                           cudaStream_t stream);
+                           rmm::cuda_stream_view stream);
 
  private:
   /**
@@ -95,7 +97,7 @@ class reader::impl {
                           size_t end_chunk,
                           const std::vector<size_t> &column_chunk_offsets,
                           std::vector<size_type> const &chunk_source_map,
-                          cudaStream_t stream);
+                          rmm::cuda_stream_view stream);
 
   /**
    * @brief Returns the number of total pages from the given column chunks
@@ -105,7 +107,8 @@ class reader::impl {
    *
    * @return The total number of pages
    */
-  size_t count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc> &chunks, cudaStream_t stream);
+  size_t count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+                            rmm::cuda_stream_view stream);
 
   /**
    * @brief Returns the page information from the given column chunks.
@@ -116,7 +119,7 @@ class reader::impl {
    */
   void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
                            hostdevice_vector<gpu::PageInfo> &pages,
-                           cudaStream_t stream);
+                           rmm::cuda_stream_view stream);
 
   /**
    * @brief Decompresses the page data, at page granularity.
@@ -129,7 +132,7 @@ class reader::impl {
    */
   rmm::device_buffer decompress_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
                                           hostdevice_vector<gpu::PageInfo> &pages,
-                                          cudaStream_t stream);
+                                          rmm::cuda_stream_view stream);
 
   /**
    * @brief Allocate nesting information storage for all pages and set pointers
@@ -149,7 +152,7 @@ class reader::impl {
   void allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc> const &chunks,
                              hostdevice_vector<gpu::PageInfo> &pages,
                              hostdevice_vector<gpu::PageNestingInfo> &page_nesting_info,
-                             cudaStream_t stream);
+                             rmm::cuda_stream_view stream);
 
   /**
    * @brief Preprocess column information for nested schemas.
@@ -174,7 +177,7 @@ class reader::impl {
                           size_t min_row,
                           size_t total_rows,
                           bool has_lists,
-                          cudaStream_t stream);
+                          rmm::cuda_stream_view stream);
 
   /**
    * @brief Converts the page data and outputs to columns.
@@ -191,7 +194,7 @@ class reader::impl {
                         hostdevice_vector<gpu::PageNestingInfo> &page_nesting,
                         size_t min_row,
                         size_t total_rows,
-                        cudaStream_t stream);
+                        rmm::cuda_stream_view stream);
 
  private:
   rmm::mr::device_memory_resource *_mr = nullptr;

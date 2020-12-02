@@ -9,11 +9,11 @@ function logger() {
 }
 
 # Install the latest version of dask and distributed
-logger "pip install git+https://github.com/dask/distributed.git --upgrade --no-deps"
-pip install "git+https://github.com/dask/distributed.git" --upgrade --no-deps
+logger "pip install git+https://github.com/dask/distributed.git@master --upgrade --no-deps"
+pip install "git+https://github.com/dask/distributed.git@master" --upgrade --no-deps
 
-logger "pip install git+https://github.com/dask/dask.git --upgrade --no-deps"
-pip install "git+https://github.com/dask/dask.git" --upgrade --no-deps
+logger "pip install git+https://github.com/dask/dask.git@master --upgrade --no-deps"
+pip install "git+https://github.com/dask/dask.git@master" --upgrade --no-deps
 
 logger "python -c 'import dask_cudf'"
 python -c "import dask_cudf"

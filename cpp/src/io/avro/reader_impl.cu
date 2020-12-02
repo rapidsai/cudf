@@ -29,6 +29,7 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
@@ -111,6 +112,7 @@ class metadata : public file_metadata {
           }
         }
       }
+      CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
     } else {
       for (int i = 0; i < num_avro_columns; ++i) {
         // Exclude array columns (unsupported)
@@ -129,7 +131,6 @@ class metadata : public file_metadata {
         }
       }
     }
-    CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
 
     return selection;
   }
@@ -139,7 +140,7 @@ class metadata : public file_metadata {
 };
 
 rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_block_data,
-                                                 cudaStream_t stream)
+                                                 rmm::cuda_stream_view stream)
 {
   size_t uncompressed_data_size = 0;
   hostdevice_vector<gpu_inflate_input_s> inflate_in(_metadata->block_list.size());
@@ -191,8 +192,9 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_
                              inflate_in.host_ptr(),
                              inflate_in.memory_size(),
                              cudaMemcpyHostToDevice,
-                             stream));
-    CUDA_TRY(cudaMemsetAsync(inflate_out.device_ptr(), 0, inflate_out.memory_size(), stream));
+                             stream.value()));
+    CUDA_TRY(
+      cudaMemsetAsync(inflate_out.device_ptr(), 0, inflate_out.memory_size(), stream.value()));
     if (_metadata->codec == "deflate") {
       CUDA_TRY(gpuinflate(
         inflate_in.device_ptr(), inflate_out.device_ptr(), inflate_in.size(), 0, stream));
@@ -206,8 +208,8 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_
                              inflate_out.device_ptr(),
                              inflate_out.memory_size(),
                              cudaMemcpyDeviceToHost,
-                             stream));
-    CUDA_TRY(cudaStreamSynchronize(stream));
+                             stream.value()));
+    stream.synchronize();
 
     // Check if larger output is required, as it's not known ahead of time
     if (_metadata->codec == "deflate" && !loop_cnt) {
@@ -247,7 +249,7 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
                                size_t num_rows,
                                std::vector<std::pair<int, std::string>> selection,
                                std::vector<column_buffer> &out_buffers,
-                               cudaStream_t stream)
+                               rmm::cuda_stream_view stream)
 {
   // Build gpu schema
   hostdevice_vector<gpu::schemadesc_s> schema_desc(_metadata->schema.size());
@@ -312,7 +314,7 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
                            schema_desc.host_ptr(),
                            schema_desc.memory_size(),
                            cudaMemcpyHostToDevice,
-                           stream));
+                           stream.value()));
 
   gpu::DecodeAvroColumnData(static_cast<block_desc_s *>(block_list.data()),
                             schema_desc.device_ptr(),
@@ -332,15 +334,16 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
                                valid_alias[i],
                                out_buffers[i].null_mask_size(),
                                cudaMemcpyHostToDevice,
-                               stream));
+                               stream.value()));
     }
   }
   CUDA_TRY(cudaMemcpyAsync(schema_desc.host_ptr(),
                            schema_desc.device_ptr(),
                            schema_desc.memory_size(),
                            cudaMemcpyDeviceToHost,
-                           stream));
-  CUDA_TRY(cudaStreamSynchronize(stream));
+                           stream.value()));
+  stream.synchronize();
+
   for (size_t i = 0; i < out_buffers.size(); i++) {
     const auto col_idx          = selection[i].first;
     const auto schema_null_idx  = _metadata->columns[col_idx].schema_null_idx;
@@ -351,13 +354,14 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
 reader::impl::impl(std::unique_ptr<datasource> source,
                    avro_reader_options const &options,
                    rmm::mr::device_memory_resource *mr)
-  : _source(std::move(source)), _mr(mr), _columns(options.get_columns())
+  : _mr(mr), _source(std::move(source)), _columns(options.get_columns())
 {
   // Open the source Avro dataset metadata
   _metadata = std::make_unique<metadata>(_source.get());
 }
 
-table_with_metadata reader::impl::read(avro_reader_options const &options, cudaStream_t stream)
+table_with_metadata reader::impl::read(avro_reader_options const &options,
+                                       rmm::cuda_stream_view stream)
 {
   auto skip_rows = options.get_skip_rows();
   auto num_rows  = options.get_num_rows();
@@ -430,17 +434,18 @@ table_with_metadata reader::impl::read(avro_reader_options const &options, cudaS
             dict_pos += len;
           }
         }
+
         CUDA_TRY(cudaMemcpyAsync(d_global_dict.data(),
                                  h_global_dict.data(),
                                  h_global_dict.size() * sizeof(gpu::nvstrdesc_s),
                                  cudaMemcpyDefault,
-                                 stream));
+                                 stream.value()));
         CUDA_TRY(cudaMemcpyAsync(d_global_dict_data.data(),
                                  h_global_dict_data.data(),
                                  h_global_dict_data.size() * sizeof(char),
                                  cudaMemcpyDefault,
-                                 stream));
-        CUDA_TRY(cudaStreamSynchronize(stream));
+                                 stream.value()));
+        stream.synchronize();
       }
 
       std::vector<column_buffer> out_buffers;
@@ -453,7 +458,12 @@ table_with_metadata reader::impl::read(avro_reader_options const &options, cudaS
       decode_data(block_data, dict, d_global_dict, num_rows, selected_columns, out_buffers, stream);
 
       for (size_t i = 0; i < column_types.size(); ++i) {
-        out_columns.emplace_back(make_column(out_buffers[i], stream, _mr));
+        out_columns.emplace_back(make_column(out_buffers[i], nullptr, stream, _mr));
+      }
+    } else {
+      // Create empty columns
+      for (size_t i = 0; i < column_types.size(); ++i) {
+        out_columns.emplace_back(make_empty_column(column_types[i]));
       }
     }
   }
@@ -491,7 +501,7 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
 reader::~reader() = default;
 
 // Forward to implementation
-table_with_metadata reader::read(avro_reader_options const &options, cudaStream_t stream)
+table_with_metadata reader::read(avro_reader_options const &options, rmm::cuda_stream_view stream)
 {
   return _impl->read(options, stream);
 }

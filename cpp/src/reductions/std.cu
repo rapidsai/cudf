@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,10 @@
 // The translation unit for reduction `standard deviation`
 
 #include <cudf/detail/reduction_functions.hpp>
-#include "compound.cuh"
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <reductions/compound.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 // @param[in] ddof Delta Degrees of Freedom used for `std`, `var`.
 //                 The divisor used in calculations is N - ddof, where N
@@ -26,14 +29,16 @@ std::unique_ptr<cudf::scalar> cudf::reduction::standard_deviation(
   column_view const& col,
   cudf::data_type const output_dtype,
   cudf::size_type ddof,
-  rmm::mr::device_memory_resource* mr,
-  cudaStream_t stream)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   // TODO: add cuda version check when the fix is available
 #if !defined(__CUDACC_DEBUG__)
   using reducer =
     cudf::reduction::compound::element_type_dispatcher<cudf::reduction::op::standard_deviation>;
-  return cudf::type_dispatcher(col.type(), reducer(), col, output_dtype, ddof, mr, stream);
+  auto col_type =
+    cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
+  return cudf::type_dispatcher(col_type, reducer(), col, output_dtype, ddof, stream, mr);
 #else
   // workaround for bug 200529165 which causes compilation error only at device
   // debug build the bug will be fixed at cuda 10.2

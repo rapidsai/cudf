@@ -38,6 +38,10 @@ namespace cudf {
  * @file
  */
 
+// forward declaration
+namespace detail {
+class aggregation_finalizer;
+}  // namespace detail
 /**
  * @brief Base class for specifying the desired aggregation in an
  * `aggregation_request`.
@@ -73,8 +77,8 @@ class aggregation {
     COLLECT,         ///< collect values into a list
     LEAD,            ///< window function, accesses row at specified offset following current row
     LAG,             ///< window function, accesses row at specified offset preceding current row
-    PTX,             ///< PTX UDF based reduction
-    CUDA             ///< CUDA UDf based reduction
+    PTX,             ///< PTX  UDF based reduction
+    CUDA             ///< CUDA UDF based reduction
   };
 
   aggregation(aggregation::Kind a) : kind{a} {}
@@ -90,6 +94,10 @@ class aggregation {
   }
 
   virtual ~aggregation() = default;
+
+  // override functions for compound aggregations
+  virtual std::vector<aggregation::Kind> get_simple_aggregations(data_type col_type) const;
+  virtual void finalize(cudf::detail::aggregation_finalizer& finalizer);
 };
 
 enum class udf_type : bool { CUDA, PTX };

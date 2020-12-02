@@ -71,6 +71,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/null_mask.hpp
     - test -f $PREFIX/include/cudf/detail/nvtx/nvtx3.hpp
     - test -f $PREFIX/include/cudf/detail/nvtx/ranges.hpp
+    - test -f $PREFIX/include/cudf/detail/quantiles.hpp
     - test -f $PREFIX/include/cudf/detail/reduction_functions.hpp
     - test -f $PREFIX/include/cudf/detail/repeat.hpp
     - test -f $PREFIX/include/cudf/detail/replace.hpp
@@ -84,6 +85,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/transform.hpp
     - test -f $PREFIX/include/cudf/detail/transpose.hpp
     - test -f $PREFIX/include/cudf/detail/unary.hpp
+    - test -f $PREFIX/include/cudf/detail/utilities/alignment.hpp
     - test -f $PREFIX/include/cudf/detail/utilities/integer_utils.hpp
     - test -f $PREFIX/include/cudf/detail/utilities/int_fastdiv.h
     - test -f $PREFIX/include/cudf/dictionary/detail/concatenate.hpp

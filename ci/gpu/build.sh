@@ -99,8 +99,8 @@ function install_dask {
     # Install the master version of dask, distributed, and streamz
     gpuci_logger "Install the master version of dask, distributed, and streamz"
     set -x
-    pip install "git+https://github.com/dask/distributed.git" --upgrade --no-deps
-    pip install "git+https://github.com/dask/dask.git" --upgrade --no-deps
+    pip install "git+https://github.com/dask/distributed.git@master" --upgrade --no-deps
+    pip install "git+https://github.com/dask/dask.git@master" --upgrade --no-deps
     pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
     set +x
 }

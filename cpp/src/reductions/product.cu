@@ -15,22 +15,26 @@
  */
 
 #include <cudf/detail/reduction_functions.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <reductions/simple.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace reduction {
 
 std::unique_ptr<cudf::scalar> product(column_view const& col,
                                       cudf::data_type const output_dtype,
-                                      rmm::mr::device_memory_resource* mr,
-                                      cudaStream_t stream)
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
-  return cudf::type_dispatcher(col.type(),
-                               simple::element_type_dispatcher<cudf::reduction::op::product>{},
-                               col,
-                               output_dtype,
-                               mr,
-                               stream);
+  return cudf::type_dispatcher(
+    cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type(),
+    simple::element_type_dispatcher<cudf::reduction::op::product>{},
+    col,
+    output_dtype,
+    stream,
+    mr);
 }
 
 }  // namespace reduction

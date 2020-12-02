@@ -18,13 +18,15 @@ from cudf._lib.scalar cimport DeviceScalar
 def replace_tokens(Column strings,
                    Column targets,
                    Column replacements,
-                   DeviceScalar delimiter):
+                   object py_delimiter):
     """
     The `targets` tokens are searched for within each `strings`
     in the Column and replaced with the corresponding `replacements`
-    if found. Tokens are identified by the `delimiter` character
+    if found. Tokens are identified by the `py_delimiter` character
     provided.
     """
+
+    cdef DeviceScalar delimiter = py_delimiter.device_value
 
     cdef column_view c_strings = strings.view()
     cdef column_view c_targets = targets.view()
@@ -49,14 +51,17 @@ def replace_tokens(Column strings,
 
 def filter_tokens(Column strings,
                   size_type min_token_length,
-                  DeviceScalar replacement,
-                  DeviceScalar delimiter):
+                  object py_replacement,
+                  object py_delimiter):
     """
     Tokens smaller than `min_token_length` are removed from `strings`
     in the Column and optionally replaced with the corresponding
-    `replacement` string. Tokens are identified by the `delimiter`
+    `py_replacement` string. Tokens are identified by the `py_delimiter`
     character provided.
     """
+
+    cdef DeviceScalar replacement = py_replacement.device_value
+    cdef DeviceScalar delimiter = py_delimiter.device_value
 
     cdef column_view c_strings = strings.view()
     cdef const string_scalar* c_repl = <const string_scalar*>replacement\

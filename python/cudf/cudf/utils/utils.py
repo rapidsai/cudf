@@ -1,8 +1,10 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import functools
 from collections import OrderedDict
+from collections.abc import Sequence
 from math import floor, isinf, isnan
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 from numba import njit
@@ -87,7 +89,12 @@ def scalar_broadcast_to(scalar, size, dtype=None):
         return column.column_empty(size, dtype=dtype, masked=True)
 
     if isinstance(scalar, pd.Categorical):
-        return scalar_broadcast_to(scalar.categories[0], size).astype(dtype)
+        if dtype is None:
+            return _categorical_scalar_broadcast_to(scalar, size)
+        else:
+            return scalar_broadcast_to(scalar.categories[0], size).astype(
+                dtype
+            )
 
     scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
     dtype = scalar.dtype
@@ -464,3 +471,93 @@ def search_range(start, stop, x, step=1, side="left"):
 
     length = (stop - start) // step
     return max(min(length, i), 0)
+
+
+# Utils for using appropriate dispatch for array functions
+def get_appropriate_dispatched_func(
+    cudf_submodule, cudf_ser_submodule, cupy_submodule, func, args, kwargs
+):
+    fname = func.__name__
+
+    if hasattr(cudf_submodule, fname):
+        cudf_func = getattr(cudf_submodule, fname)
+        return cudf_func(*args, **kwargs)
+
+    elif hasattr(cudf_ser_submodule, fname):
+        cudf_ser_func = getattr(cudf_ser_submodule, fname)
+        return cudf_ser_func(*args, **kwargs)
+
+    elif hasattr(cupy_submodule, fname):
+        cupy_func = getattr(cupy_submodule, fname)
+        # Handle case if cupy impliments it as a numpy function
+        # Unsure if needed
+        if cupy_func is func:
+            return NotImplemented
+
+        cupy_compatible_args = get_cupy_compatible_args(args)
+        cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
+        return cast_to_appropriate_cudf_type(cupy_output)
+    else:
+        return NotImplemented
+
+
+def cast_to_appropriate_cudf_type(val):
+    # TODO Handle scalar
+    if val.ndim == 0:
+        return cudf.Scalar(val).value
+    # 1D array
+    elif (val.ndim == 1) or (val.ndim == 2 and val.shape[1] == 1):
+        return cudf.Series(val)
+    else:
+        return NotImplemented
+
+
+def get_cupy_compatible_args(args):
+    casted_ls = []
+    for arg in args:
+        if isinstance(arg, cp.ndarray):
+            casted_ls.append(arg)
+        elif isinstance(arg, cudf.Series):
+            casted_ls.append(arg.values)
+        elif isinstance(arg, Sequence):
+            # handle list of inputs for functions like
+            # np.concatenate
+            casted_arg = get_cupy_compatible_args(arg)
+            casted_ls.append(casted_arg)
+        else:
+            casted_ls.append(arg)
+    return casted_ls
+
+
+def get_relevant_submodule(func, module):
+    # point to the correct submodule
+    for submodule in func.__module__.split(".")[1:]:
+        if hasattr(module, submodule):
+            module = getattr(module, submodule)
+        else:
+            return None
+    return module
+
+
+def _categorical_scalar_broadcast_to(cat_scalar, size):
+    if isinstance(cat_scalar, (cudf.Series, pd.Series)):
+        cats = cat_scalar.cat.categories
+        code = cat_scalar.cat.codes[0]
+        ordered = cat_scalar.cat.ordered
+    else:
+        # handles pd.Categorical, cudf.categorical.CategoricalColumn
+        cats = cat_scalar.categories
+        code = cat_scalar.codes[0]
+        ordered = cat_scalar.ordered
+
+    cats = column.as_column(cats)
+    codes = scalar_broadcast_to(code, size)
+
+    return column.build_categorical_column(
+        categories=cats,
+        codes=codes,
+        mask=codes.base_mask,
+        size=codes.size,
+        offset=codes.offset,
+        ordered=ordered,
+    )

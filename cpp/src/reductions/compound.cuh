@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@
 #pragma once
 
 #include <cudf/detail/reduction.cuh>
-
+#include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <rmm/device_scalar.hpp>
 
 namespace cudf {
 namespace reduction {
@@ -33,9 +33,9 @@ namespace compound {
  * @param[in] ddof   `Delta Degrees of Freedom` used for `std`, `var`.
  *                   The divisor used in calculations is N - ddof, where N
  *                   represents the number of elements.
- * @param[in] mr     Device memory resource used to allocate the returned scalar's device memory
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- * @returns   Output scalar in device memory
+ * @param[in] mr     Device memory resource used to allocate the returned scalar's device memory
+ * @return    Output scalar in device memory
  *
  * @tparam ElementType  the input column cudf dtype
  * @tparam ResultType   the output cudf dtype
@@ -46,8 +46,8 @@ template <typename ElementType, typename ResultType, typename Op>
 std::unique_ptr<scalar> compound_reduction(column_view const& col,
                                            data_type const output_dtype,
                                            cudf::size_type ddof,
-                                           rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream)
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   cudf::size_type valid_count = col.size() - col.null_count();
 
@@ -56,23 +56,37 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
   std::unique_ptr<scalar> result;
   Op compound_op{};
 
-  if (col.has_nulls()) {
-    auto it = thrust::make_transform_iterator(
-      dcol->pair_begin<ElementType, true>(),
-      compound_op.template get_null_replacing_element_transformer<ResultType>());
-    result = detail::reduce<Op, decltype(it), ResultType>(
-      it, col.size(), compound_op, valid_count, ddof, mr, stream);
+  if (!cudf::is_dictionary(col.type())) {
+    if (col.has_nulls()) {
+      auto it = thrust::make_transform_iterator(
+        dcol->pair_begin<ElementType, true>(),
+        compound_op.template get_null_replacing_element_transformer<ResultType>());
+      result = detail::reduce<Op, decltype(it), ResultType>(
+        it, col.size(), compound_op, valid_count, ddof, stream, mr);
+    } else {
+      auto it = thrust::make_transform_iterator(
+        dcol->begin<ElementType>(), compound_op.template get_element_transformer<ResultType>());
+      result = detail::reduce<Op, decltype(it), ResultType>(
+        it, col.size(), compound_op, valid_count, ddof, stream, mr);
+    }
   } else {
-    auto it = thrust::make_transform_iterator(
-      dcol->begin<ElementType>(), compound_op.template get_element_transformer<ResultType>());
-    result = detail::reduce<Op, decltype(it), ResultType>(
-      it, col.size(), compound_op, valid_count, ddof, mr, stream);
+    if (col.has_nulls()) {
+      auto it = thrust::make_transform_iterator(
+        cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType, true>(*dcol),
+        compound_op.template get_null_replacing_element_transformer<ResultType>());
+      result = detail::reduce<Op, decltype(it), ResultType>(
+        it, col.size(), compound_op, valid_count, ddof, stream, mr);
+    } else {
+      auto it = thrust::make_transform_iterator(
+        cudf::dictionary::detail::make_dictionary_iterator<ElementType>(*dcol),
+        compound_op.template get_element_transformer<ResultType>());
+      result = detail::reduce<Op, decltype(it), ResultType>(
+        it, col.size(), compound_op, valid_count, ddof, stream, mr);
+    }
   }
+
   // set scalar is valid
-  if (col.null_count() < col.size())
-    result->set_valid(true, stream);
-  else
-    result->set_valid(false, stream);
+  result->set_valid(col.null_count() < col.size(), stream);
   return result;
 };
 
@@ -93,18 +107,18 @@ struct result_type_dispatcher {
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
                                      cudf::size_type ddof,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
-    return compound_reduction<ElementType, ResultType, Op>(col, output_dtype, ddof, mr, stream);
+    return compound_reduction<ElementType, ResultType, Op>(col, output_dtype, ddof, stream, mr);
   }
 
   template <typename ResultType, std::enable_if_t<not is_supported_v<ResultType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
                                      cudf::size_type ddof,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     CUDF_FAIL("Unsupported output data type");
   }
@@ -126,19 +140,19 @@ struct element_type_dispatcher {
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
                                      cudf::size_type ddof,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     return cudf::type_dispatcher(
-      output_dtype, result_type_dispatcher<ElementType, Op>(), col, output_dtype, ddof, mr, stream);
+      output_dtype, result_type_dispatcher<ElementType, Op>(), col, output_dtype, ddof, stream, mr);
   }
 
   template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      cudf::data_type const output_dtype,
                                      cudf::size_type ddof,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream)
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     CUDF_FAIL(
       "Reduction operators other than `min` and `max`"

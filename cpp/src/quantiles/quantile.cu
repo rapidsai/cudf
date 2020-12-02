@@ -41,8 +41,8 @@ struct quantile_functor {
   std::vector<double> const& q;
   interpolation interp;
   bool retain_types;
-  rmm::mr::device_memory_resource* mr;
   rmm::cuda_stream_view stream;
+  rmm::mr::device_memory_resource* mr;
 
   template <typename T>
   std::enable_if_t<not std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
@@ -124,17 +124,46 @@ std::unique_ptr<column> quantile(column_view const& input,
                                  std::vector<double> const& q,
                                  interpolation interp,
                                  bool retain_types,
-                                 rmm::mr::device_memory_resource* mr,
-                                 cudaStream_t stream)
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   auto functor = quantile_functor<exact, SortMapIterator>{
-    ordered_indices, size, q, interp, retain_types, mr, stream};
+    ordered_indices, size, q, interp, retain_types, stream, mr};
 
   auto input_type = cudf::is_dictionary(input.type()) && !input.is_empty()
                       ? dictionary_column_view(input).keys().type()
                       : input.type();
 
   return type_dispatcher(input_type, functor, input);
+}
+
+std::unique_ptr<column> quantile(column_view const& input,
+                                 std::vector<double> const& q,
+                                 interpolation interp,
+                                 column_view const& indices,
+                                 bool exact,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  if (indices.is_empty()) {
+    auto begin = thrust::make_counting_iterator<size_type>(0);
+    if (exact) {
+      return quantile<true>(input, begin, input.size(), q, interp, exact, stream, mr);
+    } else {
+      return quantile<false>(input, begin, input.size(), q, interp, exact, stream, mr);
+    }
+
+  } else {
+    CUDF_EXPECTS(indices.type() == data_type{type_to_id<size_type>()},
+                 "`indicies` type must be `INT32`.");
+    if (exact) {
+      return quantile<true>(
+        input, indices.begin<size_type>(), indices.size(), q, interp, exact, stream, mr);
+    } else {
+      return quantile<false>(
+        input, indices.begin<size_type>(), indices.size(), q, interp, exact, stream, mr);
+    }
+  }
 }
 
 }  // namespace detail
@@ -147,28 +176,7 @@ std::unique_ptr<column> quantile(column_view const& input,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-
-  if (ordered_indices.is_empty()) {
-    if (exact) {
-      return detail::quantile<true>(
-        input, thrust::make_counting_iterator<size_type>(0), input.size(), q, interp, exact, mr, 0);
-    } else {
-      return detail::quantile<false>(
-        input, thrust::make_counting_iterator<size_type>(0), input.size(), q, interp, exact, mr, 0);
-    }
-
-  } else {
-    CUDF_EXPECTS(ordered_indices.type() == data_type{type_to_id<size_type>()},
-                 "`ordered_indicies` type must be `INT32`.");
-
-    if (exact) {
-      return detail::quantile<true>(
-        input, ordered_indices.data<size_type>(), ordered_indices.size(), q, interp, exact, mr, 0);
-    } else {
-      return detail::quantile<false>(
-        input, ordered_indices.data<size_type>(), ordered_indices.size(), q, interp, exact, mr, 0);
-    }
-  }
+  return detail::quantile(input, q, interp, ordered_indices, exact, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

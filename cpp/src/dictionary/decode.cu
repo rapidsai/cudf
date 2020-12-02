@@ -33,8 +33,8 @@ namespace detail {
  * @brief Decode a column from a dictionary.
  */
 std::unique_ptr<column> decode(dictionary_column_view const& source,
-                               rmm::mr::device_memory_resource* mr,
-                               cudaStream_t stream)
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   if (source.is_empty()) return make_empty_column(data_type{type_id::EMPTY});
 
@@ -49,15 +49,14 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
                                            indices,
                                            cudf::detail::out_of_bounds_policy::IGNORE,
                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                           mr,
-                                           stream)
+                                           stream,
+                                           mr)
                         ->release();
   auto output_column = std::unique_ptr<column>(std::move(table_column.front()));
 
   // apply any nulls to the output column
-  output_column->set_null_mask(
-    cudf::detail::copy_bitmask(source.parent(), rmm::cuda_stream_view{stream}, mr),
-    source.null_count());
+  output_column->set_null_mask(cudf::detail::copy_bitmask(source.parent(), stream, mr),
+                               source.null_count());
 
   return output_column;
 }
@@ -68,7 +67,7 @@ std::unique_ptr<column> decode(dictionary_column_view const& source,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::decode(source, mr);
+  return detail::decode(source, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace dictionary
