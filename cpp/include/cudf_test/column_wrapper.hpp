@@ -531,8 +531,9 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
   /**
    * @brief Construct a nullable column of the fixed-point elements from a range.
    *
-   * Constructs a nullable column of the fixed-point elements in the range `[begin,end)` using the range 
-   * `[v, v + distance(begin,end))` interpreted as Booleans to indicate the validity of each element.
+   * Constructs a nullable column of the fixed-point elements in the range `[begin,end)` using the
+   * range `[v, v + distance(begin,end))` interpreted as Booleans to indicate the validity of each
+   * element.
    *
    * If `v[i] == true`, element `i` is valid, else it is null.
    *

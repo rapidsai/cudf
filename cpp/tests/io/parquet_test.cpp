@@ -1483,6 +1483,34 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
     cudf::test::expect_columns_equal(result.tbl->view().column(3), a);
   }
 }
+/*
+MATCHER_P(FloatNearPointwise, tolerance, "Out-of-range")
+{
+  return (std::get<0>(arg) > std::get<1>(arg) - tolerance &&
+          std::get<0>(arg) < std::get<1>(arg) + tolerance);
+}
+
+template <typename T>
+using wrapper = cudf::test::fixed_width_column_wrapper<T>;
+
+// temporary method to verify the float columns until
+// CUDF_TEST_EXPECT_COLUMNS_EQUAL supports floating point
+template <typename T, typename valid_t>
+void check_float_column(cudf::column_view const& col_lhs,
+                        cudf::column_view const& col_rhs,
+                        T tol,
+                        valid_t const& validity)
+{
+  auto h_data = cudf::test::to_host<T>(col_rhs).first;
+
+  std::vector<T> data(h_data.size());
+  std::copy(h_data.begin(), h_data.end(), data.begin());
+
+  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(col_lhs,
+                                                (wrapper<T>{data.begin(), data.end(), validity}));
+  EXPECT_THAT(cudf::test::to_host<T>(col_lhs).first,
+              ::testing::Pointwise(FloatNearPointwise(tol), data));
+}*/
 
 TEST_F(ParquetReaderTest, DecimalRead)
 {
@@ -1560,12 +1588,15 @@ TEST_F(ParquetReaderTest, DecimalRead)
     EXPECT_EQ(result.tbl->view().column(2).size(), sizeof(col2_data) / sizeof(col2_data[0]));
 
     cudf::test::fixed_width_column_wrapper<double> col2(std::begin(col2_data), std::end(col2_data),
-    validity); cudf::test::expect_columns_equal(result.tbl->view().column(2), col2);
+    validity); check_float_column(result.tbl->view().column(2), col2, double{1.0e+5}, validity);
     */
 
   cudf_io::parquet_reader_options read_strict_opts =
     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
       .use_strict_decimal_types(true);
   EXPECT_THROW(cudf_io::read_parquet(read_strict_opts), cudf::logic_error);
+
+  read_strict_opts.set_columns({"dec7p4", "dec14p5"});
+  EXPECT_NO_THROW(cudf_io::read_parquet(read_strict_opts));
 }
 CUDF_TEST_PROGRAM_MAIN()

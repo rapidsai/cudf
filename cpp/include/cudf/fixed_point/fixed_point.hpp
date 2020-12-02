@@ -519,7 +519,7 @@ class fixed_point {
   /**
    * @brief Returns a string representation of the fixed_point value.
    */
-  std::string to_string() const
+  explicit operator std::string() const
   {
     int const n          = std::pow(10, -_scale);
     int const f          = _value % n;
