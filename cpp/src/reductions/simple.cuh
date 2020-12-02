@@ -28,6 +28,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include "cudf/utilities/error.hpp"
 
 namespace cudf {
 namespace reduction {
@@ -57,7 +58,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
   auto dcol      = cudf::column_device_view::create(col, stream);
   auto simple_op = Op{};
 
-  auto result = [&]() -> std::unique_ptr<scalar> {
+  auto result = [&] {
     if (col.has_nulls()) {
       auto f  = simple_op.template get_null_replacing_element_transformer<ResType>();
       auto it = thrust::make_transform_iterator(dcol->pair_begin<Type, true>(), f);
@@ -69,8 +70,8 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
     }
   }();
 
-  // set scalar is valid
-  result->set_valid((col.null_count() < col.size()), stream);
+  // set scalar is valid0
+  result->set_valid((col.null_count() < col.size()), stream);  // TODO see if we can fix this
   return result;
 }
 
@@ -91,24 +92,25 @@ std::unique_ptr<scalar> dictionary_reduction(column_view const& col,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
-  auto dcol = cudf::column_device_view::create(col, stream);
-  std::unique_ptr<scalar> result;
-  Op simple_op{};
+  auto dcol      = cudf::column_device_view::create(col, stream);
+  auto simple_op = Op{};
 
-  if (col.has_nulls()) {
-    auto it = thrust::make_transform_iterator(
-      cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType, true>(*dcol),
-      simple_op.template get_null_replacing_element_transformer<ResultType>());
-    result = detail::reduce(it, col.size(), simple_op, stream, mr);
-  } else {
-    auto it = thrust::make_transform_iterator(
-      cudf::dictionary::detail::make_dictionary_iterator<ElementType>(*dcol),
-      simple_op.template get_element_transformer<ResultType>());
-    result = detail::reduce(it, col.size(), simple_op, stream, mr);
-  }
+  auto result = [&] {
+    if (col.has_nulls()) {
+      auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
+      auto p  = cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType, true>(*dcol);
+      auto it = thrust::make_transform_iterator(p, f);
+      return detail::reduce(it, col.size(), simple_op, stream, mr);
+    } else {
+      auto f  = simple_op.template get_element_transformer<ResultType>();
+      auto p  = cudf::dictionary::detail::make_dictionary_iterator<ElementType>(*dcol);
+      auto it = thrust::make_transform_iterator(p, f);
+      return detail::reduce(it, col.size(), simple_op, stream, mr);
+    }
+  }();
 
   // set scalar is valid
-  result->set_valid((col.null_count() < col.size()), stream);  // TODO see if we can fix this
+  result->set_valid((col.null_count() < col.size()), stream);
   return result;
 }
 
