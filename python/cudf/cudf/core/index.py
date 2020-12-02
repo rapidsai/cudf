@@ -452,6 +452,11 @@ class Index(Frame, Serializable):
         else:
             return self
 
+    def factorize(self, na_sentinel=-1):
+        from cudf.core.series import _factorize
+
+        return _factorize(self, na_sentinel=na_sentinel)
+
     def fillna(self, value, downcast=None):
         """
         Fill null values with the specified value.

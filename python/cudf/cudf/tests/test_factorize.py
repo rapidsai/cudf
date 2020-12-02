@@ -8,7 +8,7 @@ from cudf.tests.utils import assert_eq
 
 
 @pytest.mark.parametrize("ncats,nelem", [(2, 2), (2, 10), (10, 100)])
-def test_factorize(ncats, nelem):
+def test_factorize_series_obj(ncats, nelem):
     df = DataFrame()
     np.random.seed(0)
 
@@ -25,7 +25,26 @@ def test_factorize(ncats, nelem):
     np.testing.assert_array_equal(uvals.to_array(), handcoded)
 
 
-def test_factorize_index():
+@pytest.mark.parametrize("ncats,nelem", [(2, 2), (2, 10), (10, 100)])
+def test_factorize_index_obj(ncats, nelem):
+    df = DataFrame()
+    np.random.seed(0)
+
+    # initialize data frame
+    df["cats"] = arr = np.random.randint(2, size=10, dtype=np.int32)
+    df = df.set_index("cats")
+
+    uvals, labels = df.index.factorize()
+    np.testing.assert_array_equal(labels.to_array(), sorted(set(arr)))
+    assert isinstance(uvals, Series)
+    assert isinstance(labels, Series)
+
+    encoder = dict((labels[idx], idx) for idx in range(len(labels)))
+    handcoded = [encoder[v] for v in arr]
+    np.testing.assert_array_equal(uvals.to_array(), handcoded)
+
+
+def test_factorize_series_index():
     df = DataFrame()
     df["col1"] = ["C", "H", "C", "W", "W", "W", "W", "W", "C", "W"]
     df["col2"] = [
@@ -40,7 +59,6 @@ def test_factorize_index():
         2992446.0,
         2992448.0,
     ]
-
     assert_eq(
         df.col1.factorize()[0].to_array(), df.to_pandas().col1.factorize()[0]
     )

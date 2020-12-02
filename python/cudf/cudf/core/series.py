@@ -21,10 +21,10 @@ from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
     TimeDeltaColumn,
+    arange,
     as_column,
     column,
     column_empty_like,
-    arange,
     full,
 )
 from cudf.core.column.categorical import (
@@ -50,8 +50,10 @@ from cudf.utils.dtypes import (
     min_scalar_type,
     numeric_normalize_types,
 )
-from cudf.utils.utils import get_relevant_submodule
-from cudf.utils.utils import get_appropriate_dispatched_func
+from cudf.utils.utils import (
+    get_appropriate_dispatched_func,
+    get_relevant_submodule,
+)
 
 
 class Series(Frame, Serializable):
@@ -2572,13 +2574,7 @@ class Series(Frame, Serializable):
         1    c
         dtype: object
         """
-        cats = self.dropna().unique().astype(self.dtype)
-
-        name = self.name  # label_encoding mutates self.name
-        labels = self.label_encoding(cats=cats, na_sentinel=na_sentinel)
-        self.name = name
-
-        return labels, cats
+        return _factorize(self, na_sentinel=na_sentinel)
 
     # UDF related
 
@@ -5216,3 +5212,16 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         result_col[equal_nulls] = True
 
     return Series(result_col, index=index)
+
+
+def _factorize(obj, na_sentinel=-1):
+
+    obj = cudf.Series(obj)
+
+    cats = obj.dropna().unique().astype(obj.dtype)
+
+    name = obj.name  # label_encoding mutates self.name
+    labels = obj.label_encoding(cats=cats, na_sentinel=na_sentinel)
+    obj.name = name
+
+    return labels, cats
