@@ -38,7 +38,6 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cub/cub.cuh>
-#include "cudf/copying.hpp"
 
 #include <algorithm>
 
