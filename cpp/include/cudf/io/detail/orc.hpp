@@ -18,6 +18,8 @@
 
 #include <cudf/io/orc.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace io {
 namespace detail {
@@ -66,7 +68,8 @@ class reader {
    *
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read(orc_reader_options const& options, cudaStream_t stream = 0);
+  table_with_metadata read(orc_reader_options const& options,
+                           rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 };
 
 /**
@@ -103,7 +106,7 @@ class writer {
    */
   void write(table_view const& table,
              const table_metadata* metadata = nullptr,
-             cudaStream_t stream            = 0);
+             rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
 
   /**
    * @brief Begins the chunked/streamed write process.

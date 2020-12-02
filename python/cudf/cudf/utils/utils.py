@@ -1,8 +1,10 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import functools
 from collections import OrderedDict
+from collections.abc import Sequence
 from math import floor, isinf, isnan
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 from numba import njit
@@ -16,6 +18,21 @@ from cudf.utils.dtypes import to_cudf_compatible_scalar
 
 mask_dtype = np.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
+
+_EQUALITY_OPS = {
+    "eq",
+    "ne",
+    "lt",
+    "gt",
+    "le",
+    "ge",
+    "__eq__",
+    "__ne__",
+    "__lt__",
+    "__gt__",
+    "__le__",
+    "__ge__",
+}
 
 
 @njit
@@ -72,7 +89,12 @@ def scalar_broadcast_to(scalar, size, dtype=None):
         return column.column_empty(size, dtype=dtype, masked=True)
 
     if isinstance(scalar, pd.Categorical):
-        return scalar_broadcast_to(scalar.categories[0], size).astype(dtype)
+        if dtype is None:
+            return _categorical_scalar_broadcast_to(scalar, size)
+        else:
+            return scalar_broadcast_to(scalar.categories[0], size).astype(
+                dtype
+            )
 
     scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
     dtype = scalar.dtype
@@ -322,7 +344,9 @@ def to_flat_dict(d):
     with tuple keys.
     """
 
-    def _inner(d, parents=[]):
+    def _inner(d, parents=None):
+        if parents is None:
+            parents = []
         for k, v in d.items():
             if not isinstance(v, d.__class__):
                 if parents:
@@ -364,4 +388,176 @@ def raise_iteration_error(obj):
         f"{obj.__class__.__name__} object is not iterable. "
         f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
         f"if you wish to iterate over the values."
+    )
+
+
+def pa_mask_buffer_to_mask(mask_buf, size):
+    """
+    Convert PyArrow mask buffer to cuDF mask buffer
+    """
+    mask_size = cudf._lib.null_mask.bitmask_allocation_size_bytes(size)
+    if mask_buf.size < mask_size:
+        dbuf = rmm.DeviceBuffer(size=mask_size)
+        dbuf.copy_from_host(np.asarray(mask_buf).view("u1"))
+        return Buffer(dbuf)
+    return Buffer(mask_buf)
+
+
+def isnat(val):
+    if not isinstance(val, (np.datetime64, np.timedelta64, str)):
+        return False
+    else:
+        return val in {"NaT", "NAT"} or np.isnat(val)
+
+
+def _fillna_natwise(col):
+    # If the value we are filling is np.datetime64("NAT")
+    # we set the same mask as current column.
+    # However where there are "<NA>" in the
+    # columns, their corresponding locations
+    nat = cudf._lib.scalar._create_proxy_nat_scalar(col.dtype)
+    result = cudf._lib.replace.replace_nulls(col, nat)
+    return column.build_column(
+        data=result.base_data,
+        dtype=result.dtype,
+        mask=col.base_mask,
+        size=result.size,
+        offset=result.offset,
+        children=result.base_children,
+    )
+
+
+def search_range(start, stop, x, step=1, side="left"):
+    """Find the position to insert a value in a range, so that the resulting
+    sequence remains sorted.
+
+    When ``side`` is set to 'left', the insertion point ``i`` will hold the
+    following invariant:
+    `all(x < n for x in range_left) and all(x >= n for x in range_right)`
+    where ``range_left`` and ``range_right`` refers to the range to the left
+    and right of position ``i``, respectively.
+
+    When ``side`` is set to 'right', ``i`` will hold the following invariant:
+    `all(x <= n for x in range_left) and all(x > n for x in range_right)`
+
+    Parameters
+    --------
+    start : int
+        Start value of the series
+    stop : int
+        Stop value of the range
+    x : int
+        The value to insert
+    step : int, default 1
+        Step value of the series, assumed positive
+    side : {'left', 'right'}, default 'left'
+        See description for usage.
+
+    Returns
+    --------
+    int
+        Insertion position of n.
+
+    Examples
+    --------
+    For series: 1 4 7
+    >>> search_range(start=1, stop=10, x=4, step=3, side="left")
+    1
+    >>> search_range(start=1, stop=10, x=4, step=3, side="right")
+    2
+    """
+    z = 1 if side == "left" else 0
+    i = (x - start - z) // step + 1
+
+    length = (stop - start) // step
+    return max(min(length, i), 0)
+
+
+# Utils for using appropriate dispatch for array functions
+def get_appropriate_dispatched_func(
+    cudf_submodule, cudf_ser_submodule, cupy_submodule, func, args, kwargs
+):
+    fname = func.__name__
+
+    if hasattr(cudf_submodule, fname):
+        cudf_func = getattr(cudf_submodule, fname)
+        return cudf_func(*args, **kwargs)
+
+    elif hasattr(cudf_ser_submodule, fname):
+        cudf_ser_func = getattr(cudf_ser_submodule, fname)
+        return cudf_ser_func(*args, **kwargs)
+
+    elif hasattr(cupy_submodule, fname):
+        cupy_func = getattr(cupy_submodule, fname)
+        # Handle case if cupy impliments it as a numpy function
+        # Unsure if needed
+        if cupy_func is func:
+            return NotImplemented
+
+        cupy_compatible_args = get_cupy_compatible_args(args)
+        cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
+        return cast_to_appropriate_cudf_type(cupy_output)
+    else:
+        return NotImplemented
+
+
+def cast_to_appropriate_cudf_type(val):
+    # TODO Handle scalar
+    if val.ndim == 0:
+        return cudf.Scalar(val).value
+    # 1D array
+    elif (val.ndim == 1) or (val.ndim == 2 and val.shape[1] == 1):
+        return cudf.Series(val)
+    else:
+        return NotImplemented
+
+
+def get_cupy_compatible_args(args):
+    casted_ls = []
+    for arg in args:
+        if isinstance(arg, cp.ndarray):
+            casted_ls.append(arg)
+        elif isinstance(arg, cudf.Series):
+            casted_ls.append(arg.values)
+        elif isinstance(arg, Sequence):
+            # handle list of inputs for functions like
+            # np.concatenate
+            casted_arg = get_cupy_compatible_args(arg)
+            casted_ls.append(casted_arg)
+        else:
+            casted_ls.append(arg)
+    return casted_ls
+
+
+def get_relevant_submodule(func, module):
+    # point to the correct submodule
+    for submodule in func.__module__.split(".")[1:]:
+        if hasattr(module, submodule):
+            module = getattr(module, submodule)
+        else:
+            return None
+    return module
+
+
+def _categorical_scalar_broadcast_to(cat_scalar, size):
+    if isinstance(cat_scalar, (cudf.Series, pd.Series)):
+        cats = cat_scalar.cat.categories
+        code = cat_scalar.cat.codes[0]
+        ordered = cat_scalar.cat.ordered
+    else:
+        # handles pd.Categorical, cudf.categorical.CategoricalColumn
+        cats = cat_scalar.categories
+        code = cat_scalar.codes[0]
+        ordered = cat_scalar.ordered
+
+    cats = column.as_column(cats)
+    codes = scalar_broadcast_to(code, size)
+
+    return column.build_categorical_column(
+        categories=cats,
+        codes=codes,
+        mask=codes.base_mask,
+        size=codes.size,
+        offset=codes.offset,
+        ordered=ordered,
     )

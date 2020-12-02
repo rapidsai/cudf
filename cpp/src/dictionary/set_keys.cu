@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
@@ -27,7 +28,11 @@
 #include <cudf/stream_compaction.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/binary_search.h>
+#include <algorithm>
+#include <iterator>
 
 namespace cudf {
 namespace dictionary {
@@ -46,8 +51,8 @@ struct dispatch_compute_indices {
                             std::unique_ptr<column>>
   operator()(dictionary_column_view const& input,
              column_view const& new_keys,
-             rmm::mr::device_memory_resource* mr,
-             cudaStream_t stream)
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr)
   {
     auto dictionary_view = column_device_view::create(input.parent(), stream);
     auto d_dictionary    = *dictionary_view;
@@ -69,7 +74,7 @@ struct dispatch_compute_indices {
                                       mr);
     auto result_itr =
       cudf::detail::indexalator_factory::make_output_iterator(result->mutable_view());
-    thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
+    thrust::lower_bound(rmm::exec_policy(stream)->on(stream.value()),
                         new_keys_view->begin<Element>(),
                         new_keys_view->end<Element>(),
                         dictionary_itr,
@@ -85,8 +90,8 @@ struct dispatch_compute_indices {
                             std::unique_ptr<column>>
   operator()(dictionary_column_view const& input,
              column_view const& new_keys,
-             rmm::mr::device_memory_resource* mr,
-             cudaStream_t stream)
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr)
   {
     CUDF_FAIL("list_view dictionary set_keys not supported yet");
   }
@@ -98,8 +103,8 @@ struct dispatch_compute_indices {
 std::unique_ptr<column> set_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& new_keys,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(!new_keys.has_nulls(), "keys parameter must not have nulls");
   auto keys = dictionary_column.keys();
@@ -110,13 +115,13 @@ std::unique_ptr<column> set_keys(
                                                   std::vector<size_type>{0},
                                                   duplicate_keep_option::KEEP_FIRST,
                                                   null_equality::EQUAL,
-                                                  mr,
-                                                  stream)
+                                                  stream,
+                                                  mr)
                       ->release();
   std::unique_ptr<column> keys_column(std::move(table_keys.front()));
 
   // compute the new nulls
-  auto matches   = cudf::detail::contains(keys, keys_column->view(), mr, stream);
+  auto matches   = cudf::detail::contains(keys, keys_column->view(), stream, mr);
   auto d_matches = matches->view().data<bool>();
   auto indices_itr =
     cudf::detail::indexalator_factory::make_input_iterator(dictionary_column.indices());
@@ -137,8 +142,8 @@ std::unique_ptr<column> set_keys(
                                         dispatch_compute_indices{},
                                         dictionary_column,
                                         keys_column->view(),
-                                        mr,
-                                        stream);
+                                        stream,
+                                        mr);
 
   // create column with keys_column and indices_column
   return make_dictionary_column(std::move(keys_column),
@@ -146,6 +151,66 @@ std::unique_ptr<column> set_keys(
                                 std::move(new_nulls.first),
                                 new_nulls.second);
 }
+
+std::vector<std::unique_ptr<column>> match_dictionaries(std::vector<dictionary_column_view> input,
+                                                        rmm::cuda_stream_view stream,
+                                                        rmm::mr::device_memory_resource* mr)
+{
+  std::vector<column_view> keys(input.size());
+  std::transform(input.begin(), input.end(), keys.begin(), [](auto& col) { return col.keys(); });
+  auto new_keys  = cudf::detail::concatenate(keys, stream);
+  auto keys_view = new_keys->view();
+  std::vector<std::unique_ptr<column>> result(input.size());
+  std::transform(input.begin(), input.end(), result.begin(), [keys_view, mr, stream](auto& col) {
+    return set_keys(col, keys_view, stream, mr);
+  });
+  return result;
+}
+
+std::pair<std::vector<std::unique_ptr<column>>, std::vector<table_view>> match_dictionaries(
+  std::vector<table_view> tables, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+{
+  // Make a copy of all the column views from each table_view
+  std::vector<std::vector<column_view>> updated_columns;
+  std::transform(tables.begin(), tables.end(), std::back_inserter(updated_columns), [](auto& t) {
+    return std::vector<column_view>(t.begin(), t.end());
+  });
+
+  // Each column in a table must match in type.
+  // Once a dictionary column is found, all the corresponding column_views in the
+  // other table_views are matched. The matched column_views then replace the originals.
+  std::vector<std::unique_ptr<column>> dictionary_columns;
+  auto first_table = tables.front();
+  for (size_type col_idx = 0; col_idx < first_table.num_columns(); ++col_idx) {
+    auto col = first_table.column(col_idx);
+    if (col.type().id() == type_id::DICTIONARY32) {
+      std::vector<dictionary_column_view> dict_views;  // hold all column_views at col_idx
+      std::transform(
+        tables.begin(), tables.end(), std::back_inserter(dict_views), [col_idx](auto& t) {
+          return dictionary_column_view(t.column(col_idx));
+        });
+      // now match the keys in these dictionary columns
+      auto dict_cols = dictionary::detail::match_dictionaries(dict_views, stream, mr);
+      // replace the updated_columns vector entries for the set of columns at col_idx
+      auto dict_col_idx = 0;
+      for (auto& v : updated_columns) v[col_idx] = dict_cols[dict_col_idx++]->view();
+      // move the updated dictionary columns into the main output vector
+      std::move(dict_cols.begin(), dict_cols.end(), std::back_inserter(dictionary_columns));
+    }
+  }
+  // All the new column_views are in now updated_columns.
+
+  // Rebuild the table_views from the column_views.
+  std::vector<table_view> updated_tables;
+  std::transform(updated_columns.begin(),
+                 updated_columns.end(),
+                 std::back_inserter(updated_tables),
+                 [](auto& v) { return table_view{v}; });
+
+  // Return the new dictionary columns and table_views
+  return {std::move(dictionary_columns), std::move(updated_tables)};
+}
+
 }  // namespace detail
 
 // external API
@@ -155,7 +220,7 @@ std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::set_keys(dictionary_column, keys, mr);
+  return detail::set_keys(dictionary_column, keys, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace dictionary

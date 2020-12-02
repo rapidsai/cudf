@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,19 @@
 // The translation unit for reduction `mean`
 
 #include <cudf/detail/reduction_functions.hpp>
-#include "compound.cuh"
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <reductions/compound.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 std::unique_ptr<cudf::scalar> cudf::reduction::mean(column_view const& col,
                                                     cudf::data_type const output_dtype,
-                                                    rmm::mr::device_memory_resource* mr,
-                                                    cudaStream_t stream)
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
 {
   using reducer = cudf::reduction::compound::element_type_dispatcher<cudf::reduction::op::mean>;
+  auto col_type =
+    cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type();
   return cudf::type_dispatcher(
-    col.type(), reducer(), col, output_dtype, /* ddof is not used for mean*/ 1, mr, stream);
+    col_type, reducer(), col, output_dtype, /* ddof is not used for mean*/ 1, stream, mr);
 }

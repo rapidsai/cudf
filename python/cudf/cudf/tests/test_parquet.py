@@ -2,10 +2,13 @@
 import os
 import pathlib
 import random
+import datetime
+import math
 from glob import glob
 from io import BytesIO
 from string import ascii_letters
 
+import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -48,7 +51,7 @@ def simple_pdf(request):
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
-    test_pdf = pd.util.testing.makeCustomDataframe(
+    test_pdf = pd._testing.makeCustomDataframe(
         nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
     )
     # Delete the name of the column index, and rename the row index
@@ -67,8 +70,7 @@ def simple_gdf(simple_pdf):
     return cudf.DataFrame.from_pandas(simple_pdf)
 
 
-@pytest.fixture(params=[0, 1, 10, 100])
-def pdf(request):
+def build_pdf(num_columns, day_resolution_timestamps):
     types = [
         "bool",
         "int8",
@@ -83,6 +85,7 @@ def pdf(request):
         "float32",
         "float64",
         "datetime64[ms]",
+        "datetime64[us]",
         "str",
     ]
     renamer = {
@@ -90,10 +93,10 @@ def pdf(request):
     }
     typer = {"col_" + val: val for val in types}
     ncols = len(types)
-    nrows = request.param
+    nrows = num_columns.param
 
     # Create a pandas dataframe with random data of mixed types
-    test_pdf = pd.util.testing.makeCustomDataframe(
+    test_pdf = pd._testing.makeCustomDataframe(
         nrows=nrows, ncols=ncols, data_gen_f=lambda r, c: r, r_idx_type="i"
     )
     # Delete the name of the column index, and rename the row index
@@ -102,7 +105,33 @@ def pdf(request):
 
     # Cast all the column dtypes to objects, rename them, and then cast to
     # appropriate types
-    test_pdf = test_pdf.astype("object").rename(renamer, axis=1).astype(typer)
+    test_pdf = test_pdf.rename(renamer, axis=1).astype(typer)
+
+    # make datetime64's a little more interesting by increasing the range of
+    # dates note that pandas will convert these to ns timestamps, so care is
+    # taken to avoid overflowing a ns timestamp. There is also the ability to
+    # request timestamps be whole days only via `day_resolution_timestamps`.
+    for t in [
+        {
+            "name": "datetime64[ms]",
+            "nsDivisor": 1000000,
+            "dayModulus": 86400000,
+        },
+        {
+            "name": "datetime64[us]",
+            "nsDivisor": 1000,
+            "dayModulus": 86400000000,
+        },
+    ]:
+        data = [
+            np.random.randint(0, (0x7FFFFFFFFFFFFFFF / t["nsDivisor"]))
+            for i in range(nrows)
+        ]
+        if day_resolution_timestamps:
+            data = [int(d / t["dayModulus"]) * t["dayModulus"] for d in data]
+        test_pdf["col_" + t["name"]] = pd.Series(
+            np.asarray(data, dtype=t["name"])
+        )
 
     # Create non-numeric categorical data otherwise parquet may typecast it
     data = [ascii_letters[np.random.randint(0, 52)] for i in range(nrows)]
@@ -115,12 +144,27 @@ def pdf(request):
     return test_pdf
 
 
+@pytest.fixture(params=[0, 1, 10, 100])
+def pdf(request):
+    return build_pdf(request, False)
+
+
+@pytest.fixture(params=[0, 1, 10, 100])
+def pdf_day_timestamps(request):
+    return build_pdf(request, True)
+
+
 @pytest.fixture
 def gdf(pdf):
     return cudf.DataFrame.from_pandas(pdf)
 
 
-@pytest.fixture(params=["snappy", "gzip", "brotli", None])
+@pytest.fixture
+def gdf_day_timestamps(pdf_day_timestamps):
+    return cudf.DataFrame.from_pandas(pdf_day_timestamps)
+
+
+@pytest.fixture(params=["snappy", "gzip", "brotli", None, np.str_("snappy")])
 def parquet_file(request, tmp_path_factory, pdf):
     fname = tmp_path_factory.mktemp("parquet") / "test.parquet"
     pdf.to_parquet(fname, engine="pyarrow", compression=request.param)
@@ -133,7 +177,7 @@ def rdg_seed():
 
 
 def make_pdf(nrows, ncolumns=1, nvalids=0, dtype=np.int64):
-    test_pdf = pd.util.testing.makeCustomDataframe(
+    test_pdf = pd._testing.makeCustomDataframe(
         nrows=nrows,
         ncols=1,
         data_gen_f=lambda r, c: r,
@@ -508,11 +552,11 @@ def test_parquet_read_rows(tmpdir, pdf, row_group_size):
     total_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
 
     num_rows = total_rows // 4
-    skip_rows = (total_rows - num_rows) // 2
-    gdf = cudf.read_parquet(fname, skip_rows=skip_rows, num_rows=num_rows)
+    skiprows = (total_rows - num_rows) // 2
+    gdf = cudf.read_parquet(fname, skiprows=skiprows, num_rows=num_rows)
 
     for row in range(num_rows):
-        assert gdf["col_int32"].iloc[row] == row + skip_rows
+        assert gdf["col_int32"].iloc[row] == row + skiprows
 
 
 def test_parquet_reader_spark_timestamps(datadir):
@@ -585,7 +629,7 @@ def test_parquet_chunked_skiprows(tmpdir):
     out_df.to_pandas().to_parquet(fname)
 
     for i in range(10):
-        chunk = cudf.read_parquet(fname, skip_rows=processed, num_rows=batch)
+        chunk = cudf.read_parquet(fname, skiprows=processed, num_rows=batch)
         expect = out_df[processed : processed + batch].reset_index(drop=True)
         assert_eq(chunk.reset_index(drop=True), expect)
         processed += batch
@@ -770,8 +814,45 @@ def string_gen(first_val, i):
     return strings[int_gen(first_val, i) % len(strings)]
 
 
+def list_row_gen(
+    gen, first_val, list_size, lists_per_row, include_validity=False
+):
+    """
+    Generate a single row for a List<List<>> column based on input parameters.
+
+    Args:
+        gen: A callable which generates an individual leaf element based on an
+            absolute index.
+        first_val : Generate the column as if it had started at 'first_val'
+            instead of 0.
+        list_size : Size of each generated list.
+        lists_per_row : Number of lists to generate per row.
+        include_validity : Whether or not to include nulls as part of the
+            column. If true, it will add a selection of nulls at both the
+            topmost row level and at the leaf level.
+
+    Returns:
+        The generated list column.
+    """
+
+    def L(list_size, first_val):
+        return [
+            (gen(first_val, i) if i % 2 == 0 else None)
+            if include_validity
+            else (gen(first_val, i))
+            for i in range(list_size)
+        ]
+
+    return [
+        (L(list_size, first_val + (list_size * i)) if i % 2 == 0 else None)
+        if include_validity
+        else L(list_size, first_val + (list_size * i))
+        for i in range(lists_per_row)
+    ]
+
+
 def list_gen(
-    gen, skip_rows, num_rows, lists_per_row, list_size, include_validity=False
+    gen, skiprows, num_rows, lists_per_row, list_size, include_validity=False
 ):
     """
     Generate a list column based on input parameters.
@@ -779,8 +860,8 @@ def list_gen(
     Args:
         gen: A callable which generates an individual leaf element based on an
             absolute index.
-        skip_rows : Generate the column as if it had started at 'skip_rows'
-            instead of 0. The intent here is to emulate the skip_rows
+        skiprows : Generate the column as if it had started at 'skiprows'
+            instead of 0. The intent here is to emulate the skiprows
             parameter of the parquet reader.
         num_rows : Number of rows to generate.  Again, this is to emulate the
             'num_rows' parameter of the parquet reader.
@@ -811,16 +892,16 @@ def list_gen(
     return [
         (
             R(
-                lists_per_row * list_size * (i + skip_rows),
+                lists_per_row * list_size * (i + skiprows),
                 lists_per_row,
                 list_size,
             )
-            if (i + skip_rows) % 2 == 0
+            if (i + skiprows) % 2 == 0
             else None
         )
         if include_validity
         else R(
-            lists_per_row * list_size * (i + skip_rows),
+            lists_per_row * list_size * (i + skiprows),
             lists_per_row,
             list_size,
         )
@@ -864,6 +945,57 @@ def test_parquet_reader_list_large_mixed(tmpdir):
     assert_eq(expect, got, check_dtype=False)
 
 
+def test_parquet_reader_list_large_multi_rowgroup(tmpdir):
+    # > 40 row groups
+    num_rows = 100000
+    num_docs = num_rows / 2
+    num_categories = 1_000
+    row_group_size = 1000
+
+    cupy.random.seed(0)
+
+    # generate a random pairing of doc: category
+    documents = cudf.DataFrame(
+        {
+            "document_id": cupy.random.randint(num_docs, size=num_rows),
+            "category_id": cupy.random.randint(num_categories, size=num_rows),
+        }
+    )
+
+    # group categories by document_id to create a list column
+    expect = documents.groupby("document_id").agg({"category_id": ["collect"]})
+    expect.columns = expect.columns.get_level_values(0)
+    expect.reset_index(inplace=True)
+
+    # round trip the dataframe to/from parquet
+    fname = tmpdir.join(
+        "test_parquet_reader_list_large_multi_rowgroup.parquet"
+    )
+    expect.to_pandas().to_parquet(fname, row_group_size=row_group_size)
+    got = cudf.read_parquet(fname)
+
+    assert_eq(expect, got)
+
+
+def test_parquet_reader_list_large_multi_rowgroup_nulls(tmpdir):
+    # 25 row groups
+    num_rows = 25000
+    row_group_size = 1000
+
+    expect = cudf.DataFrame(
+        {"a": list_gen(int_gen, 0, num_rows, 3, 2, include_validity=True)}
+    )
+
+    # round trip the dataframe to/from parquet
+    fname = tmpdir.join(
+        "test_parquet_reader_list_large_multi_rowgroup_nulls.parquet"
+    )
+    expect.to_pandas().to_parquet(fname, row_group_size=row_group_size)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("skip", range(0, 128))
 def test_parquet_reader_list_skiprows(skip, tmpdir):
     num_rows = 128
@@ -887,7 +1019,7 @@ def test_parquet_reader_list_skiprows(skip, tmpdir):
             ),
         }
     )
-    got = cudf.read_parquet(fname, skip_rows=skip)
+    got = cudf.read_parquet(fname, skiprows=skip)
     assert_eq(expect, got, check_dtype=False)
 
 
@@ -921,21 +1053,163 @@ def test_parquet_reader_list_num_rows(skip, tmpdir):
             ),
         }
     )
-    got = cudf.read_parquet(fname, skip_rows=skip, num_rows=rows_to_read)
+    got = cudf.read_parquet(fname, skiprows=skip, num_rows=rows_to_read)
     assert_eq(expect, got, check_dtype=False)
 
 
+def struct_gen(gen, skip_rows, num_rows, include_validity=False):
+    """
+    Generate a struct column based on input parameters.
+
+    Args:
+        gen: A array of callables which generate an individual row based on an
+            absolute index.
+        skip_rows : Generate the column as if it had started at 'skip_rows'
+            instead of 0. The intent here is to emulate the skip_rows
+            parameter of the parquet reader.
+        num_fields : Number of fields in the struct.
+        include_validity : Whether or not to include nulls as part of the
+            column. If true, it will add a selection of nulls at both the
+            field level and at the value level.
+
+    Returns:
+        The generated struct column.
+    """
+
+    def R(first_val, num_fields):
+        return {
+            "col"
+            + str(f): (gen[f](first_val, first_val) if f % 4 != 0 else None)
+            if include_validity
+            else (gen[f](first_val, first_val))
+            for f in range(len(gen))
+        }
+
+    return [
+        (R((i + skip_rows), len(gen)) if (i + skip_rows) % 4 != 0 else None)
+        if include_validity
+        else R((i + skip_rows), len(gen))
+        for i in range(num_rows)
+    ]
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        # struct
+        [
+            {"a": 1, "b": 2},
+            {"a": 10, "b": 20},
+            {"a": None, "b": 22},
+            {"a": None, "b": None},
+            {"a": 15, "b": None},
+        ],
+        # struct-of-list
+        [
+            {"a": 1, "b": 2, "c": [1, 2, 3]},
+            {"a": 10, "b": 20, "c": [4, 5]},
+            {"a": None, "b": 22, "c": [6]},
+            {"a": None, "b": None, "c": None},
+            {"a": 15, "b": None, "c": [-1, -2]},
+            None,
+            {"a": 100, "b": 200, "c": [-10, None, -20]},
+        ],
+        # list-of-struct
+        [
+            [{"a": 1, "b": 2}, {"a": 2, "b": 3}, {"a": 4, "b": 5}],
+            None,
+            [{"a": 10, "b": 20}],
+            [{"a": 100, "b": 200}, {"a": None, "b": 300}, None],
+        ],
+        # struct-of-struct
+        [
+            {"a": 1, "b": {"inner_a": 10, "inner_b": 20}, "c": 2},
+            {"a": 3, "b": {"inner_a": 30, "inner_b": 40}, "c": 4},
+            {"a": 5, "b": {"inner_a": 50, "inner_b": None}, "c": 6},
+            {"a": 7, "b": None, "c": 8},
+            {"a": None, "b": {"inner_a": None, "inner_b": None}, "c": None},
+            None,
+            {"a": None, "b": {"inner_a": None, "inner_b": 100}, "c": 10},
+        ],
+    ],
+)
+def test_parquet_reader_struct_basic(tmpdir, data):
+    expect = pa.Table.from_pydict({"struct": data})
+    fname = tmpdir.join("test_parquet_reader_struct_basic.parquet")
+    pa.parquet.write_table(expect, fname)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)
+    assert expect.equals(got.to_arrow())
+
+
+def test_parquet_reader_struct_los_large(tmpdir):
+    num_rows = 256
+    list_size = 64
+    data = [
+        struct_gen([string_gen, int_gen, string_gen], 0, list_size, False)
+        if i % 2 == 0
+        else None
+        for i in range(num_rows)
+    ]
+    expect = pa.Table.from_pydict({"los": data})
+    fname = tmpdir.join("test_parquet_reader_struct_los_large.parquet")
+    pa.parquet.write_table(expect, fname)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)
+    assert expect.equals(got.to_arrow())
+
+
+@pytest.mark.parametrize(
+    "params", [[3, 4, 32, False], [3, 4, 32, True], [100, 25, 256, True]]
+)
+def test_parquet_reader_struct_sol_table(tmpdir, params):
+    # Struct<List<List>>
+    lists_per_row = params[0]
+    list_size = params[1]
+    num_rows = params[2]
+    include_validity = params[3]
+
+    def list_gen_wrapped(x, y):
+        return list_row_gen(
+            int_gen, x * list_size * lists_per_row, list_size, lists_per_row
+        )
+
+    def string_list_gen_wrapped(x, y):
+        return list_row_gen(
+            string_gen,
+            x * list_size * lists_per_row,
+            list_size,
+            lists_per_row,
+            include_validity,
+        )
+
+    data = struct_gen(
+        [int_gen, string_gen, list_gen_wrapped, string_list_gen_wrapped],
+        0,
+        num_rows,
+        include_validity,
+    )
+    expect = pa.Table.from_pydict({"sol": data})
+    fname = tmpdir.join("test_parquet_reader_struct_sol_table.parquet")
+    pa.parquet.write_table(expect, fname)
+    assert os.path.exists(fname)
+    got = cudf.read_parquet(fname)
+    assert expect.equals(got.to_arrow())
+
+
 @pytest.mark.filterwarnings("ignore:Using CPU")
-def test_parquet_writer_cpu_pyarrow(tmpdir, pdf, gdf):
+def test_parquet_writer_cpu_pyarrow(
+    tmpdir, pdf_day_timestamps, gdf_day_timestamps
+):
     pdf_fname = tmpdir.join("pdf.parquet")
     gdf_fname = tmpdir.join("gdf.parquet")
 
-    if len(pdf) == 0:
-        pdf = pdf.reset_index(drop=True)
-        gdf = gdf.reset_index(drop=True)
+    if len(pdf_day_timestamps) == 0:
+        pdf_day_timestamps = pdf_day_timestamps.reset_index(drop=True)
+        gdf_day_timestamps = pdf_day_timestamps.reset_index(drop=True)
 
-    pdf.to_parquet(pdf_fname.strpath)
-    gdf.to_parquet(gdf_fname.strpath, engine="pyarrow")
+    pdf_day_timestamps.to_parquet(pdf_fname.strpath)
+    gdf_day_timestamps.to_parquet(gdf_fname.strpath, engine="pyarrow")
 
     assert os.path.exists(pdf_fname)
     assert os.path.exists(gdf_fname)
@@ -946,27 +1220,45 @@ def test_parquet_writer_cpu_pyarrow(tmpdir, pdf, gdf):
     assert_eq(expect, got)
 
     def clone_field(table, name, datatype):
-        f = table.schema.field_by_name(name)
+        f = table.schema.field(name)
         return pa.field(f.name, datatype, f.nullable, f.metadata)
 
     # Pandas uses a datetime64[ns] while we use a datetime64[ms]
-    expect_idx = expect.schema.get_field_index("col_datetime64[ms]")
-    expect_field = clone_field(expect, "col_datetime64[ms]", pa.date64())
-    expect = expect.set_column(
-        expect_idx,
-        expect_field,
-        expect.column(expect_idx).cast(expect_field.type),
-    )
-    expect = expect.replace_schema_metadata()
-
-    got_idx = got.schema.get_field_index("col_datetime64[ms]")
-    got_field = clone_field(got, "col_datetime64[ms]", pa.date64())
-    got = got.set_column(
-        got_idx, got_field, got.column(got_idx).cast(got_field.type)
-    )
-    got = got.replace_schema_metadata()
+    for t in [expect, got]:
+        for t_col in ["col_datetime64[ms]", "col_datetime64[us]"]:
+            idx = t.schema.get_field_index(t_col)
+            field = clone_field(t, t_col, pa.timestamp("ms"))
+            t = t.set_column(idx, field, t.column(idx).cast(field.type))
+            t = t.replace_schema_metadata()
 
     assert_eq(expect, got)
+
+
+@pytest.mark.filterwarnings("ignore:Using CPU")
+def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
+    gdf_fname = tmpdir.join("gdf.parquet")
+
+    if len(pdf) == 0:
+        pdf = pdf.reset_index(drop=True)
+        gdf = gdf.reset_index(drop=True)
+
+    if "col_category" in pdf.columns:
+        pdf = pdf.drop(columns=["col_category"])
+    if "col_category" in gdf.columns:
+        gdf = gdf.drop(columns=["col_category"])
+
+    assert_eq(pdf, gdf)
+
+    # Write out the gdf using the GPU accelerated writer with INT96 timestamps
+    gdf.to_parquet(gdf_fname.strpath, index=None, int96_timestamps=True)
+
+    assert os.path.exists(gdf_fname)
+
+    expect = pdf
+    got = pd.read_parquet(gdf_fname)
+
+    # verify INT96 timestamps were converted back to the same data.
+    assert_eq(expect, got, check_categorical=False)
 
 
 def test_multifile_warning(datadir):
@@ -1286,3 +1578,166 @@ def test_parquet_writer_sliced(tmpdir):
 
     df_select.to_parquet(cudf_path)
     assert_eq(cudf.read_parquet(cudf_path), df_select.reset_index(drop=True))
+
+
+def test_parquet_writer_list_basic(tmpdir):
+    expect = pd.DataFrame({"a": [[[1, 2], [3, 4]], None, [[5, 6], None]]})
+    fname = tmpdir.join("test_parquet_writer_list_basic.parquet")
+
+    gdf = cudf.from_pandas(expect)
+
+    gdf.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    got = pd.read_parquet(fname)
+    assert_eq(expect, got)
+
+
+def test_parquet_writer_list_large(tmpdir):
+    expect = pd.DataFrame({"a": list_gen(int_gen, 0, 256, 80, 50)})
+    fname = tmpdir.join("test_parquet_writer_list_large.parquet")
+
+    gdf = cudf.from_pandas(expect)
+
+    gdf.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    got = pd.read_parquet(fname)
+    assert_eq(expect, got)
+
+
+def test_parquet_writer_list_large_mixed(tmpdir):
+    expect = pd.DataFrame(
+        {
+            "a": list_gen(string_gen, 0, 128, 80, 50),
+            "b": list_gen(int_gen, 0, 128, 80, 50),
+            "c": list_gen(int_gen, 0, 128, 80, 50, include_validity=True),
+            "d": list_gen(string_gen, 0, 128, 80, 50, include_validity=True),
+        }
+    )
+    fname = tmpdir.join("test_parquet_writer_list_large_mixed.parquet")
+    gdf = cudf.from_pandas(expect)
+
+    gdf.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    got = pd.read_parquet(fname)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
+def test_parquet_nullable_boolean(tmpdir, engine):
+    pandas_path = tmpdir.join("pandas_bools.parquet")
+
+    pdf = pd.DataFrame(
+        {
+            "a": pd.Series(
+                [True, False, None, True, False], dtype=pd.BooleanDtype()
+            )
+        }
+    )
+    expected_gdf = cudf.DataFrame({"a": [True, False, None, True, False]})
+
+    pdf.to_parquet(pandas_path)
+    actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
+
+    assert_eq(actual_gdf, expected_gdf)
+
+
+@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
+def test_parquet_allnull_str(tmpdir, engine):
+    pandas_path = tmpdir.join("pandas_allnulls.parquet")
+
+    pdf = pd.DataFrame(
+        {"a": pd.Series([None, None, None, None, None], dtype="str")}
+    )
+    expected_gdf = cudf.DataFrame(
+        {"a": cudf.Series([None, None, None, None, None], dtype="str")}
+    )
+
+    pdf.to_parquet(pandas_path)
+    actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
+
+    assert_eq(actual_gdf, expected_gdf)
+
+
+def normalized_equals(value1, value2):
+    if isinstance(value1, pd.Timestamp):
+        value1 = value1.to_pydatetime()
+    if isinstance(value2, pd.Timestamp):
+        value2 = value2.to_pydatetime()
+    if isinstance(value1, datetime.datetime):
+        value1 = value1.replace(tzinfo=None)
+    if isinstance(value2, datetime.datetime):
+        value2 = value2.replace(tzinfo=None)
+
+    # if one is datetime then both values are datetimes now
+    if isinstance(value1, datetime.datetime):
+        return value1 == value2
+
+    # Compare integers with floats now
+    if isinstance(value1, float) or isinstance(value2, float):
+        return math.isclose(value1, value2)
+
+    return value1 == value2
+
+
+def test_parquet_writer_statistics(tmpdir, pdf):
+    file_path = tmpdir.join("cudf.parquet")
+    if "col_category" in pdf.columns:
+        pdf = pdf.drop(columns=["col_category", "col_bool"])
+
+    gdf = cudf.from_pandas(pdf)
+    gdf.to_parquet(file_path, index=False)
+
+    # Read back from pyarrow
+    pq_file = pq.ParquetFile(file_path)
+    # verify each row group's statistics
+    for rg in range(0, pq_file.num_row_groups):
+        pd_slice = pq_file.read_row_group(rg).to_pandas()
+
+        # statistics are per-column. So need to verify independently
+        for i, col in enumerate(pd_slice):
+            stats = pq_file.metadata.row_group(rg).column(i).statistics
+
+            actual_min = pd_slice[col].min()
+            stats_min = stats.min
+            assert normalized_equals(actual_min, stats_min)
+
+            actual_max = pd_slice[col].max()
+            stats_max = stats.max
+            assert normalized_equals(actual_max, stats_max)
+
+
+def test_parquet_writer_list_statistics(tmpdir):
+    df = pd.DataFrame(
+        {
+            "a": list_gen(string_gen, 0, 128, 80, 50),
+            "b": list_gen(int_gen, 0, 128, 80, 50),
+            "c": list_gen(int_gen, 0, 128, 80, 50, include_validity=True),
+            "d": list_gen(string_gen, 0, 128, 80, 50, include_validity=True),
+        }
+    )
+    fname = tmpdir.join("test_parquet_writer_list_statistics.parquet")
+    gdf = cudf.from_pandas(df)
+
+    gdf.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    # Read back from pyarrow
+    pq_file = pq.ParquetFile(fname)
+    # verify each row group's statistics
+    for rg in range(0, pq_file.num_row_groups):
+        pd_slice = pq_file.read_row_group(rg).to_pandas()
+
+        # statistics are per-column. So need to verify independently
+        for i, col in enumerate(pd_slice):
+            stats = pq_file.metadata.row_group(rg).column(i).statistics
+
+            actual_min = cudf.Series(pd_slice[col].explode().explode()).min()
+            stats_min = stats.min
+            assert normalized_equals(actual_min, stats_min)
+
+            actual_max = cudf.Series(pd_slice[col].explode().explode()).max()
+            stats_max = stats.max
+            assert normalized_equals(actual_max, stats_max)

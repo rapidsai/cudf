@@ -16,13 +16,14 @@
 
 #pragma once
 
-#include <rmm/device_buffer.hpp>
-
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 using cudf::detail::device_span;
 using cudf::detail::host_span;
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 
 /**
  * @brief A helper class that wraps fixed-length device memory for the GPU, and
@@ -47,12 +48,15 @@ class hostdevice_vector {
     return *this;
   }
 
-  explicit hostdevice_vector(size_t max_size, cudaStream_t stream = 0)
+  explicit hostdevice_vector(size_t max_size,
+                             rmm::cuda_stream_view stream = rmm::cuda_stream_default)
     : hostdevice_vector(max_size, max_size, stream)
   {
   }
 
-  explicit hostdevice_vector(size_t initial_size, size_t max_size, cudaStream_t stream = 0)
+  explicit hostdevice_vector(size_t initial_size,
+                             size_t max_size,
+                             rmm::cuda_stream_view stream = rmm::cuda_stream_default)
     : num_elements(initial_size), max_elements(max_size)
   {
     if (max_elements != 0) {
@@ -91,16 +95,18 @@ class hostdevice_vector {
     return reinterpret_cast<T const *>(d_data.data()) + offset;
   }
 
-  void host_to_device(cudaStream_t stream, bool synchronize = false)
+  void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
   {
-    cudaMemcpyAsync(d_data.data(), h_data, memory_size(), cudaMemcpyHostToDevice, stream);
-    if (synchronize) { cudaStreamSynchronize(stream); }
+    CUDA_TRY(cudaMemcpyAsync(
+      d_data.data(), h_data, memory_size(), cudaMemcpyHostToDevice, stream.value()));
+    if (synchronize) { stream.synchronize(); }
   }
 
-  void device_to_host(cudaStream_t stream, bool synchronize = false)
+  void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
   {
-    cudaMemcpyAsync(h_data, d_data.data(), memory_size(), cudaMemcpyDeviceToHost, stream);
-    if (synchronize) { cudaStreamSynchronize(stream); }
+    CUDA_TRY(cudaMemcpyAsync(
+      h_data, d_data.data(), memory_size(), cudaMemcpyDeviceToHost, stream.value()));
+    if (synchronize) { stream.synchronize(); }
   }
 
   operator device_span<T>() { return device_span<T>(device_ptr(), size()); }
@@ -123,9 +129,9 @@ class hostdevice_vector {
     v.h_data       = nullptr;
   }
 
-  cudaStream_t stream = 0;
-  size_t max_elements = 0;
-  size_t num_elements = 0;
-  T *h_data           = nullptr;
-  rmm::device_buffer d_data;
+  rmm::cuda_stream_view stream{};
+  size_t max_elements{};
+  size_t num_elements{};
+  T *h_data{};
+  rmm::device_buffer d_data{};
 };

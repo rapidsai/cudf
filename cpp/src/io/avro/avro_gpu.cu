@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,14 +20,16 @@
 
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 using cudf::detail::device_span;
 
 namespace cudf {
 namespace io {
 namespace avro {
 namespace gpu {
-#define NWARPS 16
-#define MAX_SHARED_SCHEMA_LEN 1000
+constexpr int num_warps             = 16;
+constexpr int max_shared_schema_len = 1000;
 
 /*
  * Avro varint encoding - see
@@ -225,8 +227,8 @@ static const uint8_t *__device__ avro_decode_row(device_span<schemadesc_s const>
  * @param[in] first_row Crop all rows below first_row
  *
  **/
-// blockDim {32,NWARPS,1}
-extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
+// blockDim {32,num_warps,1}
+extern "C" __global__ void __launch_bounds__(num_warps * 32, 2)
   decode_avro_column_data_kernel(device_span<block_desc_s const> blocks,
                                  device_span<nvstrdesc_s const> global_dictionary,
                                  device_span<uint8_t const> avro_data,
@@ -235,25 +237,25 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
                                  size_t max_rows,
                                  size_t first_row)
 {
-  __shared__ __align__(8) schemadesc_s g_shared_schema[MAX_SHARED_SCHEMA_LEN];
-  __shared__ __align__(8) block_desc_s blk_g[NWARPS];
+  __shared__ __align__(8) schemadesc_s g_shared_schema[max_shared_schema_len];
+  __shared__ __align__(8) block_desc_s blk_g[num_warps];
 
   uint32_t num_blocks             = blocks.size();
   uint32_t num_dictionary_entries = global_dictionary.size();
 
   device_span<schemadesc_s const> schema;
   block_desc_s *const blk = &blk_g[threadIdx.y];
-  uint32_t block_id       = blockIdx.x * NWARPS + threadIdx.y;
+  uint32_t block_id       = blockIdx.x * num_warps + threadIdx.y;
   size_t cur_row;
   uint32_t rows_remaining;
   uint8_t const *cur;
   uint8_t const *end;
 
   // Fetch schema into shared mem if possible
-  if (schema_g.size() <= MAX_SHARED_SCHEMA_LEN) {
+  if (schema_g.size() <= max_shared_schema_len) {
     for (int i = threadIdx.y * 32 + threadIdx.x;
          i < schema_g.size() * sizeof(schemadesc_s) / sizeof(uint32_t);
-         i += NWARPS * 32) {
+         i += num_warps * 32) {
       g_shared_schema[i] = schema_g[i];
     }
     __syncthreads();
@@ -287,11 +289,11 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
         schema, schema_g, cur_row - first_row + threadIdx.x, max_rows, cur, end, global_dictionary);
     }
     if (nrows <= 1) {
-      cur = start + SHFL0(static_cast<uint32_t>(cur - start));
+      cur = start + shuffle(static_cast<uint32_t>(cur - start));
     } else {
       cur = start + nrows * min_row_size;
     }
-    SYNCWARP();
+    __syncwarp();
     cur_row += nrows;
     rows_remaining -= nrows;
   }
@@ -308,8 +310,6 @@ extern "C" __global__ void __launch_bounds__(NWARPS * 32, 2)
  * @param[in] first_row Crop all rows below first_row
  * @param[in] min_row_size Minimum size in bytes of a row
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
 void __host__ decode_avro_column_data(device_span<block_desc_s const> const blocks,
                                       device_span<nvstrdesc_s const> const global_dictionary,
@@ -318,12 +318,12 @@ void __host__ decode_avro_column_data(device_span<block_desc_s const> const bloc
                                       size_t max_rows,
                                       size_t first_row,
                                       uint32_t min_row_size,
-                                      cudaStream_t stream)
+                                      rmm::cuda_stream_view stream)
 {
-  dim3 dim_block(32, NWARPS);  // NWARPS warps per threadblock
-  dim3 dim_grid((blocks.size() + NWARPS - 1) / NWARPS,
-                1);  // 1 warp per datablock, NWARPS datablocks per threadblock
-  decode_avro_column_data_kernel<<<dim_grid, dim_block, 0, stream>>>(
+  dim3 dim_block(32, num_warps);  // num_warps warps per threadblock
+  dim3 dim_grid((blocks.size() + num_warps - 1) / num_warps,
+                1);  // 1 warp per datablock, num_warps datablocks per threadblock
+  decode_avro_column_data_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(
     blocks, global_dictionary, avro_data, schema, min_row_size, max_rows, first_row);
 }
 

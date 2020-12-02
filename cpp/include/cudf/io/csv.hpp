@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/io/types.hpp>
-
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -126,6 +125,7 @@ class csv_reader_options {
                                       "-nan",
                                       "1.#IND",
                                       "1.#QNAN",
+                                      "<NA>",
                                       "N/A",
                                       "NA",
                                       "NULL",

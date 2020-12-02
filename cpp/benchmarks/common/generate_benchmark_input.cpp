@@ -24,6 +24,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
 #include <future>
@@ -296,9 +297,9 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
   return std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_to_id<T>()},
     num_rows,
-    rmm::device_buffer(data.data(), num_rows * sizeof(stored_Type), cudaStream_t(0)),
+    rmm::device_buffer(data.data(), num_rows * sizeof(stored_Type), rmm::cuda_stream_default),
     rmm::device_buffer(
-      null_mask.data(), null_mask.size() * sizeof(cudf::bitmask_type), cudaStream_t(0)));
+      null_mask.data(), null_mask.size() * sizeof(cudf::bitmask_type), rmm::cuda_stream_default));
 }
 
 /**
@@ -483,7 +484,8 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
     auto offsets_column = std::make_unique<cudf::column>(
       cudf::data_type{cudf::type_id::INT32},
       offsets.size(),
-      rmm::device_buffer(offsets.data(), offsets.size() * sizeof(int32_t), cudaStream_t(0)));
+      rmm::device_buffer(
+        offsets.data(), offsets.size() * sizeof(int32_t), rmm::cuda_stream_default));
 
     list_column = cudf::make_lists_column(
       num_rows,
@@ -491,7 +493,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
       std::move(current_child_column),
       cudf::UNKNOWN_NULL_COUNT,
       rmm::device_buffer(
-        null_mask.data(), null_mask.size() * sizeof(cudf::bitmask_type), cudaStream_t(0)));
+        null_mask.data(), null_mask.size() * sizeof(cudf::bitmask_type), rmm::cuda_stream_default));
   }
   return list_column;  // return the top-level column
 }
@@ -630,4 +632,14 @@ std::vector<cudf::type_id> get_type_or_group(int32_t id)
     if (type != cudf::type_id::EMPTY && fn(cudf::data_type(type))) types.push_back(type);
   }
   return types;
+}
+
+std::vector<cudf::type_id> get_type_or_group(std::vector<int32_t> const& ids)
+{
+  std::vector<cudf::type_id> all_type_ids;
+  for (auto& id : ids) {
+    auto const type_ids = get_type_or_group(id);
+    all_type_ids.insert(std::end(all_type_ids), std::cbegin(type_ids), std::cend(type_ids));
+  }
+  return all_type_ids;
 }

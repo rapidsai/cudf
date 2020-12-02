@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,10 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cub/cub.cuh>
-#include <cudf/utilities/error.hpp>
+
 #include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
+
+#include <cudf/utilities/error.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <cub/cub.cuh>
 
 namespace cudf {
 namespace io {
@@ -34,7 +39,7 @@ struct dict_state_s {
   EncColumnDesc col;
   PageFragment frag;
   volatile uint32_t scratch_red[32];
-  uint16_t frag_dict[MAX_PAGE_FRAGMENT_SIZE];
+  uint16_t frag_dict[max_page_fragment_size];
 };
 
 /**
@@ -83,10 +88,7 @@ __device__ void FetchDictionaryFragment(dict_state_s *s,
                                         uint32_t frag_start_row,
                                         uint32_t t)
 {
-  if (t < sizeof(PageFragment) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->frag)[t] =
-      reinterpret_cast<const uint32_t *>(s->cur_fragment)[t];
-  }
+  if (t == 0) s->frag = *s->cur_fragment;
   __syncthreads();
   // Store the row values in shared mem and set the corresponding dict_data to zero (end-of-list)
   // It's easiest to do this here since we're only dealing with values all within a 5K-row window
@@ -120,7 +122,7 @@ __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
       (is_valid &&
        dict_idx ==
          row);  // Any value that doesn't have bit31 set should have dict_idx=row at this point
-    uint32_t umask = BALLOT(is_unique);
+    uint32_t umask = ballot(is_unique);
     uint32_t pos   = num_dict_entries + __popc(umask & ((1 << (t & 0x1f)) - 1));
     if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(umask); }
     num_dict_entries += __syncthreads_count(is_unique);
@@ -157,17 +159,14 @@ __global__ void __launch_bounds__(block_size, 1)
   uint32_t t            = threadIdx.x;
   uint32_t dtype, dtype_len, dtype_len_in;
 
-  if (t < sizeof(EncColumnChunk) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->ck)[t] =
-      reinterpret_cast<const uint32_t *>(&chunks[blockIdx.x])[t];
-  }
+  if (t == 0) s->ck = chunks[blockIdx.x];
   __syncthreads();
+
   if (!s->ck.has_dictionary) { return; }
-  if (t < sizeof(EncColumnDesc) / sizeof(uint32_t)) {
-    reinterpret_cast<uint32_t *>(&s->col)[t] =
-      reinterpret_cast<const uint32_t *>(s->ck.col_desc)[t];
-  }
+
+  if (t == 0) s->col = *s->ck.col_desc;
   __syncthreads();
+
   if (!t) {
     s->hashmap               = dev_scratch + s->ck.dictionary_id * (size_t)(1 << kDictHashBits);
     s->row_cnt               = 0;
@@ -177,9 +176,11 @@ __global__ void __launch_bounds__(block_size, 1)
     s->ck.num_dict_fragments = 0;
   }
   dtype     = s->col.physical_type;
-  dtype_len = (dtype == INT64 || dtype == DOUBLE) ? 8 : 4;
+  dtype_len = (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : 4;
   if (dtype == INT32) {
     dtype_len_in = GetDtypeLogicalLen(s->col.converted_type);
+  } else if (dtype == INT96) {
+    dtype_len_in = 8;
   } else {
     dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len;
   }
@@ -204,18 +205,18 @@ __global__ void __launch_bounds__(block_size, 1)
         row = frag_start_row + s->frag_dict[i + t];
         len = dtype_len;
         if (dtype == BYTE_ARRAY) {
-          const char *ptr = reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].ptr;
-          uint32_t count =
-            (uint32_t) reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].count;
+          const char *ptr = static_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].ptr;
+          uint32_t count  = static_cast<uint32_t>(
+            static_cast<const nvstrdesc_s *>(s->col.column_data_base)[row].count);
           len += count;
           hash = nvstr_hash16(reinterpret_cast<const uint8_t *>(ptr), count);
           // Walk the list of rows with the same hash
           next_addr = &s->hashmap[hash];
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
             const char *ptr2 =
-              reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].ptr;
+              static_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].ptr;
             uint32_t count2 =
-              reinterpret_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].count;
+              static_cast<const nvstrdesc_s *>(s->col.column_data_base)[next - 1].count;
             if (count2 == count && nvstr_is_equal(ptr, count, ptr2, count2)) {
               is_dupe = 1;
               break;
@@ -226,14 +227,14 @@ __global__ void __launch_bounds__(block_size, 1)
           uint64_t val;
 
           if (dtype_len_in == 8) {
-            val  = reinterpret_cast<const uint64_t *>(s->col.column_data_base)[row];
+            val  = static_cast<const uint64_t *>(s->col.column_data_base)[row];
             hash = uint64_hash16(val);
           } else {
             val = (dtype_len_in == 4)
-                    ? reinterpret_cast<const uint32_t *>(s->col.column_data_base)[row]
+                    ? static_cast<const uint32_t *>(s->col.column_data_base)[row]
                     : (dtype_len_in == 2)
-                        ? reinterpret_cast<const uint16_t *>(s->col.column_data_base)[row]
-                        : reinterpret_cast<const uint8_t *>(s->col.column_data_base)[row];
+                        ? static_cast<const uint16_t *>(s->col.column_data_base)[row]
+                        : static_cast<const uint8_t *>(s->col.column_data_base)[row];
             hash = uint32_hash16(val);
           }
           // Walk the list of rows with the same hash
@@ -241,12 +242,12 @@ __global__ void __launch_bounds__(block_size, 1)
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
             uint64_t val2 =
               (dtype_len_in == 8)
-                ? reinterpret_cast<const uint64_t *>(s->col.column_data_base)[next - 1]
+                ? static_cast<const uint64_t *>(s->col.column_data_base)[next - 1]
                 : (dtype_len_in == 4)
-                    ? reinterpret_cast<const uint32_t *>(s->col.column_data_base)[next - 1]
+                    ? static_cast<const uint32_t *>(s->col.column_data_base)[next - 1]
                     : (dtype_len_in == 2)
-                        ? reinterpret_cast<const uint16_t *>(s->col.column_data_base)[next - 1]
-                        : reinterpret_cast<const uint8_t *>(s->col.column_data_base)[next - 1];
+                        ? static_cast<const uint16_t *>(s->col.column_data_base)[next - 1]
+                        : static_cast<const uint8_t *>(s->col.column_data_base)[next - 1];
             if (val2 == val) {
               is_dupe = 1;
               break;
@@ -326,24 +327,21 @@ __global__ void __launch_bounds__(block_size, 1)
 /**
  * @brief Launches kernel for building chunk dictionaries
  *
- * @param[in] chunks Column chunks
+ * @param[in,out] chunks Column chunks
  * @param[in] dev_scratch Device scratch data (kDictScratchSize per dictionary)
  * @param[in] num_chunks Number of column chunks
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t BuildChunkDictionaries(EncColumnChunk *chunks,
-                                   uint32_t *dev_scratch,
-                                   size_t scratch_size,
-                                   uint32_t num_chunks,
-                                   cudaStream_t stream)
+ */
+void BuildChunkDictionaries(EncColumnChunk *chunks,
+                            uint32_t *dev_scratch,
+                            size_t scratch_size,
+                            uint32_t num_chunks,
+                            rmm::cuda_stream_view stream)
 {
   if (num_chunks > 0 && scratch_size > 0) {  // zero scratch size implies no dictionaries
-    CUDA_TRY(cudaMemsetAsync(dev_scratch, 0, scratch_size, stream));
-    gpuBuildChunkDictionaries<1024><<<num_chunks, 1024, 0, stream>>>(chunks, dev_scratch);
+    CUDA_TRY(cudaMemsetAsync(dev_scratch, 0, scratch_size, stream.value()));
+    gpuBuildChunkDictionaries<1024><<<num_chunks, 1024, 0, stream.value()>>>(chunks, dev_scratch);
   }
-  return cudaSuccess;
 }
 
 }  // namespace gpu

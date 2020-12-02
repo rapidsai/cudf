@@ -1,4 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION
+
 import itertools
 
 import numba
@@ -230,8 +231,6 @@ class Rolling:
         return result_df
 
     def _apply_agg(self, agg_name):
-        if agg_name == "count" and not self._time_window:
-            self.min_periods = 0
         if isinstance(self.obj, cudf.Series):
             return self._apply_agg_series(self.obj, agg_name)
         else:
@@ -254,13 +253,22 @@ class Rolling:
 
     def apply(self, func, *args, **kwargs):
         """
-        Counterpart of pandas.core.window.Rolling.apply
+        Counterpart of `pandas.core.window.Rolling.apply
+        <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.core.window.rolling.Rolling.apply.html>`_.
 
-        *func* is a user defined function that takes an 1D array as input:
+        Parameters
+        ----------
+        func : function
+            A user defined function that takes an 1D array as input
 
         See also
         --------
-        The Notes section in `Series.applymap`.
+        cudf.core.series.Series.applymap : Apply an elementwise function to
+            transform the values in the Column.
+
+        Notes
+        -----
+        See notes of the :meth:`cudf.core.series.Series.applymap`
 
         """
         has_nulls = False
@@ -388,6 +396,8 @@ class RollingGroupby(Rolling):
             )
 
     def _apply_agg(self, agg_name):
+        if agg_name == "count" and not self._time_window:
+            self.min_periods = 0
         index = cudf.MultiIndex.from_frame(
             cudf.DataFrame(
                 {

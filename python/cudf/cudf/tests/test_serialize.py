@@ -33,11 +33,11 @@ from cudf.tests.utils import assert_eq
             {"x": ["a", "bb", "ccc"], "y": [1.0, None, 3.0]},
             index=[1, None, 3],
         ),
-        pd.util.testing.makeTimeDataFrame,
-        pd.util.testing.makeMixedDataFrame,
-        pd.util.testing.makeTimeDataFrame,
-        # pd.util.testing.makeMissingDataframe, # Problem in distributed
-        # pd.util.testing.makeMultiIndex, # Indices not serialized on device
+        pd._testing.makeTimeDataFrame,
+        pd._testing.makeMixedDataFrame,
+        pd._testing.makeTimeDataFrame,
+        # pd._testing.makeMissingDataframe, # Problem in distributed
+        # pd._testing.makeMultiIndex, # Indices not serialized on device
     ],
 )
 @pytest.mark.parametrize("to_host", [True, False])
@@ -265,3 +265,23 @@ def test_serialize_string_check_buffer_sizes():
     header, frames = df.serialize()
     got = sum(b.nbytes for b in frames)
     assert expect == got
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [[]]},
+        {"a": [[1, 2, None, 4]]},
+        {"a": [["cat", None, "dog"]]},
+        {
+            "a": [[1, 2, 3, None], [4, None, 5]],
+            "b": [None, ["fish", "bird"]],
+            "c": [[], []],
+        },
+        {"a": [[1, 2, 3, None], [4, None, 5], None, [6, 7]]},
+    ],
+)
+def test_serialize_list_columns(data):
+    df = cudf.DataFrame(data)
+    recreated = df.__class__.deserialize(*df.serialize())
+    assert_eq(recreated, df)

@@ -29,6 +29,9 @@
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/avro.hpp>
+#include <cudf/utilities/span.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
 #include <string>
@@ -70,7 +73,7 @@ class reader::impl {
    *
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(avro_reader_options const &options, cudaStream_t stream);
+  table_with_metadata read(avro_reader_options const &options, rmm::cuda_stream_view stream);
 
  private:
   /**
@@ -82,7 +85,7 @@ class reader::impl {
    * @return Device buffer to decompressed block data
    */
   rmm::device_buffer decompress_data(rmm::device_buffer const &comp_block_data,
-                                     cudaStream_t stream);
+                                     rmm::cuda_stream_view stream);
 
   /**
    * @brief Convert the avro row-based block data and outputs to columns
@@ -99,7 +102,7 @@ class reader::impl {
     size_t num_rows,
     std::vector<std::pair<int, std::string>> selection,
     std::vector<data_type> const &column_types,
-    cudaStream_t stream);
+    rmm::cuda_stream_view stream);
 
  private:
   rmm::mr::device_memory_resource *_mr = nullptr;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -100,8 +102,8 @@ std::unique_ptr<column> copy_range(
   strings_column_view const& target,
   size_type target_begin,
   size_type target_end,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(
     (target_begin >= 0) && (target_begin < target.size()) && (target_end <= target.size()),
@@ -154,7 +156,7 @@ std::unique_ptr<column> copy_range(
           source_value_begin, source_validity_begin, d_target, target_begin, target_end});
 
       p_offsets_column = detail::make_offsets_child_column(
-        string_size_begin, string_size_begin + target.size(), mr, stream);
+        string_size_begin, string_size_begin + target.size(), stream, mr);
     } else if (null_count > 0) {  // check validities for source only
       auto string_size_begin = thrust::make_transform_iterator(
         thrust::make_counting_iterator(0),
@@ -162,7 +164,7 @@ std::unique_ptr<column> copy_range(
           source_value_begin, source_validity_begin, d_target, target_begin, target_end});
 
       p_offsets_column = detail::make_offsets_child_column(
-        string_size_begin, string_size_begin + target.size(), mr, stream);
+        string_size_begin, string_size_begin + target.size(), stream, mr);
     } else {  // no need to check validities
       auto string_size_begin = thrust::make_transform_iterator(
         thrust::make_counting_iterator(0),
@@ -170,7 +172,7 @@ std::unique_ptr<column> copy_range(
           source_value_begin, source_validity_begin, d_target, target_begin, target_end});
 
       p_offsets_column = detail::make_offsets_child_column(
-        string_size_begin, string_size_begin + target.size(), mr, stream);
+        string_size_begin, string_size_begin + target.size(), stream, mr);
     }
 
     // create the chars column
@@ -180,12 +182,12 @@ std::unique_ptr<column> copy_range(
     auto chars_bytes = p_offsets[target.size()];
 
     auto p_chars_column = strings::detail::create_chars_child_column(
-      target.size(), null_count, chars_bytes, mr, stream);
+      target.size(), null_count, chars_bytes, stream, mr);
 
     // copy to the chars column
 
     auto p_chars = (p_chars_column->mutable_view()).template data<char>();
-    thrust::for_each(rmm::exec_policy(stream)->on(stream),
+    thrust::for_each(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator(0),
                      thrust::make_counting_iterator(target.size()),
                      [source_value_begin,

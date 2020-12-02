@@ -22,6 +22,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -30,8 +32,8 @@ namespace detail {
 std::unique_ptr<column> find_multiple(
   strings_column_view const& strings,
   strings_column_view const& targets,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(data_type{type_id::INT32});
@@ -55,7 +57,7 @@ std::unique_ptr<column> find_multiple(
   auto results_view = results->mutable_view();
   auto d_results    = results_view.data<int32_t>();
   // fill output column with position values
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
+  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(total_count),
                     d_results,
@@ -78,7 +80,7 @@ std::unique_ptr<column> find_multiple(strings_column_view const& strings,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::find_multiple(strings, targets, mr);
+  return detail::find_multiple(strings, targets, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

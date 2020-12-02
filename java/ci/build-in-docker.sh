@@ -19,6 +19,13 @@
 set -e
 gcc --version
 
+PARALLEL_LEVEL=${PARALLEL_LEVEL:-4}
+SKIP_JAVA_TESTS=${SKIP_JAVA_TESTS:-true}
+BUILD_CPP_TESTS=${BUILD_CPP_TESTS:-OFF}
+ENABLE_PTDS=${ENABLE_PTDS:-ON}
+RMM_LOGGING_LEVEL=${RMM_LOGGING_LEVEL:-OFF}
+OUT=${OUT:-out}
+
 SIGN_FILE=$1
 #Set absolute path for OUT_PATH
 OUT_PATH=$WORKSPACE/$OUT
@@ -28,8 +35,13 @@ if [ -z $RMM_VERSION ]
 then
 RMM_VERSION=`git describe --tags | grep -o -E '([0-9]+\.[0-9]+)'`
 fi
-echo "RMM_VERSION: $RMM_VERSION, SIGN_FILE: $SIGN_FILE, SKIP_JAVA_TESTS: $SKIP_JAVA_TESTS,\
- BUILD_CPP_TESTS: $BUILD_CPP_TESTS, ENABLED_PTDS: $ENABLE_PTDS, OUT_PATH: $OUT_PATH"
+echo "RMM_VERSION: $RMM_VERSION,\
+ SIGN_FILE: $SIGN_FILE,\
+ SKIP_JAVA_TESTS: $SKIP_JAVA_TESTS,\
+ BUILD_CPP_TESTS: $BUILD_CPP_TESTS,\
+ ENABLED_PTDS: $ENABLE_PTDS,\
+ RMM_LOGGING_LEVEL: $RMM_LOGGING_LEVEL,\
+ OUT_PATH: $OUT_PATH"
 
 INSTALL_PREFIX=/usr/local/rapids
 export GIT_COMMITTER_NAME="ci"
@@ -38,6 +50,9 @@ export CUDACXX=/usr/local/cuda/bin/nvcc
 export RMM_ROOT=$INSTALL_PREFIX
 export DLPACK_ROOT=$INSTALL_PREFIX
 export LIBCUDF_KERNEL_CACHE_PATH=/rapids
+
+# add cmake 3.19 to PATH
+export PATH=/usr/local/cmake-3.19.0-Linux-x86_64/bin:$PATH
 
 cd /rapids/
 git clone --recurse-submodules https://github.com/rapidsai/rmm.git -b branch-$RMM_VERSION
@@ -50,9 +65,6 @@ echo "RMM SHA: `git rev-parse HEAD`"
 cmake .. -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX -DBUILD_TESTS=$BUILD_CPP_TESTS
 make -j$PARALLEL_LEVEL install
 
-# Install spdlog headers from RMM build
-(cd /rapids/rmm/build/_deps/spdlog-src && find include/spdlog | cpio -pmdv $INSTALL_PREFIX)
-
 mkdir -p /rapids/dlpack/build
 cd /rapids/dlpack/build
 echo "DLPACK SHA: `git rev-parse HEAD`"
@@ -63,15 +75,20 @@ make -j$PARALLEL_LEVEL install
 rm -rf $WORKSPACE/cpp/build
 mkdir -p $WORKSPACE/cpp/build
 cd $WORKSPACE/cpp/build
-cmake .. -DUSE_NVTX=OFF -DARROW_STATIC_LIB=ON -DBoost_USE_STATIC_LIBS=ON -DBUILD_TESTS=$SKIP_CPP_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS
+cmake .. -DUSE_NVTX=OFF -DARROW_STATIC_LIB=ON -DBoost_USE_STATIC_LIBS=ON -DBUILD_TESTS=$SKIP_CPP_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL
 make -j$PARALLEL_LEVEL
 make install DESTDIR=$INSTALL_PREFIX
 
 ###### Build cudf jar ######
-BUILD_ARG="-Dmaven.repo.local=$WORKSPACE/.m2 -DskipTests=$SKIP_JAVA_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS"
+BUILD_ARG="-Dmaven.repo.local=$WORKSPACE/.m2 -DskipTests=$SKIP_JAVA_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL"
 if [ "$SIGN_FILE" == true ]; then
     # Build javadoc and sources only when SIGN_FILE is true
     BUILD_ARG="$BUILD_ARG -Prelease"
+fi
+
+if [ -f $WORKSPACE/java/ci/settings.xml ]; then
+    # Build with an internal settings.xml
+    BUILD_ARG="$BUILD_ARG -s $WORKSPACE/java/ci/settings.xml"
 fi
 
 cd $WORKSPACE/java

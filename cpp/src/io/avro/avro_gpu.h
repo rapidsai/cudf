@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/utilities/span.hpp>
 
 using cudf::detail::device_span;
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
@@ -62,7 +63,7 @@ void decode_avro_column_data(device_span<block_desc_s const> blocks,
                              size_t max_rows,
                              size_t first_row,
                              uint32_t min_row_size,
-                             cudaStream_t stream);
+                             rmm::cuda_stream_view stream);
 
 }  // namespace gpu
 }  // namespace avro

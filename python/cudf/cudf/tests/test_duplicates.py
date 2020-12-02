@@ -1,10 +1,12 @@
+# Copyright (c) 2020, NVIDIA CORPORATION.
+
 import numpy as np
 import pytest
 from pandas import DataFrame, MultiIndex, Series, date_range
 
 import cudf
 from cudf import concat
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 # TODO: PANDAS 1.0 support
 # Revisit drop_duplicates() tests to update parameters like ignore_index.
@@ -32,10 +34,15 @@ def assert_df2(g, p):
 @pytest.mark.parametrize("subset", ["a", ["a"], ["a", "B"]])
 def test_duplicated_with_misspelled_column_name(subset):
     df = DataFrame({"A": [0, 0, 1], "B": [0, 0, 1], "C": [0, 0, 1]})
-    df = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame.from_pandas(df)
 
-    with pytest.raises(KeyError):
-        df.drop_duplicates(subset)
+    assert_exceptions_equal(
+        lfunc=df.drop_duplicates,
+        rfunc=gdf.drop_duplicates,
+        lfunc_args_and_kwargs=([subset],),
+        rfunc_args_and_kwargs=([subset],),
+        compare_error_message=False,
+    )
 
 
 @pytest.mark.parametrize("keep", ["first", "last", False])
@@ -356,12 +363,21 @@ def test_dataframe_drop_duplicates_method():
     )
 
     # Test drop error
-    with pytest.raises(KeyError) as raises:
-        gdf.drop_duplicates("n3")
-    raises.match("columns {'n3'} do not exist")
-    with pytest.raises(KeyError) as raises:
-        gdf.drop_duplicates(["n1", "n4", "n3"])
-    raises.match("columns {'n[34]', 'n[34]'} do not exist")
+    assert_exceptions_equal(
+        lfunc=pdf.drop_duplicates,
+        rfunc=gdf.drop_duplicates,
+        lfunc_args_and_kwargs=(["n3"],),
+        rfunc_args_and_kwargs=(["n3"],),
+        expected_error_message="columns {'n3'} do not exist",
+    )
+
+    assert_exceptions_equal(
+        lfunc=pdf.drop_duplicates,
+        rfunc=gdf.drop_duplicates,
+        lfunc_args_and_kwargs=([["n1", "n4", "n3"]],),
+        rfunc_args_and_kwargs=([["n1", "n4", "n3"]],),
+        expected_error_message="columns {'n[34]', 'n[34]'} do not exist",
+    )
 
 
 def test_datetime_drop_duplicates():

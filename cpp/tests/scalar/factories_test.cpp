@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,18 @@
  * limitations under the License.
  */
 
-#include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/type_lists.hpp>
 
-class ScalarFactoryTest : public cudf::test::BaseFixture {
-  cudaStream_t _stream{0};
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
+class ScalarFactoryTest : public cudf::test::BaseFixture {
  public:
-  cudaStream_t stream() { return _stream; }
+  rmm::cuda_stream_view stream() { return rmm::cuda_stream_default; }
 };
 
 template <typename T>
@@ -118,7 +119,7 @@ template <typename T>
 struct FixedWidthScalarFactory : public ScalarFactoryTest {
 };
 
-TYPED_TEST_CASE(FixedWidthScalarFactory, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(FixedWidthScalarFactory, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(FixedWidthScalarFactory, ValueProvided)
 {
@@ -132,6 +133,29 @@ TYPED_TEST(FixedWidthScalarFactory, ValueProvided)
   EXPECT_EQ(s->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_EQ(numeric_s->value(), value);
   EXPECT_TRUE(numeric_s->is_valid());
+  EXPECT_TRUE(s->is_valid());
+}
+
+template <typename T>
+struct FixedPointScalarFactory : public ScalarFactoryTest {
+};
+
+TYPED_TEST_CASE(FixedPointScalarFactory, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointScalarFactory, ValueProvided)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+
+  auto const rep_value = static_cast<typename decimalXX::rep>(123);
+  auto const s =
+    cudf::make_fixed_point_scalar<decimalXX>(123, scale_type{-2}, this->stream(), this->mr());
+  auto const fp_s           = static_cast<cudf::scalar_type_t<decimalXX>*>(s.get());
+  auto const expected_dtype = cudf::data_type{cudf::type_to_id<decimalXX>(), -2};
+
+  EXPECT_EQ(s->type(), expected_dtype);
+  EXPECT_EQ(fp_s->value(), rep_value);
+  EXPECT_TRUE(fp_s->is_valid());
   EXPECT_TRUE(s->is_valid());
 }
 

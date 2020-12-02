@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,22 @@
  * limitations under the License.
  */
 
-#include <cuda_runtime.h>
-#include <string.h>  // memset
-#include <zlib.h>    // uncompress
 #include "io_uncomp.h"
 #include "unbz2.h"  // bz2 uncompress
 
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <cuda_runtime.h>
+
+#include <string.h>  // memset
+
+#include <zlib.h>  // uncompress
+
 using cudf::detail::host_span;
 
 namespace cudf {
 namespace io {
-#define GZ_FLG_FTEXT 0x01     // ASCII text hint
-#define GZ_FLG_FHCRC 0x02     // Header CRC present
-#define GZ_FLG_FEXTRA 0x04    // Extra fields present
-#define GZ_FLG_FNAME 0x08     // Original file name present
-#define GZ_FLG_FCOMMENT 0x10  // Comment present
 
 #pragma pack(push, 1)
 
@@ -39,7 +37,7 @@ struct gz_file_header_s {
   uint8_t id1;        // 0x1f
   uint8_t id2;        // 0x8b
   uint8_t comp_mthd;  // compression method (0-7=reserved, 8=deflate)
-  uint8_t flags;      // flags (GZ_FLG_XXX)
+  uint8_t flags;      // flags (GZIPHeaderFlag)
   uint8_t mtime[4];   // If non-zero: modification time (Unix format)
   uint8_t xflags;     // Extra compressor-specific flags
   uint8_t os;         // OS id
@@ -133,12 +131,12 @@ bool ParseGZArchive(gz_archive_s *dst, const uint8_t *raw, size_t len)
   if (!dst) return false;
   memset(dst, 0, sizeof(gz_archive_s));
   if (len < sizeof(gz_file_header_s) + 8) return false;
-  fhdr = (gz_file_header_s *)raw;
+  fhdr = reinterpret_cast<gz_file_header_s const *>(raw);
   if (fhdr->id1 != 0x1f || fhdr->id2 != 0x8b) return false;
   dst->fhdr = fhdr;
   raw += sizeof(gz_file_header_s);
   len -= sizeof(gz_file_header_s);
-  if (fhdr->flags & GZ_FLG_FEXTRA) {
+  if (fhdr->flags & GZIPHeaderFlag::fextra) {
     uint32_t xlen;
 
     if (len < 2) return false;
@@ -151,7 +149,7 @@ bool ParseGZArchive(gz_archive_s *dst, const uint8_t *raw, size_t len)
     raw += xlen;
     len -= xlen;
   }
-  if (fhdr->flags & GZ_FLG_FNAME) {
+  if (fhdr->flags & GZIPHeaderFlag::fname) {
     size_t l = 0;
     uint8_t c;
     do {
@@ -163,7 +161,7 @@ bool ParseGZArchive(gz_archive_s *dst, const uint8_t *raw, size_t len)
     raw += l;
     len -= l;
   }
-  if (fhdr->flags & GZ_FLG_FCOMMENT) {
+  if (fhdr->flags & GZIPHeaderFlag::fcomment) {
     size_t l = 0;
     uint8_t c;
     do {
@@ -175,7 +173,7 @@ bool ParseGZArchive(gz_archive_s *dst, const uint8_t *raw, size_t len)
     raw += l;
     len -= l;
   }
-  if (fhdr->flags & GZ_FLG_FHCRC) {
+  if (fhdr->flags & GZIPHeaderFlag::fhcrc) {
     if (len < 2) return false;
     dst->hcrc16 = raw[0] | (raw[1] << 8);
     raw += 2;
@@ -196,16 +194,17 @@ bool OpenZipArchive(zip_archive_s *dst, const uint8_t *raw, size_t len)
   // Find the end of central directory
   if (len >= sizeof(zip_eocd_s) + 2) {
     for (size_t i = len - sizeof(zip_eocd_s) - 2; i + sizeof(zip_eocd_s) + 2 + 0xffff >= len; i--) {
-      const zip_eocd_s *eocd = (zip_eocd_s *)(raw + i);
+      const zip_eocd_s *eocd = reinterpret_cast<zip_eocd_s const *>(raw + i);
       if (eocd->sig == 0x06054b50 &&
           eocd->disk_id == eocd->start_disk  // multi-file archives not supported
           && eocd->num_entries == eocd->total_entries &&
           eocd->cdir_size >= sizeof(zip_cdfh_s) * eocd->num_entries && eocd->cdir_offset < len &&
-          i + *(const uint16_t *)(eocd + 1) <= len) {
-        const zip_cdfh_s *cdfh = (const zip_cdfh_s *)(raw + eocd->cdir_offset);
+          i + *reinterpret_cast<const uint16_t *>(eocd + 1) <= len) {
+        const zip_cdfh_s *cdfh = reinterpret_cast<const zip_cdfh_s *>(raw + eocd->cdir_offset);
         dst->eocd              = eocd;
         if (i >= sizeof(zip64_eocdl)) {
-          const zip64_eocdl *eocdl = (const zip64_eocdl *)(raw + i - sizeof(zip64_eocdl));
+          const zip64_eocdl *eocdl =
+            reinterpret_cast<const zip64_eocdl *>(raw + i - sizeof(zip64_eocdl));
           if (eocdl->sig == 0x07064b50) { dst->eocdl = eocdl; }
         }
         // Start of central directory
@@ -222,7 +221,7 @@ int cpu_inflate(uint8_t *uncomp_data, size_t *destLen, const uint8_t *comp_data,
   z_stream strm;
 
   memset(&strm, 0, sizeof(strm));
-  strm.next_in   = (Bytef *)comp_data;
+  strm.next_in   = const_cast<Bytef *>(reinterpret_cast<Bytef const *>(comp_data));
   strm.avail_in  = comp_len;
   strm.total_in  = 0;
   strm.next_out  = uncomp_data;
@@ -255,7 +254,7 @@ int cpu_inflate_vector(std::vector<char> &dst, const uint8_t *comp_data, size_t 
   z_stream strm;
 
   memset(&strm, 0, sizeof(strm));
-  strm.next_in   = (Bytef *)comp_data;
+  strm.next_in   = const_cast<Bytef *>(reinterpret_cast<Bytef const *>(comp_data));
   strm.avail_in  = comp_len;
   strm.total_in  = 0;
   strm.next_out  = reinterpret_cast<uint8_t *>(dst.data());
@@ -294,7 +293,7 @@ int cpu_inflate_vector(std::vector<char> &dst, const uint8_t *comp_data, size_t 
  */
 std::vector<char> io_uncompress_single_h2d(const void *src, size_t src_size, int stream_type)
 {
-  const uint8_t *raw       = (const uint8_t *)src;
+  const uint8_t *raw       = static_cast<const uint8_t *>(src);
   const uint8_t *comp_data = nullptr;
   size_t comp_len          = 0;
   size_t uncomp_len        = 0;
@@ -319,7 +318,8 @@ std::vector<char> io_uncompress_single_h2d(const void *src, size_t src_size, int
       if (OpenZipArchive(&za, raw, src_size)) {
         size_t cdfh_ofs = 0;
         for (int i = 0; i < za.eocd->num_entries; i++) {
-          const zip_cdfh_s *cdfh = (const zip_cdfh_s *)(((const uint8_t *)za.cdfh) + cdfh_ofs);
+          const zip_cdfh_s *cdfh = reinterpret_cast<const zip_cdfh_s *>(
+            reinterpret_cast<const uint8_t *>(za.cdfh) + cdfh_ofs);
           int cdfh_len = sizeof(zip_cdfh_s) + cdfh->fname_len + cdfh->extra_len + cdfh->comment_len;
           if (cdfh_ofs + cdfh_len > za.eocd->cdir_size || cdfh->sig != 0x02014b50) {
             // Bad cdir
@@ -328,7 +328,7 @@ std::vector<char> io_uncompress_single_h2d(const void *src, size_t src_size, int
           // For now, only accept with non-zero file sizes and DEFLATE
           if (cdfh->comp_method == 8 && cdfh->comp_size > 0 && cdfh->uncomp_size > 0) {
             size_t lfh_ofs       = cdfh->hdr_ofs;
-            const zip_lfh_s *lfh = (const zip_lfh_s *)(raw + lfh_ofs);
+            const zip_lfh_s *lfh = reinterpret_cast<const zip_lfh_s *>(raw + lfh_ofs);
             if (lfh_ofs + sizeof(zip_lfh_s) <= src_size && lfh->sig == 0x04034b50 &&
                 lfh_ofs + sizeof(zip_lfh_s) + lfh->fname_len + lfh->extra_len <= src_size) {
               if (lfh->comp_method == 8 && lfh->comp_size > 0 && lfh->uncomp_size > 0) {
@@ -352,7 +352,7 @@ std::vector<char> io_uncompress_single_h2d(const void *src, size_t src_size, int
       if (stream_type != IO_UNCOMP_STREAM_TYPE_INFER) break;  // Fall through for INFER
     case IO_UNCOMP_STREAM_TYPE_BZIP2:
       if (src_size > 4) {
-        const bz2_file_header_s *fhdr = (const bz2_file_header_s *)raw;
+        const bz2_file_header_s *fhdr = reinterpret_cast<const bz2_file_header_s *>(raw);
         // Check for BZIP2 file signature "BZh1" to "BZh9"
         if (fhdr->sig[0] == 'B' && fhdr->sig[1] == 'Z' && fhdr->sig[2] == 'h' &&
             fhdr->blksz >= '1' && fhdr->blksz <= '9') {
@@ -390,7 +390,7 @@ std::vector<char> io_uncompress_single_h2d(const void *src, size_t src_size, int
     do {
       size_t dst_len = uncomp_len - dst_ofs;
       bz_err         = cpu_bz2_uncompress(
-        comp_data, comp_len, ((uint8_t *)dst.data()) + dst_ofs, &dst_len, &src_ofs);
+        comp_data, comp_len, reinterpret_cast<uint8_t *>(dst.data()) + dst_ofs, &dst_len, &src_ofs);
       if (bz_err == BZ_OUTBUFF_FULL) {
         // TBD: We could infer the compression ratio based on produced/consumed byte counts
         // in order to minimize realloc events and over-allocation
@@ -508,12 +508,12 @@ class HostDecompressor_SNAPPY : public HostDecompressor {
         if (blen & 2) {
           // xxxxxx1x: copy with 6-bit length, 2-byte or 4-byte offset
           if (cur + 2 > end) break;
-          offset = *(const uint16_t *)cur;
+          offset = *reinterpret_cast<const uint16_t *>(cur);
           cur += 2;
           if (blen & 1)  // 4-byte offset
           {
             if (cur + 2 > end) break;
-            offset |= (*(const uint16_t *)cur) << 16;
+            offset |= (*reinterpret_cast<const uint16_t *>(cur)) << 16;
             cur += 2;
           }
           blen = (blen >> 2) + 1;

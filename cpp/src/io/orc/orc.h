@@ -158,20 +158,47 @@ class ProtobufReader {
   void skip_struct_field(int t);
 
  public:
-#define DECL_ORC_STRUCT(st) bool read(st *, size_t maxlen)
-  DECL_ORC_STRUCT(PostScript);
-  DECL_ORC_STRUCT(FileFooter);
-  DECL_ORC_STRUCT(StripeInformation);
-  DECL_ORC_STRUCT(SchemaType);
-  DECL_ORC_STRUCT(UserMetadataItem);
-  DECL_ORC_STRUCT(StripeFooter);
-  DECL_ORC_STRUCT(Stream);
-  DECL_ORC_STRUCT(ColumnEncoding);
-  DECL_ORC_STRUCT(StripeStatistics);
-  DECL_ORC_STRUCT(Metadata);
-#undef DECL_ORC_STRUCT
+  bool read(PostScript &, size_t maxlen);
+  bool read(FileFooter &, size_t maxlen);
+  bool read(StripeInformation &, size_t maxlen);
+  bool read(SchemaType &, size_t maxlen);
+  bool read(UserMetadataItem &, size_t maxlen);
+  bool read(StripeFooter &, size_t maxlen);
+  bool read(Stream &, size_t maxlen);
+  bool read(ColumnEncoding &, size_t maxlen);
+  bool read(StripeStatistics &, size_t maxlen);
+  bool read(Metadata &, size_t maxlen);
+
  protected:
-  bool InitSchema(FileFooter *);
+  bool InitSchema(FileFooter &);
+
+  template <typename T, typename... Operator>
+  bool function_builder(T &s, size_t maxlen, std::tuple<Operator...> &op);
+  template <typename T>
+  bool function_builder_return(T &s, const uint8_t *end);
+  struct FieldInt32;
+  struct FieldUInt32;
+  struct FieldInt64;
+  struct FieldUInt64;
+  template <typename Enum>
+  struct FieldEnum;
+  struct FieldPackedUInt32;
+  struct FieldString;
+  struct FieldRepeatedString;
+  template <typename Enum>
+  struct FieldRepeatedStructFunctor;
+  template <typename Enum>
+  struct FieldRepeatedStructBlobFunctor;
+  template <typename Enum>
+  FieldRepeatedStructFunctor<Enum> FieldRepeatedStruct(int f, std::vector<Enum> &v)
+  {
+    return FieldRepeatedStructFunctor<Enum>(f, v);
+  }
+  template <typename Enum>
+  FieldRepeatedStructBlobFunctor<Enum> FieldRepeatedStructBlob(int f, std::vector<Enum> &v)
+  {
+    return FieldRepeatedStructBlobFunctor<Enum>(f, v);
+  }
 
  protected:
   const uint8_t *m_base;
@@ -213,20 +240,20 @@ class ProtobufWriter {
                            TypeKind kind);
 
  public:
-#define DECL_PBW_STRUCT(st) size_t write(const st *)
-  DECL_PBW_STRUCT(PostScript);
-  DECL_PBW_STRUCT(FileFooter);
-  DECL_PBW_STRUCT(StripeInformation);
-  DECL_PBW_STRUCT(SchemaType);
-  DECL_PBW_STRUCT(UserMetadataItem);
-  DECL_PBW_STRUCT(StripeFooter);
-  DECL_PBW_STRUCT(Stream);
-  DECL_PBW_STRUCT(ColumnEncoding);
-  DECL_PBW_STRUCT(StripeStatistics);
-  DECL_PBW_STRUCT(Metadata);
-#undef DECL_PBW_STRUCT
+  size_t write(const PostScript &);
+  size_t write(const FileFooter &);
+  size_t write(const StripeInformation &);
+  size_t write(const SchemaType &);
+  size_t write(const UserMetadataItem &);
+  size_t write(const StripeFooter &);
+  size_t write(const Stream &);
+  size_t write(const ColumnEncoding &);
+  size_t write(const StripeStatistics &);
+  size_t write(const Metadata &);
+
  protected:
   std::vector<uint8_t> *m_buf;
+  struct ProtobufFieldWriter;
 };
 
 /**

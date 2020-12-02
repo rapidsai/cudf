@@ -15,17 +15,18 @@
  */
 #pragma once
 
+#include <join/join_common_utils.hpp>
+#include <join/join_kernels.cuh>
+
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/join.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 
-#include "cudf/types.hpp"
-#include "join_common_utils.hpp"
-#include "join_kernels.cuh"
+#include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/sequence.h>
 
 #include <limits>
 
@@ -60,7 +61,7 @@ size_type estimate_join_output_size(table_device_view build_table,
                                     table_device_view probe_table,
                                     multimap_type const& hash_table,
                                     null_equality compare_nulls,
-                                    cudaStream_t stream)
+                                    rmm::cuda_stream_view stream)
 {
   using estimate_size_type = int64_t;  // use 64-bit size so we can detect overflow
 
@@ -97,7 +98,7 @@ size_type estimate_join_output_size(table_device_view build_table,
   estimate_size_type h_size_estimate{0};
   rmm::device_scalar<estimate_size_type> size_estimate(0, stream);
 
-  CHECK_CUDA(stream);
+  CHECK_CUDA(stream.value());
 
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   int numBlocks{-1};
@@ -117,29 +118,29 @@ size_type estimate_join_output_size(table_device_view build_table,
   do {
     sample_probe_num_rows = std::min(sample_probe_num_rows, probe_table_num_rows);
 
-    size_estimate.set_value(0);
+    size_estimate.set_value(0, stream);
 
     row_hash hash_probe{probe_table};
     row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
     // Probe the hash table without actually building the output to simply
     // find what the size of the output will be.
     compute_join_output_size<JoinKind, multimap_type, block_size>
-      <<<numBlocks * num_sms, block_size, 0, stream>>>(hash_table,
-                                                       build_table,
-                                                       probe_table,
-                                                       hash_probe,
-                                                       equality,
-                                                       sample_probe_num_rows,
-                                                       size_estimate.data());
-    CHECK_CUDA(stream);
+      <<<numBlocks * num_sms, block_size, 0, stream.value()>>>(hash_table,
+                                                               build_table,
+                                                               probe_table,
+                                                               hash_probe,
+                                                               equality,
+                                                               sample_probe_num_rows,
+                                                               size_estimate.data());
+    CHECK_CUDA(stream.value());
 
     // Only in case subset of probe table is chosen,
     // increase the estimated output size by a factor of the ratio between the
     // probe and build tables
     if (sample_probe_num_rows < probe_table_num_rows) {
-      h_size_estimate = size_estimate.value() * probe_to_build_ratio;
+      h_size_estimate = size_estimate.value(stream) * probe_to_build_ratio;
     } else {
-      h_size_estimate = size_estimate.value();
+      h_size_estimate = size_estimate.value(stream);
     }
 
     // Detect overflow
@@ -179,13 +180,13 @@ size_type estimate_join_output_size(table_device_view build_table,
  * @return Join output indices vector pair
  */
 inline std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>
-get_trivial_left_join_indices(table_view const& left, cudaStream_t stream)
+get_trivial_left_join_indices(table_view const& left, rmm::cuda_stream_view stream)
 {
   rmm::device_vector<size_type> left_indices(left.num_rows());
   thrust::sequence(
-    rmm::exec_policy(stream)->on(stream), left_indices.begin(), left_indices.end(), 0);
+    rmm::exec_policy(stream)->on(stream.value()), left_indices.begin(), left_indices.end(), 0);
   rmm::device_vector<size_type> right_indices(left.num_rows());
-  thrust::fill(rmm::exec_policy(stream)->on(stream),
+  thrust::fill(rmm::exec_policy(stream)->on(stream.value()),
                right_indices.begin(),
                right_indices.end(),
                JoinNoneValue);
@@ -226,7 +227,9 @@ struct hash_join::hash_join_impl {
    * @param build The build table, from which the hash table is built.
    * @param build_on The column indices from `build` to join on.
    */
-  hash_join_impl(cudf::table_view const& build, std::vector<size_type> const& build_on);
+  hash_join_impl(cudf::table_view const& build,
+                 std::vector<size_type> const& build_on,
+                 rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> inner_join(
     cudf::table_view const& probe,
@@ -234,6 +237,7 @@ struct hash_join::hash_join_impl {
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     common_columns_output_side common_columns_output_side,
     null_equality compare_nulls,
+    rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const;
 
   std::unique_ptr<cudf::table> left_join(
@@ -241,6 +245,7 @@ struct hash_join::hash_join_impl {
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     null_equality compare_nulls,
+    rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const;
 
   std::unique_ptr<cudf::table> full_join(
@@ -248,6 +253,7 @@ struct hash_join::hash_join_impl {
     std::vector<size_type> const& probe_on,
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     null_equality compare_nulls,
+    rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const;
 
  private:
@@ -299,8 +305,8 @@ struct hash_join::hash_join_impl {
     std::vector<std::pair<cudf::size_type, cudf::size_type>> const& columns_in_common,
     common_columns_output_side common_columns_output_side,
     null_equality compare_nulls,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream = 0) const;
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr) const;
 
   /**
    * @brief Probes the `_hash_table` built from `_build` for tuples in `probe_table`,
@@ -322,7 +328,7 @@ struct hash_join::hash_join_impl {
                    std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>>
   probe_join_indices(cudf::table_view const& probe,
                      null_equality compare_nulls,
-                     cudaStream_t stream) const;
+                     rmm::cuda_stream_view stream) const;
 };
 
 }  // namespace cudf

@@ -22,16 +22,18 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {
+
 template <bool has_nulls>
 auto is_sorted(cudf::table_view const& in,
                std::vector<order> const& column_order,
-               std::vector<null_order> const& null_precedence)
+               std::vector<null_order> const& null_precedence,
+               rmm::cuda_stream_view stream)
 {
-  cudaStream_t stream = 0;
-  auto in_d           = table_device_view::create(in);
+  auto in_d = table_device_view::create(in);
   rmm::device_vector<order> d_column_order(column_order);
   rmm::device_vector<null_order> const d_null_precedence =
     (has_nulls) ? rmm::device_vector<null_order>{null_precedence}
@@ -39,7 +41,7 @@ auto is_sorted(cudf::table_view const& in,
   auto ineq_op = row_lexicographic_comparator<has_nulls>(
     *in_d, *in_d, d_column_order.data().get(), d_null_precedence.data().get());
 
-  auto sorted = thrust::is_sorted(rmm::exec_policy(stream)->on(stream),
+  auto sorted = thrust::is_sorted(rmm::exec_policy(stream)->on(stream.value()),
                                   thrust::make_counting_iterator(0),
                                   thrust::make_counting_iterator(in.num_rows()),
                                   ineq_op);
@@ -68,9 +70,9 @@ bool is_sorted(cudf::table_view const& in,
   }
 
   if (has_nulls(in)) {
-    return detail::is_sorted<true>(in, column_order, null_precedence);
+    return detail::is_sorted<true>(in, column_order, null_precedence, rmm::cuda_stream_default);
   } else {
-    return detail::is_sorted<false>(in, column_order, null_precedence);
+    return detail::is_sorted<false>(in, column_order, null_precedence, rmm::cuda_stream_default);
   }
 }
 

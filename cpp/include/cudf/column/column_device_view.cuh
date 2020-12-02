@@ -15,9 +15,10 @@
  */
 #pragma once
 
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
+#include <algorithm>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/utilities/alignment.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -26,6 +27,11 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
 
 /**
  * @file column_device_view.cuh
@@ -385,7 +391,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *`source_view` available in device memory.
    */
   static std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> create(
-    column_view source_view, cudaStream_t stream = 0);
+    column_view source_view, rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   /**
    * @brief Destroy the `column_device_view` object.
@@ -479,7 +485,7 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    */
   static std::unique_ptr<mutable_column_device_view,
                          std::function<void(mutable_column_device_view*)>>
-  create(mutable_column_view source_view, cudaStream_t stream = 0);
+  create(mutable_column_view source_view, rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   /**
    * @brief Returns pointer to the base device memory allocation casted to
@@ -701,17 +707,20 @@ __device__ inline string_view const column_device_view::element<string_view>(
  * The basic dictionary elements are the indices which can be any index type.
  */
 struct index_element_fn {
-  template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
+  template <
+    typename IndexType,
+    std::enable_if_t<is_index_type<IndexType>() and std::is_unsigned<IndexType>::value>* = nullptr>
   __device__ size_type operator()(column_device_view const& input, size_type index)
   {
     return static_cast<size_type>(input.element<IndexType>(index));
   }
   template <typename IndexType,
             typename... Args,
-            std::enable_if_t<not is_index_type<IndexType>()>* = nullptr>
+            std::enable_if_t<not(is_index_type<IndexType>() and
+                                 std::is_unsigned<IndexType>::value)>* = nullptr>
   __device__ size_type operator()(Args&&... args)
   {
-    release_assert(false and "indices must be an integral type");
+    release_assert(false and "dictionary indices must be an unsigned integral type");
     return 0;
   }
 };
@@ -749,6 +758,42 @@ __device__ inline dictionary32 const column_device_view::element<dictionary32>(
   return dictionary32{type_dispatcher(indices.type(), index_element_fn{}, indices, index)};
 }
 
+/**
+ * @brief Returns a `numeric::decimal32` element at the specified index for a `fixed_point` column.
+ *
+ * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
+ * then any attempt to use the result will lead to undefined behavior.
+ *
+ * @param element_index Position of the desired element
+ * @return numeric::decimal32 representing the element at this index
+ */
+template <>
+__device__ inline numeric::decimal32 const column_device_view::element<numeric::decimal32>(
+  size_type element_index) const noexcept
+{
+  using namespace numeric;
+  auto const scale = scale_type{_type.scale()};
+  return decimal32{scaled_integer<int32_t>{data<int32_t>()[element_index], scale}};
+}
+
+/**
+ * @brief Returns a `numeric::decimal64` element at the specified index for a `fixed_point` column.
+ *
+ * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
+ * then any attempt to use the result will lead to undefined behavior.
+ *
+ * @param element_index Position of the desired element
+ * @return numeric::decimal64 representing the element at this index
+ */
+template <>
+__device__ inline numeric::decimal64 const column_device_view::element<numeric::decimal64>(
+  size_type element_index) const noexcept
+{
+  using namespace numeric;
+  auto const scale = scale_type{_type.scale()};
+  return decimal64{scaled_integer<int64_t>{data<int64_t>()[element_index], scale}};
+}
+
 namespace detail {
 /**
  * @brief value accessor of column without null bitmask
@@ -774,7 +819,7 @@ struct value_accessor {
    */
   value_accessor(column_device_view const& _col) : col{_col}
   {
-    CUDF_EXPECTS(data_type(type_to_id<T>()) == col.type(), "the data type mismatch");
+    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
   }
 
   __device__ T operator()(cudf::size_type i) const { return col.element<T>(i); }
@@ -808,7 +853,7 @@ struct pair_accessor {
    */
   pair_accessor(column_device_view const& _col) : col{_col}
   {
-    CUDF_EXPECTS(data_type(type_to_id<T>()) == col.type(), "the data type mismatch");
+    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
     if (has_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
   }
 
@@ -829,11 +874,66 @@ struct mutable_value_accessor {
    */
   mutable_value_accessor(mutable_column_device_view& _col) : col{_col}
   {
-    CUDF_EXPECTS(data_type(type_to_id<T>()) == col.type(), "the data type mismatch");
+    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
   }
 
   __device__ T& operator()(cudf::size_type i) { return col.element<T>(i); }
 };
+
+/**
+ * @brief Helper function for use by column_device_view and mutable_column_device_view constructors
+ * to build device_views from views.
+ *
+ * It is used to build the array of child columns in device memory. Since child columns can
+ * also have child columns, this uses recursion to build up the flat device buffer to contain
+ * all the children and set the member pointers appropriately.
+ *
+ * This is accomplished by laying out all the children and grand-children into a flat host
+ * buffer first but also keep a running device pointer to use when setting the
+ * d_children array result.
+ *
+ * This function is provided both the host pointer in which to insert its children (and
+ * by recursion its grand-children) and the device pointer to be used when calculating
+ * ultimate device pointer for the d_children member.
+ *
+ * @tparam ColumnView is either column_view or mutable_column_view
+ * @tparam ColumnDeviceView is either column_device_view or mutable_column_device_view
+ *
+ * @param child_begin Iterator pointing to begin of child columns to make into a device view
+ * @param child_begin Iterator pointing to end   of child columns to make into a device view
+ * @param h_ptr The host memory where to place any child data
+ * @param d_ptr The device pointer for calculating the d_children member of any child data
+ * @return The device pointer to be used for the d_children member of the given column
+ */
+template <typename ColumnDeviceView, typename ColumnViewIterator>
+ColumnDeviceView* child_columns_to_device_array(ColumnViewIterator child_begin,
+                                                ColumnViewIterator child_end,
+                                                void* h_ptr,
+                                                void* d_ptr)
+{
+  ColumnDeviceView* d_children = detail::align_ptr_for_type<ColumnDeviceView>(d_ptr);
+  auto num_children            = std::distance(child_begin, child_end);
+  if (num_children > 0) {
+    // The beginning of the memory must be the fixed-sized ColumnDeviceView
+    // struct objects in order for d_children to be used as an array.
+    auto h_column = detail::align_ptr_for_type<ColumnDeviceView>(h_ptr);
+    auto d_column = d_children;
+
+    // Any child data is assigned past the end of this array: h_end and d_end.
+    auto h_end = reinterpret_cast<int8_t*>(h_column + num_children);
+    auto d_end = reinterpret_cast<int8_t*>(d_column + num_children);
+    std::for_each(child_begin, child_end, [&](auto const& col) {
+      // inplace-new each child into host memory
+      new (h_column) ColumnDeviceView(col, h_end, d_end);
+      h_column++;  // advance to next child
+      // update the pointers for holding this child column's child data
+      auto col_child_data_size = ColumnDeviceView::extent(col) - sizeof(ColumnDeviceView);
+      h_end += col_child_data_size;
+      d_end += col_child_data_size;
+    });
+  }
+  return d_children;
+}
 
 }  // namespace detail
 }  // namespace cudf
