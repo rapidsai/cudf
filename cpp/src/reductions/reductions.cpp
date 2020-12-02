@@ -47,24 +47,24 @@ struct reduce_dispatch_functor {
   std::unique_ptr<scalar> operator()(std::unique_ptr<aggregation> const &agg)
   {
     switch (k) {
-      // clang-format off
-      case aggregation::SUM:            return reduction::sum           (col, output_dtype, stream, mr);
-      case aggregation::PRODUCT:        return reduction::product       (col, output_dtype, stream, mr);
-      case aggregation::MIN:            return reduction::min           (col, output_dtype, stream, mr);
-      case aggregation::MAX:            return reduction::max           (col, output_dtype, stream, mr);
-      case aggregation::ANY:            return reduction::any           (col, output_dtype, stream, mr);
-      case aggregation::ALL:            return reduction::all           (col, output_dtype, stream, mr);
-      case aggregation::SUM_OF_SQUARES: return reduction::sum_of_squares(col, output_dtype, stream, mr);
-      case aggregation::MEAN:           return reduction::mean          (col, output_dtype, stream, mr);
-      // clang-format on
+      case aggregation::SUM: return reduction::sum(col, output_dtype, stream, mr); break;
+      case aggregation::PRODUCT: return reduction::product(col, output_dtype, stream, mr); break;
+      case aggregation::MIN: return reduction::min(col, output_dtype, stream, mr); break;
+      case aggregation::MAX: return reduction::max(col, output_dtype, stream, mr); break;
+      case aggregation::ANY: return reduction::any(col, output_dtype, stream, mr); break;
+      case aggregation::ALL: return reduction::all(col, output_dtype, stream, mr); break;
+      case aggregation::SUM_OF_SQUARES:
+        return reduction::sum_of_squares(col, output_dtype, stream, mr);
+        break;
+      case aggregation::MEAN: return reduction::mean(col, output_dtype, stream, mr); break;
       case aggregation::VARIANCE: {
         auto var_agg = static_cast<std_var_aggregation const *>(agg.get());
         return reduction::variance(col, output_dtype, var_agg->_ddof, stream, mr);
-      }
+      } break;
       case aggregation::STD: {
         auto var_agg = static_cast<std_var_aggregation const *>(agg.get());
         return reduction::standard_deviation(col, output_dtype, var_agg->_ddof, stream, mr);
-      }
+      } break;
       case aggregation::MEDIAN: {
         auto sorted_indices =
           detail::sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, mr);
@@ -72,7 +72,7 @@ struct reduce_dispatch_functor {
         auto col_ptr              = detail::quantile(
           col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, stream, mr);
         return get_element(*col_ptr, 0, mr);
-      }
+      } break;
       case aggregation::QUANTILE: {
         auto quantile_agg = static_cast<quantile_aggregation const *>(agg.get());
         CUDF_EXPECTS(quantile_agg->_quantiles.size() == 1,
@@ -88,7 +88,7 @@ struct reduce_dispatch_functor {
                                         stream,
                                         mr);
         return get_element(*col_ptr, 0, mr);
-      }
+      } break;
       case aggregation::NUNIQUE: {
         auto nunique_agg = static_cast<nunique_aggregation const *>(agg.get());
         return make_fixed_width_scalar(
@@ -96,11 +96,11 @@ struct reduce_dispatch_functor {
             col, nunique_agg->_null_handling, nan_policy::NAN_IS_VALID, stream.value()),
           stream.value(),
           mr);
-      }
+      } break;
       case aggregation::NTH_ELEMENT: {
         auto nth_agg = static_cast<nth_element_aggregation const *>(agg.get());
         return reduction::nth_element(col, nth_agg->_n, nth_agg->_null_handling, stream, mr);
-      }
+      } break;
       default: CUDF_FAIL("Unsupported reduction operator");
     }
   }
