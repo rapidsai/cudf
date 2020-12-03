@@ -181,6 +181,7 @@
 - PR #6861 Fix compile error in type_dispatch_benchmark.cu
 - PR #6869 Avoid dependency resolution failure in latest version of pip by explicitly specifying versions for dask and distributed
 - PR #6806 Force install of local conda artifacts
+- PR #6887 Fix typo error and `0-d` numpy array handling in binary operation
 
 # cuDF 0.16.0 (21 Oct 2020)
 
