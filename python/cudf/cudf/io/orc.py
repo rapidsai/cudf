@@ -112,7 +112,9 @@ def read_orc_statistics(
         path_or_data=filepath_or_buffer, **kwargs,
     )
     if not is_single_filepath_or_buffer:
-        raise IOError("filepath_or_buffer resolved to multiple files")
+        raise NotImplementedError(
+            "`read_orc_statistics` does not yet support reading multiple files"
+        )
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         path_or_data=filepath_or_buffer, compression=None, **kwargs
