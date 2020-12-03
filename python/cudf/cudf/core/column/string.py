@@ -5014,6 +5014,11 @@ class StringColumn(column.ColumnBase):
                 other, size=len(self), dtype="object"
             )
             return col
+        elif isinstance(other, np.ndarray) and other.ndim == 0:
+            col = utils.scalar_broadcast_to(
+                other.item(), size=len(self), dtype="object"
+            )
+            return col
         else:
             raise TypeError(f"cannot broadcast {type(other)}")
 
