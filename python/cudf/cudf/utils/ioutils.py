@@ -1108,7 +1108,8 @@ def get_filepath_or_buffer(
     Returns
     -------
     filepath_or_buffer : str, bytes, BytesIO, list
-        Filepath string or in-memory buffer of data
+        Filepath string or in-memory buffer of data or a
+        list of Filepath strings or in-memory buffers of data.
     compression : str
         Type of compression algorithm for the content
     """
