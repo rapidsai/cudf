@@ -701,7 +701,8 @@ SparkMurmurHash3_32<cudf::string_view>::operator()(cudf::string_view const& key)
   // Spark's byte by byte tail processing
   for (int i = nblocks * 4; i < len; i++) {
     uint32_t k1 = data[i] & 0xff;
-    k1          = rotl32(k1, 15);
+    k1 *= c1;
+    k1 = rotl32(k1, 15);
     k1 *= c2;
     h1 ^= k1;
     h1 = rotl32(h1, 13);

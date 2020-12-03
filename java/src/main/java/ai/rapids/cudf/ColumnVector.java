@@ -441,7 +441,7 @@ public final class ColumnVector extends ColumnView {
    * @param columns array of columns to hash, must have identical number of rows.
    * @return the new ColumnVector of 32 character hex strings representing each row's hash value.
    */
-  public static ColumnVector serial32BitMurmurHash3(int seed, ColumnView columns[]) {
+  public static ColumnVector spark32BitMurmurHash3(int seed, ColumnView columns[]) {
     if (columns.length < 1) {
       throw new IllegalArgumentException("MD5 hashing requires at least 1 column of input");
     }
@@ -456,7 +456,7 @@ public final class ColumnVector extends ColumnView {
       assert !columns[i].getType().isNestedType() : "Unsupported column of nested type";
       columnViews[i] = columns[i].getNativeView();
     }
-    return new ColumnVector(hash(columnViews, HashType.HASH_SERIAL_MURMUR3.getNativeId(), new int[0], seed));
+    return new ColumnVector(hash(columnViews, HashType.HASH_SPARK_MURMUR3.getNativeId(), new int[0], seed));
   }
 
   /**
@@ -465,8 +465,8 @@ public final class ColumnVector extends ColumnView {
    * @param columns array of columns to hash, must have identical number of rows.
    * @return the new ColumnVector of 32 character hex strings representing each row's hash value.
    */
-  public static ColumnVector serial32BitMurmurHash3(ColumnView columns[]) {
-    return serial32BitMurmurHash3(0, columns);
+  public static ColumnVector spark32BitMurmurHash3(ColumnView columns[]) {
+    return spark32BitMurmurHash3(0, columns);
   }
 
   /**

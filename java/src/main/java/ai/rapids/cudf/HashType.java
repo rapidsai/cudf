@@ -25,7 +25,8 @@ public enum HashType {
   // TODO IDENTITY(0),
   // TODO MURMUR3(1),
   HASH_MD5(2),
-  HASH_SERIAL_MURMUR3(3);
+  HASH_SERIAL_MURMUR3(3),
+  HASH_SPARK_MURMUR3(4);
 
   private static final HashType[] HASH_TYPES = HashType.values();
   final int nativeId;

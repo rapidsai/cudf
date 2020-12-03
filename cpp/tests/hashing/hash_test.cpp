@@ -265,7 +265,7 @@ class SparkMurmurHash3Test : public cudf::test::BaseFixture {
 TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
 {
   fixed_width_column_wrapper<int32_t> const strings_col_result(
-    {1467149710, -680899318, -1620282500, 91106683, -1165223012});
+    {1467149710, 723257560, -1620282500, -2001858707, 1905352078});
   fixed_width_column_wrapper<int32_t> const ints_col_result(
     {933211791, 751823303, -1080202046, 723455942, 133916647});
 
@@ -291,7 +291,6 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
   auto const hashed_output3 = cudf::hash(input3, cudf::hash_id::HASH_SPARK_MURMUR3, {});
   auto const hashed_output4 = cudf::hash(input4, cudf::hash_id::HASH_SPARK_MURMUR3, {});
 
-  cudf::test::print(hashed_output1->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(hashed_output1->view(), strings_col_result, true);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(hashed_output2->view(), ints_col_result, true);
   EXPECT_EQ(input3.num_rows(), hashed_output3->size());
