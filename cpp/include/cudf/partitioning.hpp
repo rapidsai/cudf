@@ -17,6 +17,8 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <rmm/cuda_stream_view.hpp>
+
 #include <memory>
 #include <vector>
 
