@@ -8,7 +8,7 @@ import pickle
 import sys
 import warnings
 from collections import OrderedDict, defaultdict
-from collections.abc import Mapping, Sequence, Iterable
+from collections.abc import Iterable, Mapping, Sequence
 
 import cupy
 import numpy as np
@@ -3734,10 +3734,10 @@ class DataFrame(Frame, Serializable):
         ----------
         aggs : Iterable (set, list, string, tuple or dict)
             Function to use for aggregating data. Accepted types are:
-                string name, e.g. ``"sum"``
-                list of functions, e.g. ``["sum", "min", "max"]``
-                dict of axis labels specified operations per column,
-                e.g. ``{"a": "sum"}``
+             * string name, e.g. ``"sum"``
+             * list of functions, e.g. ``["sum", "min", "max"]``
+             * dict of axis labels specified operations per column,
+               e.g. ``{"a": "sum"}``
 
         axis : not yet supported
 
@@ -3745,14 +3745,14 @@ class DataFrame(Frame, Serializable):
         -------
         Aggregation Result : ``Series`` or ``DataFrame``
             When ``DataFrame.agg`` is called with single agg,
-            ``Series`` is returned
+            ``Series`` is returned.
             When ``DataFrame.agg`` is called with several aggs,
-            ``DataFrame``is returned
+            ``DataFrame`` is returned.
 
         Notes
         -----
         Difference from pandas:
-          * Not supporting: axis, *args, **kwargs
+          * Not supporting: ``axis``, ``*args``, ``**kwargs``
 
         """
         # TODO: Remove the typecasting below once issue #6846 is fixed
