@@ -111,8 +111,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv *env
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env,
                                                               jobject j_object,
                                                               jlongArray column_handles,
-                                                              jint hash_function_id) {
+                                                              jint hash_function_id,
+                                                              jintArray initial_values,
+                                                              jint seed) {
   JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
+  JNI_NULL_CHECK(env, initial_values, "array of initial values is null", 0);
 
   try {
     cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
@@ -122,7 +125,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env,
                    [](auto const &p_column) { return *p_column; });
     cudf::table_view *input_table = new cudf::table_view(column_views);
 
-    std::unique_ptr<cudf::column> result = cudf::hash(*input_table, static_cast<cudf::hash_id>(hash_function_id));
+    cudf::jni::native_jintArray native_iv (env, initial_values);
+    std::vector<uint32_t> vector_iv;
+    std::transform(native_iv.data(), native_iv.data() + native_iv.size(),
+                   std::back_inserter(vector_iv),
+                   [](auto const &iv) { return iv; });
+
+    std::unique_ptr<cudf::column> result = cudf::hash(*input_table, static_cast<cudf::hash_id>(hash_function_id), vector_iv, seed);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

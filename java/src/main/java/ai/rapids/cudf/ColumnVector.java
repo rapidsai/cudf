@@ -431,7 +431,42 @@ public final class ColumnVector extends ColumnView {
           "Unsupported nested type column";
       columnViews[i] = columns[i].getNativeView();
     }
-    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId()));
+    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId(), new int[0], 0));
+  }
+
+  /**
+   * Create a new vector containing the MD5 hash of each row in the table.
+   *
+   * @param seed integer seed for the murmur3 hash function
+   * @param columns array of columns to hash, must have identical number of rows.
+   * @return the new ColumnVector of 32 character hex strings representing each row's hash value.
+   */
+  public static ColumnVector serial32BitMurmurHash3(int seed, ColumnView columns[]) {
+    if (columns.length < 1) {
+      throw new IllegalArgumentException("MD5 hashing requires at least 1 column of input");
+    }
+    long[] columnViews = new long[columns.length];
+    long size = columns[0].getRowCount();
+
+    for(int i = 0; i < columns.length; i++) {
+      assert columns[i] != null : "Column vectors passed may not be null";
+      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
+      assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
+      assert !columns[i].getType().isTimestamp() : "Unsupported column type Timestamp";
+      assert !columns[i].getType().isNestedType() : "Unsupported column of nested type";
+      columnViews[i] = columns[i].getNativeView();
+    }
+    return new ColumnVector(hash(columnViews, HashType.HASH_SERIAL_MURMUR3.getNativeId(), new int[0], seed));
+  }
+
+  /**
+   * Create a new vector containing the MD5 hash of each row in the table, seed defaulted to 0.
+   *
+   * @param columns array of columns to hash, must have identical number of rows.
+   * @return the new ColumnVector of 32 character hex strings representing each row's hash value.
+   */
+  public static ColumnVector serial32BitMurmurHash3(ColumnView columns[]) {
+    return serial32BitMurmurHash3(0, columns);
   }
 
   /**
@@ -479,10 +514,15 @@ public final class ColumnVector extends ColumnView {
    * native side using the hashId.
    *
    * @param viewHandles array of native handles to the cudf::column_view columns being operated on.
-   * @param hashId integer native ID of the hashing function identifier HashType
+   * @param hashId integer native ID of the hashing function identifier HashType.
+   * @param initialValues array of integer values, one per column, only used by non-serial murmur3
+   *                      hash. Each element's hash value is merged with its column's initial value
+   *                      before the row is merged into a single value.
+   * @param seed integer seed for the hash. Only used by serial murmur3 hash.
    * @return native handle of the resulting cudf column containing the hex-string hashing results.
    */
-  private static native long hash(long[] viewHandles, int hashId) throws CudfException;
+  private static native long hash(long[] viewHandles, int hashId, int[] initialValues,
+                                  int seed) throws CudfException;
 
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
