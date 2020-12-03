@@ -8041,22 +8041,16 @@ def test_agg_for_dataframes(data, aggs):
 
 @pytest.mark.parametrize("aggs", [{"a": np.sum, "b": np.min, "c": np.max}])
 def test_agg_for_unsupported_function(aggs):
-    pdf = pd.DataFrame(
-        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
-    )
     gdf = gd.DataFrame(
         {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
     )
 
     with pytest.raises(NotImplementedError):
-        got = gdf.agg(aggs)
+        gdf.agg(aggs)
 
 
 @pytest.mark.parametrize("aggs", ["asdf"])
 def test_agg_for_dataframe_with_invalid_function(aggs):
-    pdf = pd.DataFrame(
-        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
-    )
     gdf = gd.DataFrame(
         {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
     )
@@ -8065,14 +8059,11 @@ def test_agg_for_dataframe_with_invalid_function(aggs):
         AttributeError,
         match=f"{aggs} is not a valid function for 'DataFrame' object",
     ):
-        got = gdf.agg(aggs)
+        gdf.agg(aggs)
 
 
 @pytest.mark.parametrize("aggs", [{"a": "asdf"}])
 def test_agg_for_series_with_invalid_function(aggs):
-    pdf = pd.DataFrame(
-        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
-    )
     gdf = gd.DataFrame(
         {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
     )
@@ -8081,7 +8072,7 @@ def test_agg_for_series_with_invalid_function(aggs):
         AttributeError,
         match=f"{aggs['a']} is not a valid function for 'Series' object",
     ):
-        got = gdf.agg(aggs)
+        gdf.agg(aggs)
 
 
 @pytest.mark.parametrize(
@@ -8093,10 +8084,6 @@ def test_agg_for_series_with_invalid_function(aggs):
     ],
 )
 def test_agg_for_dataframe_with_string_columns(aggs):
-    pdf = pd.DataFrame(
-        {"a": ["m", "n", "o"], "b": ["t", "u", "v"], "c": ["x", "y", "z"]},
-        index=["a", "b", "c"],
-    )
     gdf = gd.DataFrame(
         {"a": ["m", "n", "o"], "b": ["t", "u", "v"], "c": ["x", "y", "z"]},
         index=["a", "b", "c"],
@@ -8105,4 +8092,4 @@ def test_agg_for_dataframe_with_string_columns(aggs):
     with pytest.raises(
         NotImplementedError, match="Cannot transpose string columns",
     ):
-        got = gdf.agg(aggs)
+        gdf.agg(aggs)
