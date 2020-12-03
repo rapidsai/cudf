@@ -1,3 +1,11 @@
+# cuDF 0.18.0 (Date TBD)
+
+## New Features
+
+## Improvements
+
+## Bug Fixes
+
 # cuDF 0.17.0 (Date TBD)
 
 ## New Features
@@ -35,6 +43,7 @@
 - PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
 - PR #6817 Add support for scatter() on lists-of-struct columns
 - PR #6805 Implement `cudf::detail::copy_if` for `decimal32` and `decimal64`
+- PR #6847 Add a cmake find module for cuFile in JNI code
 
 ## Improvements
 
@@ -86,6 +95,7 @@
 - PR #6644 Cover different CSV reader/writer options in benchmarks
 - PR #6741 Cover different ORC and Parquet reader/writer options in benchmarks
 - PR #6651 Add cudf::dictionary::make_dictionary_pair_iterator
+- PR #6666 Add dictionary support to `cudf::reduce`
 - PR #6635 Add cudf::test::dictionary_column_wrapper class
 - PR #6702 Fix orc read corruption on boolean column
 - PR #6676 Add dictionary support to `cudf::quantile`
@@ -105,14 +115,19 @@
 - PR #6776 Use `void` return type for kernel wrapper functions instead of returning `cudaError_t`
 - PR #6786 Add nested type support to ColumnVector#getDeviceMemorySize
 - PR #6780 Move `cudf::cast` tests to separate test file
+- PR #6809 size_type overflow checking when concatenating columns
 - PR #6789 Rename `unary_op` to `unary_operator`
 - PR #6770 Support building decimal columns with Table.TestBuilder
+- PR #6800 Push DeviceScalar to cython-only
 - PR #6822 Split out `cudf::distinct_count` from `drop_duplicates.cu`
 - PR #6813 Enable `expand=False` in `.str.split` and `.str.rsplit`
 - PR #6829 Enable workaround to write categorical columns in csv
 - PR #6819 Use CMake 3.19 for RMM when building cuDF jar
 - PR #6833 Use settings.xml if existing for internal build
+- PR #6835 Move template param to member var to improve compile of hash/groupby.cu
 - PR #6837 Avoid gather when copying strings view from start of strings column
+- PR #6859 Move align_ptr_for_type() from cuda.cuh to alignment.hpp
+- PR #6807 Refactor `std::array` usage in row group index writing in ORC
 
 ## Bug Fixes
 
@@ -159,6 +174,7 @@
 - PR #6742 Fix concat bug in dask_cudf Series/Index creation
 - PR #6632 Fix DataFrame initialization from list of dicts
 - PR #6767 Fix sort order of parameters in `test_scalar_invalid_implicit_conversion` pytest
+- PR #6771 Fix index handling in parquet reader and writer
 - PR #6787 Update java reduction APIs to reflect C++ changes
 - PR #6790 Fix result representation in groupby.apply
 - PR #6794 Fix AVRO reader issues with empty input
@@ -166,9 +182,13 @@
 - PR #6824 Fix JNI build
 - PR #6826 Fix resource management in Java ColumnBuilder
 - PR #6830 Fix categorical scalar insertion
+- PR #6844 Fix uint32_t undefined errors
 - PR #6854 Fix the parameter order of writeParquetBufferBegin
 - PR #6855 Fix `.str.replace_with_backrefs` docs examples
-
+- PR #6853 Fix contiguous split of null string columns
+- PR #6861 Fix compile error in type_dispatch_benchmark.cu
+- PR #6869 Avoid dependency resolution failure in latest version of pip by explicitly specifying versions for dask and distributed
+- PR #6806 Force install of local conda artifacts
 
 # cuDF 0.16.0 (21 Oct 2020)
 
@@ -201,6 +221,7 @@
 - PR #6301 Add JNI bindings to nvcomp
 - PR #6328 Java and JNI bindings for getMapValue/map_lookup
 - PR #6371 Use ColumnViewAccess on Host side
+- PR #6392 add hash based groupby mean aggregation
 - PR #6511 Add LogicalType to Parquet reader
 - PR #6297 cuDF Python Scalars
 - PR #6723 Support creating decimal vectors from scalar
