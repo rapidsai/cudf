@@ -1495,3 +1495,35 @@ def test_datetime_dateoffset_binaryop(date_col, n_periods, frequency, dtype):
     got = gsr - goffset
 
     utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("frame", [cudf.Series, cudf.Index, cudf.DataFrame])
+@pytest.mark.parametrize(
+    "dtype", ["int", "str", "datetime64[s]", "timedelta64[s]", "category"]
+)
+def test_binops_with_lhs_numpy_scalar(frame, dtype):
+    data = [1, 2, 3, 4, 5]
+
+    data = (
+        frame({"a": data}, dtype=dtype)
+        if isinstance(frame, cudf.DataFrame)
+        else frame(data, dtype=dtype)
+    )
+
+    if dtype == "datetime64[s]":
+        val = np.dtype(dtype).type(4, "s")
+    elif dtype == "timedelta64[s]":
+        val = np.dtype(dtype).type(4, "s")
+    elif dtype == "category":
+        val = np.int64(4)
+    else:
+        val = np.dtype(dtype).type(4)
+
+    expected = val == data.to_pandas()
+    got = val == data
+
+    # In case of index, expected would be a numpy array
+    if isinstance(data, cudf.Index):
+        expected = pd.Index(expected)
+
+    utils.assert_eq(expected, got)

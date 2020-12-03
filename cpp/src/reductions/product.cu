@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <reductions/simple.cuh>
-
 #include <cudf/detail/reduction_functions.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <reductions/simple.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -28,12 +28,13 @@ std::unique_ptr<cudf::scalar> product(column_view const& col,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  return cudf::type_dispatcher(col.type(),
-                               simple::element_type_dispatcher<cudf::reduction::op::product>{},
-                               col,
-                               output_dtype,
-                               stream,
-                               mr);
+  return cudf::type_dispatcher(
+    cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type(),
+    simple::element_type_dispatcher<cudf::reduction::op::product>{},
+    col,
+    output_dtype,
+    stream,
+    mr);
 }
 
 }  // namespace reduction

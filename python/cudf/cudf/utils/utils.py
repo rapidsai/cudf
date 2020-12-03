@@ -4,8 +4,8 @@ from collections import OrderedDict
 from collections.abc import Sequence
 from math import floor, isinf, isnan
 
-import numpy as np
 import cupy as cp
+import numpy as np
 import pandas as pd
 from numba import njit
 
@@ -494,39 +494,58 @@ def get_appropriate_dispatched_func(
         if cupy_func is func:
             return NotImplemented
 
-        cupy_compatible_args = get_cupy_compatible_args(args)
-        cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
-        return cast_to_appropriate_cudf_type(cupy_output)
-    else:
-        return NotImplemented
+        cupy_compatible_args, index = _get_cupy_compatible_args_index(args)
+        if cupy_compatible_args:
+            cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
+            return _cast_to_appropriate_cudf_type(cupy_output, index)
+
+    return NotImplemented
 
 
-def cast_to_appropriate_cudf_type(val):
-    # TODO Handle scalar
+def _cast_to_appropriate_cudf_type(val, index=None):
+    # Handle scalar
     if val.ndim == 0:
         return cudf.Scalar(val).value
     # 1D array
     elif (val.ndim == 1) or (val.ndim == 2 and val.shape[1] == 1):
-        return cudf.Series(val)
-    else:
-        return NotImplemented
+        # if index is not None and is of a different length
+        # than the index, cupy dispatching behaviour is undefined
+        # so we dont impliment it
+        if (index is None) or (len(index) == len(val)):
+            return cudf.Series(val, index=index)
+
+    return NotImplemented
 
 
-def get_cupy_compatible_args(args):
+def _get_cupy_compatible_args_index(args, ser_index=None):
+    """
+     This function returns cupy compatible arguments and output index
+     if conversion is not possible it returns None
+    """
+
     casted_ls = []
     for arg in args:
         if isinstance(arg, cp.ndarray):
             casted_ls.append(arg)
         elif isinstance(arg, cudf.Series):
-            casted_ls.append(arg.values)
+            # check if indexes can be aligned
+            if (ser_index is None) or (ser_index.equals(arg.index)):
+                ser_index = arg.index
+                casted_ls.append(arg.values)
+            else:
+                # this throws a value-error if indexes are not aligned
+                # following pandas behavior for ufunc numpy dispatching
+                raise ValueError(
+                    "Can only compare identically-labeled Series objects"
+                )
         elif isinstance(arg, Sequence):
-            # handle list of inputs for functions like
-            # np.concatenate
-            casted_arg = get_cupy_compatible_args(arg)
-            casted_ls.append(casted_arg)
+            # we dont handle list of inputs for functions as
+            # these form inputs for functions like
+            # np.concatenate, vstack have ambiguity around index alignment
+            return None, ser_index
         else:
             casted_ls.append(arg)
-    return casted_ls
+    return casted_ls, ser_index
 
 
 def get_relevant_submodule(func, module):

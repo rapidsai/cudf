@@ -49,7 +49,7 @@ std::unique_ptr<table> sort_by_key(table_view const& values,
 
   return detail::gather(values,
                         sorted_order->view(),
-                        detail::out_of_bounds_policy::NULLIFY,
+                        out_of_bounds_policy::DONT_CHECK,
                         detail::negative_index_policy::NOT_ALLOWED,
                         stream,
                         mr);
