@@ -1568,8 +1568,6 @@ class Series(Frame, Serializable):
         elif isinstance(other, Index):
             return Series(other)._column
         else:
-            if isinstance(other, np.ndarray) and other.ndim == 0:
-                other = other.item()
             return self._column.normalize_binop_value(other)
 
     def eq(self, other, fill_value=None, axis=0):
