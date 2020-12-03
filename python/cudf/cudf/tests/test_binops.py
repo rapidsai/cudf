@@ -1459,3 +1459,24 @@ def test_scalar_power_invalid(dtype_l, dtype_r):
 
     with pytest.raises(TypeError):
         lval_gpu ** rval_gpu
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        cudf.Series([1, 2, 3, 4, 5]),
+        cudf.Index([1, 2, 3, 4, 5]),
+        cudf.DataFrame({"a": [1, 2, 3, 4, 5], "b": [2, 3, 4, 5, 6]}),
+    ],
+)
+def test_binops_with_lhs_numpy_scalar(data):
+    val = np.int64(4)
+
+    expected = val == data.to_pandas()
+    got = val == data
+
+    # In case of index, expected would be a numpy array
+    if isinstance(data, cudf.Index):
+        expected = pd.Index(expected)
+
+    utils.assert_eq(expected, got)

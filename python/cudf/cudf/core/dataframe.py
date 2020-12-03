@@ -1300,6 +1300,9 @@ class DataFrame(Frame, Serializable):
     # unary, binary, rbinary, orderedcompare, unorderedcompare
     def _apply_op(self, fn, other=None, fill_value=None):
 
+        if isinstance(other, np.ndarray) and other.ndim == 0:
+            other = other.item()
+
         result = DataFrame(index=self.index)
 
         def op(lhs, rhs):
