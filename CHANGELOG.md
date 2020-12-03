@@ -47,6 +47,7 @@
 - PR #6847 Add a cmake find module for cuFile in JNI code
 - PR #6726 Support selecting different hash functions in hash_partition
 - PR #6619 Improve Dockerfile
+- PR #6831 Added parquet chunked writing ability for list columns
 
 ## Improvements
 
