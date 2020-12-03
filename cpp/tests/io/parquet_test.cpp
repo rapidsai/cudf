@@ -1483,37 +1483,12 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
     cudf::test::expect_columns_equal(result.tbl->view().column(3), a);
   }
 }
-/*
-MATCHER_P(FloatNearPointwise, tolerance, "Out-of-range")
-{
-  return (std::get<0>(arg) > std::get<1>(arg) - tolerance &&
-          std::get<0>(arg) < std::get<1>(arg) + tolerance);
-}
-
-template <typename T>
-using wrapper = cudf::test::fixed_width_column_wrapper<T>;
-
-// temporary method to verify the float columns until
-// CUDF_TEST_EXPECT_COLUMNS_EQUAL supports floating point
-template <typename T, typename valid_t>
-void check_float_column(cudf::column_view const& col_lhs,
-                        cudf::column_view const& col_rhs,
-                        T tol,
-                        valid_t const& validity)
-{
-  auto h_data = cudf::test::to_host<T>(col_rhs).first;
-
-  std::vector<T> data(h_data.size());
-  std::copy(h_data.begin(), h_data.end(), data.begin());
-
-  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(col_lhs,
-                                                (wrapper<T>{data.begin(), data.end(), validity}));
-  EXPECT_THAT(cudf::test::to_host<T>(col_lhs).first,
-              ::testing::Pointwise(FloatNearPointwise(tol), data));
-}*/
 
 TEST_F(ParquetReaderTest, DecimalRead)
 {
+  /* We could add a dataset to include this file, but we don't want tests in cudf to have data. This
+     test is a temporary test until python gains the ability to write decimal, so we're embedding
+     a parquet file directly into the code here to prevent issues with finding the file */
   const unsigned char decimals_parquet[] = {
     0x50, 0x41, 0x52, 0x31, 0x15, 0x00, 0x15, 0xb0, 0x03, 0x15, 0xb8, 0x03, 0x2c, 0x15, 0x6a, 0x15,
     0x00, 0x15, 0x06, 0x15, 0x08, 0x1c, 0x36, 0x02, 0x28, 0x04, 0x7f, 0x96, 0x98, 0x00, 0x18, 0x04,
@@ -1709,37 +1684,6 @@ TEST_F(ParquetReaderTest, DecimalRead)
   cudf::test::fixed_point_column_wrapper<int64_t> col1(
     std::begin(col1_data), std::end(col1_data), validity, numeric::scale_type{-5});
   cudf::test::expect_columns_equal(result.tbl->view().column(1), col1);
-
-  /* There are floating point rounding errors in this test and this test is temporary, so I'm not
-    going to invest the time to fix this right now, but I'm leaving this data in here just in case
-    it is useful to know what is in the parquet file.
-
-    double col2_data[] = {
-      7030207412740161536.684625317779826560,47146185414161776640.872284645660324000,-94259563843139403776.220187736226427616,
-      52948536245089468416.621082009753570048,47874734658837905408.436706764836286336,49761630736066904064.339967296215288320,
-      -50167826750763278336.977910551548043520,32206156540637970432.172425176541573952,-36933483155830538240.130603660943846448,
-      -53795392205558382592.229770070202529696,-87830517796364124160.973615263471861248,67093747915093803008.618393261731736192,
-      -519490465406009344.291882841717620032,-96524679878423478272.826981422137326976,-36265983513182511104.989125689572186880,
-      -16204941729533280256.168688351182881056,13722948324930371584.228019569781307000,-94515437989285724160.167386569002369824,
-      -37157463104390250496.626654828191987456,10463154082285486080.231683133780848704,-87924340795509178368.880663251844965280,
-      79863792328666185728.633667083117473408,58770839770008322048.603095699175451040,73938688678673088512.497860455256258752,
-      58919196175146418176.870538191296708992,93125862026685317120.278398991583406080,-26568393119591448576.201579337924016512,
-      -27524106957459922944.149747749098873568,-63429631986241191936.412603878564802624,-81483761366292922368.433932859558731264,
-      -96209341627182219264.642366762722018944,32662298081954103296.298663706227861888,-38462814418454405120.516789156047944384,
-      -60986460249017303040.624665444785619712,12910852889002868736.138353069973400128,30388461131498209280.263434730802875616,
-      57348385508323786752.469661477637272384,-20458903551614468096.463416616920506752,46138089214373642240.680426345218531968,
-      77024368326414008320.922480458720942080,95790204287460671488.698479912359270016,-63834396259792322560.897096687384694240,
-      -13466932318507712512.980379731766125056,80191152199183826944.547191749489531968,-70862159833613860864.276036716270022784,
-      5609895589821284352.766625294911560320,26054056280554110976.115245501289351632,-85343517034579968000.925369275260130432,
-      73032088424913797120.383600360290995776,-78978304390981910528.703044058314155008,0,-99999999999999999999.999999999999999999,
-      99999999999999999999.999999999999999999
-    };
-
-    EXPECT_EQ(result.tbl->view().column(2).size(), sizeof(col2_data) / sizeof(col2_data[0]));
-
-    cudf::test::fixed_width_column_wrapper<double> col2(std::begin(col2_data), std::end(col2_data),
-    validity); check_float_column(result.tbl->view().column(2), col2, double{1.0e+5}, validity);
-    */
 
   cudf_io::parquet_reader_options read_strict_opts = read_opts;
   read_strict_opts.set_strict_decimal_types(true);
