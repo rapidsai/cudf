@@ -38,6 +38,7 @@
 - PR #6805 Implement `cudf::detail::copy_if` for `decimal32` and `decimal64`
 - PR #6726 Support selecting different hash functions in hash_partition
 - PR #6619 Improve Dockerfile
+- PR #6831 Added parquet chunked writing ability for list columns
 
 ## Improvements
 
