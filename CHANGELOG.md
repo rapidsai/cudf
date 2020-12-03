@@ -33,10 +33,9 @@
 - PR #6768 Add support for scatter() on list columns
 - PR #6796 Add create_metadata_file in dask_cudf
 - PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
-- PR #6805 Implement `cudf::detail::copy_if` for `decimal32` and `decimal64`
-- PR #6483 Add `agg` function to aggregate dataframe using one or more operations
 - PR #6817 Add support for scatter() on lists-of-struct columns
 - PR #6805 Implement `cudf::detail::copy_if` for `decimal32` and `decimal64`
+- PR #6483 Add `agg` function to aggregate dataframe using one or more operations
 
 ## Improvements
 
