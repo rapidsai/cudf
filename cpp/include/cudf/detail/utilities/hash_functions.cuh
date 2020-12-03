@@ -371,6 +371,7 @@ struct MurmurHash3_32 {
   using result_type   = hash_value_type;
 
   CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32() : m_seed(0) {}
+  CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
   CUDA_HOST_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
   {
@@ -416,7 +417,7 @@ struct MurmurHash3_32 {
   hash_value_type CUDA_HOST_DEVICE_CALLABLE compute_floating_point(T const& key) const
   {
     if (key == T{0.0}) {
-      return 0;
+      return compute(T{0.0});
     } else if (isnan(key)) {
       T nan = std::numeric_limits<T>::quiet_NaN();
       return compute(nan);
