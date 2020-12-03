@@ -20,9 +20,12 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/for_each.h>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
+
 #include <iostream>
 
 namespace cudf {
@@ -130,30 +133,36 @@ void print(strings_column_view const& strings,
 
 //
 std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>> create_offsets(
-  strings_column_view const& strings, cudaStream_t stream, rmm::mr::device_memory_resource* mr)
+  strings_column_view const& strings,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   size_type count          = strings.size();
   const int32_t* d_offsets = strings.offsets().data<int32_t>();
   d_offsets += strings.offset();  // nvbug-2808421 : do not combine with the previous line
   int32_t first = 0;
-  CUDA_TRY(cudaMemcpyAsync(&first, d_offsets, sizeof(int32_t), cudaMemcpyDeviceToHost, stream));
+  CUDA_TRY(
+    cudaMemcpyAsync(&first, d_offsets, sizeof(int32_t), cudaMemcpyDeviceToHost, stream.value()));
   rmm::device_vector<size_type> offsets(count + 1);
   // normalize the offset values for the column offset
   thrust::transform(
-    rmm::exec_policy(stream)->on(stream),
+    rmm::exec_policy(stream)->on(stream.value()),
     d_offsets,
     d_offsets + count + 1,
     offsets.begin(),
     [first] __device__(int32_t offset) { return static_cast<size_type>(offset - first); });
   // copy the chars column data
   int32_t bytes = 0;  // last offset entry is the size in bytes
-  CUDA_TRY(
-    cudaMemcpyAsync(&bytes, d_offsets + count, sizeof(int32_t), cudaMemcpyDeviceToHost, stream));
+  CUDA_TRY(cudaMemcpyAsync(
+    &bytes, d_offsets + count, sizeof(int32_t), cudaMemcpyDeviceToHost, stream.value()));
+  stream.synchronize();
+
   bytes -= first;
   const char* d_chars = strings.chars().data<char>() + first;
   rmm::device_vector<char> chars(bytes);
-  CUDA_TRY(cudaMemcpyAsync(chars.data().get(), d_chars, bytes, cudaMemcpyDeviceToHost, stream));
+  CUDA_TRY(
+    cudaMemcpyAsync(chars.data().get(), d_chars, bytes, cudaMemcpyDeviceToHost, stream.value()));
   // return offsets and chars
   return std::make_pair(std::move(chars), std::move(offsets));
 }

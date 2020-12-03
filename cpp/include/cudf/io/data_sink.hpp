@@ -16,12 +16,14 @@
 
 #pragma once
 
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
 #include <memory>
 #include <string>
 #include <vector>
-
-#include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
 
 namespace cudf {
 //! IO interfaces
@@ -113,7 +115,7 @@ class data_sink {
    *
    * @return void
    **/
-  virtual void device_write(void const* gpu_data, size_t size, cudaStream_t stream)
+  virtual void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream)
   {
     CUDF_FAIL("data_sink classes that support device_write must override this function.");
   }

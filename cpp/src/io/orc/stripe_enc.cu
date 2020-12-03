@@ -13,20 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include <cub/cub.cuh>
 #include <io/utilities/block_utils.cuh>
+#include <rmm/cuda_stream_view.hpp>
 #include "orc_common.h"
 #include "orc_gpu.h"
-
-// Apache ORC reader does not handle zero-length patch lists for RLEv2 mode2
-// Workaround replaces zero-length patch lists by a dummy zero patch
-#define ZERO_PLL_WAR 1
 
 namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
-#define SCRATCH_BFRSZ (512 * 4)
+constexpr int scratch_buffer_size = 512 * 4;
+
+// Apache ORC reader does not handle zero-length patch lists for RLEv2 mode2
+// Workaround replaces zero-length patch lists by a dummy zero patch
+constexpr bool zero_pll_war = true;
 
 static __device__ __constant__ int64_t kORCTimeToUTC =
   1420070400;  // Seconds from January 1st, 1970 to January 1st, 2015
@@ -75,8 +77,8 @@ struct orcenc_state_s {
     StripeDictionary dict_stripe;
   } u;
   union {
-    uint8_t u8[SCRATCH_BFRSZ];  // general scratch buffer
-    uint32_t u32[SCRATCH_BFRSZ / 4];
+    uint8_t u8[scratch_buffer_size];  // general scratch buffer
+    uint32_t u32[scratch_buffer_size / 4];
   } buf;
   union {
     uint8_t u8[2048];
@@ -162,7 +164,7 @@ static __device__ uint32_t ByteRLE(
   while (numvals > 0) {
     uint8_t v0       = (t < numvals) ? inbuf[(inpos + t) & inmask] : 0;
     uint8_t v1       = (t + 1 < numvals) ? inbuf[(inpos + t + 1) & inmask] : 0;
-    uint32_t rpt_map = BALLOT(t + 1 < numvals && v0 == v1), literal_run, repeat_run,
+    uint32_t rpt_map = ballot(t + 1 < numvals && v0 == v1), literal_run, repeat_run,
              maxvals = min(numvals, 512);
     if (!(t & 0x1f)) s->u.byterle.rpt_map[t >> 5] = rpt_map;
     __syncthreads();
@@ -319,17 +321,17 @@ static inline __device__ void StoreBitsBigEndian(
   if (t <= (num_vals | 0x1f)) {
     uint32_t mask;
     if (w <= 1) {
-      v    = (v << 1) | (SHFL_XOR(v, 1) & 0x1);
-      v    = (v << 2) | (SHFL_XOR(v, 2) & 0x3);
-      v    = (v << 4) | (SHFL_XOR(v, 4) & 0xf);
+      v    = (v << 1) | (shuffle_xor(v, 1) & 0x1);
+      v    = (v << 2) | (shuffle_xor(v, 2) & 0x3);
+      v    = (v << 4) | (shuffle_xor(v, 4) & 0xf);
       mask = 0x7;
     } else if (w <= 2) {
-      v    = (v << 2) | (SHFL_XOR(v, 1) & 0x3);
-      v    = (v << 4) | (SHFL_XOR(v, 2) & 0xf);
+      v    = (v << 2) | (shuffle_xor(v, 1) & 0x3);
+      v    = (v << 4) | (shuffle_xor(v, 2) & 0xf);
       mask = 0x3;
     } else  // if (w <= 4)
     {
-      v    = (v << 4) | (SHFL_XOR(v, 1) & 0xf);
+      v    = (v << 4) | (shuffle_xor(v, 1) & 0xf);
       mask = 0x1;
     }
     if (t < num_vals && !(t & mask)) { dst[(t * w) >> 3] = static_cast<uint8_t>(v); }
@@ -378,7 +380,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
     T v0               = (t < numvals) ? inbuf[(inpos + t) & inmask] : 0;
     T v1               = (t + 1 < numvals) ? inbuf[(inpos + t + 1) & inmask] : 0;
     T v2               = (t + 2 < numvals) ? inbuf[(inpos + t + 2) & inmask] : 0;
-    uint32_t delta_map = BALLOT(t + 2 < numvals && v1 - v0 == v2 - v1), maxvals = min(numvals, 512),
+    uint32_t delta_map = ballot(t + 2 < numvals && v1 - v0 == v2 - v1), maxvals = min(numvals, 512),
              literal_run, delta_run;
     if (!(t & 0x1f)) s->u.intrle.delta_map[t >> 5] = delta_map;
     __syncthreads();
@@ -510,14 +512,14 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
           vmax = (is_signed) ? ((vmin < 0) ? -vmin : vmin) * 2 : vmin;
           bw   = (sizeof(T) > 4) ? (8 - min(CountLeadingBytes64(vmax << bv_scale), 7))
                                : (4 - min(CountLeadingBytes32(vmax << bv_scale), 3));
-#if ZERO_PLL_WAR
-          // Insert a dummy zero patch
-          pll                                                    = 1;
-          dst[4 + bw + ((literal_run * literal_w + 7) >> 3) + 0] = 0;
-          dst[4 + bw + ((literal_run * literal_w + 7) >> 3) + 1] = 0;
-#else
-          pll = 0;
-#endif
+          if (zero_pll_war) {
+            // Insert a dummy zero patch
+            pll                                                    = 1;
+            dst[4 + bw + ((literal_run * literal_w + 7) >> 3) + 0] = 0;
+            dst[4 + bw + ((literal_run * literal_w + 7) >> 3) + 1] = 0;
+          } else {
+            pll = 0;
+          }
           dst[0] = 0x80 +
                    ((literal_w < 8) ? literal_w - 1 : kByteLengthToRLEv2_W[literal_w >> 3]) * 2 +
                    ((literal_run - 1) >> 8);
@@ -606,7 +608,7 @@ static __device__ void StoreStringData(uint8_t *dst,
   uint32_t pos = len;
   uint32_t wt  = t & 0x1f;
   for (uint32_t n = 1; n < 32; n <<= 1) {
-    uint32_t tmp = SHFL(pos, (wt & ~n) | (n - 1));
+    uint32_t tmp = shuffle(pos, (wt & ~n) | (n - 1));
     pos += (wt & n) ? tmp : 0;
   }
   if (wt == 0x1f) { strenc->lengths_red[t >> 5] = pos; }
@@ -616,7 +618,7 @@ static __device__ void StoreStringData(uint8_t *dst,
     uint32_t wlen = (wt < 16) ? strenc->lengths_red[wt] : 0;
     uint32_t wpos = wlen;
     for (uint32_t n = 1; n < 16; n <<= 1) {
-      uint32_t tmp = SHFL(wpos, (wt & ~n) | (n - 1));
+      uint32_t tmp = shuffle(wpos, (wt & ~n) | (n - 1));
       wpos += (wt & n) ? tmp : 0;
     }
     if (wt < 16) { strenc->lengths_red[wt] = wpos - wlen; }
@@ -1243,19 +1245,16 @@ __global__ void __launch_bounds__(1024) gpuCompactCompressedBlocks(StripeStream 
  * @param[in] num_columns Number of columns
  * @param[in] num_rowgroups Number of row groups
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t EncodeOrcColumnData(EncChunk *chunks,
-                                uint32_t num_columns,
-                                uint32_t num_rowgroups,
-                                cudaStream_t stream)
+ */
+void EncodeOrcColumnData(EncChunk *chunks,
+                         uint32_t num_columns,
+                         uint32_t num_rowgroups,
+                         rmm::cuda_stream_view stream)
 {
   dim3 dim_block(512, 1);  // 512 threads per chunk
   dim3 dim_grid(num_columns, num_rowgroups);
   gpuEncodeOrcColumnData<512>
-    <<<dim_grid, dim_block, 0, stream>>>(chunks, num_columns, num_rowgroups);
-  return cudaSuccess;
+    <<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_columns, num_rowgroups);
 }
 
 /**
@@ -1267,21 +1266,18 @@ cudaError_t EncodeOrcColumnData(EncChunk *chunks,
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t EncodeStripeDictionaries(StripeDictionary *stripes,
-                                     EncChunk *chunks,
-                                     uint32_t num_string_columns,
-                                     uint32_t num_columns,
-                                     uint32_t num_stripes,
-                                     cudaStream_t stream)
+ */
+void EncodeStripeDictionaries(StripeDictionary *stripes,
+                              EncChunk *chunks,
+                              uint32_t num_string_columns,
+                              uint32_t num_columns,
+                              uint32_t num_stripes,
+                              rmm::cuda_stream_view stream)
 {
   dim3 dim_block(512, 1);  // 512 threads per dictionary
   dim3 dim_grid(num_string_columns * num_stripes, 2);
   gpuEncodeStringDictionaries<512>
-    <<<dim_grid, dim_block, 0, stream>>>(stripes, chunks, num_columns);
-  return cudaSuccess;
+    <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, chunks, num_columns);
 }
 
 /**
@@ -1292,19 +1288,17 @@ cudaError_t EncodeStripeDictionaries(StripeDictionary *stripes,
  * @param[in] num_stripe_streams Total number of streams
  * @param[in] num_columns Number of columns
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t CompactOrcDataStreams(StripeStream *strm_desc,
-                                  EncChunk *chunks,
-                                  uint32_t num_stripe_streams,
-                                  uint32_t num_columns,
-                                  cudaStream_t stream)
+ */
+void CompactOrcDataStreams(StripeStream *strm_desc,
+                           EncChunk *chunks,
+                           uint32_t num_stripe_streams,
+                           uint32_t num_columns,
+                           rmm::cuda_stream_view stream)
 {
   dim3 dim_block(1024, 1);
   dim3 dim_grid(num_stripe_streams, 1);
-  gpuCompactOrcDataStreams<<<dim_grid, dim_block, 0, stream>>>(strm_desc, chunks, num_columns);
-  return cudaSuccess;
+  gpuCompactOrcDataStreams<<<dim_grid, dim_block, 0, stream.value()>>>(
+    strm_desc, chunks, num_columns);
 }
 
 /**
@@ -1320,29 +1314,26 @@ cudaError_t CompactOrcDataStreams(StripeStream *strm_desc,
  * @param[in] compression Type of compression
  * @param[in] comp_blk_size Compression block size
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t CompressOrcDataStreams(uint8_t *compressed_data,
-                                   StripeStream *strm_desc,
-                                   EncChunk *chunks,
-                                   gpu_inflate_input_s *comp_in,
-                                   gpu_inflate_status_s *comp_out,
-                                   uint32_t num_stripe_streams,
-                                   uint32_t num_compressed_blocks,
-                                   CompressionKind compression,
-                                   uint32_t comp_blk_size,
-                                   cudaStream_t stream)
+ */
+void CompressOrcDataStreams(uint8_t *compressed_data,
+                            StripeStream *strm_desc,
+                            EncChunk *chunks,
+                            gpu_inflate_input_s *comp_in,
+                            gpu_inflate_status_s *comp_out,
+                            uint32_t num_stripe_streams,
+                            uint32_t num_compressed_blocks,
+                            CompressionKind compression,
+                            uint32_t comp_blk_size,
+                            rmm::cuda_stream_view stream)
 {
   dim3 dim_block_init(256, 1);
   dim3 dim_grid(num_stripe_streams, 1);
-  gpuInitCompressionBlocks<<<dim_grid, dim_block_init, 0, stream>>>(
+  gpuInitCompressionBlocks<<<dim_grid, dim_block_init, 0, stream.value()>>>(
     strm_desc, chunks, comp_in, comp_out, compressed_data, comp_blk_size);
   if (compression == SNAPPY) { gpu_snap(comp_in, comp_out, num_compressed_blocks, stream); }
   dim3 dim_block_compact(1024, 1);
-  gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream>>>(
+  gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream.value()>>>(
     strm_desc, comp_in, comp_out, compressed_data, comp_blk_size);
-  return cudaSuccess;
 }
 
 }  // namespace gpu

@@ -20,6 +20,8 @@
 #include <strings/regex/regex.cuh>
 #include <strings/utilities.cuh>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -118,16 +120,16 @@ children_pair replace_with_backrefs_medium(column_device_view const& d_strings,
                                            string_view const& d_repl_template,
                                            rmm::device_vector<backref_type>& backrefs,
                                            size_type null_count,
-                                           rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream);
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr);
 
 children_pair replace_with_backrefs_large(column_device_view const& d_strings,
                                           reprog_device& d_prog,
                                           string_view const& d_repl_template,
                                           rmm::device_vector<backref_type>& backrefs,
                                           size_type null_count,
-                                          rmm::mr::device_memory_resource* mr,
-                                          cudaStream_t stream);
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace strings

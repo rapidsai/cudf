@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-20, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 #pragma once
 #include <stdint.h>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
@@ -36,8 +38,10 @@ enum statistics_dtype {
 };
 
 struct stats_column_desc {
-  statistics_dtype stats_dtype;    //!< physical data type of column
-  uint32_t num_rows;               //!< number of rows in column
+  statistics_dtype stats_dtype;  //!< physical data type of column
+  uint32_t num_rows;             //!< number of rows in column
+  uint32_t num_values;  //!< Number of data values in column. Different from num_rows in case of
+                        //!< nested columns
   const uint32_t *valid_map_base;  //!< base of valid bit map for this column (null if not present)
   const void *column_data_base;    //!< base ptr to column data
   int32_t ts_scale;  //!< timestamp scale (>0: multiply by scale, <0: divide by -scale)
@@ -90,13 +94,11 @@ struct statistics_merge_group {
  * @param[in] groups Statistics row groups [num_chunks]
  * @param[in] num_chunks Number of chunks & rowgroups
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t GatherColumnStatistics(statistics_chunk *chunks,
-                                   const statistics_group *groups,
-                                   uint32_t num_chunks,
-                                   cudaStream_t stream = (cudaStream_t)0);
+ */
+void GatherColumnStatistics(statistics_chunk *chunks,
+                            const statistics_group *groups,
+                            uint32_t num_chunks,
+                            rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel to merge column statistics
@@ -106,14 +108,12 @@ cudaError_t GatherColumnStatistics(statistics_chunk *chunks,
  * @param[in] groups Statistics groups [num_chunks]
  * @param[in] num_chunks Number of chunks & groups
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t MergeColumnStatistics(statistics_chunk *chunks_out,
-                                  const statistics_chunk *chunks_in,
-                                  const statistics_merge_group *groups,
-                                  uint32_t num_chunks,
-                                  cudaStream_t stream = (cudaStream_t)0);
+ */
+void MergeColumnStatistics(statistics_chunk *chunks_out,
+                           const statistics_chunk *chunks_in,
+                           const statistics_merge_group *groups,
+                           uint32_t num_chunks,
+                           rmm::cuda_stream_view stream);
 
 }  // namespace io
 }  // namespace cudf

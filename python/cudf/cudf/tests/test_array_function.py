@@ -23,30 +23,18 @@ missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
         lambda x: np.sum(x),
         lambda x: np.var(x, ddof=1),
         lambda x: np.unique(x),
+        lambda x: np.dot(x, x),
+        lambda x: np.linalg.norm(x),
     ],
 )
 def test_array_func_cudf_series(np_ar, func):
     cudf_ser = cudf.Series(np_ar)
     expect = func(np_ar)
     got = func(cudf_ser)
-
     if np.isscalar(expect):
         assert_eq(expect, got)
     else:
         assert_eq(expect, got.to_array())
-
-
-# TODO: Make it future proof
-# by adding check if these functions were implemented
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
-@pytest.mark.parametrize("np_ar", [np.random.random(100)])
-@pytest.mark.parametrize(
-    "func", [lambda x: np.dot(x, x), lambda x: np.linalg.norm(x)]
-)
-def test_array_func_missing_cudf_series(np_ar, func):
-    cudf_ser = cudf.Series(np_ar)
-    with pytest.raises(TypeError):
-        func(cudf_ser)
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
@@ -128,3 +116,12 @@ def test_array_func_missing_cudf_multi_index(func):
     cudf_multi_index = cudf.MultiIndex(levels, codes)
     with pytest.raises(TypeError):
         func(cudf_multi_index)
+
+
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+def test_list_input_array_func():
+    ar = np.array([1, 2, 3])
+    s = cudf.Series(ar)
+    expect = np.concatenate([ar, ar, ar])
+    got = np.concatenate([s, s, s])
+    assert_eq(expect, got.to_array())

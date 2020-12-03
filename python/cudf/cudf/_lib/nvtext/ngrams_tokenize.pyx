@@ -17,9 +17,13 @@ from cudf._lib.scalar cimport DeviceScalar
 def ngrams_tokenize(
     Column strings,
     int ngrams,
-    DeviceScalar delimiter,
-    DeviceScalar separator
+    object py_delimiter,
+    object py_separator
 ):
+
+    cdef DeviceScalar delimiter = py_delimiter.device_value
+    cdef DeviceScalar separator = py_separator.device_value
+
     cdef column_view c_strings = strings.view()
     cdef size_type c_ngrams = ngrams
     cdef const string_scalar* c_separator = <const string_scalar*>separator\

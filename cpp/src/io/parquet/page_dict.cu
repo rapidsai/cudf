@@ -13,10 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cub/cub.cuh>
-#include <cudf/utilities/error.hpp>
+
 #include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
+
+#include <cudf/utilities/error.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <cub/cub.cuh>
 
 namespace cudf {
 namespace io {
@@ -34,7 +39,7 @@ struct dict_state_s {
   EncColumnDesc col;
   PageFragment frag;
   volatile uint32_t scratch_red[32];
-  uint16_t frag_dict[MAX_PAGE_FRAGMENT_SIZE];
+  uint16_t frag_dict[max_page_fragment_size];
 };
 
 /**
@@ -117,7 +122,7 @@ __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
       (is_valid &&
        dict_idx ==
          row);  // Any value that doesn't have bit31 set should have dict_idx=row at this point
-    uint32_t umask = BALLOT(is_unique);
+    uint32_t umask = ballot(is_unique);
     uint32_t pos   = num_dict_entries + __popc(umask & ((1 << (t & 0x1f)) - 1));
     if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(umask); }
     num_dict_entries += __syncthreads_count(is_unique);
@@ -171,9 +176,11 @@ __global__ void __launch_bounds__(block_size, 1)
     s->ck.num_dict_fragments = 0;
   }
   dtype     = s->col.physical_type;
-  dtype_len = (dtype == INT64 || dtype == DOUBLE) ? 8 : 4;
+  dtype_len = (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : 4;
   if (dtype == INT32) {
     dtype_len_in = GetDtypeLogicalLen(s->col.converted_type);
+  } else if (dtype == INT96) {
+    dtype_len_in = 8;
   } else {
     dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len;
   }
@@ -324,20 +331,17 @@ __global__ void __launch_bounds__(block_size, 1)
  * @param[in] dev_scratch Device scratch data (kDictScratchSize per dictionary)
  * @param[in] num_chunks Number of column chunks
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t BuildChunkDictionaries(EncColumnChunk *chunks,
-                                   uint32_t *dev_scratch,
-                                   size_t scratch_size,
-                                   uint32_t num_chunks,
-                                   cudaStream_t stream)
+ */
+void BuildChunkDictionaries(EncColumnChunk *chunks,
+                            uint32_t *dev_scratch,
+                            size_t scratch_size,
+                            uint32_t num_chunks,
+                            rmm::cuda_stream_view stream)
 {
   if (num_chunks > 0 && scratch_size > 0) {  // zero scratch size implies no dictionaries
-    CUDA_TRY(cudaMemsetAsync(dev_scratch, 0, scratch_size, stream));
-    gpuBuildChunkDictionaries<1024><<<num_chunks, 1024, 0, stream>>>(chunks, dev_scratch);
+    CUDA_TRY(cudaMemsetAsync(dev_scratch, 0, scratch_size, stream.value()));
+    gpuBuildChunkDictionaries<1024><<<num_chunks, 1024, 0, stream.value()>>>(chunks, dev_scratch);
   }
-  return cudaSuccess;
 }
 
 }  // namespace gpu

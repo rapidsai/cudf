@@ -85,14 +85,6 @@ gpuci_conda_retry install -y \
 # gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
 # gpuci_conda_retry install -y "your-pkg=1.0.0"
 
-# Install the master version of dask, distributed, and streamz
-gpuci_logger "Install the master version of dask, distributed, and streamz"
-set -x
-pip install "git+https://github.com/dask/distributed.git" --upgrade --no-deps
-pip install "git+https://github.com/dask/dask.git" --upgrade --no-deps
-pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
-set +x
-
 gpuci_logger "Check compiler versions"
 python --version
 $CC --version
@@ -103,64 +95,128 @@ conda info
 conda config --show-sources
 conda list --show-channel-urls
 
-################################################################################
-# BUILD - Build libcudf, cuDF, libcudf_kafka, and dask_cudf from source
-################################################################################
+function install_dask {
+    # Install the master version of dask, distributed, and streamz
+    gpuci_logger "Install the master version of dask, distributed, and streamz"
+    set -x
+    pip install "git+https://github.com/dask/distributed.git@master" --upgrade --no-deps
+    pip install "git+https://github.com/dask/dask.git@master" --upgrade --no-deps
+    pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
+    set +x
+}
 
-gpuci_logger "Build from source"
-if [[ ${BUILD_MODE} == "pull-request" ]]; then
-    $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
+if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
+
+    install_dask
+
+    ################################################################################
+    # BUILD - Build libcudf, cuDF, libcudf_kafka, and dask_cudf from source
+    ################################################################################
+
+    gpuci_logger "Build from source"
+    if [[ ${BUILD_MODE} == "pull-request" ]]; then
+        $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
+    else
+        $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests -l --ptds
+    fi
+
+    ################################################################################
+    # TEST - Run GoogleTest
+    ################################################################################
+
+    set +e -Eo pipefail
+    EXITCODE=0
+    trap "EXITCODE=1" ERR
+
+
+    if hasArg --skip-tests; then
+        gpuci_logger "Skipping Tests"
+        exit 0
+    else
+        gpuci_logger "Check GPU usage"
+        nvidia-smi
+
+        gpuci_logger "GoogleTests"
+        set -x
+        cd $WORKSPACE/cpp/build
+
+        for gt in ${WORKSPACE}/cpp/build/gtests/* ; do
+            test_name=$(basename ${gt})
+            echo "Running GoogleTest $test_name"
+            ${gt} --gtest_output=xml:${WORKSPACE}/test-results/
+        done
+    fi
 else
-    $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests -l --ptds
-fi
+    #Project Flash
+    export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"
+    export LD_LIBRARY_PATH="$LIB_BUILD_DIR:$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
+    
+    if hasArg --skip-tests; then
+        gpuci_logger "Skipping Tests"
+        exit 0
+    fi
 
-################################################################################
-# TEST - Run GoogleTest, py.tests, and notebooks
-################################################################################
-
-set +e -Eo pipefail
-EXITCODE=0
-trap "EXITCODE=1" ERR
-
-
-if hasArg --skip-tests; then
-    gpuci_logger "Skipping Tests"
-else
     gpuci_logger "Check GPU usage"
     nvidia-smi
 
     gpuci_logger "GoogleTests"
     set -x
-    cd $WORKSPACE/cpp/build
+    cd $LIB_BUILD_DIR
 
-    for gt in ${WORKSPACE}/cpp/build/gtests/* ; do
+    for gt in gtests/* ; do
         test_name=$(basename ${gt})
         echo "Running GoogleTest $test_name"
         ${gt} --gtest_output=xml:${WORKSPACE}/test-results/
     done
 
-    # set environment variable for numpy 1.16
-    # will be enabled for later versions by default
-    np_ver=$(python -c "import numpy; print('.'.join(numpy.__version__.split('.')[:-1]))")
-    if [ "$np_ver" == "1.16" ];then
-        export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
+    CUDF_CONDA_FILE=`find $WORKSPACE/ci/artifacts/cudf/cpu/conda-bld/ -name "libcudf-*.tar.bz2"`
+    CUDF_CONDA_FILE=`basename "$CUDF_CONDA_FILE" .tar.bz2` #get filename without extension
+    CUDF_CONDA_FILE=${CUDF_CONDA_FILE//-/=} #convert to conda install
+    KAFKA_CONDA_FILE=`find $WORKSPACE/ci/artifacts/cudf/cpu/conda-bld/ -name "libcudf_kafka-*.tar.bz2"`
+    KAFKA_CONDA_FILE=`basename "$KAFKA_CONDA_FILE" .tar.bz2` #get filename without extension
+    KAFKA_CONDA_FILE=${KAFKA_CONDA_FILE//-/=} #convert to conda install
+
+    gpuci_logger "Installing $CUDF_CONDA_FILE & $KAFKA_CONDA_FILE"
+    conda install -c $WORKSPACE/ci/artifacts/cudf/cpu/conda-bld/ "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
+
+    install_dask
+
+    gpuci_logger "Build python libs from source"
+    if [[ ${BUILD_MODE} == "pull-request" ]]; then
+        $WORKSPACE/build.sh cudf dask_cudf cudf_kafka --ptds
+    else
+        $WORKSPACE/build.sh cudf dask_cudf cudf_kafka -l --ptds
     fi
-
-    cd $WORKSPACE/python/cudf
-    gpuci_logger "Python py.test for cuDF"
-    py.test --cache-clear --basetemp=${WORKSPACE}/cudf-cuda-tmp --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/python/cudf/cudf-coverage.xml --cov-report term
-
-    cd $WORKSPACE/python/dask_cudf
-    gpuci_logger "Python py.test for dask-cudf"
-    py.test --cache-clear --basetemp=${WORKSPACE}/dask-cudf-cuda-tmp --junitxml=${WORKSPACE}/junit-dask-cudf.xml -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:${WORKSPACE}/python/dask_cudf/dask-cudf-coverage.xml --cov-report term
-
-    cd $WORKSPACE/python/custreamz
-    gpuci_logger "Python py.test for cuStreamz"
-    py.test --cache-clear --basetemp=${WORKSPACE}/custreamz-cuda-tmp --junitxml=${WORKSPACE}/junit-custreamz.xml -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:${WORKSPACE}/python/custreamz/custreamz-coverage.xml --cov-report term
-
-    gpuci_logger "Test notebooks"
-    ${WORKSPACE}/ci/gpu/test-notebooks.sh 2>&1 | tee nbtest.log
-    python ${WORKSPACE}/ci/utils/nbtestlog2junitxml.py nbtest.log
 fi
+
+# Both regular and Project Flash proceed here
+
+# set environment variable for numpy 1.16
+# will be enabled for later versions by default
+np_ver=$(python -c "import numpy; print('.'.join(numpy.__version__.split('.')[:-1]))")
+if [ "$np_ver" == "1.16" ];then
+    export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
+fi
+
+
+################################################################################
+# TEST - Run py.test, notebooks
+################################################################################
+
+cd $WORKSPACE/python/cudf
+gpuci_logger "Python py.test for cuDF"
+py.test --cache-clear --basetemp=${WORKSPACE}/cudf-cuda-tmp --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/python/cudf/cudf-coverage.xml --cov-report term
+
+cd $WORKSPACE/python/dask_cudf
+gpuci_logger "Python py.test for dask-cudf"
+py.test --cache-clear --basetemp=${WORKSPACE}/dask-cudf-cuda-tmp --junitxml=${WORKSPACE}/junit-dask-cudf.xml -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:${WORKSPACE}/python/dask_cudf/dask-cudf-coverage.xml --cov-report term
+
+cd $WORKSPACE/python/custreamz
+gpuci_logger "Python py.test for cuStreamz"
+py.test --cache-clear --basetemp=${WORKSPACE}/custreamz-cuda-tmp --junitxml=${WORKSPACE}/junit-custreamz.xml -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:${WORKSPACE}/python/custreamz/custreamz-coverage.xml --cov-report term
+
+gpuci_logger "Test notebooks"
+${WORKSPACE}/ci/gpu/test-notebooks.sh 2>&1 | tee nbtest.log
+python ${WORKSPACE}/ci/utils/nbtestlog2junitxml.py nbtest.log
 
 return ${EXITCODE}

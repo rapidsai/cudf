@@ -18,13 +18,13 @@
 
 #include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/structs/struct_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <simt/type_traits>
-#include "cudf/structs/struct_view.hpp"
 
 namespace cudf {
 
@@ -621,6 +621,9 @@ MAP_CASTABLE_TYPES(cudf::duration_s, cudf::duration_s::rep);
 MAP_CASTABLE_TYPES(cudf::duration_ms, cudf::duration_ms::rep);
 MAP_CASTABLE_TYPES(cudf::duration_us, cudf::duration_us::rep);
 MAP_CASTABLE_TYPES(cudf::duration_ns, cudf::duration_ns::rep);
+// Allow cast between decimals and integer representation
+MAP_CASTABLE_TYPES(numeric::decimal32, numeric::decimal32::rep);
+MAP_CASTABLE_TYPES(numeric::decimal64, numeric::decimal64::rep);
 
 template <typename FromType>
 struct is_logically_castable_to_impl {

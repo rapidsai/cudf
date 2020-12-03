@@ -22,7 +22,7 @@ gcc --version
 PARALLEL_LEVEL=${PARALLEL_LEVEL:-4}
 SKIP_JAVA_TESTS=${SKIP_JAVA_TESTS:-true}
 BUILD_CPP_TESTS=${BUILD_CPP_TESTS:-OFF}
-ENABLE_PTDS=${ENABLE_PTDS:-OFF}
+ENABLE_PTDS=${ENABLE_PTDS:-ON}
 RMM_LOGGING_LEVEL=${RMM_LOGGING_LEVEL:-OFF}
 OUT=${OUT:-out}
 
@@ -51,6 +51,9 @@ export RMM_ROOT=$INSTALL_PREFIX
 export DLPACK_ROOT=$INSTALL_PREFIX
 export LIBCUDF_KERNEL_CACHE_PATH=/rapids
 
+# add cmake 3.19 to PATH
+export PATH=/usr/local/cmake-3.19.0-Linux-x86_64/bin:$PATH
+
 cd /rapids/
 git clone --recurse-submodules https://github.com/rapidsai/rmm.git -b branch-$RMM_VERSION
 git clone --recurse-submodules https://github.com/rapidsai/dlpack.git -b cudf
@@ -61,9 +64,6 @@ cd /rapids/rmm/build
 echo "RMM SHA: `git rev-parse HEAD`"
 cmake .. -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX -DBUILD_TESTS=$BUILD_CPP_TESTS
 make -j$PARALLEL_LEVEL install
-
-# Install spdlog headers from RMM build
-(cd /rapids/rmm/build/_deps/spdlog-src && find include/spdlog | cpio -pmdv $INSTALL_PREFIX)
 
 mkdir -p /rapids/dlpack/build
 cd /rapids/dlpack/build
@@ -84,6 +84,11 @@ BUILD_ARG="-Dmaven.repo.local=$WORKSPACE/.m2 -DskipTests=$SKIP_JAVA_TESTS -DPER_
 if [ "$SIGN_FILE" == true ]; then
     # Build javadoc and sources only when SIGN_FILE is true
     BUILD_ARG="$BUILD_ARG -Prelease"
+fi
+
+if [ -f $WORKSPACE/java/ci/settings.xml ]; then
+    # Build with an internal settings.xml
+    BUILD_ARG="$BUILD_ARG -s $WORKSPACE/java/ci/settings.xml"
 fi
 
 cd $WORKSPACE/java

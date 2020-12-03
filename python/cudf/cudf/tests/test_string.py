@@ -845,8 +845,8 @@ def test_string_upper(ps_gs):
 )
 @pytest.mark.parametrize("pat", [None, " ", "-"])
 @pytest.mark.parametrize("n", [-1, 0, 1, 3, 10])
-@pytest.mark.parametrize("expand,expand_raise", [(True, 0), (False, 1)])
-def test_string_split(data, pat, n, expand, expand_raise):
+@pytest.mark.parametrize("expand", [True, False, None])
+def test_string_split(data, pat, n, expand):
 
     if data in (["a b", " c ", "   d", "e   ", "f"],) and pat is None:
         pytest.xfail("None pattern split algorithm not implemented yet")
@@ -854,13 +854,10 @@ def test_string_split(data, pat, n, expand, expand_raise):
     ps = pd.Series(data, dtype="str")
     gs = Series(data, dtype="str")
 
-    expectation = raise_builder([expand_raise], NotImplementedError)
+    expect = ps.str.split(pat=pat, n=n, expand=expand)
+    got = gs.str.split(pat=pat, n=n, expand=expand)
 
-    with expectation:
-        expect = ps.str.split(pat=pat, n=n, expand=expand)
-        got = gs.str.split(pat=pat, n=n, expand=expand)
-
-        assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -1568,7 +1565,7 @@ def test_strings_partition(data):
     ],
 )
 @pytest.mark.parametrize("n", [-1, 2, 1, 9])
-@pytest.mark.parametrize("expand", [True])
+@pytest.mark.parametrize("expand", [True, False, None])
 def test_strings_rsplit(data, n, expand):
     gs = Series(data)
     ps = pd.Series(data)
@@ -1604,7 +1601,7 @@ def test_strings_rsplit(data, n, expand):
     ],
 )
 @pytest.mark.parametrize("n", [-1, 2, 1, 9])
-@pytest.mark.parametrize("expand", [True])
+@pytest.mark.parametrize("expand", [True, False, None])
 def test_strings_split(data, n, expand):
     gs = Series(data)
     ps = pd.Series(data)
