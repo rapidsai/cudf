@@ -1672,7 +1672,7 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
  * Similarly we merge up all the way till level 0 offsets
  */
 dremel_data get_dremel_data(column_view h_col,
-                            std::vector<bool> const &level_nullablility,
+                            std::vector<bool> const &level_nullability,
                             rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(h_col.type().id() == type_id::LIST,

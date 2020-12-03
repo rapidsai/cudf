@@ -1625,6 +1625,38 @@ def test_parquet_writer_list_large_mixed(tmpdir):
     assert_eq(expect, got)
 
 
+def test_parquet_writer_list_chunked(tmpdir):
+    table1 = cudf.DataFrame(
+        {
+            "a": list_gen(string_gen, 0, 128, 80, 50),
+            "b": list_gen(int_gen, 0, 128, 80, 50),
+            "c": list_gen(int_gen, 0, 128, 80, 50, include_validity=True),
+            "d": list_gen(string_gen, 0, 128, 80, 50, include_validity=True),
+        }
+    )
+    table2 = cudf.DataFrame(
+        {
+            "a": list_gen(string_gen, 0, 128, 80, 50),
+            "b": list_gen(int_gen, 0, 128, 80, 50),
+            "c": list_gen(int_gen, 0, 128, 80, 50, include_validity=True),
+            "d": list_gen(string_gen, 0, 128, 80, 50, include_validity=True),
+        }
+    )
+    fname = tmpdir.join("test_parquet_writer_list_chunked.parquet")
+    expect = cudf.concat([table1, table2])
+    expect = expect.reset_index(drop=True)
+
+    writer = ParquetWriter(fname)
+    writer.write_table(table1)
+    writer.write_table(table2)
+    writer.close()
+
+    assert os.path.exists(fname)
+
+    got = pd.read_parquet(fname)
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 def test_parquet_nullable_boolean(tmpdir, engine):
     pandas_path = tmpdir.join("pandas_bools.parquet")

@@ -801,11 +801,12 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
     state.md.column_order_listsize =
       (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
     if (state.user_metadata != nullptr) {
-      for (auto it = state.user_metadata->user_data.begin();
-           it != state.user_metadata->user_data.end();
-           it++) {
-        state.md.key_value_metadata.push_back({it->first, it->second});
-      }
+      std::transform(state.user_metadata->user_data.begin(),
+                     state.user_metadata->user_data.end(),
+                     std::back_inserter(state.md.key_value_metadata),
+                     [](auto const &kv) {
+                       return KeyValue{kv.first, kv.second};
+                     });
     }
     state.md.schema = this_table_schema;
   } else {
