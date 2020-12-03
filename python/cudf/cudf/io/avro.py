@@ -20,7 +20,9 @@ def read_avro(
         path_or_data=filepath_or_buffer, **kwargs,
     )
     if not is_single_filepath_or_buffer:
-        raise IOError("filepath_or_buffer resolved to multiple files")
+        raise NotImplementedError(
+            "`read_avro` does not yet support reading multiple files"
+        )
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         path_or_data=filepath_or_buffer, compression=None, **kwargs
