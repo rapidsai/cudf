@@ -37,12 +37,13 @@ from cudf._lib.nvtext.subword_tokenize import (
     subword_tokenize as cpp_subword_tokenize,
 )
 from cudf._lib.nvtext.tokenize import (
+    _count_tokens_column as cpp_count_tokens_column,
+    _count_tokens_scalar as cpp_count_tokens_scalar,
+    _tokenize_column as cpp_tokenize_column,
+    _tokenize_scalar as cpp_tokenize_scalar,
     character_tokenize as cpp_character_tokenize,
-    count_tokens as cpp_count_tokens,
     detokenize as cpp_detokenize,
-    tokenize as cpp_tokenize,
 )
-from cudf._lib.scalar import DeviceScalar, as_device_scalar
 from cudf._lib.strings.attributes import (
     code_points as cpp_code_points,
     count_bytes as cpp_count_bytes,
@@ -120,7 +121,9 @@ from cudf._lib.strings.split.partition import (
 )
 from cudf._lib.strings.split.split import (
     rsplit as cpp_rsplit,
+    rsplit_record as cpp_rsplit_record,
     split as cpp_split,
+    split_record as cpp_split_record,
 )
 from cudf._lib.strings.strip import (
     lstrip as cpp_lstrip,
@@ -423,9 +426,7 @@ class StringMethods(ColumnMethodsMixin):
 
         if others is None:
             data = cpp_join(
-                self._column,
-                as_device_scalar(sep),
-                as_device_scalar(na_rep, "str"),
+                self._column, cudf.Scalar(sep), cudf.Scalar(na_rep, "str"),
             )
         else:
             other_cols = _get_cols_list(self._parent, others)
@@ -434,8 +435,8 @@ class StringMethods(ColumnMethodsMixin):
                 cudf.DataFrame(
                     {index: value for index, value in enumerate(all_cols)}
                 ),
-                as_device_scalar(sep),
-                as_device_scalar(na_rep, "str"),
+                cudf.Scalar(sep),
+                cudf.Scalar(na_rep, "str"),
             )
 
         if len(data) == 1 and data.null_count == 1:
@@ -646,7 +647,7 @@ class StringMethods(ColumnMethodsMixin):
                 result_col = cpp_contains_re(self._column, pat)
             else:
                 result_col = cpp_contains(
-                    self._column, as_device_scalar(pat, "str")
+                    self._column, cudf.Scalar(pat, "str")
                 )
         else:
             result_col = cpp_contains_multiple(
@@ -749,12 +750,12 @@ class StringMethods(ColumnMethodsMixin):
 
         # Pandas forces non-regex replace when pat is a single-character
         return self._return_or_inplace(
-            cpp_replace_re(self._column, pat, as_device_scalar(repl, "str"), n)
+            cpp_replace_re(self._column, pat, cudf.Scalar(repl, "str"), n)
             if regex is True and len(pat) > 1
             else cpp_replace(
                 self._column,
-                as_device_scalar(pat, "str"),
-                as_device_scalar(repl, "str"),
+                cudf.Scalar(pat, "str"),
+                cudf.Scalar(repl, "str"),
                 n,
             ),
             **kwargs,
@@ -781,7 +782,7 @@ class StringMethods(ColumnMethodsMixin):
         --------
         >>> import cudf
         >>> s = cudf.Series(["A543","Z756"])
-        >>> s.str.replace_with_backrefs('(\\d)(\\d)', 'V\\2\\1')
+        >>> s.str.replace_with_backrefs('(\\\\d)(\\\\d)', 'V\\\\2\\\\1')
         0    AV453
         1    ZV576
         dtype: object
@@ -1739,7 +1740,7 @@ class StringMethods(ColumnMethodsMixin):
             repl = ""
 
         return self._return_or_inplace(
-            cpp_filter_alphanum(self._column, as_device_scalar(repl), keep),
+            cpp_filter_alphanum(self._column, cudf.Scalar(repl), keep),
             **kwargs,
         )
 
@@ -1869,9 +1870,7 @@ class StringMethods(ColumnMethodsMixin):
             repl = ""
 
         return self._return_or_inplace(
-            cpp_slice_replace(
-                self._column, start, stop, as_device_scalar(repl)
-            ),
+            cpp_slice_replace(self._column, start, stop, cudf.Scalar(repl)),
             **kwargs,
         )
 
@@ -1922,7 +1921,7 @@ class StringMethods(ColumnMethodsMixin):
             repl = ""
 
         return self._return_or_inplace(
-            cpp_string_insert(self._column, start, as_device_scalar(repl)),
+            cpp_string_insert(self._column, start, cudf.Scalar(repl)),
             **kwargs,
         )
 
@@ -1972,7 +1971,7 @@ class StringMethods(ColumnMethodsMixin):
             cpp_string_get(self._column, i), **kwargs
         )
 
-    def split(self, pat=None, n=-1, expand=None, **kwargs):
+    def split(self, pat=None, n=-1, expand=False, **kwargs):
         """
         Split strings around given separator/delimiter.
 
@@ -1987,11 +1986,18 @@ class StringMethods(ColumnMethodsMixin):
         n : int, default -1 (all)
             Limit number of splits in output. `None`, 0, and -1 will all be
             interpreted as "all splits".
+        expand : bool, default False
+            Expand the split strings into separate columns.
+
+            * If ``True``, return DataFrame/MultiIndex expanding
+              dimensionality.
+            * If ``False``, return Series/Index, containing lists
+              of strings.
 
         Returns
         -------
-        DataFrame
-            Returns a DataFrame with each split as a column.
+        Series, Index, DataFrame or MultiIndex
+            Type matches caller unless ``expand=True`` (see Notes).
 
         See also
         --------
@@ -2007,15 +2013,17 @@ class StringMethods(ColumnMethodsMixin):
 
         Notes
         -----
-        The parameter `expand` is not yet supported and will raise a
-        NotImplementedError if anything other than the default value
-        is set. The handling of the n keyword depends on the number
+        The handling of the n keyword depends on the number
         of found splits:
 
             - If found splits > n, make first n splits only
             - If found splits <= n, make all splits
             - If for a certain row the number of found
               splits < n, append None for padding up to n
+              if ``expand=True``.
+
+        If using ``expand=True``, Series and Index callers return
+        DataFrame and MultiIndex objects, respectively.
 
         Examples
         --------
@@ -2026,32 +2034,61 @@ class StringMethods(ColumnMethodsMixin):
         >>> s
         0            this is a regular sentence
         1    https://docs.python.org/index.html
-        2                                  None
+        2                                  <NA>
         dtype: object
+
+        In the default setting, the string is split by whitespace.
+
+        >>> s.str.split()
+        0        [this, is, a, regular, sentence]
+        1    [https://docs.python.org/index.html]
+        2                                    None
+        dtype: list
+
+        Without the ``n`` parameter, the outputs of ``rsplit``
+        and ``split`` are identical.
+
+        >>> s.str.rsplit()
+        0        [this, is, a, regular, sentence]
+        1    [https://docs.python.org/index.html]
+        2                                    None
+        dtype: list
 
         The `n` parameter can be used to limit the number of
         splits on the delimiter.
 
         >>> s.str.split(n=2)
-                                            0     1                   2
-        0                                this    is  a regular sentence
-        1  https://docs.python.org/index.html  None                None
-        2                                None  None                None
+        0          [this, is, a regular sentence]
+        1    [https://docs.python.org/index.html]
+        2                                    None
+        dtype: list
 
         The `pat` parameter can be used to split by other characters.
 
-        >>> s.str.split(pat = "/")
-                                    0     1                2           3
-        0  this is a regular sentence  None             None        None
-        1                      https:        docs.python.org  index.html
-        2                        None  None             None        None
+        >>> s.str.split(pat="/")
+        0               [this is a regular sentence]
+        1    [https:, , docs.python.org, index.html]
+        2                                       None
+        dtype: list
+
+        When using ``expand=True``, the split elements will expand out
+        into separate columns. If ``<NA>`` value is present, it is propagated
+        throughout the columns during the split.
+
+        >>> s.str.split(expand=True)
+                                            0     1     2        3         4
+        0                                this    is     a  regular  sentence
+        1  https://docs.python.org/index.html  <NA>  <NA>     <NA>      <NA>
+        2                                <NA>  <NA>  <NA>     <NA>      <NA>
         """
+
         if expand is None:
-            expand = True
-            warnings.warn("`expand` parameter defatults to True.")
-        elif expand is not True:
-            raise NotImplementedError(
-                "`expand=False` setting is not supported yet"
+            expand = False
+
+        if expand not in (True, False):
+            raise ValueError(
+                f"expand parameter accepts only : [True, False], "
+                f"got {expand}"
             )
 
         # Pandas treats 0 as all
@@ -2062,16 +2099,24 @@ class StringMethods(ColumnMethodsMixin):
         if pat is None:
             pat = ""
 
-        result_table = cpp_split(self._column, as_device_scalar(pat, "str"), n)
-        if len(result_table._data) == 1:
-            if result_table._data[0].null_count == len(self._parent):
-                result_table = []
+        if expand:
             if self._column.null_count == len(self._column):
                 result_table = [self._column.copy()]
+            else:
+                result_table = cpp_split(
+                    self._column, cudf.Scalar(pat, "str"), n
+                )
+                if len(result_table._data) == 1:
+                    if result_table._data[0].null_count == len(self._parent):
+                        result_table = []
+        else:
+            result_table = cpp_split_record(
+                self._column, cudf.Scalar(pat, "str"), n
+            )
 
         return self._return_or_inplace(result_table, **kwargs,)
 
-    def rsplit(self, pat=None, n=-1, expand=None, **kwargs):
+    def rsplit(self, pat=None, n=-1, expand=False, **kwargs):
         """
         Split strings around given separator/delimiter.
 
@@ -2086,11 +2131,18 @@ class StringMethods(ColumnMethodsMixin):
         n : int, default -1 (all)
             Limit number of splits in output. `None`, 0, and -1 will all be
             interpreted as "all splits".
+        expand : bool, default False
+            Expand the split strings into separate columns.
+
+            * If ``True``, return DataFrame/MultiIndex expanding
+              dimensionality.
+            * If ``False``, return Series/Index, containing lists
+              of strings.
 
         Returns
         -------
-        DataFrame or MultiIndex
-            Returns a DataFrame/MultiIndex with each split as a column.
+        Series, Index, DataFrame or MultiIndex
+            Type matches caller unless ``expand=True`` (see Notes).
 
         See also
         --------
@@ -2105,28 +2157,73 @@ class StringMethods(ColumnMethodsMixin):
 
         Notes
         -----
-        The parameter `expand` is not yet supported and will raise a
-        `NotImplementedError` if anything other than the default value is
-        set. The handling of the n keyword depends on the number of
+        The handling of the n keyword depends on the number of
         found splits:
 
             - If found splits > n, make first n splits only
             - If found splits <= n, make all splits
             - If for a certain row the number of found splits < n,
-              append None for padding up to n.
+              append None for padding up to n if ``expand=True``.
+
+        If using ``expand=True``, Series and Index callers return
+        DataFrame and MultiIndex objects, respectively.
 
         Examples
         --------
         >>> import cudf
-        >>> data = ["this is a regular sentence",
-        ... "https://docs.python.org/3/tutorial/index.html",
-        ... None]
-        >>> s = cudf.Series(data)
+        >>> s = cudf.Series(
+        ...     [
+        ...         "this is a regular sentence",
+        ...         "https://docs.python.org/3/tutorial/index.html",
+        ...         None
+        ...     ]
+        ... )
+        >>> s
+        0                       this is a regular sentence
+        1    https://docs.python.org/3/tutorial/index.html
+        2                                             <NA>
+        dtype: object
+
+        In the default setting, the string is split by whitespace.
+
+        >>> s.str.rsplit()
+        0                   [this, is, a, regular, sentence]
+        1    [https://docs.python.org/3/tutorial/index.html]
+        2                                               None
+        dtype: list
+
+        Without the ``n`` parameter, the outputs of ``rsplit``
+        and ``split`` are identical.
+
+        >>> s.str.split()
+        0                   [this, is, a, regular, sentence]
+        1    [https://docs.python.org/3/tutorial/index.html]
+        2                                               None
+        dtype: list
+
+        The n parameter can be used to limit the number of
+        splits on the delimiter. The outputs of split and rsplit are different.
+
         >>> s.str.rsplit(n=2)
+        0                     [this is a, regular, sentence]
+        1    [https://docs.python.org/3/tutorial/index.html]
+        2                                               None
+        dtype: list
+        >>> s.str.split(n=2)
+        0                     [this, is, a regular sentence]
+        1    [https://docs.python.org/3/tutorial/index.html]
+        2                                               None
+        dtype: list
+
+        When using ``expand=True``, the split elements will expand
+        out into separate columns. If ``<NA>`` value is present,
+        it is propagated throughout the columns during the split.
+
+        >>> s.str.rsplit(n=2, expand=True)
                                                        0        1         2
         0                                      this is a  regular  sentence
-        1  https://docs.python.org/3/tutorial/index.html     None      None
-        2                                           None     None      None
+        1  https://docs.python.org/3/tutorial/index.html     <NA>      <NA>
+        2                                           <NA>     <NA>      <NA>
 
         For slightly more complex use cases like splitting the
         html document name from a url, a combination of parameter
@@ -2134,16 +2231,18 @@ class StringMethods(ColumnMethodsMixin):
 
         >>> s.str.rsplit("/", n=1, expand=True)
                                             0           1
-        0          this is a regular sentence        None
+        0          this is a regular sentence        <NA>
         1  https://docs.python.org/3/tutorial  index.html
-        2                                None        None
+        2                                <NA>        <NA>
         """
+
         if expand is None:
-            expand = True
-            warnings.warn("`expand` parameter defatults to True.")
-        elif expand is not True:
-            raise NotImplementedError(
-                "`expand=False` setting is not supported yet"
+            expand = False
+
+        if expand not in (True, False):
+            raise ValueError(
+                f"expand parameter accepts only : [True, False], "
+                f"got {expand}"
             )
 
         # Pandas treats 0 as all
@@ -2154,12 +2253,16 @@ class StringMethods(ColumnMethodsMixin):
         if pat is None:
             pat = ""
 
-        result_table = cpp_rsplit(self._column, as_device_scalar(pat), n)
-        if len(result_table._data) == 1:
-            if result_table._data[0].null_count == len(self._parent):
-                result_table = []
-            elif self._parent.null_count == len(self._parent):
+        if expand:
+            if self._column.null_count == len(self._column):
                 result_table = [self._column.copy()]
+            else:
+                result_table = cpp_rsplit(self._column, cudf.Scalar(pat), n)
+                if len(result_table._data) == 1:
+                    if result_table._data[0].null_count == len(self._parent):
+                        result_table = []
+        else:
+            result_table = cpp_rsplit_record(self._column, cudf.Scalar(pat), n)
 
         return self._return_or_inplace(result_table, **kwargs)
 
@@ -2247,7 +2350,7 @@ class StringMethods(ColumnMethodsMixin):
             sep = " "
 
         return self._return_or_inplace(
-            cpp_partition(self._column, as_device_scalar(sep)), **kwargs
+            cpp_partition(self._column, cudf.Scalar(sep)), **kwargs
         )
 
     def rpartition(self, sep=" ", expand=True, **kwargs):
@@ -2318,7 +2421,7 @@ class StringMethods(ColumnMethodsMixin):
             sep = " "
 
         return self._return_or_inplace(
-            cpp_rpartition(self._column, as_device_scalar(sep)), **kwargs
+            cpp_rpartition(self._column, cudf.Scalar(sep)), **kwargs
         )
 
     def pad(self, width, side="left", fillchar=" ", **kwargs):
@@ -2717,7 +2820,7 @@ class StringMethods(ColumnMethodsMixin):
             to_strip = ""
 
         return self._return_or_inplace(
-            cpp_strip(self._column, as_device_scalar(to_strip)), **kwargs
+            cpp_strip(self._column, cudf.Scalar(to_strip)), **kwargs
         )
 
     def lstrip(self, to_strip=None, **kwargs):
@@ -2764,7 +2867,7 @@ class StringMethods(ColumnMethodsMixin):
             to_strip = ""
 
         return self._return_or_inplace(
-            cpp_lstrip(self._column, as_device_scalar(to_strip)), **kwargs
+            cpp_lstrip(self._column, cudf.Scalar(to_strip)), **kwargs
         )
 
     def rstrip(self, to_strip=None, **kwargs):
@@ -2819,7 +2922,7 @@ class StringMethods(ColumnMethodsMixin):
             to_strip = ""
 
         return self._return_or_inplace(
-            cpp_rstrip(self._column, as_device_scalar(to_strip)), **kwargs
+            cpp_rstrip(self._column, cudf.Scalar(to_strip)), **kwargs
         )
 
     def wrap(self, width, **kwargs):
@@ -3179,9 +3282,7 @@ class StringMethods(ColumnMethodsMixin):
                 len(self._column), dtype="bool", masked=True
             )
         elif is_scalar(pat):
-            result_col = cpp_endswith(
-                self._column, as_device_scalar(pat, "str")
-            )
+            result_col = cpp_endswith(self._column, cudf.Scalar(pat, "str"))
         else:
             result_col = cpp_endswith_multiple(
                 self._column, column.as_column(pat, dtype="str")
@@ -3246,9 +3347,7 @@ class StringMethods(ColumnMethodsMixin):
                 len(self._column), dtype="bool", masked=True
             )
         elif is_scalar(pat):
-            result_col = cpp_startswith(
-                self._column, as_device_scalar(pat, "str")
-            )
+            result_col = cpp_startswith(self._column, cudf.Scalar(pat, "str"))
         else:
             result_col = cpp_startswith_multiple(
                 self._column, column.as_column(pat, dtype="str")
@@ -3306,7 +3405,7 @@ class StringMethods(ColumnMethodsMixin):
             end = -1
 
         result_col = cpp_find(
-            self._column, as_device_scalar(sub, "str"), start, end
+            self._column, cudf.Scalar(sub, "str"), start, end
         )
 
         return self._return_or_inplace(result_col, **kwargs)
@@ -3365,7 +3464,7 @@ class StringMethods(ColumnMethodsMixin):
             end = -1
 
         result_col = cpp_rfind(
-            self._column, as_device_scalar(sub, "str"), start, end
+            self._column, cudf.Scalar(sub, "str"), start, end
         )
 
         return self._return_or_inplace(result_col, **kwargs)
@@ -3420,7 +3519,7 @@ class StringMethods(ColumnMethodsMixin):
             end = -1
 
         result_col = cpp_find(
-            self._column, as_device_scalar(sub, "str"), start, end
+            self._column, cudf.Scalar(sub, "str"), start, end
         )
 
         result = self._return_or_inplace(result_col, **kwargs)
@@ -3480,7 +3579,7 @@ class StringMethods(ColumnMethodsMixin):
             end = -1
 
         result_col = cpp_rfind(
-            self._column, as_device_scalar(sub, "str"), start, end
+            self._column, cudf.Scalar(sub, "str"), start, end
         )
 
         result = self._return_or_inplace(result_col, **kwargs)
@@ -3736,7 +3835,7 @@ class StringMethods(ColumnMethodsMixin):
         table = str.maketrans(table)
         return self._return_or_inplace(
             cpp_filter_characters(
-                self._column, table, keep, as_device_scalar(repl)
+                self._column, table, keep, cudf.Scalar(repl)
             ),
             **kwargs,
         )
@@ -3843,9 +3942,20 @@ class StringMethods(ColumnMethodsMixin):
         """
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
         kwargs.setdefault("retain_index", False)
-        return self._return_or_inplace(
-            cpp_tokenize(self._column, delimiter), **kwargs
-        )
+
+        if isinstance(delimiter, Column):
+            return self._return_or_inplace(
+                cpp_tokenize_column(self._column, delimiter), **kwargs
+            )
+        elif isinstance(delimiter, cudf.Scalar):
+            return self._return_or_inplace(
+                cpp_tokenize_scalar(self._column, delimiter), **kwargs
+            )
+        else:
+            raise TypeError(
+                f"Expected a Scalar or Column\
+                for delimiters, but got {type(delimiter)}"
+            )
 
     def detokenize(self, indices, separator=" ", **kwargs):
         """
@@ -3964,9 +4074,20 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
         delimiter = _massage_string_arg(delimiter, "delimiter", allow_col=True)
-        return self._return_or_inplace(
-            cpp_count_tokens(self._column, delimiter), **kwargs
-        )
+        if isinstance(delimiter, Column):
+            return self._return_or_inplace(
+                cpp_count_tokens_column(self._column, delimiter)
+            )
+
+        elif isinstance(delimiter, cudf.Scalar):
+            return self._return_or_inplace(
+                cpp_count_tokens_scalar(self._column, delimiter)
+            )
+        else:
+            raise TypeError(
+                f"Expected a Scalar or Column\
+                for delimiters, but got {type(delimiter)}"
+            )
 
     def ngrams(self, n=2, separator="_", **kwargs):
         """
@@ -4157,7 +4278,7 @@ class StringMethods(ColumnMethodsMixin):
                 self._column,
                 targets_column,
                 replacements_column,
-                as_device_scalar(delimiter, dtype="str"),
+                cudf.Scalar(delimiter, dtype="str"),
             ),
             **kwargs,
         )
@@ -4225,8 +4346,8 @@ class StringMethods(ColumnMethodsMixin):
             cpp_filter_tokens(
                 self._column,
                 min_token_length,
-                as_device_scalar(replacement, dtype="str"),
-                as_device_scalar(delimiter, dtype="str"),
+                cudf.Scalar(replacement, dtype="str"),
+                cudf.Scalar(delimiter, dtype="str"),
             ),
             **kwargs,
         )
@@ -4500,10 +4621,7 @@ class StringMethods(ColumnMethodsMixin):
 
 def _massage_string_arg(value, name, allow_col=False):
     if isinstance(value, str):
-        return as_device_scalar(value, dtype="str")
-
-    if isinstance(value, DeviceScalar) and is_string_dtype(value.dtype):
-        return value
+        return cudf.Scalar(value, dtype="str")
 
     allowed_types = ["Scalar"]
 

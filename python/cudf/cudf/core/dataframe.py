@@ -4940,10 +4940,7 @@ class DataFrame(Frame, Serializable):
             df.columns = dataframe.columns
 
         # Set index
-        if isinstance(dataframe.index, pd.MultiIndex):
-            index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
-        else:
-            index = dataframe.index
+        index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
         result = df.set_index(index)
 
         return result
@@ -7137,10 +7134,8 @@ def from_pandas(obj, nan_as_null=None):
     elif isinstance(obj, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.RangeIndex):
-        if obj._step and obj._step != 1:
-            raise ValueError("cudf RangeIndex requires step == 1")
         return cudf.core.index.RangeIndex(
-            obj._start, stop=obj._stop, name=obj.name
+            start=obj.start, stop=obj.stop, step=obj.step, name=obj.name
         )
     elif isinstance(obj, pd.Index):
         return cudf.Index.from_pandas(obj, nan_as_null=nan_as_null)

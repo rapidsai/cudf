@@ -832,7 +832,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     JNIEnv *env, jclass, jobjectArray j_col_names, jbooleanArray j_col_nullability,
     jobjectArray j_metadata_keys, jobjectArray j_metadata_values, jint j_compression,
-    jint j_stats_freq, jobject consumer) {
+    jint j_stats_freq, jboolean j_isInt96, jobject consumer) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
@@ -863,6 +863,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
             .nullable_metadata(&metadata)
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
+            .int96_timestamps(static_cast<bool>(j_isInt96))
             .build();
     std::shared_ptr<pq_chunked_state> state = write_parquet_chunked_begin(opts);
     cudf::jni::native_parquet_writer_handle *ret =
@@ -1873,7 +1874,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
     JNIEnv *env, jclass clazz, jlong j_input_table, jintArray j_keys,
     jintArray j_timestamp_column_indices, jbooleanArray j_is_timestamp_ascending,
     jintArray j_aggregate_column_indices, jlongArray j_agg_instances, jintArray j_min_periods,
-    jintArray j_preceding, jintArray j_following, jboolean ignore_null_keys) {
+    jintArray j_preceding, jintArray j_following, 
+    jbooleanArray j_unbounded_preceding, jbooleanArray j_unbounded_following, 
+    jboolean ignore_null_keys) {
 
   JNI_NULL_CHECK(env, j_input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, j_keys, "input keys are null", NULL);
@@ -1897,6 +1900,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
     cudf::jni::native_jintArray min_periods{env, j_min_periods};
     cudf::jni::native_jintArray preceding{env, j_preceding};
     cudf::jni::native_jintArray following{env, j_following};
+    cudf::jni::native_jbooleanArray unbounded_preceding{env, j_unbounded_preceding};
+    cudf::jni::native_jbooleanArray unbounded_following{env, j_unbounded_following};
 
     if (not valid_window_parameters(values, agg_instances, min_periods, preceding, following)) {
       JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
@@ -1911,11 +1916,20 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
     std::vector<std::unique_ptr<cudf::column>> result_columns;
     for (int i(0); i < values.size(); ++i) {
       int agg_column_index = values[i];
-      result_columns.emplace_back(std::move(cudf::grouped_time_range_rolling_window(
-          groupby_keys, input_table->column(timestamps[i]),
-          timestamp_ascending[i] ? cudf::order::ASCENDING : cudf::order::DESCENDING,
-          input_table->column(agg_column_index), preceding[i], following[i], min_periods[i],
-          agg_instances[i]->clone())));
+      result_columns.emplace_back(
+        std::move(
+          cudf::grouped_time_range_rolling_window(
+            groupby_keys, 
+            input_table->column(timestamps[i]),
+            timestamp_ascending[i] ? cudf::order::ASCENDING : cudf::order::DESCENDING,
+            input_table->column(agg_column_index), 
+            unbounded_preceding[i] ? cudf::window_bounds::unbounded() : cudf::window_bounds::get(preceding[i]), 
+            unbounded_following[i] ? cudf::window_bounds::unbounded() : cudf::window_bounds::get(following[i]), 
+            min_periods[i],
+            agg_instances[i]->clone()
+          )
+        )
+      );
     }
 
     auto result_table = std::make_unique<cudf::table>(std::move(result_columns));
