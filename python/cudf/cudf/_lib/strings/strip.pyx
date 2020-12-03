@@ -17,12 +17,15 @@ from cudf._lib.cpp.strings.strip cimport (
 
 
 def strip(Column source_strings,
-          DeviceScalar repl):
+          object py_repl):
     """
     Returns a Column by removing leading and trailing characters.
     The set of characters need be stripped from left and right side
-    can be specified by `repl`.
+    can be specified by `py_repl`.
     """
+
+    cdef DeviceScalar repl = py_repl.device_value
+
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
@@ -41,12 +44,15 @@ def strip(Column source_strings,
 
 
 def lstrip(Column source_strings,
-           DeviceScalar repl):
+           object py_repl):
     """
     Returns a Column by removing leading and trailing characters.
     The set of characters need be stripped from left side can
-    be specified by `repl`.
+    be specified by `py_repl`.
     """
+
+    cdef DeviceScalar repl = py_repl.device_value
+
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
@@ -65,12 +71,15 @@ def lstrip(Column source_strings,
 
 
 def rstrip(Column source_strings,
-           DeviceScalar repl):
+           object py_repl):
     """
     Returns a Column by removing leading and trailing characters.
     The set of characters need be stripped from right side can
-    be specified by `repl`.
+    be specified by `py_repl`.
     """
+
+    cdef DeviceScalar repl = py_repl.device_value
+
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
