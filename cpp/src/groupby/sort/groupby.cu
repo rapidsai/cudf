@@ -203,8 +203,8 @@ void store_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
       auto transformed_result =
         cudf::detail::gather(table_view({values}),
                              null_removed_map,
-                             argmin_result.nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
-                                                      : cudf::detail::out_of_bounds_policy::NULLIFY,
+                             argmin_result.nullable() ? cudf::out_of_bounds_policy::NULLIFY
+                                                      : cudf::out_of_bounds_policy::DONT_CHECK,
                              cudf::detail::negative_index_policy::NOT_ALLOWED,
                              stream,
                              mr);
@@ -240,8 +240,8 @@ void store_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
       auto transformed_result =
         cudf::detail::gather(table_view({values}),
                              null_removed_map,
-                             argmax_result.nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
-                                                      : cudf::detail::out_of_bounds_policy::NULLIFY,
+                             argmax_result.nullable() ? cudf::out_of_bounds_policy::NULLIFY
+                                                      : cudf::out_of_bounds_policy::DONT_CHECK,
                              cudf::detail::negative_index_policy::NOT_ALLOWED,
                              stream,
                              mr);
@@ -281,7 +281,7 @@ void store_result_functor::operator()<aggregation::VARIANCE>(aggregation const& 
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto var_agg   = static_cast<cudf::detail::std_var_aggregation const&>(agg);
+  auto var_agg   = static_cast<cudf::detail::var_aggregation const&>(agg);
   auto mean_agg  = make_mean_aggregation();
   auto count_agg = make_count_aggregation();
   operator()<aggregation::MEAN>(*mean_agg);
@@ -304,7 +304,7 @@ void store_result_functor::operator()<aggregation::STD>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto std_agg = static_cast<cudf::detail::std_var_aggregation const&>(agg);
+  auto std_agg = static_cast<cudf::detail::std_aggregation const&>(agg);
   auto var_agg = make_variance_aggregation(std_agg._ddof);
   operator()<aggregation::VARIANCE>(*var_agg);
   column_view var_result = cache.get_result(col_idx, *var_agg);

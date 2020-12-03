@@ -19,10 +19,13 @@ from cudf._lib.cpp.strings.char_types cimport (
 )
 
 
-def filter_alphanum(Column source_strings, DeviceScalar repl, bool keep=True):
+def filter_alphanum(Column source_strings, object py_repl, bool keep=True):
     """
     Returns a Column of strings keeping only alphanumeric character types.
     """
+
+    cdef DeviceScalar repl = py_repl.device_value
+
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
     cdef const string_scalar* scalar_repl = <const string_scalar*>(
