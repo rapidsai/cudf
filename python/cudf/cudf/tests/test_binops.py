@@ -1461,9 +1461,7 @@ def test_scalar_power_invalid(dtype_l, dtype_r):
         lval_gpu ** rval_gpu
 
 
-@pytest.mark.parametrize(
-    "frame", [cudf.Series, cudf.Index, cudf.DataFrame,],
-)
+@pytest.mark.parametrize("frame", [cudf.Series, cudf.Index, cudf.DataFrame])
 @pytest.mark.parametrize(
     "dtype", ["int", "str", "datetime64[s]", "timedelta64[s]", "category"]
 )
