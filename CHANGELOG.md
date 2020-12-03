@@ -36,6 +36,7 @@
 - PR #6817 Add support for scatter() on lists-of-struct columns
 - PR #6805 Implement `cudf::detail::copy_if` for `decimal32` and `decimal64`
 - PR #6726 Support selecting different hash functions in hash_partition
+- PR #6619 Improve Dockerfile
 
 ## Improvements
 
@@ -53,6 +54,7 @@
 - PR #6471 Replace index type-dispatch call with indexalator in cudf::strings::substring
 - PR #6485 Add File IO to cuIO benchmarks
 - PR #6504 Update Java bindings version to 0.17-SNAPSHOT
+- PR #6875 Remove bounds check for `cudf::gather`
 - PR #6489 Add `AVRO` fuzz tests with varying function parameters
 - PR #6540 Add dictionary support to `cudf::unary_operation`
 - PR #6537 Refactor ORC timezone
