@@ -1161,8 +1161,6 @@ class Series(Frame, Serializable):
 
         If ``reflect`` is ``True``, swap the order of the operands.
         """
-        if isinstance(other, np.ndarray) and other.ndim == 0:
-            other = other.item()
         if isinstance(other, cudf.DataFrame):
             # TODO: fn is not the same as arg expected by _apply_op
             # e.g. for fn = 'and', _apply_op equivalent is '__and__'
@@ -1570,6 +1568,8 @@ class Series(Frame, Serializable):
         elif isinstance(other, Index):
             return Series(other)._column
         else:
+            if isinstance(other, np.ndarray) and other.ndim == 0:
+                other = other.item()
             return self._column.normalize_binop_value(other)
 
     def eq(self, other, fill_value=None, axis=0):
