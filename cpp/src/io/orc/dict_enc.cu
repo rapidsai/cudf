@@ -75,10 +75,13 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
         s->scratch_red[t] = 0xffffffffu;
       } else {
         uint32_t row = s->chunk.start_row + i + t * 32;
-        uint32_t v   = (row < s->chunk.start_row + s->chunk.num_rows) ? valid_map[row >> 5] : 0;
+        uint32_t v   = (row < s->chunk.start_row + s->chunk.num_rows)
+                       ? valid_map[(row + s->chunk.column_offset) >> 5]
+                       : 0;
         if (row & 0x1f) {
-          uint32_t v1 =
-            (row + 32 < s->chunk.start_row + s->chunk.num_rows) ? valid_map[(row >> 5) + 1] : 0;
+          uint32_t v1 = (row + 32 < s->chunk.start_row + s->chunk.num_rows)
+                          ? valid_map[((row + s->chunk.column_offset) >> 5) + 1]
+                          : 0;
           v = __funnelshift_r(v, v1, row & 0x1f);
         }
         s->scratch_red[t] = v;

@@ -136,6 +136,7 @@ class parquet_column_view {
       _null_count(_leaf_col.null_count()),
       _data(col.head<uint8_t>() + col.offset() * _type_width),
       _nulls(_leaf_col.nullable() ? _leaf_col.null_mask() : nullptr),
+      _offset(col.offset()),
       _converted_type(ConvertedType::UNKNOWN),
       _ts_scale(0),
       _dremel_offsets(0, stream),
@@ -323,6 +324,7 @@ class parquet_column_view {
   bool nullable() const noexcept { return (_nulls != nullptr); }
   void const *data() const noexcept { return _data; }
   uint32_t const *nulls() const noexcept { return _nulls; }
+  size_type offset() const noexcept { return _offset; }
 
   // List related data
   column_view cudf_col() const noexcept { return _col; }
@@ -396,6 +398,7 @@ class parquet_column_view {
   size_t _null_count     = 0;
   void const *_data      = nullptr;
   uint32_t const *_nulls = nullptr;
+  size_type _offset      = 0;
 
   // parquet-related members
   std::string _name{};
@@ -797,6 +800,7 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
     *desc                  = gpu::EncColumnDesc{};  // Zero out all fields
     desc->column_data_base = col.data();
     desc->valid_map_base   = col.nulls();
+    desc->column_offset    = col.offset();
     desc->stats_dtype      = col.stats_type();
     desc->ts_scale         = col.ts_scale();
     // TODO (dm): Enable dictionary for list after refactor

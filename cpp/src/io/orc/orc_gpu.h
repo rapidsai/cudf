@@ -21,6 +21,7 @@
 #include <io/comp/gpuinflate.h>
 #include <io/orc/orc_common.h>
 #include <io/statistics/column_stats.h>
+#include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -127,6 +128,7 @@ struct EncChunk {
   int32_t strm_id[CI_NUM_STREAMS];    // stream id or -1 if not present
   uint32_t strm_len[CI_NUM_STREAMS];  // in: max length, out: actual length
   const uint32_t *valid_map_base;     // base ptr of input valid bit map
+  size_type column_offset;            // index of the first element relative to the base memory
   const void *column_data_base;       // base ptr of input column data
   uint32_t start_row;                 // start row of this chunk
   uint32_t num_rows;                  // number of rows in this chunk
@@ -156,6 +158,7 @@ struct StripeStream {
  **/
 struct DictionaryChunk {
   const uint32_t *valid_map_base;  // base ptr of input valid bit map
+  size_type column_offset;         // index of the first element relative to the base memory
   const void *column_data_base;    // base ptr of column data (ptr,len pair)
   uint32_t *dict_data;             // dictionary data (index of non-null rows)
   uint32_t *dict_index;  // row indices of corresponding string (row from dictionary index)

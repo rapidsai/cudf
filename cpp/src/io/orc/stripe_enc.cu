@@ -712,10 +712,26 @@ __global__ void __launch_bounds__(block_size)
         uint8_t valid = 0;
         if (row < s->chunk.valid_rows) {
           if (s->chunk.valid_map_base) {
-            uint8_t valid_map[4];
-            auto const valid_map_byte_idx = row >> 3;
-            memcpy(valid_map, &s->chunk.valid_map_base[valid_map_byte_idx / 4], 4);
-            valid = valid_map[valid_map_byte_idx % 4];
+            // uint8_t valid_map[4];
+            // auto const valid_map_byte_idx = row >> 3;
+            // memcpy(valid_map, &s->chunk.valid_map_base[valid_map_byte_idx / 4], 4);
+            // valid = valid_map[valid_map_byte_idx % 4];
+            ////////////////////////
+
+            size_type current_valid_offset = row + s->chunk.column_offset;
+            size_type next_valid_offset    = current_valid_offset + min(32, s->chunk.valid_rows);
+
+            size_type current_byte_index = current_valid_offset / 32;
+            size_type next_byte_index    = next_valid_offset / 32;
+
+            bitmask_type current_mask_word = s->chunk.valid_map_base[current_byte_index];
+            bitmask_type next_mask_word    = 0;
+            if (next_byte_index != current_byte_index) {
+              next_mask_word = s->chunk.valid_map_base[next_byte_index];
+            }
+            bitmask_type mask =
+              __funnelshift_r(current_mask_word, next_mask_word, current_valid_offset);
+            valid = 0xff & mask;
           } else {
             valid = 0xff;
           }
