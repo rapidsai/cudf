@@ -108,6 +108,12 @@ def read_orc_statistics(
 ):
     """{docstring}"""
 
+    is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
+        path_or_data=filepath_or_buffer, **kwargs,
+    )
+    if not is_single_filepath_or_buffer:
+        raise IOError("filepath_or_buffer resolved to multiple files")
+
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         path_or_data=filepath_or_buffer, compression=None, **kwargs
     )
@@ -220,6 +226,12 @@ def read_orc(
     """{docstring}"""
 
     from cudf import DataFrame
+
+    is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
+        path_or_data=filepath_or_buffer, **kwargs,
+    )
+    if not is_single_filepath_or_buffer:
+        raise IOError("filepath_or_buffer resolved to multiple files")
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         path_or_data=filepath_or_buffer, compression=None, **kwargs
