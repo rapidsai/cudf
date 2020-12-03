@@ -1770,6 +1770,8 @@ dremel_data get_dremel_data(column_view h_col,
                            cudaMemcpyDeviceToHost,
                            stream.value()));
 
+  stream.synchronize();
+
   rmm::device_uvector<uint8_t> rep_level(max_vals_size, stream);
   rmm::device_uvector<uint8_t> def_level(max_vals_size, stream);
 
