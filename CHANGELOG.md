@@ -184,6 +184,8 @@
 - PR #6869 Avoid dependency resolution failure in latest version of pip by explicitly specifying versions for dask and distributed
 - PR #6806 Force install of local conda artifacts
 - PR #6887 Fix typo and `0-d` numpy array handling in binary operation
+- PR #6898 Fix missing clone overrides on derived aggregations
+
 
 # cuDF 0.16.0 (21 Oct 2020)
 
