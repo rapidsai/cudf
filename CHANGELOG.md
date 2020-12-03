@@ -36,6 +36,7 @@
 - PR #6817 Add support for scatter() on lists-of-struct columns
 - PR #6805 Implement `cudf::detail::copy_if` for `decimal32` and `decimal64`
 - PR #6483 Add `agg` function to aggregate dataframe using one or more operations
+- PR #6726 Support selecting different hash functions in hash_partition
 - PR #6619 Improve Dockerfile
 
 ## Improvements
@@ -183,6 +184,7 @@
 - PR #6861 Fix compile error in type_dispatch_benchmark.cu
 - PR #6869 Avoid dependency resolution failure in latest version of pip by explicitly specifying versions for dask and distributed
 - PR #6806 Force install of local conda artifacts
+- PR #6887 Fix typo and `0-d` numpy array handling in binary operation
 
 # cuDF 0.16.0 (21 Oct 2020)
 
