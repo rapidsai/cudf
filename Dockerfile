@@ -13,12 +13,15 @@ ARG CC=5
 ARG CXX=5
 RUN apt update -y --fix-missing && \
     apt upgrade -y && \
-    apt install -y \
+    apt install -y --no-install-recommends \
       git \
       gcc-${CC} \
       g++-${CXX} \
       libboost-all-dev \
-      tzdata
+      tzdata && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install conda
 ADD https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh /miniconda.sh
@@ -70,7 +73,7 @@ RUN source activate cudf && \
     mkdir -p /cudf/cpp/build && \
     cd /cudf/cpp/build && \
     cmake .. -DCMAKE_INSTALL_PREFIX=${CONDA_PREFIX} && \
-    make -j install
+    make -j"$(nproc)" install
 
 # cuDF build/install
 RUN source activate cudf && \

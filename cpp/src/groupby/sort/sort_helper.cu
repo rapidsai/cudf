@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
@@ -276,7 +277,7 @@ sort_groupby_helper::column_ptr sort_groupby_helper::sorted_values(
 
   auto sorted_values_table = cudf::detail::gather(table_view({values}),
                                                   gather_map,
-                                                  cudf::detail::out_of_bounds_policy::NULLIFY,
+                                                  cudf::out_of_bounds_policy::DONT_CHECK,
                                                   cudf::detail::negative_index_policy::NOT_ALLOWED,
                                                   stream,
                                                   mr);
@@ -291,7 +292,7 @@ sort_groupby_helper::column_ptr sort_groupby_helper::grouped_values(
 
   auto grouped_values_table = cudf::detail::gather(table_view({values}),
                                                    gather_map,
-                                                   cudf::detail::out_of_bounds_policy::NULLIFY,
+                                                   cudf::out_of_bounds_policy::DONT_CHECK,
                                                    cudf::detail::negative_index_policy::NOT_ALLOWED,
                                                    stream,
                                                    mr);
@@ -307,8 +308,12 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view st
   auto gather_map_it = thrust::make_transform_iterator(
     group_offsets().begin(), [idx_data] __device__(size_type i) { return idx_data[i]; });
 
-  return cudf::detail::gather(
-    _keys, gather_map_it, gather_map_it + num_groups(), false, stream, mr);
+  return cudf::detail::gather(_keys,
+                              gather_map_it,
+                              gather_map_it + num_groups(),
+                              out_of_bounds_policy::DONT_CHECK,
+                              stream,
+                              mr);
 }
 
 std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::cuda_stream_view stream,
@@ -316,7 +321,7 @@ std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::cuda_stream_view st
 {
   return cudf::detail::gather(_keys,
                               key_sort_order(),
-                              cudf::detail::out_of_bounds_policy::NULLIFY,
+                              cudf::out_of_bounds_policy::DONT_CHECK,
                               cudf::detail::negative_index_policy::NOT_ALLOWED,
                               stream,
                               mr);

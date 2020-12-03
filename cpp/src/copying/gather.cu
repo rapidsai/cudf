@@ -32,7 +32,7 @@ namespace detail {
 
 std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
-                              out_of_bounds_policy bounds,
+                              out_of_bounds_policy bounds_policy,
                               negative_index_policy neg_indices,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
@@ -43,19 +43,6 @@ std::unique_ptr<table> gather(table_view const& source_table,
   auto map_begin = indexalator_factory::make_input_iterator(gather_map);
   auto map_end   = map_begin + gather_map.size();
 
-  if (bounds == out_of_bounds_policy::FAIL) {
-    cudf::size_type begin =
-      neg_indices == negative_index_policy::ALLOWED ? -source_table.num_rows() : 0;
-    cudf::size_type end = source_table.num_rows();
-    CUDF_EXPECTS(gather_map.size() == thrust::count_if(rmm::exec_policy(stream)->on(stream.value()),
-                                                       map_begin,
-                                                       map_end,
-                                                       [begin, end] __device__(size_type index) {
-                                                         return ((index >= begin) && (index < end));
-                                                       }),
-                 "Index out of bounds.");
-  }
-
   if (neg_indices == negative_index_policy::ALLOWED) {
     cudf::size_type n_rows = source_table.num_rows();
     auto idx_converter     = [n_rows] __device__(size_type in) {
@@ -64,19 +51,18 @@ std::unique_ptr<table> gather(table_view const& source_table,
     return gather(source_table,
                   thrust::make_transform_iterator(map_begin, idx_converter),
                   thrust::make_transform_iterator(map_end, idx_converter),
-                  bounds == out_of_bounds_policy::IGNORE,
+                  bounds_policy,
                   stream,
                   mr);
   }
-  return gather(
-    source_table, map_begin, map_end, bounds == out_of_bounds_policy::IGNORE, stream, mr);
+  return gather(source_table, map_begin, map_end, bounds_policy, stream, mr);
 }
 
 }  // namespace detail
 
 std::unique_ptr<table> gather(table_view const& source_table,
                               column_view const& gather_map,
-                              bool check_bounds,
+                              out_of_bounds_policy bounds_policy,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -85,12 +71,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
                                                      : detail::negative_index_policy::ALLOWED;
 
   return detail::gather(
-    source_table,
-    gather_map,
-    check_bounds ? detail::out_of_bounds_policy::FAIL : detail::out_of_bounds_policy::NULLIFY,
-    index_policy,
-    rmm::cuda_stream_default,
-    mr);
+    source_table, gather_map, bounds_policy, index_policy, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf
