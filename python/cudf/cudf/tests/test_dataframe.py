@@ -8051,11 +8051,6 @@ def test_agg_for_unsupported_function(aggs):
     with pytest.raises(NotImplementedError):
         got = gdf.agg(aggs)
 
-    expect = pdf.agg(aggs)
-    got = gdf.agg(aggs)
-
-    assert_eq(expect, got, check_dtype=False)
-
 
 @pytest.mark.parametrize("aggs", ["asdf"])
 def test_agg_for_dataframe_with_invalid_function(aggs):
@@ -8072,11 +8067,6 @@ def test_agg_for_dataframe_with_invalid_function(aggs):
     ):
         got = gdf.agg(aggs)
 
-    expect = pdf.agg(aggs)
-    got = gdf.agg(aggs)
-
-    assert_eq(expect, got, check_dtype=False)
-
 
 @pytest.mark.parametrize("aggs", [{"a": "asdf"}])
 def test_agg_for_series_with_invalid_function(aggs):
@@ -8092,11 +8082,6 @@ def test_agg_for_series_with_invalid_function(aggs):
         match=f"{aggs['a']} is not a valid function for 'Series' object",
     ):
         got = gdf.agg(aggs)
-
-    expect = pdf.agg(aggs)
-    got = gdf.agg(aggs)
-
-    assert_eq(expect, got, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -8121,8 +8106,3 @@ def test_agg_for_dataframe_with_string_columns(aggs):
         NotImplementedError, match="Cannot transpose string columns",
     ):
         got = gdf.agg(aggs)
-
-    expect = pdf.agg(aggs)
-    got = gdf.agg(aggs)
-
-    assert_eq(expect, got, check_dtype=False)
