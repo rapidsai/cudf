@@ -1250,19 +1250,15 @@ def test_multifile_parquet_folder(tmpdir):
     test_pdf2 = make_pdf(nrows=20)
     expect = pd.concat([test_pdf1, test_pdf2])
 
-    sub_dir = tmpdir.mkdir("multi_part")
-    print(os.listdir(sub_dir))
-    print(os.listdir(tmpdir))
-    print(os.listdir(tmpdir.join("multi_part")))
+    tmpdir.mkdir("multi_part")
+
     create_parquet_source(
         test_pdf1, "filepath", tmpdir.join("multi_part/multi1.parquet")
     )
     create_parquet_source(
         test_pdf2, "filepath", tmpdir.join("multi_part/multi2.parquet")
     )
-    print("After, ", os.listdir(sub_dir))
-    print(os.listdir(tmpdir))
-    print(os.listdir(tmpdir.join("multi_part")))
+
     got1 = cudf.read_parquet(tmpdir.join("multi_part/*.parquet"))
     assert_eq(expect, got1)
 
