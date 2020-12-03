@@ -1462,15 +1462,28 @@ def test_scalar_power_invalid(dtype_l, dtype_r):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [
-        cudf.Series([1, 2, 3, 4, 5]),
-        cudf.Index([1, 2, 3, 4, 5]),
-        cudf.DataFrame({"a": [1, 2, 3, 4, 5], "b": [2, 3, 4, 5, 6]}),
-    ],
+    "frame", [cudf.Series, cudf.Index, cudf.DataFrame,],
 )
-def test_binops_with_lhs_numpy_scalar(data):
-    val = np.int64(4)
+@pytest.mark.parametrize(
+    "dtype", ["int", "str", "datetime64[s]", "timedelta64[s]", "category"]
+)
+def test_binops_with_lhs_numpy_scalar(frame, dtype):
+    data = [1, 2, 3, 4, 5]
+
+    data = (
+        frame({"a": data}, dtype=dtype)
+        if isinstance(frame, cudf.DataFrame)
+        else frame(data, dtype=dtype)
+    )
+
+    if dtype == "datetime64[s]":
+        val = np.dtype(dtype).type(4, "s")
+    elif dtype == "timedelta64[s]":
+        val = np.dtype(dtype).type(4, "s")
+    elif dtype == "category":
+        val = np.int64(4)
+    else:
+        val = np.dtype(dtype).type(4)
 
     expected = val == data.to_pandas()
     got = val == data
