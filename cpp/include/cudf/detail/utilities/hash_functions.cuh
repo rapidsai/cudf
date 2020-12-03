@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <hash/hash_constants.hpp>
 
@@ -761,7 +762,17 @@ struct IdentityHash {
     return combined;
   }
 
-  CUDA_HOST_DEVICE_CALLABLE result_type operator()(const Key& key) const
+  template <typename return_type = result_type>
+  CUDA_HOST_DEVICE_CALLABLE std::enable_if_t<!std::is_arithmetic<Key>::value, return_type>
+  operator()(const Key& key) const
+  {
+    release_assert(false && "IdentityHash does not support this data type");
+    return 0;
+  }
+
+  template <typename return_type = result_type>
+  CUDA_HOST_DEVICE_CALLABLE std::enable_if_t<std::is_arithmetic<Key>::value, return_type>
+  operator()(const Key& key) const
   {
     return static_cast<result_type>(key);
   }

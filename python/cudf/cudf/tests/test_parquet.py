@@ -1,9 +1,10 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
+
+import datetime
+import math
 import os
 import pathlib
 import random
-import datetime
-import math
 from glob import glob
 from io import BytesIO
 from string import ascii_letters
@@ -459,7 +460,10 @@ def test_parquet_read_filtered_multiple_files(tmpdir):
         [fname_0, fname_1, fname_2], filters=[("x", "==", 2)]
     )
     assert_eq(
-        filtered_df, cudf.DataFrame({"x": [2, 3, 2, 3], "y": list("bbcc")})
+        filtered_df,
+        cudf.DataFrame(
+            {"x": [2, 3, 2, 3], "y": list("bbcc")}, index=[2, 3, 2, 3]
+        ),
     )
 
 
@@ -1010,15 +1014,7 @@ def test_parquet_reader_list_skiprows(skip, tmpdir):
     src.to_parquet(fname)
     assert os.path.exists(fname)
 
-    expect = pd.DataFrame(
-        {
-            "a": list_gen(int_gen, skip, num_rows - skip, 80, 50),
-            "b": list_gen(string_gen, skip, num_rows - skip, 80, 50),
-            "c": list_gen(
-                int_gen, skip, num_rows - skip, 80, 50, include_validity=True
-            ),
-        }
-    )
+    expect = src.iloc[skip:]
     got = cudf.read_parquet(fname, skiprows=skip)
     assert_eq(expect, got, check_dtype=False)
 
@@ -1041,18 +1037,7 @@ def test_parquet_reader_list_num_rows(skip, tmpdir):
     assert os.path.exists(fname)
 
     rows_to_read = min(3, num_rows - skip)
-    expect = pd.DataFrame(
-        {
-            "a": list_gen(int_gen, skip, rows_to_read, 80, 50),
-            "b": list_gen(string_gen, skip, rows_to_read, 80, 50),
-            "c": list_gen(
-                int_gen, skip, rows_to_read, 80, 50, include_validity=True
-            ),
-            "d": list_gen(
-                string_gen, skip, rows_to_read, 80, 50, include_validity=True
-            ),
-        }
-    )
+    expect = src.iloc[skip:].head(rows_to_read)
     got = cudf.read_parquet(fname, skiprows=skip, num_rows=rows_to_read)
     assert_eq(expect, got, check_dtype=False)
 
@@ -1577,7 +1562,7 @@ def test_parquet_writer_sliced(tmpdir):
     df_select = df.iloc[1:3]
 
     df_select.to_parquet(cudf_path)
-    assert_eq(cudf.read_parquet(cudf_path), df_select.reset_index(drop=True))
+    assert_eq(cudf.read_parquet(cudf_path), df_select)
 
 
 def test_parquet_writer_list_basic(tmpdir):
@@ -1625,6 +1610,38 @@ def test_parquet_writer_list_large_mixed(tmpdir):
     assert_eq(expect, got)
 
 
+def test_parquet_writer_list_chunked(tmpdir):
+    table1 = cudf.DataFrame(
+        {
+            "a": list_gen(string_gen, 0, 128, 80, 50),
+            "b": list_gen(int_gen, 0, 128, 80, 50),
+            "c": list_gen(int_gen, 0, 128, 80, 50, include_validity=True),
+            "d": list_gen(string_gen, 0, 128, 80, 50, include_validity=True),
+        }
+    )
+    table2 = cudf.DataFrame(
+        {
+            "a": list_gen(string_gen, 0, 128, 80, 50),
+            "b": list_gen(int_gen, 0, 128, 80, 50),
+            "c": list_gen(int_gen, 0, 128, 80, 50, include_validity=True),
+            "d": list_gen(string_gen, 0, 128, 80, 50, include_validity=True),
+        }
+    )
+    fname = tmpdir.join("test_parquet_writer_list_chunked.parquet")
+    expect = cudf.concat([table1, table2])
+    expect = expect.reset_index(drop=True)
+
+    writer = ParquetWriter(fname)
+    writer.write_table(table1)
+    writer.write_table(table2)
+    writer.close()
+
+    assert os.path.exists(fname)
+
+    got = pd.read_parquet(fname)
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 def test_parquet_nullable_boolean(tmpdir, engine):
     pandas_path = tmpdir.join("pandas_bools.parquet")
@@ -1642,6 +1659,63 @@ def test_parquet_nullable_boolean(tmpdir, engine):
     actual_gdf = cudf.read_parquet(pandas_path, engine=engine)
 
     assert_eq(actual_gdf, expected_gdf)
+
+
+@pytest.mark.parametrize(
+    "pdf",
+    [
+        pd.DataFrame(index=[1, 2, 3]),
+        pytest.param(
+            pd.DataFrame(index=pd.RangeIndex(0, 10, 1)),
+            marks=pytest.mark.xfail(
+                reason="https://issues.apache.org/jira/browse/ARROW-10643"
+            ),
+        ),
+        pd.DataFrame({"a": [1, 2, 3]}, index=[0.43534, 345, 0.34534]),
+        pd.DataFrame(
+            {"b": [11, 22, 33], "c": ["a", "b", "c"]},
+            index=pd.Index(["a", "b", "c"], name="custom name"),
+        ),
+        pd.DataFrame(
+            {"a": [10, 11, 12], "b": [99, 88, 77]},
+            index=pd.RangeIndex(12, 17, 2),
+        ),
+        pd.DataFrame(
+            {"b": [99, 88, 77]},
+            index=pd.RangeIndex(22, 27, 2, name="hello index"),
+        ),
+        pd.DataFrame(index=pd.Index(["a", "b", "c"], name="custom name")),
+        pd.DataFrame(
+            {"a": ["a", "bb", "cc"], "b": [10, 21, 32]},
+            index=pd.MultiIndex.from_tuples([[1, 2], [10, 11], [15, 16]]),
+        ),
+        pd.DataFrame(
+            {"a": ["a", "bb", "cc"], "b": [10, 21, 32]},
+            index=pd.MultiIndex.from_tuples(
+                [[1, 2], [10, 11], [15, 16]], names=["first", "second"]
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("index", [None, True, False])
+def test_parquet_index(tmpdir, pdf, index):
+    pandas_path = tmpdir.join("pandas_index.parquet")
+    cudf_path = tmpdir.join("pandas_index.parquet")
+
+    gdf = cudf.from_pandas(pdf)
+
+    pdf.to_parquet(pandas_path, index=index)
+    gdf.to_parquet(cudf_path, index=index)
+
+    expected = pd.read_parquet(cudf_path)
+    actual = cudf.read_parquet(cudf_path)
+
+    assert_eq(expected, actual)
+
+    expected = pd.read_parquet(pandas_path)
+    actual = cudf.read_parquet(pandas_path)
+
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])

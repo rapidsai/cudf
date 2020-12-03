@@ -68,6 +68,44 @@ parquet::Compression to_parquet_compression(compression_type compression)
   }
 }
 
+std::vector<std::vector<bool>> get_per_column_nullability(table_view const &table,
+                                                          std::vector<bool> const &col_nullable)
+{
+  auto get_depth = [](column_view const &col) {
+    column_view curr_col = col;
+    uint16_t depth       = 1;
+    while (curr_col.type().id() == type_id::LIST) {
+      depth++;
+      curr_col = lists_column_view{curr_col}.child();
+    }
+    return depth;
+  };
+
+  // for each column, check depth and add subsequent bool values to its nullable vector
+  std::vector<std::vector<bool>> per_column_nullability;
+  auto null_it  = col_nullable.begin();
+  auto const_it = thrust::make_constant_iterator(true);
+  for (auto const &col : table) {
+    uint16_t depth = get_depth(col);
+    if (col_nullable.empty()) {
+      // If no per-column nullability is specified then assume that all columns are nullable
+      per_column_nullability.emplace_back(const_it, const_it + depth);
+    } else {
+      CUDF_EXPECTS(
+        null_it + depth <= col_nullable.end(),
+        "Mismatch between size of column nullability passed in user_metadata_with_nullability and "
+        "number of null masks expected in table. Expected more values in passed metadata");
+      per_column_nullability.emplace_back(null_it, null_it + depth);
+      null_it += depth;
+    }
+  }
+  CUDF_EXPECTS(
+    null_it == col_nullable.end(),
+    "Mismatch between size of column nullability passed in user_metadata_with_nullability and "
+    "number of null masks expected in table. Too many values in passed metadata");
+  return per_column_nullability;
+}
+
 /**
  * @brief Get the leaf column
  *
@@ -123,6 +161,7 @@ class parquet_column_view {
    **/
   explicit parquet_column_view(size_t id,
                                column_view const &col,
+                               std::vector<bool> const &nullability,
                                const table_metadata *metadata,
                                bool int96_timestamps,
                                rmm::cuda_stream_view stream)
@@ -140,7 +179,8 @@ class parquet_column_view {
       _ts_scale(0),
       _dremel_offsets(0, stream),
       _rep_level(0, stream),
-      _def_level(0, stream)
+      _def_level(0, stream),
+      _nullability(nullability)
   {
     switch (_leaf_col.type().id()) {
       case cudf::type_id::INT8:
@@ -266,12 +306,13 @@ class parquet_column_view {
       // size of the leaf column
       // Calculate row offset into dremel data (repetition/definition values) and the respective
       // definition and repetition levels
-      gpu::dremel_data dremel = gpu::get_dremel_data(col, stream);
+      gpu::dremel_data dremel = gpu::get_dremel_data(col, _nullability, stream);
       _dremel_offsets         = std::move(dremel.dremel_offsets);
       _rep_level              = std::move(dremel.rep_level);
       _def_level              = std::move(dremel.def_level);
       leaf_col_offset         = dremel.leaf_col_offset;
       _data_count             = dremel.leaf_data_size;
+      _max_def_level          = dremel.max_def_level;
 
       _type_width = (is_fixed_width(_leaf_col.type())) ? cudf::size_of(_leaf_col.type()) : 0;
       _data       = (is_fixed_width(_leaf_col.type()))
@@ -288,7 +329,21 @@ class parquet_column_view {
       }
       _offsets_array = offsets_array;
 
+      // Update level nullability if no nullability was passed in.
+      curr_col = col;
+      if (_nullability.empty()) {
+        while (curr_col.type().id() == type_id::LIST) {
+          lists_column_view list_col(curr_col);
+          _nullability.push_back(list_col.null_mask() != nullptr);
+          curr_col = list_col.child();
+        }
+        _nullability.push_back(curr_col.null_mask() != nullptr);
+      }
+
       stream.synchronize();
+    } else {
+      if (_nullability.empty()) { _nullability = {col.nullable()}; }
+      _max_def_level = (_nullability[0]) ? 1 : 0;
     }
     if (_string_type && _data_count > 0) {
       strings_column_view view{_leaf_col};
@@ -320,9 +375,10 @@ class parquet_column_view {
   size_t row_count() const noexcept { return _row_count; }
   size_t data_count() const noexcept { return _data_count; }
   size_t null_count() const noexcept { return _null_count; }
-  bool nullable() const noexcept { return (_nulls != nullptr); }
+  bool nullable() const { return _nullability.back(); }
   void const *data() const noexcept { return _data; }
   uint32_t const *nulls() const noexcept { return _nulls; }
+  bool level_nullable(size_t level) const { return _nullability[level]; }
 
   // List related data
   column_view cudf_col() const noexcept { return _col; }
@@ -332,24 +388,7 @@ class parquet_column_view {
   size_type const *level_offsets() const noexcept { return _dremel_offsets.data(); }
   uint8_t const *repetition_levels() const noexcept { return _rep_level.data(); }
   uint8_t const *definition_levels() const noexcept { return _def_level.data(); }
-  uint16_t max_def_level()
-  {
-    if (_max_def_level > -1) return _max_def_level;
-
-    uint16_t num_def_level = 0;
-    auto curr_col          = cudf_col();
-    while (curr_col.type().id() == type_id::LIST) {
-      // There is one definition level for each level of nesting and one for each level's
-      // nullability. If the level is nullable, then it needs 2 definition levels to describe it.
-      num_def_level += curr_col.nullable() ? 2 : 1;
-      lists_column_view lcw(curr_col);
-      curr_col = lcw.child();
-    }
-    // This is the leaf level. There is no further nesting.
-    if (curr_col.nullable()) ++num_def_level;
-    _max_def_level = num_def_level;
-    return _max_def_level;
-  }
+  uint16_t max_def_level() const noexcept { return _max_def_level; }
   void set_def_level(uint16_t def_level) { _max_def_level = def_level; }
 
   auto name() const noexcept { return _name; }
@@ -419,6 +458,7 @@ class parquet_column_view {
                       ///< level vectors. O(num rows)
   rmm::device_uvector<uint8_t> _rep_level;
   rmm::device_uvector<uint8_t> _def_level;
+  std::vector<bool> _nullability;
   size_type _max_def_level = -1;
 
   // String-related members
@@ -643,20 +683,35 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
   // we actually have.
   std::vector<parquet_column_view> parquet_columns;
   parquet_columns.reserve(num_columns);  // Avoids unnecessary re-allocation
+
+  // because the repetition type is global (in the sense of, not per-rowgroup or per write_chunk()
+  // call) we cannot know up front if the user is going to end up passing tables with nulls/no nulls
+  // in the multiple write_chunk() case.  so we'll do some special handling.
+  // The user can pass in information about the nullability of a column to be enforced across
+  // write_chunk() calls, in a flattened bool vector. Figure out that per column.
+  auto per_column_nullability =
+    (state.single_write_mode)
+      ? std::vector<std::vector<bool>>{}
+      : get_per_column_nullability(table, state.user_metadata_with_nullability.column_nullable);
+
   for (auto it = table.begin(); it < table.end(); ++it) {
     const auto col        = *it;
     const auto current_id = parquet_columns.size();
 
     num_rows = std::max<uint32_t>(num_rows, col.size());
-    parquet_columns.emplace_back(
-      current_id, col, state.user_metadata, state.int96_timestamps, state.stream);
-  }
 
-  if (state.user_metadata_with_nullability.column_nullable.size() > 0) {
-    CUDF_EXPECTS(state.user_metadata_with_nullability.column_nullable.size() ==
-                   static_cast<size_t>(num_columns),
-                 "When passing values in user_metadata_with_nullability, data for all columns must "
-                 "be specified");
+    // if the user is explicitly saying "I am only calling this once", assume the columns in this
+    // one table tell us everything we need to know about their nullability.
+    // Empty nullability means the writer figures out the nullability from the cudf columns.
+    auto const &this_column_nullability =
+      (state.single_write_mode) ? std::vector<bool>{} : per_column_nullability[current_id];
+
+    parquet_columns.emplace_back(current_id,
+                                 col,
+                                 this_column_nullability,
+                                 state.user_metadata,
+                                 state.int96_timestamps,
+                                 state.stream);
   }
 
   // first call. setup metadata. num_rows will get incremented as write_chunk is
@@ -667,35 +722,24 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
       return sum + col.nesting_levels();
     });
 
-  if (state.md.version == 0) {
-    state.md.version  = 1;
-    state.md.num_rows = num_rows;
+  // Make schema with current table
+  std::vector<SchemaElement> this_table_schema;
+  {
     // Each level of nesting requires two levels of Schema. The leaf level needs one schema element
-    state.md.schema.reserve(1 + num_columns + list_col_depths * 2);
+    this_table_schema.reserve(1 + num_columns + list_col_depths * 2);
     SchemaElement root{};
     root.type            = UNDEFINED_TYPE;
     root.repetition_type = NO_REPETITION_TYPE;
     root.name            = "schema";
     root.num_children    = num_columns;
-    state.md.schema.push_back(std::move(root));
-    state.md.column_order_listsize =
-      (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
-    if (state.user_metadata != nullptr) {
-      for (auto it = state.user_metadata->user_data.begin();
-           it != state.user_metadata->user_data.end();
-           it++) {
-        state.md.key_value_metadata.push_back({it->first, it->second});
-      }
-    }
+    this_table_schema.push_back(std::move(root));
     for (auto i = 0; i < num_columns; i++) {
       auto &col = parquet_columns[i];
       if (col.is_list()) {
-        CUDF_EXPECTS(state.single_write_mode, "Chunked write for lists is not supported");
         size_type nesting_depth = col.nesting_levels();
         // Each level of nesting requires two levels of Schema. The leaf level needs one schema
         // element
         std::vector<SchemaElement> list_schema(nesting_depth * 2 + 1);
-        column_view cudf_col = col.cudf_col();
         for (size_type j = 0; j < nesting_depth; j++) {
           // List schema is denoted by two levels for each nesting level and one final level for
           // leaf. The top level is the same name as the column name.
@@ -705,21 +749,17 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
           auto const list_idx  = 2 * j + 1;
 
           list_schema[group_idx].name            = (j == 0) ? col.name() : "element";
-          list_schema[group_idx].repetition_type = (cudf_col.nullable()) ? OPTIONAL : REQUIRED;
+          list_schema[group_idx].repetition_type = (col.level_nullable(j)) ? OPTIONAL : REQUIRED;
           list_schema[group_idx].converted_type  = ConvertedType::LIST;
           list_schema[group_idx].num_children    = 1;
 
           list_schema[list_idx].name            = "list";
           list_schema[list_idx].repetition_type = REPEATED;
           list_schema[list_idx].num_children    = 1;
-
-          // Move on to next child
-          lists_column_view lcw(cudf_col);
-          cudf_col = lcw.child();
         }
         list_schema[nesting_depth * 2].name = "element";
         list_schema[nesting_depth * 2].repetition_type =
-          col.leaf_col().nullable() ? OPTIONAL : REQUIRED;
+          col.level_nullable(nesting_depth) ? OPTIONAL : REQUIRED;
         auto const &physical_type           = col.physical_type();
         list_schema[nesting_depth * 2].type = physical_type;
         list_schema[nesting_depth * 2].converted_type =
@@ -732,7 +772,7 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
             return s.name;
           });
         col.set_path_in_schema(path_in_schema);
-        state.md.schema.insert(state.md.schema.end(), list_schema.begin(), list_schema.end());
+        this_table_schema.insert(this_table_schema.end(), list_schema.begin(), list_schema.end());
       } else {
         SchemaElement col_schema{};
         // Column metadata
@@ -740,46 +780,39 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
         col_schema.type           = physical_type;
         col_schema.converted_type =
           physical_type == parquet::Type::INT96 ? ConvertedType::UNKNOWN : col.converted_type();
-        // because the repetition type is global (in the sense of, not per-rowgroup or per
-        // write_chunk() call) we cannot know up front if the user is going to end up passing tables
-        // with nulls/no nulls in the multiple write_chunk() case.  so we'll do some special
-        // handling.
-        //
-        // if the user is explicitly saying "I am only calling this once", fall back to the original
-        // behavior and assume the columns in this one table tell us everything we need to know.
-        if (state.single_write_mode) {
-          col_schema.repetition_type =
-            (col.nullable() || col.data_count() < (size_t)num_rows) ? OPTIONAL : REQUIRED;
-        }
-        // otherwise, if the user is explicitly telling us global information about all the tables
-        // that will ever get passed in
-        else if (state.user_metadata_with_nullability.column_nullable.size() > 0) {
-          col_schema.repetition_type =
-            state.user_metadata_with_nullability.column_nullable[i] ? OPTIONAL : REQUIRED;
-          col.set_def_level((col_schema.repetition_type == OPTIONAL) ? 1 : 0);
-        }
-        // otherwise assume the worst case.
-        else {
-          col_schema.repetition_type = OPTIONAL;
-          col.set_def_level(1);  // def level for OPTIONAL is 1, for REQUIRED is 0
-        }
+
+        col_schema.repetition_type =
+          (col.max_def_level() == 1 ||
+           (state.single_write_mode && col.row_count() < (size_t)num_rows))
+            ? OPTIONAL
+            : REQUIRED;
+
         col_schema.name         = col.name();
         col_schema.num_children = 0;  // Leaf node
 
-        state.md.schema.push_back(std::move(col_schema));
+        this_table_schema.push_back(std::move(col_schema));
       }
     }
+  }
+
+  if (state.md.version == 0) {
+    state.md.version  = 1;
+    state.md.num_rows = num_rows;
+    state.md.column_order_listsize =
+      (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
+    if (state.user_metadata != nullptr) {
+      std::transform(state.user_metadata->user_data.begin(),
+                     state.user_metadata->user_data.end(),
+                     std::back_inserter(state.md.key_value_metadata),
+                     [](auto const &kv) {
+                       return KeyValue{kv.first, kv.second};
+                     });
+    }
+    state.md.schema = this_table_schema;
   } else {
     // verify the user isn't passing mismatched tables
-    // TODO (dm): Now needs to compare children of columns in case of list when we support chunked
-    // write for it
-    CUDF_EXPECTS(state.md.schema[0].num_children == num_columns,
-                 "Mismatch in table structure between multiple calls to write_chunk");
-    for (auto i = 0; i < num_columns; i++) {
-      auto &col = parquet_columns[i];
-      CUDF_EXPECTS(state.md.schema[1 + i].type == col.physical_type(),
-                   "Mismatch in column types between multiple calls to write_chunk");
-    }
+    CUDF_EXPECTS(state.md.schema == this_table_schema,
+                 "Mismatch in schema between multiple calls to write_chunk");
 
     // increment num rows
     state.md.num_rows += num_rows;
@@ -811,22 +844,20 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
       desc->level_offsets   = col.level_offsets();
       desc->rep_values      = col.repetition_levels();
       desc->def_values      = col.definition_levels();
-      auto count_bits       = [](uint16_t number) {
-        int16_t nbits = 0;
-        while (number > 0) {
-          nbits++;
-          number = number >> 1;
-        }
-        return nbits;
-      };
-      desc->level_bits = count_bits(col.nesting_levels()) << 4 | count_bits(col.max_def_level());
-    } else {
-      desc->level_bits = (state.md.schema[1 + i].repetition_type == OPTIONAL) ? 1 : 0;
     }
     desc->num_values     = col.data_count();
     desc->num_rows       = col.row_count();
     desc->physical_type  = static_cast<uint8_t>(col.physical_type());
     desc->converted_type = static_cast<uint8_t>(col.converted_type());
+    auto count_bits      = [](uint16_t number) {
+      int16_t nbits = 0;
+      while (number > 0) {
+        nbits++;
+        number >>= 1;
+      }
+      return nbits;
+    };
+    desc->level_bits = count_bits(col.nesting_levels()) << 4 | count_bits(col.max_def_level());
   }
 
   // Init page fragments
@@ -835,9 +866,10 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
   // iteratively reduce this value if the largest fragment exceeds the max page size limit (we
   // ideally want the page size to be below 1MB so as to have enough pages to get good
   // compression/decompression performance).
+  using cudf::io::parquet::gpu::max_page_fragment_size;
   constexpr uint32_t fragment_size = 5000;
-  static_assert(fragment_size <= MAX_PAGE_FRAGMENT_SIZE,
-                "fragment size cannot be greater than MAX_PAGE_FRAGMENT_SIZE");
+  static_assert(fragment_size <= max_page_fragment_size,
+                "fragment size cannot be greater than max_page_fragment_size");
 
   uint32_t num_fragments = (uint32_t)((num_rows + fragment_size - 1) / fragment_size);
   hostdevice_vector<gpu::PageFragment> fragments(num_columns * num_fragments);
