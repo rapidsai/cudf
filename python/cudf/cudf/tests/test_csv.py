@@ -531,51 +531,54 @@ def test_csv_reader_NaN_values():
     custom_na_values = ["NV_NAN", "NotANumber"]
 
     # test default NA values. empty cells should also yield NaNs
-    all_nan = read_csv(
+    gdf = read_csv(
         StringIO(default_na_cells + empty_cells), names=names, dtype=dtypes
     )
-    expected = pd.read_csv(StringIO(default_na_cells + empty_cells), 
-      names=names, dtype=np.float32)
-    assert_eq(all_nan, expected)
+    pdf = pd.read_csv(
+        StringIO(default_na_cells + empty_cells), names=names, dtype=np.float32
+    )
+    assert_eq(pdf, gdf)
 
     # custom NA values
-    all_nan = read_csv(
+    gdf = read_csv(
         StringIO(all_cells),
         names=names,
         dtype=dtypes,
         na_values=custom_na_values,
     )
-    assert all(np.isnan(all_nan.to_pandas()["float32"]))
+    pdf = pd.read_csv(
+        StringIO(all_cells),
+        names=names,
+        dtype=np.float32,
+        na_values=custom_na_values,
+    )
+    assert_eq(pdf, gdf)
 
     # custom NA values
-    all_nan = read_csv(
+    gdf = read_csv(
         StringIO(empty_cells + default_na_cells + "_NAA_\n"),
         names=names,
         dtype=dtypes,
         na_values="_NAA_",
     )
-    assert all(np.isnan(all_nan.to_pandas()["float32"]))
+    pdf = pd.read_csv(
+        StringIO(empty_cells + default_na_cells + "_NAA_\n"),
+        names=names,
+        dtype=np.float32,
+        na_values="_NAA_",
+    )
+    assert_eq(pdf, gdf)
 
     # data type detection should evaluate the column to int8 (all nulls)
-    df_int8 = read_csv(
-        StringIO(default_na_cells + custom_na_cells),
-        header=None,
-        na_values=custom_na_values,
+    gdf = read_csv(
+        StringIO(all_cells), header=None, na_values=custom_na_values,
     )
-    assert df_int8.dtypes[0] == "int8"
-    assert all(
-        df_int8["0"][idx] is cudf.NA for idx in range(len(df_int8["0"]))
-    )
+    assert gdf.dtypes[0] == "int8"
+    assert all(gdf["0"][idx] is cudf.NA for idx in range(len(gdf["0"])))
 
-    # data type detection should evaluate the column to int8 if all nulls;
-    df_obj = read_csv(
-        StringIO(all_cells), header=None, na_values=custom_na_values
-    )
-    assert df_obj.dtypes[0] == np.dtype("int8")
-
-    # data type detection should evaluate the column to object if some nulls;
-    df_obj = read_csv(StringIO(all_cells), header=None)
-    assert df_obj.dtypes[0] == np.dtype("object")
+    # data type detection should evaluate the column to object if some nulls
+    gdf = read_csv(StringIO(all_cells), header=None)
+    assert gdf.dtypes[0] == np.dtype("object")
 
 
 def test_csv_reader_thousands(tmpdir):
@@ -1499,7 +1502,7 @@ def test_csv_writer_datetime_data(tmpdir):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("sep", [",", " ",])
+@pytest.mark.parametrize("sep", [",", "|", " ", ";", np.str_(",")])
 @pytest.mark.parametrize(
     "columns",
     [
@@ -1523,9 +1526,15 @@ def test_csv_writer_datetime_data(tmpdir):
         None,
     ],
 )
-@pytest.mark.parametrize("header", [True, False])
-@pytest.mark.parametrize("index", [True, False])
-@pytest.mark.parametrize("line_terminator", ["\r", "\n", np.str_("\n\r")])
+@pytest.mark.parametrize(
+    "header", [True, False, np.bool_(True), np.bool_(False)]
+)
+@pytest.mark.parametrize(
+    "index", [True, False, np.bool_(True), np.bool_(False)]
+)
+@pytest.mark.parametrize(
+    "line_terminator", ["\r", "\n", "NEWLINE", "<<<<<", np.str_("\n\r")]
+)
 def test_csv_writer_mixed_data(
     sep, columns, header, index, line_terminator, tmpdir
 ):
@@ -1914,25 +1923,22 @@ def test_csv_writer_datetime_sep_error():
 
 
 def test_na_filter_empty_fields():
-    df = pd.DataFrame({"col0": ["valid", None, "also_valid", "", "test_nan"]})
+    test_na = "TEST_NAN"
+    df = pd.DataFrame({"col0": ["valid", None, "also_valid", "", test_na]})
     buffer = df.to_csv()
-    print(buffer)
 
     pdf = pd.read_csv(StringIO(buffer), na_filter=False)
     gdf = cudf.read_csv(StringIO(buffer), na_filter=False)
     assert_eq(pdf, gdf)
-    print(gdf)
 
     pdf = pd.read_csv(StringIO(buffer), keep_default_na=False)
     gdf = cudf.read_csv(StringIO(buffer), keep_default_na=False)
-
-    print(gdf)
     assert_eq(pdf, gdf)
 
     pdf = pd.read_csv(
-        StringIO(buffer), keep_default_na=False, na_values="test_nan"
+        StringIO(buffer), keep_default_na=False, na_values=test_na
     )
     gdf = cudf.read_csv(
-        StringIO(buffer), keep_default_na=False, na_values="test_nan"
+        StringIO(buffer), keep_default_na=False, na_values=test_na
     )
     assert_eq(pdf, gdf)

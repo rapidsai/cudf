@@ -135,7 +135,7 @@ __host__ __device__ inline bool serialized_trie_contains(device_span<SerialTrieN
                                                          char const *key,
                                                          size_t key_len)
 {
-  if (trie.data() == nullptr) return false;
+  if (trie.data() == nullptr || trie.empty()) return false;
   if (key_len == 0) return trie[0].is_leaf;
   int curr_node = 1;
   for (size_t i = 0; i < key_len; ++i) {

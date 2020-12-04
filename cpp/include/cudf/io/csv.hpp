@@ -116,25 +116,7 @@ class csv_reader_options {
   // Additional values to recognize as boolean false values
   std::vector<std::string> _false_values{"False", "FALSE", "false"};
   // Additional values to recognize as null values
-  std::vector<std::string> _na_values{"",
-                                      "#N/A",
-                                      "#N/A N/A",
-                                      "#NA",
-                                      "-1.#IND",
-                                      "-1.#QNAN",
-                                      "-NaN",
-                                      "-nan",
-                                      "1.#IND",
-                                      "1.#QNAN",
-                                      "<NA>",
-                                      "N/A",
-                                      "NA",
-                                      "NULL",
-                                      "NaN",
-                                      "n/a",
-                                      "nan",
-                                      "null"};
-
+  std::vector<std::string> _na_values;
   // Whether to keep the built-in default NA values
   bool _keep_default_na = true;
   // Whether to disable null filter; disabling can improve performance
@@ -614,11 +596,7 @@ class csv_reader_options {
       CUDF_FAIL("Can't set na_values when na_filtering is disabled");
     }
 
-    if (_keep_default_na) {
-      _na_values.insert(_na_values.end(), vals.begin(), vals.end());
-    } else {
-      _na_values = std::move(vals);
-    }
+    _na_values = std::move(vals);
   }
 
   /**
@@ -1083,7 +1061,7 @@ class csv_reader_options_builder {
   /**
    * @brief move csv_reader_options member once it's built.
    */
-  operator csv_reader_options &&() { return std::move(options); }
+  operator csv_reader_options&&() { return std::move(options); }
 
   /**
    * @brief move csv_reader_options member once it's built.
@@ -1412,7 +1390,7 @@ class csv_writer_options_builder {
   /**
    * @brief move `csv_writer_options` member once it's built.
    */
-  operator csv_writer_options &&() { return std::move(options); }
+  operator csv_writer_options&&() { return std::move(options); }
 
   /**
    * @brief move `csv_writer_options` member once it's built.
