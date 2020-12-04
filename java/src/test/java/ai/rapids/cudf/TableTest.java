@@ -722,7 +722,7 @@ public class TableTest extends CudfTestBase {
   void testReadParquetContainsDecimalData() {
     try (Table table = Table.readParquet(TEST_DECIMAL_PARQUET_FILE)) {
       long rows = table.getRowCount();
-      assertEquals(2048, rows);
+      assertEquals(100, rows);
       DType[] expectedTypes = new DType[]{
           DType.create(DType.DTypeEnum.DECIMAL64, 0), // Decimal(18, 0)
           DType.create(DType.DTypeEnum.DECIMAL32, -3), // Decimal(7, 3)
