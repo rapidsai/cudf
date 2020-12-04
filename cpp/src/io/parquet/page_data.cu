@@ -745,10 +745,10 @@ static const __device__ __constant__ double kPow10[40] = {
  * @param[in] dst Pointer to row output data
  * @param[in] dtype Stored data type
  */
-inline __device__ void gpuOutputDecimal(volatile page_state_s *s,
-                                        int src_pos,
-                                        double *dst,
-                                        int dtype)
+inline __device__ void gpuOutputDecimalAsFloat(volatile page_state_s *s,
+                                               int src_pos,
+                                               double *dst,
+                                               int dtype)
 {
   const uint8_t *dict;
   uint32_t dict_pos, dict_size = s->dict_size, dtype_len_in;
@@ -983,15 +983,16 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
           break;
       }
       // Special check for downconversions
-      s->dtype_len_in = s->dtype_len;
-      if (s->col.converted_type == DECIMAL) {
-        s->dtype_len = 8;  // Convert DECIMAL to 64-bit float
-      } else if ((s->col.data_type & 7) == INT32) {
+      s->dtype_len_in          = s->dtype_len;
+      uint16_t const data_type = s->col.data_type & 7;
+      if (s->col.converted_type == DECIMAL && data_type != INT32 && data_type != INT64) {
+        s->dtype_len = 8;  // FLOAT output
+      } else if (data_type == INT32) {
         if (dtype_len_out == 1) s->dtype_len = 1;  // INT8 output
         if (dtype_len_out == 2) s->dtype_len = 2;  // INT16 output
-      } else if ((s->col.data_type & 7) == BYTE_ARRAY && dtype_len_out == 4) {
+      } else if (data_type == BYTE_ARRAY && dtype_len_out == 4) {
         s->dtype_len = 4;  // HASH32 output
-      } else if ((s->col.data_type & 7) == INT96) {
+      } else if (data_type == INT96) {
         s->dtype_len = 8;  // Convert to 64-bit timestamp
       }
 
@@ -1685,9 +1686,13 @@ extern "C" __global__ void __launch_bounds__(block_size)
           gpuOutputString(s, src_pos, dst);
         else if (dtype == BOOLEAN)
           gpuOutputBoolean(s, src_pos, static_cast<uint8_t *>(dst));
-        else if (s->col.converted_type == DECIMAL)
-          gpuOutputDecimal(s, src_pos, static_cast<double *>(dst), dtype);
-        else if (dtype == INT96)
+        else if (s->col.converted_type == DECIMAL) {
+          switch (dtype) {
+            case INT32: gpuOutputFast(s, src_pos, static_cast<uint32_t *>(dst)); break;
+            case INT64: gpuOutputFast(s, src_pos, static_cast<uint2 *>(dst)); break;
+            default: gpuOutputDecimalAsFloat(s, src_pos, static_cast<double *>(dst), dtype); break;
+          }
+        } else if (dtype == INT96)
           gpuOutputInt96Timestamp(s, src_pos, static_cast<int64_t *>(dst));
         else if (dtype_len == 8) {
           if (s->ts_scale)
