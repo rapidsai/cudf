@@ -1972,13 +1972,13 @@ def test_quantile(q, numeric_only):
     td = pd.to_timedelta(np.arange(5), unit='h')
     pdf = pd.DataFrame({
         'date': ts,
-        'delay': td,
+        'delta': td,
         'val': np.random.randn(len(ts))
     })
     gdf = gd.DataFrame.from_pandas(pdf)
 
     assert_eq(pdf["date"].quantile(q), gdf["date"].quantile(q))
-    assert_eq(pdf["delay"].quantile(q), gdf["delay"].quantile(q))
+    assert_eq(pdf["delta"].quantile(q), gdf["delta"].quantile(q))
     assert_eq(pdf["val"].quantile(q), gdf["val"].quantile(q))
 
     if numeric_only:
@@ -1986,7 +1986,10 @@ def test_quantile(q, numeric_only):
     else:
         q = q if isinstance(q, list) else [q]
         assert_eq(
-            pdf.quantile(q, numeric_only=False),
+            pdf.quantile(
+                q if isinstance(q, list) else [q],
+                numeric_only=False
+            ),
             gdf.quantile(q, numeric_only=False)
         )
 
