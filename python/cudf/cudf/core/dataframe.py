@@ -5265,9 +5265,9 @@ class DataFrame(Frame, Serializable):
         Returns
         -------
         Series or DataFrame
-            If q is an array or the result includes non-numeric types, a
-            DataFrame will be returned where index is q, the columns are
-            the columns of self, and the values are the quantile.
+            If q is an array or numeric_only is set to False, a DataFrame
+            will be returned where index is q, the columns are the columns
+            of self, and the values are the quantile.
 
             If q is a float, a Series will be returned where the index is
             the columns of self and the values are the quantiles.
