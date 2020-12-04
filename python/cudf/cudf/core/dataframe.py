@@ -5250,8 +5250,9 @@ class DataFrame(Frame, Serializable):
             0 <= q <= 1, the quantile(s) to compute
         axis : int
             axis is a NON-FUNCTIONAL parameter
-        numeric_only : boolean
-            numeric_only is a NON-FUNCTIONAL parameter
+        numeric_only : bool, default True
+            If False, the quantile of datetime and timedelta data will be
+            computed as well.
         interpolation : {`linear`, `lower`, `higher`, `midpoint`, `nearest`}
             This parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.
@@ -5263,40 +5264,64 @@ class DataFrame(Frame, Serializable):
 
         Returns
         -------
+        Series or DataFrame
+            If q is an array or the result includes non-numeric types, a
+            DataFrame will be returned where index is q, the columns are
+            the columns of self, and the values are the quantile.
 
-        DataFrame
+            If q is a float, a Series will be returned where the index is
+            the columns of self and the values are the quantiles.
+
+        Notes
+        -----
+        One notable difference from Pandas is when DataFrame is of
+        non-numeric types and result is expected to be a Series in case of
+        Pandas. cuDF will return a DataFrame as it doesn't support mixed
+        types under Series yet.
         """
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
 
-        if not numeric_only:
-            raise NotImplementedError("numeric_only is not implemented yet")
+        if numeric_only:
+            data_df = self.select_dtypes(
+                include=[np.number], exclude=["datetime64", "timedelta64"]
+            )
+        else:
+            data_df = self
+
         if columns is None:
-            columns = self._data.names
+            columns = data_df._data.names
 
         result = DataFrame()
 
-        for k in self._data.names:
+        for k in data_df._data.names:
 
             if k in columns:
-                res = self[k].quantile(
+                res = data_df[k].quantile(
                     q,
                     interpolation=interpolation,
                     exact=exact,
                     quant_index=False,
                 )
-                if not isinstance(res, numbers.Number) and len(res) == 0:
+                if not isinstance(
+                        res, (numbers.Number, pd.Timestamp, pd.Timedelta)
+                ) and len(res) == 0:
                     res = column.column_empty_like(
-                        q, dtype="float64", masked=True, newsize=len(q)
+                        q, dtype=data_df[k].dtype, masked=True, newsize=len(q)
                     )
                 result[k] = column.as_column(res)
 
         if isinstance(q, numbers.Number):
-            result = result.fillna(np.nan)
-            result = result.iloc[0]
-            result.index = as_index(self.columns)
-            result.name = q
-            return result
+            if not numeric_only:
+                q = [float(q)]
+                result.index = q
+                return result
+            else:
+                result = result.fillna(np.nan)
+                result = result.iloc[0]
+                result.index = as_index(data_df.columns)
+                result.name = q
+                return result
         else:
             q = list(map(float, q))
             result.index = q
