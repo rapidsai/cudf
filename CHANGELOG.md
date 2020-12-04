@@ -5,6 +5,7 @@
 ## Improvements
 
 ## Bug Fixes
+- PR #6889 Fix nullmask offset handling in parquet and orc writer
 
 # cuDF 0.17.0 (Date TBD)
 
