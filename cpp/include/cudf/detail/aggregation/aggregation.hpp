@@ -61,6 +61,11 @@ struct min_aggregation final : aggregation {
       return {this->kind};
   }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+
+  std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<min_aggregation>(*this);
+  }
 };
 
 /**
@@ -77,6 +82,11 @@ struct max_aggregation final : aggregation {
       return {this->kind};
   }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+
+  std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<max_aggregation>(*this);
+  }
 };
 
 /**
@@ -173,6 +183,11 @@ struct mean_aggregation final : aggregation {
     return {aggregation::SUM, aggregation::COUNT_VALID};
   }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+
+  std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<mean_aggregation>(*this);
+  }
 };
 
 /**

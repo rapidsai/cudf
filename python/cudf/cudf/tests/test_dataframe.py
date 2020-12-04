@@ -7995,3 +7995,105 @@ def test_dataframe_from_pandas_duplicate_columns():
         ValueError, match="Duplicate column names are not allowed"
     ):
         gd.from_pandas(pdf)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]},
+        {"a": [1.0, 2.0, 3.0], "b": [3.0, 4.0, 5.0], "c": [True, True, False]},
+        {"a": [1, 2, 3], "b": [3, 4, 5], "c": [True, True, False]},
+        {"a": [1, 2, 3], "b": [True, True, False], "c": [False, True, False]},
+        {
+            "a": [1.0, 2.0, 3.0],
+            "b": [True, True, False],
+            "c": [False, True, False],
+        },
+        {"a": [1, 2, 3], "b": [3, 4, 5], "c": [2.0, 3.0, 4.0]},
+        {"a": [1, 2, 3], "b": [2.0, 3.0, 4.0], "c": [5.0, 6.0, 4.0]},
+    ],
+)
+@pytest.mark.parametrize(
+    "aggs",
+    [
+        ["min", "sum", "max"],
+        ("min", "sum", "max"),
+        {"min", "sum", "max"},
+        "sum",
+        {"a": "sum", "b": "min", "c": "max"},
+        {"a": ["sum"], "b": ["min"], "c": ["max"]},
+        {"a": ("sum"), "b": ("min"), "c": ("max")},
+        {"a": {"sum"}, "b": {"min"}, "c": {"max"}},
+        {"a": ["sum", "min"], "b": ["sum", "max"], "c": ["min", "max"]},
+        {"a": ("sum", "min"), "b": ("sum", "max"), "c": ("min", "max")},
+        {"a": {"sum", "min"}, "b": {"sum", "max"}, "c": {"min", "max"}},
+    ],
+)
+def test_agg_for_dataframes(data, aggs):
+    pdf = pd.DataFrame(data)
+    gdf = gd.DataFrame(data)
+
+    expect = pdf.agg(aggs)
+    got = gdf.agg(aggs)
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize("aggs", [{"a": np.sum, "b": np.min, "c": np.max}])
+def test_agg_for_unsupported_function(aggs):
+    gdf = gd.DataFrame(
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
+    )
+
+    with pytest.raises(NotImplementedError):
+        gdf.agg(aggs)
+
+
+@pytest.mark.parametrize("aggs", ["asdf"])
+def test_agg_for_dataframe_with_invalid_function(aggs):
+    gdf = gd.DataFrame(
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
+    )
+
+    with pytest.raises(
+        AttributeError,
+        match=f"{aggs} is not a valid function for 'DataFrame' object",
+    ):
+        gdf.agg(aggs)
+
+
+@pytest.mark.parametrize("aggs", [{"a": "asdf"}])
+def test_agg_for_series_with_invalid_function(aggs):
+    gdf = gd.DataFrame(
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
+    )
+
+    with pytest.raises(
+        AttributeError,
+        match=f"{aggs['a']} is not a valid function for 'Series' object",
+    ):
+        gdf.agg(aggs)
+
+
+@pytest.mark.parametrize(
+    "aggs",
+    [
+        "sum",
+        ["min", "sum", "max"],
+        {"a": {"sum", "min"}, "b": {"sum", "max"}, "c": {"min", "max"}},
+    ],
+)
+def test_agg_for_dataframe_with_string_columns(aggs):
+    gdf = gd.DataFrame(
+        {"a": ["m", "n", "o"], "b": ["t", "u", "v"], "c": ["x", "y", "z"]},
+        index=["a", "b", "c"],
+    )
+
+    with pytest.raises(
+        NotImplementedError,
+        match=re.escape(
+            "DataFrame.agg() is not supported for "
+            "frames containing string columns"
+        ),
+    ):
+        gdf.agg(aggs)
