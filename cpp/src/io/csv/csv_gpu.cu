@@ -224,7 +224,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
       long tempPos   = pos - 1;
       long field_len = pos - start;
 
-      if (field_len <= 0 || serialized_trie_contains(opts.trie_na, raw_csv + start, field_len)) {
+      if (field_len < 0 || serialized_trie_contains(opts.trie_na, raw_csv + start, field_len)) {
         atomicAdd(&d_columnData[actual_col].null_count, 1);
       } else if (serialized_trie_contains(opts.trie_true, raw_csv + start, field_len) ||
                  serialized_trie_contains(opts.trie_false, raw_csv + start, field_len)) {

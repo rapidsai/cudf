@@ -534,7 +534,9 @@ def test_csv_reader_NaN_values():
     all_nan = read_csv(
         StringIO(default_na_cells + empty_cells), names=names, dtype=dtypes
     )
-    assert all(np.isnan(all_nan.to_pandas()["float32"]))
+    expected = pd.read_csv(StringIO(default_na_cells + empty_cells), 
+      names=names, dtype=np.float32)
+    assert_eq(all_nan, expected)
 
     # custom NA values
     all_nan = read_csv(
@@ -572,9 +574,7 @@ def test_csv_reader_NaN_values():
     assert df_obj.dtypes[0] == np.dtype("int8")
 
     # data type detection should evaluate the column to object if some nulls;
-    df_obj = read_csv(
-        StringIO(all_cells), header=None
-    )
+    df_obj = read_csv(StringIO(all_cells), header=None)
     assert df_obj.dtypes[0] == np.dtype("object")
 
 
@@ -1499,7 +1499,7 @@ def test_csv_writer_datetime_data(tmpdir):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("sep", [",", "|", " ", ";", np.str_(",")])
+@pytest.mark.parametrize("sep", [",", " ",])
 @pytest.mark.parametrize(
     "columns",
     [
@@ -1523,15 +1523,9 @@ def test_csv_writer_datetime_data(tmpdir):
         None,
     ],
 )
-@pytest.mark.parametrize(
-    "header", [True, False, np.bool_(True), np.bool_(False)]
-)
-@pytest.mark.parametrize(
-    "index", [True, False, np.bool_(True), np.bool_(False)]
-)
-@pytest.mark.parametrize(
-    "line_terminator", ["\r", "\n", "NEWLINE", "<<<<<", np.str_("\n\r")]
-)
+@pytest.mark.parametrize("header", [True, False])
+@pytest.mark.parametrize("index", [True, False])
+@pytest.mark.parametrize("line_terminator", ["\r", "\n", np.str_("\n\r")])
 def test_csv_writer_mixed_data(
     sep, columns, header, index, line_terminator, tmpdir
 ):
@@ -1902,22 +1896,6 @@ def test_csv_reader_category_error():
         cudf.read_csv(StringIO(csv_buf), dtype="category")
 
 
-def test_csv_reader_keep_default_na_error():
-    # TODO: Remove this test once following
-    # issue is fixed: https://github.com/rapidsai/cudf/issues/6680
-    df = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
-    csv_buf = df.to_csv()
-
-    with pytest.raises(
-        NotImplementedError,
-        match=re.escape(
-            "keep_default_na=False is currently not supported, please refer "
-            "to: https://github.com/rapidsai/cudf/issues/6680"
-        ),
-    ):
-        cudf.read_csv(StringIO(csv_buf), keep_default_na=False)
-
-
 def test_csv_writer_datetime_sep_error():
     # TODO: Remove this test once following
     # issues is fixed: https://github.com/rapidsai/cudf/issues/6699
@@ -1933,3 +1911,28 @@ def test_csv_writer_datetime_sep_error():
         ),
     ):
         df.to_csv(sep="-")
+
+
+def test_na_filter_empty_fields():
+    df = pd.DataFrame({"col0": ["valid", None, "also_valid", "", "test_nan"]})
+    buffer = df.to_csv()
+    print(buffer)
+
+    pdf = pd.read_csv(StringIO(buffer), na_filter=False)
+    gdf = cudf.read_csv(StringIO(buffer), na_filter=False)
+    assert_eq(pdf, gdf)
+    print(gdf)
+
+    pdf = pd.read_csv(StringIO(buffer), keep_default_na=False)
+    gdf = cudf.read_csv(StringIO(buffer), keep_default_na=False)
+
+    print(gdf)
+    assert_eq(pdf, gdf)
+
+    pdf = pd.read_csv(
+        StringIO(buffer), keep_default_na=False, na_values="test_nan"
+    )
+    gdf = cudf.read_csv(
+        StringIO(buffer), keep_default_na=False, na_values="test_nan"
+    )
+    assert_eq(pdf, gdf)
