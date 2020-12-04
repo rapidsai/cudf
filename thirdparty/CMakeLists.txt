@@ -52,7 +52,7 @@ message(STATUS "Fetching libcudacxx from ${SRC_LIBCUDACXX}")
 FetchContent_Declare(
     libcudacxx
     GIT_REPOSITORY ${SRC_LIBCUDACXX}
-    GIT_TAG        main
+    GIT_TAG        1.4.0
     GIT_SHALLOW    true
 )
 
