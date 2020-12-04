@@ -3301,24 +3301,64 @@ class Frame(libcudf.table.Table):
         keys = self.__class__._from_table(keys)
         return keys, indices
 
-    def _reindex_frame_by_columns(
-        self, existing_column_names, num_rows, dtypes=None, deep=False
-    ):
+    def _reindex_frame(self, columns, dtypes=None, deep=False, index=None):
+        """
+        Helper for `.reindex`
+
+        Parameters
+        ----------
+        columns : array-like
+            The list of columns to select from the Frame,
+            if ``columns`` is a superset of ``Frame.columns`` new
+            columns are created.
+        dtypes : dict
+            Mapping of dtypes for the empty columns being created.
+        deep : boolean, optional, default False
+            Whether to make deep copy or shallow copy of the columns.
+        index : Index or array-like, default None
+            The ``index`` to be used to reindex the Frame with.
+
+        Returns
+        -------
+        DataFrame
+        """
         if dtypes is None:
             dtypes = {}
 
-        cols = OrderedDict()
+        df = self
+        if index is not None:
+            index = cudf.core.index.as_index(index)
 
-        for name in existing_column_names:
-            if name in self._data:
-                cols[name] = self._data[name].copy(deep=deep)
+            if isinstance(index, cudf.core.MultiIndex):
+                idx_dtype_match = (
+                    df.index._source_data.dtypes == index._source_data.dtypes
+                ).all()
+            else:
+                idx_dtype_match = df.index.dtype == index.dtype
+
+            if not idx_dtype_match:
+                columns = columns if columns is not None else list(df.columns)
+                df = cudf.DataFrame()
+            else:
+                df = cudf.DataFrame(None, index).join(
+                    df, how="left", sort=True
+                )
+                # double-argsort to map back from sorted to unsorted positions
+                df = df.take(index.argsort(ascending=True).argsort())
+
+        cols = OrderedDict()
+        index = index if index is not None else df.index
+        names = columns if columns is not None else list(df.columns)
+        for name in names:
+            if name in df._data:
+                cols[name] = df._data[name].copy(deep=deep)
             else:
                 dtype = dtypes.get(name, np.float64)
                 cols[name] = column_empty(
-                    dtype=dtype, masked=True, row_count=num_rows
+                    dtype=dtype, masked=True, row_count=len(index)
                 )
 
-        return self.__class__._from_table(Frame(data=cols))
+        return self.__class__._from_table(Frame(data=cols, index=index))
 
 
 def _get_replacement_values(to_replace, replacement, col_name, column):

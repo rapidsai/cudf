@@ -212,11 +212,7 @@ class DataFrame(Frame, Serializable):
 
             if columns is not None:
                 self._data = data.copy(deep=False)
-                df = self._reindex_frame_by_columns(
-                    existing_column_names=columns,
-                    deep=True,
-                    num_rows=len(index),
-                )
+                df = self._reindex_frame(columns=columns, deep=True,)
                 self._data = ColumnAccessor(
                     data=df._data,
                     multiindex=data.multiindex,
@@ -241,10 +237,8 @@ class DataFrame(Frame, Serializable):
             self._index = index
 
             if columns is not None:
-                df = data._reindex_frame_by_columns(
-                    existing_column_names=columns,
-                    num_rows=len(index),
-                    deep=False,
+                df = data._reindex_frame(
+                    columns=columns, index=index, deep=False,
                 )
                 self._data = df._data
             else:
@@ -2594,34 +2588,9 @@ class DataFrame(Frame, Serializable):
         cols = labels if cols is None and axis in (1, "columns") else cols
         df = df if cols is None else df[list(set(df.columns) & set(cols))]
 
-        if idx is not None:
-            idx = as_index(idx)
-
-            if isinstance(idx, cudf.core.MultiIndex):
-                idx_dtype_match = (
-                    df.index._source_data.dtypes == idx._source_data.dtypes
-                ).all()
-            else:
-                idx_dtype_match = df.index.dtype == idx.dtype
-
-            if not idx_dtype_match:
-                cols = cols if cols is not None else list(df.columns)
-                df = DataFrame()
-            else:
-                df = DataFrame(None, idx).join(df, how="left", sort=True)
-                # double-argsort to map back from sorted to unsorted positions
-                df = df.take(idx.argsort(ascending=True).argsort())
-
-        idx = idx if idx is not None else df.index
-        names = cols if cols is not None else list(df.columns)
-
-        result = df._reindex_frame_by_columns(
-            existing_column_names=names,
-            dtypes=dtypes,
-            deep=copy,
-            num_rows=len(idx),
+        result = df._reindex_frame(
+            columns=cols, dtypes=dtypes, deep=copy, index=idx
         )
-        result._index = idx
 
         return result
 
