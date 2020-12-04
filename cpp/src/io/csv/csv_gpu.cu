@@ -589,15 +589,15 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
     if (column_flags[col] & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas
-      const bool is_na = serialized_trie_contains(options.trie_na, raw_csv + start, pos - start);
+      auto const is_valid =
+        !serialized_trie_contains(options.trie_na, raw_csv + start, pos - start);
 
       // Modify start & end to ignore whitespace and quotechars
       long tempPos = pos - 1;
-      if (!is_na && dtypes[actual_col].id() != cudf::type_id::STRING) {
+      if (is_valid && dtypes[actual_col].id() != cudf::type_id::STRING) {
         trim_field_start_end(raw_csv, &start, &tempPos, options.quotechar);
       }
-      if (!is_na) {  // Empty fields are not legal values
-
+      if (is_valid) {
         // Type dispatcher does not handle STRING
         if (dtypes[actual_col].id() == cudf::type_id::STRING) {
           long end = pos;

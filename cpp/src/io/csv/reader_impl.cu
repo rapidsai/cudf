@@ -748,7 +748,11 @@ parse_options make_parse_options(csv_reader_options const &reader_opts)
 
   // Handle user-defined N/A values, whereby field data is treated as null
   if (reader_opts.get_na_values().size() != 0) {
-    parse_opts.trie_na = createSerializedTrie(reader_opts.get_na_values());
+    auto na_values = reader_opts.get_na_values();
+    if (std::find(na_values.begin(), na_values.end(), "") != na_values.end()) {
+      na_values.push_back(std::string(2, parse_opts.quotechar));
+    }
+    parse_opts.trie_na = createSerializedTrie(na_values);
   }
 
   return parse_opts;
