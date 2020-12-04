@@ -5303,9 +5303,12 @@ class DataFrame(Frame, Serializable):
                     exact=exact,
                     quant_index=False,
                 )
-                if not isinstance(
+                if (
+                    not isinstance(
                         res, (numbers.Number, pd.Timestamp, pd.Timedelta)
-                ) and len(res) == 0:
+                    )
+                    and len(res) == 0
+                ):
                     res = column.column_empty_like(
                         q, dtype=data_df[k].dtype, masked=True, newsize=len(q)
                     )

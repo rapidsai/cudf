@@ -1968,13 +1968,11 @@ def test_iteritems(gdf):
 @pytest.mark.parametrize("q", [0.5, 1, 0.001, [0.5], [], [0.005, 0.5, 1]])
 @pytest.mark.parametrize("numeric_only", [True, False])
 def test_quantile(q, numeric_only):
-    ts = pd.date_range('2018-08-24', periods=5, freq='D')
-    td = pd.to_timedelta(np.arange(5), unit='h')
-    pdf = pd.DataFrame({
-        'date': ts,
-        'delta': td,
-        'val': np.random.randn(len(ts))
-    })
+    ts = pd.date_range("2018-08-24", periods=5, freq="D")
+    td = pd.to_timedelta(np.arange(5), unit="h")
+    pdf = pd.DataFrame(
+        {"date": ts, "delta": td, "val": np.random.randn(len(ts))}
+    )
     gdf = gd.DataFrame.from_pandas(pdf)
 
     assert_eq(pdf["date"].quantile(q), gdf["date"].quantile(q))
@@ -1987,10 +1985,9 @@ def test_quantile(q, numeric_only):
         q = q if isinstance(q, list) else [q]
         assert_eq(
             pdf.quantile(
-                q if isinstance(q, list) else [q],
-                numeric_only=False
+                q if isinstance(q, list) else [q], numeric_only=False
             ),
-            gdf.quantile(q, numeric_only=False)
+            gdf.quantile(q, numeric_only=False),
         )
 
 
