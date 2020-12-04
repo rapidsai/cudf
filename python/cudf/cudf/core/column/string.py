@@ -299,7 +299,7 @@ class StringMethods(ColumnMethodsMixin):
         dtype: int32
         """
 
-        return self._return_or_inplace(cpp_count_characters(self._column),)
+        return self._return_or_inplace(cpp_count_characters(self._column))
 
     def byte_count(self):
         """
