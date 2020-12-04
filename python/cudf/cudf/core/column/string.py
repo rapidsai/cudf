@@ -2324,7 +2324,7 @@ class StringMethods(ColumnMethodsMixin):
             sep = " "
 
         return self._return_or_inplace(
-            cpp_partition(self._column, cudf.Scalar(sep))
+            cpp_partition(self._column, cudf.Scalar(sep)), expand=expand
         )
 
     def rpartition(self, sep=" ", expand=True):
