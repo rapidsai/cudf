@@ -37,8 +37,9 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include "thrust/iterator/discard_iterator.h"
 
+#include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/reverse_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 
@@ -403,6 +404,15 @@ struct replace_nulls_fillna_policy_kernel_forwarder {
                              incol_validity_zip_iterator + input.size(),
                              outcol_validity_zip_iterator,
                              func);
+    } else {
+      auto rbegin_in =
+        thrust::make_reverse_iterator(incol_validity_zip_iterator + input.size() - 1);
+      auto rend_in = thrust::make_reverse_iterator(incol_validity_zip_iterator - 1);
+      auto rbegin_out =
+        thrust::make_reverse_iterator(outcol_validity_zip_iterator + output_view.size() - 1);
+
+      thrust::inclusive_scan(
+        rmm::exec_policy(stream)->on(stream.value()), rbegin_in, rend_in, rbegin_out, func);
     }
 
     return output;
