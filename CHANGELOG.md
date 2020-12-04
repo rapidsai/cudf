@@ -6,6 +6,11 @@
 
 ## Bug Fixes
 
+ - PR #6903 Add null count test for apply_boolean_mask
+
+## Bug Fixes
+
+
 # cuDF 0.17.0 (Date TBD)
 
 ## New Features
