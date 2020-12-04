@@ -126,15 +126,25 @@ struct table_metadata {
 };
 
 /**
- * @brief Derived class of table_metadata which includes nullability information per column of
- * input.
+ * @brief Derived class of table_metadata which includes flattened nullability information of input.
  *
  * This information is used as an optimization for chunked writes. If the caller leaves
  * column_nullable uninitialized, the writer code will assume the worst case : that all columns are
  * nullable.
  *
  * If the column_nullable field is not empty, it is expected that it has a length equal to the
- * number of columns in the table being written.
+ * number of columns in the flattened table being written.
+ *
+ * Flattening refers to the flattening of nested columns. For list columns, the number of values
+ * expected in the nullability vector is equal to the depth of the nesting. e.g. for a table of
+ * three columns of types: {int, list<double>, float}, the nullability vector contains the values:
+ *
+ * |Index| Nullability of                         |
+ * |-----|----------------------------------------|
+ * |  0  | int column                             |
+ * |  1  | Level 0 of list column (list itself)   |
+ * |  2  | Level 1 of list column (double values) |
+ * |  3  | float column                           |
  *
  * In the case where column nullability is known, pass `true` if the corresponding column could
  * contain nulls in one or more subtables to be written, otherwise `false`.
