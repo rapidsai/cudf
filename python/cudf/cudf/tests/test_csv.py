@@ -1925,7 +1925,7 @@ def test_csv_writer_datetime_sep_error():
 def test_na_filter_empty_fields():
     test_na = "TEST_NAN"
     df = pd.DataFrame({"col0": ["valid", None, "also_valid", "", test_na]})
-    buffer = df.to_csv()
+    buffer = df.to_csv(index=False)
 
     pdf = pd.read_csv(StringIO(buffer), na_filter=False)
     gdf = cudf.read_csv(StringIO(buffer), na_filter=False)
