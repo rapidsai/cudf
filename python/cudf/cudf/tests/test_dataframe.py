@@ -8090,6 +8090,8 @@ def test_agg_for_dataframe_with_string_columns(aggs):
     )
 
     with pytest.raises(
-        NotImplementedError, match="Cannot transpose string columns",
+        NotImplementedError,
+        match="DataFrame.agg() is not supported for "
+        "frames containing string columns",
     ):
         gdf.agg(aggs)

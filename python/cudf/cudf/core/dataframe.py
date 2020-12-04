@@ -3763,6 +3763,12 @@ class DataFrame(Frame, Serializable):
         common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
         df_normalized = self.astype(common_dtype)
 
+        if any(is_string_dtype(dt) for dt in dtypes):
+            raise NotImplementedError(
+                "DataFrame.agg() is not supported for "
+                "frames containing string columns"
+            )
+
         if axis == 0 or axis is not None:
             raise NotImplementedError("axis not implemented yet")
 
