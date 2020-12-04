@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include <cstring>
 
 #include <cufile.h>
@@ -21,6 +20,8 @@
 #include <unistd.h>
 
 #include <cudf/utilities/error.hpp>
+
+#include "jni_utils.hpp"
 
 namespace cufile {
 namespace jni {
@@ -102,8 +103,8 @@ private:
 
 class cufile_file {
 public:
-  cufile_file(std::string const &path) {
-    file_descriptor_ = open(path.c_str(), O_CREAT | O_RDWR | O_DIRECT, 0644);
+  cufile_file(char const *path) {
+    file_descriptor_ = open(path, O_CREAT | O_RDWR | O_DIRECT, 0644);
     if (file_descriptor_ < 0) {
       CUDF_FAIL("Failed to open file: " + cuFileGetErrorString(errno));
     }
@@ -124,8 +125,8 @@ public:
     close(file_descriptor_);
   }
 
-  std::size_t read(cufile_buffer *buffer) {
-    auto const status = cuFileRead(cufile_handle_, buffer->device_pointer(), buffer->size(), 0, 0);
+  std::size_t read(cufile_buffer const &buffer) {
+    auto const status = cuFileRead(cufile_handle_, buffer.device_pointer(), buffer.size(), 0, 0);
 
     if (status < 0) {
       if (IS_CUFILE_ERR(status)) {
@@ -159,3 +160,47 @@ private:
 
 } // namespace jni
 } // namespace cufile
+
+extern "C" {
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_open(JNIEnv *env, jclass) {
+  try {
+    auto const status = cuFileDriverOpen();
+    if (status.err != CU_FILE_SUCCESS) {
+      CUDF_FAIL("Failed to initialize cuFile driver: " + cufile::jni::cuFileGetErrorString(status));
+    }
+  }
+  CATCH_STD(env, );
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_close(JNIEnv *env, jclass) {
+  try {
+    cuFileDriverClose();
+  }
+  CATCH_STD(env, );
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_copyToFile(JNIEnv *env, jclass, jstring path,
+                                                             jlong device_pointer, jlong size) {
+  try {
+    cufile::jni::cufile_buffer buffer{reinterpret_cast<void *>(device_pointer),
+                                      static_cast<std::size_t>(size)};
+    cufile::jni::cufile_file file{(env->GetStringUTFChars(path, nullptr))};
+    file.write(buffer);
+  }
+  CATCH_STD(env, );
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_copyFromFile(JNIEnv *env, jclass,
+                                                               jlong device_pointer, jlong size,
+                                                               jstring path) {
+  try {
+    cufile::jni::cufile_buffer buffer{reinterpret_cast<void *>(device_pointer),
+                                      static_cast<std::size_t>(size)};
+    cufile::jni::cufile_file file{(env->GetStringUTFChars(path, nullptr))};
+    file.read(buffer);
+  }
+  CATCH_STD(env, );
+}
+
+} // extern "C"
