@@ -119,6 +119,7 @@
 - PR #6837 Avoid gather when copying strings view from start of strings column
 - PR #6859 Move align_ptr_for_type() from cuda.cuh to alignment.hpp
 - PR #6807 Refactor `std::array` usage in row group index writing in ORC
+- PR #6914 Enable groupby `list` aggregation for strings
 
 ## Bug Fixes
 
