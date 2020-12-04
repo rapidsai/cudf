@@ -1061,7 +1061,7 @@ class csv_reader_options_builder {
   /**
    * @brief move csv_reader_options member once it's built.
    */
-  operator csv_reader_options&&() { return std::move(options); }
+  operator csv_reader_options &&() { return std::move(options); }
 
   /**
    * @brief move csv_reader_options member once it's built.
@@ -1390,7 +1390,7 @@ class csv_writer_options_builder {
   /**
    * @brief move `csv_writer_options` member once it's built.
    */
-  operator csv_writer_options&&() { return std::move(options); }
+  operator csv_writer_options &&() { return std::move(options); }
 
   /**
    * @brief move `csv_writer_options` member once it's built.
