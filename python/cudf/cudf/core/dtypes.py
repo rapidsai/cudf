@@ -241,7 +241,3 @@ class DecimalDtype(ExtensionDtype):
     @classmethod
     def from_arrow(cls, typ):
         return cls(typ.precision, typ.scale)
-
-    @property
-    def itemsize(self):
-        return 8
