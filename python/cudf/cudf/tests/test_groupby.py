@@ -1268,6 +1268,18 @@ def test_groupby_list_single_element(list_agg):
     )
 
 
+@pytest.mark.parametrize("list_agg", [list, "collect"])
+def test_groupby_list_strings(list_agg):
+    pdf = pd.DataFrame({"a": [1, 1, 1, 2, 2], "b": ["b", "a", "c", "e", "d"]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").agg({"b": list}),
+        gdf.groupby("a").agg({"b": list_agg}),
+        check_dtype=False,
+    )
+
+
 def test_groupby_list_columns_excluded():
     pdf = pd.DataFrame(
         {
