@@ -2574,7 +2574,13 @@ class Series(Frame, Serializable):
         1    c
         dtype: object
         """
-        return _factorize(self, na_sentinel=na_sentinel)
+        cats = self.dropna().unique().astype(self.dtype)
+
+        name = self.name  # label_encoding mutates self.name
+        labels = self.label_encoding(cats=cats, na_sentinel=na_sentinel)
+        self.name = name
+
+        return labels, cats
 
     # UDF related
 
@@ -5214,14 +5220,5 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     return Series(result_col, index=index)
 
 
-def _factorize(obj, na_sentinel=-1):
-
-    obj = cudf.Series(obj)
-
-    cats = obj.dropna().unique().astype(obj.dtype)
-
-    name = obj.name  # label_encoding mutates self.name
-    labels = obj.label_encoding(cats=cats, na_sentinel=na_sentinel)
-    obj.name = name
-
-    return labels, cats
+def factorize(obj, na_sentinel=-1):
+    return cudf.Series(obj).factorize(na_sentinel=na_sentinel)

@@ -461,7 +461,7 @@ class Index(Frame, Serializable):
         cudf.Series.factorize
 
         """
-        return cudf.core.series._factorize(self, na_sentinel=na_sentinel)
+        return cudf.core.series.factorize(self, na_sentinel=na_sentinel)
 
     def fillna(self, value, downcast=None):
         """
