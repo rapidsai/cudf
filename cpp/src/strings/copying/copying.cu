@@ -75,7 +75,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
   // build a new strings column from the indices
   auto sliced_table = cudf::detail::gather(table_view{{strings.parent()}},
                                            indices_view,
-                                           cudf::detail::out_of_bounds_policy::NULLIFY,
+                                           cudf::out_of_bounds_policy::DONT_CHECK,
                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
                                            stream,
                                            mr)
