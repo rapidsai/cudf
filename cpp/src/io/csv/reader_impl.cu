@@ -698,6 +698,10 @@ std::vector<column_buffer> reader::impl::decode_data(std::vector<data_type> cons
 
   return out_buffers;
 }
+
+/**
+ * @brief Create a serialized trie for N/A value matching, based on the options.
+ */
 thrust::host_vector<SerialTrieNode> create_na_trie(char quotechar,
                                                    csv_reader_options const &reader_opts)
 {
@@ -728,6 +732,7 @@ thrust::host_vector<SerialTrieNode> create_na_trie(char quotechar,
     na_values.insert(na_values.end(), default_na_values.begin(), default_na_values.end());
   }
 
+  // Pandas treats empty strings as N/A if empty fields are treated as N/A
   if (std::find(na_values.begin(), na_values.end(), "") != na_values.end()) {
     na_values.push_back(std::string(2, quotechar));
   }

@@ -931,7 +931,6 @@ TEST_F(CsvReaderTest, nullHandling)
     outfile << "NULL\n\nnull\nn/a\nNull\nNA\nnan";
   }
 
-
   // Test disabling na_filter
   {
     cudf_io::csv_reader_options in_opts =
@@ -947,7 +946,7 @@ TEST_F(CsvReaderTest, nullHandling)
     std::cout << view.column(0).size();
     expect_columns_equal(expect, view.column(0));
   }
-  return;
+
   // Test enabling na_filter
   {
     cudf_io::csv_reader_options in_opts =
