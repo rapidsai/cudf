@@ -158,7 +158,7 @@ std::unique_ptr<column> map_lookup(column_view const &map_column, string_scalar 
   auto table_for_gather = table_view{std::vector<cudf::column_view>{values_column}};
 
   auto gathered_table = cudf::detail::gather(
-      table_for_gather, gather_map->view(), detail::out_of_bounds_policy::IGNORE,
+      table_for_gather, gather_map->view(), out_of_bounds_policy::NULLIFY,
       detail::negative_index_policy::NOT_ALLOWED, stream, mr);
 
   return std::make_unique<cudf::column>(std::move(gathered_table->get_column(0)));
