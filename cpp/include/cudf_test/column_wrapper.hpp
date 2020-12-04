@@ -527,6 +527,55 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
     : fixed_point_column_wrapper(std::cbegin(values), std::cend(values), scale)
   {
   }
+
+  /**
+   * @brief Construct a nullable column of the fixed-point elements from a range.
+   *
+   * Constructs a nullable column of the fixed-point elements in the range `[begin,end)` using the
+   * range `[v, v + distance(begin,end))` interpreted as Booleans to indicate the validity of each
+   * element.
+   *
+   * If `v[i] == true`, element `i` is valid, else it is null.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable column of DECIMAL32 elements with 5 elements: {null, 100, null, 300,
+   * null}
+   * auto elements = make_counting_transform_iterator(0, [](auto i){ return i; });
+   * auto validity = make_counting_transform_iterator(0, [](auto i){ return i%2; });
+   * fixed_point_column_wrapper<int32_t> w(elements, elements + 5, validity, 2);
+   * @endcode
+   *
+   * Note: similar to `std::vector`, this "range" constructor should be used
+   *       with parentheses `()` and not braces `{}`. The latter should only
+   *       be used for the `initializer_list` constructors
+   *
+   * @param begin The beginning of the sequence of elements
+   * @param end The end of the sequence of elements
+   * @param v The beginning of the sequence of validity indicators
+   * @param scale The scale of the elements in the column
+   */
+  template <typename FixedPointRepIterator, typename ValidityIterator>
+  fixed_point_column_wrapper(FixedPointRepIterator begin,
+                             FixedPointRepIterator end,
+                             ValidityIterator v,
+                             numeric::scale_type scale)
+    : column_wrapper{}
+  {
+    CUDF_EXPECTS(numeric::is_supported_representation_type<Rep>(), "not valid representation type");
+
+    auto const size         = cudf::distance(begin, end);
+    auto const elements     = thrust::host_vector<Rep>(begin, end);
+    auto const is_decimal32 = std::is_same<Rep, int32_t>::value;
+    auto const id           = is_decimal32 ? type_id::DECIMAL32 : type_id::DECIMAL64;
+    auto const data_type    = cudf::data_type{id, static_cast<int32_t>(scale)};
+
+    wrapped.reset(new cudf::column{data_type,
+                                   size,
+                                   rmm::device_buffer{elements.data(), size * sizeof(Rep)},
+                                   detail::make_null_mask(v, v + size),
+                                   cudf::UNKNOWN_NULL_COUNT});
+  }
 };
 
 /**

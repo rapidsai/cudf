@@ -210,6 +210,7 @@ class reader::impl {
 
   bool _strings_to_categorical = false;
   data_type _timestamp_type{type_id::EMPTY};
+  bool _strict_decimal_types = false;
 };
 
 }  // namespace parquet
