@@ -188,7 +188,6 @@
 - PR #6824 Fix JNI build
 - PR #6826 Fix resource management in Java ColumnBuilder
 - PR #6830 Fix categorical scalar insertion
-- PR #6838 Fix `columns` & `index` handling in dataframe constructor
 - PR #6844 Fix uint32_t undefined errors
 - PR #6854 Fix the parameter order of writeParquetBufferBegin
 - PR #6855 Fix `.str.replace_with_backrefs` docs examples
