@@ -1,7 +1,7 @@
 # cuDF 0.18.0 (Date TBD)
 
 ## New Features
-- PR #6902 Implement `DataFrame.quantile` for `datettime` and `timedelta` data types
+- PR #6902 Implement `DataFrame.quantile` for `datetime` and `timedelta` data types
 
 ## Improvements
 

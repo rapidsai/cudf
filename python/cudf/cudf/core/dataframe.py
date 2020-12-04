@@ -5277,7 +5277,7 @@ class DataFrame(Frame, Serializable):
         One notable difference from Pandas is when DataFrame is of
         non-numeric types and result is expected to be a Series in case of
         Pandas. cuDF will return a DataFrame as it doesn't support mixed
-        types under Series yet.
+        types under Series.
         """
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
