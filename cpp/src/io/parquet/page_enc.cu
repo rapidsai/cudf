@@ -197,7 +197,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     uint32_t is_valid =
       (i + t < nvals && val_idx < s->col.num_values)
         ? (valid)
-            ? (valid[(val_idx + validity_offset) >> 5] >> ((val_idx + validity_offset) & 0x1f)) & 1
+            ? (valid[(val_idx + validity_offset) / 32] >> ((val_idx + validity_offset) % 32)) & 1
             : 1
         : 0;
     uint32_t valid_warp = ballot(is_valid);
@@ -990,8 +990,8 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         // def_lvl accordingly and sets it in s->vals which is then given to RleEncode to encode
         uint32_t def_lvl =
           (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
-            ? (valid)
-                ? (valid[(row + validity_offset) >> 5] >> ((row + validity_offset) & 0x1f)) & 1
+            ? (valid != nullptr)
+                ? (valid[(row + validity_offset) / 32] >> ((row + validity_offset) % 32)) & 1
                 : 1
             : 0;
         s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = def_lvl;
@@ -1092,9 +1092,8 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       const uint32_t *valid = s->col.valid_map_base;
       is_valid =
         (val_idx < s->col.num_values && cur_val_idx + t < s->page.num_leaf_values)
-          ? (valid)
-              ? (valid[(val_idx + validity_offset) >> 5] >> ((val_idx + validity_offset) & 0x1f)) &
-                  1
+          ? (valid != nullptr)
+              ? (valid[(val_idx + validity_offset) / 32] >> ((val_idx + validity_offset) % 32)) & 1
               : 1
           : 0;
     }

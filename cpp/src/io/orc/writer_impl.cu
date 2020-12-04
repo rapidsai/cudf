@@ -120,8 +120,9 @@ __global__ void stringdata_to_nvstrdesc(gpu::nvstrdesc_s *dst,
 {
   size_type row = blockIdx.x * blockDim.x + threadIdx.x;
   if (row < column_size) {
-    uint32_t is_valid =
-      (nulls) ? (nulls[(row + column_offset) >> 5] >> ((row + column_offset) & 0x1f)) & 1 : 1;
+    uint32_t is_valid = (nulls != nullptr)
+                          ? (nulls[(row + column_offset) / 32] >> ((row + column_offset) % 32)) & 1
+                          : 1;
     size_t count;
     const char *ptr;
     if (is_valid) {

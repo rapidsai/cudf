@@ -142,15 +142,6 @@ inline auto random_values(size_t size)
   return values;
 }
 
-// Helper function to compare two tables
-// void CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::table_view const& lhs, cudf::table_view const& rhs)
-//{
-//  EXPECT_EQ(lhs.num_columns(), rhs.num_columns());
-//  auto expected = lhs.begin();
-//  auto result   = rhs.begin();
-//  while (result != rhs.end()) { CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected++, *result++); }
-//}
-
 struct SkipRowTest {
   int test_calls;
   SkipRowTest(void) : test_calls(0) {}
@@ -624,7 +615,7 @@ TEST_F(OrcWriterTest, Slice)
     cudf::test::fixed_width_column_wrapper<int>{{1, 2, 3, 4, 5}, {true, true, true, false, true}};
   std::vector<cudf::size_type> indices{2, 5};
   std::vector<cudf::column_view> result = cudf::slice(col, indices);
-  cudf::table_view tbl{{result[0]}};
+  cudf::table_view tbl{result};
 
   auto filepath = temp_env->get_temp_filepath("Slice.orc");
   cudf_io::orc_writer_options out_opts =

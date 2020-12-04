@@ -476,7 +476,6 @@ TEST_F(ParquetWriterTest, SlicedTable)
   expected_metadata.column_names.emplace_back("col_list");
   expected_metadata.column_names.emplace_back("col_multi_level_list");
 
-  // auto expected = table_view({col0, col1, col2, col3});
   auto expected = table_view({col0, col1, col2, col3, col4});
 
   auto expected_slice = cudf::slice(expected, {2, static_cast<cudf::size_type>(num_rows) - 1});
@@ -823,7 +822,7 @@ TEST_F(ParquetWriterTest, Slice)
     cudf::test::fixed_width_column_wrapper<int>{{1, 2, 3, 4, 5}, {true, true, true, false, true}};
   std::vector<cudf::size_type> indices{2, 5};
   std::vector<cudf::column_view> result = cudf::slice(col, indices);
-  cudf::table_view tbl{{result[0]}};
+  cudf::table_view tbl{result};
 
   auto filepath = temp_env->get_temp_filepath("Slice.parquet");
   cudf_io::parquet_writer_options out_opts =
