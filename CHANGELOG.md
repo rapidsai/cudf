@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #6907 `fixed_width_type` column support with `ffill` `bfill` method for `replace_nulls`
+
 ## Improvements
 
 ## Bug Fixes
