@@ -5314,19 +5314,14 @@ class DataFrame(Frame, Serializable):
                     )
                 result[k] = column.as_column(res)
 
-        if isinstance(q, numbers.Number):
-            if not numeric_only:
-                q = [float(q)]
-                result.index = q
-                return result
-            else:
-                result = result.fillna(np.nan)
-                result = result.iloc[0]
-                result.index = as_index(data_df.columns)
-                result.name = q
-                return result
+        if isinstance(q, numbers.Number) and numeric_only:
+            result = result.fillna(np.nan)
+            result = result.iloc[0]
+            result.index = as_index(data_df.columns)
+            result.name = q
+            return result
         else:
-            q = list(map(float, q))
+            q = list(map(float, [q] if isinstance(q, numbers.Number) else q))
             result.index = q
             return result
 
