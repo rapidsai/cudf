@@ -115,6 +115,7 @@
 - PR #6809 size_type overflow checking when concatenating columns
 - PR #6789 Rename `unary_op` to `unary_operator`
 - PR #6770 Support building decimal columns with Table.TestBuilder
+- PR #6815 Add wildcard path support to `read_parquet`
 - PR #6800 Push DeviceScalar to cython-only
 - PR #6822 Split out `cudf::distinct_count` from `drop_duplicates.cu`
 - PR #6813 Enable `expand=False` in `.str.split` and `.str.rsplit`
