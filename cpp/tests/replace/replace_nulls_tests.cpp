@@ -299,6 +299,22 @@ TYPED_TEST(ReplaceNullsTest, LargeScaleScalar)
                                   expectedColumn.begin(), expectedColumn.end()));
 }
 
+struct ReplaceNullsFillnaPolicyTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(ReplaceNullsFillnaPolicyTest, ForwardFill)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> col{{1, 2, 3, 4, 5, 6, 7, 8},
+                                                      {1, 0, 0, 0, 1, 1, 0, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> expected_col{{1, 1, 1, 1, 5, 6, 6, 8}};
+
+  auto result = cudf::replace_nulls(col, cudf::fillna_policy::FORWARD_FILL);
+
+  const cudf::column_view result_view = result->view();
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_col);
+}
+
 struct ReplaceDictionaryTest : public cudf::test::BaseFixture {
 };
 

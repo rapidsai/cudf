@@ -27,6 +27,14 @@ namespace cudf {
  */
 
 /**
+ * @brief Policy to fill null/nan values inside
+ *
+ * `FORWARD_FILL` means filling the null
+ * `BACKWARD_FILL` means
+ */
+enum class fillna_policy : bool { FORWARD_FILL, BACKWARD_FILL };
+
+/**
  * @brief Replaces all null values in a column with corresponding values of another column
  *
  * If `input[i]` is NULL, then `output[i]` will contain `replacement[i]`.
@@ -59,6 +67,23 @@ std::unique_ptr<column> replace_nulls(
 std::unique_ptr<column> replace_nulls(
   column_view const& input,
   scalar const& replacement,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Replaces all null values in a column the first non-null value to its front/back.
+ *
+ * If `input[i]` is NULL, then `output[i]` will contain the first non-null value to its
+ * front or back based on `fillna_policy`, `input` and `replacement` must have the same type.
+ *
+ * @param[in] input A column whose null values will be replaced.
+ * @param[in] fillna_policy Side of the non-null element to select from, front or back.
+ * @param[in] mr Device memory resource used to allocate device memory of the returned column.
+ *
+ * @returns Copy of `input` with null values replaced by `replacement`.
+ */
+std::unique_ptr<column> replace_nulls(
+  column_view const& input,
+  fillna_policy const& fillna_policy,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
