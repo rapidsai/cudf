@@ -138,6 +138,7 @@
 - PR #6837 Avoid gather when copying strings view from start of strings column
 - PR #6859 Move align_ptr_for_type() from cuda.cuh to alignment.hpp
 - PR #6807 Refactor `std::array` usage in row group index writing in ORC
+- PR #6908 Parquet option for strictly decimal reading
 
 ## Bug Fixes
 
@@ -200,6 +201,7 @@
 - PR #6869 Avoid dependency resolution failure in latest version of pip by explicitly specifying versions for dask and distributed
 - PR #6806 Force install of local conda artifacts
 - PR #6887 Fix typo and `0-d` numpy array handling in binary operation
+- PR #6898 Fix missing clone overrides on derived aggregations
 - PR #6899 Update JNI to new gather boundary check API
 
 
