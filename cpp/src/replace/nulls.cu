@@ -358,13 +358,9 @@ std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<
 template <typename T>
 struct replace_nulls_fillna_policy_functor {
   __device__ thrust::tuple<T, bool> operator()(thrust::tuple<T, bool> const& lhs,
-                                               thrust::tuple<T, bool> const& rhs)
-  {
-    auto ldata  = thrust::get<0>(lhs);
-    auto rdata  = thrust::get<0>(rhs);
-    bool rvalid = thrust::get<1>(rhs);
-
-    return rvalid ? thrust::make_tuple(rdata, true) : thrust::make_tuple(ldata, true);
+                                               thrust::tuple<T, bool> const& rhs) {
+    return thrust::get<1>(rhs) ? thrust::make_tuple(thrust::get<0>(rhs), true)
+                               : thrust::make_tuple(thrust::get<0>(lhs), true);
   }
 };
 
@@ -404,12 +400,13 @@ struct replace_nulls_fillna_policy_kernel_forwarder {
                              incol_validity_zip_iterator + input.size(),
                              outcol_validity_zip_iterator,
                              func);
-    } else {
+    } 
+    else {
       auto rbegin_in =
-        thrust::make_reverse_iterator(incol_validity_zip_iterator + input.size() - 1);
-      auto rend_in = thrust::make_reverse_iterator(incol_validity_zip_iterator - 1);
+        thrust::make_reverse_iterator(incol_validity_zip_iterator + input.size());
+      auto rend_in = thrust::make_reverse_iterator(incol_validity_zip_iterator);
       auto rbegin_out =
-        thrust::make_reverse_iterator(outcol_validity_zip_iterator + output_view.size() - 1);
+        thrust::make_reverse_iterator(outcol_validity_zip_iterator + output_view.size());
 
       thrust::inclusive_scan(
         rmm::exec_policy(stream)->on(stream.value()), rbegin_in, rend_in, rbegin_out, func);
