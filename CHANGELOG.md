@@ -6,6 +6,9 @@
 
 ## Bug Fixes
 
+- PR #6922 Fix N/A detection for empty fields in CSV reader
+
+
 # cuDF 0.17.0 (Date TBD)
 
 ## New Features
