@@ -943,7 +943,6 @@ TEST_F(CsvReaderTest, nullHandling)
     const auto view   = result.tbl->view();
     auto expect =
       cudf::test::strings_column_wrapper({"NULL", "", "null", "n/a", "Null", "NA", "nan"});
-    std::cout << view.column(0).size();
     expect_columns_equal(expect, view.column(0));
   }
 
