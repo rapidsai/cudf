@@ -211,8 +211,8 @@ class DataFrame(Frame, Serializable):
             self._index = index
 
             if columns is not None:
-                self._data = data.copy(deep=False)
-                df = self._reindex_frame(columns=columns, deep=True,)
+                self._data = data
+                df = self._reindex(columns=columns, deep=True, inplace=False)
                 self._data = ColumnAccessor(
                     data=df._data,
                     multiindex=data.multiindex,
@@ -237,10 +237,10 @@ class DataFrame(Frame, Serializable):
             self._index = index
 
             if columns is not None:
-                df = data._reindex_frame(
-                    columns=columns, index=index, deep=False,
+                self._data = data._data
+                self._reindex(
+                    columns=columns, index=index, deep=False, inplace=True
                 )
-                self._data = df._data
             else:
                 self._data = data._data
                 self.columns = data.columns
@@ -2588,8 +2588,8 @@ class DataFrame(Frame, Serializable):
         cols = labels if cols is None and axis in (1, "columns") else cols
         df = df if cols is None else df[list(set(df.columns) & set(cols))]
 
-        result = df._reindex_frame(
-            columns=cols, dtypes=dtypes, deep=copy, index=idx
+        result = df._reindex(
+            columns=cols, dtypes=dtypes, deep=copy, index=idx, inplace=False
         )
 
         return result

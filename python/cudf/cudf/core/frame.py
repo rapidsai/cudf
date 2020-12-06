@@ -3301,7 +3301,9 @@ class Frame(libcudf.table.Table):
         keys = self.__class__._from_table(keys)
         return keys, indices
 
-    def _reindex_frame(self, columns, dtypes=None, deep=False, index=None):
+    def _reindex(
+        self, columns, dtypes=None, deep=False, index=None, inplace=False
+    ):
         """
         Helper for `.reindex`
 
@@ -3317,6 +3319,8 @@ class Frame(libcudf.table.Table):
             Whether to make deep copy or shallow copy of the columns.
         index : Index or array-like, default None
             The ``index`` to be used to reindex the Frame with.
+        inplace : bool, default False
+            Whether to perform the operation in place on the data.
 
         Returns
         -------
@@ -3358,7 +3362,9 @@ class Frame(libcudf.table.Table):
                     dtype=dtype, masked=True, row_count=len(index)
                 )
 
-        return self.__class__._from_table(Frame(data=cols, index=index))
+        result = self.__class__._from_table(Frame(data=cols), index=index)
+
+        return self._mimic_inplace(result, inplace=inplace)
 
 
 def _get_replacement_values(to_replace, replacement, col_name, column):
