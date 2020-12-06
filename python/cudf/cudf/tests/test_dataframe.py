@@ -2972,6 +2972,17 @@ def test_select_dtype():
         gdf.select_dtypes(include=["int"], exclude=["object"]),
     )
 
+    gdf = gd.DataFrame({'int_col': [0, 1, 2], 'list_col': [[1, 2], [3, 4], [5, 6]]})
+    pdf = gdf.to_pandas()
+    assert_eq(
+        pdf.select_dtypes(include=['int64']).columns,
+        gdf.select_dtypes(include=['int64']).columns
+    )
+    assert_eq(
+        pdf.select_dtypes(exclude=['int64']).columns,
+        gdf.select_dtypes(exclude=['int64']).columns
+    )
+
 
 def test_select_dtype_datetime():
     gdf = gd.datasets.timeseries(
