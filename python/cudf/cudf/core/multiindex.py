@@ -190,6 +190,36 @@ class MultiIndex(Index):
         assert len(value) == self.nlevels
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
+    def set_names(self, names, level=None, inplace=False):
+        if (
+            level is not None
+            and not cudf.utils.dtypes.is_list_like(level)
+            and cudf.utils.dtypes.is_list_like(names)
+        ):
+            raise TypeError(
+                "Names must be a string when a single level is provided."
+            )
+
+        if (
+            not cudf.utils.dtypes.is_list_like(names)
+            and level is None
+            and self.nlevels > 1
+        ):
+            raise TypeError("Must pass list-like as `names`.")
+
+        if not cudf.utils.dtypes.is_list_like(names):
+            names = [names]
+        if level is not None and not cudf.utils.dtypes.is_list_like(level):
+            level = [level]
+
+        if self.nlevels > 1 and level is not None:
+            existing_names = self.names
+            for i, l in enumerate(level):
+                existing_names[l] = names[i]
+            names = existing_names
+
+        return self._set_names(names=names, inplace=inplace)
+
     @classmethod
     def _from_table(cls, table, names=None):
         df = cudf.DataFrame(table._data)

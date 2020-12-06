@@ -452,6 +452,31 @@ class Index(Frame, Serializable):
         else:
             return self
 
+    @property
+    def nlevels(self):
+        return 1
+
+    def _set_names(self, names, inplace=False):
+        if inplace:
+            idx = self
+        else:
+            idx = self.copy(deep=False)
+
+        idx.names = names
+        if not inplace:
+            return idx
+
+    def set_names(self, names, level=None, inplace=False):
+        if level is not None:
+            raise ValueError("Level must be None for non-MultiIndex")
+
+        if not is_list_like(names):
+            names = [names]
+        if level is not None and not is_list_like(level):
+            level = [level]
+
+        return self._set_names(names=names, inplace=inplace)
+
     def fillna(self, value, downcast=None):
         """
         Fill null values with the specified value.
