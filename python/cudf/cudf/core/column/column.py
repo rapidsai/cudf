@@ -1676,7 +1676,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         if dtype is not None:
             data = data.astype(dtype)
 
-    elif isinstance(arbitrary, pd.Timestamp):
+    elif isinstance(arbitrary, (pd.Timestamp, pd.Timedelta)):
         # This will always treat NaTs as nulls since it's not technically a
         # discrete value like NaN
         data = as_column(pa.array(pd.Series([arbitrary]), from_pandas=True))

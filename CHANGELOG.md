@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #6902 Implement `DataFrame.quantile` for `datetime` and `timedelta` data types
+
 ## Improvements
 
 ## Bug Fixes
