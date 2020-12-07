@@ -107,6 +107,8 @@ class NumericalColumn(column.ColumnBase):
         if other is None:
             return other
         if isinstance(other, cudf.Scalar):
+            if self.dtype == other.dtype:
+                return other
             # expensive device-host transfer just to
             # adjust the dtype
             other = other.value
