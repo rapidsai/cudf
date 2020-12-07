@@ -1862,6 +1862,12 @@ class Frame(libcudf.table.Table):
                     f"object type {self.__class__}"
                 )
 
+            if replace:
+                raise NotImplementedError(
+                    "Sample is not supported for "
+                    f"axis {axis} when 'replace=True'"
+                )
+
             if n > 0 and self.shape[1] == 0:
                 raise ValueError(
                     "a must be greater than 0 unless no samples are taken"
