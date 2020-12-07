@@ -1371,7 +1371,9 @@ class DataFrame(Frame, Serializable):
                         l_opr = self[col]
                 result[col] = op(l_opr, r_opr)
 
-        elif isinstance(other, (numbers.Number, cudf.Scalar)):
+        elif isinstance(other, (numbers.Number, cudf.Scalar)) or (
+            isinstance(other, np.ndarray) and other.ndim == 0
+        ):
             for col in self._data:
                 result[col] = op(self[col], other)
         else:
@@ -4940,10 +4942,7 @@ class DataFrame(Frame, Serializable):
             df.columns = dataframe.columns
 
         # Set index
-        if isinstance(dataframe.index, pd.MultiIndex):
-            index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
-        else:
-            index = dataframe.index
+        index = cudf.from_pandas(dataframe.index, nan_as_null=nan_as_null)
         result = df.set_index(index)
 
         return result
@@ -5251,8 +5250,9 @@ class DataFrame(Frame, Serializable):
             0 <= q <= 1, the quantile(s) to compute
         axis : int
             axis is a NON-FUNCTIONAL parameter
-        numeric_only : boolean
-            numeric_only is a NON-FUNCTIONAL parameter
+        numeric_only : bool, default True
+            If False, the quantile of datetime and timedelta data will be
+            computed as well.
         interpolation : {`linear`, `lower`, `higher`, `midpoint`, `nearest`}
             This parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.
@@ -5264,42 +5264,64 @@ class DataFrame(Frame, Serializable):
 
         Returns
         -------
+        Series or DataFrame
+            If q is an array or numeric_only is set to False, a DataFrame
+            will be returned where index is q, the columns are the columns
+            of self, and the values are the quantile.
 
-        DataFrame
+            If q is a float, a Series will be returned where the index is
+            the columns of self and the values are the quantiles.
+
+        Notes
+        -----
+        One notable difference from Pandas is when DataFrame is of
+        non-numeric types and result is expected to be a Series in case of
+        Pandas. cuDF will return a DataFrame as it doesn't support mixed
+        types under Series.
         """
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
 
-        if not numeric_only:
-            raise NotImplementedError("numeric_only is not implemented yet")
+        if numeric_only:
+            data_df = self.select_dtypes(
+                include=[np.number], exclude=["datetime64", "timedelta64"]
+            )
+        else:
+            data_df = self
+
         if columns is None:
-            columns = self._data.names
+            columns = data_df._data.names
 
         result = DataFrame()
 
-        for k in self._data.names:
+        for k in data_df._data.names:
 
             if k in columns:
-                res = self[k].quantile(
+                res = data_df[k].quantile(
                     q,
                     interpolation=interpolation,
                     exact=exact,
                     quant_index=False,
                 )
-                if not isinstance(res, numbers.Number) and len(res) == 0:
+                if (
+                    not isinstance(
+                        res, (numbers.Number, pd.Timestamp, pd.Timedelta)
+                    )
+                    and len(res) == 0
+                ):
                     res = column.column_empty_like(
-                        q, dtype="float64", masked=True, newsize=len(q)
+                        q, dtype=data_df[k].dtype, masked=True, newsize=len(q)
                     )
                 result[k] = column.as_column(res)
 
-        if isinstance(q, numbers.Number):
+        if isinstance(q, numbers.Number) and numeric_only:
             result = result.fillna(np.nan)
             result = result.iloc[0]
-            result.index = as_index(self.columns)
+            result.index = as_index(data_df.columns)
             result.name = q
             return result
         else:
-            q = list(map(float, q))
+            q = list(map(float, [q] if isinstance(q, numbers.Number) else q))
             result.index = q
             return result
 
@@ -7137,10 +7159,8 @@ def from_pandas(obj, nan_as_null=None):
     elif isinstance(obj, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.RangeIndex):
-        if obj._step and obj._step != 1:
-            raise ValueError("cudf RangeIndex requires step == 1")
         return cudf.core.index.RangeIndex(
-            obj._start, stop=obj._stop, name=obj.name
+            start=obj.start, stop=obj.stop, step=obj.step, name=obj.name
         )
     elif isinstance(obj, pd.Index):
         return cudf.Index.from_pandas(obj, nan_as_null=nan_as_null)
