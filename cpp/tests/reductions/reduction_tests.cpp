@@ -27,6 +27,8 @@
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <thrust/device_vector.h>
+#include <thrust/iterator/counting_iterator.h>
+
 #include <iostream>
 #include <vector>
 
@@ -1125,6 +1127,29 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumFractional)
     auto const column   = fp_wrapper{{111, 222, 333}, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
     auto const expected = decimalXX{666, scale};
+
+    auto const result        = cudf::reduce(column, cudf::make_sum_aggregation(), out_type);
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+
+    EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+  }
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumLarge)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (int i = -2; i <= 0; ++i) {
+    auto const scale          = scale_type{i};
+    auto f                    = thrust::make_counting_iterator(0);
+    auto const values         = std::vector<RepType>(f, f + 1000);
+    auto const column         = fp_wrapper{values.cbegin(), values.cend(), scale};
+    auto const out_type       = static_cast<cudf::column_view>(column).type();
+    auto const expected_value = std::accumulate(values.cbegin(), values.cend(), RepType{0});
+    auto const expected       = decimalXX{expected_value, scale};
 
     auto const result        = cudf::reduce(column, cudf::make_sum_aggregation(), out_type);
     auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
