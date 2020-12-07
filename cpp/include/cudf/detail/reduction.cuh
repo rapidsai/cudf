@@ -99,7 +99,10 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FAIL("shouldn't hit here");
+  CUDF_FAIL(
+    "This function should never be called. fixed_point reduce should always go through the reduce "
+    "for the corresponding device_storage_type_t");
+  ;
 }
 
 // @brief string_view specialization of simple reduction

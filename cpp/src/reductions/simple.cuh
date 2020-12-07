@@ -364,8 +364,6 @@ struct element_type_dispatcher {
                                  mr);
   }
 
-  // NUMERIC (FLOATING AND INTEGRAL)
-
   /**
    * @brief Called by the type-dispatcher to reduce the input column `col` using
    * the `Op` operation.
@@ -406,7 +404,6 @@ struct element_type_dispatcher {
     return fixed_point_reduction<ElementType, Op>(col, stream, mr);
   }
 
-  // DISALLOWING
   template <typename ElementType,
             typename std::enable_if_t<not cudf::is_numeric<ElementType>() and
                                       not cudf::is_fixed_point<ElementType>()>* = nullptr>
