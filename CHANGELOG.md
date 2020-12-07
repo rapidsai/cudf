@@ -6,6 +6,8 @@
 
 ## Improvements
 
+- PR #6938 Pass numeric scalars of the same dtype through numeric binops
+
 ## Bug Fixes
 
 - PR #6912 Fix rmm_mode=managed parameter for gtests
