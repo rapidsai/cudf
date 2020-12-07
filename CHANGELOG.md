@@ -1,3 +1,16 @@
+# cuDF 0.18.0 (Date TBD)
+
+## New Features
+
+- PR #6902 Implement `DataFrame.quantile` for `datetime` and `timedelta` data types
+
+## Improvements
+
+## Bug Fixes
+
+- PR #6912 Fix rmm_mode=managed parameter for gtests
+
+
 # cuDF 0.17.0 (Date TBD)
 
 ## New Features
@@ -29,14 +42,18 @@
 - PR #6652 Add support for struct columns in concatenate
 - PR #6675 Add DecimalDtype to cuDF
 - PR #6739 Add Java bindings for is_timestamp
+- PR #6808 Add support for reading decimal32 and decimal64 from parquet
+- PR #6781 Add serial murmur3 hashing
 - PR #6811 First class support for unbounded window function bounds
 - PR #6768 Add support for scatter() on list columns
 - PR #6796 Add create_metadata_file in dask_cudf
 - PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
 - PR #6817 Add support for scatter() on lists-of-struct columns
 - PR #6805 Implement `cudf::detail::copy_if` for `decimal32` and `decimal64`
+- PR #6847 Add a cmake find module for cuFile in JNI code
 - PR #6726 Support selecting different hash functions in hash_partition
 - PR #6619 Improve Dockerfile
+- PR #6831 Added parquet chunked writing ability for list columns
 
 ## Improvements
 
@@ -113,16 +130,19 @@
 - PR #6809 size_type overflow checking when concatenating columns
 - PR #6789 Rename `unary_op` to `unary_operator`
 - PR #6770 Support building decimal columns with Table.TestBuilder
+- PR #6815 Add wildcard path support to `read_parquet`
 - PR #6800 Push DeviceScalar to cython-only
 - PR #6822 Split out `cudf::distinct_count` from `drop_duplicates.cu`
 - PR #6813 Enable `expand=False` in `.str.split` and `.str.rsplit`
 - PR #6829 Enable workaround to write categorical columns in csv
 - PR #6819 Use CMake 3.19 for RMM when building cuDF jar
 - PR #6833 Use settings.xml if existing for internal build
+- PR #6839 Handle index when dispatching __array_function__ and __array_ufunc__ to cupy for cudf.Series
 - PR #6835 Move template param to member var to improve compile of hash/groupby.cu
 - PR #6837 Avoid gather when copying strings view from start of strings column
 - PR #6859 Move align_ptr_for_type() from cuda.cuh to alignment.hpp
 - PR #6807 Refactor `std::array` usage in row group index writing in ORC
+- PR #6908 Parquet option for strictly decimal reading
 
 ## Bug Fixes
 
@@ -185,6 +205,9 @@
 - PR #6869 Avoid dependency resolution failure in latest version of pip by explicitly specifying versions for dask and distributed
 - PR #6806 Force install of local conda artifacts
 - PR #6887 Fix typo and `0-d` numpy array handling in binary operation
+- PR #6898 Fix missing clone overrides on derived aggregations
+- PR #6899 Update JNI to new gather boundary check API
+
 
 # cuDF 0.16.0 (21 Oct 2020)
 

@@ -10,7 +10,6 @@ from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.scalar import as_device_scalar
 from cudf._typing import DatetimeLikeScalar, Dtype, DtypeObj, ScalarObj
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, column, string
@@ -240,12 +239,7 @@ class DatetimeColumn(column.ColumnBase):
         )
         if isinstance(q, Number):
             return pd.Timestamp(result, unit=self.time_unit)
-
-        result = result * as_device_scalar(
-            _numpy_to_pandas_conversion[self.time_unit]
-        )
-
-        return result.astype("datetime64[ns]")
+        return result.astype(self.dtype)
 
     def binary_operator(
         self,
