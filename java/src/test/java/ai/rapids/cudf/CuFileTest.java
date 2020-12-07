@@ -27,7 +27,7 @@ public class CuFileTest extends CudfTestBase {
          HostMemoryBuffer dest = HostMemoryBuffer.allocate(16);) {
       orig.setLong(0, 123456789);
       from.copyFromHostBuffer(orig);
-      CuFile.copyDeviceBufferToFile(tempFile, from);
+      CuFile.copyDeviceBufferToFile(tempFile, from, false);
       CuFile.copyFileToDeviceBuffer(to, tempFile);
       dest.copyFromDeviceBuffer(to);
       assertEquals(123456789, dest.getLong(0));

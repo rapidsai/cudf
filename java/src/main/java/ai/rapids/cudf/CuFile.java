@@ -24,6 +24,7 @@ import java.io.File;
 public class CuFile {
   private static final Logger log = LoggerFactory.getLogger(CuFile.class);
   private static boolean initialized = false;
+  private static long driverPointer = 0;
 
   static {
     initialize();
@@ -37,8 +38,10 @@ public class CuFile {
     if (!initialized) {
       try {
         NativeDepsLoader.loadNativeDeps(new String[]{"cufilejni"});
-        open();
-        Runtime.getRuntime().addShutdownHook(new Thread(CuFile::close));
+        driverPointer = createDriver();
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+          destroyDriver(driverPointer);
+        }));
         initialized = true;
       } catch (Throwable t) {
         log.error("Could not load cuFile jni library...", t);
@@ -46,13 +49,12 @@ public class CuFile {
     }
   }
 
-  private static native void open();
+  private static native long createDriver();
 
-  private static native void close();
+  private static native void destroyDriver(long pointer);
 
-  public static long copyDeviceBufferToFile(File path, DeviceMemoryBuffer buffer) {
-    copyToFile(path.getAbsolutePath(), buffer.getAddress(), buffer.getLength());
-    return 0;
+  public static long copyDeviceBufferToFile(File path, DeviceMemoryBuffer buffer, boolean append) {
+    return copyToFile(path.getAbsolutePath(), buffer.getAddress(), buffer.getLength(), append);
   }
 
   public static long copyFileToDeviceBuffer(DeviceMemoryBuffer buffer, File path) {
@@ -60,7 +62,7 @@ public class CuFile {
     return 0;
   }
 
-  private static native void copyToFile(String path, long address, long length);
+  private static native long copyToFile(String path, long address, long length, boolean append);
 
   private static native void copyFromFile(long address, long length, String path);
 }

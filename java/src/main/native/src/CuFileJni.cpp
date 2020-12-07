@@ -23,13 +23,12 @@
 
 #include "jni_utils.hpp"
 
-namespace cufile {
-namespace jni {
+namespace {
 
 //
 // cuda driver error description
 //
-static const char *GetCuErrorString(CUresult cu_result) {
+char const *GetCuErrorString(CUresult cu_result) {
   const char *description;
   if (cuGetErrorName(cu_result, &description) != CUDA_SUCCESS)
     description = "unknown cuda error";
@@ -139,8 +138,9 @@ public:
     return static_cast<std::size_t>(status);
   }
 
-  std::size_t write(cufile_buffer const &buffer) {
-    auto const status = cuFileWrite(cufile_handle_, buffer.device_pointer(), buffer.size(), 0, 0);
+  void write(cufile_buffer const &buffer, std::size_t file_offset = 0) {
+    auto const status =
+        cuFileWrite(cufile_handle_, buffer.device_pointer(), buffer.size(), file_offset, 0);
 
     if (status < 0) {
       if (IS_CUFILE_ERR(status)) {
@@ -150,7 +150,17 @@ public:
       }
     }
 
-    return static_cast<std::size_t>(status);
+    CUDF_EXPECTS(status == buffer.size(), "Size of bytes written is different from buffer size");
+  }
+
+  std::size_t append(cufile_buffer const &buffer) {
+    auto const status = lseek(file_descriptor_, 0, SEEK_END);
+    if (status < 0) {
+      CUDF_FAIL("Failed to seek end of file: " + cuFileGetErrorString(errno));
+    }
+
+    write(buffer, status);
+    return status;
   }
 
 private:
@@ -158,46 +168,50 @@ private:
   CUfileHandle_t cufile_handle_;
 };
 
-} // namespace jni
-} // namespace cufile
+} // anonymous namespace
 
 extern "C" {
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_open(JNIEnv *env, jclass) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFile_createDriver(JNIEnv *env, jclass) {
   try {
-    auto const status = cuFileDriverOpen();
-    if (status.err != CU_FILE_SUCCESS) {
-      CUDF_FAIL("Failed to initialize cuFile driver: " + cufile::jni::cuFileGetErrorString(status));
+    return reinterpret_cast<jlong>(new cufile_driver());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_destroyDriver(JNIEnv *env, jclass,
+                                                                jlong pointer) {
+  try {
+    if (pointer != 0) {
+      cufile_driver *driver = reinterpret_cast<cufile_driver *>(pointer);
+      delete driver;
     }
   }
   CATCH_STD(env, );
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_close(JNIEnv *env, jclass) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFile_copyToFile(JNIEnv *env, jclass, jstring path,
+                                                              jlong device_pointer, jlong size,
+                                                              jboolean append) {
   try {
-    cuFileDriverClose();
+    cufile_buffer buffer{reinterpret_cast<void *>(device_pointer), static_cast<std::size_t>(size)};
+    cufile_file file{(env->GetStringUTFChars(path, nullptr))};
+    if (append) {
+      return file.append(buffer);
+    } else {
+      file.write(buffer);
+      return 0;
+    }
   }
-  CATCH_STD(env, );
-}
-
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_copyToFile(JNIEnv *env, jclass, jstring path,
-                                                             jlong device_pointer, jlong size) {
-  try {
-    cufile::jni::cufile_buffer buffer{reinterpret_cast<void *>(device_pointer),
-                                      static_cast<std::size_t>(size)};
-    cufile::jni::cufile_file file{(env->GetStringUTFChars(path, nullptr))};
-    file.write(buffer);
-  }
-  CATCH_STD(env, );
+  CATCH_STD(env, -1);
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_copyFromFile(JNIEnv *env, jclass,
                                                                jlong device_pointer, jlong size,
                                                                jstring path) {
   try {
-    cufile::jni::cufile_buffer buffer{reinterpret_cast<void *>(device_pointer),
-                                      static_cast<std::size_t>(size)};
-    cufile::jni::cufile_file file{(env->GetStringUTFChars(path, nullptr))};
+    cufile_buffer buffer{reinterpret_cast<void *>(device_pointer), static_cast<std::size_t>(size)};
+    cufile_file file{(env->GetStringUTFChars(path, nullptr))};
     file.read(buffer);
   }
   CATCH_STD(env, );
