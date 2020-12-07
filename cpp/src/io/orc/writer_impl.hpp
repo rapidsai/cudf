@@ -320,8 +320,6 @@ class writer::impl {
   }
 
  private:
-  rmm::mr::device_memory_resource* _mr = nullptr;
-
   size_t max_stripe_size_           = DEFAULT_STRIPE_SIZE;
   size_t row_index_stride_          = default_row_index_stride;
   size_t compression_blocksize_     = DEFAULT_COMPRESSION_BLOCKSIZE;
@@ -332,6 +330,8 @@ class writer::impl {
 
   std::vector<uint8_t> buffer_;
   std::unique_ptr<data_sink> out_sink_;
+
+  rmm::mr::device_memory_resource* _mr = nullptr;
 };
 
 }  // namespace orc

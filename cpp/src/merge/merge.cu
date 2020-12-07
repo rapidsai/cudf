@@ -252,37 +252,28 @@ struct column_merger {
                                                   stream,
                                                   mr);
 
-    //"gather" data from lcol, rcol according to row_order_ "map"
-    //(directly calling gather() won't work because
-    // lcol, rcol indices overlap!)
-    //
+    // "gather" data from lcol, rcol according to row_order_ "map" (directly calling gather() won't
+    // work because lcol, rcol indices overlap!)
     cudf::mutable_column_view merged_view = merged_col->mutable_view();
 
     // initialize null_mask to all valid:
     //
-    // Note: this initialization in conjunction with
-    // _conditionally_ calling materialize_bitmask() below covers
-    // the case materialize_merged_bitmask_kernel<false, false>()
-    // which won't be called anymore (because of the _condition_
-    // below)
-    //
+    // Note: this initialization in conjunction with _conditionally_ calling materialize_bitmask()
+    // below covers the case materialize_merged_bitmask_kernel<false, false>() which won't be called
+    // anymore (because of the _condition_ below)
     cudf::detail::set_null_mask(merged_view.null_mask(), 0, merged_view.size(), true, stream);
 
     // set the null count:
-    //
     merged_col->set_null_count(lcol.null_count() + rcol.null_count());
 
     using Type = device_storage_type_t<Element>;
 
     // to resolve view.data()'s types use: Element
-    //
     auto const d_lcol = lcol.data<Type>();
     auto const d_rcol = rcol.data<Type>();
 
-    // capture lcol, rcol
-    // and "gather" into merged_view.data()[indx_merged]
-    // from lcol or rcol, depending on side;
-    //
+    // capture lcol, rcol and "gather" into merged_view.data()[indx_merged] from lcol or rcol,
+    // depending on side;
     thrust::transform(rmm::exec_policy(stream),
                       row_order_.begin(),
                       row_order_.end(),
@@ -294,12 +285,9 @@ struct column_merger {
                         return side == side::LEFT ? d_lcol[index] : d_rcol[index];
                       });
 
-    // CAVEAT: conditional call below is erroneous without
-    // set_null_mask() call (see TODO above):
-    //
+    // CAVEAT: conditional call below is erroneous without set_null_mask() call (see TODO above):
     if (lcol.has_nulls() || rcol.has_nulls()) {
       // resolve null mask:
-      //
       materialize_bitmask(lcol, rcol, merged_view, row_order_.data().get(), stream);
     }
 
@@ -361,18 +349,15 @@ table_ptr_type merge(cudf::table_view const& left_table,
                      rmm::mr::device_memory_resource* mr)
 {
   // collect index columns for lhs, rhs, resp.
-  //
   cudf::table_view index_left_view{left_table.select(key_cols)};
   cudf::table_view index_right_view{right_table.select(key_cols)};
   bool const nullable = cudf::has_nulls(index_left_view) || cudf::has_nulls(index_right_view);
 
   // extract merged row order according to indices:
-  //
   rmm::device_vector<index_type> merged_indices = generate_merged_indices(
     index_left_view, index_right_view, column_order, null_precedence, nullable);
 
   // create merged table:
-  //
   auto const n_cols = left_table.num_columns();
   std::vector<std::unique_ptr<column>> merged_cols;
   merged_cols.reserve(n_cols);

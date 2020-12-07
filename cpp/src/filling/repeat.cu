@@ -133,7 +133,8 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                       thrust::make_counting_iterator(output_size),
                       indices.begin());
 
-  return gather(input_table, indices.begin(), indices.end(), false, stream, mr);
+  return gather(
+    input_table, indices.begin(), indices.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
@@ -153,7 +154,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
     thrust::make_counting_iterator(0), [count] __device__(auto i) { return i / count; });
   auto map_end = map_begin + output_size;
 
-  return gather(input_table, map_begin, map_end, false, stream, mr);
+  return gather(input_table, map_begin, map_end, out_of_bounds_policy::DONT_CHECK, stream, mr);
 }
 
 }  // namespace detail

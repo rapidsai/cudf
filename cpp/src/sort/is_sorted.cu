@@ -25,6 +25,8 @@
 #include <rmm/device_vector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/sort.h>
+
 namespace cudf {
 namespace detail {
 

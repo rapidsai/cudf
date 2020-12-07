@@ -100,7 +100,7 @@ size_type estimate_join_output_size(table_device_view build_table,
   estimate_size_type h_size_estimate{0};
   rmm::device_scalar<estimate_size_type> size_estimate(0, stream);
 
-  CHECK_CUDA(stream);
+  CHECK_CUDA(stream.value());
 
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   int numBlocks{-1};
@@ -186,8 +186,7 @@ get_trivial_left_join_indices(table_view const& left, rmm::cuda_stream_view stre
 {
   rmm::device_vector<size_type> left_indices(left.num_rows());
   thrust::sequence(rmm::exec_policy(stream), left_indices.begin(), left_indices.end(), 0);
-  rmm::device_vector<size_type> right_indices(left.num_rows());
-  thrust::fill(rmm::exec_policy(stream), right_indices.begin(), right_indices.end(), JoinNoneValue);
+  rmm::device_vector<size_type> right_indices(left.num_rows(), JoinNoneValue);
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
 

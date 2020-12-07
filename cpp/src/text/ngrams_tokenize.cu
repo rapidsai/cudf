@@ -223,9 +223,8 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
   auto chars_column = cudf::strings::detail::create_chars_child_column(
     strings_count, 0, output_chars_size, stream, mr);
   auto d_chars = chars_column->mutable_view().data<char>();
-  // Generate the ngrams into the chars column data buffer.
-  // The ngram_builder_fn functor also fills the d_ngram_sizes vector with the
-  // size of each ngram.
+  // Generate the ngrams into the chars column data buffer. The ngram_builder_fn functor also fills
+  // the d_ngram_sizes vector with the size of each ngram.
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<int32_t>(0),
                      strings_count,

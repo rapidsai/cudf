@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <io/csv/csv_common.h>
+#include <io/utilities/column_type_histogram.hpp>
 #include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/types.hpp>

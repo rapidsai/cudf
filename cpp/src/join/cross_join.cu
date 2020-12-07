@@ -28,6 +28,8 @@
 #include <cudf/utilities/error.hpp>
 #include "rmm/cuda_stream_view.hpp"
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace detail {
 /**

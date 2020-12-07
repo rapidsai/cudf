@@ -562,3 +562,61 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseScalarScalar)
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end(), valids);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
+
+template <typename T>
+struct FixedPointTypes : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(FixedPointTypes, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTypes, FixedPointSimple)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const mask     = cudf::test::fixed_width_column_wrapper<bool>{0, 1, 1, 1, 0, 0};
+  auto const a        = fp_wrapper{{110, 220, 330, 440, 550, 660}, scale_type{-2}};
+  auto const b        = fp_wrapper{{0, 0, 0, 0, 0, 0}, scale_type{-2}};
+  auto const expected = fp_wrapper{{0, 220, 330, 440, 0, 0}, scale_type{-2}};
+  auto const result   = cudf::copy_if_else(a, b, mask);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTypes, FixedPointLarge)
+{
+  using namespace numeric;
+  using namespace cudf::test;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto a = thrust::make_counting_iterator(-1000);
+  auto b = thrust::make_constant_iterator(0);
+  auto m = make_counting_transform_iterator(-1000, [](int i) { return i > 0; });
+  auto e = make_counting_transform_iterator(-1000, [](int i) { return std::max(0, i); });
+
+  auto const mask     = cudf::test::fixed_width_column_wrapper<bool>(m, m + 2000);
+  auto const A        = fp_wrapper{a, a + 2000, scale_type{-3}};
+  auto const B        = fp_wrapper{b, b + 2000, scale_type{-3}};
+  auto const expected = fp_wrapper{e, e + 2000, scale_type{-3}};
+  auto const result   = cudf::copy_if_else(A, B, mask);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTypes, FixedPointScaleMismatch)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const mask = cudf::test::fixed_width_column_wrapper<bool>{0, 1, 1, 1, 0, 0};
+  auto const a    = fp_wrapper{{110, 220, 330, 440, 550, 660}, scale_type{-2}};
+  auto const b    = fp_wrapper{{0, 0, 0, 0, 0, 0}, scale_type{-1}};
+
+  EXPECT_THROW(cudf::copy_if_else(a, b, mask), cudf::logic_error);
+}

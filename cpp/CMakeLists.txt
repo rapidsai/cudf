@@ -16,7 +16,7 @@
 
 cmake_minimum_required(VERSION 3.14...3.17 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.17.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.18.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")

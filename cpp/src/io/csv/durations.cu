@@ -22,6 +22,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <strings/convert/utilities.cuh>
 #include <strings/utilities.cuh>

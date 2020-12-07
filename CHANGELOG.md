@@ -1,8 +1,22 @@
+# cuDF 0.18.0 (Date TBD)
+
+## New Features
+
+- PR #6902 Implement `DataFrame.quantile` for `datetime` and `timedelta` data types
+
+## Improvements
+
+## Bug Fixes
+
+- PR #6912 Fix rmm_mode=managed parameter for gtests
+
+
 # cuDF 0.17.0 (Date TBD)
 
 ## New Features
 
 - PR #6116 Add `filters` parameter to Python `read_orc` function or filtering
+- PR #6848 Added Java bindings for writing parquet files with INT96 timestamps
 - PR #6460 Add is_timestamp format check API
 - PR #6647 Implement `cudf::round` floating point and integer types (`HALF_EVEN`)
 - PR #6562 Implement `cudf::round` floating point and integer types (`HALF_UP`)
@@ -11,11 +25,15 @@
 - PR #6777 Implement `cudf::unary_operation` for `decimal32` & `decimal64`
 - PR #6729 Implement `cudf::cast` for `decimal32/64` to/from different `type_id`
 - PR #6792 Implement `cudf::clamp` for `decimal32` and `decimal64`
+- PR #6845 Implement `cudf::copy_if_else` for `decimal32` and `decimal64`
+- PR #6805 Implement `cudf::detail::copy_if` for `decimal32` and `decimal64`
+- PR #6843 Implement `cudf::copy_range` for `decimal32` and `decimal64`
 - PR #6528 Enable `fixed_point` binary operations
 - PR #6460 Add is_timestamp format check API
 - PR #6568 Add function to create hashed vocabulary file from raw vocabulary
 - PR #6142 Add Python `read_orc_statistics` function for reading file- and stripe-level statistics
 - PR #6581 Add JNI API to check if PTDS is enabled
+- PR #6615 Add support for list and struct types to contiguous_split
 - PR #6625 Add INT96 timestamp writing option to parquet writer
 - PR #6592 Add `cudf.to_numeric` function
 - PR #6598 Add strings::contains API with target column parameter
@@ -24,9 +42,18 @@
 - PR #6652 Add support for struct columns in concatenate
 - PR #6675 Add DecimalDtype to cuDF
 - PR #6739 Add Java bindings for is_timestamp
+- PR #6808 Add support for reading decimal32 and decimal64 from parquet
+- PR #6781 Add serial murmur3 hashing
+- PR #6811 First class support for unbounded window function bounds
 - PR #6768 Add support for scatter() on list columns
 - PR #6796 Add create_metadata_file in dask_cudf
 - PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
+- PR #6817 Add support for scatter() on lists-of-struct columns
+- PR #6805 Implement `cudf::detail::copy_if` for `decimal32` and `decimal64`
+- PR #6847 Add a cmake find module for cuFile in JNI code
+- PR #6726 Support selecting different hash functions in hash_partition
+- PR #6619 Improve Dockerfile
+- PR #6831 Added parquet chunked writing ability for list columns
 
 ## Improvements
 
@@ -44,6 +71,7 @@
 - PR #6471 Replace index type-dispatch call with indexalator in cudf::strings::substring
 - PR #6485 Add File IO to cuIO benchmarks
 - PR #6504 Update Java bindings version to 0.17-SNAPSHOT
+- PR #6875 Remove bounds check for `cudf::gather`
 - PR #6489 Add `AVRO` fuzz tests with varying function parameters
 - PR #6540 Add dictionary support to `cudf::unary_operation`
 - PR #6537 Refactor ORC timezone
@@ -64,6 +92,7 @@
 - PR #6597 Use thread-local to track CUDA device in JNI
 - PR #6599 Replace `size()==0` with `empty()`, `is_empty()`
 - PR #6514 Initial work for decimal type in Java/JNI
+- PR #6605 Reduce HtoD copies in `cudf::concatenate` of string columns
 - PR #6608 Improve subword tokenizer docs
 - PR #6610 Add ability to set scalar values in `cudf.DataFrame`
 - PR #6612 Update JNI to new RMM cuda_stream_view API
@@ -77,6 +106,7 @@
 - PR #6644 Cover different CSV reader/writer options in benchmarks
 - PR #6741 Cover different ORC and Parquet reader/writer options in benchmarks
 - PR #6651 Add cudf::dictionary::make_dictionary_pair_iterator
+- PR #6666 Add dictionary support to `cudf::reduce`
 - PR #6635 Add cudf::test::dictionary_column_wrapper class
 - PR #6702 Fix orc read corruption on boolean column
 - PR #6676 Add dictionary support to `cudf::quantile`
@@ -96,8 +126,22 @@
 - PR #6776 Use `void` return type for kernel wrapper functions instead of returning `cudaError_t`
 - PR #6786 Add nested type support to ColumnVector#getDeviceMemorySize
 - PR #6780 Move `cudf::cast` tests to separate test file
+- PR #6809 size_type overflow checking when concatenating columns
 - PR #6789 Rename `unary_op` to `unary_operator`
 - PR #6770 Support building decimal columns with Table.TestBuilder
+- PR #6815 Add wildcard path support to `read_parquet`
+- PR #6800 Push DeviceScalar to cython-only
+- PR #6822 Split out `cudf::distinct_count` from `drop_duplicates.cu`
+- PR #6813 Enable `expand=False` in `.str.split` and `.str.rsplit`
+- PR #6829 Enable workaround to write categorical columns in csv
+- PR #6819 Use CMake 3.19 for RMM when building cuDF jar
+- PR #6833 Use settings.xml if existing for internal build
+- PR #6839 Handle index when dispatching __array_function__ and __array_ufunc__ to cupy for cudf.Series
+- PR #6835 Move template param to member var to improve compile of hash/groupby.cu
+- PR #6837 Avoid gather when copying strings view from start of strings column
+- PR #6859 Move align_ptr_for_type() from cuda.cuh to alignment.hpp
+- PR #6807 Refactor `std::array` usage in row group index writing in ORC
+- PR #6908 Parquet option for strictly decimal reading
 
 ## Bug Fixes
 
@@ -144,11 +188,24 @@
 - PR #6742 Fix concat bug in dask_cudf Series/Index creation
 - PR #6632 Fix DataFrame initialization from list of dicts
 - PR #6767 Fix sort order of parameters in `test_scalar_invalid_implicit_conversion` pytest
+- PR #6771 Fix index handling in parquet reader and writer
 - PR #6787 Update java reduction APIs to reflect C++ changes
+- PR #6790 Fix result representation in groupby.apply
 - PR #6794 Fix AVRO reader issues with empty input
 - PR #6798 Fix `read_avro` docs
 - PR #6824 Fix JNI build
 - PR #6826 Fix resource management in Java ColumnBuilder
+- PR #6830 Fix categorical scalar insertion
+- PR #6844 Fix uint32_t undefined errors
+- PR #6854 Fix the parameter order of writeParquetBufferBegin
+- PR #6855 Fix `.str.replace_with_backrefs` docs examples
+- PR #6853 Fix contiguous split of null string columns
+- PR #6861 Fix compile error in type_dispatch_benchmark.cu
+- PR #6869 Avoid dependency resolution failure in latest version of pip by explicitly specifying versions for dask and distributed
+- PR #6806 Force install of local conda artifacts
+- PR #6887 Fix typo and `0-d` numpy array handling in binary operation
+- PR #6898 Fix missing clone overrides on derived aggregations
+- PR #6899 Update JNI to new gather boundary check API
 
 
 # cuDF 0.16.0 (21 Oct 2020)
@@ -182,6 +239,8 @@
 - PR #6301 Add JNI bindings to nvcomp
 - PR #6328 Java and JNI bindings for getMapValue/map_lookup
 - PR #6371 Use ColumnViewAccess on Host side
+- PR #6392 add hash based groupby mean aggregation
+- PR #6511 Add LogicalType to Parquet reader
 - PR #6297 cuDF Python Scalars
 - PR #6723 Support creating decimal vectors from scalar
 
@@ -291,6 +350,7 @@
 - PR #6653 Replaced SHFL_XOR calls with cub::WarpReduce
 - PR #6751 Rework ColumnViewAccess and its usage
 - PR #6698 Remove macros from ORC reader and writer
+- PR #6782 Replace cuio macros with constexpr and inline functions
 
 ## Bug Fixes
 

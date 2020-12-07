@@ -282,10 +282,20 @@ class mutable_column_view_base : public column_view_base {
  **/
 class column_view : public detail::column_view_base {
  public:
-  column_view()                   = default;
-  ~column_view()                  = default;
-  column_view(column_view const&) = default;
-  column_view(column_view&&)      = default;
+  column_view() = default;
+
+  // these pragmas work around the nvcc issue where if a column_view is used
+  // inside of a __device__ code path, these functions will end up being created
+  // as __host__ __device__ because they are explicitly defaulted.  However, if
+  // they then end up being called by a simple __host__ function
+  // (eg std::vector destructor) you get a compile error because you're trying to
+  // call a __host__ __device__ function from a __host__ function.
+#pragma nv_exec_check_disable
+  ~column_view() = default;
+#pragma nv_exec_check_disable
+  column_view(column_view const& c) = default;
+
+  column_view(column_view&&) = default;
   column_view& operator=(column_view const&) = default;
   column_view& operator=(column_view&&) = default;
 
@@ -524,6 +534,16 @@ class mutable_column_view : public detail::column_view_base {
    * @brief Returns the number of child columns.
    **/
   size_type num_children() const noexcept { return mutable_children.size(); }
+
+  /**
+   * @brief Returns iterator to the beginning of the ordered sequence of child column-views.
+   */
+  auto child_begin() const noexcept { return mutable_children.begin(); }
+
+  /**
+   * @brief Returns iterator to the end of the ordered sequence of child column-views.
+   */
+  auto child_end() const noexcept { return mutable_children.end(); }
 
   /**
    * @brief Converts a mutable view into an immutable view

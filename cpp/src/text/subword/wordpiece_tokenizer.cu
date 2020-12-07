@@ -20,6 +20,7 @@
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/utilities/error.hpp>
+
 #include <nvtext/subword_tokenize.hpp>
 
 #include <rmm/cuda_stream_view.hpp>

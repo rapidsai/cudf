@@ -142,7 +142,7 @@ void set_null_mask(bitmask_type *bitmask,
     cudf::detail::grid_1d config(number_of_mask_words, 256);
     set_null_mask_kernel<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
       static_cast<bitmask_type *>(bitmask), begin_bit, end_bit, valid, number_of_mask_words);
-    CHECK_CUDA(stream);
+    CHECK_CUDA(stream.value());
   }
 }
 
@@ -604,7 +604,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
                                            last_word_indices,
                                            stream.value()));
 
-  CHECK_CUDA(stream);
+  CHECK_CUDA(stream.value());
 
   // third, adjust counts in segment boundaries (if segments are not
   // word-aligned)
@@ -619,7 +619,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
                                                stream.value()>>>(
     bitmask, num_ranges, d_first_indices.begin(), d_last_indices.begin(), d_null_counts.begin());
 
-  CHECK_CUDA(stream);
+  CHECK_CUDA(stream.value());
 
   std::vector<size_type> ret(num_ranges);
   CUDA_TRY(cudaMemcpyAsync(ret.data(),

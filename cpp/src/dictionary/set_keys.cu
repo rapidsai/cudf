@@ -31,6 +31,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/iterator/permutation_iterator.h>
+
 #include <algorithm>
 #include <iterator>
 

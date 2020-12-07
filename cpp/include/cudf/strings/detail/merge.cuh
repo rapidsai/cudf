@@ -55,7 +55,6 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
   using cudf::detail::side;
   size_type strings_count = static_cast<size_type>(std::distance(begin, end));
   if (strings_count == 0) return make_empty_strings_column(stream, mr);
-
   auto lhs_column = column_device_view::create(lhs.parent(), stream);
   auto d_lhs      = *lhs_column;
   auto rhs_column = column_device_view::create(rhs.parent(), stream);

@@ -219,15 +219,17 @@ public final class Table implements AutoCloseable {
 
   /**
    * Read in Parquet formatted data.
-   * @param filterColumnNames name of the columns to read, or an empty array if we want to read
-   *                          all of them
-   * @param filePath          the path of the file to read, or null if no path should be read.
-   * @param address           the address of the buffer to read from or 0 if we should not.
-   * @param length            the length of the buffer to read from.
-   * @param timeUnit          return type of TimeStamp in units
+   * @param filterColumnNames  name of the columns to read, or an empty array if we want to read
+   *                           all of them
+   * @param filePath           the path of the file to read, or null if no path should be read.
+   * @param address            the address of the buffer to read from or 0 if we should not.
+   * @param length             the length of the buffer to read from.
+   * @param timeUnit           return type of TimeStamp in units
+   * @param strictDecimalTypes whether strictly reading all decimal columns as fixed-point decimal type
    */
   private static native long[] readParquet(String[] filterColumnNames, String filePath,
-                                           long address, long length, int timeUnit) throws CudfException;
+                                           long address, long length, int timeUnit,
+                                           boolean strictDecimalTypes) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a file.
@@ -256,6 +258,7 @@ public final class Table implements AutoCloseable {
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
    * @param statsFreq       native statistics frequency ID
+   * @param isInt96         true if timestamp type is int96
    * @param consumer        consumer of host buffers produced.
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
@@ -265,6 +268,7 @@ public final class Table implements AutoCloseable {
                                                      String[] metadataValues,
                                                      int compression,
                                                      int statsFreq,
+                                                     boolean isInt96,
                                                      HostBufferConsumer consumer) throws CudfException;
 
   /**
@@ -445,7 +449,8 @@ public final class Table implements AutoCloseable {
 
   private static native long[] timeRangeRollingWindowAggregate(long inputTable, int[] keyIndices, int[] timestampIndices, boolean[] isTimesampAscending,
                                                                int[] aggColumnsIndices, long[] aggInstances, int[] minPeriods,
-                                                               int[] preceding, int[] following, boolean ignoreNullKeys) throws CudfException;
+                                                               int[] preceding, int[] following, boolean[] unboundedPreceding, boolean[] unboundedFollowing, 
+                                                               boolean ignoreNullKeys) throws CudfException;
 
   private static native long[] orderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
                                        boolean[] areNullsSmallest) throws CudfException;
@@ -615,7 +620,8 @@ public final class Table implements AutoCloseable {
    */
   public static Table readParquet(ParquetOptions opts, File path) {
     return new Table(readParquet(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId()));
+        path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId(),
+        opts.isStrictDecimalType()));
   }
 
   /**
@@ -675,7 +681,8 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(readParquet(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()));
+        null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId(),
+        opts.isStrictDecimalType()));
   }
 
   /**
@@ -781,6 +788,7 @@ public final class Table implements AutoCloseable {
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
+          options.isTimestampTypeInt96(),
           consumer);
       this.consumer = consumer;
     }
@@ -2115,6 +2123,8 @@ public final class Table implements AutoCloseable {
       try {
         int[] aggPrecedingWindows = new int[totalOps];
         int[] aggFollowingWindows = new int[totalOps];
+        boolean[] aggPrecedingWindowsUnbounded = new boolean[totalOps];
+        boolean[] aggFollowingWindowsUnbounded = new boolean[totalOps];
         int[] aggMinPeriods = new int[totalOps];
         int opIndex = 0;
         for (Map.Entry<Integer, ColumnWindowOps> entry: groupedOps.entrySet()) {
@@ -2124,6 +2134,8 @@ public final class Table implements AutoCloseable {
             aggInstances[opIndex] = operation.createNativeInstance();
             aggPrecedingWindows[opIndex] = operation.getWindowOptions().getPreceding();
             aggFollowingWindows[opIndex] = operation.getWindowOptions().getFollowing();
+            aggPrecedingWindowsUnbounded[opIndex] = operation.getWindowOptions().isUnboundedPreceding();
+            aggFollowingWindowsUnbounded[opIndex] = operation.getWindowOptions().isUnboundedFollowing();
             aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
             assert (operation.getWindowOptions().getFrameType() == WindowOptions.FrameType.RANGE);
             timestampColumnIndexes[opIndex] = operation.getWindowOptions().getTimestampColumnIndex();
@@ -2144,6 +2156,7 @@ public final class Table implements AutoCloseable {
             isTimestampOrderAscending,
             aggColumnIndexes,
             aggInstances, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
+            aggPrecedingWindowsUnbounded, aggFollowingWindowsUnbounded,
             groupByOptions.getIgnoreNullKeys()))) {
           // prepare the final table
           ColumnVector[] finalCols = new ColumnVector[windowAggregates.length];

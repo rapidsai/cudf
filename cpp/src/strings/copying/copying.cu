@@ -16,7 +16,10 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/get_value.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/copying.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -45,7 +48,24 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
   if (end < 0 || end > strings_count) end = strings_count;
   CUDF_EXPECTS(((start >= 0) && (start < end)), "Invalid start parameter value.");
   strings_count = cudf::util::round_up_safe<size_type>((end - start), step);
-
+  if (start == 0 && strings.offset() == 0 && step == 1) {
+    // sliced at the beginning and copying every step, so no need to gather
+    auto offsets_column = std::make_unique<cudf::column>(
+      cudf::slice(strings.offsets(), {0, strings_count + 1}).front(), stream, mr);
+    auto data_size =
+      cudf::detail::get_value<size_type>(offsets_column->view(), strings_count, stream);
+    auto chars_column = std::make_unique<cudf::column>(
+      cudf::slice(strings.chars(), {0, data_size}).front(), stream, mr);
+    auto null_mask = cudf::detail::copy_bitmask(strings.null_mask(), 0, strings_count, stream, mr);
+    return make_strings_column(strings_count,
+                               std::move(offsets_column),
+                               std::move(chars_column),
+                               UNKNOWN_NULL_COUNT,
+                               std::move(null_mask),
+                               stream,
+                               mr);
+  }
+  // do the gather instead
   // build indices
   rmm::device_vector<size_type> indices(strings_count);
   thrust::sequence(rmm::exec_policy(stream), indices.begin(), indices.end(), start, step);
@@ -55,7 +75,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
   // build a new strings column from the indices
   auto sliced_table = cudf::detail::gather(table_view{{strings.parent()}},
                                            indices_view,
-                                           cudf::detail::out_of_bounds_policy::NULLIFY,
+                                           cudf::out_of_bounds_policy::DONT_CHECK,
                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
                                            stream,
                                            mr)

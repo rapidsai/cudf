@@ -659,6 +659,32 @@ def test_groupby_datetime_multi_agg_multi_groupby():
     assert_eq(pdg, gdg)
 
 
+@pytest.mark.parametrize(
+    "agg",
+    [
+        ["min", "max", "count", "mean"],
+        ["mean", "var", "std"],
+        ["count", "mean", "var", "std"],
+    ],
+)
+def test_groupby_multi_agg_hash_groupby(agg):
+    alphabets = "abcdefghijklmnopqrstuvwxyz"
+    prefixes = alphabets[:10]
+    coll_dict = dict()
+    for prefix in prefixes:
+        for this_name in alphabets:
+            coll_dict[prefix + this_name] = float
+    coll_dict["id"] = int
+    gdf = cudf.datasets.timeseries(
+        start="2000", end="2000-01-2", dtypes=coll_dict, freq="1s", seed=1,
+    ).reset_index(drop=True)
+    pdf = gdf.to_pandas()
+    check_dtype = False if "count" in agg else True
+    pdg = pdf.groupby("id").agg(agg)
+    gdg = gdf.groupby("id").agg(agg)
+    assert_eq(pdg, gdg, check_dtype=check_dtype)
+
+
 @pytest.mark.parametrize("agg", ["min", "max", "sum", "count", "mean"])
 def test_groupby_nulls_basic(agg):
     check_dtype = False if agg == "count" else True
@@ -1269,5 +1295,53 @@ def test_groupby_pipe():
 
     expected = pdf.groupby("A").pipe(lambda x: x.max() - x.min())
     actual = gdf.groupby("A").pipe(lambda x: x.max() - x.min())
+
+    assert_eq(expected, actual)
+
+
+def test_groupby_apply_return_scalars():
+    pdf = pd.DataFrame(
+        {
+            "A": [1, 1, 2, 2, 3, 3, 4, 4, 5, 5],
+            "B": [
+                0.01,
+                np.nan,
+                0.03,
+                0.04,
+                np.nan,
+                0.06,
+                0.07,
+                0.08,
+                0.09,
+                1.0,
+            ],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    def custom_map_func(x):
+        x = x[~x["B"].isna()]
+        ticker = x.shape[0]
+        full = ticker / 10
+        return full
+
+    expected = pdf.groupby("A").apply(lambda x: custom_map_func(x))
+    actual = gdf.groupby("A").apply(lambda x: custom_map_func(x))
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "cust_func",
+    [lambda x: x - x.max(), lambda x: x.min() - x.max(), lambda x: x.min()],
+)
+def test_groupby_apply_return_series_dataframe(cust_func):
+    pdf = pd.DataFrame(
+        {"key": [0, 0, 1, 1, 2, 2, 2], "val": [0, 1, 2, 3, 4, 5, 6]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pdf.groupby(["key"]).apply(cust_func)
+    actual = gdf.groupby(["key"]).apply(cust_func)
 
     assert_eq(expected, actual)

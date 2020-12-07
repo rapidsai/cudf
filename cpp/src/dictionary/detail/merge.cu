@@ -25,6 +25,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/transform.h>
+
 namespace cudf {
 namespace dictionary {
 namespace detail {

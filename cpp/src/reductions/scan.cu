@@ -90,7 +90,7 @@ struct ScanDispatcher {
                              Op{});
     }
 
-    CHECK_CUDA(stream);
+    CHECK_CUDA(stream.value());
     return output_column;
   }
 
@@ -179,7 +179,7 @@ struct ScanDispatcher {
       thrust::inclusive_scan(
         rmm::exec_policy(stream), input, input + size, result.data().get(), Op{});
     }
-    CHECK_CUDA(stream);
+    CHECK_CUDA(stream.value());
 
     auto output_column = make_strings_column(result, Op::template identity<T>(), stream, mr);
     if (null_handling == null_policy::EXCLUDE) {

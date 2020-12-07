@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,12 @@
  */
 
 #include <strings/regex/regcomp.h>
-#include <cudf/detail/utilities/integer_utils.hpp>
-#include <rmm/device_buffer.hpp>
 #include <strings/regex/regex.cuh>
-#include "rmm/cuda_stream_view.hpp"
+
+#include <cudf/detail/utilities/integer_utils.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 
 namespace cudf {
 namespace strings {

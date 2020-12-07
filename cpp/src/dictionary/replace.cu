@@ -113,12 +113,17 @@ std::unique_ptr<column> replace_indices(column_view const& input,
   auto const d_input    = *input_view;
   auto predicate        = [d_input] __device__(auto i) { return d_input.is_valid(i); };
 
+  using Element = typename thrust::
+    tuple_element<0, typename thrust::iterator_traits<ReplacementIter>::value_type>::type;
+
   auto input_pair_iterator = make_nullable_index_iterator<true>(input);
+
   return cudf::detail::copy_if_else(true,
                                     input_pair_iterator,
                                     input_pair_iterator + input.size(),
                                     replacement_iter,
                                     predicate,
+                                    data_type{type_to_id<Element>()},
                                     stream,
                                     mr);
 }

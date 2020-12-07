@@ -14,6 +14,13 @@
  * limitations under the License.
  */
 
+#include <strings/utilities.cuh>
+
+#include <nvtext/normalize.hpp>
+
+#include <text/subword/detail/data_normalizer.hpp>
+#include <text/utilities/tokenize_ops.cuh>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -25,14 +32,8 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <strings/utilities.cuh>
-
-#include <nvtext/normalize.hpp>
-
-#include <text/subword/detail/data_normalizer.hpp>
-#include <text/utilities/tokenize_ops.cuh>
-
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/transform_reduce.h>
