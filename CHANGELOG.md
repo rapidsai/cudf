@@ -8,6 +8,9 @@
 
 ## Bug Fixes
 
+- PR #6912 Fix rmm_mode=managed parameter for gtests
+
+
 # cuDF 0.17.0 (Date TBD)
 
 ## New Features
