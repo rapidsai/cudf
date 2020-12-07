@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@
 
       for (auto _ : state){
 
-        cudaStream_t stream = 0;
+        rmm::cuda_stream_view stream{}; // default stream, could be another stream
 
         // Create (Construct) an object of this class. You HAVE to pass in the
         // benchmark::State object you are using. It measures the time from its
@@ -44,7 +44,7 @@
         cuda_event_timer raii(state, true, stream); // flush_l2_cache = true
 
         // Now perform the operations that is to be benchmarked
-        sample_kernel<<<1, 256, 0, stream>>>(); // Possibly launching a CUDA kernel
+        sample_kernel<<<1, 256, 0, stream.value()>>>(); // Possibly launching a CUDA kernel
 
       }
     }
@@ -61,7 +61,10 @@
 
 // Google Benchmark library
 #include <benchmark/benchmark.h>
+
 #include <cudf/types.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <driver_types.h>
 
@@ -77,7 +80,9 @@ class cuda_event_timer {
    *                            every iteration.
    * @param[in] stream_ The CUDA stream we are measuring time on.
    **/
-  cuda_event_timer(benchmark::State& state, bool flush_l2_cache, cudaStream_t stream_ = 0);
+  cuda_event_timer(benchmark::State& state,
+                   bool flush_l2_cache,
+                   rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   // The user must provide a benchmark::State object to set
   // the timer so we disable the default c'tor.
@@ -91,7 +96,7 @@ class cuda_event_timer {
  private:
   cudaEvent_t start;
   cudaEvent_t stop;
-  cudaStream_t stream;
+  rmm::cuda_stream_view stream;
   benchmark::State* p_state;
 };
 

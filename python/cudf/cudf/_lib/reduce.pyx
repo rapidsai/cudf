@@ -1,7 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 import cudf
-from cudf._lib.cpp.reduce cimport cpp_reduce, cpp_scan, scan_type
+from cudf._lib.cpp.reduce cimport cpp_reduce, cpp_scan, scan_type, cpp_minmax
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport data_type, type_id
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -12,7 +12,7 @@ from cudf._lib.types import np_to_cudf_types
 from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.aggregation cimport make_aggregation, aggregation
 from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
+from libcpp.utility cimport move, pair
 import numpy as np
 
 
@@ -105,3 +105,28 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
 
     py_result = Column.from_unique_ptr(move(c_result))
     return py_result
+
+
+def minmax(Column incol):
+    """
+    Top level Cython minmax function wrapping libcudf++ minmax.
+
+    Parameters
+    ----------
+    incol : Column
+        A cuDF Column object
+
+    Returns
+    -------
+    A pair of ``(min, max)`` values of ``incol``
+    """
+    cdef column_view c_incol_view = incol.view()
+    cdef pair[unique_ptr[scalar], unique_ptr[scalar]] c_result
+
+    with nogil:
+        c_result = move(cpp_minmax(c_incol_view))
+
+    py_result_min = DeviceScalar.from_unique_ptr(move(c_result.first))
+    py_result_max = DeviceScalar.from_unique_ptr(move(c_result.second))
+
+    return cudf.Scalar(py_result_min), cudf.Scalar(py_result_max)

@@ -12,6 +12,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_device_scalar
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.table cimport Table
+from cudf._lib.reduce import minmax
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport (
@@ -130,7 +131,16 @@ def copy_range(Column input_column,
 
 
 def gather(Table source_table, Column gather_map, bool keep_index=True):
-    assert pd.api.types.is_integer_dtype(gather_map.dtype)
+    if not pd.api.types.is_integer_dtype(gather_map.dtype):
+        raise ValueError("Gather map is not integer dtype.")
+
+    if len(gather_map) > 0:
+        gm_min, gm_max = minmax(gather_map)
+        if gm_min < -len(source_table) or gm_max >= len(source_table):
+            raise IndexError(f"Gather map index with min {gm_min},"
+                             f" max {gm_max} is out of bounds in"
+                             f" {type(source_table)} with {len(source_table)}"
+                             f" rows.")
 
     cdef unique_ptr[table] c_result
     cdef table_view source_table_view
@@ -139,14 +149,16 @@ def gather(Table source_table, Column gather_map, bool keep_index=True):
     else:
         source_table_view = source_table.data_view()
     cdef column_view gather_map_view = gather_map.view()
-    cdef bool c_bounds_check = True
+    cdef cpp_copying.out_of_bounds_policy policy = (
+        cpp_copying.out_of_bounds_policy.DONT_CHECK
+    )
 
     with nogil:
         c_result = move(
             cpp_copying.gather(
                 source_table_view,
                 gather_map_view,
-                c_bounds_check
+                policy
             )
         )
 

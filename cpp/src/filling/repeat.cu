@@ -46,7 +46,8 @@ struct count_accessor {
   cudf::scalar const* p_scalar = nullptr;
 
   template <typename T>
-  std::enable_if_t<std::is_integral<T>::value, cudf::size_type> operator()(cudaStream_t stream = 0)
+  std::enable_if_t<std::is_integral<T>::value, cudf::size_type> operator()(
+    rmm::cuda_stream_view stream)
   {
     using ScalarType = cudf::scalar_type_t<T>;
 #if 1
@@ -63,7 +64,8 @@ struct count_accessor {
   }
 
   template <typename T>
-  std::enable_if_t<not std::is_integral<T>::value, cudf::size_type> operator()(cudaStream_t stream)
+  std::enable_if_t<not std::is_integral<T>::value, cudf::size_type> operator()(
+    rmm::cuda_stream_view)
   {
     CUDF_FAIL("count value should be a integral type.");
   }
@@ -133,7 +135,8 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                       thrust::make_counting_iterator(output_size),
                       indices.begin());
 
-  return gather(input_table, indices.begin(), indices.end(), false, stream, mr);
+  return gather(
+    input_table, indices.begin(), indices.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
@@ -153,7 +156,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
     thrust::make_counting_iterator(0), [count] __device__(auto i) { return i / count; });
   auto map_end = map_begin + output_size;
 
-  return gather(input_table, map_begin, map_end, false, stream, mr);
+  return gather(input_table, map_begin, map_end, out_of_bounds_policy::DONT_CHECK, stream, mr);
 }
 
 }  // namespace detail

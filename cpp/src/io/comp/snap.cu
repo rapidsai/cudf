@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 
-#include <io/utilities/block_utils.cuh>
 #include "gpuinflate.h"
+
+#include <io/utilities/block_utils.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
-#define HASH_BITS 12
+constexpr int hash_bits = 12;
 
 // TBD: Tentatively limits to 2-byte codes to prevent long copy search followed by long literal
 // encoding
-#define MAX_LITERAL_LENGTH 256
-
-#define MAX_COPY_LENGTH 64       // Syntax limit
-#define MAX_COPY_DISTANCE 32768  // Matches encoder limit as described in snappy format description
 
 /**
  * @brief snappy compressor state
@@ -40,7 +39,7 @@ struct snap_state_s {
   volatile uint32_t literal_length;   ///< Number of literal bytes
   volatile uint32_t copy_length;      ///< Number of copy bytes
   volatile uint32_t copy_distance;    ///< Distance for copy bytes
-  uint16_t hash_map[1 << HASH_BITS];  ///< Low 16-bit offset from hash
+  uint16_t hash_map[1 << hash_bits];  ///< Low 16-bit offset from hash
 };
 
 /**
@@ -48,7 +47,7 @@ struct snap_state_s {
  **/
 static inline __device__ uint32_t snap_hash(uint32_t v)
 {
-  return (v * ((1 << 20) + (0x2a00) + (0x6a) + 1)) >> (32 - HASH_BITS);
+  return (v * ((1 << 20) + (0x2a00) + (0x6a) + 1)) >> (32 - hash_bits);
 }
 
 /**
@@ -159,9 +158,9 @@ static inline __device__ uint32_t HashMatchAny(uint32_t v, uint32_t t)
   return __match_any_sync(~0, v);
 #else
   uint32_t err_map = 0;
-  for (uint32_t i = 0; i < HASH_BITS; i++, v >>= 1) {
+  for (uint32_t i = 0; i < hash_bits; i++, v >>= 1) {
     uint32_t b       = v & 1;
-    uint32_t match_b = BALLOT(b);
+    uint32_t match_b = ballot(b);
     err_map |= match_b ^ -(int32_t)b;
   }
   return ~err_map;
@@ -170,7 +169,7 @@ static inline __device__ uint32_t HashMatchAny(uint32_t v, uint32_t t)
 
 /**
  * @brief Finds the first occurrence of a consecutive 4-byte match in the input sequence,
- * or at most MAX_LITERAL_LENGTH bytes
+ * or at most 256 bytes
  *
  * @param s Compressor state (copy_length set to 4 if a match is found, zero otherwise)
  * @param src Uncompressed buffer
@@ -184,9 +183,12 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s *s,
                                              uint32_t pos0,
                                              uint32_t t)
 {
-  uint32_t len    = s->src_len;
-  uint32_t pos    = pos0;
-  uint32_t maxpos = pos0 + MAX_LITERAL_LENGTH - 31;
+  constexpr int max_literal_length = 256;
+  // Matches encoder limit as described in snappy format description
+  constexpr int max_copy_distance = 32768;
+  uint32_t len                    = s->src_len;
+  uint32_t pos                    = pos0;
+  uint32_t maxpos                 = pos0 + max_literal_length - 31;
   uint32_t match_mask, literal_cnt;
   if (t == 0) { s->copy_length = 0; }
   do {
@@ -195,7 +197,7 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s *s,
     uint32_t hash             = (valid4) ? snap_hash(data32) : 0;
     uint32_t local_match      = HashMatchAny(hash, t);
     uint32_t local_match_lane = 31 - __clz(local_match & ((1 << t) - 1));
-    uint32_t local_match_data = SHFL(data32, min(local_match_lane, t));
+    uint32_t local_match_data = shuffle(data32, min(local_match_lane, t));
     uint32_t offset, match;
     if (valid4) {
       if (local_match_lane < t && local_match_data == data32) {
@@ -205,14 +207,14 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s *s,
         offset = (pos & ~0xffff) | s->hash_map[hash];
         if (offset >= pos) { offset = (offset >= 0x10000) ? offset - 0x10000 : pos; }
         match =
-          (offset < pos && offset + MAX_COPY_DISTANCE >= pos + t && fetch4(src + offset) == data32);
+          (offset < pos && offset + max_copy_distance >= pos + t && fetch4(src + offset) == data32);
       }
     } else {
       match       = 0;
       local_match = 0;
       offset      = pos + t;
     }
-    match_mask = BALLOT(match);
+    match_mask = ballot(match);
     if (match_mask != 0) {
       literal_cnt = __ffs(match_mask) - 1;
       if (t == literal_cnt) {
@@ -236,9 +238,9 @@ static __device__ uint32_t Match60(const uint8_t *src1,
                                    uint32_t len,
                                    uint32_t t)
 {
-  uint32_t mismatch = BALLOT(t >= len || src1[t] != src2[t]);
+  uint32_t mismatch = ballot(t >= len || src1[t] != src2[t]);
   if (mismatch == 0) {
-    mismatch = BALLOT(32 + t >= len || src1[32 + t] != src2[32 + t]);
+    mismatch = ballot(32 + t >= len || src1[32 + t] != src2[32 + t]);
     return 31 + __ffs(mismatch);  // mismatch cannot be zero here if len <= 63
   } else {
     return __ffs(mismatch) - 1;
@@ -309,7 +311,7 @@ extern "C" __global__ void __launch_bounds__(128)
         if (t == 0) { dst = StoreCopy(dst, end, copy_len, distance); }
         pos += copy_len;
       }
-      SYNCWARP();
+      __syncwarp();
       if (t == 0) { s->dst = dst; }
     } else {
       pos += literal_len + copy_len;
@@ -342,11 +344,13 @@ extern "C" __global__ void __launch_bounds__(128)
 cudaError_t __host__ gpu_snap(gpu_inflate_input_s *inputs,
                               gpu_inflate_status_s *outputs,
                               int count,
-                              cudaStream_t stream)
+                              rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);  // 4 warps per stream, 1 stream per block
   dim3 dim_grid(count, 1);
-  if (count > 0) { snap_kernel<<<dim_grid, dim_block, 0, stream>>>(inputs, outputs, count); }
+  if (count > 0) {
+    snap_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs, count);
+  }
   return cudaSuccess;
 }
 

@@ -140,7 +140,11 @@ class DatetimeColumn(column.ColumnBase):
     def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarObj:
         if isinstance(other, cudf.Scalar):
             return other
-        elif isinstance(other, dt.datetime):
+
+        if isinstance(other, np.ndarray) and other.ndim == 0:
+            other = other.item()
+
+        if isinstance(other, dt.datetime):
             other = np.datetime64(other)
         elif isinstance(other, dt.timedelta):
             other = np.timedelta64(other)

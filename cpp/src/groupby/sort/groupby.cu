@@ -33,6 +33,8 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <memory>
 #include <unordered_map>
 #include <utility>
@@ -54,9 +56,9 @@ struct store_result_functor {
                        column_view const& values,
                        sort::sort_groupby_helper& helper,
                        cudf::detail::result_cache& cache,
-                       cudaStream_t stream,
+                       rmm::cuda_stream_view stream,
                        rmm::mr::device_memory_resource* mr)
-    : col_idx(col_idx), values(values), helper(helper), cache(cache), stream(stream), mr(mr)
+    : col_idx(col_idx), helper(helper), cache(cache), values(values), stream(stream), mr(mr)
   {
   }
 
@@ -105,7 +107,7 @@ struct store_result_functor {
   cudf::detail::result_cache& cache;  ///< cache of results to store into
   column_view const& values;          ///< Column of values to group and aggregate
 
-  cudaStream_t stream;                  ///< CUDA stream on which to execute kernels
+  rmm::cuda_stream_view stream;         ///< CUDA stream on which to execute kernels
   rmm::mr::device_memory_resource* mr;  ///< Memory resource to allocate space for results
 
   std::unique_ptr<column> sorted_values;   ///< Memoised grouped and sorted values
@@ -122,8 +124,8 @@ void store_result_functor::operator()<aggregation::COUNT_VALID>(aggregation cons
     agg,
     get_grouped_values().nullable()
       ? detail::group_count_valid(
-          get_grouped_values(), helper.group_labels(), helper.num_groups(), mr, stream)
-      : detail::group_count_all(helper.group_offsets(), helper.num_groups(), mr, stream));
+          get_grouped_values(), helper.group_labels(), helper.num_groups(), stream, mr)
+      : detail::group_count_all(helper.group_offsets(), helper.num_groups(), stream, mr));
 }
 
 template <>
@@ -132,7 +134,7 @@ void store_result_functor::operator()<aggregation::COUNT_ALL>(aggregation const&
   if (cache.has_result(col_idx, agg)) return;
 
   cache.add_result(
-    col_idx, agg, detail::group_count_all(helper.group_offsets(), helper.num_groups(), mr, stream));
+    col_idx, agg, detail::group_count_all(helper.group_offsets(), helper.num_groups(), stream, mr));
 }
 
 template <>
@@ -143,7 +145,7 @@ void store_result_functor::operator()<aggregation::SUM>(aggregation const& agg)
   cache.add_result(col_idx,
                    agg,
                    detail::group_sum(
-                     get_grouped_values(), helper.num_groups(), helper.group_labels(), mr, stream));
+                     get_grouped_values(), helper.num_groups(), helper.group_labels(), stream, mr));
 };
 
 template <>
@@ -157,8 +159,8 @@ void store_result_functor::operator()<aggregation::ARGMAX>(aggregation const& ag
                                         helper.num_groups(),
                                         helper.group_labels(),
                                         helper.key_sort_order(),
-                                        mr,
-                                        stream));
+                                        stream,
+                                        mr));
 };
 
 template <>
@@ -172,8 +174,8 @@ void store_result_functor::operator()<aggregation::ARGMIN>(aggregation const& ag
                                         helper.num_groups(),
                                         helper.group_labels(),
                                         helper.key_sort_order(),
-                                        mr,
-                                        stream));
+                                        stream,
+                                        mr));
 };
 
 template <>
@@ -184,7 +186,7 @@ void store_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
   auto result = [&]() {
     if (cudf::is_fixed_width(values.type())) {
       return detail::group_min(
-        get_grouped_values(), helper.num_groups(), helper.group_labels(), mr, stream);
+        get_grouped_values(), helper.num_groups(), helper.group_labels(), stream, mr);
     } else {
       auto argmin_agg = make_argmin_aggregation();
       operator()<aggregation::ARGMIN>(*argmin_agg);
@@ -201,8 +203,8 @@ void store_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
       auto transformed_result =
         cudf::detail::gather(table_view({values}),
                              null_removed_map,
-                             argmin_result.nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
-                                                      : cudf::detail::out_of_bounds_policy::NULLIFY,
+                             argmin_result.nullable() ? cudf::out_of_bounds_policy::NULLIFY
+                                                      : cudf::out_of_bounds_policy::DONT_CHECK,
                              cudf::detail::negative_index_policy::NOT_ALLOWED,
                              stream,
                              mr);
@@ -221,7 +223,7 @@ void store_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
   auto result = [&]() {
     if (cudf::is_fixed_width(values.type())) {
       return detail::group_max(
-        get_grouped_values(), helper.num_groups(), helper.group_labels(), mr, stream);
+        get_grouped_values(), helper.num_groups(), helper.group_labels(), stream, mr);
     } else {
       auto argmax_agg = make_argmax_aggregation();
       operator()<aggregation::ARGMAX>(*argmax_agg);
@@ -238,8 +240,8 @@ void store_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
       auto transformed_result =
         cudf::detail::gather(table_view({values}),
                              null_removed_map,
-                             argmax_result.nullable() ? cudf::detail::out_of_bounds_policy::IGNORE
-                                                      : cudf::detail::out_of_bounds_policy::NULLIFY,
+                             argmax_result.nullable() ? cudf::out_of_bounds_policy::NULLIFY
+                                                      : cudf::out_of_bounds_policy::DONT_CHECK,
                              cudf::detail::negative_index_policy::NOT_ALLOWED,
                              stream,
                              mr);
@@ -279,7 +281,7 @@ void store_result_functor::operator()<aggregation::VARIANCE>(aggregation const& 
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto var_agg   = static_cast<cudf::detail::std_var_aggregation const&>(agg);
+  auto var_agg   = static_cast<cudf::detail::var_aggregation const&>(agg);
   auto mean_agg  = make_mean_aggregation();
   auto count_agg = make_count_aggregation();
   operator()<aggregation::MEAN>(*mean_agg);
@@ -292,8 +294,8 @@ void store_result_functor::operator()<aggregation::VARIANCE>(aggregation const& 
                                   group_sizes,
                                   helper.group_labels(),
                                   var_agg._ddof,
-                                  mr,
-                                  stream);
+                                  stream,
+                                  mr);
   cache.add_result(col_idx, agg, std::move(result));
 };
 
@@ -302,7 +304,7 @@ void store_result_functor::operator()<aggregation::STD>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto std_agg = static_cast<cudf::detail::std_var_aggregation const&>(agg);
+  auto std_agg = static_cast<cudf::detail::std_aggregation const&>(agg);
   auto var_agg = make_variance_aggregation(std_agg._ddof);
   operator()<aggregation::VARIANCE>(*var_agg);
   column_view var_result = cache.get_result(col_idx, *var_agg);
@@ -327,8 +329,8 @@ void store_result_functor::operator()<aggregation::QUANTILE>(aggregation const& 
                                         helper.num_groups(),
                                         quantile_agg._quantiles,
                                         quantile_agg._interpolation,
-                                        mr,
-                                        stream);
+                                        stream,
+                                        mr);
   cache.add_result(col_idx, agg, std::move(result));
 };
 
@@ -347,8 +349,8 @@ void store_result_functor::operator()<aggregation::MEDIAN>(aggregation const& ag
                                         helper.num_groups(),
                                         {0.5},
                                         interpolation::LINEAR,
-                                        mr,
-                                        stream);
+                                        stream,
+                                        mr);
   cache.add_result(col_idx, agg, std::move(result));
 };
 
@@ -364,8 +366,8 @@ void store_result_functor::operator()<aggregation::NUNIQUE>(aggregation const& a
                                       helper.num_groups(),
                                       helper.group_offsets(),
                                       nunique_agg._null_handling,
-                                      mr,
-                                      stream);
+                                      stream,
+                                      mr);
   cache.add_result(col_idx, agg, std::move(result));
 };
 
@@ -394,8 +396,8 @@ void store_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation cons
                                              helper.num_groups(),
                                              nth_element_agg._n,
                                              nth_element_agg._null_handling,
-                                             mr,
-                                             stream));
+                                             stream,
+                                             mr));
 }
 
 template <>
@@ -404,7 +406,7 @@ void store_result_functor::operator()<aggregation::COLLECT>(aggregation const& a
   if (cache.has_result(col_idx, agg)) return;
 
   auto result = detail::group_collect(
-    get_grouped_values(), helper.group_offsets(), helper.num_groups(), mr, stream);
+    get_grouped_values(), helper.group_offsets(), helper.num_groups(), stream, mr);
 
   cache.add_result(col_idx, agg, std::move(result));
 };
@@ -414,7 +416,7 @@ void store_result_functor::operator()<aggregation::COLLECT>(aggregation const& a
 // Sort-based groupby
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort_aggregate(
   std::vector<aggregation_request> const& requests,
-  cudaStream_t stream,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
   // We're going to start by creating a cache of results so that aggs that

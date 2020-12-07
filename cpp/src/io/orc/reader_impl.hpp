@@ -26,6 +26,8 @@
 #include <cudf/io/detail/orc.hpp>
 #include <cudf/io/orc.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <memory>
 #include <string>
 #include <utility>
@@ -41,7 +43,7 @@ using namespace cudf::io;
 // Forward declarations
 class metadata;
 namespace {
-class orc_stream_info;
+struct orc_stream_info;
 }
 
 /**
@@ -73,7 +75,7 @@ class reader::impl {
   table_with_metadata read(size_type skip_rows,
                            size_type num_rows,
                            const std::vector<size_type> &stripes,
-                           cudaStream_t stream);
+                           rmm::cuda_stream_view stream);
 
  private:
   /**
@@ -97,7 +99,7 @@ class reader::impl {
                                             size_t num_stripes,
                                             rmm::device_vector<gpu::RowGroup> &row_groups,
                                             size_t row_index_stride,
-                                            cudaStream_t stream);
+                                            rmm::cuda_stream_view stream);
 
   /**
    * @brief Converts the stripe column data and outputs to columns
@@ -120,7 +122,7 @@ class reader::impl {
                           const rmm::device_vector<gpu::RowGroup> &row_groups,
                           size_t row_index_stride,
                           std::vector<column_buffer> &out_buffers,
-                          cudaStream_t stream);
+                          rmm::cuda_stream_view stream);
 
  private:
   rmm::mr::device_memory_resource *_mr = nullptr;

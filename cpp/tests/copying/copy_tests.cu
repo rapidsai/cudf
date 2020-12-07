@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
-#include <cudf/copying.hpp>
-#include <cudf/detail/copy_if_else.cuh>
-#include <cudf/detail/iterator.cuh>
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/copying.hpp>
+#include <cudf/detail/copy_if_else.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 template <typename T>
 struct CopyTest : public cudf::test::BaseFixture {
@@ -69,8 +70,8 @@ struct copy_if_else_tiny_grid_functor {
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& lhs,
                                            cudf::column_view const& rhs,
                                            Filter filter,
-                                           rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream)
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
   {
     // output
     std::unique_ptr<cudf::column> out =
@@ -85,7 +86,7 @@ struct copy_if_else_tiny_grid_functor {
 
     // call the kernel with an artificially small grid
     cudf::detail::copy_if_else_kernel<32, T, decltype(lhs_iter), decltype(rhs_iter), Filter, false>
-      <<<1, 32, 0, stream>>>(lhs_iter, rhs_iter, filter, *out_dv, nullptr);
+      <<<1, 32, 0, stream.value()>>>(lhs_iter, rhs_iter, filter, *out_dv, nullptr);
 
     return out;
   }
@@ -94,8 +95,8 @@ struct copy_if_else_tiny_grid_functor {
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& lhs,
                                            cudf::column_view const& rhs,
                                            Filter filter,
-                                           rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream)
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
   {
     CUDF_FAIL("Unexpected test execution");
   }
@@ -115,8 +116,8 @@ std::unique_ptr<cudf::column> tiny_grid_launch(cudf::column_view const& lhs,
                                lhs,
                                rhs,
                                filter,
-                               rmm::mr::get_current_device_resource(),
-                               (cudaStream_t)0);
+                               rmm::cuda_stream_default,
+                               rmm::mr::get_current_device_resource());
 }
 
 TYPED_TEST(CopyTest, CopyIfElseTestTinyGrid)
@@ -560,4 +561,62 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseScalarScalar)
   }
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end(), valids);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+template <typename T>
+struct FixedPointTypes : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(FixedPointTypes, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTypes, FixedPointSimple)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const mask     = cudf::test::fixed_width_column_wrapper<bool>{0, 1, 1, 1, 0, 0};
+  auto const a        = fp_wrapper{{110, 220, 330, 440, 550, 660}, scale_type{-2}};
+  auto const b        = fp_wrapper{{0, 0, 0, 0, 0, 0}, scale_type{-2}};
+  auto const expected = fp_wrapper{{0, 220, 330, 440, 0, 0}, scale_type{-2}};
+  auto const result   = cudf::copy_if_else(a, b, mask);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTypes, FixedPointLarge)
+{
+  using namespace numeric;
+  using namespace cudf::test;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto a = thrust::make_counting_iterator(-1000);
+  auto b = thrust::make_constant_iterator(0);
+  auto m = make_counting_transform_iterator(-1000, [](int i) { return i > 0; });
+  auto e = make_counting_transform_iterator(-1000, [](int i) { return std::max(0, i); });
+
+  auto const mask     = cudf::test::fixed_width_column_wrapper<bool>(m, m + 2000);
+  auto const A        = fp_wrapper{a, a + 2000, scale_type{-3}};
+  auto const B        = fp_wrapper{b, b + 2000, scale_type{-3}};
+  auto const expected = fp_wrapper{e, e + 2000, scale_type{-3}};
+  auto const result   = cudf::copy_if_else(A, B, mask);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(FixedPointTypes, FixedPointScaleMismatch)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const mask = cudf::test::fixed_width_column_wrapper<bool>{0, 1, 1, 1, 0, 0};
+  auto const a    = fp_wrapper{{110, 220, 330, 440, 550, 660}, scale_type{-2}};
+  auto const b    = fp_wrapper{{0, 0, 0, 0, 0, 0}, scale_type{-1}};
+
+  EXPECT_THROW(cudf::copy_if_else(a, b, mask), cudf::logic_error);
 }

@@ -1545,6 +1545,13 @@ class RangeIndex(Index):
         return self._stop
 
     @property
+    def step(self):
+        """
+        The value of the step parameter.
+        """
+        return self._step
+
+    @property
     def _num_columns(self):
         return 1
 

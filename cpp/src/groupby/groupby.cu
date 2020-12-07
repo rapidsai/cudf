@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ groupby::groupby(table_view const& keys,
 // Select hash vs. sort groupby implementation
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::dispatch_aggregation(
   std::vector<aggregation_request> const& requests,
-  cudaStream_t stream,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
   // If sort groupby has been called once on this groupby object, then
@@ -149,7 +149,7 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
   if (values.num_columns()) {
     grouped_values = cudf::detail::gather(values,
                                           helper().key_sort_order(),
-                                          cudf::detail::out_of_bounds_policy::NULLIFY,
+                                          cudf::out_of_bounds_policy::DONT_CHECK,
                                           cudf::detail::negative_index_policy::NOT_ALLOWED,
                                           rmm::cuda_stream_default,
                                           mr);

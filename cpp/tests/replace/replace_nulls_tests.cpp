@@ -158,7 +158,7 @@ TEST_F(ReplaceNullsStringsTest, ReplaceNone)
   std::unique_ptr<cudf::column> result;
   ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, replacement_w, mr()));
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected_w);
 }
 
 TEST_F(ReplaceNullsStringsTest, SimpleReplaceScalar)

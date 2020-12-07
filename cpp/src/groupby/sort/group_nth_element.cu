@@ -18,10 +18,13 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace groupby {
@@ -33,8 +36,8 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
                                           size_type num_groups,
                                           size_type n,
                                           null_policy null_handling,
-                                          rmm::mr::device_memory_resource *mr,
-                                          cudaStream_t stream)
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(static_cast<size_t>(values.size()) == group_labels.size(),
                "Size of values column should be same as that of group labels");
@@ -47,7 +50,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
   if (null_handling == null_policy::INCLUDE || !values.has_nulls()) {
     // Returns index of nth value.
     thrust::transform_if(
-      rmm::exec_policy(stream)->on(stream),
+      rmm::exec_policy(stream)->on(stream.value()),
       group_sizes.begin<size_type>(),
       group_sizes.end<size_type>(),
       group_offsets.begin(),
@@ -67,7 +70,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
                                       [] __device__(auto b) { return static_cast<size_type>(b); });
     rmm::device_vector<size_type> intra_group_index(values.size());
     // intra group index for valids only.
-    thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream),
+    thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream.value()),
                                   group_labels.begin(),
                                   group_labels.end(),
                                   bitmask_iterator,
@@ -76,7 +79,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
     rmm::device_vector<size_type> group_count = [&] {
       if (n < 0) {
         rmm::device_vector<size_type> group_count(num_groups);
-        thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
+        thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream.value()),
                               group_labels.begin(),
                               group_labels.end(),
                               bitmask_iterator,
@@ -88,7 +91,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
       }
     }();
     // gather the valid index == n
-    thrust::scatter_if(rmm::exec_policy(stream)->on(stream),
+    thrust::scatter_if(rmm::exec_policy(stream)->on(stream.value()),
                        thrust::make_counting_iterator<size_type>(0),
                        thrust::make_counting_iterator<size_type>(values.size()),
                        group_labels.begin(),                          // map
@@ -103,8 +106,12 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
                          return (bitmask_iterator[i] && intra_group_index[i] == nth);
                        });
   }
-  auto output_table = cudf::detail::gather(
-    table_view{{values}}, nth_index.begin(), nth_index.end(), true, stream, mr);
+  auto output_table = cudf::detail::gather(table_view{{values}},
+                                           nth_index.begin(),
+                                           nth_index.end(),
+                                           out_of_bounds_policy::NULLIFY,
+                                           stream,
+                                           mr);
   if (!output_table->get_column(0).has_nulls()) output_table->get_column(0).set_null_mask({}, 0);
   return std::make_unique<column>(std::move(output_table->get_column(0)));
 }
