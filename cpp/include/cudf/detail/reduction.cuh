@@ -118,7 +118,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 {
   auto binary_op  = sop.get_binary_op();
   auto identity   = sop.template get_identity<OutputType>();
-  auto dev_result = rmm::device_scalar<OutputType>{identity, stream, mr};
+  auto dev_result = rmm::device_scalar<OutputType>{identity, stream};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
