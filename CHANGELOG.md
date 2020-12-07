@@ -9,7 +9,6 @@
 ## Bug Fixes
 
 - PR #6884 Correct the sampling range when sampling with replacement
-
 - PR #6912 Fix rmm_mode=managed parameter for gtests
 
 
