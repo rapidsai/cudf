@@ -2,9 +2,14 @@
 
 ## New Features
 
+- PR #6902 Implement `DataFrame.quantile` for `datetime` and `timedelta` data types
+
 ## Improvements
 
 ## Bug Fixes
+
+- PR #6912 Fix rmm_mode=managed parameter for gtests
+
 
 # cuDF 0.17.0 (Date TBD)
 
