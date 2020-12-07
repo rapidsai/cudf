@@ -3,7 +3,7 @@
 ## New Features
 
 - PR #6902 Implement `DataFrame.quantile` for `datetime` and `timedelta` data types
-- PR #6814 Implement `cudf::reduce` for `decimal32` and `decimal64`
+- PR #6814 Implement `cudf::reduce` for `decimal32` and `decimal64` (part 1)
 
 ## Improvements
 

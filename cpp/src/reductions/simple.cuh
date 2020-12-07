@@ -28,7 +28,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include "cudf/utilities/error.hpp"
 
 namespace cudf {
 namespace reduction {
@@ -70,7 +69,7 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
     }
   }();
 
-  // set scalar is valid0
+  // set scalar is valid
   result->set_valid((col.null_count() < col.size()), stream);
   return result;
 }
