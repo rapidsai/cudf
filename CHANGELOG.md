@@ -6,6 +6,8 @@
 
 ## Improvements
 
+ - PR #6934 Update libcudf to use simplified `rmm::exec_policy`
+
 ## Bug Fixes
 
 - PR #6912 Fix rmm_mode=managed parameter for gtests
