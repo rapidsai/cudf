@@ -1,14 +1,14 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import cupy as cp
 import numpy as np
+import pandas as pd
 import pytest
 
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.tests.utils import assert_eq
 
-import pandas as pd
-import cupy as cp
 
 @pytest.mark.parametrize("ncats,nelem", [(2, 2), (2, 10), (10, 100)])
 def test_factorize_series_obj(ncats, nelem):
@@ -46,6 +46,7 @@ def test_factorize_index_obj(ncats, nelem):
     handcoded = [encoder[v] for v in arr]
     np.testing.assert_array_equal(uvals.to_array(), handcoded)
 
+
 def test_factorize_series_index():
     df = DataFrame()
     df["col1"] = ["C", "H", "C", "W", "W", "W", "W", "W", "C", "W"]
@@ -79,8 +80,9 @@ def test_factorize_series_index():
         df.to_pandas().col1.factorize()[1].values,
     )
 
+
 def test_cudf_factorize_series():
-    data = [1,2,3,4,5]
+    data = [1, 2, 3, 4, 5]
 
     psr = pd.Series(data)
     gsr = cudf.Series(data)
@@ -88,27 +90,14 @@ def test_cudf_factorize_series():
     expect = pd.factorize(psr)
     got = cudf.factorize(gsr)
 
-    assert(len(expect) == len(got))
+    assert len(expect) == len(got)
 
     np.testing.assert_array_equal(expect[0], got[0].to_array())
     np.testing.assert_array_equal(expect[1], got[1].to_array())
 
-def test_cudf_factorize_series():
-    data = [1,2,3,4,5]
-
-    psr = pd.Series(data)
-    gsr = cudf.Series(data)
-
-    expect = pd.factorize(psr)
-    got = cudf.factorize(gsr)
-
-    assert(len(expect) == len(got))
-
-    np.testing.assert_array_equal(expect[0], got[0].to_array())
-    np.testing.assert_array_equal(expect[1], got[1].to_array())
 
 def test_cudf_factorize_index():
-    data = [1,2,3,4,5]
+    data = [1, 2, 3, 4, 5]
 
     pi = pd.Index(data)
     gi = cudf.Index(data)
@@ -116,13 +105,14 @@ def test_cudf_factorize_index():
     expect = pd.factorize(pi)
     got = cudf.factorize(gi)
 
-    assert(len(expect) == len(got))
+    assert len(expect) == len(got)
 
     np.testing.assert_array_equal(expect[0], got[0].to_array())
     np.testing.assert_array_equal(expect[1], got[1].to_array())
 
+
 def test_cudf_factorize_array():
-    data = [1,2,3,4,5]
+    data = [1, 2, 3, 4, 5]
 
     parr = np.array(data)
     garr = cp.array(data)
@@ -130,7 +120,7 @@ def test_cudf_factorize_array():
     expect = pd.factorize(parr)
     got = cudf.factorize(garr)
 
-    assert(len(expect) == len(got))
+    assert len(expect) == len(got)
 
     np.testing.assert_array_equal(expect[0], got[0].to_array())
     np.testing.assert_array_equal(expect[1], got[1].to_array())

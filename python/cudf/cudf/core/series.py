@@ -5220,5 +5220,45 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     return Series(result_col, index=index)
 
 
-def factorize(obj, na_sentinel=-1):
-    return cudf.Series(obj).factorize(na_sentinel=na_sentinel)
+def factorize(values, sort=False, na_sentinel=-1):
+    """Encode the input values as integer labels
+
+    Parameters
+    ----------
+    values: Series, Index, or CuPy array
+        The data to be factorized.
+    na_sentinel : number
+        Value to indicate missing category.
+
+    Returns
+    --------
+    (labels, cats) : (Series, Series)
+        - *labels* contains the encoded values
+        - *cats* contains the categories in order that the N-th
+            item corresponds to the (N-1) code.
+
+    Examples
+    --------
+    >>> import cudf
+    >>> data = cudf.Series(['a', 'c', 'c'])
+    >>> codes, uniques = cudf.factorize(data)
+    >>> codes
+    0    0
+    1    1
+    2    1
+    dtype: int8
+    >>> uniques
+    0    a
+    1    c
+    dtype: object
+
+    See Also
+    --------
+    cudf.Series.factorize
+
+    """
+    if sort:
+        raise NotImplementedError(
+            "Sorting not yet supported during factorization."
+        )
+    return cudf.Series(values).factorize(na_sentinel=na_sentinel)
