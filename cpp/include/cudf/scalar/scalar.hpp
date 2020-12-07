@@ -348,17 +348,16 @@ class fixed_point_scalar : public scalar {
    * @param[in] stream CUDA stream used for device memory operations.
    * @param[in] mr Device memory resource to use for device memory allocation
    */
-  // fixed_point_scalar(rmm::device_scalar<rep_type>&& data,
-  //                    bool is_valid                       = true,
-  //                    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  //                    rmm::mr::device_memory_resource* mr =
-  //                    rmm::mr::get_current_device_resource())
-  //   : scalar{data_type{type_to_id<T>()}, is_valid, stream, mr},  // note that scale is ignored
-  //   here
-  //     _data{std::forward<rmm::device_scalar<rep_type>>(data),
-  //     _scale{std::forward<rmm::device_scalar<rep_type>>(0)}
-  // {
-  // }
+  fixed_point_scalar(rmm::device_scalar<rep_type>&& data,
+                     rmm::device_scalar<int32_t>&& scale,
+                     bool is_valid                       = true,
+                     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+    : scalar{data_type{type_to_id<T>()}, is_valid, stream, mr},
+      _data{std::forward<rmm::device_scalar<rep_type>>(data)},
+      _scale{std::forward<rmm::device_scalar<int32_t>>(scale)}
+  {
+  }
 
   /**
    * @brief Get the value of the scalar
@@ -370,7 +369,11 @@ class fixed_point_scalar : public scalar {
     return _data.value(stream);
   }
 
-  // TODO docs
+  /**
+   * @brief Get the decimal32 or decimal64
+   *
+   * @param stream CUDA stream used for device memory operations.
+   */
   T fixed_point_value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
   {
     return T{_data.value(stream), numeric::scale_type{_scale.value(stream)}};
