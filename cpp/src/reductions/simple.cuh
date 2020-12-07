@@ -97,13 +97,11 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
     }
   }();
 
-  auto const val   = static_cast<cudf::scalar_type_t<Type>*>(result.get());
-  auto const scale = numeric::scale_type{col.type().scale()};
+  auto const scale = std::is_same<Op, cudf::reduction::op::product>::value
+                       ? numeric::scale_type{col.type().scale() * (col.size() - col.null_count())}
+                       : numeric::scale_type{col.type().scale()};
+  auto const val = static_cast<cudf::scalar_type_t<Type>*>(result.get());
   return cudf::make_fixed_point_scalar<ElementType>(val->value(), scale);
-
-  // set scalar is valid0
-  // result->set_valid((col.null_count() < col.size()), stream);
-  // return result;
 }
 
 /**
