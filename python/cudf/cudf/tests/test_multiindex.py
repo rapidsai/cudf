@@ -1385,7 +1385,41 @@ def test_multiindex_set_names(idx, names, inplace):
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
-def test_multiindex_set_names_level(idx, level, names, inplace):
+def test_multiindex_set_names_level_with_integers(idx, level, names, inplace):
+    pi = idx.copy()
+    gi = cudf.from_pandas(idx)
+
+    expected = pi.set_names(names=names, level=level, inplace=inplace)
+    actual = gi.set_names(names=names, level=level, inplace=inplace)
+
+    if inplace:
+        expected, actual = pi, gi
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.MultiIndex.from_product(
+            [["python", "cobra"], [2018, 2019], ["aab", "bcd"]],
+            names=["one", None, "three"],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "level, names",
+    [
+        ([None], "abc"),
+        (["three", "one"], ["a", "b"]),
+        (["three", 1], ["a", "b"]),
+        ([0, "three", 1], ["a", "b", "z"]),
+        (["one", 1, "three"], ["a", "b", "z"]),
+        (["one", None, "three"], ["a", "b", "z"]),
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_multiindex_set_names_level_with_labels(idx, level, names, inplace):
     pi = idx.copy()
     gi = cudf.from_pandas(idx)
 

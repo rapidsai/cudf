@@ -219,11 +219,15 @@ class MultiIndex(Index):
                 "Length of names must match number of levels in MultiIndex."
             )
 
-        if self.nlevels > 1 and level is not None:
-            existing_names = list(self.names)
-            for i, l in enumerate(level):
-                existing_names[l] = names[i]
-            names = existing_names
+        if level is None:
+            level = range(self.nlevels)
+        else:
+            level = [self._level_index_from_level(lev) for lev in level]
+
+        existing_names = list(self.names)
+        for i, l in enumerate(level):
+            existing_names[l] = names[i]
+        names = existing_names
 
         return self._set_names(names=names, inplace=inplace)
 

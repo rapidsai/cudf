@@ -1784,8 +1784,8 @@ def test_index_set_names(idx, names, inplace):
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("idx", [pd.Index([1, 2, 3])])
-@pytest.mark.parametrize("level", [1, [0]])
+@pytest.mark.parametrize("idx", [pd.Index([1, 2, 3], name="abc")])
+@pytest.mark.parametrize("level", [1, [0], "abc"])
 @pytest.mark.parametrize("names", [None, "a"])
 def test_index_set_names_error(idx, level, names):
     pi = idx.copy()
