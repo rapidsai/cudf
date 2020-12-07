@@ -212,8 +212,15 @@ class MultiIndex(Index):
         if level is not None and not cudf.utils.dtypes.is_list_like(level):
             level = [level]
 
+        if level is not None and len(names) != len(level):
+            raise ValueError("Length of names must match length of level.")
+        if level is None and len(names) != self.nlevels:
+            raise ValueError(
+                "Length of names must match number of levels in MultiIndex."
+            )
+
         if self.nlevels > 1 and level is not None:
-            existing_names = self.names
+            existing_names = list(self.names)
             for i, l in enumerate(level):
                 existing_names[l] = names[i]
             names = existing_names
@@ -474,6 +481,9 @@ class MultiIndex(Index):
 
     @property
     def nlevels(self):
+        """
+        Integer number of levels in this MultiIndex.
+        """
         return self._source_data.shape[1]
 
     @property
