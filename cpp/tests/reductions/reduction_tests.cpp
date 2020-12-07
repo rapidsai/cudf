@@ -1240,6 +1240,25 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMaxLarge)
   }
 }
 
+TYPED_TEST(FixedPointTestBothReps, FixedPointReductionNUnique)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (int i = -3; i <= 0; ++i) {
+    auto const scale    = scale_type{i};
+    auto const column   = fp_wrapper{{1, 1, 2, 2, 3, 3, 4, 4}, scale};
+    auto const out_type = static_cast<cudf::column_view>(column).type();
+
+    auto const result        = cudf::reduce(column, cudf::make_nunique_aggregation(), out_type);
+    auto const result_scalar = static_cast<cudf::scalar_type_t<cudf::size_type> *>(result.get());
+
+    EXPECT_EQ(result_scalar->value(), 4);
+  }
+}
+
 TYPED_TEST(ReductionTest, NthElement)
 {
   using T = TypeParam;
