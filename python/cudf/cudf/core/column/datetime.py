@@ -329,9 +329,12 @@ def binop(lhs, rhs, op, out_dtype):
 
 
 def binop_offset(lhs, rhs, op):
-    rhs = rhs._generate_column(len(lhs), op)
-    out = libcudf.datetime.add_months(lhs, rhs)
-    return out
+    if rhs._is_no_op:
+        return lhs
+    else:
+        rhs = rhs._generate_column(len(lhs), op)
+        out = libcudf.datetime.add_months(lhs, rhs)
+        return out
 
 
 def infer_format(element, **kwargs):
