@@ -422,7 +422,9 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
   std::vector<size_type> build_noncommon_col =
     non_common_column_indices(build.num_columns(), build_common_col);
 
-  bool const nullify_out_of_bounds{JoinKind != join_kind::INNER_JOIN};
+  out_of_bounds_policy const bounds_policy = JoinKind != join_kind::INNER_JOIN
+                                               ? out_of_bounds_policy::NULLIFY
+                                               : out_of_bounds_policy::DONT_CHECK;
 
   std::unique_ptr<table> common_table = std::make_unique<table>();
   // Construct the joined columns
@@ -433,13 +435,13 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
       auto common_from_build = detail::gather(build.select(build_common_col),
                                               complement_indices.second.begin(),
                                               complement_indices.second.end(),
-                                              nullify_out_of_bounds,
+                                              bounds_policy,
                                               stream,
                                               rmm::mr::get_current_device_resource());
       auto common_from_probe = detail::gather(probe.select(probe_common_col),
                                               joined_indices.first.begin(),
                                               joined_indices.first.end(),
-                                              nullify_out_of_bounds,
+                                              bounds_policy,
                                               stream,
                                               rmm::mr::get_current_device_resource());
       common_table           = cudf::detail::concatenate(
@@ -451,7 +453,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
       common_table = detail::gather(probe.select(probe_common_col),
                                     joined_indices.first.begin(),
                                     joined_indices.first.end(),
-                                    nullify_out_of_bounds,
+                                    bounds_policy,
                                     stream,
                                     mr);
     }
@@ -461,14 +463,14 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
   std::unique_ptr<table> probe_table = detail::gather(probe.select(probe_noncommon_col),
                                                       joined_indices.first.begin(),
                                                       joined_indices.first.end(),
-                                                      nullify_out_of_bounds,
+                                                      bounds_policy,
                                                       stream,
                                                       mr);
 
   std::unique_ptr<table> build_table = detail::gather(build.select(build_noncommon_col),
                                                       joined_indices.second.begin(),
                                                       joined_indices.second.end(),
-                                                      nullify_out_of_bounds,
+                                                      bounds_policy,
                                                       stream,
                                                       mr);
 

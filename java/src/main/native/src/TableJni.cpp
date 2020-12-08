@@ -787,7 +787,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
     JNIEnv *env, jclass j_class_object, jobjectArray filter_col_names, jstring inputfilepath,
-    jlong buffer, jlong buffer_length, jint unit) {
+    jlong buffer, jlong buffer_length, jint unit, jboolean strict_decimal_types) {
   bool read_buffer = true;
   if (buffer == 0) {
     JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
@@ -823,6 +823,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
             .convert_strings_to_categories(false)
             .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
             .build();
+    opts.set_strict_decimal_types(static_cast<bool>(strict_decimal_types));
     cudf::io::table_with_metadata result = cudf::io::read_parquet(opts);
     return cudf::jni::convert_table_for_return(env, result.tbl);
   }
@@ -832,7 +833,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     JNIEnv *env, jclass, jobjectArray j_col_names, jbooleanArray j_col_nullability,
     jobjectArray j_metadata_keys, jobjectArray j_metadata_values, jint j_compression,
-    jint j_stats_freq, jobject consumer) {
+    jint j_stats_freq, jboolean j_isInt96, jobject consumer) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
@@ -863,6 +864,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
             .nullable_metadata(&metadata)
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
+            .int96_timestamps(static_cast<bool>(j_isInt96))
             .build();
     std::shared_ptr<pq_chunked_state> state = write_parquet_chunked_begin(opts);
     cudf::jni::native_parquet_writer_handle *ret =

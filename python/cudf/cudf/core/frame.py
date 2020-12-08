@@ -1,9 +1,9 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import copy
 import functools
+import operator
 import warnings
 from collections import OrderedDict, abc as abc
-import operator
 
 import cupy
 import numpy as np
@@ -3300,6 +3300,79 @@ class Frame(libcudf.table.Table):
         keys, indices = libcudf.transform.table_encode(self)
         keys = self.__class__._from_table(keys)
         return keys, indices
+
+    def _reindex(
+        self, columns, dtypes=None, deep=False, index=None, inplace=False
+    ):
+        """
+        Helper for `.reindex`
+
+        Parameters
+        ----------
+        columns : array-like
+            The list of columns to select from the Frame,
+            if ``columns`` is a superset of ``Frame.columns`` new
+            columns are created.
+        dtypes : dict
+            Mapping of dtypes for the empty columns being created.
+        deep : boolean, optional, default False
+            Whether to make deep copy or shallow copy of the columns.
+        index : Index or array-like, default None
+            The ``index`` to be used to reindex the Frame with.
+        inplace : bool, default False
+            Whether to perform the operation in place on the data.
+
+        Returns
+        -------
+        DataFrame
+        """
+        if dtypes is None:
+            dtypes = {}
+
+        df = self
+        if index is not None:
+            index = cudf.core.index.as_index(index)
+
+            if isinstance(index, cudf.core.MultiIndex):
+                idx_dtype_match = (
+                    df.index._source_data.dtypes == index._source_data.dtypes
+                ).all()
+            else:
+                idx_dtype_match = df.index.dtype == index.dtype
+
+            if not idx_dtype_match:
+                columns = columns if columns is not None else list(df.columns)
+                df = cudf.DataFrame()
+            else:
+                df = cudf.DataFrame(None, index).join(
+                    df, how="left", sort=True
+                )
+                # double-argsort to map back from sorted to unsorted positions
+                df = df.take(index.argsort(ascending=True).argsort())
+
+        cols = OrderedDict()
+        index = index if index is not None else df.index
+        names = columns if columns is not None else list(df.columns)
+        for name in names:
+            if name in df._data:
+                cols[name] = df._data[name].copy(deep=deep)
+            else:
+                dtype = dtypes.get(name, np.float64)
+                cols[name] = column_empty(
+                    dtype=dtype, masked=True, row_count=len(index)
+                )
+        result = self.__class__._from_table(
+            Frame(
+                data=cudf.core.column_accessor.ColumnAccessor(
+                    cols,
+                    multiindex=self._data.multiindex,
+                    level_names=self._data.level_names,
+                )
+            ),
+            index=index,
+        )
+
+        return self._mimic_inplace(result, inplace=inplace)
 
 
 def _get_replacement_values(to_replace, replacement, col_name, column):

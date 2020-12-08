@@ -740,7 +740,7 @@ inline __device__ uint32_t select_rowmap(uint4 ctx_map, uint32_t ctxid)
 template <uint32_t lanemask, uint32_t tmask, uint32_t base, uint32_t level_scale>
 inline __device__ void ctx_merge(uint64_t *ctxtree, packed_rowctx_t *ctxb, uint32_t t)
 {
-  uint64_t tmp = SHFL_XOR(*ctxb, lanemask);
+  uint64_t tmp = shuffle_xor(*ctxb, lanemask);
   if (!(t & tmask)) {
     *ctxb                              = merge_row_contexts(*ctxb, tmp);
     ctxtree[base + (t >> level_scale)] = *ctxb;
@@ -811,7 +811,7 @@ static inline __device__ void rowctx_merge_transform(uint64_t ctxtree[1024],
     ctx_merge<4, 0x7, 4, 3>(ctxtree, &ctxb, t);
     ctx_merge<8, 0xf, 2, 4>(ctxtree, &ctxb, t);
     // Final stage
-    uint64_t tmp = SHFL_XOR(ctxb, 16);
+    uint64_t tmp = shuffle_xor(ctxb, 16);
     if (t == 0) { ctxtree[1] = merge_row_contexts(ctxb, tmp); }
   }
 }

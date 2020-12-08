@@ -452,6 +452,86 @@ class Index(Frame, Serializable):
         else:
             return self
 
+    @property
+    def nlevels(self):
+        """
+        Number of levels.
+        """
+        return 1
+
+    def _set_names(self, names, inplace=False):
+        if inplace:
+            idx = self
+        else:
+            idx = self.copy(deep=False)
+
+        idx.names = names
+        if not inplace:
+            return idx
+
+    def set_names(self, names, level=None, inplace=False):
+        """
+        Set Index or MultiIndex name.
+        Able to set new names partially and by level.
+
+        Parameters
+        ----------
+        names : label or list of label
+            Name(s) to set.
+        level : int, label or list of int or label, optional
+            If the index is a MultiIndex, level(s) to set (None for all
+            levels). Otherwise level must be None.
+        inplace : bool, default False
+            Modifies the object directly, instead of creating a new Index or
+            MultiIndex.
+
+        Returns
+        -------
+        Index
+            The same type as the caller or None if inplace is True.
+
+        See Also
+        --------
+        cudf.core.index.Index.rename : Able to set new names without level.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index([1, 2, 3, 4])
+        >>> idx
+        Int64Index([1, 2, 3, 4], dtype='int64')
+        >>> idx.set_names('quarter')
+        Int64Index([1, 2, 3, 4], dtype='int64', name='quarter')
+        >>> idx = cudf.MultiIndex.from_product([['python', 'cobra'],
+        ... [2018, 2019]])
+        >>> idx
+        MultiIndex(levels=[0     cobra
+        1    python
+        dtype: object, 0    2018
+        1    2019
+        dtype: int64],
+        codes=   0  1
+        0  1  0
+        1  1  1
+        2  0  0
+        3  0  1)
+        >>> idx.names
+        FrozenList([None, None])
+        >>> idx.set_names(['kind', 'year'], inplace=True)
+        >>> idx.names
+        FrozenList(['kind', 'year'])
+        >>> idx.set_names('species', level=0, inplace=True)
+        >>> idx.names
+        FrozenList(['species', 'year'])
+        """
+        if level is not None:
+            raise ValueError("Level must be None for non-MultiIndex")
+
+        if not is_list_like(names):
+            names = [names]
+
+        return self._set_names(names=names, inplace=inplace)
+
     def fillna(self, value, downcast=None):
         """
         Fill null values with the specified value.
@@ -1531,6 +1611,13 @@ class RangeIndex(Index):
         The value of the stop parameter.
         """
         return self._stop
+
+    @property
+    def step(self):
+        """
+        The value of the step parameter.
+        """
+        return self._step
 
     @property
     def _num_columns(self):

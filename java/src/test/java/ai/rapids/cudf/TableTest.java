@@ -67,6 +67,7 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_ORC_FILE = new File("src/test/resources/TestOrcFile.orc");
   private static final File TEST_ORC_TIMESTAMP_DATE_FILE = new File(
       "src/test/resources/timestamp-date-test.orc");
+  private static final File TEST_DECIMAL_PARQUET_FILE = new File("src/test/resources/decimal.parquet");
 
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
@@ -715,6 +716,30 @@ public class TableTest extends CudfTestBase {
 
       assertTableTypes(expectedTypes, table);
     }
+  }
+
+  @Test
+  void testReadParquetContainsDecimalData() {
+    try (Table table = Table.readParquet(TEST_DECIMAL_PARQUET_FILE)) {
+      long rows = table.getRowCount();
+      assertEquals(100, rows);
+      DType[] expectedTypes = new DType[]{
+          DType.create(DType.DTypeEnum.DECIMAL64, 0), // Decimal(18, 0)
+          DType.create(DType.DTypeEnum.DECIMAL32, -3), // Decimal(7, 3)
+          DType.create(DType.DTypeEnum.DECIMAL64, -10),  // Decimal(10, 10)
+          DType.create(DType.DTypeEnum.DECIMAL32, 0),  // Decimal(1, 0)
+          DType.create(DType.DTypeEnum.DECIMAL64, -15),  // Decimal(18, 15)
+          DType.FLOAT64,  // Decimal(20, 10) which is backed by FIXED_LEN_BYTE_ARRAY
+          DType.INT64,
+          DType.FLOAT32
+      };
+      assertTableTypes(expectedTypes, table);
+    }
+    // An CudfException will be thrown here because we haven't support reading decimal stored as FIXED_LEN_BYTE_ARRAY.
+    ParquetOptions opts = ParquetOptions.builder().enableStrictDecimalType(true).build();
+    assertThrows(ai.rapids.cudf.CudfException.class, () -> {
+      try (Table table = Table.readParquet(opts, TEST_DECIMAL_PARQUET_FILE)) {}
+    });
   }
 
   @Test
@@ -3843,6 +3868,24 @@ public class TableTest extends CudfTestBase {
         offset += amountToCopy;
       }
       return amountToCopy;
+    }
+  }
+
+  @Test
+  void testParquetWriteToBufferChunkedInt96() {
+    try (Table table0 = getExpectedFileTable();
+         MyBufferConsumer consumer = new MyBufferConsumer()) {
+      ParquetWriterOptions options = ParquetWriterOptions.builder().withTimestampInt96(true).build();
+
+      try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
+        writer.write(table0);
+        writer.write(table0);
+        writer.write(table0);
+      }
+      try (Table table1 = Table.readParquet(ParquetOptions.DEFAULT, consumer.buffer, 0, consumer.offset);
+           Table concat = Table.concatenate(table0, table0, table0)) {
+        assertTablesAreEqual(concat, table1);
+      }
     }
   }
 

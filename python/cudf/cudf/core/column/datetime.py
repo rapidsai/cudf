@@ -9,7 +9,6 @@ from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.scalar import as_device_scalar
 from cudf.core.column import column, string
 from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import _fillna_natwise
@@ -129,7 +128,11 @@ class DatetimeColumn(column.ColumnBase):
     def normalize_binop_value(self, other):
         if isinstance(other, cudf.Scalar):
             return other
-        elif isinstance(other, dt.datetime):
+
+        if isinstance(other, np.ndarray) and other.ndim == 0:
+            other = other.item()
+
+        if isinstance(other, dt.datetime):
             other = np.datetime64(other)
         elif isinstance(other, dt.timedelta):
             other = np.timedelta64(other)
@@ -211,12 +214,7 @@ class DatetimeColumn(column.ColumnBase):
         )
         if isinstance(q, Number):
             return pd.Timestamp(result, unit=self.time_unit)
-
-        result = result * as_device_scalar(
-            _numpy_to_pandas_conversion[self.time_unit]
-        )
-
-        return result.astype("datetime64[ns]")
+        return result.astype(self.dtype)
 
     def binary_operator(self, op, rhs, reflect=False):
         lhs, rhs = self, rhs

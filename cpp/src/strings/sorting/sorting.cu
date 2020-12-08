@@ -67,7 +67,7 @@ std::unique_ptr<cudf::column> sort(strings_column_view strings,
   // now build a new strings column from the indices
   auto table_sorted = cudf::detail::gather(table_view{{strings.parent()}},
                                            indices_view,
-                                           cudf::detail::out_of_bounds_policy::NULLIFY,
+                                           cudf::out_of_bounds_policy::DONT_CHECK,
                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
                                            stream,
                                            mr)

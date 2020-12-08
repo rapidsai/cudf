@@ -56,6 +56,6 @@ dependencies:
   - protobuf
   - nvtx>=0.2.1
   - pip:
-      - git+https://github.com/dask/dask.git
-      - git+https://github.com/dask/distributed.git
+      - git+https://github.com/dask/dask.git@master
+      - git+https://github.com/dask/distributed.git@master
       - git+https://github.com/python-streamz/streamz.git
