@@ -1370,7 +1370,7 @@ def test_multiindex_set_names(idx, names, inplace):
         ),
         pd.MultiIndex.from_product(
             [["python", "cobra"], [2018, 2019], ["aab", "bcd"]],
-            names=["one", "two", "three"],
+            names=[1, 0, 2],
         ),
     ],
 )
@@ -1380,12 +1380,15 @@ def test_multiindex_set_names(idx, names, inplace):
         (0, "abc"),
         (1, "xyz"),
         ([2, 1], ["a", "b"]),
+        ([0, 1], ["aa", "bb"]),
         (None, ["a", "b", "c"]),
         (None, ["a", None, "c"]),
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
-def test_multiindex_set_names_level_with_integers(idx, level, names, inplace):
+def test_multiindex_set_names_default_and_int_names(
+    idx, level, names, inplace
+):
     pi = idx.copy()
     gi = cudf.from_pandas(idx)
 
@@ -1416,10 +1419,12 @@ def test_multiindex_set_names_level_with_integers(idx, level, names, inplace):
         ([0, "three", 1], ["a", "b", "z"]),
         (["one", 1, "three"], ["a", "b", "z"]),
         (["one", None, "three"], ["a", "b", "z"]),
+        ([2, 1], ["a", "b"]),
+        (1, "xyz"),
     ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
-def test_multiindex_set_names_level_with_labels(idx, level, names, inplace):
+def test_multiindex_set_names_string_names(idx, level, names, inplace):
     pi = idx.copy()
     gi = cudf.from_pandas(idx)
 
