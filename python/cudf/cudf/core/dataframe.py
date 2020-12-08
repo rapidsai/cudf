@@ -201,34 +201,52 @@ class DataFrame(Frame, Serializable):
         """
         super().__init__()
 
+        if isinstance(columns, (Series, cudf.Index)):
+            columns = columns.to_pandas()
+
         if isinstance(data, ColumnAccessor):
-            self._data = data
             if index is None:
-                index = as_index(range(self._data.nrows))
-            self.index = as_index(index)
-            return None
+                index = as_index(range(data.nrows))
+            else:
+                index = as_index(index)
+            self._index = index
 
-        if isinstance(data, DataFrame):
-            self._data = data._data
-            self._index = data._index
-            self.columns = data.columns
-            return
+            if columns is not None:
+                self._data = data
+                self._reindex(columns=columns, deep=True, inplace=True)
+            else:
+                self._data = data
 
-        if isinstance(data, pd.DataFrame):
-            data = self.from_pandas(data)
-            self._data = data._data
-            self._index = data._index
-            self.columns = data.columns
-            return
+        elif isinstance(data, (DataFrame, pd.DataFrame)):
+            if isinstance(data, pd.DataFrame):
+                data = self.from_pandas(data)
 
-        if data is None:
+            if index is not None:
+                if not data.index.equals(index):
+                    data = data.reindex(index)
+                    index = data._index
+                else:
+                    index = as_index(index)
+            else:
+                index = data._index
+
+            self._index = index
+
+            if columns is not None:
+                self._data = data._data
+                self._reindex(
+                    columns=columns, index=index, deep=False, inplace=True
+                )
+            else:
+                self._data = data._data
+                self.columns = data.columns
+
+        elif data is None:
             if index is None:
                 self._index = RangeIndex(0)
             else:
                 self._index = as_index(index)
             if columns is not None:
-                if isinstance(columns, (Series, cudf.Index)):
-                    columns = columns.to_pandas()
 
                 self._data = ColumnAccessor(
                     OrderedDict.fromkeys(
@@ -2561,48 +2579,16 @@ class DataFrame(Frame, Serializable):
 
         df = self
         cols = columns
-        original_cols = df._data
         dtypes = OrderedDict(df.dtypes)
         idx = labels if index is None and axis in (0, "index") else index
         cols = labels if cols is None and axis in (1, "columns") else cols
         df = df if cols is None else df[list(set(df.columns) & set(cols))]
 
-        if idx is not None:
-            idx = as_index(idx)
+        result = df._reindex(
+            columns=cols, dtypes=dtypes, deep=copy, index=idx, inplace=False
+        )
 
-            if isinstance(idx, cudf.core.MultiIndex):
-                idx_dtype_match = (
-                    df.index._source_data.dtypes == idx._source_data.dtypes
-                ).all()
-            else:
-                idx_dtype_match = df.index.dtype == idx.dtype
-
-            if not idx_dtype_match:
-                cols = cols if cols is not None else list(df.columns)
-                df = DataFrame()
-            else:
-                df = DataFrame(None, idx).join(df, how="left", sort=True)
-                # double-argsort to map back from sorted to unsorted positions
-                df = df.take(idx.argsort(ascending=True).argsort())
-
-        idx = idx if idx is not None else df.index
-        names = cols if cols is not None else list(df.columns)
-
-        length = len(idx)
-        cols = OrderedDict()
-
-        for name in names:
-            if name in df:
-                cols[name] = df._data[name].copy(deep=copy)
-            else:
-                dtype = dtypes.get(name, np.float64)
-                col = original_cols.get(name, Series(dtype=dtype)._column)
-                col = column.column_empty_like(
-                    col, dtype=dtype, masked=True, newsize=length
-                )
-                cols[name] = col
-
-        return DataFrame(cols, idx)
+        return result
 
     def _set_index(
         self, index, to_drop=None, inplace=False, verify_integrity=False,
