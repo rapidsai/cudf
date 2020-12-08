@@ -212,12 +212,7 @@ class DataFrame(Frame, Serializable):
 
             if columns is not None:
                 self._data = data
-                df = self._reindex(columns=columns, deep=True, inplace=False)
-                self._data = ColumnAccessor(
-                    data=df._data,
-                    multiindex=data.multiindex,
-                    level_names=data.level_names,
-                )
+                self._reindex(columns=columns, deep=True, inplace=True)
             else:
                 self._data = data
 

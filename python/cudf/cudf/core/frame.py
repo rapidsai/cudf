@@ -3361,8 +3361,16 @@ class Frame(libcudf.table.Table):
                 cols[name] = column_empty(
                     dtype=dtype, masked=True, row_count=len(index)
                 )
-
-        result = self.__class__._from_table(Frame(data=cols), index=index)
+        result = self.__class__._from_table(
+            Frame(
+                data=cudf.core.column_accessor.ColumnAccessor(
+                    cols,
+                    multiindex=self._data.multiindex,
+                    level_names=self._data.level_names,
+                )
+            ),
+            index=index,
+        )
 
         return self._mimic_inplace(result, inplace=inplace)
 
