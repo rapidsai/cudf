@@ -6,6 +6,8 @@
 
 ## Improvements
 
+- PR #6275 Update to official libcu++ on Github
+
 ## Bug Fixes
 
 - PR #6912 Fix rmm_mode=managed parameter for gtests
@@ -343,7 +345,6 @@
 - PR #6407 Add RMM_LOGGING_LEVEL flag to Java docker build
 - PR #6425 Factor out csv parse_options creation to pure function
 - PR #6438 Fetch nvcomp v1.1.0 for JNI build
-- PR #6275 Update to official libcu++ on Github
 - PR #6459 Add `map` method to series
 - PR #6379 Add list hashing functionality to MD5
 - PR #6498 Add helper method to ColumnBuilder with some nits
