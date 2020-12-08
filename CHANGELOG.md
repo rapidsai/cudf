@@ -3,7 +3,9 @@
 ## New Features
 - PR #6856 Add groupby idxmin, idxmax aggregation
 
+- PR #6847 Add a cmake find module for cuFile in JNI code
 - PR #6902 Implement `DataFrame.quantile` for `datetime` and `timedelta` data types
+- PR #6929 Add `Index.set_names` api
 
 ## Improvements
 
@@ -51,7 +53,6 @@
 - PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
 - PR #6817 Add support for scatter() on lists-of-struct columns
 - PR #6805 Implement `cudf::detail::copy_if` for `decimal32` and `decimal64`
-- PR #6847 Add a cmake find module for cuFile in JNI code
 - PR #6726 Support selecting different hash functions in hash_partition
 - PR #6619 Improve Dockerfile
 - PR #6831 Added parquet chunked writing ability for list columns
