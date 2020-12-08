@@ -17,12 +17,13 @@
  * limitations under the License.
  */
 
-#include "binaryop/compiled/binary_ops.hpp"
-#include "binaryop/jit/code/code.h"
-#include "binaryop/jit/util.hpp"
-#include "jit/launcher.h"
-#include "jit/parser.h"
-#include "jit/type.h"
+#include "compiled/binary_ops.hpp"
+#include "jit/code/code.h"
+#include "jit/util.hpp"
+
+#include <jit/launcher.h>
+#include <jit/parser.h>
+#include <jit/type.h>
 
 #include <jit/bit.hpp.jit>
 #include <jit/common_headers.hpp>

@@ -15,10 +15,11 @@
  */
 
 #include "jit/code/code.h"
-#include "jit/common_headers.hpp"
-#include "jit/launcher.h"
-#include "jit/parser.h"
-#include "jit/type.h"
+
+#include <jit/common_headers.hpp>
+#include <jit/launcher.h>
+#include <jit/parser.h>
+#include <jit/type.h>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>

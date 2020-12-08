@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-#include "jit/launcher.h"
-#include "jit/parser.h"
-#include "jit/type.h"
-#include "rolling/jit/code/code.h"
-#include "rolling/rolling_detail.hpp"
-#include "rolling/rolling_jit_detail.hpp"
+#include <jit/launcher.h>
+#include <jit/parser.h>
+#include <jit/type.h>
+
+#include "jit/code/code.h"
+#include "rolling_detail.hpp"
+#include "rolling_jit_detail.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
