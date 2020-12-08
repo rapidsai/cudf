@@ -17,17 +17,18 @@
  * limitations under the License.
  */
 
-#include <tests/binaryop/assert-binops.h>
-#include <tests/binaryop/binop-fixture.hpp>
-
 #include <cudf/binaryop.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <tests/binaryop/assert-binops.h>
+#include <tests/binaryop/binop-fixture.hpp>
 
 namespace cudf {
 namespace test {

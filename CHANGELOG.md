@@ -10,7 +10,9 @@
 
 ## Improvements
 
+- PR #6275 Update to official libcu++ on Github
 - PR #6838 Fix `columns` & `index` handling in dataframe constructor
+- PR #6750 Remove **kwargs from string/categorical methods
 
 ## Bug Fixes
 

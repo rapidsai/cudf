@@ -23,18 +23,18 @@ namespace jit {
 namespace code {
 const char* traits =
   R"***(
-#pragma once
-    #include <cstdint>
-    #include <simt/type_traits>
+    #pragma once
 
-    // -------------------------------------------------------------------------
-    // Simplifying std::is_integral
-    template <typename T>
-    constexpr bool is_integral_v = simt::std::is_integral<T>::value;
+    // Include Jitify's cstddef header first
+    #include <cstddef>
 
-    // Simplifying std::is_floating_point
-    template <typename T>
-    constexpr bool is_floating_point_v = simt::std::is_floating_point<T>::value;
+    #include <cuda/std/climits>
+    #include <cuda/std/cstddef>
+    #include <cuda/std/limits>
+    #include <cuda/std/type_traits>
+
+    #include <cudf/wrappers/durations.hpp>
+    #include <cudf/wrappers/timestamps.hpp>
 
     // -------------------------------------------------------------------------
     // type_traits cannot tell the difference between float and double
@@ -43,19 +43,19 @@ const char* traits =
 
     template <typename T>
     constexpr bool is_timestamp_v =
-        simt::std::is_same<cudf::timestamp_D, T>::value ||
-        simt::std::is_same<cudf::timestamp_s, T>::value ||
-        simt::std::is_same<cudf::timestamp_ms, T>::value ||
-        simt::std::is_same<cudf::timestamp_us, T>::value ||
-        simt::std::is_same<cudf::timestamp_ns, T>::value;
+        cuda::std::is_same<cudf::timestamp_D, T>::value ||
+        cuda::std::is_same<cudf::timestamp_s, T>::value ||
+        cuda::std::is_same<cudf::timestamp_ms, T>::value ||
+        cuda::std::is_same<cudf::timestamp_us, T>::value ||
+        cuda::std::is_same<cudf::timestamp_ns, T>::value;
 
     template <typename T>
     constexpr bool is_duration_v =
-        simt::std::is_same<cudf::duration_D, T>::value ||
-        simt::std::is_same<cudf::duration_s, T>::value ||
-        simt::std::is_same<cudf::duration_ms, T>::value ||
-        simt::std::is_same<cudf::duration_us, T>::value ||
-        simt::std::is_same<cudf::duration_ns, T>::value;
+        cuda::std::is_same<cudf::duration_D, T>::value ||
+        cuda::std::is_same<cudf::duration_s, T>::value ||
+        cuda::std::is_same<cudf::duration_ms, T>::value ||
+        cuda::std::is_same<cudf::duration_us, T>::value ||
+        cuda::std::is_same<cudf::duration_ns, T>::value;
 
     template <typename T>
     constexpr bool is_chrono_v = is_timestamp_v<T> || is_duration_v<T>;
