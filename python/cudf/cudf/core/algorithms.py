@@ -9,7 +9,7 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
     ----------
     values: Series, Index, or CuPy array
         The data to be factorized.
-    na_sentinel : number
+    na_sentinel : number, default -1
         Value to indicate missing category.
 
     Returns
