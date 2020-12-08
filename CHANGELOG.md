@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #6902 Implement `DataFrame.quantile` for `datetime` and `timedelta` data types
+- PR #6940 Add JNI wrapper for the cuFile API (GDS)
 
 ## Improvements
 
