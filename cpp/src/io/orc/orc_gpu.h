@@ -84,7 +84,7 @@ struct DictionaryEntry {
 /**
  * @brief Mask to indicate conversion from decimals to float64
  **/
-#define ORC_DECIMAL2FLOAT64_SCALE 0x80
+constexpr int orc_decimal2float64_scale = 0x80;
 
 /**
  * @brief Struct to describe per stripe's column information

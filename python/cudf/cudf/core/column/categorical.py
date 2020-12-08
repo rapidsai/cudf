@@ -890,6 +890,9 @@ class CategoricalColumn(column.ColumnBase):
 
     def normalize_binop_value(self, other):
 
+        if isinstance(other, np.ndarray) and other.ndim == 0:
+            other = other.item()
+
         ary = cudf.utils.utils.scalar_broadcast_to(
             self._encode(other), size=len(self), dtype=self.codes.dtype
         )

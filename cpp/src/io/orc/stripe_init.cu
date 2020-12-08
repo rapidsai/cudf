@@ -52,7 +52,7 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
     uint32_t num_compressed_blocks   = 0;
     uint32_t num_uncompressed_blocks = 0;
     while (cur + 3 < end) {
-      uint32_t block_len = SHFL0((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
+      uint32_t block_len = shuffle((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
       uint32_t is_uncompressed = block_len & 1;
       uint32_t uncompressed_size;
       gpu_inflate_input_s *init_ctl = nullptr;
@@ -99,12 +99,12 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
         s->ctl.dstDevice = uncompressed + max_uncompressed_size;
         s->ctl.dstSize   = uncompressed_size;
       }
-      SYNCWARP();
+      __syncwarp();
       if (init_ctl && lane_id == 0) *init_ctl = s->ctl;
       cur += block_len;
       max_uncompressed_size += uncompressed_size;
     }
-    SYNCWARP();
+    __syncwarp();
     if (!lane_id) {
       s->info.num_compressed_blocks   = num_compressed_blocks;
       s->info.num_uncompressed_blocks = num_uncompressed_blocks;
@@ -143,7 +143,7 @@ extern "C" __global__ void __launch_bounds__(128, 8)
     uint32_t max_compressed_blocks      = s->info.num_compressed_blocks;
 
     while (cur + 3 < end) {
-      uint32_t block_len = SHFL0((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
+      uint32_t block_len = shuffle((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
       uint32_t is_uncompressed = block_len & 1;
       uint32_t uncompressed_size_est, uncompressed_size_actual;
       block_len >>= 1;
@@ -154,13 +154,13 @@ extern "C" __global__ void __launch_bounds__(128, 8)
         uncompressed_size_actual = block_len;
       } else {
         if (num_compressed_blocks > max_compressed_blocks) { break; }
-        if (SHFL0((lane_id == 0) ? dec_out[num_compressed_blocks].status : 0) != 0) {
+        if (shuffle((lane_id == 0) ? dec_out[num_compressed_blocks].status : 0) != 0) {
           // Decompression failed, not much point in doing anything else
           break;
         }
         uncompressed_size_est =
-          SHFL0((lane_id == 0) ? *(const uint32_t *)&dec_in[num_compressed_blocks].dstSize : 0);
-        uncompressed_size_actual = SHFL0(
+          shuffle((lane_id == 0) ? *(const uint32_t *)&dec_in[num_compressed_blocks].dstSize : 0);
+        uncompressed_size_actual = shuffle(
           (lane_id == 0) ? *(const uint32_t *)&dec_out[num_compressed_blocks].bytes_written : 0);
       }
       // In practice, this should never happen with a well-behaved writer, as we would expect the
@@ -202,8 +202,6 @@ struct rowindex_state_s {
   uint32_t compressed_offset[128][2];
 };
 
-#define PB_ROWINDEXENTRY_ID ((1 * 8) + PB_TYPE_FIXEDLEN)
-
 enum row_entry_state_e {
   NOT_FOUND = 0,
   GET_LENGTH,
@@ -227,6 +225,8 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s *s,
                                                       const uint8_t *start,
                                                       const uint8_t *end)
 {
+  constexpr uint32_t pb_rowindexentry_id = static_cast<uint32_t>(PB_TYPE_FIXEDLEN) + 8;
+
   const uint8_t *cur      = start;
   row_entry_state_e state = NOT_FOUND;
   uint32_t length = 0, strm_idx_id = s->chunk.skip_count >> 8, idx_id = 1, ci_id = CI_PRESENT,
@@ -240,7 +240,7 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s *s,
     }
     switch (state) {
       case NOT_FOUND:
-        if (v == PB_ROWINDEXENTRY_ID) {
+        if (v == pb_rowindexentry_id) {
           state = GET_LENGTH;
         } else {
           v &= 7;

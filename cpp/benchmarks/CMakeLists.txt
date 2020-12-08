@@ -129,6 +129,14 @@ set(APPLY_BOOLEAN_MASK_BENCH_SRC
 ConfigureBench(APPLY_BOOLEAN_MASK_BENCH "${APPLY_BOOLEAN_MASK_BENCH_SRC}")
 
 ###################################################################################################
+# - stream_compaction benchmark -------------------------------------------------------------------
+
+set(STREAM_COMPACTION_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_duplicates_benchmark.cpp")
+
+ConfigureBench(STREAM_COMPACTION_BENCH "${STREAM_COMPACTION_BENCH_SRC}")
+
+###################################################################################################
 # - join benchmark --------------------------------------------------------------------------------
 
 set(JOIN_BENCH_SRC

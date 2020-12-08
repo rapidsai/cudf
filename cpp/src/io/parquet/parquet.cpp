@@ -152,7 +152,59 @@ bool CompactProtocolReader::read(SchemaElement *s)
                             ParquetFieldInt32(5, s->num_children),
                             ParquetFieldEnum<ConvertedType>(6, s->converted_type),
                             ParquetFieldInt32(7, s->decimal_scale),
-                            ParquetFieldInt32(8, s->decimal_precision));
+                            ParquetFieldInt32(8, s->decimal_precision),
+                            ParquetFieldStruct(10, s->logical_type));
+  return function_builder(this, op);
+}
+
+bool CompactProtocolReader::read(LogicalType *l)
+{
+  auto op =
+    std::make_tuple(ParquetFieldUnion(1, l->isset.STRING, l->STRING),
+                    ParquetFieldUnion(2, l->isset.MAP, l->MAP),
+                    ParquetFieldUnion(3, l->isset.LIST, l->LIST),
+                    ParquetFieldUnion(4, l->isset.ENUM, l->ENUM),
+                    ParquetFieldUnion(5, l->isset.DECIMAL, l->DECIMAL),  // read the struct
+                    ParquetFieldUnion(6, l->isset.DATE, l->DATE),
+                    ParquetFieldUnion(7, l->isset.TIME, l->TIME),            //  read the struct
+                    ParquetFieldUnion(8, l->isset.TIMESTAMP, l->TIMESTAMP),  //  read the struct
+                    ParquetFieldUnion(10, l->isset.INTEGER, l->INTEGER),     //  read the struct
+                    ParquetFieldUnion(11, l->isset.UNKNOWN, l->UNKNOWN),
+                    ParquetFieldUnion(12, l->isset.JSON, l->JSON),
+                    ParquetFieldUnion(13, l->isset.BSON, l->BSON));
+  return function_builder(this, op);
+}
+
+bool CompactProtocolReader::read(DecimalType *d)
+{
+  auto op = std::make_tuple(ParquetFieldInt32(1, d->scale), ParquetFieldInt32(2, d->precision));
+  return function_builder(this, op);
+}
+
+bool CompactProtocolReader::read(TimeType *t)
+{
+  auto op =
+    std::make_tuple(ParquetFieldBool(1, t->isAdjustedToUTC), ParquetFieldStruct(2, t->unit));
+  return function_builder(this, op);
+}
+
+bool CompactProtocolReader::read(TimestampType *t)
+{
+  auto op =
+    std::make_tuple(ParquetFieldBool(1, t->isAdjustedToUTC), ParquetFieldStruct(2, t->unit));
+  return function_builder(this, op);
+}
+
+bool CompactProtocolReader::read(TimeUnit *u)
+{
+  auto op = std::make_tuple(ParquetFieldUnion(1, u->isset.MILLIS, u->MILLIS),
+                            ParquetFieldUnion(2, u->isset.MICROS, u->MICROS));
+  return function_builder(this, op);
+}
+
+bool CompactProtocolReader::read(IntType *i)
+{
+  auto op = std::make_tuple(ParquetFieldInt8(1, i->bitWidth), ParquetFieldBool(2, i->isSigned));
   return function_builder(this, op);
 }
 
