@@ -579,10 +579,21 @@ struct column_view_printer {
                   std::string const& indent)
   {
     auto const h_data = cudf::test::to_host<Element>(col);
-    std::transform(std::cbegin(h_data.first),
-                   std::cend(h_data.first),
-                   std::back_inserter(out),
-                   [](auto const& fp) { return std::to_string(static_cast<double>(fp)); });
+    if (col.nullable()) {
+      std::transform(thrust::make_counting_iterator(size_type{0}),
+                     thrust::make_counting_iterator(col.size()),
+                     std::back_inserter(out),
+                     [&h_data](auto idx) {
+                       return h_data.second.empty() || bit_is_set(h_data.second.data(), idx)
+                                ? static_cast<std::string>(h_data.first[idx])
+                                : std::string("NULL");
+                     });
+    } else {
+      std::transform(std::cbegin(h_data.first),
+                     std::cend(h_data.first),
+                     std::back_inserter(out),
+                     [col](auto const& fp) { return static_cast<std::string>(fp); });
+    }
   }
 
   template <typename Element,
