@@ -14,6 +14,7 @@
 ## Bug Fixes
 
 - PR #6912 Fix rmm_mode=managed parameter for gtests
+- PR #6943 Fix join with nulls not equal performance
 
 
 # cuDF 0.17.0 (Date TBD)
