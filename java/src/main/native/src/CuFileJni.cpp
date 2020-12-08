@@ -78,11 +78,13 @@ public:
 
 class cufile_buffer {
 public:
-  cufile_buffer(void *device_pointer, std::size_t size)
-      : device_pointer_{device_pointer}, size_{size} {
-    auto const status = cuFileBufRegister(device_pointer_, size_, 0);
-    if (status.err != CU_FILE_SUCCESS) {
-      CUDF_FAIL("Failed to register cuFile buffer: " + cuFileGetErrorString(status));
+  cufile_buffer(void *device_pointer, std::size_t size, bool register_buffer = false)
+      : device_pointer_{device_pointer}, size_{size}, register_buffer_{register_buffer} {
+    if (register_buffer_) {
+      auto const status = cuFileBufRegister(device_pointer_, size_, 0);
+      if (status.err != CU_FILE_SUCCESS) {
+        CUDF_FAIL("Failed to register cuFile buffer: " + cuFileGetErrorString(status));
+      }
     }
   }
 
@@ -90,7 +92,11 @@ public:
   cufile_buffer(cufile_buffer const &) = delete;
   cufile_buffer &operator=(cufile_buffer const &) = delete;
 
-  ~cufile_buffer() { cuFileBufDeregister(device_pointer_); }
+  ~cufile_buffer() {
+    if (register_buffer_) {
+      cuFileBufDeregister(device_pointer_);
+    }
+  }
 
   void *device_pointer() const { return device_pointer_; }
   std::size_t size() const { return size_; }
@@ -98,6 +104,7 @@ public:
 private:
   void *device_pointer_;
   std::size_t size_;
+  bool register_buffer_;
 };
 
 class cufile_file {
@@ -124,8 +131,9 @@ public:
     close(file_descriptor_);
   }
 
-  std::size_t read(cufile_buffer const &buffer) {
-    auto const status = cuFileRead(cufile_handle_, buffer.device_pointer(), buffer.size(), 0, 0);
+  void read(cufile_buffer const &buffer, std::size_t file_offset) {
+    auto const status =
+        cuFileRead(cufile_handle_, buffer.device_pointer(), buffer.size(), file_offset, 0);
 
     if (status < 0) {
       if (IS_CUFILE_ERR(status)) {
@@ -135,7 +143,7 @@ public:
       }
     }
 
-    return static_cast<std::size_t>(status);
+    CUDF_EXPECTS(status == buffer.size(), "Size of bytes read is different from buffer size");
   }
 
   void write(cufile_buffer const &buffer, std::size_t file_offset = 0) {
@@ -208,11 +216,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFile_copyToFile(JNIEnv *env, jclas
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_copyFromFile(JNIEnv *env, jclass,
                                                                jlong device_pointer, jlong size,
-                                                               jstring path) {
+                                                               jstring path, jlong file_offset) {
   try {
     cufile_buffer buffer{reinterpret_cast<void *>(device_pointer), static_cast<std::size_t>(size)};
     cufile_file file{(env->GetStringUTFChars(path, nullptr))};
-    file.read(buffer);
+    file.read(buffer, file_offset);
   }
   CATCH_STD(env, );
 }

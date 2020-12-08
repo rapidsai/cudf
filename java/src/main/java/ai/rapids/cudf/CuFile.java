@@ -57,12 +57,11 @@ public class CuFile {
     return copyToFile(path.getAbsolutePath(), buffer.getAddress(), buffer.getLength(), append);
   }
 
-  public static long copyFileToDeviceBuffer(DeviceMemoryBuffer buffer, File path) {
-    copyFromFile(buffer.getAddress(), buffer.getLength(), path.getAbsolutePath());
-    return 0;
+  public static void copyFileToDeviceBuffer(DeviceMemoryBuffer buffer, File path, long fileOffset) {
+    copyFromFile(buffer.getAddress(), buffer.getLength(), path.getAbsolutePath(), fileOffset);
   }
 
   private static native long copyToFile(String path, long address, long length, boolean append);
 
-  private static native void copyFromFile(long address, long length, String path);
+  private static native void copyFromFile(long address, long length, String path, long fileOffset);
 }

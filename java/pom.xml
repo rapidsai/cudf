@@ -160,7 +160,7 @@
             </properties>
         </profile>
         <profile>
-            <id>no-cufile</id>
+            <id>no-cufile-tests</id>
             <activation>
                 <property>
                     <name>USE_GDS</name>
@@ -174,7 +174,7 @@
                         <artifactId>maven-compiler-plugin</artifactId>
                         <configuration>
                             <excludes>
-                                <exclude>**/CuFile*.java</exclude>
+                                <exclude>**/CuFileTest.java</exclude>
                             </excludes>
                         </configuration>
                     </plugin>
