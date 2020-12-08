@@ -33,6 +33,7 @@
 #include <cudf/strings/detail/replace.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -355,10 +356,11 @@ std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<
   return cudf::dictionary::detail::replace_nulls(dict_input, replacement, stream, mr);
 }
 
-template <typename T>
 struct replace_nulls_fillna_policy_functor {
-  __device__ thrust::tuple<T, bool> operator()(thrust::tuple<T, bool> const& lhs,
-                                               thrust::tuple<T, bool> const& rhs) {
+  __device__ thrust::tuple<cudf::size_type, bool> operator()(
+    thrust::tuple<cudf::size_type, bool> const& lhs,
+    thrust::tuple<cudf::size_type, bool> const& rhs)
+  {
     return thrust::get<1>(rhs) ? thrust::make_tuple(thrust::get<0>(rhs), true)
                                : thrust::make_tuple(thrust::get<0>(lhs), true);
   }
@@ -376,43 +378,41 @@ struct replace_nulls_fillna_policy_kernel_forwarder {
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
   {
-    // Construct input data-validity zip iterator
     using Type     = cudf::device_storage_type_t<col_type>;
     auto device_in = cudf::column_device_view::create(input);
+    auto index     = thrust::make_counting_iterator<cudf::size_type>(0);
+    auto valid_it  = cudf::detail::make_validity_iterator(*device_in);
+    auto in_begin  = thrust::make_zip_iterator(thrust::make_tuple(index, valid_it));
 
-    auto in_validity_iterator = cudf::detail::make_validity_iterator(*device_in);
-    auto incol_validity_zip_iterator =
-      thrust::make_zip_iterator(thrust::make_tuple(input.begin<Type>(), in_validity_iterator));
+    rmm::device_vector<cudf::size_type> gather_map(input.size());
+    auto gm_begin = thrust::make_zip_iterator(
+      thrust::make_tuple(gather_map.begin(), thrust::make_discard_iterator()));
 
-    // Construct output data-validity zip iterator
-    std::unique_ptr<cudf::column> output =
-      cudf::allocate_like(input, cudf::mask_allocation_policy::NEVER, mr);
-    auto output_view = output->mutable_view();
-    auto device_out  = cudf::column_device_view::create(*output);
-
-    auto outcol_validity_zip_iterator = thrust::make_zip_iterator(
-      thrust::make_tuple(output_view.begin<Type>(), thrust::make_discard_iterator()));
-
-    auto func = replace_nulls_fillna_policy_functor<Type>();
+    auto func = replace_nulls_fillna_policy_functor();
     if (fillna_policy == cudf::fillna_policy::FORWARD_FILL) {
       thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
-                             incol_validity_zip_iterator,
-                             incol_validity_zip_iterator + input.size(),
-                             outcol_validity_zip_iterator,
+                             in_begin,
+                             in_begin + input.size(),
+                             gm_begin,
                              func);
-    } 
-    else {
-      auto rbegin_in =
-        thrust::make_reverse_iterator(incol_validity_zip_iterator + input.size());
-      auto rend_in = thrust::make_reverse_iterator(incol_validity_zip_iterator);
-      auto rbegin_out =
-        thrust::make_reverse_iterator(outcol_validity_zip_iterator + output_view.size());
-
-      thrust::inclusive_scan(
-        rmm::exec_policy(stream)->on(stream.value()), rbegin_in, rend_in, rbegin_out, func);
+    } else {
+      auto in_rbegin = thrust::make_reverse_iterator(in_begin + input.size());
+      auto gm_rbegin = thrust::make_reverse_iterator(gm_begin + gather_map.size());
+      thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
+                             in_rbegin,
+                             in_rbegin + input.size(),
+                             gm_rbegin,
+                             func);
     }
 
-    return output;
+    cudf::column_view gm_col(cudf::data_type{cudf::type_id::INT32},
+                             gather_map.size(),
+                             thrust::raw_pointer_cast(gather_map.data()));
+
+    auto output =
+      cudf::gather(cudf::table_view({input}), gm_col, cudf::out_of_bounds_policy::DONT_CHECK, mr);
+
+    return std::move(output->release()[0]);
   }
 
   template <typename col_type, std::enable_if_t<not cudf::is_fixed_width<col_type>()>* = nullptr>

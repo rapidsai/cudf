@@ -17,7 +17,10 @@
  * limitations under the License.
  */
 
+#include <bits/stdint-intn.h>
 #include <cudf/replace.hpp>
+
+#include <tests/groupby/groupby_test_util.hpp>
 
 #include <cudf/dictionary/detail/replace.hpp>
 #include <cudf/dictionary/encode.hpp>
@@ -304,13 +307,11 @@ struct ReplaceNullsFillnaPolicyTest : public cudf::test::BaseFixture {
 
 TEST_F(ReplaceNullsFillnaPolicyTest, ForwardFill)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> col{{1, 2, 3, 4, 5, 6, 7, 8},
-                                                      {1, 0, 0, 0, 1, 1, 0, 1}};
-  cudf::test::fixed_width_column_wrapper<int32_t> expected_col{{1, 1, 1, 1, 5, 6, 6, 8}};
+  cudf::test::fixed_width_column_wrapper<int32_t> col{{42, 2, 1, -10, 20, -30}, {1, 0, 0, 1, 0, 1}};
+  cudf::test::fixed_width_column_wrapper<int32_t> expected_col{{42, 42, 42, -10, -10, -30},
+                                                               cudf::test::all_valid()};
 
   auto result = cudf::replace_nulls(col, cudf::fillna_policy::FORWARD_FILL);
-
-  const cudf::column_view result_view = result->view();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_col);
 }
@@ -319,38 +320,34 @@ TEST_F(ReplaceNullsFillnaPolicyTest, BackwardFill)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col{{1, 2, 3, 4, 5, 6, 7, 8},
                                                       {1, 0, 0, 0, 1, 1, 0, 1}};
-  cudf::test::fixed_width_column_wrapper<int32_t> expected_col{{1, 5, 5, 5, 5, 6, 8, 8}};
+  cudf::test::fixed_width_column_wrapper<int32_t> expected_col{{1, 5, 5, 5, 5, 6, 8, 8},
+                                                               cudf::test::all_valid()};
 
   auto result = cudf::replace_nulls(col, cudf::fillna_policy::BACKWARD_FILL);
-
-  const cudf::column_view result_view = result->view();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_col);
 }
 
-TEST_F(ReplaceNullsFillnaPolicyTest, ForwardFillLeadNulls)
+TEST_F(ReplaceNullsFillnaPolicyTest, ForwardFillLeadingNulls)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col{{1, 2, 3, 4, 5, 6, 7, 8},
                                                       {0, 0, 0, 0, 1, 1, 0, 1}};
   cudf::test::fixed_width_column_wrapper<int32_t> expected_col{{1, 1, 1, 1, 5, 6, 6, 8},
-                                                                {0, 0, 0, 0, 1, 1, 1, 1}};
+                                                               {0, 0, 0, 0, 1, 1, 1, 1}};
 
   auto result = cudf::replace_nulls(col, cudf::fillna_policy::FORWARD_FILL);
-
-  const cudf::column_view result_view = result->view();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_col);
 }
 
-TEST_F(ReplaceNullsFillnaPolicyTest, BackwardFillLeadNulls)
+TEST_F(ReplaceNullsFillnaPolicyTest, BackwardFillTrailingNulls)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> col{{1, 2, 3, 4, 5, 6, 7, 8},
                                                       {1, 0, 0, 0, 1, 1, 0, 0}};
-  cudf::test::fixed_width_column_wrapper<int32_t> expected_col{{1, 5, 5, 5, 5, 6, 8, 8}, {1, 1, 1, 1, 1, 1, 0, 0}};
+  cudf::test::fixed_width_column_wrapper<int32_t> expected_col{{1, 5, 5, 5, 5, 6, 8, 8},
+                                                               {1, 1, 1, 1, 1, 1, 0, 0}};
 
   auto result = cudf::replace_nulls(col, cudf::fillna_policy::BACKWARD_FILL);
-
-  const cudf::column_view result_view = result->view();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_col);
 }
