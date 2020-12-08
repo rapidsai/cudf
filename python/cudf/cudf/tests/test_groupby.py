@@ -1358,3 +1358,14 @@ def test_groupby_no_columns(pdf):
         check_dtype=False,
         check_index_type=False,
     )
+
+
+@pytest.mark.parametrize(
+    "pdf", [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([])]
+)
+def test_groupby_apply_empty(pdf):
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(
+        pdf.groupby([]).apply(lambda x: x.max()),
+        gdf.groupby([]).apply(lambda x: x.max()),
+    )

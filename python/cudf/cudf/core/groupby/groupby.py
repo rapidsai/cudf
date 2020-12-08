@@ -162,14 +162,6 @@ class GroupBy(Serializable):
         1  1.5  1.75  2.0   2.0
         2  3.0  3.00  1.0   1.0
         """
-        if not len(self.grouping._key_columns):
-            if len(self.obj):
-                raise ValueError("No group keys passed")
-            else:
-                return self.obj
-        return self._agg(func)
-
-    def _agg(self, func):
         normalized_aggs = self._normalize_aggs(func)
 
         result = self._groupby.aggregate(self.obj, normalized_aggs)
@@ -198,7 +190,8 @@ class GroupBy(Serializable):
                         raise
 
         # set index names to be group key names
-        result.index.names = self.grouping.names
+        if len(result):
+            result.index.names = self.grouping.names
 
         # copy categorical information from keys to the result index:
         result.index._postprocess_columns(self.grouping.keys)
@@ -425,16 +418,15 @@ class GroupBy(Serializable):
         ]
         chunk_results = [function(chk) for chk in chunks]
 
-        if len(chunk_results) > 0 and cudf.utils.dtypes.is_scalar(
-            chunk_results[0]
-        ):
+        if not len(chunk_results):
+            return self.obj.__class__()
+
+        if cudf.utils.dtypes.is_scalar(chunk_results[0]):
             result = cudf.Series(
                 chunk_results, index=self.grouping.keys[offsets[:-1]]
             )
             result.index.names = self.grouping.names
-        elif len(chunk_results) > 0 and isinstance(
-            chunk_results[0], cudf.Series
-        ):
+        elif isinstance(chunk_results[0], cudf.Series):
             result = cudf.concat(chunk_results, axis=1).T
             result.index.names = self.grouping.names
         else:
@@ -779,8 +771,8 @@ class SeriesGroupBy(GroupBy):
             dropna=dropna,
         )
 
-    def _agg(self, func):
-        result = super()._agg(func)
+    def agg(self, func):
+        result = super().agg(func)
 
         # downcast the result to a Series:
         if len(result._data):
@@ -817,6 +809,9 @@ class _Grouping(Serializable):
         # to support `as_index=False` correctly
         self._named_columns = []
         self._handle_by_or_level(by, level)
+
+        if len(obj) and not len(self._key_columns):
+            raise ValueError("No group keys passed")
 
     def _handle_by_or_level(self, by=None, level=None):
         if level is not None:
