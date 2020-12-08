@@ -9,6 +9,7 @@
 
 ## Improvements
 
+- PR #6275 Update to official libcu++ on Github
 - PR #6838 Fix `columns` & `index` handling in dataframe constructor
 
 ## Bug Fixes
