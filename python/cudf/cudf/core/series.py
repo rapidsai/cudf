@@ -5220,7 +5220,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     return Series(result_col, index=index)
 
 
-def factorize(values, sort=False, na_sentinel=-1):
+def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
     """Encode the input values as integer labels
 
     Parameters
@@ -5261,4 +5261,9 @@ def factorize(values, sort=False, na_sentinel=-1):
         raise NotImplementedError(
             "Sorting not yet supported during factorization."
         )
+    if size_hint:
+        raise NotImplementedError(
+            "size_hint is not applicable for cudf.factorize"
+        )
+
     return cudf.Series(values).factorize(na_sentinel=na_sentinel)
