@@ -138,7 +138,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
-        <junit.version>5.7.0</junit.version>
+        <junit.version>5.4.2</junit.version>
         <ai.rapids.refcount.debug>false</ai.rapids.refcount.debug>
         <native.build.path>${basedir}/target/cmake-build</native.build.path>
         <skipNativeCopy>false</skipNativeCopy>
