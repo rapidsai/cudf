@@ -1350,7 +1350,7 @@ def test_groupby_apply_return_series_dataframe(cust_func):
 @pytest.mark.parametrize(
     "pdf", [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([])]
 )
-def test_groupby_no_columns(pdf):
+def test_groupby_no_keys(pdf):
     gdf = cudf.from_pandas(pdf)
     assert_eq(
         pdf.groupby([]).max(),
@@ -1363,9 +1363,22 @@ def test_groupby_no_columns(pdf):
 @pytest.mark.parametrize(
     "pdf", [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([])]
 )
-def test_groupby_apply_empty(pdf):
+def test_groupby_apply_no_keys(pdf):
     gdf = cudf.from_pandas(pdf)
     assert_eq(
         pdf.groupby([]).apply(lambda x: x.max()),
         gdf.groupby([]).apply(lambda x: x.max()),
+    )
+
+
+@pytest.mark.parametrize(
+    "pdf",
+    [pd.DataFrame({"a": [1, 2]}), pd.DataFrame({"a": [1, 2], "b": [2, 3]})],
+)
+def test_groupby_nonempty_no_keys(pdf):
+    gdf = cudf.from_pandas(pdf)
+    assert_exceptions_equal(
+        lambda: pdf.groupby([]),
+        lambda: gdf.groupby([]),
+        compare_error_message=False,
     )
