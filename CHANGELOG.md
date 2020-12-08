@@ -9,6 +9,7 @@
 ## Bug Fixes
 
 - PR #6912 Fix rmm_mode=managed parameter for gtests
+- PR #6945 Fix groupby agg/apply behaviour when no key columns are provided 
 
 
 # cuDF 0.17.0 (Date TBD)
