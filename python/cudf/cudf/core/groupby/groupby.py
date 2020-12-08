@@ -162,6 +162,14 @@ class GroupBy(Serializable):
         1  1.5  1.75  2.0   2.0
         2  3.0  3.00  1.0   1.0
         """
+        if not len(self.grouping._key_columns):
+            if len(self.obj):
+                raise ValueError("No group keys passed")
+            else:
+                return self.obj
+        return self._agg(func)
+
+    def _agg(self, func):
         normalized_aggs = self._normalize_aggs(func)
 
         result = self._groupby.aggregate(self.obj, normalized_aggs)
@@ -771,12 +779,13 @@ class SeriesGroupBy(GroupBy):
             dropna=dropna,
         )
 
-    def agg(self, func):
-        result = super().agg(func)
+    def _agg(self, func):
+        result = super()._agg(func)
 
         # downcast the result to a Series:
-        if result.shape[1] == 1 and not pd.api.types.is_list_like(func):
-            return result.iloc[:, 0]
+        if len(result._data):
+            if result.shape[1] == 1 and not pd.api.types.is_list_like(func):
+                return result.iloc[:, 0]
 
         # drop the first level if we have a multiindex
         if (
@@ -839,7 +848,10 @@ class _Grouping(Serializable):
     @property
     def keys(self):
         nkeys = len(self._key_columns)
-        if nkeys > 1:
+
+        if nkeys == 0:
+            return cudf.core.index.as_index([], name=None)
+        elif nkeys > 1:
             return cudf.MultiIndex(
                 source_data=cudf.DataFrame(
                     dict(zip(range(nkeys), self._key_columns))

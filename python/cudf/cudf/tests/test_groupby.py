@@ -1345,3 +1345,16 @@ def test_groupby_apply_return_series_dataframe(cust_func):
     actual = gdf.groupby(["key"]).apply(cust_func)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "pdf", [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([])]
+)
+def test_groupby_no_columns(pdf):
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(
+        pdf.groupby([]).max(),
+        gdf.groupby([]).max(),
+        check_dtype=False,
+        check_index_type=False,
+    )
