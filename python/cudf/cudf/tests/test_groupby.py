@@ -419,11 +419,11 @@ def test_groupby_column_name():
 
     gxx = g["xx"].idxmin()
     pxx = p["xx"].idxmin()
-    assert_eq(pxx, gxx)
+    assert_eq(pxx, gxx, check_dtype=False)
 
     gxx = g["xx"].idxmax()
     pxx = p["xx"].idxmax()
-    assert_eq(pxx, gxx)
+    assert_eq(pxx, gxx, check_dtype=False)
 
     gxx = g["xx"].mean()
     pxx = p["xx"].mean()
