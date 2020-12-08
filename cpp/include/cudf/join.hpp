@@ -394,10 +394,12 @@ class hash_join {
    *
    * @param build The build table, from which the hash table is built.
    * @param build_on The column indices from `build` to join on.
+   * @param compare_nulls Controls whether null join-key values should match or not.
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   hash_join(cudf::table_view const& build,
             std::vector<size_type> const& build_on,
+            null_equality compare_nulls,
             rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   /**

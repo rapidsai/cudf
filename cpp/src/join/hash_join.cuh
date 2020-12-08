@@ -226,9 +226,11 @@ struct hash_join::hash_join_impl {
    *
    * @param build The build table, from which the hash table is built.
    * @param build_on The column indices from `build` to join on.
+   * @param compare_nulls Controls whether null join-key values should match or not.
    */
   hash_join_impl(cudf::table_view const& build,
                  std::vector<size_type> const& build_on,
+                 null_equality compare_nulls,
                  rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> inner_join(
