@@ -25,43 +25,52 @@
 
 namespace {
 
-//
-// cuda driver error description
-//
+/**
+ * @brief Get the error description based on the CUDA driver error code.
+ *
+ * @param cu_result CUDA driver error code.
+ * @return Description for the error.
+ */
 char const *GetCuErrorString(CUresult cu_result) {
-  const char *description;
+  char const *description;
   if (cuGetErrorName(cu_result, &description) != CUDA_SUCCESS)
     description = "unknown cuda error";
   return description;
 }
 
-//
-// cuFile APIs return both cuFile specific error codes as well as POSIX error codes
-// for ease, the below template can be used for getting the error description depending
-// on its type.
-
-// POSIX
-template <typename T,
-          typename std::enable_if<std::is_integral<T>::value, std::nullptr_t>::type = nullptr>
-std::string cuFileGetErrorString(T status) {
-  status = std::abs(status);
-  return IS_CUFILE_ERR(status) ? std::string(CUFILE_ERRSTR(status)) :
-                                 std::string(std::strerror(status));
+/**
+ * @brief Get the error description based on the integer error code.
+ *
+ * cuFile APIs return both cuFile specific error codes as well as POSIX error codes for ease of use.
+ *
+ * @param error_code Integer error code.
+ * @return Description of the error.
+ */
+std::string cuFileGetErrorString(int error_code) {
+  return IS_CUFILE_ERR(error_code) ? std::string(CUFILE_ERRSTR(error_code)) :
+                                     std::string(std::strerror(error_code));
 }
 
-// CUfileError_t
-template <typename T,
-          typename std::enable_if<!std::is_integral<T>::value, std::nullptr_t>::type = nullptr>
-std::string cuFileGetErrorString(T status) {
-  std::string error = cuFileGetErrorString(static_cast<int>(status.err));
+/**
+ * @brief Get the error description based on the cuFile return status.
+ *
+ * @param status cuFile return status.
+ * @return Description of the error.
+ */
+std::string cuFileGetErrorString(CUfileError_t status) {
+  std::string error = cuFileGetErrorString(status.err);
   if (IS_CUDA_ERR(status)) {
     error.append(".").append(GetCuErrorString(status.cu_err));
   }
   return error;
 }
 
+/**
+ * @brief RAII wrapper for the cuFile driver.
+ */
 class cufile_driver {
 public:
+  /** @brief Construct a new driver instance by opening the cuFile driver. */
   cufile_driver() {
     auto const status = cuFileDriverOpen();
     if (status.err != CU_FILE_SUCCESS) {
@@ -73,11 +82,21 @@ public:
   cufile_driver(cufile_driver const &) = delete;
   cufile_driver &operator=(cufile_driver const &) = delete;
 
+  /** @brief Destroy the driver instance by closing the cuFile driver. */
   ~cufile_driver() { cuFileDriverClose(); }
 };
 
+/** @brief RAII wrapper for a device buffer used by cuFile. */
 class cufile_buffer {
 public:
+  /**
+   * @brief Construct a new cuFile buffer.
+   *
+   * @param device_pointer Pointer to the device buffer.
+   * @param size The size of the allocated device buffer.
+   * @param register_buffer Whether to register the buffer with cuFile. This should only be set to
+   * true if this buffer is being reused to fill a larger buffer.
+   */
   cufile_buffer(void *device_pointer, std::size_t size, bool register_buffer = false)
       : device_pointer_{device_pointer}, size_{size}, register_buffer_{register_buffer} {
     if (register_buffer_) {
@@ -92,23 +111,44 @@ public:
   cufile_buffer(cufile_buffer const &) = delete;
   cufile_buffer &operator=(cufile_buffer const &) = delete;
 
+  /** @brief Destroy the buffer by de-registering it if necessary. */
   ~cufile_buffer() {
     if (register_buffer_) {
       cuFileBufDeregister(device_pointer_);
     }
   }
 
+  /**
+   * @brief Get the pointer to the underlying device buffer.
+   *
+   * @return Pointer to the device buffer.
+   */
   void *device_pointer() const { return device_pointer_; }
+
+  /**
+   * @brief Get the size of the underlying device buffer.
+   *
+   * @return The size of the device buffer.
+   */
   std::size_t size() const { return size_; }
 
 private:
+  /// Pointer to the device buffer.
   void *device_pointer_;
+  /// Size of the device buffer.
   std::size_t size_;
+  /// Whether to register the buffer with cuFile.
   bool register_buffer_;
 };
 
+/** @brief RAII wrapper for a file descriptor and the corresponding cuFile handle. */
 class cufile_file {
 public:
+  /**
+   * @brief Construct a file wrapper.
+   *
+   * @param path Absolute path to the underlying file.
+   */
   cufile_file(char const *path) {
     file_descriptor_ = open(path, O_CREAT | O_RDWR | O_DIRECT, 0644);
     if (file_descriptor_ < 0) {
@@ -126,11 +166,18 @@ public:
   cufile_file(cufile_file const &) = delete;
   cufile_file &operator=(cufile_file const &) = delete;
 
+  /** @brief Destroy the file wrapper by de-registering the cuFile handle and closing the file. */
   ~cufile_file() {
     cuFileHandleDeregister(cufile_handle_);
     close(file_descriptor_);
   }
 
+  /**
+   * @brief Read the file into a device buffer.
+   *
+   * @param buffer Device buffer to read the file content into.
+   * @param file_offset Starting offset from which to read the file.
+   */
   void read(cufile_buffer const &buffer, std::size_t file_offset) {
     auto const status =
         cuFileRead(cufile_handle_, buffer.device_pointer(), buffer.size(), file_offset, 0);
@@ -146,6 +193,12 @@ public:
     CUDF_EXPECTS(status == buffer.size(), "Size of bytes read is different from buffer size");
   }
 
+  /**
+   * @brief Write a device buffer to the file.
+   *
+   * @param buffer The device buffer to write.
+   * @param file_offset Starting offset from which to write the file.
+   */
   void write(cufile_buffer const &buffer, std::size_t file_offset = 0) {
     auto const status =
         cuFileWrite(cufile_handle_, buffer.device_pointer(), buffer.size(), file_offset, 0);
@@ -161,18 +214,27 @@ public:
     CUDF_EXPECTS(status == buffer.size(), "Size of bytes written is different from buffer size");
   }
 
+  /**
+   * @brief Append a device buffer to the file.
+   *
+   * @param buffer The device buffer to write.
+   * @return The file offset from which the buffer was appended.
+   */
   std::size_t append(cufile_buffer const &buffer) {
     auto const status = lseek(file_descriptor_, 0, SEEK_END);
     if (status < 0) {
       CUDF_FAIL("Failed to seek end of file: " + cuFileGetErrorString(errno));
     }
 
-    write(buffer, status);
-    return status;
+    auto const file_offset = static_cast<std::size_t>(status);
+    write(buffer, file_offset);
+    return file_offset;
   }
 
 private:
+  /// The underlying file descriptor.
   int file_descriptor_;
+  /// The registered cuFile handle.
   CUfileHandle_t cufile_handle_;
 };
 
@@ -180,6 +242,12 @@ private:
 
 extern "C" {
 
+/**
+ * @brief Create a new cuFile driver wrapper.
+ *
+ * @param env The JNI environment.
+ * @return Pointer address to the new driver wrapper instance.
+ */
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFile_createDriver(JNIEnv *env, jclass) {
   try {
     return reinterpret_cast<jlong>(new cufile_driver());
@@ -187,6 +255,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFile_createDriver(JNIEnv *env, jcl
   CATCH_STD(env, 0);
 }
 
+/**
+ * @brief Destroy the given cuFile driver wrapper.
+ *
+ * @param env The JNI environment.
+ * @param pointer Pointer address to the driver wrapper instance.
+ */
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_destroyDriver(JNIEnv *env, jclass,
                                                                 jlong pointer) {
   try {
@@ -198,6 +272,16 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_destroyDriver(JNIEnv *env, jcl
   CATCH_STD(env, );
 }
 
+/**
+ * @brief Copy a device buffer into a given file path.
+ *
+ * @param env The JNI environment.
+ * @param path Absolute path of the file to copy the buffer to.
+ * @param device_pointer Pointer address to the device buffer.
+ * @param size The size of the device buffer.
+ * @param append Whether to append the buffer to the file.
+ * @return The file offset from which the buffer was appended.
+ */
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFile_copyToFile(JNIEnv *env, jclass, jstring path,
                                                               jlong device_pointer, jlong size,
                                                               jboolean append) {
@@ -214,6 +298,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFile_copyToFile(JNIEnv *env, jclas
   CATCH_STD(env, -1);
 }
 
+/**
+ * @brief Copy from a given file path into a device buffer.
+ *
+ * @param env The JNI environment.
+ * @param device_pointer Pointer address to the device buffer.
+ * @param size The size of the device buffer.
+ * @param path Absolute path of the file to copy from.
+ * @param file_offset The file offset from which to copy content.
+ */
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_copyFromFile(JNIEnv *env, jclass,
                                                                jlong device_pointer, jlong size,
                                                                jstring path, jlong file_offset) {

@@ -21,6 +21,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 
+/**
+ * JNI wrapper for accessing the cuFile API.
+ */
 public class CuFile {
   private static final Logger log = LoggerFactory.getLogger(CuFile.class);
   private static boolean initialized = false;
@@ -53,10 +56,25 @@ public class CuFile {
 
   private static native void destroyDriver(long pointer);
 
+  /**
+   * Copy a device buffer to a given file path.
+   *
+   * @param path The file path to copy to.
+   * @param buffer The device buffer to copy from.
+   * @param append Whether to append to the file.
+   * @return The file offset from which the buffer was appended.
+   */
   public static long copyDeviceBufferToFile(File path, DeviceMemoryBuffer buffer, boolean append) {
     return copyToFile(path.getAbsolutePath(), buffer.getAddress(), buffer.getLength(), append);
   }
 
+  /**
+   * Copy a file into a device buffer.
+   *
+   * @param buffer The device buffer to copy into.
+   * @param path The file path to copy from.
+   * @param fileOffset The file offset from which to copy the content.
+   */
   public static void copyFileToDeviceBuffer(DeviceMemoryBuffer buffer, File path, long fileOffset) {
     copyFromFile(buffer.getAddress(), buffer.getLength(), path.getAbsolutePath(), fileOffset);
   }
