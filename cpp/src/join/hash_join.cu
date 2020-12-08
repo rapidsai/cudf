@@ -226,7 +226,7 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type *)>> build_join_
   rmm::device_scalar<int> failure(0, stream);
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   detail::grid_1d config(build_table_num_rows, block_size);
-  auto row_bitmask = [compare_nulls, &stream, &build]() {
+  auto const row_bitmask = [compare_nulls, &stream, &build]() {
     if (compare_nulls == null_equality::EQUAL)
       return rmm::device_buffer{0, stream};
     else
