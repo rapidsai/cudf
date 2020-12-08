@@ -1819,7 +1819,7 @@ class Frame(libcudf.table.Table):
         if axis is None or axis == 0 or axis == "index":
             if n > 0 and self.shape[0] == 0:
                 raise ValueError(
-                    "a must be greater than 0 unless no samples are taken"
+                    "Cannot take a sample larger than 0 when axis is empty"
                 )
 
             if not replace and n > self.shape[0]:
@@ -1870,7 +1870,7 @@ class Frame(libcudf.table.Table):
 
             if n > 0 and self.shape[1] == 0:
                 raise ValueError(
-                    "a must be greater than 0 unless no samples are taken"
+                    "Cannot take a sample larger than 0 when axis is empty"
                 )
 
             columns = np.asarray(self._data.names)
