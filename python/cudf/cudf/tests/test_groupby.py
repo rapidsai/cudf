@@ -136,7 +136,7 @@ def test_groupby_agg_min_max_dictlist(nelem):
 
 @pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
 @pytest.mark.parametrize(
-    "func", ["mean", "min", "max", "idxmin", "idxmax" "count", "sum"]
+    "func", ["mean", "min", "max", "idxmin", "idxmax", "count", "sum"]
 )
 def test_groupby_2keys_agg(nelem, func):
     # gdf (Note: lack of multiIndex)
