@@ -47,6 +47,8 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
         raise NotImplementedError(
             "size_hint is not applicable for cudf.factorize"
         )
+    if not na_sentinel:
+        raise NotImplementedError("na_sentinel can not be None.")
 
     values = Series(values)
 
