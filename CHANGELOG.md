@@ -8,6 +8,8 @@
 
 ## Improvements
 
+- PR #6838 Fix `columns` & `index` handling in dataframe constructor
+
 ## Bug Fixes
 
 - PR #6912 Fix rmm_mode=managed parameter for gtests
