@@ -2574,13 +2574,7 @@ class Series(Frame, Serializable):
         1    c
         dtype: object
         """
-        cats = self.dropna().unique().astype(self.dtype)
-
-        name = self.name  # label_encoding mutates self.name
-        labels = self.label_encoding(cats=cats, na_sentinel=na_sentinel)
-        self.name = name
-
-        return labels, cats
+        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
 
     # UDF related
 
@@ -5218,52 +5212,3 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         result_col[equal_nulls] = True
 
     return Series(result_col, index=index)
-
-
-def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
-    """Encode the input values as integer labels
-
-    Parameters
-    ----------
-    values: Series, Index, or CuPy array
-        The data to be factorized.
-    na_sentinel : number
-        Value to indicate missing category.
-
-    Returns
-    --------
-    (labels, cats) : (Series, Series)
-        - *labels* contains the encoded values
-        - *cats* contains the categories in order that the N-th
-            item corresponds to the (N-1) code.
-
-    Examples
-    --------
-    >>> import cudf
-    >>> data = cudf.Series(['a', 'c', 'c'])
-    >>> codes, uniques = cudf.factorize(data)
-    >>> codes
-    0    0
-    1    1
-    2    1
-    dtype: int8
-    >>> uniques
-    0    a
-    1    c
-    dtype: object
-
-    See Also
-    --------
-    cudf.Series.factorize
-
-    """
-    if sort:
-        raise NotImplementedError(
-            "Sorting not yet supported during factorization."
-        )
-    if size_hint:
-        raise NotImplementedError(
-            "size_hint is not applicable for cudf.factorize"
-        )
-
-    return cudf.Series(values).factorize(na_sentinel=na_sentinel)
