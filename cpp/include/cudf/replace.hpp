@@ -32,7 +32,7 @@ namespace cudf {
  * `FORWARD_FILL` means filling the null
  * `BACKWARD_FILL` means
  */
-enum class fillna_policy : bool { FORWARD_FILL, BACKWARD_FILL };
+enum class replace_policy : bool {PRECEDING, FOLLOWING};
 
 /**
  * @brief Replaces all null values in a column with corresponding values of another column
