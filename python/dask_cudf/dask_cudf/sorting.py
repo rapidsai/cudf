@@ -34,7 +34,7 @@ def _quantile(a, q):
     n = len(a)
     if not len(a):
         return None, n
-    return (a.quantiles(q.tolist(), interpolation="nearest"), n)
+    return (a.quantiles(q=q.tolist(), interpolation="nearest"), n)
 
 
 def merge_quantiles(finalq, qs, vals):
@@ -121,7 +121,7 @@ def _approximate_quantile(df, q):
 
     # Define final action (create df with quantiles as index)
     def finalize_tsk(tsk):
-        return (final_type, tsk, q)
+        return (final_type, tsk)
 
     return_type = df.__class__
 
@@ -162,7 +162,14 @@ def _approximate_quantile(df, q):
     }
     dsk = toolz.merge(val_dsk, merge_dsk)
     graph = HighLevelGraph.from_collections(name2, dsk, dependencies=[df])
-    return return_type(graph, name2, meta, new_divisions)
+    df = return_type(graph, name2, meta, new_divisions)
+
+    def set_quantile_index(df):
+        df.index = q
+        return df
+
+    df = df.map_partitions(set_quantile_index, meta=meta)
+    return df
 
 
 def quantile_divisions(df, by, npartitions):
