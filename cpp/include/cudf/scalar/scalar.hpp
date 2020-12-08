@@ -299,8 +299,7 @@ class fixed_point_scalar : public scalar {
                      rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : scalar{data_type{type_to_id<T>(), static_cast<int32_t>(scale)}, is_valid, stream, mr},
-      _data{value},
-      _scale{static_cast<int32_t>(scale)}
+      _data{value}
   {
   }
 
@@ -316,7 +315,7 @@ class fixed_point_scalar : public scalar {
                      bool is_valid                       = true,
                      rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : scalar{data_type{type_to_id<T>(), 0}, is_valid, stream, mr}, _data{value}, _scale{0}
+    : scalar{data_type{type_to_id<T>(), 0}, is_valid, stream, mr}, _data{value}
   {
   }
 
@@ -333,8 +332,7 @@ class fixed_point_scalar : public scalar {
                      rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : scalar{data_type{type_to_id<T>(), 0}, is_valid, stream, mr},
-      _data{numeric::scaled_integer<rep_type>{value}.value},
-      _scale{0}
+      _data{numeric::scaled_integer<rep_type>{value}.value}
   {
     CUDF_EXPECTS(value == (T{_data.value(), numeric::scale_type{0}}),
                  "scale of fixed_point value should be zero");
@@ -349,13 +347,11 @@ class fixed_point_scalar : public scalar {
    * @param[in] mr Device memory resource to use for device memory allocation
    */
   fixed_point_scalar(rmm::device_scalar<rep_type>&& data,
-                     rmm::device_scalar<int32_t>&& scale,
                      bool is_valid                       = true,
                      rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
     : scalar{data_type{type_to_id<T>()}, is_valid, stream, mr},
-      _data{std::forward<rmm::device_scalar<rep_type>>(data)},
-      _scale{std::forward<rmm::device_scalar<int32_t>>(scale)}
+      _data{std::forward<rmm::device_scalar<rep_type>>(data)}
   {
   }
 
@@ -376,7 +372,7 @@ class fixed_point_scalar : public scalar {
    */
   T fixed_point_value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
   {
-    return T{_data.value(stream), numeric::scale_type{_scale.value(stream)}};
+    return T{_data.value(stream), numeric::scale_type{type().scale()}};
   }
 
   /**
@@ -391,7 +387,6 @@ class fixed_point_scalar : public scalar {
 
  protected:
   rmm::device_scalar<rep_type> _data{};  ///< device memory containing the value
-  rmm::device_scalar<int32_t> _scale{};  ///< device memory containing the scale
 };
 
 /**
