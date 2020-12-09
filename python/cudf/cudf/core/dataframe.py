@@ -200,34 +200,52 @@ class DataFrame(Frame, Serializable):
         """
         super().__init__()
 
+        if isinstance(columns, (Series, cudf.Index)):
+            columns = columns.to_pandas()
+
         if isinstance(data, ColumnAccessor):
-            self._data = data
             if index is None:
-                index = as_index(range(self._data.nrows))
-            self.index = as_index(index)
-            return None
+                index = as_index(range(data.nrows))
+            else:
+                index = as_index(index)
+            self._index = index
 
-        if isinstance(data, DataFrame):
-            self._data = data._data
-            self._index = data._index
-            self.columns = data.columns
-            return
+            if columns is not None:
+                self._data = data
+                self._reindex(columns=columns, deep=True, inplace=True)
+            else:
+                self._data = data
 
-        if isinstance(data, pd.DataFrame):
-            data = self.from_pandas(data)
-            self._data = data._data
-            self._index = data._index
-            self.columns = data.columns
-            return
+        elif isinstance(data, (DataFrame, pd.DataFrame)):
+            if isinstance(data, pd.DataFrame):
+                data = self.from_pandas(data)
 
-        if data is None:
+            if index is not None:
+                if not data.index.equals(index):
+                    data = data.reindex(index)
+                    index = data._index
+                else:
+                    index = as_index(index)
+            else:
+                index = data._index
+
+            self._index = index
+
+            if columns is not None:
+                self._data = data._data
+                self._reindex(
+                    columns=columns, index=index, deep=False, inplace=True
+                )
+            else:
+                self._data = data._data
+                self.columns = data.columns
+
+        elif data is None:
             if index is None:
                 self._index = RangeIndex(0)
             else:
                 self._index = as_index(index)
             if columns is not None:
-                if isinstance(columns, (Series, cudf.Index)):
-                    columns = columns.to_pandas()
 
                 self._data = ColumnAccessor(
                     OrderedDict.fromkeys(
@@ -1088,7 +1106,7 @@ class DataFrame(Frame, Serializable):
         else:
             for col in self._data:
                 result._data[col] = self._data[col].astype(
-                    dtype=dtype, errors=errors, copy=copy, **kwargs
+                    dtype=dtype, **kwargs
                 )
 
         return result
@@ -2560,48 +2578,16 @@ class DataFrame(Frame, Serializable):
 
         df = self
         cols = columns
-        original_cols = df._data
         dtypes = OrderedDict(df.dtypes)
         idx = labels if index is None and axis in (0, "index") else index
         cols = labels if cols is None and axis in (1, "columns") else cols
         df = df if cols is None else df[list(set(df.columns) & set(cols))]
 
-        if idx is not None:
-            idx = as_index(idx)
+        result = df._reindex(
+            columns=cols, dtypes=dtypes, deep=copy, index=idx, inplace=False
+        )
 
-            if isinstance(idx, cudf.core.MultiIndex):
-                idx_dtype_match = (
-                    df.index._source_data.dtypes == idx._source_data.dtypes
-                ).all()
-            else:
-                idx_dtype_match = df.index.dtype == idx.dtype
-
-            if not idx_dtype_match:
-                cols = cols if cols is not None else list(df.columns)
-                df = DataFrame()
-            else:
-                df = DataFrame(None, idx).join(df, how="left", sort=True)
-                # double-argsort to map back from sorted to unsorted positions
-                df = df.take(idx.argsort(ascending=True).argsort())
-
-        idx = idx if idx is not None else df.index
-        names = cols if cols is not None else list(df.columns)
-
-        length = len(idx)
-        cols = OrderedDict()
-
-        for name in names:
-            if name in df:
-                cols[name] = df._data[name].copy(deep=copy)
-            else:
-                dtype = dtypes.get(name, np.float64)
-                col = original_cols.get(name, Series(dtype=dtype)._column)
-                col = column.column_empty_like(
-                    col, dtype=dtype, masked=True, newsize=length
-                )
-                cols[name] = col
-
-        return DataFrame(cols, idx)
+        return result
 
     def _set_index(
         self, index, to_drop=None, inplace=False, verify_integrity=False,
@@ -5381,8 +5367,9 @@ class DataFrame(Frame, Serializable):
             0 <= q <= 1, the quantile(s) to compute
         axis : int
             axis is a NON-FUNCTIONAL parameter
-        numeric_only : boolean
-            numeric_only is a NON-FUNCTIONAL parameter
+        numeric_only : bool, default True
+            If False, the quantile of datetime and timedelta data will be
+            computed as well.
         interpolation : {`linear`, `lower`, `higher`, `midpoint`, `nearest`}
             This parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.
@@ -5394,42 +5381,64 @@ class DataFrame(Frame, Serializable):
 
         Returns
         -------
+        Series or DataFrame
+            If q is an array or numeric_only is set to False, a DataFrame
+            will be returned where index is q, the columns are the columns
+            of self, and the values are the quantile.
 
-        DataFrame
+            If q is a float, a Series will be returned where the index is
+            the columns of self and the values are the quantiles.
+
+        Notes
+        -----
+        One notable difference from Pandas is when DataFrame is of
+        non-numeric types and result is expected to be a Series in case of
+        Pandas. cuDF will return a DataFrame as it doesn't support mixed
+        types under Series.
         """
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
 
-        if not numeric_only:
-            raise NotImplementedError("numeric_only is not implemented yet")
+        if numeric_only:
+            data_df = self.select_dtypes(
+                include=[np.number], exclude=["datetime64", "timedelta64"]
+            )
+        else:
+            data_df = self
+
         if columns is None:
-            columns = self._data.names
+            columns = data_df._data.names
 
         result = DataFrame()
 
-        for k in self._data.names:
+        for k in data_df._data.names:
 
             if k in columns:
-                res = self[k].quantile(
+                res = data_df[k].quantile(
                     q,
                     interpolation=interpolation,
                     exact=exact,
                     quant_index=False,
                 )
-                if not isinstance(res, numbers.Number) and len(res) == 0:
+                if (
+                    not isinstance(
+                        res, (numbers.Number, pd.Timestamp, pd.Timedelta)
+                    )
+                    and len(res) == 0
+                ):
                     res = column.column_empty_like(
-                        q, dtype="float64", masked=True, newsize=len(q)
+                        q, dtype=data_df[k].dtype, masked=True, newsize=len(q)
                     )
                 result[k] = column.as_column(res)
 
-        if isinstance(q, numbers.Number):
+        if isinstance(q, numbers.Number) and numeric_only:
             result = result.fillna(np.nan)
             result = result.iloc[0]
-            result.index = as_index(self.columns)
+            result.index = as_index(data_df.columns)
             result.name = q
             return result
         else:
-            q = list(map(float, q))
+            q = list(map(float, [q] if isinstance(q, numbers.Number) else q))
             result.index = q
             return result
 
