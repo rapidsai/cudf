@@ -70,17 +70,16 @@ std::unique_ptr<column> replace_nulls(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Replaces all null values in a column the first non-null value to its front/back.
+ * @brief Replaces all null values in a column with the first non-null value that precedes/follows.
  *
- * If `input[i]` is NULL, then `output[i]` will contain the first non-null value to its
- * front or back based on `fillna_policy`, `input` and `replacement` must have the same type.
+ * If `input[i]` is NULL, then `output[i]` will contain the first non-null value that precedes or
+ * follows the null value, based on `replace_policy`.
  *
  * @param[in] input A column whose null values will be replaced.
- * @param[in] replace_policy Specify the relative position that replacement value is to the null
- * value.
+ * @param[in] replace_policy Specify the position that replacement value is to the null value.
  * @param[in] mr Device memory resource used to allocate device memory of the returned column.
  *
- * @returns Copy of `input` with null values replaced by `replacement`.
+ * @returns Copy of `input` with null values replaced based on `replace_policy`.
  */
 std::unique_ptr<column> replace_nulls(
   column_view const& input,

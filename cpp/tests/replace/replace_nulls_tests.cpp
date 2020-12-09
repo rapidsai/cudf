@@ -17,7 +17,6 @@
  * limitations under the License.
  */
 
-#include <bits/stdint-intn.h>
 #include <cudf/replace.hpp>
 
 #include <tests/groupby/groupby_test_util.hpp>
@@ -32,7 +31,6 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
-#include "cudf/types.hpp"
 
 struct ReplaceErrorTest : public cudf::test::BaseFixture {
 };
