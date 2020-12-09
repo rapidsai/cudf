@@ -372,7 +372,8 @@ class fixed_point_scalar : public scalar {
    */
   T fixed_point_value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
   {
-    return T{_data.value(stream), numeric::scale_type{type().scale()}};
+    using namespace numeric;
+    return T{scaled_integer<rep_type>{_data.value(stream), scale_type{type().scale()}}};
   }
 
   /**
