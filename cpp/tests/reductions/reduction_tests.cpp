@@ -1081,6 +1081,26 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProduct)
   }
 }
 
+TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProductWithNulls)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (int i = -1; i <= 0; ++i) {
+    auto const scale    = scale_type{i};
+    auto const column   = fp_wrapper{{1, 2, 3, 1, 2, 3}, {1, 1, 1, 0, 0, 0}, scale};
+    auto const out_type = static_cast<cudf::column_view>(column).type();
+    auto const expected = decimalXX{scaled_integer<RepType>{6, scale_type{i * 3}}};
+
+    auto const result        = cudf::reduce(column, cudf::make_product_aggregation(), out_type);
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+
+    EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+  }
+}
+
 TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSum)
 {
   using namespace numeric;
