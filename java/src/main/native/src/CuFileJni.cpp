@@ -147,19 +147,45 @@ public:
   /**
    * @brief Construct a file wrapper.
    *
-   * @param path Absolute path to the underlying file.
+   * Should not be called directly; use the following factory methods instead.
+   *
+   * @param file_descriptor A valid file descriptor.
    */
-  cufile_file(char const *path) {
-    file_descriptor_ = open(path, O_CREAT | O_RDWR | O_DIRECT, 0644);
-    if (file_descriptor_ < 0) {
-      CUDF_FAIL("Failed to open file: " + cuFileGetErrorString(errno));
-    }
+  explicit cufile_file(int file_descriptor) : file_descriptor_{file_descriptor} {
     CUfileDescr_t cufile_descriptor{CU_FILE_HANDLE_TYPE_OPAQUE_FD, file_descriptor_};
     auto const status = cuFileHandleRegister(&cufile_handle_, &cufile_descriptor);
     if (status.err != CU_FILE_SUCCESS) {
       close(file_descriptor_);
       CUDF_FAIL("Failed to register cuFile handle: " + cuFileGetErrorString(status));
     }
+  }
+
+  /**
+   * @brief Factory method to create a file wrapper for reading.
+   *
+   * @param path Absolute path of the file to read from.
+   * @return std::unique_ptr<cufile_file> for reading.
+   */
+  static auto make_reader(char const *path) {
+    auto const file_descriptor = open(path, O_RDONLY | O_DIRECT);
+    if (file_descriptor < 0) {
+      CUDF_FAIL("Failed to open file to read: " + cuFileGetErrorString(errno));
+    }
+    return std::make_unique<cufile_file>(file_descriptor);
+  }
+
+  /**
+   * @brief Factory method to create a file wrapper for writing.
+   *
+   * @param path Absolute path of the file to write to.
+   * @return std::unique_ptr<cufile_file> for writing.
+   */
+  static auto make_writer(char const *path) {
+    auto const file_descriptor = open(path, O_CREAT | O_WRONLY | O_DIRECT, S_IRUSR | S_IWUSR);
+    if (file_descriptor < 0) {
+      CUDF_FAIL("Failed to open file to write: " + cuFileGetErrorString(errno));
+    }
+    return std::make_unique<cufile_file>(file_descriptor);
   }
 
   // Disable copy (and move) semantics.
@@ -178,7 +204,7 @@ public:
    * @param buffer Device buffer to read the file content into.
    * @param file_offset Starting offset from which to read the file.
    */
-  void read(cufile_buffer const &buffer, std::size_t file_offset) {
+  void read(cufile_buffer const &buffer, std::size_t file_offset) const {
     auto const status =
         cuFileRead(cufile_handle_, buffer.device_pointer(), buffer.size(), file_offset, 0);
 
@@ -235,7 +261,7 @@ private:
   /// The underlying file descriptor.
   int file_descriptor_;
   /// The registered cuFile handle.
-  CUfileHandle_t cufile_handle_;
+  CUfileHandle_t cufile_handle_{};
 };
 
 } // anonymous namespace
@@ -265,7 +291,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_destroyDriver(JNIEnv *env, jcl
                                                                 jlong pointer) {
   try {
     if (pointer != 0) {
-      cufile_driver *driver = reinterpret_cast<cufile_driver *>(pointer);
+      auto *driver = reinterpret_cast<cufile_driver *>(pointer);
       delete driver;
     }
   }
@@ -287,11 +313,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFile_copyToFile(JNIEnv *env, jclas
                                                               jboolean append) {
   try {
     cufile_buffer buffer{reinterpret_cast<void *>(device_pointer), static_cast<std::size_t>(size)};
-    cufile_file file{(env->GetStringUTFChars(path, nullptr))};
+    auto writer = cufile_file::make_writer(env->GetStringUTFChars(path, nullptr));
     if (append) {
-      return file.append(buffer);
+      return writer->append(buffer);
     } else {
-      file.write(buffer);
+      writer->write(buffer);
       return 0;
     }
   }
@@ -312,8 +338,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_copyFromFile(JNIEnv *env, jcla
                                                                jstring path, jlong file_offset) {
   try {
     cufile_buffer buffer{reinterpret_cast<void *>(device_pointer), static_cast<std::size_t>(size)};
-    cufile_file file{(env->GetStringUTFChars(path, nullptr))};
-    file.read(buffer, file_offset);
+    auto const reader = cufile_file::make_reader(env->GetStringUTFChars(path, nullptr));
+    reader->read(buffer, file_offset);
   }
   CATCH_STD(env, );
 }
