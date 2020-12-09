@@ -93,6 +93,7 @@ def replace_nulls_scalar(Column input_col, DeviceScalar replacement_value):
 
     return Column.from_unique_ptr(move(c_result))
 
+
 def replace_nulls_fill(Column input_col, object method):
     """
     Replaces null values in input_col with replacement_value
@@ -102,18 +103,28 @@ def replace_nulls_fill(Column input_col, object method):
     input_col : Column whose value will be updated
     method : 'ffill' or 'bfill'
     """
-    
+
     cdef column_view input_col_view = input_col.view()
-    
+
     cdef unique_ptr[column] c_result
-    cdef cpp_replace_policy policy = cpp_replace_policy.PRECEDING if method == 'ffill' else cpp_replace_policy.FOLLOWING
+    cdef cpp_replace_policy policy = (
+        cpp_replace_policy.PRECEDING
+        if method == 'ffill'
+        else cpp_replace_policy.FOLLOWING
+    )
 
     with nogil:
         c_result = move(cpp_replace_nulls(input_col_view, policy))
 
     return Column.from_unique_ptr(move(c_result))
 
-def replace_nulls(Column input_col, object replacement=None, object method=None, object dtype=None):
+
+def replace_nulls(
+    Column input_col,
+    object replacement=None,
+    object method=None,
+    object dtype=None
+):
     """
     Calls one of the version of replace_nulls depending on type
     of replacement
@@ -121,7 +132,7 @@ def replace_nulls(Column input_col, object replacement=None, object method=None,
 
     if replacement is None and method is None:
         raise ValueError("Must specify a fill 'value' or 'method'.")
-    
+
     if replacement and method:
         raise ValueError("Cannot specify both 'value' and 'method'.")
 
