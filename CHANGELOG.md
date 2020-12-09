@@ -12,6 +12,7 @@
 - PR #6275 Update to official libcu++ on Github
 - PR #6838 Fix `columns` & `index` handling in dataframe constructor
 - PR #6750 Remove **kwargs from string/categorical methods
+- PR #6585 Add dictionary support to libcudf groupby functions
 
 ## Bug Fixes
 
@@ -94,7 +95,6 @@
 - PR #6555 Adapt JNI build to libcudf composition of multiple libraries
 - PR #6559 Refactoring cooperative loading with single thread loading.
 - PR #6564 Load JNI library dependencies with a thread pool
-- PR #6585 Add dictionary support to libcudf groupby functions
 - PR #6571 Add ORC fuzz tests with varying function parameters
 - PR #6578 Add in java column to row conversion
 - PR #6573 Create `cudf::detail::byte_cast` for `cudf::byte_cast`
