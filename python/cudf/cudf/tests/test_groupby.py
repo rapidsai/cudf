@@ -1356,7 +1356,7 @@ def test_groupby_no_keys(pdf):
         pdf.groupby([]).max(),
         gdf.groupby([]).max(),
         check_dtype=False,
-        check_index_type=False,
+        check_index_type=False,  # Int64Index v/s Float64Index
     )
 
 
