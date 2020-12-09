@@ -468,12 +468,8 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 
   if (!input.has_nulls()) { return std::make_unique<cudf::column>(input, stream, mr); }
 
-  return cudf::type_dispatcher(input.type(),
-                               replace_nulls_policy_kernel_forwarder{},
-                               input,
-                               replace_policy,
-                               stream,
-                               mr);
+  return cudf::type_dispatcher(
+    input.type(), replace_nulls_policy_kernel_forwarder{}, input, replace_policy, stream, mr);
 }
 
 }  // namespace detail
