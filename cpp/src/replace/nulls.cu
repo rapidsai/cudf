@@ -20,6 +20,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/gather.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -405,12 +406,10 @@ struct replace_nulls_replace_policy_kernel_forwarder {
                              func);
     }
 
-    cudf::column_view gm_col(cudf::data_type{cudf::type_id::INT32},
-                             gather_map.size(),
-                             thrust::raw_pointer_cast(gather_map.data()));
-
-    auto output =
-      cudf::gather(cudf::table_view({input}), gm_col, cudf::out_of_bounds_policy::DONT_CHECK, mr);
+    auto output = cudf::detail::gather(cudf::table_view({input}),
+                                       gather_map.begin(),
+                                       gather_map.end(),
+                                       cudf::out_of_bounds_policy::DONT_CHECK);
 
     return std::move(output->release()[0]);
   }
