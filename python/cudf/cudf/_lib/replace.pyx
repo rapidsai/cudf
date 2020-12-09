@@ -16,7 +16,7 @@ from cudf._lib.cpp.column.column_view cimport (
     mutable_column_view
 )
 from cudf._lib.cpp.replace cimport (
-    fillna_policy as cpp_fillna_policy,
+    replace_policy as cpp_replace_policy,
     find_and_replace_all as cpp_find_and_replace_all,
     replace_nulls as cpp_replace_nulls,
     clamp as cpp_clamp,
@@ -100,19 +100,18 @@ def replace_nulls_fill(Column input_col, object method):
     Parameters
     ----------
     input_col : Column whose value will be updated
-    method : TODO
+    method : 'ffill' or 'bfill'
     """
     
-    return 0
-    # cdef column_view input_col_view = input_col.view()
+    cdef column_view input_col_view = input_col.view()
     
-    # cdef unique_ptr[column] c_result
-    # cdef cpp_fillna_policy policy = cpp_fillna_policy.FORWARD_FILL if method == 'ffill' else cpp_fillna_policy.BACKWARD_FILL
+    cdef unique_ptr[column] c_result
+    cdef cpp_replace_policy policy = cpp_replace_policy.PRECEDING if method == 'ffill' else cpp_replace_policy.FOLLOWING
 
-    # with nogil:
-    #     c_result = move(cpp_replace_nulls(input_col_view, policy))
+    with nogil:
+        c_result = move(cpp_replace_nulls(input_col_view, policy))
 
-    # return Column.from_unique_ptr(move(c_result))
+    return Column.from_unique_ptr(move(c_result))
 
 def replace_nulls(Column input_col, object replacement=None, object method=None, object dtype=None):
     """
