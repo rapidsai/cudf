@@ -21,6 +21,16 @@
 #include <memory>
 
 namespace cudf {
+
+std::vector<aggregation::Kind> aggregation::get_simple_aggregations(data_type col_type) const
+{
+  return {this->kind};
+}
+void aggregation::finalize(cudf::detail::aggregation_finalizer& finalizer)
+{
+  finalizer.visit(*this);
+}
+
 /// Factory to create a SUM aggregation
 std::unique_ptr<aggregation> make_sum_aggregation()
 {
@@ -34,12 +44,12 @@ std::unique_ptr<aggregation> make_product_aggregation()
 /// Factory to create a MIN aggregation
 std::unique_ptr<aggregation> make_min_aggregation()
 {
-  return std::make_unique<aggregation>(aggregation::MIN);
+  return std::make_unique<detail::min_aggregation>();
 }
 /// Factory to create a MAX aggregation
 std::unique_ptr<aggregation> make_max_aggregation()
 {
-  return std::make_unique<aggregation>(aggregation::MAX);
+  return std::make_unique<detail::max_aggregation>();
 }
 /// Factory to create a COUNT aggregation
 std::unique_ptr<aggregation> make_count_aggregation(null_policy null_handling)
@@ -66,17 +76,17 @@ std::unique_ptr<aggregation> make_sum_of_squares_aggregation()
 /// Factory to create a MEAN aggregation
 std::unique_ptr<aggregation> make_mean_aggregation()
 {
-  return std::make_unique<aggregation>(aggregation::MEAN);
+  return std::make_unique<detail::mean_aggregation>();
 }
 /// Factory to create a VARIANCE aggregation
 std::unique_ptr<aggregation> make_variance_aggregation(size_type ddof)
 {
-  return std::make_unique<detail::std_var_aggregation>(aggregation::VARIANCE, ddof);
+  return std::make_unique<detail::var_aggregation>(ddof);
 };
 /// Factory to create a STD aggregation
 std::unique_ptr<aggregation> make_std_aggregation(size_type ddof)
 {
-  return std::make_unique<detail::std_var_aggregation>(aggregation::STD, ddof);
+  return std::make_unique<detail::std_aggregation>(ddof);
 };
 /// Factory to create a MEDIAN aggregation
 std::unique_ptr<aggregation> make_median_aggregation()
@@ -103,13 +113,12 @@ std::unique_ptr<aggregation> make_argmin_aggregation()
 /// Factory to create a NUNIQUE aggregation
 std::unique_ptr<aggregation> make_nunique_aggregation(null_policy null_handling)
 {
-  return std::make_unique<detail::nunique_aggregation>(aggregation::NUNIQUE, null_handling);
+  return std::make_unique<detail::nunique_aggregation>(null_handling);
 }
 /// Factory to create a NTH_ELEMENT aggregation
 std::unique_ptr<aggregation> make_nth_element_aggregation(size_type n, null_policy null_handling)
 {
-  return std::make_unique<detail::nth_element_aggregation>(
-    aggregation::NTH_ELEMENT, n, null_handling);
+  return std::make_unique<detail::nth_element_aggregation>(n, null_handling);
 }
 /// Factory to create a ROW_NUMBER aggregation
 std::unique_ptr<aggregation> make_row_number_aggregation()
