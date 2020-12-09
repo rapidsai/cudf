@@ -19,8 +19,8 @@
 
 #include <io/utilities/block_utils.cuh>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
@@ -473,7 +473,7 @@ void BuildStripeDictionaries(StripeDictionary *stripes,
       const nvstrdesc_s *str_data =
         static_cast<const nvstrdesc_s *>(stripes_host[i].column_data_base);
       // NOTE: Requires the --expt-extended-lambda nvcc flag
-      thrust::sort(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::sort(rmm::exec_policy(stream),
                    p,
                    p + stripes_host[i].num_strings,
                    [str_data] __device__(const uint32_t &lhs, const uint32_t &rhs) {

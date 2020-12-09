@@ -27,6 +27,7 @@
 #include <cudf/strings/translate.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/find.h>
 
@@ -93,7 +94,6 @@ std::unique_ptr<column> translate(
   // copy translate table to device memory
   rmm::device_vector<translate_table> table(htable);
 
-  auto execpol        = rmm::exec_policy(stream);
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // create null mask
@@ -111,7 +111,7 @@ std::unique_ptr<column> translate(
   auto chars_column = strings::detail::create_chars_child_column(
     strings_count, strings.null_count(), bytes, stream, mr);
   auto d_chars = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,
                      translate_fn{d_strings, table.begin(), table.end(), d_offsets, d_chars});

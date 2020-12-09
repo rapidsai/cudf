@@ -27,8 +27,8 @@
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/stream_compaction.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
 #include <algorithm>
@@ -74,7 +74,7 @@ struct dispatch_compute_indices {
                                       mr);
     auto result_itr =
       cudf::detail::indexalator_factory::make_output_iterator(result->mutable_view());
-    thrust::lower_bound(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::lower_bound(rmm::exec_policy(stream),
                         new_keys_view->begin<Element>(),
                         new_keys_view->end<Element>(),
                         dictionary_itr,

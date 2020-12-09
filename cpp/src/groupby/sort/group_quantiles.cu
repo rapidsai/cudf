@@ -24,8 +24,9 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/types.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
 
@@ -62,7 +63,7 @@ struct quantiles_functor {
     auto result_view     = mutable_column_device_view::create(result->mutable_view());
 
     // For each group, calculate quantile
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator(0),
                        num_groups,
                        [d_values       = *values_view,

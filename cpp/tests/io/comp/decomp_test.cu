@@ -15,12 +15,13 @@
  */
 
 #include <io/comp/gpuinflate.h>
+
 #include <cudf_test/base_fixture.hpp>
 
 #include <vector>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_vector.hpp>
 
 /**
  * @brief Base test fixture for decompression
