@@ -164,6 +164,9 @@ class GroupBy(Serializable):
         """
         normalized_aggs = self._normalize_aggs(func)
 
+        # Note: When there are no key columns, the below produces
+        # a Float64Index, while Pandas returns an Int64Index
+        # (GH: 6945)
         result = self._groupby.aggregate(self.obj, normalized_aggs)
 
         result = cudf.DataFrame._from_table(result)
