@@ -196,8 +196,8 @@ get_left_join_indices_complement(rmm::device_vector<size_type> &right_indices,
  * @throw std::out_of_range if elements of `build_on` exceed the number of columns in the `build`
  * table.
  *
- * @param build_table Device view of table of build side columns to join.
- * @param build Table of build side columns.
+ * @param build_table Device view of table of columns used to build join hash.
+ * @param build Table of columns used to build join hash.
  * @param compare_nulls Controls whether null join-key values should match or not.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
