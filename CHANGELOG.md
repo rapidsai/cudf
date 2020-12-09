@@ -8,7 +8,7 @@
 
 ## Bug Fixes
 
- - PR #6903 Add null count test for apply_boolean_mask
+- PR #6903 Add null count test for apply_boolean_mask
 - PR #6912 Fix rmm_mode=managed parameter for gtests
 
 
