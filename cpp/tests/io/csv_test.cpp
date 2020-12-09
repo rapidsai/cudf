@@ -133,7 +133,7 @@ void check_timestamp_column(cudf::column_view const& col_lhs,
                             long tol_ms = 1000l)
 {
   using T = cudf::timestamp_ms;
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
 
   auto h_lhs = cudf::test::to_host<T>(col_lhs).first;
   auto h_rhs = cudf::test::to_host<T>(col_rhs).first;
@@ -150,7 +150,7 @@ void check_timestamp_column(cudf::column_view const& col_lhs,
 
   auto found = thrust::find_if(
     thrust::host, begin_count, end_count, [ptr_lhs, ptr_rhs, tol_ms](auto row_index) {
-      auto delta_ms = simt::std::chrono::duration_cast<simt::std::chrono::milliseconds>(
+      auto delta_ms = cuda::std::chrono::duration_cast<cuda::std::chrono::milliseconds>(
         ptr_lhs[row_index] - ptr_rhs[row_index]);
       return delta_ms.count() >= tol_ms;
     });
@@ -425,7 +425,7 @@ TEST_F(CsvReaderTest, Dates)
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::TIMESTAMP_MILLISECONDS, view.column(0).type().id());
 
-  using namespace simt::std::chrono_literals;
+  using namespace cuda::std::chrono_literals;
   expect_column_data_equal(std::vector<cudf::timestamp_ms>{cudf::timestamp_ms{983750400000ms},
                                                            cudf::timestamp_ms{1288483200000ms},
                                                            cudf::timestamp_ms{782611200000ms},
@@ -462,7 +462,7 @@ TEST_F(CsvReaderTest, DatesCastToTimestampSeconds)
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::TIMESTAMP_SECONDS, view.column(0).type().id());
 
-  using namespace simt::std::chrono_literals;
+  using namespace cuda::std::chrono_literals;
   expect_column_data_equal(std::vector<cudf::timestamp_s>{cudf::timestamp_s{983750400s},
                                                           cudf::timestamp_s{1288483200s},
                                                           cudf::timestamp_s{782611200s},
@@ -499,7 +499,7 @@ TEST_F(CsvReaderTest, DatesCastToTimestampMilliSeconds)
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::TIMESTAMP_MILLISECONDS, view.column(0).type().id());
 
-  using namespace simt::std::chrono_literals;
+  using namespace cuda::std::chrono_literals;
   expect_column_data_equal(std::vector<cudf::timestamp_ms>{cudf::timestamp_ms{983750400000ms},
                                                            cudf::timestamp_ms{1288483200000ms},
                                                            cudf::timestamp_ms{782611200000ms},
@@ -536,7 +536,7 @@ TEST_F(CsvReaderTest, DatesCastToTimestampMicroSeconds)
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::TIMESTAMP_MICROSECONDS, view.column(0).type().id());
 
-  using namespace simt::std::chrono_literals;
+  using namespace cuda::std::chrono_literals;
   expect_column_data_equal(std::vector<cudf::timestamp_us>{cudf::timestamp_us{983750400000000us},
                                                            cudf::timestamp_us{1288483200000000us},
                                                            cudf::timestamp_us{782611200000000us},
@@ -573,7 +573,7 @@ TEST_F(CsvReaderTest, DatesCastToTimestampNanoSeconds)
   EXPECT_EQ(1, view.num_columns());
   ASSERT_EQ(cudf::type_id::TIMESTAMP_NANOSECONDS, view.column(0).type().id());
 
-  using namespace simt::std::chrono_literals;
+  using namespace cuda::std::chrono_literals;
   expect_column_data_equal(
     std::vector<cudf::timestamp_ns>{cudf::timestamp_ns{983750400000000000ns},
                                     cudf::timestamp_ns{1288483200000000000ns},
@@ -928,7 +928,7 @@ TEST_F(CsvReaderTest, nullHandling)
   const auto filepath = temp_env->get_temp_dir() + "NullValues.csv";
   {
     std::ofstream outfile(filepath, std::ofstream::out);
-    outfile << "NULL\nnull\nn/a\nNull\nNA\nnan";
+    outfile << "NULL\n\nnull\nn/a\nNull\nNA\nnan";
   }
 
   // Test disabling na_filter
@@ -937,11 +937,12 @@ TEST_F(CsvReaderTest, nullHandling)
       cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
         .na_filter(false)
         .dtypes({"str"})
-        .header(-1);
+        .header(-1)
+        .skip_blank_lines(false);
     const auto result = cudf_io::read_csv(in_opts);
     const auto view   = result.tbl->view();
-    auto expect = cudf::test::strings_column_wrapper({"NULL", "null", "n/a", "Null", "NA", "nan"});
-
+    auto expect =
+      cudf::test::strings_column_wrapper({"NULL", "", "null", "n/a", "Null", "NA", "nan"});
     expect_columns_equal(expect, view.column(0));
   }
 
@@ -950,11 +951,13 @@ TEST_F(CsvReaderTest, nullHandling)
     cudf_io::csv_reader_options in_opts =
       cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
         .dtypes({"str"})
-        .header(-1);
+        .header(-1)
+        .skip_blank_lines(false);
     const auto result = cudf_io::read_csv(in_opts);
     const auto view   = result.tbl->view();
-    auto expect = cudf::test::strings_column_wrapper({"NULL", "null", "n/a", "Null", "NA", "nan"},
-                                                     {false, false, false, true, false, false});
+    auto expect =
+      cudf::test::strings_column_wrapper({"NULL", "", "null", "n/a", "Null", "NA", "nan"},
+                                         {false, false, false, false, true, false, false});
 
     expect_columns_equal(expect, view.column(0));
   }
@@ -965,11 +968,13 @@ TEST_F(CsvReaderTest, nullHandling)
       cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
         .na_values({"Null"})
         .dtypes({"str"})
-        .header(-1);
+        .header(-1)
+        .skip_blank_lines(false);
     const auto result = cudf_io::read_csv(in_opts);
     const auto view   = result.tbl->view();
-    auto expect = cudf::test::strings_column_wrapper({"NULL", "null", "n/a", "Null", "NA", "nan"},
-                                                     {false, false, false, false, false, false});
+    auto expect =
+      cudf::test::strings_column_wrapper({"NULL", "", "null", "n/a", "Null", "NA", "nan"},
+                                         {false, false, false, false, false, false, false});
 
     expect_columns_equal(expect, view.column(0));
   }
@@ -981,11 +986,13 @@ TEST_F(CsvReaderTest, nullHandling)
         .keep_default_na(false)
         .na_values({"Null"})
         .dtypes({"str"})
-        .header(-1);
+        .header(-1)
+        .skip_blank_lines(false);
     const auto result = cudf_io::read_csv(in_opts);
     const auto view   = result.tbl->view();
-    auto expect = cudf::test::strings_column_wrapper({"NULL", "null", "n/a", "Null", "NA", "nan"},
-                                                     {true, true, true, false, true, true});
+    auto expect =
+      cudf::test::strings_column_wrapper({"NULL", "", "null", "n/a", "Null", "NA", "nan"},
+                                         {true, true, true, true, false, true, true, true});
 
     expect_columns_equal(expect, view.column(0));
   }
