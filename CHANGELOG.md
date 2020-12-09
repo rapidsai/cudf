@@ -47,7 +47,6 @@
 - PR #6817 Add support for scatter() on lists-of-struct columns
 - PR #6805 Implement `cudf::detail::copy_if` for `decimal32` and `decimal64`
 - PR #6847 Add a cmake find module for cuFile in JNI code
-- PR #6483 Add `agg` function to aggregate dataframe using one or more operations
 - PR #6726 Support selecting different hash functions in hash_partition
 - PR #6619 Improve Dockerfile
 - PR #6831 Added parquet chunked writing ability for list columns
