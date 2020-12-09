@@ -584,3 +584,15 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
                 "number_of_values"
             ]
             assert normalized_equals(actual_valid_count, stats_valid_count)
+
+
+def test_orc_reader_gmt_timestamps(datadir):
+    path = datadir / "TestOrcFile.gmt.orc"
+    try:
+        orcfile = pa.orc.ORCFile(path)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+
+    pdf = orcfile.read().to_pandas()
+    gdf = cudf.read_orc(path, engine="cudf").to_pandas()
+    assert_eq(pdf, gdf)
