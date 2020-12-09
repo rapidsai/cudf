@@ -23,6 +23,14 @@ import java.io.File;
 
 /**
  * JNI wrapper for accessing the cuFile API.
+ * <p>
+ * Using this wrapper requires GPUDirect Storage (GDS)/cuFile to be installed in the target
+ * environment, and the jar to be built with `USE_GDS=ON`. Otherwise it will throw an exception when
+ * loading.
+ * <p>
+ * The Java APIs are experimental and subject to change.
+ *
+ * @see <a href="https://docs.nvidia.com/gpudirect-storage/">GDS documentation</a>
  */
 public class CuFile {
   private static final Logger log = LoggerFactory.getLogger(CuFile.class);
@@ -57,9 +65,11 @@ public class CuFile {
   private static native void destroyDriver(long pointer);
 
   /**
-   * Copy a device buffer to a given file path.
+   * Copy a device buffer to a given file path synchronously.
+   * <p>
+   * This method is NOT thread safe if the path points to the same file on disk.
    *
-   * @param path The file path to copy to.
+   * @param path   The file path to copy to.
    * @param buffer The device buffer to copy from.
    * @param append Whether to append to the file.
    * @return The file offset from which the buffer was appended.
@@ -69,10 +79,12 @@ public class CuFile {
   }
 
   /**
-   * Copy a file into a device buffer.
+   * Copy a file into a device buffer synchronously.
+   * <p>
+   * This method is NOT thread safe if the path points to the same file on disk.
    *
-   * @param buffer The device buffer to copy into.
-   * @param path The file path to copy from.
+   * @param buffer     The device buffer to copy into.
+   * @param path       The file path to copy from.
    * @param fileOffset The file offset from which to copy the content.
    */
   public static void copyFileToDeviceBuffer(DeviceMemoryBuffer buffer, File path, long fileOffset) {
