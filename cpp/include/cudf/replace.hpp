@@ -32,7 +32,7 @@ namespace cudf {
  * `PRECEDING` means the replacement value is the first non-null value preceding the null row.
  * `FOLLOWING` means the replacement value is the first non-null value following the null row.
  */
-enum class replace_policy : bool {PRECEDING, FOLLOWING};
+enum class replace_policy : bool { PRECEDING, FOLLOWING };
 
 /**
  * @brief Replaces all null values in a column with corresponding values of another column
@@ -76,7 +76,8 @@ std::unique_ptr<column> replace_nulls(
  * front or back based on `fillna_policy`, `input` and `replacement` must have the same type.
  *
  * @param[in] input A column whose null values will be replaced.
- * @param[in] replace_policy Specify the relative position that replacement value is to the null value.
+ * @param[in] replace_policy Specify the relative position that replacement value is to the null
+ * value.
  * @param[in] mr Device memory resource used to allocate device memory of the returned column.
  *
  * @returns Copy of `input` with null values replaced by `replacement`.
