@@ -357,7 +357,7 @@ std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<
   return cudf::dictionary::detail::replace_nulls(dict_input, replacement, stream, mr);
 }
 
-struct replace_nulls_replace_policy_functor {
+struct replace_policy_functor {
   __device__ thrust::tuple<cudf::size_type, bool> operator()(
     thrust::tuple<cudf::size_type, bool> const& lhs,
     thrust::tuple<cudf::size_type, bool> const& rhs)
@@ -371,7 +371,7 @@ struct replace_nulls_replace_policy_functor {
  * @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
  *        `replace_nulls` with the appropriate data types.
  */
-struct replace_nulls_replace_policy_kernel_forwarder {
+struct replace_nulls_policy_kernel_forwarder {
   template <typename col_type,
             typename std::enable_if_t<cudf::is_fixed_width<col_type>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
@@ -389,7 +389,7 @@ struct replace_nulls_replace_policy_kernel_forwarder {
     auto gm_begin = thrust::make_zip_iterator(
       thrust::make_tuple(gather_map.begin(), thrust::make_discard_iterator()));
 
-    auto func = replace_nulls_replace_policy_functor();
+    auto func = replace_policy_functor();
     if (replace_policy == cudf::replace_policy::PRECEDING) {
       thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
                              in_begin,
@@ -469,7 +469,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   if (!input.has_nulls()) { return std::make_unique<cudf::column>(input, stream, mr); }
 
   return cudf::type_dispatcher(input.type(),
-                               replace_nulls_replace_policy_kernel_forwarder{},
+                               replace_nulls_policy_kernel_forwarder{},
                                input,
                                replace_policy,
                                stream,

@@ -302,10 +302,10 @@ TYPED_TEST(ReplaceNullsTest, LargeScaleScalar)
 }
 
 template <typename T>
-struct ReplaceNullsReplacePolicyTest : public cudf::test::BaseFixture {
+struct ReplaceNullsPolicyTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ReplaceNullsReplacePolicyTest, test_types);
+TYPED_TEST_CASE(ReplaceNullsPolicyTest, test_types);
 
 template <typename T>
 void TestReplaceNullsWithPolicy(cudf::test::fixed_width_column_wrapper<T> input,
@@ -316,7 +316,7 @@ void TestReplaceNullsWithPolicy(cudf::test::fixed_width_column_wrapper<T> input,
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
 
-TYPED_TEST(ReplaceNullsReplacePolicyTest, PrecedingFill)
+TYPED_TEST(ReplaceNullsPolicyTest, PrecedingFill)
 {
   std::vector<TypeParam> col =
     cudf::test::make_type_param_vector<TypeParam>({42, 2, 1, -10, 20, -30});
@@ -332,7 +332,7 @@ TYPED_TEST(ReplaceNullsReplacePolicyTest, PrecedingFill)
     cudf::replace_policy::PRECEDING);
 }
 
-TYPED_TEST(ReplaceNullsReplacePolicyTest, FollowingFill)
+TYPED_TEST(ReplaceNullsPolicyTest, FollowingFill)
 {
   std::vector<TypeParam> col =
     cudf::test::make_type_param_vector<TypeParam>({42, 2, 1, -10, 20, -30});
@@ -348,7 +348,7 @@ TYPED_TEST(ReplaceNullsReplacePolicyTest, FollowingFill)
     cudf::replace_policy::FOLLOWING);
 }
 
-TYPED_TEST(ReplaceNullsReplacePolicyTest, PrecedingFillLeadingNulls)
+TYPED_TEST(ReplaceNullsPolicyTest, PrecedingFillLeadingNulls)
 {
   std::vector<TypeParam> col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
   std::vector<cudf::valid_type> mask =
@@ -365,7 +365,7 @@ TYPED_TEST(ReplaceNullsReplacePolicyTest, PrecedingFillLeadingNulls)
     cudf::replace_policy::PRECEDING);
 }
 
-TYPED_TEST(ReplaceNullsReplacePolicyTest, FollowingFillTrailingNulls)
+TYPED_TEST(ReplaceNullsPolicyTest, FollowingFillTrailingNulls)
 {
   std::vector<TypeParam> col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
   std::vector<cudf::valid_type> mask =
