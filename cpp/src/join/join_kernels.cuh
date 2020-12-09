@@ -93,7 +93,7 @@ __global__ void build_hash_table(multimap_type multi_map,
       // Insert the (row hash value, row index) into the map
       // using the row hash value to determine the location in the
       // hash map where the new pair should be inserted
-      const auto insert_location =
+      auto const insert_location =
         multi_map.insert(thrust::make_pair(row_hash_value, i), true, row_hash_value);
 
       // If the insert failed, set the error code accordingly
