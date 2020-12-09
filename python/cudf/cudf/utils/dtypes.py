@@ -234,10 +234,17 @@ def is_struct_dtype(obj):
     return (
         type(obj) is cudf.core.dtypes.StructDtype
         or obj is cudf.core.dtypes.StructDtype
-        # or type(obj) is cudf.core.column.StructColumn
-        # or obj is cudf.core.column.StructColumn
         or (isinstance(obj, str) and obj == cudf.core.dtypes.StructDtype.name)
         or (hasattr(obj, "dtype") and is_struct_dtype(obj.dtype))
+    )
+
+
+def is_decimal_dtype(obj):
+    return (
+        type(obj) is cudf.core.dtypes.DecimalDtype
+        or obj is cudf.core.dtypes.DecimalDtype
+        or (isinstance(obj, str) and obj == cudf.core.dtypes.DecimalDtype.name)
+        or (hasattr(obj, "dtype") and is_decimal_dtype(obj.dtype))
     )
 
 

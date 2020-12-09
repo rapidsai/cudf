@@ -50,6 +50,7 @@
 - PR #6737 New build process (Project Flash)
 - PR #6652 Add support for struct columns in concatenate
 - PR #6675 Add DecimalDtype to cuDF
+- PR #6715 Add Python DecimalColumn
 - PR #6739 Add Java bindings for is_timestamp
 - PR #6808 Add support for reading decimal32 and decimal64 from parquet
 - PR #6781 Add serial murmur3 hashing

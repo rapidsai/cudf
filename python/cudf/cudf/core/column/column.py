@@ -32,6 +32,7 @@ from cudf.utils.dtypes import (
     cudf_dtypes_to_pandas_dtypes,
     get_time_unit,
     is_categorical_dtype,
+    is_decimal_dtype,
     is_list_dtype,
     is_numerical_dtype,
     is_scalar,
@@ -1199,6 +1200,9 @@ class ColumnBase(Column, Serializable):
             mask = Buffer.deserialize(header["mask"], [frames[1]])
         return build_column(data=data, dtype=dtype, mask=mask)
 
+    def binary_operator(self, op, other, reflect=False):
+        raise NotImplementedError
+
     def min(self, skipna=None, dtype=None):
         result_col = self._process_for_reduction(skipna=skipna)
         if isinstance(result_col, ColumnBase):
@@ -1471,6 +1475,15 @@ def build_column(
         )
     elif is_struct_dtype(dtype):
         return cudf.core.column.StructColumn(
+            data=data,
+            size=size,
+            dtype=dtype,
+            mask=mask,
+            null_count=null_count,
+            children=children,
+        )
+    elif is_decimal_dtype(dtype):
+        return cudf.core.column.DecimalColumn(
             data=data,
             size=size,
             dtype=dtype,
@@ -1851,6 +1864,14 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                                 "Cannot create list column from given data"
                             )
                         return as_column(data, nan_as_null=nan_as_null)
+                    if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
+                        data = pa.array(
+                            arbitrary,
+                            type=pa.decimal128(
+                                precision=dtype.precision, scale=dtype.scale
+                            ),
+                        )
+                        return cudf.core.column.DecimalColumn.from_arrow(data)
                     dtype = pd.api.types.pandas_dtype(dtype)
                     if is_categorical_dtype(dtype):
                         raise TypeError

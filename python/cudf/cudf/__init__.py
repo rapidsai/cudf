@@ -39,7 +39,7 @@ from cudf.core import (
     from_pandas,
     merge,
 )
-from cudf.core.dtypes import CategoricalDtype
+from cudf.core.dtypes import CategoricalDtype, DecimalDtype
 from cudf.core.groupby import Grouper
 from cudf.core.ops import (
     add,
