@@ -311,7 +311,7 @@ TEST_F(ReplaceNullsFillnaPolicyTest, ForwardFill)
   cudf::test::fixed_width_column_wrapper<int32_t> expected_col{{42, 42, 42, -10, -10, -30},
                                                                cudf::test::all_valid()};
 
-  auto result = cudf::replace_nulls(col, cudf::fillna_policy::FORWARD_FILL);
+  auto result = cudf::replace_nulls(col, cudf::replace_policy::PRECEDING);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_col);
 }
@@ -323,7 +323,7 @@ TEST_F(ReplaceNullsFillnaPolicyTest, BackwardFill)
   cudf::test::fixed_width_column_wrapper<int32_t> expected_col{{1, 5, 5, 5, 5, 6, 8, 8},
                                                                cudf::test::all_valid()};
 
-  auto result = cudf::replace_nulls(col, cudf::fillna_policy::BACKWARD_FILL);
+  auto result = cudf::replace_nulls(col, cudf::replace_policy::FOLLOWING);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_col);
 }
@@ -335,7 +335,7 @@ TEST_F(ReplaceNullsFillnaPolicyTest, ForwardFillLeadingNulls)
   cudf::test::fixed_width_column_wrapper<int32_t> expected_col{{1, 1, 1, 1, 5, 6, 6, 8},
                                                                {0, 0, 0, 0, 1, 1, 1, 1}};
 
-  auto result = cudf::replace_nulls(col, cudf::fillna_policy::FORWARD_FILL);
+  auto result = cudf::replace_nulls(col, cudf::replace_policy::PRECEDING);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_col);
 }
@@ -347,7 +347,7 @@ TEST_F(ReplaceNullsFillnaPolicyTest, BackwardFillTrailingNulls)
   cudf::test::fixed_width_column_wrapper<int32_t> expected_col{{1, 5, 5, 5, 5, 6, 8, 8},
                                                                {1, 1, 1, 1, 1, 1, 0, 0}};
 
-  auto result = cudf::replace_nulls(col, cudf::fillna_policy::BACKWARD_FILL);
+  auto result = cudf::replace_nulls(col, cudf::replace_policy::FOLLOWING);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_col);
 }

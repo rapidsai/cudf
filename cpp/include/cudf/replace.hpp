@@ -27,10 +27,10 @@ namespace cudf {
  */
 
 /**
- * @brief Policy to fill null/nan values inside
+ * @brief Policy to specify the relative position that replacement value is to the null row
  *
- * `FORWARD_FILL` means filling the null
- * `BACKWARD_FILL` means
+ * `PRECEDING` means the replacement value is the first non-null value preceding the null row.
+ * `FOLLOWING` means the replacement value is the first non-null value following the null row.
  */
 enum class replace_policy : bool {PRECEDING, FOLLOWING};
 
@@ -76,14 +76,14 @@ std::unique_ptr<column> replace_nulls(
  * front or back based on `fillna_policy`, `input` and `replacement` must have the same type.
  *
  * @param[in] input A column whose null values will be replaced.
- * @param[in] fillna_policy Side of the non-null element to select from, front or back.
+ * @param[in] replace_policy Specify the relative position that replacement value is to the null value.
  * @param[in] mr Device memory resource used to allocate device memory of the returned column.
  *
  * @returns Copy of `input` with null values replaced by `replacement`.
  */
 std::unique_ptr<column> replace_nulls(
   column_view const& input,
-  fillna_policy const& fillna_policy,
+  replace_policy const& replace_policy,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

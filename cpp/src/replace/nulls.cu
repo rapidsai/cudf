@@ -356,7 +356,7 @@ std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<
   return cudf::dictionary::detail::replace_nulls(dict_input, replacement, stream, mr);
 }
 
-struct replace_nulls_fillna_policy_functor {
+struct replace_nulls_replace_policy_functor {
   __device__ thrust::tuple<cudf::size_type, bool> operator()(
     thrust::tuple<cudf::size_type, bool> const& lhs,
     thrust::tuple<cudf::size_type, bool> const& rhs)
@@ -370,11 +370,11 @@ struct replace_nulls_fillna_policy_functor {
  * @brief Functor called by the `type_dispatcher` in order to invoke and instantiate
  *        `replace_nulls` with the appropriate data types.
  */
-struct replace_nulls_fillna_policy_kernel_forwarder {
+struct replace_nulls_replace_policy_kernel_forwarder {
   template <typename col_type,
             typename std::enable_if_t<cudf::is_fixed_width<col_type>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
-                                           cudf::fillna_policy const& fillna_policy,
+                                           cudf::replace_policy const& replace_policy,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
   {
@@ -388,8 +388,8 @@ struct replace_nulls_fillna_policy_kernel_forwarder {
     auto gm_begin = thrust::make_zip_iterator(
       thrust::make_tuple(gather_map.begin(), thrust::make_discard_iterator()));
 
-    auto func = replace_nulls_fillna_policy_functor();
-    if (fillna_policy == cudf::fillna_policy::FORWARD_FILL) {
+    auto func = replace_nulls_replace_policy_functor();
+    if (replace_policy == cudf::replace_policy::PRECEDING) {
       thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
                              in_begin,
                              in_begin + input.size(),
@@ -417,7 +417,7 @@ struct replace_nulls_fillna_policy_kernel_forwarder {
 
   template <typename col_type, std::enable_if_t<not cudf::is_fixed_width<col_type>()>* = nullptr>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
-                                           cudf::fillna_policy const& fillna_policy,
+                                           cudf::replace_policy const& fillna_policy,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
   {
@@ -461,7 +461,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 }
 
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
-                                            cudf::fillna_policy const& fillna_policy,
+                                            cudf::replace_policy const& replace_policy,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
@@ -470,7 +470,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   if (!input.has_nulls()) { return std::make_unique<cudf::column>(input, stream, mr); }
 
   return cudf::type_dispatcher(
-    input.type(), replace_nulls_fillna_policy_kernel_forwarder{}, input, fillna_policy, stream, mr);
+    input.type(), replace_nulls_replace_policy_kernel_forwarder{}, input, replace_policy, stream, mr);
 }
 
 }  // namespace detail
@@ -492,11 +492,11 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
 }
 
 std::unique_ptr<cudf::column> replace_nulls(column_view const& input,
-                                            fillna_policy const& fillna_policy,
+                                            replace_policy const& replace_policy,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return cudf::detail::replace_nulls(input, fillna_policy, rmm::cuda_stream_default, mr);
+  return cudf::detail::replace_nulls(input, replace_policy, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf
