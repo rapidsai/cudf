@@ -226,6 +226,7 @@ def test_MI():
     gdfT = gdf.T
     pdfT = pdf.T
     assert gdf.__repr__() == pdf.__repr__()
+    assert gdf.index.__repr__() == pdf.index.__repr__()
     assert gdfT.__repr__() == pdfT.__repr__()
 
 

@@ -8,6 +8,7 @@ from collections.abc import Sequence
 import cupy
 import numpy as np
 import pandas as pd
+from pandas._config import get_option
 
 import cudf
 from cudf import _lib as libcudf
@@ -392,13 +393,34 @@ class MultiIndex(Index):
         return result
 
     def __repr__(self):
-        return (
-            "MultiIndex(levels="
-            + str(self.levels)
-            + ",\ncodes="
-            + str(self.codes)
-            + ")"
-        )
+        max_seq_items = get_option("display.max_seq_items") or len(self)
+
+        if len(self) > max_seq_items:
+            n = int(max_seq_items / 2) + 1
+            top = self[:n]
+            bottom = self[-n:]
+            preprocess = cudf.concat([top, bottom])
+        else:
+            preprocess = self
+
+        if any(
+            self._source_data._data[col].has_nulls
+            for col in self._source_data._data
+        ):
+            preprocess = preprocess._clean_nulls_from_index()
+
+        output = preprocess.to_pandas().__repr__()
+        lines = output.split("\n")
+
+        if len(lines) > 1:
+            if "length=" in lines[-1] and len(self) != len(preprocess):
+                last_line = lines[-1]
+                length_index = last_line.index("length=")
+                last_line = last_line[:length_index] + f"length={len(self)})"
+                lines = lines[:-1]
+                lines.append(last_line)
+
+        return "\n".join(lines)
 
     @classmethod
     def from_arrow(cls, table):
