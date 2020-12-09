@@ -18,6 +18,7 @@
  */
 
 #include <cudf/binaryop.hpp>
+
 #include <tests/binaryop/binop-fixture.hpp>
 
 namespace cudf {

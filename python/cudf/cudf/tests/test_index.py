@@ -20,8 +20,6 @@ from cudf.core.index import (
     RangeIndex,
     as_index,
 )
-from cudf.utils.utils import search_range
-
 from cudf.tests.utils import (
     FLOAT_TYPES,
     NUMERIC_TYPES,
@@ -32,6 +30,7 @@ from cudf.tests.utils import (
     assert_eq,
     assert_exceptions_equal,
 )
+from cudf.utils.utils import search_range
 
 
 def test_df_set_index_from_series():
@@ -1759,3 +1758,42 @@ def test_index_rangeindex_get_item_slices(rge, sl):
     gridx = cudf.RangeIndex(*rge)
 
     assert_eq(pridx[sl], gridx[sl])
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.Index([1, 2, 3]),
+        pd.Index(["abc", "def", "ghi"]),
+        pd.RangeIndex(0, 10, 1),
+        pd.Index([0.324, 0.234, 1.3], name="abc"),
+    ],
+)
+@pytest.mark.parametrize("names", [None, "a", "new name", ["another name"]])
+@pytest.mark.parametrize("inplace", [True, False])
+def test_index_set_names(idx, names, inplace):
+    pi = idx.copy()
+    gi = cudf.from_pandas(idx)
+
+    expected = pi.set_names(names=names, inplace=inplace)
+    actual = gi.set_names(names=names, inplace=inplace)
+
+    if inplace:
+        expected, actual = pi, gi
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("idx", [pd.Index([1, 2, 3], name="abc")])
+@pytest.mark.parametrize("level", [1, [0], "abc"])
+@pytest.mark.parametrize("names", [None, "a"])
+def test_index_set_names_error(idx, level, names):
+    pi = idx.copy()
+    gi = cudf.from_pandas(idx)
+
+    assert_exceptions_equal(
+        lfunc=pi.set_names,
+        rfunc=gi.set_names,
+        lfunc_args_and_kwargs=([], {"names": names, "level": level}),
+        rfunc_args_and_kwargs=([], {"names": names, "level": level}),
+    )

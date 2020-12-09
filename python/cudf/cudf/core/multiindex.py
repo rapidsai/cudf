@@ -190,6 +190,47 @@ class MultiIndex(Index):
         assert len(value) == self.nlevels
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
+    def set_names(self, names, level=None, inplace=False):
+        if (
+            level is not None
+            and not cudf.utils.dtypes.is_list_like(level)
+            and cudf.utils.dtypes.is_list_like(names)
+        ):
+            raise TypeError(
+                "Names must be a string when a single level is provided."
+            )
+
+        if (
+            not cudf.utils.dtypes.is_list_like(names)
+            and level is None
+            and self.nlevels > 1
+        ):
+            raise TypeError("Must pass list-like as `names`.")
+
+        if not cudf.utils.dtypes.is_list_like(names):
+            names = [names]
+        if level is not None and not cudf.utils.dtypes.is_list_like(level):
+            level = [level]
+
+        if level is not None and len(names) != len(level):
+            raise ValueError("Length of names must match length of level.")
+        if level is None and len(names) != self.nlevels:
+            raise ValueError(
+                "Length of names must match number of levels in MultiIndex."
+            )
+
+        if level is None:
+            level = range(self.nlevels)
+        else:
+            level = [self._level_index_from_level(lev) for lev in level]
+
+        existing_names = list(self.names)
+        for i, l in enumerate(level):
+            existing_names[l] = names[i]
+        names = existing_names
+
+        return self._set_names(names=names, inplace=inplace)
+
     @classmethod
     def _from_table(cls, table, names=None):
         df = cudf.DataFrame(table._data)
@@ -444,6 +485,9 @@ class MultiIndex(Index):
 
     @property
     def nlevels(self):
+        """
+        Integer number of levels in this MultiIndex.
+        """
         return self._source_data.shape[1]
 
     @property

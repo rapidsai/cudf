@@ -31,7 +31,7 @@ message(STATUS "Fetching jitify from ${SRC_JITIFY}")
 FetchContent_Declare(
     jitify
     GIT_REPOSITORY ${SRC_JITIFY}
-    GIT_TAG        cudf_0.15
+    GIT_TAG        cudf_0.16
     GIT_SHALLOW    true
 )
 
@@ -45,14 +45,14 @@ set(JITIFY_INCLUDE_DIR "${jitify_SOURCE_DIR}" PARENT_SCOPE)
 ###################################################################################################
 # - libcudacxx ------------------------------------------------------------------------------------
 
-set(SRC_LIBCUDACXX "https://github.com/rapidsai/thirdparty-freestanding.git")
+set(SRC_LIBCUDACXX "https://github.com/NVIDIA/libcudacxx.git")
 
 message(STATUS "Fetching libcudacxx from ${SRC_LIBCUDACXX}")
 
 FetchContent_Declare(
     libcudacxx
     GIT_REPOSITORY ${SRC_LIBCUDACXX}
-    GIT_TAG        cudf
+    GIT_TAG        1.4.0
     GIT_SHALLOW    true
 )
 
