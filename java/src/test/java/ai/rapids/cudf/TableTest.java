@@ -67,6 +67,7 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_ORC_FILE = new File("src/test/resources/TestOrcFile.orc");
   private static final File TEST_ORC_TIMESTAMP_DATE_FILE = new File(
       "src/test/resources/timestamp-date-test.orc");
+  private static final File TEST_DECIMAL_PARQUET_FILE = new File("src/test/resources/decimal.parquet");
 
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
@@ -91,7 +92,7 @@ public class TableTest extends CudfTestBase {
    * @param expect The expected result column
    * @param cv The input column
    */
-  public static void assertColumnsAreEqual(ColumnVector expect, ColumnVector cv) {
+  public static void assertColumnsAreEqual(ColumnView expect, ColumnView cv) {
     assertColumnsAreEqual(expect, cv, "unnamed");
   }
 
@@ -101,7 +102,7 @@ public class TableTest extends CudfTestBase {
    * @param cv The input column
    * @param colName The name of the column
    */
-  public static void assertColumnsAreEqual(ColumnVector expected, ColumnVector cv, String colName) {
+  public static void assertColumnsAreEqual(ColumnView expected, ColumnView cv, String colName) {
     assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true);
   }
 
@@ -120,7 +121,7 @@ public class TableTest extends CudfTestBase {
    * @param expected The expected result Struct column
    * @param cv The input Struct column
    */
-  public static void assertStructColumnsAreEqual(ColumnVector expected, ColumnVector cv) {
+  public static void assertStructColumnsAreEqual(ColumnView expected, ColumnView cv) {
     assertPartialStructColumnsAreEqual(expected, 0, expected.getRowCount(), cv, "unnamed", true);
   }
 
@@ -133,8 +134,8 @@ public class TableTest extends CudfTestBase {
    * @param colName The name of the column
    * @param enableNullCheck Whether to check for nulls in the Struct column
    */
-  public static void assertPartialStructColumnsAreEqual(ColumnVector expected, long rowOffset, long length,
-                                                        ColumnVector cv, String colName, boolean enableNullCheck) {
+  public static void assertPartialStructColumnsAreEqual(ColumnView expected, long rowOffset, long length,
+      ColumnView cv, String colName, boolean enableNullCheck) {
     try (HostColumnVector hostExpected = expected.copyToHost();
          HostColumnVector hostcv = cv.copyToHost()) {
       assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck);
@@ -148,8 +149,8 @@ public class TableTest extends CudfTestBase {
    * @param colName The name of the column
    * @param enableNullCheck Whether to check for nulls in the column
    */
-  public static void assertPartialColumnsAreEqual(ColumnVector expected, long rowOffset, long length,
-                                                  ColumnVector cv, String colName, boolean enableNullCheck) {
+  public static void assertPartialColumnsAreEqual(ColumnView expected, long rowOffset, long length,
+      ColumnView cv, String colName, boolean enableNullCheck) {
     try (HostColumnVector hostExpected = expected.copyToHost();
          HostColumnVector hostcv = cv.copyToHost()) {
       assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck);
@@ -715,6 +716,30 @@ public class TableTest extends CudfTestBase {
 
       assertTableTypes(expectedTypes, table);
     }
+  }
+
+  @Test
+  void testReadParquetContainsDecimalData() {
+    try (Table table = Table.readParquet(TEST_DECIMAL_PARQUET_FILE)) {
+      long rows = table.getRowCount();
+      assertEquals(100, rows);
+      DType[] expectedTypes = new DType[]{
+          DType.create(DType.DTypeEnum.DECIMAL64, 0), // Decimal(18, 0)
+          DType.create(DType.DTypeEnum.DECIMAL32, -3), // Decimal(7, 3)
+          DType.create(DType.DTypeEnum.DECIMAL64, -10),  // Decimal(10, 10)
+          DType.create(DType.DTypeEnum.DECIMAL32, 0),  // Decimal(1, 0)
+          DType.create(DType.DTypeEnum.DECIMAL64, -15),  // Decimal(18, 15)
+          DType.FLOAT64,  // Decimal(20, 10) which is backed by FIXED_LEN_BYTE_ARRAY
+          DType.INT64,
+          DType.FLOAT32
+      };
+      assertTableTypes(expectedTypes, table);
+    }
+    // An CudfException will be thrown here because we haven't support reading decimal stored as FIXED_LEN_BYTE_ARRAY.
+    ParquetOptions opts = ParquetOptions.builder().enableStrictDecimalType(true).build();
+    assertThrows(ai.rapids.cudf.CudfException.class, () -> {
+      try (Table table = Table.readParquet(opts, TEST_DECIMAL_PARQUET_FILE)) {}
+    });
   }
 
   @Test
