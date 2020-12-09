@@ -67,14 +67,6 @@ def read_csv(
     if na_values is not None and is_scalar(na_values):
         na_values = [na_values]
 
-    if keep_default_na is False:
-        # TODO: Remove this error once the following issue is fixed:
-        # https://github.com/rapidsai/cudf/issues/6680
-        raise NotImplementedError(
-            "keep_default_na=False is currently not supported, please refer "
-            "to: https://github.com/rapidsai/cudf/issues/6680"
-        )
-
     return libcudf.csv.read_csv(
         filepath_or_buffer,
         lineterminator=lineterminator,
