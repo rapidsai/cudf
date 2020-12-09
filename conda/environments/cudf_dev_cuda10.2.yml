@@ -23,6 +23,7 @@ dependencies:
   - fsspec>=0.6.0
   - pytest
   - pytest-benchmark
+  - pytest-xdist
   - sphinx
   - sphinx_rtd_theme
   - sphinxcontrib-websupport
