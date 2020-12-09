@@ -1,11 +1,9 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
-
 import datetime
 import math
 import os
 import pathlib
 import random
-from glob import glob
 from io import BytesIO
 from string import ascii_letters
 
@@ -1246,14 +1244,26 @@ def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
     assert_eq(expect, got, check_categorical=False)
 
 
-def test_multifile_warning(datadir):
-    fpath = datadir.__fspath__() + "/*.parquet"
-    with pytest.warns(UserWarning):
-        got = cudf.read_parquet(fpath)
-        fname = sorted(glob(fpath))[0]
-        expect = pd.read_parquet(fname)
-        expect = expect.apply(pd.to_numeric)
-        assert_eq(expect, got)
+def test_multifile_parquet_folder(tmpdir):
+
+    test_pdf1 = make_pdf(nrows=10, nvalids=10 // 2)
+    test_pdf2 = make_pdf(nrows=20)
+    expect = pd.concat([test_pdf1, test_pdf2])
+
+    tmpdir.mkdir("multi_part")
+
+    create_parquet_source(
+        test_pdf1, "filepath", tmpdir.join("multi_part/multi1.parquet")
+    )
+    create_parquet_source(
+        test_pdf2, "filepath", tmpdir.join("multi_part/multi2.parquet")
+    )
+
+    got1 = cudf.read_parquet(tmpdir.join("multi_part/*.parquet"))
+    assert_eq(expect, got1)
+
+    got2 = cudf.read_parquet(tmpdir.join("multi_part"))
+    assert_eq(expect, got2)
 
 
 # Validates the metadata return path of the parquet writer
@@ -1604,6 +1614,38 @@ def test_parquet_writer_list_large_mixed(tmpdir):
     gdf = cudf.from_pandas(expect)
 
     gdf.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    got = pd.read_parquet(fname)
+    assert_eq(expect, got)
+
+
+def test_parquet_writer_list_chunked(tmpdir):
+    table1 = cudf.DataFrame(
+        {
+            "a": list_gen(string_gen, 0, 128, 80, 50),
+            "b": list_gen(int_gen, 0, 128, 80, 50),
+            "c": list_gen(int_gen, 0, 128, 80, 50, include_validity=True),
+            "d": list_gen(string_gen, 0, 128, 80, 50, include_validity=True),
+        }
+    )
+    table2 = cudf.DataFrame(
+        {
+            "a": list_gen(string_gen, 0, 128, 80, 50),
+            "b": list_gen(int_gen, 0, 128, 80, 50),
+            "c": list_gen(int_gen, 0, 128, 80, 50, include_validity=True),
+            "d": list_gen(string_gen, 0, 128, 80, 50, include_validity=True),
+        }
+    )
+    fname = tmpdir.join("test_parquet_writer_list_chunked.parquet")
+    expect = cudf.concat([table1, table2])
+    expect = expect.reset_index(drop=True)
+
+    writer = ParquetWriter(fname)
+    writer.write_table(table1)
+    writer.write_table(table2)
+    writer.close()
+
     assert os.path.exists(fname)
 
     got = pd.read_parquet(fname)

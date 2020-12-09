@@ -447,8 +447,8 @@ __inline__ __device__ int64_t parseTimeDeltaFormat(const char* data, long start,
     }
   }
 
-  return simt::std::chrono::duration_cast<T>(
+  return cuda::std::chrono::duration_cast<T>(
            cudf::duration_s{((days * 24L + hour) * 60L + minute) * 60L + second})
            .count() +
-         simt::std::chrono::duration_cast<T>(cudf::duration_ns{nanosecond}).count();
+         cuda::std::chrono::duration_cast<T>(cudf::duration_ns{nanosecond}).count();
 }

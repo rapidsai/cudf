@@ -146,7 +146,10 @@ endif(CUDA_STATIC_RUNTIME)
 ###################################################################################################
 # - cmake modules ---------------------------------------------------------------------------------
 
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
+set(CMAKE_MODULE_PATH
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/"
+    "${PROJECT_SOURCE_DIR}/../../../../cpp/cmake/Modules/"
+    ${CMAKE_MODULE_PATH})
 
 include(FeatureSummary)
 include(CheckIncludeFiles)
@@ -165,7 +168,7 @@ find_path(CUB_INCLUDE "cub"
           "${CUDF_CPP_BUILD_DIR}/_deps/thrust-src"
           "$ENV{CONDA_PREFIX}/include")
 
-find_path(LIBCUDACXX_INCLUDE "simt"
+find_path(LIBCUDACXX_INCLUDE "cuda"
     HINTS "$ENV{CUDF_ROOT}/_deps/libcudacxx-src/include"
           "${CUDF_CPP_BUILD_DIR}/_deps/libcudacxx-src/include")
 
@@ -263,6 +266,15 @@ endif(NVCOMP_FOUND)
 add_library(nvcomp STATIC IMPORTED ${NVCOMP_LIB})
 
 ###################################################################################################
+# - GDS/cufile ------------------------------------------------------------------------------------
+
+option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
+if(USE_GDS)
+    message(STATUS "Building with GPUDirect Storage (GDS)/cuFile support")
+    find_package(cuFile REQUIRED)
+endif(USE_GDS)
+
+###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
 include_directories("${THRUST_INCLUDE}"
@@ -277,7 +289,8 @@ include_directories("${THRUST_INCLUDE}"
                     "${JNI_INCLUDE_DIRS}"
                     "${CUDF_INCLUDE}"
                     "${RMM_INCLUDE}"
-                    "${ARROW_INCLUDE}")
+                    "${ARROW_INCLUDE}"
+                    "$<$<BOOL:${cuFile_FOUND}>:${cuFile_INCLUDE_DIRS}>")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
