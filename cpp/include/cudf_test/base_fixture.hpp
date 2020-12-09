@@ -243,7 +243,7 @@ inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
   if (allocation_mode == "binning") return make_binning();
   if (allocation_mode == "cuda") return make_cuda();
   if (allocation_mode == "pool") return make_pool();
-  if (allocation_mode == "managed") make_managed();
+  if (allocation_mode == "managed") return make_managed();
   CUDF_FAIL("Invalid RMM allocation mode: " + allocation_mode);
 }
 

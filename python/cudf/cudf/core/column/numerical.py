@@ -144,11 +144,10 @@ class NumericalColumn(column.ColumnBase):
         return libcudf.string_casting.int2ip(self)
 
     def as_string_column(self, dtype, **kwargs):
-
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
                 np.dtype(self.dtype)
-            ](self, **kwargs)
+            ](self)
         else:
             return as_column([], dtype="object")
 
@@ -172,7 +171,7 @@ class NumericalColumn(column.ColumnBase):
             size=self.size,
         )
 
-    def as_numerical_column(self, dtype, **kwargs):
+    def as_numerical_column(self, dtype):
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self

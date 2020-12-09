@@ -18,10 +18,7 @@
 
 #include <limits>
 
-#define _LIBCUDACXX_USE_CXX20_CHRONO
-#define _LIBCUDACXX_USE_CXX17_TYPE_TRAITS
-
-#include <simt/chrono>
+#include <cuda/std/chrono>
 
 /**
  * @file timestamps.hpp
@@ -32,7 +29,7 @@ namespace cudf {
 namespace detail {
 // TODO: Use chrono::utc_clock when available in libcu++?
 template <class Duration>
-using time_point = simt::std::chrono::sys_time<Duration>;
+using time_point = cuda::std::chrono::sys_time<Duration>;
 
 template <class Duration>
 struct timestamp : time_point<Duration> {
@@ -61,27 +58,27 @@ struct timestamp : time_point<Duration> {
  * epoch.
  **/
 using timestamp_D =
-  detail::timestamp<simt::std::chrono::duration<int32_t, simt::std::ratio<86400>>>;
+  detail::timestamp<cuda::std::chrono::duration<int32_t, cuda::std::ratio<86400>>>;
 /**
  * @brief Type alias representing an int64_t duration of seconds since the
  * unix epoch.
  **/
-using timestamp_s = detail::timestamp<simt::std::chrono::duration<int64_t, simt::std::ratio<1>>>;
+using timestamp_s = detail::timestamp<cuda::std::chrono::duration<int64_t, cuda::std::ratio<1>>>;
 /**
  * @brief Type alias representing an int64_t duration of milliseconds since
  * the unix epoch.
  **/
-using timestamp_ms = detail::timestamp<simt::std::chrono::duration<int64_t, simt::std::milli>>;
+using timestamp_ms = detail::timestamp<cuda::std::chrono::duration<int64_t, cuda::std::milli>>;
 /**
  * @brief Type alias representing an int64_t duration of microseconds since
  * the unix epoch.
  **/
-using timestamp_us = detail::timestamp<simt::std::chrono::duration<int64_t, simt::std::micro>>;
+using timestamp_us = detail::timestamp<cuda::std::chrono::duration<int64_t, cuda::std::micro>>;
 /**
  * @brief Type alias representing an int64_t duration of nanoseconds since
  * the unix epoch.
  **/
-using timestamp_ns = detail::timestamp<simt::std::chrono::duration<int64_t, simt::std::nano>>;
+using timestamp_ns = detail::timestamp<cuda::std::chrono::duration<int64_t, cuda::std::nano>>;
 
 static_assert(sizeof(timestamp_D) == sizeof(typename timestamp_D::rep), "");
 static_assert(sizeof(timestamp_s) == sizeof(typename timestamp_s::rep), "");
