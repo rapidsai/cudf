@@ -130,7 +130,7 @@ class NumericalColumn(column.ColumnBase):
                     other, size=len(self), dtype=other_dtype
                 )
                 return column.build_column(
-                    data=Buffer.from_array_lik(ary),
+                    data=Buffer.from_array_like(ary),
                     dtype=ary.dtype,
                     mask=self.mask,
                 )
