@@ -732,7 +732,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_logicalCastTo(JNIEnv *env
     cudf::jni::auto_set_device(env);
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
     cudf::data_type n_data_type = cudf::jni::make_data_type(type, scale);
-    std::unique_ptr<cudf::column_view> result(new cudf::column_view);
+    std::unique_ptr<cudf::column_view> result = std::make_unique<cudf::column_view>();
     *result = cudf::logical_cast(*column, n_data_type);
     return reinterpret_cast<jlong>(result.release());
   }
