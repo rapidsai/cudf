@@ -50,21 +50,18 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  using Type    = device_storage_type_t<ElementType>;
-  using ResType = device_storage_type_t<ResultType>;
-
   // reduction by iterator
   auto dcol      = cudf::column_device_view::create(col, stream);
   auto simple_op = Op{};
 
   auto result = [&] {
     if (col.has_nulls()) {
-      auto f  = simple_op.template get_null_replacing_element_transformer<ResType>();
-      auto it = thrust::make_transform_iterator(dcol->pair_begin<Type, true>(), f);
+      auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
+      auto it = thrust::make_transform_iterator(dcol->pair_begin<ElementType, true>(), f);
       return detail::reduce(it, col.size(), simple_op, stream, mr);
     } else {
-      auto f  = simple_op.template get_element_transformer<ResType>();
-      auto it = thrust::make_transform_iterator(dcol->begin<Type>(), f);
+      auto f  = simple_op.template get_element_transformer<ResultType>();
+      auto it = thrust::make_transform_iterator(dcol->begin<ElementType>(), f);
       return detail::reduce(it, col.size(), simple_op, stream, mr);
     }
   }();
@@ -74,12 +71,23 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
   return result;
 }
 
-template <typename ElementType, typename Op>
+/**
+ * @brief Reduction for `sum`, `product`, `min` and `max` for decimal types
+ *
+ * @tparam DecimalXX  The `decimal32` or `decimal64` type
+ * @tparam Op         The operator of cudf::reduction::op::
+ * @param col         Input column of data to reduce
+
+ * @param mr          Device memory resource used to allocate the returned scalar's device memory
+ * @param stream      Used for device memory operations and kernel launches.
+ * @return            Output scalar in device memory
+ */
+template <typename DecimalXX, typename Op>
 std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
-  using Type = device_storage_type_t<ElementType>;
+  using Type = device_storage_type_t<DecimalXX>;
 
   auto dcol      = cudf::column_device_view::create(col, stream);
   auto simple_op = Op{};
@@ -100,7 +108,7 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
                        ? numeric::scale_type{col.type().scale() * (col.size() - col.null_count())}
                        : numeric::scale_type{col.type().scale()};
   auto const val = static_cast<cudf::scalar_type_t<Type>*>(result.get());
-  return cudf::make_fixed_point_scalar<ElementType>(val->value(), scale);
+  return cudf::make_fixed_point_scalar<DecimalXX>(val->value(), scale);
 }
 
 /**
