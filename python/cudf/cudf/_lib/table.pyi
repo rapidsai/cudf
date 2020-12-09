@@ -1,12 +1,11 @@
-from typing import List, Any
+from typing import List, Any, TYPE_CHECKING
 
-from cudf.core.column_accessor import ColumnAccessor
+import cudf
 
 class Table(object):
+    _data: cudf.core.column_accessor.ColumnAccessor
+    _index: cudf.core.index.Index
 
-    _data: ColumnAccessor
-    _index: "Table"
-    
     def __init__(self, data: object = None, index: object = None) -> None: ...
 
     @property

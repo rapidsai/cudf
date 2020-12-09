@@ -4,6 +4,11 @@ import functools
 import operator
 import warnings
 from collections import OrderedDict, abc as abc
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from cudf.core.column_accessor import ColumnAccessor
+    from cudf.core.index import Index
 
 import cupy
 import numpy as np
@@ -37,11 +42,14 @@ class Frame(libcudf.table.Table):
         A Frame representing the (optional) index columns.
     """
 
+    _data: "ColumnAccessor"
+    _index: "Index"
+
     @classmethod
-    def _from_table(cls, table):
+    def _from_table(cls, table: "Frame"):
         return cls(table._data, index=table._index)
 
-    def _mimic_inplace(self, result, inplace=False):
+    def _mimic_inplace(self, result: "Frame", inplace: bool = False):
         if inplace:
             for col in self._data:
                 if col in result._data:
@@ -136,6 +144,7 @@ class Frame(libcudf.table.Table):
         >>> midx.size
         5
         """
+        self._index
         return self._num_columns * self._num_rows
 
     @property
