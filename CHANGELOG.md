@@ -17,6 +17,7 @@
 
 - PR #6922 Fix N/A detection for empty fields in CSV reader
 - PR #6912 Fix rmm_mode=managed parameter for gtests
+- PR #6942 Fix cudf::merge gtest for dictionary columns
 
 
 # cuDF 0.17.0 (Date TBD)
