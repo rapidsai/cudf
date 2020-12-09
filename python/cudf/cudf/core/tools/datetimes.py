@@ -3,6 +3,7 @@
 import warnings
 
 import numpy as np
+import pandas as pd
 from pandas.core.tools.datetimes import _unit_map
 
 import cudf
@@ -333,23 +334,8 @@ def get_units(value):
     return value
 
 
-class DateOffset(object):
+class DateOffset(pd.DateOffset):
     def __init__(self, n=1, normalize=False, **kwds):
-
-        self.resolutions = [
-            "days",
-            "hours",
-            "microseconds",
-            "minutes",
-            "months",
-            "nanoseconds",
-            "seconds",
-            "weeks",
-            "years",
-        ]
-
-        self.n = n
-
         if normalize:
             raise NotImplementedError("normalize not supported for DateOffset")
 
@@ -357,36 +343,36 @@ class DateOffset(object):
         if len(kwds) > 1:
             raise ValueError("only a single unit may" "be specified at a time")
 
+        super().__init__(n=n, normalize=normalize, **kwds)
+
         # in pandas, **kwds is passed to an underling relativedelta
         # which has its own valid kwargs. so must manually validate
-        supported_kwargs = ["months"]
-        wrong_kwargs = set(kwds.keys()).difference(supported_kwargs)
+        not_supported_kwargs = [
+            "years",
+            "weeks",
+            "days",
+            "hours",
+            "minutes",
+            "seconds",
+            "microseconds",
+            "nanoseconds",
+            "year",
+            "month",
+            "week",
+            "day",
+            "hour",
+            "minute",
+            "second",
+            "microsecond",
+            "nanosecond",
+        ]
+
+        wrong_kwargs = set(kwds.keys()).intersection(not_supported_kwargs)
         if len(wrong_kwargs) > 0:
             raise ValueError(
                 f"Keyword arguments '{','.join(list(wrong_kwargs))}'"
-                " are not supported"
+                " are not supported in cuDF DateOffsets"
             )
-
-        # something like years=1.5 was passed
-        if kwds.get("years") and not kwds.get("years") == int(
-            kwds.get("years")
-        ):
-            raise ValueError("fractional years not supported")
-
-        # something like months=1.5 was passed
-        if kwds.get("months") and not kwds.get("months") == int(
-            kwds.get("months")
-        ):
-            raise ValueError("fractional months not supported")
-
-        for r in self.resolutions:
-            setattr(self, r, kwds.get(r, None))
-
-        # some logic could be implemented here for more complex cases
-        # such as +1 year, -12 months
-        self._is_no_op = False
-        if all([getattr(self, r) in (None, 0) for r in self.resolutions]):
-            self._is_no_op = True
 
     def _generate_column(self, size, op):
         months = -self.months if op == "sub" else self.months
@@ -395,17 +381,8 @@ class DateOffset(object):
         )
         return col
 
-    def __repr__(self):
-        includes = []
-        for unit in self.resolutions:
-            val = getattr(self, unit)
-            if val and abs(val) > 0:
-                includes.append(f"{unit}={val}")
-
-        unit_data = ", ".join(includes)
-        repr_str = f"<DateOffset: {unit_data}>"
-
-        if self.n == 1:
-            return repr_str
-        else:
-            return f"{self.n} * " + repr_str
+    @property
+    def _is_no_op(self):
+        # some logic could be implemented here for more complex cases
+        # such as +1 year, -12 months
+        return all([i == 0 for i in self.kwds.values()])
