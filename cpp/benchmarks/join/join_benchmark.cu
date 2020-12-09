@@ -94,25 +94,6 @@ static void BM_join(benchmark::State &state)
   cudf::table_view build_table({build_key_column->view(), build_payload_column});
   cudf::table_view probe_table({probe_key_column->view(), probe_payload_column});
 
-  /*
-    auto build_column = [](int table_size, int null_count) {
-    auto data_it = thrust::make_counting_iterator(0);
-    if (Nullable) {
-      auto validity = thrust::make_transform_iterator(data_it, [](auto i) { return i % 3 == 0; });
-
-      return cudf::test::fixed_width_column_wrapper<payload_type>(
-        data_it, data_it + table_size, validity);
-    } else {
-      return cudf::test::fixed_width_column_wrapper<payload_type>(data_it, data_it + table_size);
-    }
-  };
-
-  CHECK_CUDA(0);
-
-  cudf::table_view build_table({build_key_column->view(), build_column(build_table_size, 3)});
-  cudf::table_view probe_table({probe_key_column->view(), build_column(probe_table_size, 5)});
-*/
-
   // Setup join parameters and result table
 
   std::vector<cudf::size_type> columns_to_join = {0};
