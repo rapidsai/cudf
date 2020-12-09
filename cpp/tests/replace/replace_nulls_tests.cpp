@@ -32,6 +32,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
+#include "cudf/types.hpp"
 
 struct ReplaceErrorTest : public cudf::test::BaseFixture {
 };
@@ -302,54 +303,81 @@ TYPED_TEST(ReplaceNullsTest, LargeScaleScalar)
                                   expectedColumn.begin(), expectedColumn.end()));
 }
 
-struct ReplaceNullsFillnaPolicyTest : public cudf::test::BaseFixture {
+template <typename T>
+struct ReplaceNullsReplacePolicyTest : public cudf::test::BaseFixture {
 };
 
-TEST_F(ReplaceNullsFillnaPolicyTest, ForwardFill)
+TYPED_TEST_CASE(ReplaceNullsReplacePolicyTest, test_types);
+
+template <typename T>
+void TestReplaceNullsWithPolicy(
+  cudf::test::fixed_width_column_wrapper<T> input,
+  cudf::test::fixed_width_column_wrapper<T> expected,
+  cudf::replace_policy policy
+)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> col{{42, 2, 1, -10, 20, -30}, {1, 0, 0, 1, 0, 1}};
-  cudf::test::fixed_width_column_wrapper<int32_t> expected_col{{42, 42, 42, -10, -10, -30},
-                                                               cudf::test::all_valid()};
-
-  auto result = cudf::replace_nulls(col, cudf::replace_policy::PRECEDING);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_col);
+  auto result = cudf::replace_nulls(input, policy);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
 
-TEST_F(ReplaceNullsFillnaPolicyTest, BackwardFill)
+TYPED_TEST(ReplaceNullsReplacePolicyTest, PrecedingFill)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> col{{1, 2, 3, 4, 5, 6, 7, 8},
-                                                      {1, 0, 0, 0, 1, 1, 0, 1}};
-  cudf::test::fixed_width_column_wrapper<int32_t> expected_col{{1, 5, 5, 5, 5, 6, 8, 8},
-                                                               cudf::test::all_valid()};
+  std::vector<TypeParam> col =
+    cudf::test::make_type_param_vector<TypeParam>({42, 2, 1, -10, 20, -30});
+  std::vector<cudf::valid_type> mask =
+    cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 0, 1, 0, 1});  
+  std::vector<TypeParam> expect_col =
+    cudf::test::make_type_param_vector<TypeParam>({42, 42, 42, -10, -10, -30});
 
-  auto result = cudf::replace_nulls(col, cudf::replace_policy::FOLLOWING);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_col);
+  TestReplaceNullsWithPolicy(cudf::test::fixed_width_column_wrapper<TypeParam>(col.begin(), col.end(), mask.begin()), 
+                            cudf::test::fixed_width_column_wrapper<TypeParam> (expect_col.begin(), expect_col.end(), cudf::test::all_valid()),
+                            cudf::replace_policy::PRECEDING);
 }
 
-TEST_F(ReplaceNullsFillnaPolicyTest, ForwardFillLeadingNulls)
+TYPED_TEST(ReplaceNullsReplacePolicyTest, FollowingFill)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> col{{1, 2, 3, 4, 5, 6, 7, 8},
-                                                      {0, 0, 0, 0, 1, 1, 0, 1}};
-  cudf::test::fixed_width_column_wrapper<int32_t> expected_col{{1, 1, 1, 1, 5, 6, 6, 8},
-                                                               {0, 0, 0, 0, 1, 1, 1, 1}};
+  std::vector<TypeParam> col =
+    cudf::test::make_type_param_vector<TypeParam>({42, 2, 1, -10, 20, -30});
+  std::vector<cudf::valid_type> mask =
+    cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 0, 1, 0, 1});  
+  std::vector<TypeParam> expect_col =
+    cudf::test::make_type_param_vector<TypeParam>({42, -10, -10, -10, -30, -30});  
 
-  auto result = cudf::replace_nulls(col, cudf::replace_policy::PRECEDING);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_col);
+  TestReplaceNullsWithPolicy(cudf::test::fixed_width_column_wrapper<TypeParam>(col.begin(), col.end(), mask.begin()), 
+                            cudf::test::fixed_width_column_wrapper<TypeParam> (expect_col.begin(), expect_col.end(), cudf::test::all_valid()),
+                            cudf::replace_policy::FOLLOWING);
 }
 
-TEST_F(ReplaceNullsFillnaPolicyTest, BackwardFillTrailingNulls)
+TYPED_TEST(ReplaceNullsReplacePolicyTest, PrecedingFillLeadingNulls)
 {
-  cudf::test::fixed_width_column_wrapper<int32_t> col{{1, 2, 3, 4, 5, 6, 7, 8},
-                                                      {1, 0, 0, 0, 1, 1, 0, 0}};
-  cudf::test::fixed_width_column_wrapper<int32_t> expected_col{{1, 5, 5, 5, 5, 6, 8, 8},
-                                                               {1, 1, 1, 1, 1, 1, 0, 0}};
+  std::vector<TypeParam> col = 
+    cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
+  std::vector<cudf::valid_type> mask = 
+    cudf::test::make_type_param_vector<cudf::valid_type>({0, 0, 1, 0, 1});
+  std::vector<TypeParam> expect_col = 
+    cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 3, 5});
+  std::vector<cudf::valid_type> expect_mask = 
+    cudf::test::make_type_param_vector<cudf::valid_type>({0, 0, 1, 1, 1});
+  
+  TestReplaceNullsWithPolicy(cudf::test::fixed_width_column_wrapper<TypeParam>(col.begin(), col.end(), mask.begin()), 
+                            cudf::test::fixed_width_column_wrapper<TypeParam> (expect_col.begin(), expect_col.end(), expect_mask.begin()),
+                            cudf::replace_policy::PRECEDING);
+}
 
-  auto result = cudf::replace_nulls(col, cudf::replace_policy::FOLLOWING);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_col);
+TYPED_TEST(ReplaceNullsReplacePolicyTest, FollowingFillTrailingNulls)
+{
+  std::vector<TypeParam> col = 
+    cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
+  std::vector<cudf::valid_type> mask = 
+    cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 1, 0, 0});
+  std::vector<TypeParam> expect_col = 
+    cudf::test::make_type_param_vector<TypeParam>({1, 3, 3, 4, 5});
+  std::vector<cudf::valid_type> expect_mask = 
+    cudf::test::make_type_param_vector<cudf::valid_type>({1, 1, 1, 0, 0});
+  
+  TestReplaceNullsWithPolicy(cudf::test::fixed_width_column_wrapper<TypeParam>(col.begin(), col.end(), mask.begin()), 
+                            cudf::test::fixed_width_column_wrapper<TypeParam> (expect_col.begin(), expect_col.end(), expect_mask.begin()),
+                            cudf::replace_policy::FOLLOWING);
 }
 
 struct ReplaceDictionaryTest : public cudf::test::BaseFixture {
