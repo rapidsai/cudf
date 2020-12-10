@@ -4,6 +4,10 @@ import pytest
 import cudf
 import glob
 import io
+import os
+
+from get_datasets import create_cudf_dataset
+
 from conftest import option
 
 
@@ -20,7 +24,9 @@ def bench_avro(benchmark, file_path, use_buffer, skiprows):
     if use_buffer == "True":
         with open(file_path, "rb") as f:
             file_path = io.BytesIO(f.read())
-    benchmark(cudf.read_avro, file_path, skiprows=skiprows)
+    x = benchmark(cudf.read_avro, file_path, skiprows=skiprows)
+    print(x.shape)
+    print(x.dtypes)
 
 
 def get_dtypes(file_path):
@@ -82,3 +88,75 @@ def bench_json(benchmark, file_path, use_buffer, dtype):
         orient="records",
         dtype=dtype,
     )
+
+
+@pytest.mark.parametrize("dtype", ['float32', 'float64',
+                                   'int32', 'int64',
+                                   'str', 'datetime64[s]'])
+def bench_to_csv(benchmark, dtype):
+    cudf_df, file_path = create_cudf_dataset(dtype, file_type="csv",
+                                             only_file=False)
+    benchmark(cudf_df.to_csv, file_path)
+
+
+@pytest.mark.parametrize("dtype", ['float32', 'float64',
+                                   'int32', 'int64',
+                                   'str', 'datetime64[s]'])
+def bench_from_csv(benchmark, use_buffer, dtype):
+    file_path = create_cudf_dataset(dtype, file_type="csv",
+                                    only_file=True)
+    if use_buffer == "True":
+        with open(file_path, "rb") as f:
+            file = io.BytesIO(f.read())
+    else:
+        file = file_path
+    benchmark(cudf.read_csv, file)
+    os.remove(file_path)
+
+
+@pytest.mark.parametrize("dtype", ['float32', 'float64',
+                                   'int32', 'int64',
+                                   'str', 'datetime64[s]'])
+def bench_to_orc(benchmark, dtype):
+    cudf_df, file_path = create_cudf_dataset(dtype, file_type="orc",
+                                             only_file=False)
+    benchmark(cudf_df.to_orc, file_path)
+
+
+@pytest.mark.parametrize("dtype", ['float32', 'float64',
+                                   'int32', 'int64',
+                                   'str', 'datetime64[s]'])
+def bench_read_orc(benchmark, use_buffer, dtype):
+    file_path = create_cudf_dataset(dtype, file_type="orc",
+                                    only_file=True)
+    if use_buffer == "True":
+        with open(file_path, "rb") as f:
+            file = io.BytesIO(f.read())
+    else:
+        file = file_path
+    benchmark(cudf.read_orc, file)
+    os.remove(file_path)
+
+
+@pytest.mark.parametrize("dtype", ['float32', 'float64',
+                                   'int32', 'int64',
+                                   'str', 'datetime64[s]'])
+def bench_to_parquet(benchmark, dtype):
+    cudf_df, file_path = create_cudf_dataset(dtype, file_type="parquet",
+                                             only_file=False)
+    benchmark(cudf_df.to_parquet, file_path)
+
+
+@pytest.mark.parametrize("dtype", ['float32', 'float64',
+                                   'int32', 'int64',
+                                   'str', 'datetime64[s]'])
+def bench_read_parquet(benchmark, use_buffer, dtype):
+    file_path = create_cudf_dataset(dtype, file_type="parquet",
+                                    only_file=True)
+    if use_buffer == "True":
+        with open(file_path, "rb") as f:
+            file = io.BytesIO(f.read())
+    else:
+        file = file_path
+    benchmark(cudf.read_parquet, file)
+    os.remove(file_path)
