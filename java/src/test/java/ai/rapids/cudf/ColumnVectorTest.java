@@ -2477,6 +2477,66 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testUrlDecode() {
+    String[] inputs = new String[] {
+        "foobar.site%2Fq%3Fx%3D%C3%A9%25",
+        "a%2Bb%2Dc%2Ad%2Fe",
+        "1%092%0A3",
+        "abc%401%2523",
+        "abc123",
+        " %09%0D%0A%0C",
+        "",
+        null
+    };
+    String[] expectedOutputs = new String[] {
+        "foobar.site/q?x=é%",
+        "a+b-c*d/e",
+        "1\t2\n3",
+        "abc@1%23",
+        "abc123",
+        " \t\r\n\f",
+        "",
+        null
+    };
+
+    try (ColumnVector v = ColumnVector.fromStrings(inputs);
+         ColumnVector expected = ColumnVector.fromStrings(expectedOutputs);
+         ColumnVector actual = v.urlDecode()) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testUrlEncode() {
+    String[] inputs = new String[] {
+        "foobar.site/q?x=é%",
+        "a+b-c*d/e",
+        "1\t2\n3",
+        "abc@1%23",
+        "abc123",
+        " \t\r\n\f",
+        "",
+        null
+    };
+    String[] expectedOutputs = new String[] {
+        "foobar.site%2Fq%3Fx%3D%C3%A9%25",
+        "a%2Bb-c%2Ad%2Fe",
+        "1%092%0A3",
+        "abc%401%2523",
+        "abc123",
+        "%20%09%0D%0A%0C",
+        "",
+        null
+    };
+
+    try (ColumnVector v = ColumnVector.fromStrings(inputs);
+         ColumnVector expected = ColumnVector.fromStrings(expectedOutputs);
+         ColumnVector actual = v.urlEncode()) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
   void testStringFindOperationsThrowsException() {
     assertThrows(CudfException.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
