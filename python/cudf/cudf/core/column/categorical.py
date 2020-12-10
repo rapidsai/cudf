@@ -45,7 +45,9 @@ ParentType = Union["cudf.Series", "cudf.Index"]
 
 
 class CategoricalAccessor(ColumnMethodsMixin):
-    def __init__(self, column: "ColumnBase", parent: ParentType = None):
+    _column: "CategoricalColumn"
+
+    def __init__(self, column, parent: ParentType = None):
         """
         Accessor object for categorical properties of the Series values.
         Be aware that assigning to `categories` is a inplace operation,

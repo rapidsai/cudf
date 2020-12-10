@@ -1,15 +1,20 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from typing import Optional, Union, overload
+from typing import TYPE_CHECKING, Optional, Union, overload
 
 from typing_extensions import Literal
 
 import cudf
 
+if TYPE_CHECKING:
+    from cudf.core.column import ColumnBase
+
 
 class ColumnMethodsMixin:
     def __init__(
-        self, column, parent: Union["cudf.Series", "cudf.Index"] = None
+        self,
+        column: "ColumnBase",
+        parent: Union["cudf.Series", "cudf.Index"] = None,
     ):
         self._column = column
         self._parent = parent
