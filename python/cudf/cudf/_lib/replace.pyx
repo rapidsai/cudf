@@ -137,7 +137,7 @@ def replace_nulls(
         raise ValueError("Cannot specify both 'value' and 'method'.")
 
     if method:
-        replace_nulls_fill(input_col, method)
+        return replace_nulls_fill(input_col, method)
     elif is_scalar(replacement):
         return replace_nulls_scalar(
             input_col,
