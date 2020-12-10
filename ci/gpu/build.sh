@@ -213,7 +213,7 @@ py.test -n 6 --cache-clear --basetemp=${WORKSPACE}/dask-cudf-cuda-tmp --junitxml
 
 cd $WORKSPACE/python/custreamz
 gpuci_logger "Python py.test for cuStreamz"
-py.test --cache-clear --basetemp=${WORKSPACE}/custreamz-cuda-tmp --junitxml=${WORKSPACE}/junit-custreamz.xml -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:${WORKSPACE}/python/custreamz/custreamz-coverage.xml --cov-report term
+py.test -n 6 --cache-clear --basetemp=${WORKSPACE}/custreamz-cuda-tmp --junitxml=${WORKSPACE}/junit-custreamz.xml -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:${WORKSPACE}/python/custreamz/custreamz-coverage.xml --cov-report term
 
 gpuci_logger "Test notebooks"
 ${WORKSPACE}/ci/gpu/test-notebooks.sh 2>&1 | tee nbtest.log
