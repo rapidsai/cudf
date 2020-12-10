@@ -46,7 +46,7 @@ static void BM_join(benchmark::State &state)
   const bool is_build_table_key_unique = true;
 
   // Generate build and probe tables
-
+  std::srand(1337);
   auto build_random_null_mask = [](int size) {
     if (Nullable) {
       // roughly 25% nulls
