@@ -23,17 +23,18 @@ datasets = {
 
 def create_random_data(dtype, file_type, only_file):
     file_dir = "cudf/benchmarks/cuio_data/"
-    file_path = os.path.join(file_dir, "file_data"
-                             + str(dtype) + "." + file_type)
+    file_path = os.path.join(
+        file_dir, "file_data" + str(dtype) + "." + file_type
+    )
 
     if only_file:
         return None, file_path, None
 
-    if dtype == 'datetime64[s]':
-        n_samples = 2**19
+    if dtype == "datetime64[s]":
+        n_samples = 2 ** 19
     else:
-        n_samples = 2**21
-    n_features = 2**6
+        n_samples = 2 ** 21
+    n_features = 2 ** 6
     random_state = 23
     np.random.seed(random_state)
     X = np.random.rand(n_samples, n_features)
@@ -42,8 +43,7 @@ def create_random_data(dtype, file_type, only_file):
 
 
 def create_cudf_dataset(dtype, file_type, only_file):
-    X, file_path, n_features = create_random_data(dtype,
-                                                  file_type, only_file)
+    X, file_path, n_features = create_random_data(dtype, file_type, only_file)
     if only_file:
         return file_path
 
@@ -54,8 +54,7 @@ def create_cudf_dataset(dtype, file_type, only_file):
 
 
 def create_pandas_dataset(dtype, file_type, only_file):
-    X, file_path, n_features = create_random_data(dtype,
-                                                  file_type, only_file)
+    X, file_path, n_features = create_random_data(dtype, file_type, only_file)
     if only_file:
         return file_path
 
@@ -90,7 +89,7 @@ def fetch_datasets(urls, dirs):
     delete_dir(tmp_path)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     urls = []
     dirs = []
 
