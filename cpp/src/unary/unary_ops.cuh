@@ -23,8 +23,8 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace unary {
@@ -65,11 +65,8 @@ struct launcher {
         rmm::device_buffer{input.null_mask(), bitmask_allocation_size_bytes(input.size())},
         input.null_count());
 
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
-                      input.begin<T>(),
-                      input.end<T>(),
-                      output_view.begin<Tout>(),
-                      F{});
+    thrust::transform(
+      rmm::exec_policy(stream), input.begin<T>(), input.end<T>(), output_view.begin<Tout>(), F{});
 
     CHECK_CUDA(stream.value());
 

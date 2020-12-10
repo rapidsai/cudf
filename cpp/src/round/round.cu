@@ -29,6 +29,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <type_traits>
 
@@ -217,11 +218,8 @@ std::unique_ptr<column> round_with(column_view const& input,
   auto out_view = result->mutable_view();
   T const n     = std::pow(10, std::abs(decimal_places));
 
-  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
-                    input.begin<T>(),
-                    input.end<T>(),
-                    out_view.begin<T>(),
-                    Functor{n});
+  thrust::transform(
+    rmm::exec_policy(stream), input.begin<T>(), input.end<T>(), out_view.begin<T>(), Functor{n});
 
   return result;
 }
@@ -257,7 +255,7 @@ std::unique_ptr<column> round_with(column_view const& input,
   auto out_view = result->mutable_view();
   Type const n  = std::pow(10, std::abs(decimal_places + input.type().scale()));
 
-  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::transform(rmm::exec_policy(stream),
                     input.begin<Type>(),
                     input.end<Type>(),
                     out_view.begin<Type>(),

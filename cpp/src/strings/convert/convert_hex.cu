@@ -26,8 +26,8 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <strings/utilities.cuh>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
@@ -96,7 +96,7 @@ struct dispatch_hex_to_integers_fn {
                   rmm::cuda_stream_view stream) const
   {
     auto d_results = output_column.data<IntegerType>();
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_column.size()),
                       d_results,
@@ -159,7 +159,7 @@ std::unique_ptr<column> is_hex(strings_column_view const& strings,
                                      stream,
                                      mr);
   auto d_results = results->mutable_view().data<bool>();
-  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings.size()),
                     d_results,

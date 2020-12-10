@@ -40,6 +40,7 @@
 #include <string>
 #include <vector>
 
+#include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <cudf/strings/convert/convert_datetime.hpp>

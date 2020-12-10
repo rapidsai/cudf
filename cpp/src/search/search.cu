@@ -29,6 +29,7 @@
 #include <hash/unordered_multiset.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
 
@@ -48,7 +49,7 @@ void launch_search(DataIterator it_data,
                    rmm::cuda_stream_view stream)
 {
   if (find_first) {
-    thrust::lower_bound(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::lower_bound(rmm::exec_policy(stream),
                         it_data,
                         it_data + data_size,
                         it_vals,
@@ -56,7 +57,7 @@ void launch_search(DataIterator it_data,
                         it_output,
                         comp);
   } else {
-    thrust::upper_bound(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::upper_bound(rmm::exec_policy(stream),
                         it_data,
                         it_data + data_size,
                         it_vals,
@@ -156,14 +157,14 @@ struct contains_scalar_dispatch {
     auto s           = static_cast<const ScalarType*>(&value);
 
     if (col.has_nulls()) {
-      auto found_iter = thrust::find(rmm::exec_policy(stream)->on(stream.value()),
+      auto found_iter = thrust::find(rmm::exec_policy(stream),
                                      d_col->pair_begin<Type, true>(),
                                      d_col->pair_end<Type, true>(),
                                      thrust::make_pair(s->value(), true));
 
       return found_iter != d_col->pair_end<Type, true>();
     } else {
-      auto found_iter = thrust::find(rmm::exec_policy(stream)->on(stream.value()),  //
+      auto found_iter = thrust::find(rmm::exec_policy(stream),  //
                                      d_col->begin<Type>(),
                                      d_col->end<Type>(),
                                      s->value());
@@ -237,10 +238,8 @@ struct multi_contains_dispatch {
     mutable_column_view result_view = result.get()->mutable_view();
 
     if (needles.is_empty()) {
-      thrust::fill(rmm::exec_policy(stream)->on(stream.value()),
-                   result_view.begin<bool>(),
-                   result_view.end<bool>(),
-                   false);
+      thrust::fill(
+        rmm::exec_policy(stream), result_view.begin<bool>(), result_view.end<bool>(), false);
       return result;
     }
 
@@ -251,7 +250,7 @@ struct multi_contains_dispatch {
     auto d_haystack     = *d_haystack_ptr;
 
     if (haystack.has_nulls()) {
-      thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(haystack.size()),
                         result_view.begin<bool>(),
@@ -260,7 +259,7 @@ struct multi_contains_dispatch {
                                  device_hash_set.contains(d_haystack.element<Element>(index));
                         });
     } else {
-      thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(haystack.size()),
                         result_view.begin<bool>(),

@@ -23,6 +23,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace strings {
@@ -71,8 +72,7 @@ std::unique_ptr<column> scatter(
   rmm::device_vector<string_view> target_vector =
     create_string_vector_from_column(target, stream.value());
   // do the scatter
-  thrust::scatter(
-    rmm::exec_policy(stream)->on(stream.value()), begin, end, scatter_map, target_vector.begin());
+  thrust::scatter(rmm::exec_policy(stream), begin, end, scatter_map, target_vector.begin());
 
   // build offsets column
   auto offsets_column = child_offsets_from_string_vector(target_vector, stream, mr);
