@@ -40,6 +40,9 @@ def bench_from_csv(benchmark, use_buffer, dtype):
 )
 def bench_read_orc(benchmark, use_buffer, dtype):
     file_path = create_pandas_dataset(dtype, file_type="orc", only_file=True)
+    if ~os.path.isfile(file_path):
+        pytest.skip(file_path, "  file does not exist")
+
     if use_buffer == "True":
         with open(file_path, "rb") as f:
             file = io.BytesIO(f.read())
@@ -78,6 +81,9 @@ def bench_read_parquet(benchmark, use_buffer, dtype):
 @pytest.mark.parametrize("dtype", ["infer", "provide"])
 @pytest.mark.parametrize("file_path", glob.glob(get_dataset_dir() + "json_*"))
 def bench_json(benchmark, file_path, use_buffer, dtype):
+    if ~os.path.isfile(file_path):
+        pytest.skip(file_path, "  file does not exist")
+
     if "bz2" in file_path:
         compression = "bz2"
     elif "gzip" in file_path:
