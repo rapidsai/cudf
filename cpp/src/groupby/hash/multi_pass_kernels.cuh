@@ -61,14 +61,16 @@ struct var_hash_functor {
   }
 
   template <typename Source>
-  __device__ std::enable_if_t<!is_supported<Source>()> operator()(size_type source_index,
+  __device__ std::enable_if_t<!is_supported<Source>()> operator()(column_device_view const& source,
+                                                                  size_type source_index,
                                                                   size_type target_index) noexcept
   {
     release_assert(false and "Invalid source type for std, var aggregation combination.");
   }
 
   template <typename Source>
-  __device__ std::enable_if_t<is_supported<Source>()> operator()(size_type source_index,
+  __device__ std::enable_if_t<is_supported<Source>()> operator()(column_device_view const& source,
+                                                                 size_type source_index,
                                                                  size_type target_index) noexcept
   {
     using Target    = target_type_t<Source, aggregation::VARIANCE>;
@@ -92,7 +94,16 @@ struct var_hash_functor {
     if (row_bitmask == nullptr or cudf::bit_is_set(row_bitmask, source_index)) {
       auto result       = map.find(source_index);
       auto target_index = result->second;
-      type_dispatcher(source.type(), *this, source_index, target_index);
+
+      auto col         = source;
+      auto source_type = source.type();
+      if (source_type.id() == type_id::DICTIONARY32) {
+        col          = source.child(cudf::dictionary_column_view::keys_column_index);
+        source_type  = col.type();
+        source_index = static_cast<size_type>(source.element<dictionary32>(source_index));
+      }
+
+      type_dispatcher(source_type, *this, col, source_index, target_index);
     }
   }
 };
