@@ -24,9 +24,7 @@ def bench_avro(benchmark, file_path, use_buffer, skiprows):
     if use_buffer == "True":
         with open(file_path, "rb") as f:
             file_path = io.BytesIO(f.read())
-    x = benchmark(cudf.read_avro, file_path, skiprows=skiprows)
-    print(x.shape)
-    print(x.dtypes)
+    benchmark(cudf.read_avro, file_path, skiprows=skiprows)
 
 
 def get_dtypes(file_path):
@@ -135,7 +133,6 @@ def bench_read_orc(benchmark, use_buffer, dtype):
     else:
         file = file_path
     benchmark(cudf.read_orc, file)
-    os.remove(file_path)
 
 
 @pytest.mark.parametrize("dtype", ['float32', 'float64',
