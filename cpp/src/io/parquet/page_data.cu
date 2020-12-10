@@ -815,6 +815,39 @@ inline __device__ void gpuOutputDecimalAsFloat(volatile page_state_s *s,
   *dst  = (scale < 0) ? (d * kPow10[min(-scale, 39)]) : (d / kPow10[min(scale, 39)]);
 }
 
+inline __device__ void gpuOutputFixedLenByteArrayAsInt64(volatile page_state_s *s,
+                                                         int src_pos,
+                                                         int64_t *dst) {
+  const uint8_t *dict;
+  uint32_t dict_pos, dict_size = s->dict_size, dtype_len_in;
+
+  if (s->dict_base) {
+    // Dictionary
+    dict_pos = (s->dict_bits > 0) ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] : 0;
+    dict     = s->dict_base;
+  } else {
+    // Plain
+    dict_pos = src_pos;
+    dict     = s->data_start;
+  }
+  dtype_len_in = s->dtype_len_in;
+  dict_pos *= dtype_len_in;
+
+  int64_t unscaled64 = 0;
+  for (unsigned int i = 0; i < dtype_len_in; i++) {
+    uint32_t v = (dict_pos + i < dict_size) ? dict[dict_pos + i] : 0;
+    unscaled64 = (unscaled64 << 8) | v;
+  }
+  if (dtype_len_in < 8) {
+    unscaled64 <<= 64 - dtype_len_in * 8;
+    unscaled64 >>= 64 - dtype_len_in * 8;
+  }
+//  uint2 unscaledValue;
+//  unscaledValue.x = unscaled64 & 4294967295;
+//  unscaledValue.y = unscaled64 >> 32;
+  *dst = unscaled64;
+}
+
 /**
  * @brief Output a small fixed-length value
  *
@@ -1690,7 +1723,13 @@ extern "C" __global__ void __launch_bounds__(block_size)
           switch (dtype) {
             case INT32: gpuOutputFast(s, src_pos, static_cast<uint32_t *>(dst)); break;
             case INT64: gpuOutputFast(s, src_pos, static_cast<uint2 *>(dst)); break;
-            default: gpuOutputDecimalAsFloat(s, src_pos, static_cast<double *>(dst), dtype); break;
+            default:
+              if (s->col.strict_decimal_type) {
+                gpuOutputFixedLenByteArrayAsInt64(s, src_pos, static_cast<int64_t *>(dst));
+              } else {
+                gpuOutputDecimalAsFloat(s, src_pos, static_cast<double *>(dst), dtype);
+              }
+              break;
           }
         } else if (dtype == INT96)
           gpuOutputInt96Timestamp(s, src_pos, static_cast<int64_t *>(dst));
