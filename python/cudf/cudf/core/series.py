@@ -1588,6 +1588,9 @@ class Series(Frame, Serializable):
     def __eq__(self, other):
         return self._binaryop(other, "eq")
 
+    def equal(self, other, fill_value=None, axis=0):
+        return self.eq(other, fill_value, axis)
+
     def ne(self, other, fill_value=None, axis=0):
         """Not equal to of series and other, element-wise
         (binary operator ne).
@@ -1605,6 +1608,9 @@ class Series(Frame, Serializable):
 
     def __ne__(self, other):
         return self._binaryop(other, "ne")
+
+    def not_equal(self, other, fill_value=None, axis=0):
+        return self.ne(other, fill_value, axis)
 
     def lt(self, other, fill_value=None, axis=0):
         """Less than of series and other, element-wise
@@ -1624,6 +1630,9 @@ class Series(Frame, Serializable):
     def __lt__(self, other):
         return self._binaryop(other, "lt")
 
+    def less(self, other, fill_value=None, axis=0):
+        return self.lt(other, fill_value, axis)
+
     def le(self, other, fill_value=None, axis=0):
         """Less than or equal to of series and other, element-wise
         (binary operator le).
@@ -1641,6 +1650,9 @@ class Series(Frame, Serializable):
 
     def __le__(self, other):
         return self._binaryop(other, "le")
+
+    def less_equal(self, other, fill_value=None, axis=0):
+        return self.le(other, fill_value, axis)
 
     def gt(self, other, fill_value=None, axis=0):
         """Greater than of series and other, element-wise
@@ -1660,6 +1672,9 @@ class Series(Frame, Serializable):
     def __gt__(self, other):
         return self._binaryop(other, "gt")
 
+    def greater(self, other, fill_value=None, axis=0):
+        return self.gt(other, fill_value, axis)
+
     def ge(self, other, fill_value=None, axis=0):
         """Greater than or equal to of series and other, element-wise
         (binary operator ge).
@@ -1677,6 +1692,9 @@ class Series(Frame, Serializable):
 
     def __ge__(self, other):
         return self._binaryop(other, "ge")
+
+    def greater_equal(self, other, fill_value=None, axis=0):
+        return self.ge(other, fill_value, axis)
 
     def __invert__(self):
         """Bitwise invert (~) for each element.
@@ -3838,6 +3856,9 @@ class Series(Frame, Serializable):
         return self._unaryop("abs")
 
     def __abs__(self):
+        return self.abs()
+
+    def absolute(self):
         return self.abs()
 
     # Rounding
