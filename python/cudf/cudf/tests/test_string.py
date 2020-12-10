@@ -14,7 +14,12 @@ from cudf import concat
 from cudf.core import DataFrame, Series
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
-from cudf.tests.utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.tests.utils import (
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    assert_eq,
+    assert_exceptions_equal,
+)
 from cudf.utils import dtypes as dtypeutils
 
 data_list = [
@@ -110,6 +115,8 @@ def test_string_get_item(ps_gs, item):
         expect = pa.Array.from_pandas(expect)
         pa.Array.equals(expect, got)
     else:
+        if got is cudf.NA and expect is None:
+            return
         assert expect == got
 
 
@@ -155,10 +162,10 @@ def test_string_repr(ps_gs, item):
     expect = str(expect_out)
     got = str(got_out)
 
-    if got_out is not None and len(got_out) > 1:
+    if got_out is not cudf.NA and len(got_out) > 1:
         expect = expect.replace("None", "<NA>")
 
-    assert expect == got
+    assert expect == got or (expect == "None" and got == "<NA>")
 
 
 @pytest.mark.parametrize(
@@ -838,8 +845,8 @@ def test_string_upper(ps_gs):
 )
 @pytest.mark.parametrize("pat", [None, " ", "-"])
 @pytest.mark.parametrize("n", [-1, 0, 1, 3, 10])
-@pytest.mark.parametrize("expand,expand_raise", [(True, 0), (False, 1)])
-def test_string_split(data, pat, n, expand, expand_raise):
+@pytest.mark.parametrize("expand", [True, False, None])
+def test_string_split(data, pat, n, expand):
 
     if data in (["a b", " c ", "   d", "e   ", "f"],) and pat is None:
         pytest.xfail("None pattern split algorithm not implemented yet")
@@ -847,13 +854,10 @@ def test_string_split(data, pat, n, expand, expand_raise):
     ps = pd.Series(data, dtype="str")
     gs = Series(data, dtype="str")
 
-    expectation = raise_builder([expand_raise], NotImplementedError)
+    expect = ps.str.split(pat=pat, n=n, expand=expand)
+    got = gs.str.split(pat=pat, n=n, expand=expand)
 
-    with expectation:
-        expect = ps.str.split(pat=pat, n=n, expand=expand)
-        got = gs.str.split(pat=pat, n=n, expand=expand)
-
-        assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -1561,7 +1565,7 @@ def test_strings_partition(data):
     ],
 )
 @pytest.mark.parametrize("n", [-1, 2, 1, 9])
-@pytest.mark.parametrize("expand", [True])
+@pytest.mark.parametrize("expand", [True, False, None])
 def test_strings_rsplit(data, n, expand):
     gs = Series(data)
     ps = pd.Series(data)
@@ -1597,7 +1601,7 @@ def test_strings_rsplit(data, n, expand):
     ],
 )
 @pytest.mark.parametrize("n", [-1, 2, 1, 9])
-@pytest.mark.parametrize("expand", [True])
+@pytest.mark.parametrize("expand", [True, False, None])
 def test_strings_split(data, n, expand):
     gs = Series(data)
     ps = pd.Series(data)
@@ -2144,6 +2148,49 @@ def test_string_str_rindex(data, sub, er):
 
 
 @pytest.mark.parametrize(
+    "data,sub,expect",
+    [
+        (
+            ["abc", "xyz", "a", "ab", "123", "097"],
+            ["b", "y", "a", "c", "4", "8"],
+            [True, True, True, False, False, False],
+        ),
+        (
+            ["A B", "1.5", "3,000", "23", "³", "⅕"],
+            ["A B", ".", ",", "1", " ", " "],
+            [True, True, True, False, False, False],
+        ),
+        (
+            [" ", "\t", "\r", "\f ", "\n", ""],
+            ["", "\t", "\r", "xx", "yy", "zz"],
+            [True, True, True, False, False, False],
+        ),
+        (
+            ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+            ["$", "B", "ab", "*", "@", "dog"],
+            [True, True, True, False, False, False],
+        ),
+        (
+            ["hello", "there", "world", "-1234", None, "accént"],
+            ["lo", "e", "o", "+1234", " ", "e"],
+            [True, True, True, False, None, False],
+        ),
+        (
+            ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", "", "x", None],
+            ["A", "B", "C", " ", "y", "e"],
+            [True, True, True, False, False, None],
+        ),
+    ],
+)
+def test_string_contains_multi(data, sub, expect):
+    gs = Series(data)
+    sub = Series(sub)
+    got = gs.str.contains(sub)
+    expect = Series(expect)
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
     "data",
     [
         ["abc", "xyz", "a", "ab", "123", "097"],
@@ -2404,13 +2451,13 @@ def test_string_typecast_error(data, obj_type, dtype):
     psr = pd.Series(data, dtype=obj_type)
     gsr = Series(data, dtype=obj_type)
 
-    try:
-        psr.astype(dtype=dtype)
-    except Exception as e:
-        with pytest.raises(type(e)):
-            gsr.astype(dtype=dtype)
-    else:
-        raise AssertionError("Was expecting `psr.astype` to fail")
+    assert_exceptions_equal(
+        lfunc=psr.astype,
+        rfunc=gsr.astype,
+        lfunc_args_and_kwargs=([dtype],),
+        rfunc_args_and_kwargs=([dtype],),
+        compare_error_message=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -2436,6 +2483,45 @@ def test_string_ishex():
     gsr = Series(["", None, "0x01a2b3c4d5e6f", "0789", "ABCDEF0"])
     got = gsr.str.ishex()
     expected = Series([False, None, True, True, True])
+    assert_eq(expected, got)
+
+
+def test_string_istimestamp():
+    gsr = Series(
+        [
+            "",
+            None,
+            "20201009 123456.987654AM+0100",
+            "1920111 012345.000001",
+            "18201235 012345.1",
+            "20201009 250001.2",
+            "20201009 129901.3",
+            "20201009 123499.4",
+            "20201009 000000.500000PM-0130",
+            "20201009:000000.600000",
+            "20201009 010203.700000PM-2500",
+            "20201009 010203.800000AM+0590",
+            "20201009 010203.900000AP-0000",
+        ]
+    )
+    got = gsr.str.istimestamp(r"%Y%m%d %H%M%S.%f%p%z")
+    expected = Series(
+        [
+            False,
+            None,
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            True,
+            False,
+            False,
+            False,
+            False,
+        ]
+    )
     assert_eq(expected, got)
 
 
@@ -2753,39 +2839,28 @@ def test_string_product():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = Series(["1", "2", "3", "4", "5"])
 
-    try:
-        psr.product()
-    except Exception as e:
-        with pytest.raises(
-            type(e),
-            match=re.escape(f"cannot perform prod with type {sr.dtype}"),
-        ):
-            sr.product()
-    else:
-        raise AssertionError("psr.product() should've failed")
+    assert_exceptions_equal(
+        lfunc=psr.product,
+        rfunc=sr.product,
+        expected_error_message=re.escape(
+            f"cannot perform prod with type {sr.dtype}"
+        ),
+    )
 
 
 def test_string_var():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = Series(["1", "2", "3", "4", "5"])
 
-    try:
-        psr.var()
-    except Exception as e:
-        with pytest.raises(type(e)):
-            sr.var()
-    else:
-        raise AssertionError("psr.var() should've failed")
+    assert_exceptions_equal(
+        lfunc=psr.var, rfunc=sr.var, compare_error_message=False
+    )
 
 
 def test_string_std():
     psr = pd.Series(["1", "2", "3", "4", "5"])
     sr = Series(["1", "2", "3", "4", "5"])
 
-    try:
-        psr.std()
-    except Exception as e:
-        with pytest.raises(type(e)):
-            sr.std()
-    else:
-        raise AssertionError("psr.std() should've failed")
+    assert_exceptions_equal(
+        lfunc=psr.std, rfunc=sr.std, compare_error_message=False
+    )

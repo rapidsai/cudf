@@ -21,27 +21,23 @@
 
 #include "writer_impl.hpp"
 
+#include <strings/utilities.cuh>
+
 #include <cudf/copying.hpp>
 #include <cudf/null_mask.hpp>
-
-#include <cudf/utilities/traits.hpp>
-
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/combine.hpp>
 #include <cudf/strings/convert/convert_booleans.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
-
-#include <cudf/strings/combine.hpp>
+#include <cudf/strings/detail/modify_strings.cuh>
 #include <cudf/strings/replace.hpp>
+#include <cudf/utilities/traits.hpp>
 
-#include <strings/utilities.cuh>
-
-#include <algorithm>
-#include <cstring>
-#include <iterator>
-#include <sstream>
-#include <type_traits>
-#include <utility>
+#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
@@ -50,11 +46,12 @@
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
-#include <rmm/thrust_rmm_allocator.h>
-#include <rmm/device_buffer.hpp>
-
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/detail/modify_strings.cuh>
+#include <algorithm>
+#include <cstring>
+#include <iterator>
+#include <sstream>
+#include <type_traits>
+#include <utility>
 
 namespace cudf {
 namespace io {
@@ -70,10 +67,7 @@ using namespace cudf::strings;
 //{"\"", "\n", <delimiter>}
 //
 struct predicate_special_chars {
-  explicit predicate_special_chars(string_scalar const& delimiter, cudaStream_t stream = 0)
-    : delimiter_(delimiter.value(stream))
-  {
-  }
+  explicit predicate_special_chars(string_view const& delimiter) : delimiter_(delimiter) {}
 
   __device__ bool operator()(string_view const& str_view) const
   {
@@ -92,7 +86,7 @@ struct predicate_special_chars {
   }
 
  private:
-  string_view delimiter_;
+  string_view const delimiter_;
 };
 
 struct probe_special_chars {
@@ -123,7 +117,7 @@ struct probe_special_chars {
 
  private:
   column_device_view const d_column_;
-  predicate_special_chars predicate_;
+  predicate_special_chars const predicate_;
 };
 
 struct modify_special_chars {
@@ -181,7 +175,7 @@ struct modify_special_chars {
       // copy the source string unmodified:
       //(pass-through)
       //
-      memcpy(get_output_ptr(idx), d_str.data(), str_size_bytes);
+      memcpy(d_buffer, d_str.data(), str_size_bytes);
     }
     return 0;
   }
@@ -195,7 +189,7 @@ struct modify_special_chars {
   column_device_view const d_column_;
   int32_t const* d_offsets_;
   char* d_chars_;
-  predicate_special_chars predicate_;
+  predicate_special_chars const predicate_;
 };
 
 struct column_to_strings_fn {
@@ -220,7 +214,7 @@ struct column_to_strings_fn {
 
   explicit column_to_strings_fn(csv_writer_options const& options,
                                 rmm::mr::device_memory_resource* mr = nullptr,
-                                cudaStream_t stream                 = nullptr)
+                                rmm::cuda_stream_view stream        = nullptr)
     : options_(options), mr_(mr), stream_(stream)
   {
   }
@@ -268,10 +262,10 @@ struct column_to_strings_fn {
     // where modify() = duplicate the double quotes, if any; add 2bl quotes prefix/suffix;
     //}
     //
-    std::string delimiter{options_.get_inter_column_delimiter()};
-    predicate_special_chars pred{delimiter, stream_};
+    string_scalar delimiter{std::string{options_.get_inter_column_delimiter()}, true, stream_};
+    predicate_special_chars pred{delimiter.value(stream_)};
 
-    return modify_strings<probe_special_chars, modify_special_chars>(column_v, mr_, stream_, pred);
+    return modify_strings<probe_special_chars, modify_special_chars>(column_v, stream_, mr_, pred);
   }
 
   // ints:
@@ -303,7 +297,19 @@ struct column_to_strings_fn {
   std::enable_if_t<cudf::is_timestamp<column_type>(), std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
-    std::string format{"%Y-%m-%dT%H:%M:%SZ"};  // same as default for `from_timestamp`
+    std::string format = [&]() {
+      if (std::is_same<cudf::timestamp_s, column_type>::value) {
+        return std::string{"%Y-%m-%dT%H:%M:%SZ"};
+      } else if (std::is_same<cudf::timestamp_ms, column_type>::value) {
+        return std::string{"%Y-%m-%dT%H:%M:%S.%3fZ"};
+      } else if (std::is_same<cudf::timestamp_us, column_type>::value) {
+        return std::string{"%Y-%m-%dT%H:%M:%S.%6fZ"};
+      } else if (std::is_same<cudf::timestamp_ns, column_type>::value) {
+        return std::string{"%Y-%m-%dT%H:%M:%S.%9fZ"};
+      } else {
+        return std::string{"%Y-%m-%d"};
+      }
+    }();
 
     // handle the cases where delimiter / line-terminator can be
     // "-" or ":", in which case they are to be dropped from the format:
@@ -345,7 +351,7 @@ struct column_to_strings_fn {
  private:
   csv_writer_options const& options_;
   rmm::mr::device_memory_resource* mr_;
-  cudaStream_t stream_;
+  rmm::cuda_stream_view stream_;
 };
 }  // unnamed namespace
 
@@ -371,7 +377,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 //
 void writer::impl::write_chunked_begin(table_view const& table,
                                        const table_metadata* metadata,
-                                       cudaStream_t stream)
+                                       rmm::cuda_stream_view stream)
 {
   if ((metadata != nullptr) && (options_.is_enabled_include_header())) {
     CUDF_EXPECTS(metadata->column_names.size() == static_cast<size_t>(table.num_columns()),
@@ -393,7 +399,7 @@ void writer::impl::write_chunked_begin(table_view const& table,
 
 void writer::impl::write_chunked(strings_column_view const& str_column_view,
                                  const table_metadata* metadata,
-                                 cudaStream_t stream)
+                                 rmm::cuda_stream_view stream)
 {
   // algorithm outline:
   //
@@ -433,9 +439,9 @@ void writer::impl::write_chunked(strings_column_view const& str_column_view,
                              ptr_all_bytes,
                              total_num_bytes * sizeof(char),
                              cudaMemcpyDeviceToHost,
-                             stream));
+                             stream.value()));
 
-    CUDA_TRY(cudaStreamSynchronize(stream));
+    stream.synchronize();
 
     // host algorithm call, where the underlying call
     // is also host_write taking a host buffer;
@@ -450,7 +456,7 @@ void writer::impl::write_chunked(strings_column_view const& str_column_view,
 
 void writer::impl::write(table_view const& table,
                          const table_metadata* metadata,
-                         cudaStream_t stream)
+                         rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(table.num_columns() > 0, "Empty table.");
 
@@ -486,15 +492,16 @@ void writer::impl::write(table_view const& table,
       splits.resize(n_chunks);
 
       rmm::device_vector<size_type> d_splits(n_chunks, n_rows_per_chunk);
-      thrust::inclusive_scan(exec->on(stream), d_splits.begin(), d_splits.end(), d_splits.begin());
+      thrust::inclusive_scan(
+        exec->on(stream.value()), d_splits.begin(), d_splits.end(), d_splits.begin());
 
       CUDA_TRY(cudaMemcpyAsync(splits.data(),
                                d_splits.data().get(),
                                n_chunks * sizeof(size_type),
                                cudaMemcpyDeviceToHost,
-                               stream));
+                               stream.value()));
 
-      CUDA_TRY(cudaStreamSynchronize(stream));
+      stream.synchronize();
 
       // split table_view into chunks:
       //
@@ -539,7 +546,9 @@ void writer::impl::write(table_view const& table,
   write_chunked_end(table, metadata, stream);
 }
 
-void writer::write(table_view const& table, const table_metadata* metadata, cudaStream_t stream)
+void writer::write(table_view const& table,
+                   const table_metadata* metadata,
+                   rmm::cuda_stream_view stream)
 {
   _impl->write(table, metadata, stream);
 }

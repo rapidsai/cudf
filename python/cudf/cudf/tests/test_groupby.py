@@ -1,4 +1,5 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+
 import itertools
 
 import numpy as np
@@ -9,7 +10,7 @@ from numpy.testing import assert_array_equal
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_110
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 _now = np.datetime64("now")
 _tomorrow = _now + np.timedelta64(1, "D")
@@ -439,6 +440,7 @@ def test_advanced_groupby_levels():
     assert_eq(pdh, gdh)
     pdg = pdf.groupby(["x", "y", "z"]).sum()
     gdg = gdf.groupby(["x", "y", "z"]).sum()
+    assert_eq(pdg, gdg)
     pdg = pdf.groupby(["z"]).sum()
     gdg = gdf.groupby(["z"]).sum()
     assert_eq(pdg, gdg)
@@ -467,14 +469,14 @@ def test_advanced_groupby_levels():
     assert_eq(pdh, gdh)
     pdg = pdf.groupby(["x", "y"]).sum()
     gdg = gdf.groupby(["x", "y"]).sum()
-    with pytest.raises(IndexError) as raises:
-        pdh = pdg.groupby(level=2).sum()
-    raises.match("Too many levels")
-    with pytest.raises(IndexError) as raises:
-        gdh = gdg.groupby(level=2).sum()
-    # we use a different error message
-    raises.match("Invalid level number")
-    assert_eq(pdh, gdh)
+
+    assert_exceptions_equal(
+        lfunc=pdg.groupby,
+        rfunc=gdg.groupby,
+        lfunc_args_and_kwargs=([], {"level": 2}),
+        rfunc_args_and_kwargs=([], {"level": 2}),
+        expected_error_message="Invalid level number",
+    )
 
 
 @pytest.mark.parametrize(
@@ -655,6 +657,32 @@ def test_groupby_datetime_multi_agg_multi_groupby():
     gdg = gdf.groupby(["a", "b"]).agg(["sum", "max"])
 
     assert_eq(pdg, gdg)
+
+
+@pytest.mark.parametrize(
+    "agg",
+    [
+        ["min", "max", "count", "mean"],
+        ["mean", "var", "std"],
+        ["count", "mean", "var", "std"],
+    ],
+)
+def test_groupby_multi_agg_hash_groupby(agg):
+    alphabets = "abcdefghijklmnopqrstuvwxyz"
+    prefixes = alphabets[:10]
+    coll_dict = dict()
+    for prefix in prefixes:
+        for this_name in alphabets:
+            coll_dict[prefix + this_name] = float
+    coll_dict["id"] = int
+    gdf = cudf.datasets.timeseries(
+        start="2000", end="2000-01-2", dtypes=coll_dict, freq="1s", seed=1,
+    ).reset_index(drop=True)
+    pdf = gdf.to_pandas()
+    check_dtype = False if "count" in agg else True
+    pdg = pdf.groupby("id").agg(agg)
+    gdg = gdf.groupby("id").agg(agg)
+    assert_eq(pdg, gdg, check_dtype=check_dtype)
 
 
 @pytest.mark.parametrize("agg", ["min", "max", "sum", "count", "mean"])
@@ -901,7 +929,7 @@ def test_groupby_categorical_from_string():
     gdf["val"] = [0, 1, 2]
     gdf["id"] = gdf["id"].astype("category")
     assert_eq(
-        cudf.DataFrame({"val": gdf["val"]}).set_index(index=gdf["id"]),
+        cudf.DataFrame({"val": gdf["val"]}).set_index(keys=gdf["id"]),
         gdf.groupby("id").sum(),
     )
 
@@ -1049,13 +1077,7 @@ def test_raise_data_error():
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
     gdf = cudf.from_pandas(pdf)
 
-    try:
-        pdf.groupby("a").mean()
-    except Exception as e:
-        with pytest.raises(type(e), match=e.__str__()):
-            gdf.groupby("a").mean()
-    else:
-        raise AssertionError("Expected pandas groupby to fail")
+    assert_exceptions_equal(pdf.groupby("a").mean, gdf.groupby("a").mean)
 
 
 def test_drop_unsupported_multi_agg():
@@ -1246,6 +1268,26 @@ def test_groupby_list_single_element(list_agg):
     )
 
 
+@pytest.mark.parametrize(
+    "agg", [list, [list, "count"], {"b": list, "c": "sum"}]
+)
+def test_groupby_list_strings(agg):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 1, 2, 2],
+            "b": ["b", "a", None, "e", "d"],
+            "c": [1, 2, 3, 4, 5],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").agg(agg),
+        gdf.groupby("a").agg(agg),
+        check_dtype=False,
+    )
+
+
 def test_groupby_list_columns_excluded():
     pdf = pd.DataFrame(
         {
@@ -1265,3 +1307,61 @@ def test_groupby_list_columns_excluded():
         gdf.groupby("a").agg("mean"),
         check_dtype=False,
     )
+
+
+def test_groupby_pipe():
+    pdf = pd.DataFrame({"A": "a b a b".split(), "B": [1, 2, 3, 4]})
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pdf.groupby("A").pipe(lambda x: x.max() - x.min())
+    actual = gdf.groupby("A").pipe(lambda x: x.max() - x.min())
+
+    assert_eq(expected, actual)
+
+
+def test_groupby_apply_return_scalars():
+    pdf = pd.DataFrame(
+        {
+            "A": [1, 1, 2, 2, 3, 3, 4, 4, 5, 5],
+            "B": [
+                0.01,
+                np.nan,
+                0.03,
+                0.04,
+                np.nan,
+                0.06,
+                0.07,
+                0.08,
+                0.09,
+                1.0,
+            ],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    def custom_map_func(x):
+        x = x[~x["B"].isna()]
+        ticker = x.shape[0]
+        full = ticker / 10
+        return full
+
+    expected = pdf.groupby("A").apply(lambda x: custom_map_func(x))
+    actual = gdf.groupby("A").apply(lambda x: custom_map_func(x))
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "cust_func",
+    [lambda x: x - x.max(), lambda x: x.min() - x.max(), lambda x: x.min()],
+)
+def test_groupby_apply_return_series_dataframe(cust_func):
+    pdf = pd.DataFrame(
+        {"key": [0, 0, 1, 1, 2, 2, 2], "val": [0, 1, 2, 3, 4, 5, 6]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pdf.groupby(["key"]).apply(cust_func)
+    actual = gdf.groupby(["key"]).apply(cust_func)
+
+    assert_eq(expected, actual)

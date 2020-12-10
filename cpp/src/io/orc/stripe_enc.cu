@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,20 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include <cub/cub.cuh>
 #include <io/utilities/block_utils.cuh>
+#include <rmm/cuda_stream_view.hpp>
 #include "orc_common.h"
 #include "orc_gpu.h"
-
-// Apache ORC reader does not handle zero-length patch lists for RLEv2 mode2
-// Workaround replaces zero-length patch lists by a dummy zero patch
-#define ZERO_PLL_WAR 1
 
 namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
-#define SCRATCH_BFRSZ (512 * 4)
+constexpr int scratch_buffer_size = 512 * 4;
+
+// Apache ORC reader does not handle zero-length patch lists for RLEv2 mode2
+// Workaround replaces zero-length patch lists by a dummy zero patch
+constexpr bool zero_pll_war = true;
 
 static __device__ __constant__ int64_t kORCTimeToUTC =
   1420070400;  // Seconds from January 1st, 1970 to January 1st, 2015
@@ -75,8 +77,8 @@ struct orcenc_state_s {
     StripeDictionary dict_stripe;
   } u;
   union {
-    uint8_t u8[SCRATCH_BFRSZ];  // general scratch buffer
-    uint32_t u32[SCRATCH_BFRSZ / 4];
+    uint8_t u8[scratch_buffer_size];  // general scratch buffer
+    uint32_t u32[scratch_buffer_size / 4];
   } buf;
   union {
     uint8_t u8[2048];
@@ -91,16 +93,19 @@ struct orcenc_state_s {
   } lengths;
 };
 
-static inline __device__ uint32_t zigzag32(int32_t v)
+static inline __device__ uint32_t zigzag(uint32_t v) { return v; }
+static inline __device__ uint64_t zigzag(uint64_t v) { return v; }
+static inline __device__ uint32_t zigzag(int32_t v)
 {
   int32_t s = (v >> 31);
   return ((v ^ s) * 2) - s;
 }
-static inline __device__ uint64_t zigzag64(int64_t v)
+static inline __device__ uint64_t zigzag(int64_t v)
 {
   int64_t s = (v < 0) ? 1 : 0;
   return ((v ^ -s) * 2) + s;
 }
+
 static inline __device__ uint32_t CountLeadingBytes32(uint32_t v) { return __clz(v) >> 3; }
 static inline __device__ uint32_t CountLeadingBytes64(uint64_t v) { return __clzll(v) >> 3; }
 
@@ -159,7 +164,7 @@ static __device__ uint32_t ByteRLE(
   while (numvals > 0) {
     uint8_t v0       = (t < numvals) ? inbuf[(inpos + t) & inmask] : 0;
     uint8_t v1       = (t + 1 < numvals) ? inbuf[(inpos + t + 1) & inmask] : 0;
-    uint32_t rpt_map = BALLOT(t + 1 < numvals && v0 == v1), literal_run, repeat_run,
+    uint32_t rpt_map = ballot(t + 1 < numvals && v0 == v1), literal_run, repeat_run,
              maxvals = min(numvals, 512);
     if (!(t & 0x1f)) s->u.byterle.rpt_map[t >> 5] = rpt_map;
     __syncthreads();
@@ -316,17 +321,17 @@ static inline __device__ void StoreBitsBigEndian(
   if (t <= (num_vals | 0x1f)) {
     uint32_t mask;
     if (w <= 1) {
-      v    = (v << 1) | (SHFL_XOR(v, 1) & 0x1);
-      v    = (v << 2) | (SHFL_XOR(v, 2) & 0x3);
-      v    = (v << 4) | (SHFL_XOR(v, 4) & 0xf);
+      v    = (v << 1) | (shuffle_xor(v, 1) & 0x1);
+      v    = (v << 2) | (shuffle_xor(v, 2) & 0x3);
+      v    = (v << 4) | (shuffle_xor(v, 4) & 0xf);
       mask = 0x7;
     } else if (w <= 2) {
-      v    = (v << 2) | (SHFL_XOR(v, 1) & 0x3);
-      v    = (v << 4) | (SHFL_XOR(v, 2) & 0xf);
+      v    = (v << 2) | (shuffle_xor(v, 1) & 0x3);
+      v    = (v << 4) | (shuffle_xor(v, 2) & 0xf);
       mask = 0x3;
     } else  // if (w <= 4)
     {
-      v    = (v << 4) | (SHFL_XOR(v, 1) & 0xf);
+      v    = (v << 4) | (shuffle_xor(v, 1) & 0xf);
       mask = 0x1;
     }
     if (t < num_vals && !(t & mask)) { dst[(t * w) >> 3] = static_cast<uint8_t>(v); }
@@ -345,6 +350,8 @@ static inline __device__ void StoreBitsBigEndian(
  * @param[in] numvals max number of values to encode
  * @param[in] flush encode all remaining values if nonzero
  * @param[in] t thread id
+ * @param[in] temp_storage_full shared memory storage to performance warp reduce
+ * @param[in] temp_storage_half shared memory storage to performance half warp reduce
  *
  * @return number of input values encoded
  *
@@ -373,7 +380,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
     T v0               = (t < numvals) ? inbuf[(inpos + t) & inmask] : 0;
     T v1               = (t + 1 < numvals) ? inbuf[(inpos + t + 1) & inmask] : 0;
     T v2               = (t + 2 < numvals) ? inbuf[(inpos + t + 2) & inmask] : 0;
-    uint32_t delta_map = BALLOT(t + 2 < numvals && v1 - v0 == v2 - v1), maxvals = min(numvals, 512),
+    uint32_t delta_map = ballot(t + 2 < numvals && v1 - v0 == v2 - v1), maxvals = min(numvals, 512),
              literal_run, delta_run;
     if (!(t & 0x1f)) s->u.intrle.delta_map[t >> 5] = delta_map;
     __syncthreads();
@@ -434,15 +441,15 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
         __syncwarp();
         if (t == 0) {
           uint32_t mode1_w, mode2_w;
-          T vrange_mode1, vrange_mode2;
+          typename std::make_unsigned<T>::type vrange_mode1, vrange_mode2;
           s->u.intrle.scratch.u64[0] = (uint64_t)vmin;
           if (sizeof(T) > 4) {
-            vrange_mode1 = (is_signed) ? max(zigzag64(vmin), zigzag64(vmax)) : vmax;
+            vrange_mode1 = (is_signed) ? max(zigzag(vmin), zigzag(vmax)) : vmax;
             vrange_mode2 = vmax - vmin;
             mode1_w      = 8 - min(CountLeadingBytes64(vrange_mode1), 7);
             mode2_w      = 8 - min(CountLeadingBytes64(vrange_mode2), 7);
           } else {
-            vrange_mode1 = (is_signed) ? max(zigzag32(vmin), zigzag32(vmax)) : vmax;
+            vrange_mode1 = (is_signed) ? max(zigzag(vmin), zigzag(vmax)) : vmax;
             vrange_mode2 = vmax - vmin;
             mode1_w      = 4 - min(CountLeadingBytes32(vrange_mode1), 3);
             mode2_w      = 4 - min(CountLeadingBytes32(vrange_mode2), 3);
@@ -490,16 +497,14 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
           dst[1] = (literal_run - 1) & 0xff;
         }
         dst += 2;
-        if (t < literal_run && is_signed) {
-          if (sizeof(T) > 4)
-            v0 = zigzag64(v0);
-          else
-            v0 = zigzag32(v0);
+
+        typename std::make_unsigned<T>::type zzv0 = v0;
+        if (t < literal_run) { zzv0 = zigzag(v0); }
+        if (literal_w < 8) {
+          StoreBitsBigEndian(dst, zzv0, literal_w, literal_run, t);
+        } else if (t < literal_run) {
+          StoreBytesBigEndian(dst + t * (literal_w >> 3), zzv0, (literal_w >> 3));
         }
-        if (literal_w < 8)
-          StoreBitsBigEndian(dst, (uint32_t)v0, literal_w, literal_run, t);
-        else if (t < literal_run)
-          StoreBytesBigEndian(dst + t * (literal_w >> 3), v0, (literal_w >> 3));
       } else if (literal_mode == 2) {
         // Patched base mode
         if (!t) {
@@ -507,14 +512,14 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
           vmax = (is_signed) ? ((vmin < 0) ? -vmin : vmin) * 2 : vmin;
           bw   = (sizeof(T) > 4) ? (8 - min(CountLeadingBytes64(vmax << bv_scale), 7))
                                : (4 - min(CountLeadingBytes32(vmax << bv_scale), 3));
-#if ZERO_PLL_WAR
-          // Insert a dummy zero patch
-          pll                                                    = 1;
-          dst[4 + bw + ((literal_run * literal_w + 7) >> 3) + 0] = 0;
-          dst[4 + bw + ((literal_run * literal_w + 7) >> 3) + 1] = 0;
-#else
-          pll = 0;
-#endif
+          if (zero_pll_war) {
+            // Insert a dummy zero patch
+            pll                                                    = 1;
+            dst[4 + bw + ((literal_run * literal_w + 7) >> 3) + 0] = 0;
+            dst[4 + bw + ((literal_run * literal_w + 7) >> 3) + 1] = 0;
+          } else {
+            pll = 0;
+          }
           dst[0] = 0x80 +
                    ((literal_w < 8) ? literal_w - 1 : kByteLengthToRLEv2_W[literal_w >> 3]) * 2 +
                    ((literal_run - 1) >> 8);
@@ -552,7 +557,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
     if (delta_run > 0) {
       if (t == literal_run) {
         int64_t delta       = (int64_t)v1 - (int64_t)v0;
-        uint64_t delta_base = (is_signed) ? (sizeof(T) > 4) ? zigzag64(v0) : zigzag32(v0) : v0;
+        uint64_t delta_base = zigzag(v0);
         if (delta == 0 && delta_run >= 3 && delta_run <= 10) {
           // Short repeat
           uint32_t delta_bw = 8 - min(CountLeadingBytes64(delta_base), 7);
@@ -564,7 +569,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s,
           s->u.intrle.hdr_bytes = 1 + delta_bw;
         } else {
           // Delta
-          uint64_t delta_u = zigzag64(delta);
+          uint64_t delta_u = zigzag(delta);
           uint32_t bytecnt = 2;
           dst[0]           = 0xC0 + ((delta_run - 1) >> 8);
           dst[1]           = (delta_run - 1) & 0xff;
@@ -603,7 +608,7 @@ static __device__ void StoreStringData(uint8_t *dst,
   uint32_t pos = len;
   uint32_t wt  = t & 0x1f;
   for (uint32_t n = 1; n < 32; n <<= 1) {
-    uint32_t tmp = SHFL(pos, (wt & ~n) | (n - 1));
+    uint32_t tmp = shuffle(pos, (wt & ~n) | (n - 1));
     pos += (wt & n) ? tmp : 0;
   }
   if (wt == 0x1f) { strenc->lengths_red[t >> 5] = pos; }
@@ -613,7 +618,7 @@ static __device__ void StoreStringData(uint8_t *dst,
     uint32_t wlen = (wt < 16) ? strenc->lengths_red[wt] : 0;
     uint32_t wpos = wlen;
     for (uint32_t n = 1; n < 16; n <<= 1) {
-      uint32_t tmp = SHFL(wpos, (wt & ~n) | (n - 1));
+      uint32_t tmp = shuffle(wpos, (wt & ~n) | (n - 1));
       wpos += (wt & n) ? tmp : 0;
     }
     if (wt < 16) { strenc->lengths_red[wt] = wpos - wlen; }
@@ -678,10 +683,7 @@ __global__ void __launch_bounds__(block_size)
   uint32_t group_id       = blockIdx.y;
   int t                   = threadIdx.x;
 
-  if (t < sizeof(EncChunk) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&s->chunk)[t] =
-      ((const uint32_t *)&chunks[group_id * num_columns + col_id])[t];
-  }
+  if (t == 0) s->chunk = chunks[group_id * num_columns + col_id];
   if (t < CI_NUM_STREAMS) { s->strm_pos[t] = 0; }
   __syncthreads();
   if (!t) {
@@ -709,9 +711,14 @@ __global__ void __launch_bounds__(block_size)
         uint32_t row  = s->chunk.start_row + present_rows + t * 8;
         uint8_t valid = 0;
         if (row < s->chunk.valid_rows) {
-          const uint8_t *valid_map_base =
-            reinterpret_cast<const uint8_t *>(s->chunk.valid_map_base);
-          valid = (valid_map_base) ? valid_map_base[row >> 3] : 0xff;
+          if (s->chunk.valid_map_base) {
+            uint8_t valid_map[4];
+            auto const valid_map_byte_idx = row >> 3;
+            memcpy(valid_map, &s->chunk.valid_map_base[valid_map_byte_idx / 4], 4);
+            valid = valid_map[valid_map_byte_idx % 4];
+          } else {
+            valid = 0xff;
+          }
           if (row + 7 > s->chunk.valid_rows) {
             valid = valid & ((1 << (s->chunk.valid_rows & 7)) - 1);
           }
@@ -985,15 +992,12 @@ __global__ void __launch_bounds__(block_size)
   const nvstrdesc_s *str_desc;
   const uint32_t *dict_data;
 
-  if (t < sizeof(StripeDictionary) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&s->u.dict_stripe)[t] = ((const uint32_t *)&stripes[stripe_id])[t];
-  }
+  if (t == 0) s->u.dict_stripe = stripes[stripe_id];
+
   __syncthreads();
   chunk_id = s->u.dict_stripe.start_chunk * num_columns + s->u.dict_stripe.column_id;
-  if (t < sizeof(EncChunk) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&s->chunk)[t] = ((const uint32_t *)&chunks[chunk_id])[t];
-  }
   if (t == 0) {
+    s->chunk         = chunks[chunk_id];
     s->strm_pos[cid] = 0;
     s->numlengths    = 0;
     s->nrows         = s->u.dict_stripe.num_strings;
@@ -1071,15 +1075,12 @@ __global__ void __launch_bounds__(1024)
   uint32_t t = threadIdx.x;
   uint8_t *dst_ptr;
 
-  if (t < sizeof(StripeStream) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&ss)[t] = ((const uint32_t *)&strm_desc[strm_id])[t];
+  if (t == 0) {
+    ss  = strm_desc[strm_id];
+    ck0 = chunks[ss.first_chunk_id];
   }
   __syncthreads();
-  ck0_id = ss.first_chunk_id;
-  if (t < sizeof(EncChunk) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&ck0)[t] = ((const uint32_t *)&chunks[ck0_id])[t];
-  }
-  __syncthreads();
+  ck0_id  = ss.first_chunk_id;
   cid     = ss.stream_type;
   dst_ptr = ck0.streams[cid] + ck0.strm_len[cid];
   for (uint32_t g = 1; g < ss.num_chunks; g++) {
@@ -1135,11 +1136,10 @@ __global__ void __launch_bounds__(256) gpuInitCompressionBlocks(StripeStream *st
   uint32_t num_blocks;
   uint8_t *src, *dst;
 
-  if (t < sizeof(StripeStream) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&ss)[t] = ((const uint32_t *)&strm_desc[strm_id])[t];
+  if (t == 0) {
+    ss            = strm_desc[strm_id];
+    uncomp_base_g = chunks[ss.first_chunk_id].streams[ss.stream_type];
   }
-  __syncthreads();
-  if (t == 0) { uncomp_base_g = chunks[ss.first_chunk_id].streams[ss.stream_type]; }
   __syncthreads();
   src        = uncomp_base_g;
   dst        = compressed_bfr + ss.bfr_offset;
@@ -1187,10 +1187,9 @@ __global__ void __launch_bounds__(1024) gpuCompactCompressedBlocks(StripeStream 
   const uint8_t *src;
   uint8_t *dst;
 
-  if (t < sizeof(StripeStream) / sizeof(uint32_t)) {
-    ((volatile uint32_t *)&ss)[t] = ((const uint32_t *)&strm_desc[strm_id])[t];
-  }
+  if (t == 0) ss = strm_desc[strm_id];
   __syncthreads();
+
   num_blocks = (ss.stream_size > 0) ? (ss.stream_size - 1) / comp_blk_size + 1 : 0;
   dst        = compressed_bfr + ss.bfr_offset;
   b          = 0;
@@ -1246,19 +1245,16 @@ __global__ void __launch_bounds__(1024) gpuCompactCompressedBlocks(StripeStream 
  * @param[in] num_columns Number of columns
  * @param[in] num_rowgroups Number of row groups
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t EncodeOrcColumnData(EncChunk *chunks,
-                                uint32_t num_columns,
-                                uint32_t num_rowgroups,
-                                cudaStream_t stream)
+ */
+void EncodeOrcColumnData(EncChunk *chunks,
+                         uint32_t num_columns,
+                         uint32_t num_rowgroups,
+                         rmm::cuda_stream_view stream)
 {
   dim3 dim_block(512, 1);  // 512 threads per chunk
   dim3 dim_grid(num_columns, num_rowgroups);
   gpuEncodeOrcColumnData<512>
-    <<<dim_grid, dim_block, 0, stream>>>(chunks, num_columns, num_rowgroups);
-  return cudaSuccess;
+    <<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_columns, num_rowgroups);
 }
 
 /**
@@ -1270,21 +1266,18 @@ cudaError_t EncodeOrcColumnData(EncChunk *chunks,
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t EncodeStripeDictionaries(StripeDictionary *stripes,
-                                     EncChunk *chunks,
-                                     uint32_t num_string_columns,
-                                     uint32_t num_columns,
-                                     uint32_t num_stripes,
-                                     cudaStream_t stream)
+ */
+void EncodeStripeDictionaries(StripeDictionary *stripes,
+                              EncChunk *chunks,
+                              uint32_t num_string_columns,
+                              uint32_t num_columns,
+                              uint32_t num_stripes,
+                              rmm::cuda_stream_view stream)
 {
   dim3 dim_block(512, 1);  // 512 threads per dictionary
   dim3 dim_grid(num_string_columns * num_stripes, 2);
   gpuEncodeStringDictionaries<512>
-    <<<dim_grid, dim_block, 0, stream>>>(stripes, chunks, num_columns);
-  return cudaSuccess;
+    <<<dim_grid, dim_block, 0, stream.value()>>>(stripes, chunks, num_columns);
 }
 
 /**
@@ -1295,19 +1288,17 @@ cudaError_t EncodeStripeDictionaries(StripeDictionary *stripes,
  * @param[in] num_stripe_streams Total number of streams
  * @param[in] num_columns Number of columns
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t CompactOrcDataStreams(StripeStream *strm_desc,
-                                  EncChunk *chunks,
-                                  uint32_t num_stripe_streams,
-                                  uint32_t num_columns,
-                                  cudaStream_t stream)
+ */
+void CompactOrcDataStreams(StripeStream *strm_desc,
+                           EncChunk *chunks,
+                           uint32_t num_stripe_streams,
+                           uint32_t num_columns,
+                           rmm::cuda_stream_view stream)
 {
   dim3 dim_block(1024, 1);
   dim3 dim_grid(num_stripe_streams, 1);
-  gpuCompactOrcDataStreams<<<dim_grid, dim_block, 0, stream>>>(strm_desc, chunks, num_columns);
-  return cudaSuccess;
+  gpuCompactOrcDataStreams<<<dim_grid, dim_block, 0, stream.value()>>>(
+    strm_desc, chunks, num_columns);
 }
 
 /**
@@ -1323,29 +1314,26 @@ cudaError_t CompactOrcDataStreams(StripeStream *strm_desc,
  * @param[in] compression Type of compression
  * @param[in] comp_blk_size Compression block size
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t CompressOrcDataStreams(uint8_t *compressed_data,
-                                   StripeStream *strm_desc,
-                                   EncChunk *chunks,
-                                   gpu_inflate_input_s *comp_in,
-                                   gpu_inflate_status_s *comp_out,
-                                   uint32_t num_stripe_streams,
-                                   uint32_t num_compressed_blocks,
-                                   CompressionKind compression,
-                                   uint32_t comp_blk_size,
-                                   cudaStream_t stream)
+ */
+void CompressOrcDataStreams(uint8_t *compressed_data,
+                            StripeStream *strm_desc,
+                            EncChunk *chunks,
+                            gpu_inflate_input_s *comp_in,
+                            gpu_inflate_status_s *comp_out,
+                            uint32_t num_stripe_streams,
+                            uint32_t num_compressed_blocks,
+                            CompressionKind compression,
+                            uint32_t comp_blk_size,
+                            rmm::cuda_stream_view stream)
 {
   dim3 dim_block_init(256, 1);
   dim3 dim_grid(num_stripe_streams, 1);
-  gpuInitCompressionBlocks<<<dim_grid, dim_block_init, 0, stream>>>(
+  gpuInitCompressionBlocks<<<dim_grid, dim_block_init, 0, stream.value()>>>(
     strm_desc, chunks, comp_in, comp_out, compressed_data, comp_blk_size);
   if (compression == SNAPPY) { gpu_snap(comp_in, comp_out, num_compressed_blocks, stream); }
   dim3 dim_block_compact(1024, 1);
-  gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream>>>(
+  gpuCompactCompressedBlocks<<<dim_grid, dim_block_compact, 0, stream.value()>>>(
     strm_desc, comp_in, comp_out, compressed_data, comp_blk_size);
-  return cudaSuccess;
 }
 
 }  // namespace gpu

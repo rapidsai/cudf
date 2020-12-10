@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,13 +88,6 @@ For more information on these sources, see the manual.
 
 namespace cudf {
 namespace io {
-#ifdef _MSC_VER
-#define bswap_32(v) _byteswap_ulong(v)
-#define bswap_64(v) _byteswap_uint64(v)
-#else
-#define bswap_32(v) __builtin_bswap32(v)
-#define bswap_64(v) __builtin_bswap64(v)
-#endif
 
 // Constants for the fast MTF decoder.
 #define MTFA_SIZE 4096
@@ -182,7 +175,7 @@ static void skipbits(unbz_state_s *s, uint32_t n)
   if (bitpos >= 32) {
     const uint8_t *cur = s->cur + 4;
     uint32_t next32 =
-      (cur + 4 < s->end) ? bswap_32(*reinterpret_cast<const uint32_t *>(cur + 4)) : 0;
+      (cur + 4 < s->end) ? __builtin_bswap32(*reinterpret_cast<const uint32_t *>(cur + 4)) : 0;
     s->cur    = cur;
     s->bitbuf = (s->bitbuf << 32) | next32;
     bitpos &= 0x1f;
@@ -542,7 +535,7 @@ int32_t cpu_bz2_uncompress(
   s.base = source;
   s.end =
     source + sourceLen - 4;  // We will not read the final combined CRC (last 4 bytes of the file)
-  s.bitbuf = bswap_64(*reinterpret_cast<const uint64_t *>(source));
+  s.bitbuf = __builtin_bswap64(*reinterpret_cast<const uint64_t *>(source));
   s.bitpos = 0;
 
   s.out     = dest;
@@ -568,7 +561,7 @@ int32_t cpu_bz2_uncompress(
       s.cur    = source + (size_t)(bit_offs >> 3);
       s.bitpos = (uint32_t)(bit_offs & 7);
       if (s.cur + 8 > s.end) return BZ_PARAM_ERROR;
-      s.bitbuf = bswap_64(*reinterpret_cast<const uint64_t *>(s.cur));
+      s.bitbuf = __builtin_bswap64(*reinterpret_cast<const uint64_t *>(s.cur));
     }
   }
 

@@ -3,8 +3,8 @@
 import numpy as np
 
 from cudf._lib.column cimport Column
-from cudf._lib.scalar import as_scalar
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar import as_device_scalar
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.types import np_to_cudf_types
 from cudf._lib.types cimport underlying_type_t_type_id
 
@@ -19,7 +19,8 @@ from cudf._lib.cpp.strings.convert.convert_booleans cimport (
 )
 from cudf._lib.cpp.strings.convert.convert_datetime cimport (
     to_timestamps as cpp_to_timestamps,
-    from_timestamps as cpp_from_timestamps
+    from_timestamps as cpp_from_timestamps,
+    is_timestamp as cpp_is_timestamp
 )
 from cudf._lib.cpp.strings.convert.convert_floats cimport (
     to_floats as cpp_to_floats,
@@ -446,10 +447,10 @@ def _to_booleans(Column input_col, object string_true="True"):
     A Column with string values cast to boolean
     """
 
-    cdef Scalar str_true = as_scalar(string_true)
+    cdef DeviceScalar str_true = as_device_scalar(string_true)
     cdef column_view input_column_view = input_col.view()
-    cdef string_scalar* string_scalar_true = <string_scalar*>(
-        str_true.c_value.get())
+    cdef const string_scalar* string_scalar_true = <const string_scalar*>(
+        str_true.get_raw_ptr())
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(
@@ -483,13 +484,13 @@ def _from_booleans(
     A Column with boolean values cast to string
     """
 
-    cdef Scalar str_true = as_scalar(string_true)
-    cdef Scalar str_false = as_scalar(string_false)
+    cdef DeviceScalar str_true = as_device_scalar(string_true)
+    cdef DeviceScalar str_false = as_device_scalar(string_false)
     cdef column_view input_column_view = input_col.view()
-    cdef string_scalar* string_scalar_true = <string_scalar*>(
-        str_true.c_value.get())
-    cdef string_scalar* string_scalar_false = <string_scalar*>(
-        str_false.c_value.get())
+    cdef const string_scalar* string_scalar_true = <const string_scalar*>(
+        str_true.get_raw_ptr())
+    cdef const string_scalar* string_scalar_false = <const string_scalar*>(
+        str_false.get_raw_ptr())
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(
@@ -568,6 +569,38 @@ def timestamp2int(
             cpp_to_timestamps(
                 input_column_view,
                 out_type,
+                c_timestamp_format))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def istimestamp(
+        Column input_col,
+        object format,
+        **kwargs):
+    """
+    Check input string column matches the specified timestamp format
+
+    Parameters
+    ----------
+    input_col : input column of type string
+
+    format : format string of timestamp specifiers
+
+    Returns
+    -------
+    A Column of boolean values identifying strings that matched the format.
+
+    """
+    if input_col.size == 0:
+        return as_column([], dtype=kwargs.get('dtype'))
+    cdef column_view input_column_view = input_col.view()
+    cdef string c_timestamp_format = <string>str(format).encode('UTF-8')
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(
+            cpp_is_timestamp(
+                input_column_view,
                 c_timestamp_format))
 
     return Column.from_unique_ptr(move(c_result))

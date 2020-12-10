@@ -1,25 +1,22 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import pickle
+
 import pyarrow as pa
 
-from cudf.core.column import ColumnBase
+import cudf
+from cudf.core.buffer import Buffer
+from cudf.core.column import ColumnBase, column
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.utils.dtypes import is_list_dtype
 
 
 class ListColumn(ColumnBase):
     def __init__(
-        self,
-        data,
-        size,
-        dtype,
-        mask=None,
-        offset=0,
-        null_count=None,
-        children=(),
+        self, size, dtype, mask=None, offset=0, null_count=None, children=(),
     ):
         super().__init__(
-            data,
+            None,
             size,
             dtype,
             mask=mask,
@@ -27,6 +24,42 @@ class ListColumn(ColumnBase):
             null_count=null_count,
             children=children,
         )
+
+    def __sizeof__(self):
+        if self._cached_sizeof is None:
+            n = 0
+            if self.nullable:
+                n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
+                    self.size
+                )
+
+            child0_size = (self.size + 1) * self.base_children[
+                0
+            ].dtype.itemsize
+            current_base_child = self.base_children[1]
+            current_offset = self.offset
+            n += child0_size
+            while type(current_base_child) is ListColumn:
+                child0_size = (
+                    current_base_child.size + 1 - current_offset
+                ) * current_base_child.base_children[0].dtype.itemsize
+                current_offset = current_base_child.base_children[0][
+                    current_offset
+                ]
+                n += child0_size
+                current_base_child = current_base_child.base_children[1]
+
+            n += (
+                current_base_child.size - current_offset
+            ) * current_base_child.dtype.itemsize
+
+            if current_base_child.nullable:
+                n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
+                    current_base_child.size
+                )
+            self._cached_sizeof = n
+
+        return self._cached_sizeof
 
     @property
     def base_size(self):
@@ -67,6 +100,67 @@ class ListColumn(ColumnBase):
             buffers = offsets.buffers()
         return pa.ListArray.from_buffers(
             pa_type, len(self), buffers, children=[elements]
+        )
+
+    def set_base_data(self, value):
+        if value is not None:
+            raise RuntimeError(
+                "ListColumn's do not use data attribute of Column, use "
+                "`set_base_children` instead"
+            )
+        else:
+            super().set_base_data(value)
+
+    def serialize(self):
+        header = {}
+        frames = []
+        header["type-serialized"] = pickle.dumps(type(self))
+        header["dtype"] = pickle.dumps(self.dtype)
+        header["null_count"] = self.null_count
+        header["size"] = self.size
+
+        frames = []
+        sub_headers = []
+
+        for item in self.children:
+            sheader, sframes = item.serialize()
+            sub_headers.append(sheader)
+            frames.extend(sframes)
+
+        if self.null_count > 0:
+            frames.append(self.mask)
+
+        header["subheaders"] = sub_headers
+        header["frame_count"] = len(frames)
+
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+
+        # Get null mask
+        if header["null_count"] > 0:
+            mask = Buffer(frames[-1])
+        else:
+            mask = None
+
+        # Deserialize child columns
+        children = []
+        f = 0
+        for h in header["subheaders"]:
+            fcount = h["frame_count"]
+            child_frames = frames[f : f + fcount]
+            column_type = pickle.loads(h["type-serialized"])
+            children.append(column_type.deserialize(h, child_frames))
+            f += fcount
+
+        # Materialize list column
+        return column.build_column(
+            data=None,
+            dtype=pickle.loads(header["dtype"]),
+            mask=mask,
+            children=tuple(children),
+            size=header["size"],
         )
 
 

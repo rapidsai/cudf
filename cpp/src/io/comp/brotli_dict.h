@@ -76,8 +76,8 @@ struct brotli_dictionary_s {
   uint8_t data[122784];
 };
 
-#define BROTLI_MIN_DICTIONARY_WORD_LENGTH 4
-#define BROTLI_MAX_DICTIONARY_WORD_LENGTH 24
+constexpr int brotli_min_dictionary_word_length = 4;
+constexpr int brotli_max_dictionary_word_length = 24;
 
 const brotli_dictionary_s *get_brotli_dictionary(void);
 

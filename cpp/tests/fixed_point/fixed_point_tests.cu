@@ -31,6 +31,7 @@
 #include <numeric>
 #include <type_traits>
 #include <vector>
+#include "cudf_test/column_utilities.hpp"
 
 using namespace numeric;
 
@@ -60,9 +61,9 @@ TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXConstruction)
   EXPECT_EQ(1, static_cast<double>(num0));
   EXPECT_EQ(1.2, static_cast<double>(num1));
   EXPECT_EQ(1.23, static_cast<double>(num2));
-  EXPECT_EQ(1.235, static_cast<double>(num3));    // rounds up
-  EXPECT_EQ(1.2346, static_cast<double>(num4));   // rounds up
-  EXPECT_EQ(1.23457, static_cast<double>(num5));  // rounds up
+  EXPECT_EQ(1.234, static_cast<double>(num3));
+  EXPECT_EQ(1.2345, static_cast<double>(num4));
+  EXPECT_EQ(1.23456, static_cast<double>(num5));
   EXPECT_EQ(1.234567, static_cast<double>(num6));
 }
 
@@ -81,9 +82,9 @@ TYPED_TEST(FixedPointTestBothReps, SimpleNegativeDecimalXXConstruction)
   EXPECT_EQ(-1, static_cast<double>(num0));
   EXPECT_EQ(-1.2, static_cast<double>(num1));
   EXPECT_EQ(-1.23, static_cast<double>(num2));
-  EXPECT_EQ(-1.235, static_cast<double>(num3));    // rounds up
-  EXPECT_EQ(-1.2346, static_cast<double>(num4));   // rounds up
-  EXPECT_EQ(-1.23457, static_cast<double>(num5));  // rounds up
+  EXPECT_EQ(-1.234, static_cast<double>(num3));
+  EXPECT_EQ(-1.2345, static_cast<double>(num4));
+  EXPECT_EQ(-1.23456, static_cast<double>(num5));
   EXPECT_EQ(-1.234567, static_cast<double>(num6));
 }
 
@@ -103,10 +104,10 @@ TYPED_TEST(FixedPointTestBothReps, PaddedDecimalXXConstruction)
 
   EXPECT_EQ(1.1, static_cast<double>(a));
   EXPECT_EQ(1.01, static_cast<double>(b));
-  EXPECT_EQ(1.001, static_cast<double>(c));
+  EXPECT_EQ(1, static_cast<double>(c));  // intentional (inherited problem from floating point)
   EXPECT_EQ(1.0001, static_cast<double>(d));
   EXPECT_EQ(1.00001, static_cast<double>(e));
-  EXPECT_EQ(1.000001, static_cast<double>(f));
+  EXPECT_EQ(1, static_cast<double>(f));  // intentional (inherited problem from floating point)
 
   EXPECT_TRUE(1.000123 - static_cast<double>(x) < std::numeric_limits<double>::epsilon());
   EXPECT_EQ(0.000123, static_cast<double>(y));
@@ -130,9 +131,9 @@ TYPED_TEST(FixedPointTestBothReps, SimpleBinaryFPConstruction)
 
   EXPECT_EQ(10, static_cast<double>(num0));
   EXPECT_EQ(10, static_cast<double>(num1));
-  EXPECT_EQ(12, static_cast<double>(num2));
+  EXPECT_EQ(8, static_cast<double>(num2));
   EXPECT_EQ(8, static_cast<double>(num3));
-  EXPECT_EQ(16, static_cast<double>(num4));
+  EXPECT_EQ(0, static_cast<double>(num4));
 
   EXPECT_EQ(1, static_cast<double>(num5));
   EXPECT_EQ(1, static_cast<double>(num6));
@@ -149,7 +150,7 @@ TYPED_TEST(FixedPointTestBothReps, MoreSimpleBinaryFPConstruction)
   binary_fp num1{2.1, scale_type{-4}};
 
   EXPECT_EQ(1.25, static_cast<double>(num0));
-  EXPECT_EQ(2.125, static_cast<double>(num1));
+  EXPECT_EQ(2.0625, static_cast<double>(num1));
 }
 
 TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXMath)
@@ -207,23 +208,23 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXTrickyDivision)
   decimalXX TEN_1{10, scale_type{1}};
   decimalXX SIXTY_1{60, scale_type{1}};
 
-  EXPECT_EQ(static_cast<int32_t>(ONE_1), 0);   // round(1 / 10) = 0
-  EXPECT_EQ(static_cast<int32_t>(SIX_1), 10);  // round(6 / 10) = 10
+  EXPECT_EQ(static_cast<int32_t>(ONE_1), 0);
+  EXPECT_EQ(static_cast<int32_t>(SIX_1), 0);
   EXPECT_EQ(static_cast<int32_t>(TEN_0), 10);
   EXPECT_EQ(static_cast<int32_t>(SIXTY_1), 60);
 
-  EXPECT_EQ(SIXTY_1 / TEN_0, TEN_1);
+  EXPECT_EQ(SIXTY_1 / TEN_0, ONE_1);
   EXPECT_EQ(SIXTY_1 / TEN_1, SIX_0);
 
   decimalXX A{34.56, scale_type{-2}};
   decimalXX B{1.234, scale_type{-3}};
   decimalXX C{1, scale_type{-2}};
 
-  EXPECT_EQ(static_cast<int32_t>(A / B), 30);
+  EXPECT_EQ(static_cast<int32_t>(A / B), 20);
   EXPECT_EQ(static_cast<int32_t>((A * C) / B), 28);
 
   decimalXX n{28, scale_type{1}};
-  EXPECT_EQ(static_cast<int32_t>(n), 30);
+  EXPECT_EQ(static_cast<int32_t>(n), 20);
 }
 
 TYPED_TEST(FixedPointTestBothReps, DecimalXXRounding)
@@ -236,7 +237,7 @@ TYPED_TEST(FixedPointTestBothReps, DecimalXXRounding)
   decimalXX FOUR_0{4, scale_type{0}};
   decimalXX FIVE_0{5, scale_type{0}};
   decimalXX TEN_0{10, scale_type{0}};
-  decimalXX TEN_1{5, scale_type{1}};
+  decimalXX TEN_1{10, scale_type{1}};
 
   decimalXX FOURTEEN_0{14, scale_type{0}};
   decimalXX FIFTEEN_0{15, scale_type{0}};
@@ -286,9 +287,9 @@ TYPED_TEST(FixedPointTestBothReps, RescaledTest)
   decimalXX num0{1, scale_type{0}};
   decimalXX num1{1.2, scale_type{-1}};
   decimalXX num2{1.23, scale_type{-2}};
-  decimalXX num3{1.235, scale_type{-3}};
-  decimalXX num4{1.2346, scale_type{-4}};
-  decimalXX num5{1.23457, scale_type{-5}};
+  decimalXX num3{1.234, scale_type{-3}};
+  decimalXX num4{1.2345, scale_type{-4}};
+  decimalXX num5{1.23456, scale_type{-5}};
   decimalXX num6{1.234567, scale_type{-6}};
 
   EXPECT_EQ(num0, num6.rescaled(scale_type{0}));
@@ -308,10 +309,10 @@ TYPED_TEST(FixedPointTestBothReps, RescaledRounding)
   decimalXX num2{-1499, scale_type{0}};
   decimalXX num3{-1500, scale_type{0}};
 
-  EXPECT_EQ(2000, static_cast<TypeParam>(num0.rescaled(scale_type{3})));
+  EXPECT_EQ(1000, static_cast<TypeParam>(num0.rescaled(scale_type{3})));
   EXPECT_EQ(1000, static_cast<TypeParam>(num1.rescaled(scale_type{3})));
   EXPECT_EQ(-1000, static_cast<TypeParam>(num2.rescaled(scale_type{3})));
-  EXPECT_EQ(-2000, static_cast<TypeParam>(num3.rescaled(scale_type{3})));
+  EXPECT_EQ(-1000, static_cast<TypeParam>(num3.rescaled(scale_type{3})));
 }
 
 TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust)
@@ -572,12 +573,12 @@ TYPED_TEST(FixedPointTestBothReps, NoScaleOrWrongTypeID)
 
 TYPED_TEST(FixedPointTestBothReps, SimpleFixedPointColumnWrapper)
 {
-  using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
+  using RepType = cudf::device_storage_type_t<TypeParam>;
 
-  auto const a = cudf::test::fixed_point_column_wrapper<int32_t>{{11, 22, 33}, scale_type{-1}};
-  auto const b = cudf::test::fixed_point_column_wrapper<int32_t>{{110, 220, 330}, scale_type{-2}};
+  auto const a = cudf::test::fixed_point_column_wrapper<RepType>{{11, 22, 33}, scale_type{-1}};
+  auto const b = cudf::test::fixed_point_column_wrapper<RepType>{{110, 220, 330}, scale_type{-2}};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(a, b);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(a, b);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

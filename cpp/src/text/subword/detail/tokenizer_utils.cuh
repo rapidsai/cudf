@@ -18,6 +18,8 @@
 
 #include <text/subword/detail/cp_data.h>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <stdint.h>
 
 namespace nvtext {
@@ -60,7 +62,7 @@ struct update_strings_lengths_fn {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-codepoint_metadata_type const* get_codepoint_metadata(cudaStream_t stream);
+codepoint_metadata_type const* get_codepoint_metadata(rmm::cuda_stream_view stream);
 
 /**
  * @brief Retrieve the aux code point metadata table.
@@ -70,7 +72,7 @@ codepoint_metadata_type const* get_codepoint_metadata(cudaStream_t stream);
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-aux_codepoint_data_type const* get_aux_codepoint_data(cudaStream_t stream);
+aux_codepoint_data_type const* get_aux_codepoint_data(rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace nvtext

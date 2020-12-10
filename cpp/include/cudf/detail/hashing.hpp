@@ -17,19 +17,10 @@
 
 #include <cudf/hashing.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace detail {
-/**
- * @copydoc cudf::hash_partition
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
- */
-std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
-  table_view const& input,
-  std::vector<size_type> const& columns_to_hash,
-  int num_partitions,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
 
 /**
  * @copydoc cudf::hash
@@ -40,19 +31,26 @@ std::unique_ptr<column> hash(
   table_view const& input,
   hash_id hash_function                     = hash_id::HASH_MURMUR3,
   std::vector<uint32_t> const& initial_hash = {},
-  rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                       = 0);
+  uint32_t seed                             = 0,
+  rmm::cuda_stream_view stream              = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> murmur_hash3_32(
   table_view const& input,
   std::vector<uint32_t> const& initial_hash = {},
-  rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                       = 0);
+  rmm::cuda_stream_view stream              = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> md5_hash(
   table_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+std::unique_ptr<column> serial_murmur_hash3_32(
+  table_view const& input,
+  uint32_t seed                       = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace cudf

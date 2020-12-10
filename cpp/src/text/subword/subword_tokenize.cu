@@ -23,6 +23,8 @@
 #include <nvtext/subword_tokenize.hpp>
 #include <text/subword/detail/wordpiece_tokenizer.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/for_each.h>
 #include <thrust/transform_scan.h>
 
@@ -102,25 +104,19 @@ __global__ void kernel_compute_tensor_metadata(
 
   // write metadata
   if (token_idx == 0) {
-    auto const metadata_idx = absolute_row_id * 3;  // three metadata values per output row
-    metadata[metadata_idx]  = tensor_id;
-    if (row_within_tensor == 0)
-      metadata[metadata_idx + 1] = 0;
-    else
-      metadata[metadata_idx + 1] = (max_sequence_length - stride) / 2;
-    if (last_row_of_tensor) {
-      if (n_tokens_tensor < max_sequence_length)
-        metadata[metadata_idx + 2] = (n_tokens_tensor > 0) ? (n_tokens_tensor - 1) : 0;
-      else {
-        if (!do_truncate)
-          metadata[metadata_idx + 2] =
-            (max_sequence_length - stride) + (n_tokens_tensor - max_sequence_length) % stride - 1;
-        else
-          // truncate
-          metadata[metadata_idx + 2] = (max_sequence_length - 1);
-      }
-    } else
-      metadata[metadata_idx + 2] = max_sequence_length - (max_sequence_length - stride) / 2 - 1;
+    auto const metadata_idx    = absolute_row_id * 3;  // three metadata values per output row
+    metadata[metadata_idx]     = tensor_id;
+    metadata[metadata_idx + 1] = (row_within_tensor == 0) ? 0 : (max_sequence_length - stride) / 2;
+    metadata[metadata_idx + 2] = [&] {
+      if (!last_row_of_tensor) return max_sequence_length - (max_sequence_length - stride) / 2 - 1;
+      if (n_tokens_tensor <= max_sequence_length)  // we fit, all good
+        return (n_tokens_tensor > 0) ? (n_tokens_tensor - 1) : 0;
+      if (do_truncate) return (max_sequence_length - 1);
+
+      auto const final_row_value =
+        (max_sequence_length - stride) + (n_tokens_tensor - max_sequence_length) % stride;
+      return (final_row_value > 0) ? (final_row_value - 1) : 0;
+    }();
   }
 }
 
@@ -133,7 +129,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   bool do_lower_case,
                                   bool do_truncate,
                                   uint32_t max_rows_tensor,
-                                  cudaStream_t stream,
+                                  rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(stride <= max_sequence_length,
@@ -170,7 +166,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   auto d_offsets_per_tensor = offsets_per_tensor.data();
   auto const execpol        = rmm::exec_policy(stream);
   thrust::transform_exclusive_scan(
-    execpol->on(stream),
+    execpol->on(stream.value()),
     thrust::make_counting_iterator<cudf::size_type>(0),
     thrust::make_counting_iterator<cudf::size_type>(strings_count + 1),
     offsets_per_tensor.begin(),
@@ -190,7 +186,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   rmm::device_uvector<uint32_t> row2row_within_tensor(nrows_tensor_token_ids, stream);
   auto d_row2row_within_tensor = row2row_within_tensor.data();
   thrust::for_each_n(
-    execpol->on(stream),
+    execpol->on(stream.value()),
     thrust::make_counting_iterator<uint32_t>(0),
     strings_count,
     [d_offsets_per_tensor, d_row2tensor, d_row2row_within_tensor] __device__(auto idx) {
@@ -224,7 +220,10 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   constexpr int block_size = 256;
   cudf::detail::grid_1d const grid{
     static_cast<cudf::size_type>(nrows_tensor_token_ids * max_sequence_length), block_size};
-  kernel_compute_tensor_metadata<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
+  kernel_compute_tensor_metadata<<<grid.num_blocks,
+                                   grid.num_threads_per_block,
+                                   0,
+                                   stream.value()>>>(
     device_token_ids,
     device_offsets,
     d_row2tensor,

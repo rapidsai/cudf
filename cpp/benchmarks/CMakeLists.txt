@@ -1,6 +1,18 @@
-cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
-
-project(CUDF_BENCHS LANGUAGES C CXX CUDA)
+#=============================================================================
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#=============================================================================
 
 add_library(cudf_datagen STATIC
                    "${CMAKE_SOURCE_DIR}/benchmarks/common/generate_benchmark_input.cpp"
@@ -15,7 +27,8 @@ function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
     add_executable(${CMAKE_BENCH_NAME}
                    ${CMAKE_BENCH_SRC}
                    "${CMAKE_CURRENT_SOURCE_DIR}/synchronization/synchronization.cpp"
-                   "${CMAKE_SOURCE_DIR}/tests/utilities/base_fixture.cpp")
+                   "${CMAKE_SOURCE_DIR}/tests/utilities/base_fixture.cpp"
+                   "${CMAKE_SOURCE_DIR}/benchmarks/io/cuio_benchmark_common.cpp")
     set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_link_libraries(${CMAKE_BENCH_NAME} benchmark benchmark_main pthread cudf_datagen cudf)
     set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
@@ -44,6 +57,10 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${ARROW_INCLUDE_DIR}"
                     "${RMM_INCLUDE}"
                     "${CMAKE_CURRENT_SOURCE_DIR}")
+
+if(CONDA_INCLUDE_DIRS)
+  include_directories("${CONDA_INCLUDE_DIRS}")
+endif(CONDA_INCLUDE_DIRS)
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -110,6 +127,14 @@ set(APPLY_BOOLEAN_MASK_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_benchmark.cpp")
 
 ConfigureBench(APPLY_BOOLEAN_MASK_BENCH "${APPLY_BOOLEAN_MASK_BENCH_SRC}")
+
+###################################################################################################
+# - stream_compaction benchmark -------------------------------------------------------------------
+
+set(STREAM_COMPACTION_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_duplicates_benchmark.cpp")
+
+ConfigureBench(STREAM_COMPACTION_BENCH "${STREAM_COMPACTION_BENCH_SRC}")
 
 ###################################################################################################
 # - join benchmark --------------------------------------------------------------------------------

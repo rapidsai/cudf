@@ -3,16 +3,17 @@ import copy
 import functools
 import warnings
 from collections import OrderedDict, abc as abc
+import operator
 
 import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from nvtx import annotate
 from pandas.api.types import is_dict_like, is_dtype_equal
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.nvtx import annotate
 from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils import utils
 from cudf.utils.dtypes import (
@@ -206,8 +207,9 @@ class Frame(libcudf.table.Table):
 
     @classmethod
     @annotate("CONCAT", color="orange", domain="cudf_python")
-    def _concat(cls, objs, axis=0, ignore_index=False, sort=False):
-
+    def _concat(
+        cls, objs, axis=0, join="outer", ignore_index=False, sort=False
+    ):
         # shallow-copy the input DFs in case the same DF instance
         # is concatenated with itself
 
@@ -235,9 +237,50 @@ class Frame(libcudf.table.Table):
                     result_index_length += len(obj)
                     empty_has_index = empty_has_index or len(obj) > 0
 
-        # Get a list of the unique table column names
-        names = [name for f in objs for name in f._column_names]
-        names = OrderedDict.fromkeys(names).keys()
+        if join == "inner":
+            all_columns_list = [obj._column_names for obj in objs]
+            # get column names present in ALL objs
+            intersecting_columns = functools.reduce(
+                np.intersect1d, all_columns_list
+            )
+            # get column names not present in all objs
+            non_intersecting_columns = (
+                functools.reduce(operator.or_, (obj.columns for obj in objs))
+                ^ intersecting_columns
+            )
+            names = OrderedDict.fromkeys(intersecting_columns).keys()
+
+            if axis == 0:
+                if ignore_index and (
+                    num_empty_input_frames > 0
+                    or len(intersecting_columns) == 0
+                ):
+                    # When ignore_index is True and if there is
+                    # at least 1 empty dataframe and no
+                    # intersecting columns are present, an empty dataframe
+                    # needs to be returned just with an Index.
+                    empty_has_index = True
+                    num_empty_input_frames = len(objs)
+                    result_index_length = sum(len(obj) for obj in objs)
+
+                objs = [obj.copy(deep=False) for obj in objs]
+                # remove columns not present in all objs
+                for obj in objs:
+                    obj.drop(
+                        columns=non_intersecting_columns,
+                        inplace=True,
+                        errors="ignore",
+                    )
+        elif join == "outer":
+            # Get a list of the unique table column names
+            names = [name for f in objs for name in f._column_names]
+            names = OrderedDict.fromkeys(names).keys()
+
+        else:
+            raise ValueError(
+                "Only can inner (intersect) or outer (union) when joining"
+                "the other axis"
+            )
 
         try:
             if sort:
@@ -253,7 +296,6 @@ class Frame(libcudf.table.Table):
         # If any of the input frames have a non-empty index, include these
         # columns in the list of columns to concatenate, even if the input
         # frames are empty and `ignore_index=True`.
-
         columns = [
             (
                 []
@@ -320,7 +362,6 @@ class Frame(libcudf.table.Table):
         # to the result frame.
         if empty_has_index and num_empty_input_frames == len(objs):
             out._index = cudf.RangeIndex(result_index_length)
-
         # Reassign the categories for any categorical table cols
         _reassign_categories(
             categories, out._data, indices[first_data_column_position:]
@@ -345,7 +386,6 @@ class Frame(libcudf.table.Table):
             out.columns = objs[0].columns
         else:
             out.columns = names
-
         if not ignore_index:
             out._index.name = objs[0]._index.name
             out._index.names = objs[0]._index.names
@@ -711,9 +751,8 @@ class Frame(libcudf.table.Table):
             and (isinstance(other, float) and not np.isnan(other))
         ) and (self.dtype.type(other) != other):
             raise TypeError(
-                "Cannot safely cast non-equivalent {} to {}".format(
-                    type(other).__name__, self.dtype.name
-                )
+                f"Cannot safely cast non-equivalent "
+                f"{type(other).__name__} to {self.dtype.name}"
             )
 
         return (
@@ -780,9 +819,8 @@ class Frame(libcudf.table.Table):
                 return out
             else:
                 raise ValueError(
-                    "Inappropriate input {} and other {} combination".format(
-                        type(self), type(other)
-                    )
+                    f"Inappropriate input {type(self)} "
+                    f"and other {type(other)} combination"
                 )
 
     def where(self, cond, other=None, inplace=False):
@@ -840,7 +878,7 @@ class Frame(libcudf.table.Table):
 
         if isinstance(self, cudf.DataFrame):
             if hasattr(cond, "__cuda_array_interface__"):
-                cond = self.from_gpu_matrix(
+                cond = cudf.DataFrame(
                     cond, columns=self._data.names, index=self.index
                 )
             elif not isinstance(cond, cudf.DataFrame):
@@ -1050,6 +1088,53 @@ class Frame(libcudf.table.Table):
                 result.append(self._empty_like(keep_index))
 
         return result
+
+    def pipe(self, func, *args, **kwargs):
+        """
+        Apply ``func(self, *args, **kwargs)``.
+
+        Parameters
+        ----------
+        func : function
+            Function to apply to the Series/DataFrame/Index.
+            ``args``, and ``kwargs`` are passed into ``func``.
+            Alternatively a ``(callable, data_keyword)`` tuple where
+            ``data_keyword`` is a string indicating the keyword of
+            ``callable`` that expects the Series/DataFrame/Index.
+        args : iterable, optional
+            Positional arguments passed into ``func``.
+        kwargs : mapping, optional
+            A dictionary of keyword arguments passed into ``func``.
+
+        Returns
+        -------
+        object : the return type of ``func``.
+
+        Examples
+        --------
+
+        Use ``.pipe`` when chaining together functions that expect
+        Series, DataFrames or GroupBy objects. Instead of writing
+
+        >>> func(g(h(df), arg1=a), arg2=b, arg3=c)
+
+        You can write
+
+        >>> (df.pipe(h)
+        ...    .pipe(g, arg1=a)
+        ...    .pipe(func, arg2=b, arg3=c)
+        ... )
+
+        If you have a function that takes the data as (say) the second
+        argument, pass a tuple indicating which keyword expects the
+        data. For example, suppose ``f`` takes its data as ``arg2``:
+
+        >>> (df.pipe(h)
+        ...    .pipe(g, arg1=a)
+        ...    .pipe((func, 'arg2'), arg1=a, arg3=c)
+        ...  )
+        """
+        return cudf.core.common.pipe(self, func, *args, **kwargs)
 
     @annotate("SCATTER_BY_MAP", color="green", domain="cudf_python")
     def scatter_by_map(
@@ -1321,7 +1406,9 @@ class Frame(libcudf.table.Table):
         copy_data = self._data.copy(deep=True)
 
         for name in copy_data.keys():
-            if name in value and value[name] is not None:
+            if name in value and not libcudf.scalar._is_null_host_scalar(
+                value[name]
+            ):
                 copy_data[name] = copy_data[name].fillna(value[name],)
 
         result = self._from_table(Frame(copy_data, self._index))
@@ -1354,7 +1441,7 @@ class Frame(libcudf.table.Table):
             subset = (subset,)
         diff = set(subset) - set(self._data)
         if len(diff) != 0:
-            raise KeyError("columns {!r} do not exist".format(diff))
+            raise KeyError(f"columns {diff} do not exist")
         subset_cols = [
             name for name, col in self._data.items() if name in subset
         ]
@@ -1490,7 +1577,9 @@ class Frame(libcudf.table.Table):
             raise KeyError(method)
         method_enum = libcudf.sort.RankMethod[method.upper()]
         if na_option not in {"keep", "top", "bottom"}:
-            raise KeyError(na_option)
+            raise ValueError(
+                "na_option must be one of 'keep', 'top', or 'bottom'"
+            )
 
         # TODO code for selecting numeric columns
         source = self
@@ -1997,7 +2086,7 @@ class Frame(libcudf.table.Table):
             subset = (subset,)
         diff = set(subset) - set(self._data)
         if len(diff) != 0:
-            raise KeyError("columns {!r} do not exist".format(diff))
+            raise KeyError(f"columns {diff} do not exist")
         subset_cols = [name for name in self._column_names if name in subset]
         if len(subset_cols) == 0:
             return self.copy(deep=True)
@@ -2126,28 +2215,164 @@ class Frame(libcudf.table.Table):
         return self.__class__._from_table(Frame(data, self._index))
 
     def isnull(self):
-        """Identify missing values.
+        """
+        Identify missing values.
+
+        Return a boolean same-sized object indicating if
+        the values are ``<NA>``. ``<NA>`` values gets mapped to
+        ``True`` values. Everything else gets mapped to
+        ``False`` values. ``<NA>`` values include:
+
+        * Values where null mask is set.
+        * ``NaN`` in float dtype.
+        * ``NaT`` in datetime64 and timedelta64 types.
+
+        Characters such as empty strings ``''`` or
+        ``inf`` incase of float are not
+        considered ``<NA>`` values.
+
+        Returns
+        -------
+        DataFrame/Series/Index
+            Mask of bool values for each element in
+            the object that indicates whether an element is an NA value.
+
+        Examples
+        --------
+
+        Show which entries in a DataFrame are NA.
+
+        >>> import cudf
+        >>> import numpy as np
+        >>> import pandas as pd
+        >>> df = cudf.DataFrame({'age': [5, 6, np.NaN],
+        ...                    'born': [pd.NaT, pd.Timestamp('1939-05-27'),
+        ...                             pd.Timestamp('1940-04-25')],
+        ...                    'name': ['Alfred', 'Batman', ''],
+        ...                    'toy': [None, 'Batmobile', 'Joker']})
+        >>> df
+            age                        born    name        toy
+        0     5                        <NA>  Alfred       <NA>
+        1     6  1939-05-27 00:00:00.000000  Batman  Batmobile
+        2  <NA>  1940-04-25 00:00:00.000000              Joker
+        >>> df.isnull()
+            age   born   name    toy
+        0  False   True  False   True
+        1  False  False  False  False
+        2   True  False  False  False
+
+        Show which entries in a Series are NA.
+
+        >>> ser = cudf.Series([5, 6, np.NaN, np.inf, -np.inf])
+        >>> ser
+        0     5.0
+        1     6.0
+        2    <NA>
+        3     Inf
+        4    -Inf
+        dtype: float64
+        >>> ser.isnull()
+        0    False
+        1    False
+        2     True
+        3    False
+        4    False
+        dtype: bool
+
+        Show which entries in an Index are NA.
+
+        >>> idx = cudf.Index([1, 2, None, np.NaN, 0.32, np.inf])
+        >>> idx
+        Float64Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
+        >>> idx.isnull()
+        GenericIndex([False, False, True, True, False, False], dtype='bool')
         """
         data_columns = (col.isnull() for col in self._columns)
         data = zip(self._column_names, data_columns)
         return self.__class__._from_table(Frame(data, self._index))
 
-    def isna(self):
-        """Identify missing values. Alias for `isnull`
-        """
-        return self.isnull()
+    # Alias for isnull
+    isna = isnull
 
     def notnull(self):
-        """Identify non-missing values.
+        """
+        Identify non-missing values.
+
+        Return a boolean same-sized object indicating if
+        the values are not ``<NA>``. Non-missing values get
+        mapped to ``True``. ``<NA>`` values get mapped to
+        ``False`` values. ``<NA>`` values include:
+
+        * Values where null mask is set.
+        * ``NaN`` in float dtype.
+        * ``NaT`` in datetime64 and timedelta64 types.
+
+        Characters such as empty strings ``''`` or
+        ``inf`` incase of float are not
+        considered ``<NA>`` values.
+
+        Returns
+        -------
+        DataFrame/Series/Index
+            Mask of bool values for each element in
+            the object that indicates whether an element is not an NA value.
+
+        Examples
+        --------
+
+        Show which entries in a DataFrame are NA.
+
+        >>> import cudf
+        >>> import numpy as np
+        >>> import pandas as pd
+        >>> df = cudf.DataFrame({'age': [5, 6, np.NaN],
+        ...                    'born': [pd.NaT, pd.Timestamp('1939-05-27'),
+        ...                             pd.Timestamp('1940-04-25')],
+        ...                    'name': ['Alfred', 'Batman', ''],
+        ...                    'toy': [None, 'Batmobile', 'Joker']})
+        >>> df
+            age                        born    name        toy
+        0     5                        <NA>  Alfred       <NA>
+        1     6  1939-05-27 00:00:00.000000  Batman  Batmobile
+        2  <NA>  1940-04-25 00:00:00.000000              Joker
+        >>> df.notnull()
+             age   born  name    toy
+        0   True  False  True  False
+        1   True   True  True   True
+        2  False   True  True   True
+
+        Show which entries in a Series are NA.
+
+        >>> ser = cudf.Series([5, 6, np.NaN, np.inf, -np.inf])
+        >>> ser
+        0     5.0
+        1     6.0
+        2    <NA>
+        3     Inf
+        4    -Inf
+        dtype: float64
+        >>> ser.notnull()
+        0     True
+        1     True
+        2    False
+        3     True
+        4     True
+        dtype: bool
+
+        Show which entries in an Index are NA.
+
+        >>> idx = cudf.Index([1, 2, None, np.NaN, 0.32, np.inf])
+        >>> idx
+        Float64Index([1.0, 2.0, <NA>, <NA>, 0.32, Inf], dtype='float64')
+        >>> idx.notnull()
+        GenericIndex([True, True, False, False, True, True], dtype='bool')
         """
         data_columns = (col.notnull() for col in self._columns)
         data = zip(self._column_names, data_columns)
         return self.__class__._from_table(Frame(data, self._index))
 
-    def notna(self):
-        """Identify non-missing values. Alias for `notnull`.
-        """
-        return self.notnull()
+    # Alias for notnull
+    notna = notnull
 
     def interleave_columns(self):
         """
@@ -2895,9 +3120,7 @@ class Frame(libcudf.table.Table):
 
         # must actually support the requested merge type
         if how not in ["left", "inner", "outer", "leftanti", "leftsemi"]:
-            raise NotImplementedError(
-                "{!r} merge not supported yet".format(how)
-            )
+            raise NotImplementedError(f"{how} merge not supported yet")
 
         # Passing 'on' with 'left_on' or 'right_on' is potentially ambiguous
         if on:
@@ -2938,14 +3161,14 @@ class Frame(libcudf.table.Table):
             on_keys = [on] if not isinstance(on, list) else on
             for key in on_keys:
                 if not (key in lhs._data.keys() and key in rhs._data.keys()):
-                    raise KeyError("Key {} not in both operands".format(on))
+                    raise KeyError(f"Key {on} not in both operands")
         else:
             for key in left_on:
                 if key not in lhs._data.keys():
-                    raise KeyError('Key "{}" not in left operand'.format(key))
+                    raise KeyError(f'Key "{key}" not in left operand')
             for key in right_on:
                 if key not in rhs._data.keys():
-                    raise KeyError('Key "{}" not in right operand'.format(key))
+                    raise KeyError(f'Key "{key}" not in right operand')
 
     def _merge(
         self,
@@ -3111,19 +3334,16 @@ def _get_replacement_values(to_replace, replacement, col_name, column):
             # If both are non-scalar
             if len(to_replace) != len(replacement):
                 raise ValueError(
-                    "Replacement lists must be "
-                    "of same length."
-                    "Expected {}, got {}.".format(
-                        len(to_replace), len(replacement)
-                    )
+                    f"Replacement lists must be "
+                    f"of same length."
+                    f"Expected {len(to_replace)}, got {len(replacement)}."
                 )
     else:
         if not is_scalar(replacement):
             raise TypeError(
-                "Incompatible types '{}' and '{}' "
-                "for *to_replace* and *replacement*.".format(
-                    type(to_replace).__name__, type(replacement).__name__
-                )
+                f"Incompatible types '{type(to_replace).__name__}' "
+                f"and '{type(replacement).__name__}' "
+                f"for *to_replace* and *replacement*."
             )
         to_replace = [to_replace]
         replacement = [replacement]

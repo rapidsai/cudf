@@ -1,6 +1,18 @@
-﻿cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
-
-project(CUDF_TESTS LANGUAGES C CXX CUDA)
+﻿#=============================================================================
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#=============================================================================
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -264,9 +276,19 @@ ConfigureTest(FIXED_POINT_TEST "${FIXED_POINT_TEST_SRC}")
 # - unary tests -----------------------------------------------------------------------------------
 
 set(UNARY_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/unary/unary_ops_test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/unary/math_ops_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/unary/unary_ops_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/unary/cast_tests.cpp")
 
 ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
+
+###################################################################################################
+# - round tests -----------------------------------------------------------------------------------
+
+set(ROUND_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/round/round_tests.cpp")
+
+ConfigureTest(ROUND_TEST "${ROUND_TEST_SRC}")
 
 ###################################################################################################
 # - binary tests ----------------------------------------------------------------------------------
@@ -357,6 +379,7 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_struct_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/detail_gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_list_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cpp"
@@ -429,6 +452,7 @@ ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
 
 set(MERGE_TEST_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_test.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_dictionary_test.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge_string_test.cpp")
 
 ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")

@@ -18,11 +18,17 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 
+ctypedef const scalar constscalar
+
 cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
+    ctypedef enum out_of_bounds_policy:
+        NULLIFY 'cudf::out_of_bounds_policy::NULLIFY'
+        DONT_CHECK 'cudf::out_of_bounds_policy::DONT_CHECK'
+
     cdef unique_ptr[table] gather (
         const table_view& source_table,
         const column_view& gather_map,
-        bool bounds_check
+        out_of_bounds_policy policy
     ) except +
 
     cdef unique_ptr[column] shift(
@@ -39,7 +45,7 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
     ) except +
 
     cdef unique_ptr[table] scatter (
-        vector[unique_ptr[scalar]] source_scalars,
+        vector[reference_wrapper[constscalar]] source_scalars,
         column_view indices,
         table_view target,
         bool bounds_check
@@ -145,7 +151,7 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
     ) except +
 
     cdef unique_ptr[table] boolean_mask_scatter (
-        vector[reference_wrapper[scalar]] input,
+        vector[reference_wrapper[constscalar]] input,
         table_view target,
         column_view boolean_mask
     ) except +

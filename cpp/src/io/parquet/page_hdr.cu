@@ -14,14 +14,18 @@
  * limitations under the License.
  */
 
+#include <thrust/tuple.h>
 #include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
 namespace parquet {
 namespace gpu {
 // Minimal thrift implementation for parsing page headers
+// https://github.com/apache/thrift/blob/master/doc/specs/thrift-compact-protocol.md
 
 static const __device__ __constant__ uint8_t g_list2struct[16] = {0,
                                                                   1,
@@ -50,6 +54,13 @@ struct byte_stream_s {
   ColumnChunkDesc ck;
 };
 
+/**
+ * @brief Get current byte from the byte stream
+ *
+ * @param[in] bs Byte stream
+ *
+ * @return Current byte pointed to by the byte stream
+ */
 inline __device__ unsigned int getb(byte_stream_s *bs)
 {
   return (bs->cur < bs->end) ? *bs->cur++ : 0;
@@ -61,6 +72,17 @@ inline __device__ void skip_bytes(byte_stream_s *bs, size_t bytecnt)
   bs->cur += bytecnt;
 }
 
+/**
+ * @brief Decode unsigned integer from a byte stream using VarInt encoding
+ *
+ * Concatenate least significant 7 bits of each byte to form a 32 bit
+ * integer. Most significant bit of each byte indicates if more bytes
+ * are to be used to form the number.
+ *
+ * @param[in] bs Byte stream
+ *
+ * @return Decoded 32 bit integer
+ */
 __device__ uint32_t get_u32(byte_stream_s *bs)
 {
   uint32_t v = 0, l = 0, c;
@@ -72,13 +94,24 @@ __device__ uint32_t get_u32(byte_stream_s *bs)
   return v;
 }
 
+/**
+ * @brief Decode signed integer from a byte stream using zigzag encoding
+ *
+ * The number n encountered in a byte stream translates to
+ * -1^(n%2) * ceil(n/2), with the exception of 0 which remains the same.
+ * i.e. 0, 1, 2, 3, 4, 5 etc convert to 0, -1, 1, -2, 2 respectively.
+ *
+ * @param[in] bs Byte stream
+ *
+ * @return Decoded 32 bit integer
+ */
 inline __device__ int32_t get_i32(byte_stream_s *bs)
 {
   uint32_t u = get_u32(bs);
   return (int32_t)((u >> 1u) ^ -(int32_t)(u & 1));
 }
 
-__device__ void skip_struct_field(byte_stream_s *bs, int t)
+__device__ void skip_struct_field(byte_stream_s *bs, int field_type)
 {
   int struct_depth = 0;
   int rep_cnt      = 0;
@@ -87,16 +120,16 @@ __device__ void skip_struct_field(byte_stream_s *bs, int t)
     if (rep_cnt != 0) {
       rep_cnt--;
     } else if (struct_depth != 0) {
-      int c;
+      unsigned int c;
       do {
         c = getb(bs);
         if (!c) --struct_depth;
       } while (!c && struct_depth);
       if (!struct_depth) break;
-      t = c & 0xf;
+      field_type = c & 0xf;
       if (!(c & 0xf0)) get_i32(bs);
     }
-    switch (t) {
+    switch (field_type) {
       case ST_FLD_TRUE:
       case ST_FLD_FALSE: break;
       case ST_FLD_I16:
@@ -107,11 +140,11 @@ __device__ void skip_struct_field(byte_stream_s *bs, int t)
       case ST_FLD_BINARY: skip_bytes(bs, get_u32(bs)); break;
       case ST_FLD_LIST:
       case ST_FLD_SET: {  // NOTE: skipping a list of lists is not handled
-        int c = getb(bs);
-        int n = c >> 4;
+        auto const c = getb(bs);
+        int n        = c >> 4;
         if (n == 0xf) n = get_u32(bs);
-        t = g_list2struct[c & 0xf];
-        if (t == ST_FLD_STRUCT)
+        field_type = g_list2struct[c & 0xf];
+        if (field_type == ST_FLD_STRUCT)
           struct_depth += n;
         else
           rep_cnt = n;
@@ -121,70 +154,179 @@ __device__ void skip_struct_field(byte_stream_s *bs, int t)
   } while (rep_cnt || struct_depth);
 }
 
-#define PARQUET_BEGIN_STRUCT(fn)         \
-  __device__ bool fn(byte_stream_s *bs)  \
-  {                                      \
-    int fld = 0;                         \
-    for (;;) {                           \
-      int c, t, f;                       \
-      c = getb(bs);                      \
-      if (!c) break;                     \
-      f   = c >> 4;                      \
-      t   = c & 0xf;                     \
-      fld = (f) ? fld + f : get_i32(bs); \
-      switch (fld) {
-#define PARQUET_FLD_ENUM(id, m, mt)    \
-  case id:                             \
-    bs->m = (mt)get_i32(bs);           \
-    if (t != ST_FLD_I32) return false; \
-    break;
+/**
+ * @brief Functor to set value to 32 bit integer read from byte stream
+ *
+ * @return True if field type is not int32
+ */
+struct ParquetFieldInt32 {
+  int field;
+  int32_t &val;
 
-#define PARQUET_FLD_INT32(id, m)       \
-  case id:                             \
-    bs->m = get_i32(bs);               \
-    if (t != ST_FLD_I32) return false; \
-    break;
+  __device__ ParquetFieldInt32(int f, int32_t &v) : field(f), val(v) {}
 
-#define PARQUET_FLD_STRUCT(id, m)                   \
-  case id:                                          \
-    if (t != ST_FLD_STRUCT || !m(bs)) return false; \
-    break;
+  inline __device__ bool operator()(byte_stream_s *bs, int field_type)
+  {
+    val = get_i32(bs);
+    return (field_type != ST_FLD_I32);
+  }
+};
 
-#define PARQUET_END_STRUCT()                \
-  default: skip_struct_field(bs, t); break; \
-    }                                       \
-    }                                       \
-    return true;                            \
+/**
+ * @brief Functor to set value to enum read from byte stream
+ *
+ * @return True if field type is not int32
+ */
+template <typename Enum>
+struct ParquetFieldEnum {
+  int field;
+  Enum &val;
+
+  __device__ ParquetFieldEnum(int f, Enum &v) : field(f), val(v) {}
+
+  inline __device__ bool operator()(byte_stream_s *bs, int field_type)
+  {
+    val = static_cast<Enum>(get_i32(bs));
+    return (field_type != ST_FLD_I32);
+  }
+};
+
+/**
+ * @brief Functor to run operator on byte stream
+ *
+ * @return True if field type is not struct type or if the calling operator
+ * fails
+ */
+template <typename Operator>
+struct ParquetFieldStruct {
+  int field;
+  Operator op;
+
+  __device__ ParquetFieldStruct(int f) : field(f) {}
+
+  inline __device__ bool operator()(byte_stream_s *bs, int field_type)
+  {
+    return ((field_type != ST_FLD_STRUCT) || !op(bs));
+  }
+};
+
+/**
+ * @brief Functor to run an operator
+ *
+ * The purpose of this functor is to replace a switch case. If the field in
+ * the argument is equal to the field specified in any element of the tuple
+ * of operators then it is run with the byte stream and field type arguments.
+ *
+ * If the field does not match any of the functors then skip_struct_field is
+ * called over the byte stream.
+ *
+ * @return Return value of the selected operator or false if no operator
+ * matched the field value
+ */
+template <int index>
+struct FunctionSwitchImpl {
+  template <typename... Operator>
+  static inline __device__ bool run(byte_stream_s *bs,
+                                    int field_type,
+                                    const int &field,
+                                    thrust::tuple<Operator...> &ops)
+  {
+    if (field == thrust::get<index>(ops).field) {
+      return thrust::get<index>(ops)(bs, field_type);
+    } else {
+      return FunctionSwitchImpl<index - 1>::run(bs, field_type, field, ops);
     }
+  }
+};
 
-PARQUET_BEGIN_STRUCT(gpuParseDataPageHeader)
-PARQUET_FLD_INT32(1, page.num_input_values)
-PARQUET_FLD_ENUM(2, page.encoding, Encoding);
-PARQUET_FLD_ENUM(3, page.definition_level_encoding, Encoding);
-PARQUET_FLD_ENUM(4, page.repetition_level_encoding, Encoding);
-PARQUET_END_STRUCT()
+template <>
+struct FunctionSwitchImpl<0> {
+  template <typename... Operator>
+  static inline __device__ bool run(byte_stream_s *bs,
+                                    int field_type,
+                                    const int &field,
+                                    thrust::tuple<Operator...> &ops)
+  {
+    if (field == thrust::get<0>(ops).field) {
+      return thrust::get<0>(ops)(bs, field_type);
+    } else {
+      skip_struct_field(bs, field_type);
+      return false;
+    }
+  }
+};
 
-PARQUET_BEGIN_STRUCT(gpuParseDictionaryPageHeader)
-PARQUET_FLD_INT32(1, page.num_input_values)
-PARQUET_FLD_ENUM(2, page.encoding, Encoding);
-PARQUET_END_STRUCT()
+/**
+ * @brief Function to parse page header based on the tuple of functors provided
+ *
+ * Bytes are read from the byte stream and the field delta and field type are
+ * matched up against user supplied reading functors. If they match then the
+ * corresponding values are written to references pointed to by the functors.
+ *
+ * @return Returns false if an unexpected field is encountered while reading
+ * byte stream. Otherwise true is returned.
+ */
+template <typename... Operator>
+inline __device__ bool parse_header(thrust::tuple<Operator...> &op, byte_stream_s *bs)
+{
+  constexpr int index = thrust::tuple_size<thrust::tuple<Operator...>>::value - 1;
+  int field           = 0;
+  while (true) {
+    auto const current_byte = getb(bs);
+    if (!current_byte) break;
+    int const field_delta = current_byte >> 4;
+    int const field_type  = current_byte & 0xf;
+    field                 = field_delta ? field + field_delta : get_i32(bs);
+    bool exit_function    = FunctionSwitchImpl<index>::run(bs, field_type, field, op);
+    if (exit_function) { return false; }
+  }
+  return true;
+}
 
-PARQUET_BEGIN_STRUCT(gpuParseDataPageHeaderV2)
-PARQUET_FLD_INT32(1, page.num_input_values)
-PARQUET_FLD_INT32(3, page.num_rows)
-PARQUET_FLD_ENUM(4, page.encoding, Encoding);
-PARQUET_FLD_ENUM(5, page.definition_level_encoding, Encoding);
-PARQUET_FLD_ENUM(6, page.repetition_level_encoding, Encoding);
-PARQUET_END_STRUCT()
+struct gpuParseDataPageHeader {
+  __device__ bool operator()(byte_stream_s *bs)
+  {
+    auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
+                                 ParquetFieldEnum<Encoding>(2, bs->page.encoding),
+                                 ParquetFieldEnum<Encoding>(3, bs->page.definition_level_encoding),
+                                 ParquetFieldEnum<Encoding>(4, bs->page.repetition_level_encoding));
+    return parse_header(op, bs);
+  }
+};
 
-PARQUET_BEGIN_STRUCT(gpuParsePageHeader)
-PARQUET_FLD_ENUM(1, page_type, PageType)
-PARQUET_FLD_INT32(2, page.uncompressed_page_size)
-PARQUET_FLD_INT32(3, page.compressed_page_size)
-PARQUET_FLD_STRUCT(5, gpuParseDataPageHeader)
-PARQUET_FLD_STRUCT(7, gpuParseDictionaryPageHeader)
-PARQUET_FLD_STRUCT(8, gpuParseDataPageHeaderV2)
-PARQUET_END_STRUCT()
+struct gpuParseDictionaryPageHeader {
+  __device__ bool operator()(byte_stream_s *bs)
+  {
+    auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
+                                 ParquetFieldEnum<Encoding>(2, bs->page.encoding));
+    return parse_header(op, bs);
+  }
+};
+
+struct gpuParseDataPageHeaderV2 {
+  __device__ bool operator()(byte_stream_s *bs)
+  {
+    auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
+                                 ParquetFieldInt32(3, bs->page.num_rows),
+                                 ParquetFieldEnum<Encoding>(4, bs->page.encoding),
+                                 ParquetFieldEnum<Encoding>(5, bs->page.definition_level_encoding),
+                                 ParquetFieldEnum<Encoding>(6, bs->page.repetition_level_encoding));
+    return parse_header(op, bs);
+  }
+};
+
+struct gpuParsePageHeader {
+  __device__ bool operator()(byte_stream_s *bs)
+  {
+    auto op = thrust::make_tuple(ParquetFieldEnum<PageType>(1, bs->page_type),
+                                 ParquetFieldInt32(2, bs->page.uncompressed_page_size),
+                                 ParquetFieldInt32(3, bs->page.compressed_page_size),
+                                 ParquetFieldStruct<gpuParseDataPageHeader>(5),
+                                 ParquetFieldStruct<gpuParseDictionaryPageHeader>(7),
+                                 ParquetFieldStruct<gpuParseDataPageHeaderV2>(8));
+    return parse_header(op, bs);
+  }
+};
 
 /**
  * @brief Kernel for outputting page headers from the specified column chunks
@@ -196,20 +338,16 @@ PARQUET_END_STRUCT()
 extern "C" __global__ void __launch_bounds__(128)
   gpuDecodePageHeaders(ColumnChunkDesc *chunks, int32_t num_chunks)
 {
+  gpuParsePageHeader parse_page_header;
   __shared__ byte_stream_s bs_g[4];
 
-  int t                   = threadIdx.x & 0x1f;
-  int chunk               = (blockIdx.x << 2) + (threadIdx.x >> 5);
-  byte_stream_s *const bs = &bs_g[threadIdx.x >> 5];
+  int lane_id             = threadIdx.x % 32;
+  int chunk               = (blockIdx.x * 4) + (threadIdx.x / 32);
+  byte_stream_s *const bs = &bs_g[threadIdx.x / 32];
 
-  if (chunk < num_chunks) {
-    // NOTE: Assumes that sizeof(ColumnChunkDesc) <= 128
-    if (t < sizeof(ColumnChunkDesc) / sizeof(uint32_t)) {
-      reinterpret_cast<uint32_t *>(&bs->ck)[t] =
-        reinterpret_cast<const uint32_t *>(&chunks[chunk])[t];
-    }
-  }
+  if (chunk < num_chunks and lane_id == 0) bs->ck = chunks[chunk];
   __syncthreads();
+
   if (chunk < num_chunks) {
     size_t num_values, values_found;
     uint32_t data_page_count       = 0;
@@ -218,7 +356,7 @@ extern "C" __global__ void __launch_bounds__(128)
     int32_t num_dict_pages = bs->ck.num_dict_pages;
     PageInfo *page_info;
 
-    if (!t) {
+    if (!lane_id) {
       bs->base = bs->cur      = bs->ck.compressed_data;
       bs->end                 = bs->base + bs->ck.compressed_size;
       bs->page.chunk_idx      = chunk;
@@ -234,17 +372,17 @@ extern "C" __global__ void __launch_bounds__(128)
     num_dict_pages = bs->ck.num_dict_pages;
     max_num_pages  = (page_info) ? bs->ck.max_num_pages : 0;
     values_found   = 0;
-    SYNCWARP();
+    __syncwarp();
     while (values_found < num_values && bs->cur < bs->end) {
       int index_out = -1;
 
-      if (t == 0) {
+      if (lane_id == 0) {
         // this computation is only valid for flat schemas. for nested schemas,
         // they will be recomputed in the preprocess step by examining repetition and
         // definition levels
         bs->page.chunk_row += bs->page.num_rows;
         bs->page.num_rows = 0;
-        if (gpuParsePageHeader(bs) && bs->page.compressed_page_size >= 0) {
+        if (parse_page_header(bs) && bs->page.compressed_page_size >= 0) {
           switch (bs->page_type) {
             case PageType::DATA_PAGE:
               // this computation is only valid for flat schemas. for nested schemas,
@@ -270,18 +408,13 @@ extern "C" __global__ void __launch_bounds__(128)
           bs->cur = bs->end;
         }
       }
-      index_out = SHFL0(index_out);
-      if (index_out >= 0 && index_out < max_num_pages) {
-        // NOTE: Assumes that sizeof(PageInfo) <= 128
-        if (t < sizeof(PageInfo) / sizeof(uint32_t)) {
-          reinterpret_cast<uint32_t *>(page_info + index_out)[t] =
-            reinterpret_cast<const uint32_t *>(&bs->page)[t];
-        }
-      }
-      num_values = SHFL0(num_values);
-      SYNCWARP();
+      index_out = shuffle(index_out);
+      if (index_out >= 0 && index_out < max_num_pages && lane_id == 0)
+        page_info[index_out] = bs->page;
+      num_values = shuffle(num_values);
+      __syncwarp();
     }
-    if (t == 0) {
+    if (lane_id == 0) {
       chunks[chunk].num_data_pages = data_page_count;
       chunks[chunk].num_dict_pages = dictionary_page_count;
     }
@@ -305,18 +438,14 @@ extern "C" __global__ void __launch_bounds__(128)
 {
   __shared__ ColumnChunkDesc chunk_g[4];
 
-  int t                     = threadIdx.x & 0x1f;
-  int chunk                 = (blockIdx.x << 2) + (threadIdx.x >> 5);
-  ColumnChunkDesc *const ck = &chunk_g[threadIdx.x >> 5];
-  if (chunk < num_chunks) {
-    // NOTE: Assumes that sizeof(ColumnChunkDesc) <= 128
-    if (t < sizeof(ColumnChunkDesc) / sizeof(uint32_t)) {
-      reinterpret_cast<uint32_t *>(ck)[t] = reinterpret_cast<const uint32_t *>(&chunks[chunk])[t];
-    }
-  }
+  int lane_id               = threadIdx.x % 32;
+  int chunk                 = (blockIdx.x * 4) + (threadIdx.x / 32);
+  ColumnChunkDesc *const ck = &chunk_g[threadIdx.x / 32];
+  if (chunk < num_chunks and lane_id == 0) *ck = chunks[chunk];
   __syncthreads();
+
   if (chunk >= num_chunks) { return; }
-  if (!t && ck->num_dict_pages > 0 && ck->str_dict_index) {
+  if (!lane_id && ck->num_dict_pages > 0 && ck->str_dict_index) {
     // Data type to describe a string
     nvstrdesc_s *dict_index = ck->str_dict_index;
     const uint8_t *dict     = ck->page_info[0].page_data;
@@ -341,24 +470,22 @@ extern "C" __global__ void __launch_bounds__(128)
   }
 }
 
-cudaError_t __host__ DecodePageHeaders(ColumnChunkDesc *chunks,
-                                       int32_t num_chunks,
-                                       cudaStream_t stream)
+void __host__ DecodePageHeaders(ColumnChunkDesc *chunks,
+                                int32_t num_chunks,
+                                rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
-  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream>>>(chunks, num_chunks);
-  return cudaSuccess;
+  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks);
 }
 
-cudaError_t __host__ BuildStringDictionaryIndex(ColumnChunkDesc *chunks,
-                                                int32_t num_chunks,
-                                                cudaStream_t stream)
+void __host__ BuildStringDictionaryIndex(ColumnChunkDesc *chunks,
+                                         int32_t num_chunks,
+                                         rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
-  gpuBuildStringDictionaryIndex<<<dim_grid, dim_block, 0, stream>>>(chunks, num_chunks);
-  return cudaSuccess;
+  gpuBuildStringDictionaryIndex<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks);
 }
 
 }  // namespace gpu

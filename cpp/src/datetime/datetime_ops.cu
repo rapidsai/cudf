@@ -19,6 +19,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/datetime.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
@@ -26,6 +27,7 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace datetime {
@@ -135,16 +137,16 @@ struct launch_functor {
 
   template <typename Element>
   typename std::enable_if_t<!cudf::is_timestamp_t<Element>::value, void> operator()(
-    cudaStream_t stream) const
+    rmm::cuda_stream_view stream) const
   {
     CUDF_FAIL("Cannot extract datetime component from non-timestamp column.");
   }
 
   template <typename Timestamp>
   typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void> operator()(
-    cudaStream_t stream) const
+    rmm::cuda_stream_view stream) const
   {
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
+    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                       input.begin<Timestamp>(),
                       input.end<Timestamp>(),
                       output.begin<OutputColT>(),
@@ -155,7 +157,7 @@ struct launch_functor {
 // Create an output column by applying the functor to every element from the input column
 template <typename TransformFunctor, cudf::type_id OutputColCudfT>
 std::unique_ptr<column> apply_datetime_op(column_view const& column,
-                                          cudaStream_t stream,
+                                          rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(is_timestamp(column.type()), "Column type should be timestamp");
@@ -165,8 +167,12 @@ std::unique_ptr<column> apply_datetime_op(column_view const& column,
   // Return an empty column if source column is empty
   if (size == 0) return make_empty_column(output_col_type);
 
-  auto output = make_fixed_width_column(
-    output_col_type, size, copy_bitmask(column, stream, mr), column.null_count(), stream, mr);
+  auto output = make_fixed_width_column(output_col_type,
+                                        size,
+                                        cudf::detail::copy_bitmask(column, stream, mr),
+                                        column.null_count(),
+                                        stream,
+                                        mr);
   auto launch =
     launch_functor<TransformFunctor, typename cudf::id_to_type_impl<OutputColCudfT>::type>{
       column, static_cast<mutable_column_view>(*output)};
@@ -204,16 +210,16 @@ struct add_calendrical_months_functor {
 
   template <typename Element>
   typename std::enable_if_t<!cudf::is_timestamp_t<Element>::value, void> operator()(
-    cudaStream_t stream) const
+    rmm::cuda_stream_view stream) const
   {
     CUDF_FAIL("Cannot extract datetime component from non-timestamp column.");
   }
 
   template <typename Timestamp>
   typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void> operator()(
-    cudaStream_t stream) const
+    rmm::cuda_stream_view stream) const
   {
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
+    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                       timestamp_column.begin<Timestamp>(),
                       timestamp_column.end<Timestamp>(),
                       months_column.begin<int16_t>(),
@@ -246,7 +252,7 @@ struct add_calendrical_months_functor {
 
 std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_column,
                                                column_view const& months_column,
-                                               cudaStream_t stream,
+                                               rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(is_timestamp(timestamp_column.type()), "Column type should be timestamp");
@@ -260,8 +266,9 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
   // Return an empty column if source column is empty
   if (size == 0) return make_empty_column(output_col_type);
 
-  auto output_col_mask = bitmask_and(table_view({timestamp_column, months_column}), mr, stream);
-  auto output          = make_fixed_width_column(
+  auto output_col_mask =
+    cudf::detail::bitmask_and(table_view({timestamp_column, months_column}), stream, mr);
+  auto output = make_fixed_width_column(
     output_col_type, size, std::move(output_col_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
   auto launch = add_calendrical_months_functor{

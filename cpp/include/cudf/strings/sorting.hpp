@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace strings {
@@ -48,7 +50,7 @@ std::unique_ptr<cudf::column> sort(
   sort_type stype,
   cudf::order order                   = cudf::order::ASCENDING,
   cudf::null_order null_order         = cudf::null_order::BEFORE,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

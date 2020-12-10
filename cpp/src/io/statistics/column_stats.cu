@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,10 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <math_constants.h>
-#include <cub/cub.cuh>
-#include <io/utilities/block_utils.cuh>
+
 #include "column_stats.h"
+
+#include <io/utilities/block_utils.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
+
+#include <cub/cub.cuh>
+
+#include <math_constants.h>
 
 namespace cudf {
 namespace io {
@@ -63,32 +69,33 @@ struct IgnoreNaNSum {
  **/
 inline __device__ string_stats WarpReduceMinString(const char *smin, uint32_t lmin)
 {
-  uint32_t len    = SHFL_XOR(lmin, 1);
-  const char *ptr = reinterpret_cast<const char *>(SHFL_XOR(reinterpret_cast<uintptr_t>(smin), 1));
+  uint32_t len = shuffle_xor(lmin, 1);
+  const char *ptr =
+    reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smin), 1));
   if (!smin || (ptr && nvstr_is_lesser(ptr, len, smin, lmin))) {
     smin = ptr;
     lmin = len;
   }
-  len = SHFL_XOR(lmin, 2);
-  ptr = reinterpret_cast<const char *>(SHFL_XOR(reinterpret_cast<uintptr_t>(smin), 2));
+  len = shuffle_xor(lmin, 2);
+  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smin), 2));
   if (!smin || (ptr && nvstr_is_lesser(ptr, len, smin, lmin))) {
     smin = ptr;
     lmin = len;
   }
-  len = SHFL_XOR(lmin, 4);
-  ptr = reinterpret_cast<const char *>(SHFL_XOR(reinterpret_cast<uintptr_t>(smin), 4));
+  len = shuffle_xor(lmin, 4);
+  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smin), 4));
   if (!smin || (ptr && nvstr_is_lesser(ptr, len, smin, lmin))) {
     smin = ptr;
     lmin = len;
   }
-  len = SHFL_XOR(lmin, 8);
-  ptr = reinterpret_cast<const char *>(SHFL_XOR(reinterpret_cast<uintptr_t>(smin), 8));
+  len = shuffle_xor(lmin, 8);
+  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smin), 8));
   if (!smin || (ptr && nvstr_is_lesser(ptr, len, smin, lmin))) {
     smin = ptr;
     lmin = len;
   }
-  len = SHFL_XOR(lmin, 16);
-  ptr = reinterpret_cast<const char *>(SHFL_XOR(reinterpret_cast<uintptr_t>(smin), 16));
+  len = shuffle_xor(lmin, 16);
+  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smin), 16));
   if (!smin || (ptr && nvstr_is_lesser(ptr, len, smin, lmin))) {
     smin = ptr;
     lmin = len;
@@ -101,32 +108,33 @@ inline __device__ string_stats WarpReduceMinString(const char *smin, uint32_t lm
  **/
 inline __device__ string_stats WarpReduceMaxString(const char *smax, uint32_t lmax)
 {
-  uint32_t len    = SHFL_XOR(lmax, 1);
-  const char *ptr = reinterpret_cast<const char *>(SHFL_XOR(reinterpret_cast<uintptr_t>(smax), 1));
+  uint32_t len = shuffle_xor(lmax, 1);
+  const char *ptr =
+    reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smax), 1));
   if (!smax || (ptr && nvstr_is_greater(ptr, len, smax, lmax))) {
     smax = ptr;
     lmax = len;
   }
-  len = SHFL_XOR(lmax, 2);
-  ptr = reinterpret_cast<const char *>(SHFL_XOR(reinterpret_cast<uintptr_t>(smax), 2));
+  len = shuffle_xor(lmax, 2);
+  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smax), 2));
   if (!smax || (ptr && nvstr_is_greater(ptr, len, smax, lmax))) {
     smax = ptr;
     lmax = len;
   }
-  len = SHFL_XOR(lmax, 4);
-  ptr = reinterpret_cast<const char *>(SHFL_XOR(reinterpret_cast<uintptr_t>(smax), 4));
+  len = shuffle_xor(lmax, 4);
+  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smax), 4));
   if (!smax || (ptr && nvstr_is_greater(ptr, len, smax, lmax))) {
     smax = ptr;
     lmax = len;
   }
-  len = SHFL_XOR(lmax, 8);
-  ptr = reinterpret_cast<const char *>(SHFL_XOR(reinterpret_cast<uintptr_t>(smax), 8));
+  len = shuffle_xor(lmax, 8);
+  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smax), 8));
   if (!smax || (ptr && nvstr_is_greater(ptr, len, smax, lmax))) {
     smax = ptr;
     lmax = len;
   }
-  len = SHFL_XOR(lmax, 16);
-  ptr = reinterpret_cast<const char *>(SHFL_XOR(reinterpret_cast<uintptr_t>(smax), 16));
+  len = shuffle_xor(lmax, 16);
+  ptr = reinterpret_cast<const char *>(shuffle_xor(reinterpret_cast<uintptr_t>(smax), 16));
   if (!smax || (ptr && nvstr_is_greater(ptr, len, smax, lmax))) {
     smax = ptr;
     lmax = len;
@@ -157,7 +165,7 @@ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Stora
     uint32_t r                = i + t;
     uint32_t row              = r + s->group.start_row;
     const uint32_t *valid_map = s->col.valid_map_base;
-    uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_rows)
+    uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_values)
                           ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1
                           : 0;
     if (is_valid) {
@@ -188,9 +196,9 @@ gatherIntColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Stora
     s->ck.null_count = s->group.num_rows - nn_cnt;
   }
   vmin = warp_reduce(storage.integer_stats[t / 32]).Reduce(vmin, cub::Min());
-  vmin = SHFL0(vmin);
+  vmin = shuffle(vmin);
   vmax = warp_reduce(storage.integer_stats[t / 32]).Reduce(vmax, cub::Max());
-  vmax = SHFL0(vmax);
+  vmax = shuffle(vmax);
   vsum = warp_reduce(storage.integer_stats[t / 32]).Sum(vsum);
   if (!(t & 0x1f)) {
     s->warp_min[t >> 5].i_val = vmin;
@@ -242,7 +250,7 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
     uint32_t r                = i + t;
     uint32_t row              = r + s->group.start_row;
     const uint32_t *valid_map = s->col.valid_map_base;
-    uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_rows)
+    uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_values)
                           ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1
                           : 0;
     if (is_valid) {
@@ -262,9 +270,9 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
     s->ck.null_count = s->group.num_rows - nn_cnt;
   }
   vmin = warp_reduce(storage.float_stats[t / 32]).Reduce(vmin, cub::Min());
-  vmin = SHFL0(vmin);
+  vmin = shuffle(vmin);
   vmax = warp_reduce(storage.float_stats[t / 32]).Reduce(vmax, cub::Max());
-  vmax = SHFL0(vmax);
+  vmax = shuffle(vmax);
   vsum = warp_reduce(storage.float_stats[t / 32]).Reduce(vsum, IgnoreNaNSum());
   if (!(t & 0x1f)) {
     s->warp_min[t >> 5].fp_val = vmin;
@@ -322,7 +330,7 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &s
     uint32_t r                = i + t;
     uint32_t row              = r + s->group.start_row;
     const uint32_t *valid_map = s->col.valid_map_base;
-    uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_rows)
+    uint32_t is_valid         = (r < s->group.num_rows && row < s->col.num_values)
                           ? (valid_map) ? (valid_map[row >> 5] >> (row & 0x1f)) & 1 : 1
                           : 0;
     if (is_valid) {
@@ -468,13 +476,13 @@ void __device__ mergeIntColumnStats(merge_state_s *s,
   __syncwarp();
   vmin = cub::WarpReduce<int64_t>(storage.i64[t / 32]).Reduce(vmin, cub::Min());
   __syncwarp();
-  vmin = SHFL0(vmin);
+  vmin = shuffle(vmin);
 
   null_count = cub::WarpReduce<uint32_t>(storage.u32[t / 32]).Sum(null_count);
   __syncwarp();
   vmax = cub::WarpReduce<int64_t>(storage.i64[t / 32]).Reduce(vmax, cub::Max());
   __syncwarp();
-  vmax = SHFL0(vmax);
+  vmax = shuffle(vmax);
 
   vsum = cub::WarpReduce<int64_t>(storage.i64[t / 32]).Sum(vsum);
 
@@ -553,13 +561,13 @@ void __device__ mergeFloatColumnStats(merge_state_s *s,
   __syncwarp();
   vmin = cub::WarpReduce<double>(storage.f64[t / 32]).Reduce(vmin, cub::Min());
   __syncwarp();
-  vmin = SHFL0(vmin);
+  vmin = shuffle(vmin);
 
   null_count = cub::WarpReduce<uint32_t>(storage.u32[t / 32]).Sum(null_count);
   __syncwarp();
   vmax = cub::WarpReduce<double>(storage.f64[t / 32]).Reduce(vmax, cub::Max());
   __syncwarp();
-  vmax = SHFL0(vmax);
+  vmax = shuffle(vmax);
 
   vsum = cub::WarpReduce<double>(storage.f64[t / 32]).Reduce(vsum, IgnoreNaNSum());
 
@@ -750,16 +758,13 @@ __global__ void __launch_bounds__(block_size, 1)
  * @param[in] groups Statistics row groups [num_chunks]
  * @param[in] num_chunks Number of chunks & rowgroups
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t GatherColumnStatistics(statistics_chunk *chunks,
-                                   const statistics_group *groups,
-                                   uint32_t num_chunks,
-                                   cudaStream_t stream)
+ */
+void GatherColumnStatistics(statistics_chunk *chunks,
+                            const statistics_group *groups,
+                            uint32_t num_chunks,
+                            rmm::cuda_stream_view stream)
 {
-  gpuGatherColumnStatistics<1024><<<num_chunks, 1024, 0, stream>>>(chunks, groups);
-  return cudaSuccess;
+  gpuGatherColumnStatistics<1024><<<num_chunks, 1024, 0, stream.value()>>>(chunks, groups);
 }
 
 /**
@@ -770,17 +775,15 @@ cudaError_t GatherColumnStatistics(statistics_chunk *chunks,
  * @param[in] groups Statistics groups [num_chunks]
  * @param[in] num_chunks Number of chunks & groups
  * @param[in] stream CUDA stream to use, default 0
- *
- * @return cudaSuccess if successful, a CUDA error code otherwise
- **/
-cudaError_t MergeColumnStatistics(statistics_chunk *chunks_out,
-                                  const statistics_chunk *chunks_in,
-                                  const statistics_merge_group *groups,
-                                  uint32_t num_chunks,
-                                  cudaStream_t stream)
+ */
+void MergeColumnStatistics(statistics_chunk *chunks_out,
+                           const statistics_chunk *chunks_in,
+                           const statistics_merge_group *groups,
+                           uint32_t num_chunks,
+                           rmm::cuda_stream_view stream)
 {
-  gpuMergeColumnStatistics<1024><<<num_chunks, 1024, 0, stream>>>(chunks_out, chunks_in, groups);
-  return cudaSuccess;
+  gpuMergeColumnStatistics<1024>
+    <<<num_chunks, 1024, 0, stream.value()>>>(chunks_out, chunks_in, groups);
 }
 
 }  // namespace io

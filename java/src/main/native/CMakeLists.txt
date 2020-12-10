@@ -180,20 +180,33 @@ find_path(SPDLOG_INCLUDE "spdlog"
 set(CUDF_INCLUDE "${PROJECT_SOURCE_DIR}/../../../../cpp/include"
                  "${PROJECT_SOURCE_DIR}/../../../../cpp/src/")
 
-find_library(CUDF_LIBRARY "cudf"
+set(CUDF_LIBS_HINTS
     HINTS "$ENV{CUDF_ROOT}"
           "$ENV{CUDF_ROOT}/lib"
           "$ENV{CONDA_PREFIX}/lib"
           "${CUDF_CPP_BUILD_DIR}")
 
-message(STATUS "CUDF: CUDF_LIBRARY set to ${CUDF_LIBRARY}")
-message(STATUS "CUDF: CUDF_INCLUDE set to ${CUDF_INCLUDE}")
+# This list of cudf libraries needs to be kept in sync with the lists
+# in pom.xml and NativeDepsLoader.java
+set(CUDF_LIB_BASES
+  "cudf_ast"
+  "cudf_base"
+  "cudf_comms"
+  "cudf_hash"
+  "cudf_interop"
+  "cudf_io"
+  "cudf_join"
+  "cudf_merge"
+  "cudf_partitioning"
+  "cudf_reductions"
+  "cudf_replace"
+  "cudf_rolling")
 
-add_library(cudf SHARED IMPORTED ${CUDF_LIBRARY})
-if (CUDF_INCLUDE AND CUDF_LIBRARY)
-    set_target_properties(cudf PROPERTIES IMPORTED_LOCATION ${CUDF_LIBRARY})
-endif (CUDF_INCLUDE AND CUDF_LIBRARY)
-
+set(CUDF_LIBS "")
+foreach(CUDF_LIB_BASE ${CUDF_LIB_BASES})
+    find_library(LIB_${CUDF_LIB_BASE} ${CUDF_LIB_BASE} REQUIRED HINTS ${CUDF_LIBS_HINTS})
+    list(APPEND CUDF_LIBS ${LIB_${CUDF_LIB_BASE}})
+endforeach()
 
 ###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
@@ -270,18 +283,19 @@ include_directories("${THRUST_INCLUDE}"
 # - library paths ---------------------------------------------------------------------------------
 
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
-                 "${CMAKE_BINARY_DIR}/lib"
-                 "${CUDF_LIBRARY}")
+                 "${CMAKE_BINARY_DIR}/lib")
 
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
 
 set(SOURCE_FILES
+    "src/row_conversion.cu"
     "src/AggregationJni.cpp"
     "src/CudfJni.cpp"
     "src/CudaJni.cpp"
     "src/ColumnVectorJni.cpp"
+    "src/ColumnViewJni.cpp"
     "src/HostMemoryBufferNativeUtilsJni.cpp"
     "src/NvcompJni.cpp"
     "src/NvtxRangeJni.cpp"
@@ -325,4 +339,4 @@ target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni cudf ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda nvrtc)
+target_link_libraries(cudfjni ${CUDF_LIBS} ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda nvrtc)

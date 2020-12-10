@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "chunked_state.hpp"
 #include "orc.h"
 #include "orc_gpu.h"
 
@@ -28,11 +29,11 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <memory>
 #include <string>
 #include <vector>
-
-#include "chunked_state.hpp"
 
 namespace cudf {
 namespace io {
@@ -53,9 +54,6 @@ class writer::impl {
 
   // ORC datasets are divided into fixed-size, independent stripes
   static constexpr uint32_t DEFAULT_STRIPE_SIZE = 64 * 1024 * 1024;
-
-  // ORC rows are divided into groups and assigned indexes for faster seeking
-  static constexpr uint32_t DEFAULT_ROW_INDEX_STRIDE = 10000;
 
   // ORC compresses streams into independent chunks
   static constexpr uint32_t DEFAULT_COMPRESSION_BLOCKSIZE = 256 * 1024;
@@ -79,7 +77,7 @@ class writer::impl {
    * @param metadata The metadata associated with the table
    * @param stream CUDA stream used for device memory operations and kernel launches.
    **/
-  void write(table_view const& table, const table_metadata* metadata, cudaStream_t stream);
+  void write(table_view const& table, const table_metadata* metadata, rmm::cuda_stream_view stream);
 
   /**
    * @brief Begins the chunked/streamed write process.
@@ -124,7 +122,7 @@ class writer::impl {
                          uint32_t* dict_data,
                          uint32_t* dict_index,
                          hostdevice_vector<gpu::DictionaryChunk>& dict,
-                         cudaStream_t stream);
+                         rmm::cuda_stream_view stream);
 
   /**
    * @brief Builds up per-stripe dictionaries for string columns
@@ -145,7 +143,7 @@ class writer::impl {
                           hostdevice_vector<gpu::DictionaryChunk> const& dict,
                           uint32_t* dict_index,
                           hostdevice_vector<gpu::StripeDictionary>& stripe_dict,
-                          cudaStream_t stream);
+                          rmm::cuda_stream_view stream);
 
   /**
    * @brief Returns stream information for each column
@@ -190,7 +188,7 @@ class writer::impl {
                                     std::vector<Stream> const& streams,
                                     std::vector<int32_t> const& strm_ids,
                                     hostdevice_vector<gpu::EncChunk>& chunks,
-                                    cudaStream_t stream);
+                                    rmm::cuda_stream_view stream);
 
   /**
    * @brief Returns stripe information after compacting columns' individual data
@@ -214,7 +212,7 @@ class writer::impl {
                                                 std::vector<uint32_t> const& stripe_list,
                                                 hostdevice_vector<gpu::EncChunk>& chunks,
                                                 hostdevice_vector<gpu::StripeStream>& strm_desc,
-                                                cudaStream_t stream);
+                                                rmm::cuda_stream_view stream);
 
   /**
    * @brief Returns per-stripe and per-file column statistics encoded
@@ -239,7 +237,7 @@ class writer::impl {
     std::vector<uint32_t> const& stripe_list,
     std::vector<StripeInformation> const& stripes,
     hostdevice_vector<gpu::EncChunk>& chunks,
-    cudaStream_t stream);
+    rmm::cuda_stream_view stream);
 
   /**
    * @brief Write the specified column's row index stream
@@ -288,7 +286,7 @@ class writer::impl {
                          uint8_t* stream_out,
                          StripeInformation& stripe,
                          std::vector<Stream>& streams,
-                         cudaStream_t stream);
+                         rmm::cuda_stream_view stream);
 
   /**
    * @brief Insert 3-byte uncompressed block headers in a byte vector
@@ -325,7 +323,7 @@ class writer::impl {
   rmm::mr::device_memory_resource* _mr = nullptr;
 
   size_t max_stripe_size_           = DEFAULT_STRIPE_SIZE;
-  size_t row_index_stride_          = DEFAULT_ROW_INDEX_STRIDE;
+  size_t row_index_stride_          = default_row_index_stride;
   size_t compression_blocksize_     = DEFAULT_COMPRESSION_BLOCKSIZE;
   CompressionKind compression_kind_ = CompressionKind::NONE;
 

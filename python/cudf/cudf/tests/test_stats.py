@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION.
 
 import re
 
@@ -8,7 +8,7 @@ import pytest
 
 from cudf.core import Series
 from cudf.datasets import randomdata
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 params_dtypes = [np.int32, np.uint32, np.float32, np.float64]
 methods = ["min", "max", "sum", "mean", "var", "std"]
@@ -479,25 +479,22 @@ def test_min_count_ops(data, ops, skipna, min_count):
 def test_cov_corr_invalid_dtypes(gsr):
     psr = gsr.to_pandas()
 
-    try:
-        psr.corr(psr)
-    except Exception as e:
-        with pytest.raises(
-            type(e),
-            match=re.escape(
-                f"cannot perform corr with types {gsr.dtype}, {gsr.dtype}"
-            ),
-        ):
-            gsr.corr(gsr)
+    assert_exceptions_equal(
+        lfunc=psr.corr,
+        rfunc=gsr.corr,
+        lfunc_args_and_kwargs=([psr],),
+        rfunc_args_and_kwargs=([gsr],),
+        expected_error_message=re.escape(
+            f"cannot perform corr with types {gsr.dtype}, {gsr.dtype}"
+        ),
+    )
 
-    try:
-        psr.cov(psr)
-    except Exception as e:
-        with pytest.raises(
-            type(e),
-            match=re.escape(
-                f"cannot perform covarience with types {gsr.dtype}, "
-                f"{gsr.dtype}"
-            ),
-        ):
-            gsr.cov(gsr)
+    assert_exceptions_equal(
+        lfunc=psr.cov,
+        rfunc=gsr.cov,
+        lfunc_args_and_kwargs=([psr],),
+        rfunc_args_and_kwargs=([gsr],),
+        expected_error_message=re.escape(
+            f"cannot perform covarience with types {gsr.dtype}, {gsr.dtype}"
+        ),
+    )

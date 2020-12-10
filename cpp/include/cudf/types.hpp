@@ -37,11 +37,6 @@
  *
  **/
 
-/**
- * @brief Forward declaration of cudaStream_t
- **/
-using cudaStream_t = struct CUstream_st*;
-
 namespace bit_mask {
 using bit_mask_t = uint32_t;
 }
@@ -295,7 +290,11 @@ class data_type {
  * @return true `lhs` is equal to `rhs`
  * @return false `lhs` is not equal to `rhs`
  */
-inline bool operator==(data_type const& lhs, data_type const& rhs) { return lhs.id() == rhs.id(); }
+inline bool operator==(data_type const& lhs, data_type const& rhs)
+{
+  // use std::tie in the future, breaks JITIFY currently
+  return lhs.id() == rhs.id() && lhs.scale() == rhs.scale();
+}
 
 /**
  * @brief Compares two `data_type` objects for inequality.
@@ -326,9 +325,10 @@ std::size_t size_of(data_type t);
  *  @brief Identifies the hash function to be used
  */
 enum class hash_id {
-  HASH_IDENTITY = 0,  ///< Identity hash function that simply returns the key to be hashed
-  HASH_MURMUR3,       ///< Murmur3 hash function
-  HASH_MD5            ///< MD5 hash function
+  HASH_IDENTITY = 0,   ///< Identity hash function that simply returns the key to be hashed
+  HASH_MURMUR3,        ///< Murmur3 hash function
+  HASH_MD5,            ///< MD5 hash function
+  HASH_SERIAL_MURMUR3  ///< Serial Murmur3 hash function
 };
 
 /** @} */

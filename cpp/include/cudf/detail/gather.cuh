@@ -17,6 +17,7 @@
 
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/indexalator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/detail/valid_if.cuh>
@@ -24,7 +25,6 @@
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/lists/detail/gather.cuh>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/gather.cuh>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
@@ -35,6 +35,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <algorithm>
 
@@ -120,11 +121,11 @@ void gather_helper(InputItr source_itr,
                    MapIterator gather_map_begin,
                    MapIterator gather_map_end,
                    bool nullify_out_of_bounds,
-                   cudaStream_t stream)
+                   rmm::cuda_stream_view stream)
 {
   using map_type = typename std::iterator_traits<MapIterator>::value_type;
   if (nullify_out_of_bounds) {
-    thrust::gather_if(rmm::exec_policy(stream)->on(stream),
+    thrust::gather_if(rmm::exec_policy(stream)->on(stream.value()),
                       gather_map_begin,
                       gather_map_end,
                       gather_map_begin,
@@ -132,7 +133,7 @@ void gather_helper(InputItr source_itr,
                       target_itr,
                       bounds_checker<map_type>{0, source_size});
   } else {
-    thrust::gather(rmm::exec_policy(stream)->on(stream),
+    thrust::gather(rmm::exec_policy(stream)->on(stream.value()),
                    gather_map_begin,
                    gather_map_end,
                    source_itr,
@@ -169,13 +170,13 @@ struct column_gatherer_impl {
                                      MapIterator gather_map_begin,
                                      MapIterator gather_map_end,
                                      bool nullify_out_of_bounds,
-                                     cudaStream_t stream,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
     auto const num_rows = cudf::distance(gather_map_begin, gather_map_end);
     auto const policy   = cudf::mask_allocation_policy::NEVER;
     auto destination_column =
-      cudf::detail::allocate_like(source_column, num_rows, policy, mr, stream);
+      cudf::detail::allocate_like(source_column, num_rows, policy, stream, mr);
 
     using Type = device_storage_type_t<Element>;
 
@@ -216,15 +217,15 @@ struct column_gatherer_impl<string_view, MapItType> {
                                      MapItType gather_map_begin,
                                      MapItType gather_map_end,
                                      bool nullify_out_of_bounds,
-                                     cudaStream_t stream,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
     if (true == nullify_out_of_bounds) {
       return cudf::strings::detail::gather<true>(
-        strings_column_view(source_column), gather_map_begin, gather_map_end, mr, stream);
+        strings_column_view(source_column), gather_map_begin, gather_map_end, stream, mr);
     } else {
       return cudf::strings::detail::gather<false>(
-        strings_column_view(source_column), gather_map_begin, gather_map_end, mr, stream);
+        strings_column_view(source_column), gather_map_begin, gather_map_end, stream, mr);
     }
   }
 };
@@ -289,7 +290,7 @@ struct column_gatherer_impl<list_view, MapItRoot> {
                                      MapItRoot gather_map_begin,
                                      MapItRoot gather_map_end,
                                      bool nullify_out_of_bounds,
-                                     cudaStream_t stream,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
     lists_column_view list(column);
@@ -354,7 +355,7 @@ struct column_gatherer {
                                      MapIterator gather_map_begin,
                                      MapIterator gather_map_end,
                                      bool nullify_out_of_bounds,
-                                     cudaStream_t stream,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
     column_gatherer_impl<Element, MapIterator> gatherer{};
@@ -386,7 +387,7 @@ struct column_gatherer_impl<dictionary32, MapItType> {
                                      MapItType gather_map_begin,
                                      MapItType gather_map_end,
                                      bool nullify_out_of_bounds,
-                                     cudaStream_t stream,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
     dictionary_column_view dictionary(source_column);
@@ -403,7 +404,7 @@ struct column_gatherer_impl<dictionary32, MapItType> {
     // Perform gather on just the indices
     column_view indices = dictionary.get_indices_annotated();
     auto new_indices    = cudf::detail::allocate_like(
-      indices, output_count, cudf::mask_allocation_policy::NEVER, mr, stream);
+      indices, output_count, cudf::mask_allocation_policy::NEVER, stream, mr);
     gather_helper(
       cudf::detail::indexalator_factory::make_input_iterator(indices),
       indices.size(),
@@ -457,7 +458,7 @@ void gather_bitmask(table_device_view input,
                     size_type mask_count,
                     size_type mask_size,
                     size_type* valid_counts,
-                    cudaStream_t stream)
+                    rmm::cuda_stream_view stream)
 {
   if (mask_size == 0) { return; }
 
@@ -469,7 +470,7 @@ void gather_bitmask(table_device_view input,
     valid_if_n_kernel<decltype(counting_it), decltype(counting_it), Selector, block_size>;
 
   cudf::detail::grid_1d grid{mask_size, block_size, 1};
-  kernel<<<grid.num_blocks, block_size, 0, stream>>>(
+  kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
     counting_it, counting_it, selector, masks, mask_count, mask_size, valid_counts);
 }
 
@@ -478,8 +479,8 @@ void gather_bitmask(table_view const& source,
                     MapIterator gather_map,
                     std::vector<std::unique_ptr<column>>& target,
                     gather_bitmask_op op,
-                    rmm::mr::device_memory_resource* mr,
-                    cudaStream_t stream)
+                    rmm::cuda_stream_view stream,
+                    rmm::mr::device_memory_resource* mr)
 {
   if (target.empty()) { return; }
 
@@ -496,7 +497,7 @@ void gather_bitmask(table_view const& source,
         not target[i]->nullable()) {
       auto const state =
         op == gather_bitmask_op::PASSTHROUGH ? mask_state::ALL_VALID : mask_state::UNINITIALIZED;
-      auto mask = create_null_mask(target[i]->size(), state, stream, mr);
+      auto mask = detail::create_null_mask(target[i]->size(), state, stream, mr);
       target[i]->set_null_mask(std::move(mask), 0);
     }
   }
@@ -548,7 +549,7 @@ struct column_gatherer_impl<struct_view, MapItRoot> {
                                      MapItRoot gather_map_begin,
                                      MapItRoot gather_map_end,
                                      bool nullify_out_of_bounds,
-                                     cudaStream_t stream,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
     structs_column_view structs_column(column);
@@ -578,8 +579,8 @@ struct column_gatherer_impl<struct_view, MapItRoot> {
       gather_map_begin,
       output_struct_members,
       nullify_out_of_bounds ? gather_bitmask_op::NULLIFY : gather_bitmask_op::DONT_CHECK,
-      mr,
-      stream);
+      stream,
+      mr);
 
     return cudf::make_structs_column(
       gather_map_size,
@@ -609,7 +610,12 @@ struct column_gatherer_impl<struct_view, MapItRoot> {
  * the source columns to rows in the destination columns
  * @param[in] gather_map_end End of iterator range of integer indices that map the rows in the
  * source columns to rows in the destination columns
- * @param[in] nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds.
+ * @param[in] bounds_policy Policy to apply to account for possible out-of-bound indices
+ * `DONT_CHECK` skips all bound checking for gather map values. `NULLIFY` coerces rows that
+ * corresponds to out-of-bound indices in the gather map to be null elements. Callers should
+ * use `DONT_CHECK` when they are certain that the gather_map contains only valid indices for
+ * better performance. In case there are out-of-bound indices in the gather map, the behavior
+ * is undefined. Defaults to `DONT_CHECK`.
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @return cudf::table Result of the gather
@@ -619,9 +625,9 @@ std::unique_ptr<table> gather(
   table_view const& source_table,
   MapIterator gather_map_begin,
   MapIterator gather_map_end,
-  bool nullify_out_of_bounds          = false,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  out_of_bounds_policy bounds_policy  = out_of_bounds_policy::DONT_CHECK,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   std::vector<std::unique_ptr<column>> destination_columns;
 
@@ -629,19 +635,22 @@ std::unique_ptr<table> gather(
 
   for (auto const& source_column : source_table) {
     // The data gather for n columns will be put on the first n streams
-    destination_columns.push_back(cudf::type_dispatcher(source_column.type(),
-                                                        column_gatherer{},
-                                                        source_column,
-                                                        gather_map_begin,
-                                                        gather_map_end,
-                                                        nullify_out_of_bounds,
-                                                        stream,
-                                                        mr));
+    destination_columns.push_back(
+      cudf::type_dispatcher(source_column.type(),
+                            column_gatherer{},
+                            source_column,
+                            gather_map_begin,
+                            gather_map_end,
+                            bounds_policy == out_of_bounds_policy::NULLIFY,
+                            stream,
+                            mr));
   }
 
-  auto const op =
-    nullify_out_of_bounds ? gather_bitmask_op::NULLIFY : gather_bitmask_op::DONT_CHECK;
-  gather_bitmask(source_table, gather_map_begin, destination_columns, op, mr, stream);
+  gather_bitmask_op const op = bounds_policy == out_of_bounds_policy::NULLIFY
+                                 ? gather_bitmask_op::NULLIFY
+                                 : gather_bitmask_op::DONT_CHECK;
+
+  gather_bitmask(source_table, gather_map_begin, destination_columns, op, stream, mr);
 
   return std::make_unique<table>(std::move(destination_columns));
 }

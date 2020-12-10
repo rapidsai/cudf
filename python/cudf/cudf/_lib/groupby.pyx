@@ -29,7 +29,7 @@ _GROUPBY_AGGS = {
     "min",
     "max",
     "mean",
-    "variance",
+    "var",
     "std",
     "quantile",
     "median",
@@ -51,6 +51,7 @@ _STRING_AGGS = {
     "min",
     "nunique",
     "nth",
+    "collect"
 }
 
 _LIST_AGGS = {
