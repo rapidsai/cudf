@@ -155,7 +155,7 @@ namespace detail{
         RMM_ALLOC(...,stream);
         CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
         kernel<<<..., stream>>>(...);
-        thrust::algorithm(rmm::exec_policy(stream)->on(stream), ...);
+        thrust::algorithm(rmm::exec_policy(stream), ...);
         stream.synchronize();
         RMM_FREE(...,stream);
     }

@@ -3,8 +3,8 @@
 #include <thrust/device_vector.h>
 #include <thrust/pair.h>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_vector.hpp>
 
 #include <cudf/io/types.hpp>
 

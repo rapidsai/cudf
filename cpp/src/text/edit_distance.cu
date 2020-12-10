@@ -26,6 +26,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
@@ -166,8 +167,8 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
                                                stream,
                                                mr);
   auto d_results = results->mutable_view().data<int32_t>();
-  auto execpol   = rmm::exec_policy(stream);
-  thrust::transform(execpol->on(stream.value()),
+
+  thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(strings_count),
                     d_results,
@@ -183,10 +184,9 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
 
   // get the total size of the temporary compute buffer
   size_t compute_size =
-    thrust::reduce(execpol->on(stream.value()), d_results, d_results + strings_count, size_t{0});
+    thrust::reduce(rmm::exec_policy(stream), d_results, d_results + strings_count, size_t{0});
   // convert sizes to offsets in-place
-  thrust::exclusive_scan(
-    execpol->on(stream.value()), d_results, d_results + strings_count, d_results);
+  thrust::exclusive_scan(rmm::exec_policy(stream), d_results, d_results + strings_count, d_results);
   // create the temporary compute buffer
   rmm::device_uvector<int16_t> compute_buffer(compute_size, stream);
   auto d_buffer = compute_buffer.data();
@@ -195,7 +195,7 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
   // - on input, d_results is the offset to the working section of d_buffer for each row
   // - on output, d_results is the calculated edit distance for that row
   thrust::for_each_n(
-    execpol->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
     strings_count,
     edit_distance_levenshtein_algorithm{d_strings, d_targets, d_buffer, d_results});
@@ -219,7 +219,6 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
   // create device column of the input strings column
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
-  auto execpol        = rmm::exec_policy(stream);
 
   // Calculate the size of the compute-buffer.
   // We only need memory for half the size of the output matrix since the edit distance calculation
@@ -229,7 +228,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
   auto d_offsets = offsets.data();
   CUDA_TRY(cudaMemsetAsync(d_offsets, 0, n_upper * sizeof(cudf::size_type), stream.value()));
   thrust::for_each_n(
-    execpol->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
     strings_count * strings_count,
     [d_strings, d_offsets, strings_count] __device__(cudf::size_type idx) {
@@ -247,10 +246,9 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
 
   // get the total size for the compute buffer
   size_t compute_size =
-    thrust::reduce(execpol->on(stream.value()), offsets.begin(), offsets.end(), size_t{0});
+    thrust::reduce(rmm::exec_policy(stream), offsets.begin(), offsets.end(), size_t{0});
   // convert sizes to offsets in-place
-  thrust::exclusive_scan(
-    execpol->on(stream.value()), offsets.begin(), offsets.end(), offsets.begin());
+  thrust::exclusive_scan(rmm::exec_policy(stream), offsets.begin(), offsets.end(), offsets.begin());
   // create the compute buffer
   rmm::device_uvector<int16_t> compute_buffer(compute_size, stream);
   auto d_buffer = compute_buffer.data();
@@ -264,7 +262,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
                                                mr);
   auto d_results = results->mutable_view().data<int32_t>();
   thrust::for_each_n(
-    execpol->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
     strings_count * strings_count,
     edit_distance_matrix_levenshtein_algorithm{d_strings, d_buffer, d_offsets, d_results});
@@ -277,7 +275,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
                                                       stream,
                                                       mr);
   thrust::transform_exclusive_scan(
-    execpol->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<int32_t>(0),
     thrust::make_counting_iterator<int32_t>(strings_count + 1),
     offsets_column->mutable_view().data<int32_t>(),
