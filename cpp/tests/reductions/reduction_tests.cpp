@@ -1263,10 +1263,33 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionNUnique)
     auto const column   = fp_wrapper{{1, 1, 2, 2, 3, 3, 4, 4}, scale};
     auto const out_type = static_cast<cudf::column_view>(column).type();
 
+    // TODO why does this out_type work
     auto const result        = cudf::reduce(column, cudf::make_nunique_aggregation(), out_type);
     auto const result_scalar = static_cast<cudf::scalar_type_t<cudf::size_type> *>(result.get());
 
     EXPECT_EQ(result_scalar->value(), 4);
+  }
+}
+
+TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumOfSquares)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (int i = -2; i <= 0; ++i) {
+    auto const scale = scale_type{i};
+
+    auto const column = fp_wrapper{{1, 2, 3, 4}, scale};
+    // auto const out_type = cudf::data_type{cudf::type_to_id<decimalXX>(), scale_type{i * 2}};
+    auto const out_type = static_cast<cudf::column_view>(column).type();
+    auto const expected = decimalXX{scaled_integer<RepType>{30, scale_type{i * 2}}};
+
+    auto const result = cudf::reduce(column, cudf::make_sum_of_squares_aggregation(), out_type);
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+
+    EXPECT_EQ(result_scalar->fixed_point_value(), expected);
   }
 }
 
