@@ -334,7 +334,12 @@ def get_units(value):
     return value
 
 
-class DateOffset(pd.DateOffset):
+class Container(object):
+    def __init__(self, arg):
+        self.arg = arg
+
+
+class DateOffset(pd.DateOffset, Container):
     def __init__(self, n=1, normalize=False, **kwds):
         if normalize:
             raise NotImplementedError("normalize not supported for DateOffset")
@@ -343,12 +348,9 @@ class DateOffset(pd.DateOffset):
         if len(kwds) > 1:
             raise ValueError("only a single unit may" "be specified at a time")
 
-        super().__init__(n=n, normalize=normalize, **kwds)
-
-        # in pandas, **kwds is passed to an underling relativedelta
-        # which has its own valid kwargs. so must manually validate
-        not_supported_kwargs = [
+        all_possible_kwargs = {
             "years",
+            "months",
             "weeks",
             "days",
             "hours",
@@ -365,9 +367,17 @@ class DateOffset(pd.DateOffset):
             "second",
             "microsecond",
             "nanosecond",
-        ]
+        }
 
-        wrong_kwargs = set(kwds.keys()).intersection(not_supported_kwargs)
+        supported_kwargs = {"months"}
+        kwds = {
+            k: cudf.Scalar(v) if k in all_possible_kwargs else v
+            for k, v in kwds.items()
+        }
+
+        super().__init__(n=n, normalize=normalize, **kwds)
+
+        wrong_kwargs = set(kwds.keys()).difference(supported_kwargs)
         if len(wrong_kwargs) > 0:
             raise ValueError(
                 f"Keyword arguments '{','.join(list(wrong_kwargs))}'"
