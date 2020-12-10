@@ -335,7 +335,7 @@ cpdef write_parquet(
         Table table,
         object path,
         object index=None,
-        object compression=None,
+        object compression="snappy",
         object statistics="ROWGROUP",
         object metadata_file_path=None,
         object int96_timestamps=False):
