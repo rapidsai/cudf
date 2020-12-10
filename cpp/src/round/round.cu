@@ -237,6 +237,9 @@ std::unique_ptr<column> round_with(column_view const& input,
   using Type                   = device_storage_type_t<T>;
   using FixedPointRoundFunctor = RoundFunctor<Type>;
 
+  if (input.type().scale() == -decimal_places)
+    return std::make_unique<cudf::column>(input, stream, mr);
+
   // if rounding to more precision than fixed_point is capable of, just need to rescale
   // note: decimal_places has the opposite sign of numeric::scale_type (therefore have to negate)
   if (input.type().scale() > -decimal_places) {
