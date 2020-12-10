@@ -1297,6 +1297,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Zero-copy cast between types with the same underlying representation.
+   *
+   * Similar to reinterpret_cast or bit_cast in C++. This will essentially take the underlying data
+   * and update the metadata to reflect a new type. Not all types are supported the width of the
+   * types must match.
+   * @param type the type you want to go to.
+   * @return a ColumnView that cannot outlive the Column that owns the actual data it points to.
+   */
+  public ColumnView logicalCastTo(DType type) {
+    return new ColumnView(logicalCastTo(getNativeView(),
+        type.typeId.getNativeId(), type.getScale()));
+  }
+
+  /**
    * Cast to Byte - ColumnVector
    * This method takes the value provided by the ColumnVector and casts to byte
    * When casting from a Date, Timestamp, or Boolean to a byte type the underlying numerical
@@ -2471,6 +2485,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long extractListElement(long nativeView, int index);
 
   private static native long castTo(long nativeHandle, int type, int scale);
+
+  private static native long logicalCastTo(long nativeHandle, int type, int scale);
 
   private static native long byteListCast(long nativeHandle, boolean config);
 

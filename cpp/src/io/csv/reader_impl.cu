@@ -699,6 +699,47 @@ std::vector<column_buffer> reader::impl::decode_data(std::vector<data_type> cons
   return out_buffers;
 }
 
+/**
+ * @brief Create a serialized trie for N/A value matching, based on the options.
+ */
+thrust::host_vector<SerialTrieNode> create_na_trie(char quotechar,
+                                                   csv_reader_options const &reader_opts)
+{
+  // Default values to recognize as null values
+  static std::vector<std::string> const default_na_values{"",
+                                                          "#N/A",
+                                                          "#N/A N/A",
+                                                          "#NA",
+                                                          "-1.#IND",
+                                                          "-1.#QNAN",
+                                                          "-NaN",
+                                                          "-nan",
+                                                          "1.#IND",
+                                                          "1.#QNAN",
+                                                          "<NA>",
+                                                          "N/A",
+                                                          "NA",
+                                                          "NULL",
+                                                          "NaN",
+                                                          "n/a",
+                                                          "nan",
+                                                          "null"};
+
+  if (!reader_opts.is_enabled_na_filter()) { return {}; }
+
+  std::vector<std::string> na_values = reader_opts.get_na_values();
+  if (reader_opts.is_enabled_keep_default_na()) {
+    na_values.insert(na_values.end(), default_na_values.begin(), default_na_values.end());
+  }
+
+  // Pandas treats empty strings as N/A if empty fields are treated as N/A
+  if (std::find(na_values.begin(), na_values.end(), "") != na_values.end()) {
+    na_values.push_back(std::string(2, quotechar));
+  }
+
+  return createSerializedTrie(na_values);
+}
+
 parse_options make_parse_options(csv_reader_options const &reader_opts)
 {
   auto parse_opts = parse_options{};
@@ -747,9 +788,7 @@ parse_options make_parse_options(csv_reader_options const &reader_opts)
   }
 
   // Handle user-defined N/A values, whereby field data is treated as null
-  if (reader_opts.get_na_values().size() != 0) {
-    parse_opts.trie_na = createSerializedTrie(reader_opts.get_na_values());
-  }
+  parse_opts.trie_na = create_na_trie(parse_opts.quotechar, reader_opts);
 
   return parse_opts;
 }

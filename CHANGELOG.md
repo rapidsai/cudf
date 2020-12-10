@@ -4,16 +4,20 @@
 
 - PR #6847 Add a cmake find module for cuFile in JNI code
 - PR #6902 Implement `DataFrame.quantile` for `datetime` and `timedelta` data types
+- PR #6814 Implement `cudf::reduce` for `decimal32` and `decimal64` (part 1)
 - PR #6929 Add `Index.set_names` api
 
 ## Improvements
 
+- PR #6275 Update to official libcu++ on Github
 - PR #6838 Fix `columns` & `index` handling in dataframe constructor
 - PR #6750 Remove **kwargs from string/categorical methods
 
 ## Bug Fixes
 
+- PR #6922 Fix N/A detection for empty fields in CSV reader
 - PR #6912 Fix rmm_mode=managed parameter for gtests
+- PR #6942 Fix cudf::merge gtest for dictionary columns
 
 
 # cuDF 0.17.0 (Date TBD)

@@ -17,28 +17,37 @@
  * limitations under the License.
  */
 
+#include <jit/libcudacxx/cuda/std/chrono.jit>
+#include <jit/libcudacxx/cuda/std/climits.jit>
+#include <jit/libcudacxx/cuda/std/cstddef.jit>
+#include <jit/libcudacxx/cuda/std/cstdint.jit>
+#include <jit/libcudacxx/cuda/std/ctime.jit>
+#include <jit/libcudacxx/cuda/std/detail/__config.jit>
+#include <jit/libcudacxx/cuda/std/detail/__pragma_pop.jit>
+#include <jit/libcudacxx/cuda/std/detail/__pragma_push.jit>
+#include <jit/libcudacxx/cuda/std/detail/libcxx/include/__config.jit>
+#include <jit/libcudacxx/cuda/std/detail/libcxx/include/__pragma_pop.jit>
+#include <jit/libcudacxx/cuda/std/detail/libcxx/include/__pragma_push.jit>
+#include <jit/libcudacxx/cuda/std/detail/libcxx/include/__undef_macros.jit>
+#include <jit/libcudacxx/cuda/std/detail/libcxx/include/chrono.jit>
+#include <jit/libcudacxx/cuda/std/detail/libcxx/include/climits.jit>
+#include <jit/libcudacxx/cuda/std/detail/libcxx/include/cstddef.jit>
+#include <jit/libcudacxx/cuda/std/detail/libcxx/include/cstdint.jit>
+#include <jit/libcudacxx/cuda/std/detail/libcxx/include/ctime.jit>
+#include <jit/libcudacxx/cuda/std/detail/libcxx/include/limits.jit>
+#include <jit/libcudacxx/cuda/std/detail/libcxx/include/ratio.jit>
+#include <jit/libcudacxx/cuda/std/detail/libcxx/include/type_traits.jit>
+#include <jit/libcudacxx/cuda/std/detail/libcxx/include/version.jit>
+#include <jit/libcudacxx/cuda/std/limits.jit>
+#include <jit/libcudacxx/cuda/std/ratio.jit>
+#include <jit/libcudacxx/cuda/std/type_traits.jit>
+#include <jit/libcudacxx/cuda/std/version.jit>
+
+#include <cstring>
 #include <iostream>
-#include <jit/libcudacxx/details/__config.jit>
-#include <jit/libcudacxx/libcxx/include/__config.jit>
-#include <jit/libcudacxx/libcxx/include/__undef_macros.jit>
-#include <jit/libcudacxx/libcxx/include/cassert.jit>
-#include <jit/libcudacxx/libcxx/include/cfloat.jit>
-#include <jit/libcudacxx/libcxx/include/chrono.jit>
-#include <jit/libcudacxx/libcxx/include/cmath.jit>
-#include <jit/libcudacxx/libcxx/include/ctime.jit>
-#include <jit/libcudacxx/libcxx/include/limits.jit>
-#include <jit/libcudacxx/libcxx/include/ratio.jit>
-#include <jit/libcudacxx/libcxx/include/type_traits.jit>
-#include <jit/libcudacxx/simt/cassert.jit>
-#include <jit/libcudacxx/simt/cfloat.jit>
-#include <jit/libcudacxx/simt/chrono.jit>
-#include <jit/libcudacxx/simt/cmath.jit>
-#include <jit/libcudacxx/simt/ctime.jit>
-#include <jit/libcudacxx/simt/limits.jit>
-#include <jit/libcudacxx/simt/ratio.jit>
-#include <jit/libcudacxx/simt/type_traits.jit>
-#include <jit/libcudacxx/simt/version.jit>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace cudf {
 namespace jit {
@@ -52,12 +61,6 @@ const std::vector<std::string> compiler_flags
     "-w",
     // force libcudacxx to not include system headers
     "-D__CUDACC_RTC__",
-    // __CHAR_BIT__ is from GCC, but libcxx uses it
-    "-D__CHAR_BIT__=" + std::to_string(__CHAR_BIT__),
-    // enable temporary workarounds to compile libcudacxx with nvrtc
-    "-D_LIBCUDACXX_HAS_NO_CTIME", "-D_LIBCUDACXX_HAS_NO_WCHAR", "-D_LIBCUDACXX_HAS_NO_CFLOAT",
-    "-D_LIBCUDACXX_HAS_NO_STDINT", "-D_LIBCUDACXX_HAS_NO_CSTDDEF", "-D_LIBCUDACXX_HAS_NO_CLIMITS",
-    "-D_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS",
 #if defined(__powerpc64__)
     "-D__powerpc64__"
 #elif defined(__x86_64__)
@@ -66,24 +69,32 @@ const std::vector<std::string> compiler_flags
 };
 
 const std::unordered_map<std::string, char const*> stringified_headers{
-  {"details/../../libcxx/include/__config", libcxx_config},
-  {"../libcxx/include/__undef_macros", libcxx_undef_macros},
-  {"simt/../../libcxx/include/cfloat", libcxx_cfloat},
-  {"simt/../../libcxx/include/chrono", libcxx_chrono},
-  {"simt/../../libcxx/include/ctime", libcxx_ctime},
-  {"simt/../../libcxx/include/limits", libcxx_limits},
-  {"simt/../../libcxx/include/ratio", libcxx_ratio},
-  {"simt/../../libcxx/include/cmath", libcxx_cmath},
-  {"simt/../../libcxx/include/cassert", libcxx_cassert},
-  {"simt/../../libcxx/include/type_traits", libcxx_type_traits},
-  {"simt/../details/__config", libcudacxx_details_config},
-  {"simt/cfloat", libcudacxx_simt_cfloat},
-  {"simt/chrono", libcudacxx_simt_chrono},
-  {"simt/ctime", libcudacxx_simt_ctime},
-  {"simt/limits", libcudacxx_simt_limits},
-  {"simt/ratio", libcudacxx_simt_ratio},
-  {"simt/type_traits", libcudacxx_simt_type_traits},
-  {"simt/version", libcudacxx_simt_version},
+  {"cuda/std/chrono", cuda_std_chrono},
+  {"cuda/std/climits", cuda_std_climits},
+  {"cuda/std/cstddef", cuda_std_cstddef},
+  {"cuda/std/cstdint", cuda_std_cstdint},
+  {"cuda/std/ctime", cuda_std_ctime},
+  {"cuda/std/limits", cuda_std_limits},
+  {"cuda/std/ratio", cuda_std_ratio},
+  {"cuda/std/type_traits", cuda_std_type_traits},
+  {"cuda/std/type_traits", cuda_std_type_traits},
+  {"cuda/std/version", cuda_std_version},
+  {"cuda/std/detail/__config", cuda_std_detail___config},
+  {"cuda/std/detail/__pragma_pop", cuda_std_detail___pragma_pop},
+  {"cuda/std/detail/__pragma_push", cuda_std_detail___pragma_push},
+  {"cuda/std/detail/libcxx/include/__config", cuda_std_detail_libcxx_include___config},
+  {"cuda/std/detail/libcxx/include/__pragma_pop", cuda_std_detail_libcxx_include___pragma_pop},
+  {"cuda/std/detail/libcxx/include/__pragma_push", cuda_std_detail_libcxx_include___pragma_push},
+  {"cuda/std/detail/libcxx/include/__undef_macros", cuda_std_detail_libcxx_include___undef_macros},
+  {"cuda/std/detail/libcxx/include/chrono", cuda_std_detail_libcxx_include_chrono},
+  {"cuda/std/detail/libcxx/include/climits", cuda_std_detail_libcxx_include_climits},
+  {"cuda/std/detail/libcxx/include/cstddef", cuda_std_detail_libcxx_include_cstddef},
+  {"cuda/std/detail/libcxx/include/cstdint", cuda_std_detail_libcxx_include_cstdint},
+  {"cuda/std/detail/libcxx/include/ctime", cuda_std_detail_libcxx_include_ctime},
+  {"cuda/std/detail/libcxx/include/limits", cuda_std_detail_libcxx_include_limits},
+  {"cuda/std/detail/libcxx/include/ratio", cuda_std_detail_libcxx_include_ratio},
+  {"cuda/std/detail/libcxx/include/type_traits", cuda_std_detail_libcxx_include_type_traits},
+  {"cuda/std/detail/libcxx/include/version", cuda_std_detail_libcxx_include_version},
 };
 
 inline std::istream* send_stringified_header(std::iostream& stream, char const* header)
