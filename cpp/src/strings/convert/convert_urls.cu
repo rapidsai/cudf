@@ -138,7 +138,7 @@ std::unique_ptr<column> url_encode(
                               stream,
                               mr);
   auto d_chars = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      url_encoder_fn{d_strings, d_offsets, d_chars});
@@ -242,7 +242,7 @@ std::unique_ptr<column> url_decode(
                               stream,
                               mr);
   auto d_chars = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      url_decoder_fn{d_strings, d_offsets, d_chars});

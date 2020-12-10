@@ -29,9 +29,12 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
-#include <rmm/cuda_stream_view.hpp>
+
 #include <vector>
 
 namespace cudf {
@@ -97,7 +100,7 @@ OutputIterator unique_copy(InputIterator first,
 {
   size_type const last_index = thrust::distance(first, last) - 1;
   return thrust::copy_if(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     first,
     last,
     thrust::counting_iterator<size_type>(0),

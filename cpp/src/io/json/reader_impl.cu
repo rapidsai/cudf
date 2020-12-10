@@ -34,9 +34,10 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/optional.h>
 
@@ -114,7 +115,7 @@ col_map_ptr_type create_col_names_hash_map(column_view column_name_hashes,
 {
   auto key_col_map{col_map_type::create(column_name_hashes.size(), stream)};
   auto const column_data = column_name_hashes.data<uint32_t>();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      column_name_hashes.size(),
                      [map = *key_col_map, column_data] __device__(size_type idx) mutable {
@@ -327,7 +328,7 @@ void reader::impl::set_record_starts(rmm::cuda_stream_view stream)
   // Previous call stores the record pinput_file.typeositions as encountered by all threads
   // Sort the record positions as subsequent processing may require filtering
   // certain rows or other processing on specific records
-  thrust::sort(rmm::exec_policy()->on(stream.value()), rec_starts_.begin(), rec_starts_.end());
+  thrust::sort(rmm::exec_policy(stream), rec_starts_.begin(), rec_starts_.end());
 
   auto filtered_count = prefilter_count;
   if (allow_newlines_in_strings_) {
@@ -345,7 +346,7 @@ void reader::impl::set_record_starts(rmm::cuda_stream_view stream)
     }
 
     rec_starts_ = h_rec_starts;
-    thrust::sort(rmm::exec_policy()->on(stream.value()), rec_starts_.begin(), rec_starts_.end());
+    thrust::sort(rmm::exec_policy(stream), rec_starts_.begin(), rec_starts_.end());
   }
 
   // Exclude the ending newline as it does not precede a record start
@@ -384,7 +385,7 @@ void reader::impl::upload_data_to_device(rmm::cuda_stream_view stream)
     // Adjust row start positions to account for the data subcopy
     start_offset = h_rec_starts.front();
     rec_starts_.resize(h_rec_starts.size());
-    thrust::transform(rmm::exec_policy()->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       rec_starts_.begin(),
                       rec_starts_.end(),
                       thrust::make_constant_iterator(start_offset),

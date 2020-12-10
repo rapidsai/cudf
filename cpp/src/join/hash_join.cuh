@@ -25,6 +25,8 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/sequence.h>
 
@@ -183,13 +185,9 @@ inline std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>
 get_trivial_left_join_indices(table_view const& left, rmm::cuda_stream_view stream)
 {
   rmm::device_vector<size_type> left_indices(left.num_rows());
-  thrust::sequence(
-    rmm::exec_policy(stream)->on(stream.value()), left_indices.begin(), left_indices.end(), 0);
+  thrust::sequence(rmm::exec_policy(stream), left_indices.begin(), left_indices.end(), 0);
   rmm::device_vector<size_type> right_indices(left.num_rows());
-  thrust::fill(rmm::exec_policy(stream)->on(stream.value()),
-               right_indices.begin(),
-               right_indices.end(),
-               JoinNoneValue);
+  thrust::fill(rmm::exec_policy(stream), right_indices.begin(), right_indices.end(), JoinNoneValue);
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
 

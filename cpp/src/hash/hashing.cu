@@ -28,7 +28,6 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include "thrust/detail/seq.h"
 
 namespace cudf {
 namespace {
@@ -82,8 +81,6 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   auto begin = thrust::make_constant_iterator(32);
   auto offsets_column =
     cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
-  auto offsets_view  = offsets_column->view();
-  auto d_new_offsets = offsets_view.data<int32_t>();
 
   auto chars_column = strings::detail::create_chars_child_column(
     input.num_rows(), 0, input.num_rows() * 32, stream, mr);
@@ -95,7 +92,7 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   auto const device_input = table_device_view::create(input, stream);
 
   // Hash each row, hashing each element sequentially left to right
-  thrust::for_each(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each(rmm::exec_policy(stream),
                    thrust::make_counting_iterator(0),
                    thrust::make_counting_iterator(input.num_rows()),
                    [d_chars, device_input = *device_input] __device__(auto row_index) {
@@ -136,7 +133,7 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
   auto output_view        = output->mutable_view();
 
   if (has_nulls(input)) {
-    thrust::tabulate(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::tabulate(rmm::exec_policy(stream),
                      output_view.begin<int32_t>(),
                      output_view.end<int32_t>(),
                      [device_input = *device_input, seed] __device__(auto row_index) {
@@ -154,7 +151,7 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
                          });
                      });
   } else {
-    thrust::tabulate(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::tabulate(rmm::exec_policy(stream),
                      output_view.begin<int32_t>(),
                      output_view.end<int32_t>(),
                      [device_input = *device_input, seed] __device__(auto row_index) {
@@ -199,13 +196,13 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
     auto device_initial_hash = rmm::device_vector<uint32_t>(initial_hash);
 
     if (nullable) {
-      thrust::tabulate(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::tabulate(rmm::exec_policy(stream),
                        output_view.begin<int32_t>(),
                        output_view.end<int32_t>(),
                        row_hasher_initial_values<MurmurHash3_32, true>(
                          *device_input, device_initial_hash.data().get()));
     } else {
-      thrust::tabulate(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::tabulate(rmm::exec_policy(stream),
                        output_view.begin<int32_t>(),
                        output_view.end<int32_t>(),
                        row_hasher_initial_values<MurmurHash3_32, false>(
@@ -213,12 +210,12 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
     }
   } else {
     if (nullable) {
-      thrust::tabulate(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::tabulate(rmm::exec_policy(stream),
                        output_view.begin<int32_t>(),
                        output_view.end<int32_t>(),
                        row_hasher<MurmurHash3_32, true>(*device_input));
     } else {
-      thrust::tabulate(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::tabulate(rmm::exec_policy(stream),
                        output_view.begin<int32_t>(),
                        output_view.end<int32_t>(),
                        row_hasher<MurmurHash3_32, false>(*device_input));

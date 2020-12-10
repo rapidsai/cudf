@@ -48,7 +48,7 @@ class ReductionTest extends CudfTestBase {
       return Scalar.fromNull(baseType);
     }
     if (FLOAT_REDUCTIONS.contains(op.kind)) {
-      if (baseType == DType.FLOAT32) {
+      if (baseType.equals(DType.FLOAT32)) {
         return Scalar.fromFloat((Float) expectedObject);
       }
       return Scalar.fromDouble((Double) expectedObject);

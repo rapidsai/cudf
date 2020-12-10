@@ -45,13 +45,11 @@
 #include <jit/rolling_jit_detail.hpp.jit>
 #include <jit/types.hpp.jit>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/device_vector.hpp>
 
 #include <thrust/binary_search.h>
-#include <thrust/detail/execution_policy.h>
-#include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>

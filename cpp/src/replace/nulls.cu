@@ -314,7 +314,7 @@ struct replace_nulls_scalar_kernel_forwarder {
     auto device_in   = cudf::column_device_view::create(input);
 
     auto func = replace_nulls_functor<Type>{s1.data()};
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       input.data<Type>(),
                       input.data<Type>() + input.size(),
                       cudf::detail::make_validity_iterator(*device_in),

@@ -25,6 +25,7 @@
 #include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace strings {
@@ -54,7 +55,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
   using cudf::detail::side;
   size_type strings_count = static_cast<size_type>(std::distance(begin, end));
   if (strings_count == 0) return make_empty_strings_column(stream, mr);
-  auto execpol    = rmm::exec_policy(stream);
+
   auto lhs_column = column_device_view::create(lhs.parent(), stream);
   auto d_lhs      = *lhs_column;
   auto rhs_column = column_device_view::create(rhs.parent(), stream);
@@ -86,7 +87,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
     strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
   // merge the strings
   auto d_chars = chars_column->mutable_view().template data<char>();
-  thrust::for_each_n(execpol->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      [d_lhs, d_rhs, begin, d_offsets, d_chars] __device__(size_type idx) {
