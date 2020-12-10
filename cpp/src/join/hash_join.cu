@@ -203,16 +203,14 @@ get_left_join_indices_complement(rmm::device_vector<size_type> &right_indices,
  * @return Built hash table.
  */
 std::unique_ptr<multimap_type, std::function<void(multimap_type *)>> build_join_hash_table(
-  cudf::table_view const &build,
-  null_equality compare_nulls,
-  rmm::cuda_stream_view stream)
+  cudf::table_view const &build, null_equality compare_nulls, rmm::cuda_stream_view stream)
 {
-  auto build_table = cudf::table_device_view::create(build, stream);
+  auto build_device_table = cudf::table_device_view::create(build, stream);
 
-  CUDF_EXPECTS(0 != build_table->num_columns(), "Selected build dataset is empty");
-  CUDF_EXPECTS(0 != build_table->num_rows(), "Build side table has no rows");
+  CUDF_EXPECTS(0 != build_device_table->num_columns(), "Selected build dataset is empty");
+  CUDF_EXPECTS(0 != build_device_table->num_rows(), "Build side table has no rows");
 
-  const size_type build_table_num_rows{build_table->num_rows()};
+  const size_type build_table_num_rows{build_device_table->num_rows()};
   size_t const hash_table_size = compute_hash_table_size(build_table_num_rows);
 
   auto hash_table = multimap_type::create(hash_table_size,
@@ -222,7 +220,7 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type *)>> build_join_
                                           multimap_type::key_equal(),
                                           multimap_type::allocator_type());
 
-  row_hash hash_build{*build_table};
+  row_hash hash_build{*build_device_table};
   rmm::device_scalar<int> failure(0, stream);
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   detail::grid_1d config(build_table_num_rows, block_size);
@@ -515,7 +513,7 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const &build,
 
   if (_build_on.empty() || 0 == build.num_rows()) { return; }
 
-  _hash_table      = build_join_hash_table(_build_selected, compare_nulls, stream);
+  _hash_table = build_join_hash_table(_build_selected, compare_nulls, stream);
 }
 
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>>
