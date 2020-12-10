@@ -370,10 +370,12 @@ class DateOffset(pd.DateOffset, Container):
         }
 
         supported_kwargs = {"months"}
-        kwds = {
-            k: cudf.Scalar(v) if k in all_possible_kwargs else v
-            for k, v in kwds.items()
-        }
+
+        for k, v in kwds.items():
+            if k in all_possible_kwargs:
+                # Months must be int16
+                dtype = "int16" if k == "months" else None
+                kwds[k] = cudf.Scalar(v, dtype=dtype)
 
         super().__init__(n=n, normalize=normalize, **kwds)
 
@@ -386,9 +388,7 @@ class DateOffset(pd.DateOffset, Container):
 
     def _generate_column(self, size, op):
         months = -self.months if op == "sub" else self.months
-        col = cudf.core.column.as_column(
-            months, dtype=np.dtype("int16"), length=size
-        )
+        col = cudf.core.column.as_column(months, length=size)
         return col
 
     @property
