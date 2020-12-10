@@ -4,7 +4,6 @@
 
 - PR #6847 Add a cmake find module for cuFile in JNI code
 - PR #6902 Implement `DataFrame.quantile` for `datetime` and `timedelta` data types
-- PR #6940 Add JNI wrapper for the cuFile API (GDS)
 - PR #6814 Implement `cudf::reduce` for `decimal32` and `decimal64` (part 1)
 - PR #6929 Add `Index.set_names` api
 
