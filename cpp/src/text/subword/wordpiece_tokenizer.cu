@@ -20,10 +20,10 @@
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/utilities/error.hpp>
+
 #include <nvtext/subword_tokenize.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/remove.h>
@@ -349,7 +349,8 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
   // all values not equal to the max uint32_t and place them at the start of the array. We leverage
   // the fact that the start_word_indices and the end_word indices are contiguous to only launch one
   // device select kernel.
-  auto itr_end = thrust::remove(rmm::exec_policy(stream),
+  auto const execpol = rmm::exec_policy(stream);
+  auto itr_end       = thrust::remove(execpol->on(stream.value()),
                                 device_word_indices.begin(),
                                 device_word_indices.end(),
                                 std::numeric_limits<uint32_t>::max());
@@ -383,7 +384,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
   // Repurpose the input array for the token ids. In the worst case, each code point ends up being a
   // token so this will always have enough memory to store the contiguous tokens.
   uint32_t* contiguous_token_ids = device_code_points;
-  thrust::copy_if(rmm::exec_policy(stream),
+  thrust::copy_if(execpol->on(stream.value()),
                   device_token_ids.begin(),
                   device_token_ids.end(),
                   contiguous_token_ids,
@@ -391,7 +392,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
 
   // Repurpose start word indices since it is the same size and type as the required output.
   uint32_t* token_id_counts = device_start_word_indices;
-  thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+  thrust::transform_inclusive_scan(execpol->on(stream.value()),
                                    device_tokens_per_word.data(),
                                    device_tokens_per_word.data() + num_code_points,
                                    token_id_counts,
@@ -399,7 +400,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stre
                                    thrust::plus<uint32_t>());
 
   // Update the device_strings_offsets using the token_id_counts
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<uint32_t>(1),
                      num_strings,
                      update_strings_lengths_fn{token_id_counts, device_strings_offsets});

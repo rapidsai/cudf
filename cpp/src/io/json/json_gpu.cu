@@ -32,8 +32,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/device_vector.hpp>
-#include <rmm/exec_policy.hpp>
 
 #include <thrust/detail/copy.h>
 #include <thrust/find.h>
@@ -837,7 +835,7 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
   if (do_set_null_count) {
     // Set the null count to the row count (all fields assumes to be null).
     thrust::for_each(
-      rmm::exec_policy(stream),
+      rmm::exec_policy(stream)->on(stream.value()),
       d_column_infos.begin(),
       d_column_infos.end(),
       [num_records = row_offsets.size()] __device__(auto &info) { info.null_count = num_records; });

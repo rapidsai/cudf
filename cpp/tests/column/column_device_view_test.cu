@@ -26,7 +26,6 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
 
 struct ColumnDeviceViewTest : public cudf::test::BaseFixture {
 };
@@ -40,8 +39,8 @@ TEST_F(ColumnDeviceViewTest, Sample)
   auto input_device_view = cudf::column_device_view::create(input, stream);
   auto output_device_view =
     cudf::mutable_column_device_view::create(output->mutable_view(), stream);
-
-  EXPECT_NO_THROW(thrust::copy(rmm::exec_policy(stream),
+  auto exec = rmm::exec_policy(stream);
+  EXPECT_NO_THROW(thrust::copy(exec->on(stream.value()),
                                input_device_view->begin<T>(),
                                input_device_view->end<T>(),
                                output_device_view->begin<T>()));
@@ -58,8 +57,8 @@ TEST_F(ColumnDeviceViewTest, MismatchingType)
   auto input_device_view = cudf::column_device_view::create(input, stream);
   auto output_device_view =
     cudf::mutable_column_device_view::create(output->mutable_view(), stream);
-
-  EXPECT_THROW(thrust::copy(rmm::exec_policy(stream),
+  auto exec = rmm::exec_policy(stream);
+  EXPECT_THROW(thrust::copy(exec->on(stream.value()),
                             input_device_view->begin<T>(),
                             input_device_view->end<T>(),
                             output_device_view->begin<int64_t>()),

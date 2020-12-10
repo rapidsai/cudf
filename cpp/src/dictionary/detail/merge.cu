@@ -23,7 +23,6 @@
 #include <cudf/dictionary/dictionary_factories.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -47,7 +46,7 @@ std::unique_ptr<column> merge(dictionary_column_view const& lcol,
     cudf::detail::indexalator_factory::make_output_iterator(indices_column->mutable_view());
 
   // merge the input indices columns into the output column
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                     row_order.begin(),
                     row_order.end(),
                     output_iter,

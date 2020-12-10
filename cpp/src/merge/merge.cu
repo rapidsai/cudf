@@ -24,9 +24,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 
+#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
-#include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -194,6 +193,7 @@ rmm::device_vector<index_type> generate_merged_indices(
 
   rmm::device_vector<order> d_column_order(column_order);
 
+  auto exec_pol = rmm::exec_policy(stream);
   if (nullable) {
     rmm::device_vector<null_order> d_null_precedence(null_precedence);
 
@@ -202,7 +202,7 @@ rmm::device_vector<index_type> generate_merged_indices(
                                                         *rhs_device_view,
                                                         d_column_order.data().get(),
                                                         d_null_precedence.data().get());
-    thrust::merge(rmm::exec_policy(stream),
+    thrust::merge(exec_pol->on(stream.value()),
                   left_begin_zip_iterator,
                   left_end_zip_iterator,
                   right_begin_zip_iterator,
@@ -212,7 +212,7 @@ rmm::device_vector<index_type> generate_merged_indices(
   } else {
     auto ineq_op = detail::row_lexicographic_tagged_comparator<false>(
       *lhs_device_view, *rhs_device_view, d_column_order.data().get());
-    thrust::merge(rmm::exec_policy(stream),
+    thrust::merge(exec_pol->on(stream.value()),
                   left_begin_zip_iterator,
                   left_end_zip_iterator,
                   right_begin_zip_iterator,
@@ -279,11 +279,13 @@ struct column_merger {
     auto const d_lcol = lcol.data<Type>();
     auto const d_rcol = rcol.data<Type>();
 
+    auto exe_pol = rmm::exec_policy(stream);
+
     // capture lcol, rcol
     // and "gather" into merged_view.data()[indx_merged]
     // from lcol or rcol, depending on side;
     //
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(exe_pol->on(stream.value()),
                       row_order_.begin(),
                       row_order_.end(),
                       merged_view.begin<Type>(),

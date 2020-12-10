@@ -24,7 +24,6 @@
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace detail {
@@ -424,7 +423,10 @@ struct identity_initializer {
   std::enable_if_t<is_supported<T, k>(), void> operator()(mutable_column_view const& col,
                                                           rmm::cuda_stream_view stream)
   {
-    thrust::fill(rmm::exec_policy(stream), col.begin<T>(), col.end<T>(), get_identity<T, k>());
+    thrust::fill(rmm::exec_policy(stream)->on(stream.value()),
+                 col.begin<T>(),
+                 col.end<T>(),
+                 get_identity<T, k>());
   }
 
   template <typename T, aggregation::Kind k>

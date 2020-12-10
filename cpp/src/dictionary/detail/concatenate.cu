@@ -26,7 +26,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/transform_scan.h>
@@ -159,7 +158,7 @@ struct dispatch_compute_indices {
     auto result_itr =
       cudf::detail::indexalator_factory::make_output_iterator(result->mutable_view());
     // new indices values are computed by matching the concatenated keys to the new key set
-    thrust::lower_bound(rmm::exec_policy(stream),
+    thrust::lower_bound(rmm::exec_policy(stream)->on(stream.value()),
                         new_keys_view->begin<Element>(),
                         new_keys_view->end<Element>(),
                         all_itr,
@@ -237,7 +236,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
                                                      });
   // the indices offsets (pair.second) are for building the map
   thrust::lower_bound(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream)->on(stream.value()),
     children_offsets.begin() + 1,
     children_offsets.end(),
     indices_itr,
