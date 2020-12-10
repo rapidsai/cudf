@@ -58,7 +58,7 @@ std::unique_ptr<column> all_characters_of_type(
   // get the static character types table
   auto d_flags = detail::get_character_flags_table();
   // set the output values by checking the character types for each string
-  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
@@ -201,7 +201,7 @@ std::unique_ptr<column> is_integer(
                                      stream,
                                      mr);
   auto d_results = results->mutable_view().data<bool>();
-  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings.size()),
                     d_results,
@@ -222,7 +222,7 @@ bool all_integer(strings_column_view const& strings, rmm::cuda_stream_view strea
       if (d_column.is_null(idx)) return false;
       return string::is_integer(d_column.element<string_view>(idx));
     });
-  return thrust::all_of(rmm::exec_policy(stream)->on(stream.value()),
+  return thrust::all_of(rmm::exec_policy(stream),
                         transformer_itr,
                         transformer_itr + strings.size(),
                         thrust::identity<bool>());
@@ -244,7 +244,7 @@ std::unique_ptr<column> is_float(
                                      mr);
   auto d_results = results->mutable_view().data<bool>();
   // check strings for valid float chars
-  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings.size()),
                     d_results,
@@ -265,7 +265,7 @@ bool all_float(strings_column_view const& strings, rmm::cuda_stream_view stream)
       if (d_column.is_null(idx)) return false;
       return string::is_float(d_column.element<string_view>(idx));
     });
-  return thrust::all_of(rmm::exec_policy(stream)->on(stream.value()),
+  return thrust::all_of(rmm::exec_policy(stream),
                         transformer_itr,
                         transformer_itr + strings.size(),
                         thrust::identity<bool>());

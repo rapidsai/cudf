@@ -23,6 +23,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace detail {
@@ -57,14 +58,14 @@ struct byte_list_conversion {
     size_type mask     = sizeof(T) - 1;
 
     if (configuration == flip_endianness::YES) {
-      thrust::for_each(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::for_each(rmm::exec_policy(stream),
                        thrust::make_counting_iterator(0),
                        thrust::make_counting_iterator(num_bytes),
                        [d_chars, d_data, mask] __device__(auto index) {
                          d_chars[index] = d_data[index + mask - ((index & mask) << 1)];
                        });
     } else {
-      thrust::copy_n(rmm::exec_policy(stream)->on(stream.value()), d_data, num_bytes, d_chars);
+      thrust::copy_n(rmm::exec_policy(stream), d_data, num_bytes, d_chars);
     }
 
     auto begin          = thrust::make_constant_iterator(cudf::size_of(input_column.type()));

@@ -20,6 +20,7 @@
 #include <cudf/unary.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace detail {
@@ -54,7 +55,7 @@ std::unique_ptr<column> true_if(
   auto output_mutable_view = output->mutable_view();
   auto output_data         = output_mutable_view.data<bool>();
 
-  thrust::transform(rmm::exec_policy(stream)->on(stream.value()), begin, end, output_data, p);
+  thrust::transform(rmm::exec_policy(stream), begin, end, output_data, p);
 
   return output;
 }

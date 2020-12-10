@@ -23,6 +23,8 @@
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <rmm/device_vector.hpp>
+
 #include <thrust/sequence.h>
 #include <random>
 

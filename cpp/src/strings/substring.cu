@@ -129,7 +129,7 @@ std::unique_ptr<column> slice_strings(
   auto chars_column = strings::detail::create_chars_child_column(
     strings_count, strings.null_count(), bytes, stream, mr);
   auto d_chars = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      substring_fn{d_column, d_start, d_stop, d_step, d_new_offsets, d_chars});
@@ -230,7 +230,7 @@ std::unique_ptr<column> compute_substrings_from_fn(column_device_view const& d_c
     cudf::strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.template data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,
                      substring_from_fn{d_column, starts, stops, d_new_offsets, d_chars});
@@ -262,7 +262,7 @@ void compute_substring_indices(column_device_view const& d_column,
   auto strings_count = d_column.size();
 
   thrust::for_each_n(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     [delim_itr, delimiter_count, start_char_pos, end_char_pos, d_column] __device__(size_type idx) {

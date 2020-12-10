@@ -24,10 +24,10 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/device_vector.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <thrust/binary_search.h>
