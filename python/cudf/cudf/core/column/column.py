@@ -1011,7 +1011,7 @@ class ColumnBase(Column, Serializable):
         elif np.issubdtype(dtype, np.timedelta64):
             return self.as_timedelta_column(dtype, **kwargs)
         else:
-            return self.as_numerical_column(dtype, **kwargs)
+            return self.as_numerical_column(dtype)
 
     def as_categorical_column(self, dtype, **kwargs):
         if "ordered" in kwargs:
@@ -1056,7 +1056,7 @@ class ColumnBase(Column, Serializable):
             ordered=ordered,
         )
 
-    def as_numerical_column(self, dtype, **kwargs):
+    def as_numerical_column(self, dtype):
         raise NotImplementedError
 
     def as_datetime_column(self, dtype, **kwargs):

@@ -1982,6 +1982,15 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testLogicalCast() {
+    try (ColumnVector cv = ColumnVector.decimalFromLongs(-2, 1L, 2L, 100L, 552L);
+         ColumnVector expected = ColumnVector.fromLongs(1L, 2L, 100L, 552L);
+         ColumnView casted = cv.logicalCastTo(DType.INT64)) {
+      assertColumnsAreEqual(expected, casted);
+    }
+  }
+
+  @Test
   void testFixedWidthCast() {
     int[] values = new int[]{1,3,4,5,2};
     long[] longValues = Arrays.stream(values).asLongStream().toArray();

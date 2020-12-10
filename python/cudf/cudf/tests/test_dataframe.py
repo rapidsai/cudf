@@ -784,7 +784,8 @@ a b  c
     assert got.split() == expect.split()
 
 
-def test_dataframe_to_string_wide():
+def test_dataframe_to_string_wide(monkeypatch):
+    monkeypatch.setenv("COLUMNS", 79)
     # Test basic
     df = gd.DataFrame()
     for i in range(100):
@@ -800,7 +801,6 @@ def test_dataframe_to_string_wide():
 [3 rows x 100 columns]
 """
     # values should match despite whitespace difference
-
     assert got.split() == expect.split()
 
 

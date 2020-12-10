@@ -9,12 +9,16 @@
 
 ## Improvements
 
+- PR #6275 Update to official libcu++ on Github
 - PR #6838 Fix `columns` & `index` handling in dataframe constructor
+- PR #6750 Remove **kwargs from string/categorical methods
 
 ## Bug Fixes
 
+- PR #6922 Fix N/A detection for empty fields in CSV reader
 - PR #6912 Fix rmm_mode=managed parameter for gtests
 - PR #6943 Fix join with nulls not equal performance
+- PR #6942 Fix cudf::merge gtest for dictionary columns
 
 
 # cuDF 0.17.0 (Date TBD)
