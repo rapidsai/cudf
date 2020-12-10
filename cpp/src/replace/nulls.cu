@@ -391,7 +391,7 @@ struct replace_nulls_policy_kernel_forwarder {
 
     auto func = replace_policy_functor();
     if (replace_policy == cudf::replace_policy::PRECEDING) {
-      thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::inclusive_scan(rmm::exec_policy(stream),
                              in_begin,
                              in_begin + input.size(),
                              gm_begin,
@@ -399,7 +399,7 @@ struct replace_nulls_policy_kernel_forwarder {
     } else {
       auto in_rbegin = thrust::make_reverse_iterator(in_begin + input.size());
       auto gm_rbegin = thrust::make_reverse_iterator(gm_begin + gather_map.size());
-      thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::inclusive_scan(rmm::exec_policy(stream),
                              in_rbegin,
                              in_rbegin + input.size(),
                              gm_rbegin,
