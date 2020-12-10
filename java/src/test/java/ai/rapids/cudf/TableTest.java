@@ -321,7 +321,7 @@ public class TableTest extends CudfTestBase {
       for (long row = 0; row < numRows; row++) {
         try (HostColumnVector cv = table.getColumn(col).copyToHost()) {
           Object key = 0;
-          if (cv.getType() == DType.INT32) {
+          if (cv.getType().equals(DType.INT32)) {
             key = cv.getInt(row);
           } else {
             key = cv.getDouble(row);
@@ -804,7 +804,7 @@ public class TableTest extends CudfTestBase {
     try (Table table = Table.readORC(TEST_ORC_TIMESTAMP_DATE_FILE)) {
       assertEquals(2, table.getNumberOfColumns());
       found = table.getColumn(0).getType();
-      assertTrue(found.isTimestamp());
+      assertTrue(found.isTimestampType());
       assertEquals(DType.TIMESTAMP_MILLISECONDS, table.getColumn(1).getType());
     }
 
