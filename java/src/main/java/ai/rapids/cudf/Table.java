@@ -1301,7 +1301,7 @@ public final class Table implements AutoCloseable {
     assert this.getRowCount() != 0 : "Input table cannot be empty";
     assert valueTable.getRowCount() != 0 : "Value table cannot be empty";
     for (int i = 0; i < Math.min(columns.length, valueTable.columns.length); i++) {
-      assert valueTable.columns[i].getType() == this.getColumn(i).getType() :
+      assert valueTable.columns[i].getType().equals(this.getColumn(i).getType()) :
           "Input and values tables' data types do not match";
     }
   }
@@ -1577,7 +1577,7 @@ public final class Table implements AutoCloseable {
    * the filter defined by the boolean mask
    */
   public Table filter(ColumnVector mask) {
-    assert mask.getType() == DType.BOOL8 : "Mask column must be of type BOOL8";
+    assert mask.getType().equals(DType.BOOL8) : "Mask column must be of type BOOL8";
     assert getRowCount() == 0 || getRowCount() == mask.getRowCount() : "Mask column has incorrect size";
     return new Table(filter(nativeHandle, mask.getNativeView()));
   }
@@ -2668,9 +2668,9 @@ public final class Table implements AutoCloseable {
           DType dtype = dataType.getType();
           Object dataArray = typeErasedData.get(i);
           if (dtype.isNestedType()) {
-            if (dtype == DType.LIST) {
+            if (dtype.equals(DType.LIST)) {
               columns.add(fromLists(dataType, (Object[][]) dataArray));
-            } else if (dtype == DType.STRUCT) {
+            } else if (dtype.equals(DType.STRUCT)) {
               columns.add(fromStructs(dataType, (StructData[]) dataArray));
             } else {
               throw new IllegalStateException("Unexpected nested type: " + dtype);
