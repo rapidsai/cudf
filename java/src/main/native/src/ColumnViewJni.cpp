@@ -724,6 +724,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_logicalCastTo(JNIEnv *env, jclass,
+                                                                     jlong handle, jint type,
+                                                                     jint scale) {
+  JNI_NULL_CHECK(env, handle, "native handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
+    cudf::data_type n_data_type = cudf::jni::make_data_type(type, scale);
+    std::unique_ptr<cudf::column_view> result = std::make_unique<cudf::column_view>();
+    *result = cudf::logical_cast(*column, n_data_type);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_byteListCast(JNIEnv *env, jobject j_object,
                                                                     jlong handle,
                                                                     jboolean endianness_config) {
