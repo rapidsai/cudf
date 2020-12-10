@@ -27,8 +27,8 @@ public class CuFileTest extends CudfTestBase {
          HostMemoryBuffer dest = HostMemoryBuffer.allocate(16);) {
       orig.setLong(0, 123456789);
       from.copyFromHostBuffer(orig);
-      CuFile.copyDeviceBufferToFile(tempFile, from, false);
-      CuFile.copyFileToDeviceBuffer(to, tempFile, 0);
+      CuFile.writeDeviceBufferToFile(tempFile, 0, from);
+      CuFile.readFileToDeviceBuffer(to, tempFile, 0);
       dest.copyFromDeviceBuffer(to);
       assertEquals(123456789, dest.getLong(0));
     }
@@ -43,17 +43,17 @@ public class CuFileTest extends CudfTestBase {
          HostMemoryBuffer dest = HostMemoryBuffer.allocate(16);) {
       orig.setLong(0, 123456789);
       from.copyFromHostBuffer(orig);
-      CuFile.copyDeviceBufferToFile(tempFile, from, true);
+      CuFile.appendDeviceBufferToFile(tempFile, from);
 
       orig.setLong(0, 987654321);
       from.copyFromHostBuffer(orig);
-      CuFile.copyDeviceBufferToFile(tempFile, from, true);
+      CuFile.appendDeviceBufferToFile(tempFile, from);
 
-      CuFile.copyFileToDeviceBuffer(to, tempFile, 0);
+      CuFile.readFileToDeviceBuffer(to, tempFile, 0);
       dest.copyFromDeviceBuffer(to);
       assertEquals(123456789, dest.getLong(0));
 
-      CuFile.copyFileToDeviceBuffer(to, tempFile, 16);
+      CuFile.readFileToDeviceBuffer(to, tempFile, 16);
       dest.copyFromDeviceBuffer(to);
       assertEquals(987654321, dest.getLong(0));
     }

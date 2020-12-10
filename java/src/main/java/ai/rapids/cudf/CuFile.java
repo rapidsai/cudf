@@ -65,21 +65,44 @@ public class CuFile {
   private static native void destroyDriver(long pointer);
 
   /**
-   * Copy a device buffer to a given file path synchronously.
+   * Check if the libcufilejni library is loaded.
+   *
+   * @return true if the libcufilejni library has been successfully loaded.
+   */
+  public static boolean libraryLoaded() {
+    return initialized;
+  }
+
+  /**
+   * Write a device buffer to a given file path synchronously.
+   * <p>
+   * This method is NOT thread safe if the path points to the same file on disk.
+   *
+   * @param path        The file path to copy to.
+   * @param file_offset The file offset from which to write the buffer.
+   * @param buffer      The device buffer to copy from.
+   * @return The file offset from which the buffer was appended.
+   */
+  public static void writeDeviceBufferToFile(File path, long file_offset,
+                                             BaseDeviceMemoryBuffer buffer) {
+    writeToFile(path.getAbsolutePath(), file_offset, buffer.getAddress(), buffer.getLength());
+  }
+
+  /**
+   * Append a device buffer to a given file path synchronously.
    * <p>
    * This method is NOT thread safe if the path points to the same file on disk.
    *
    * @param path   The file path to copy to.
    * @param buffer The device buffer to copy from.
-   * @param append Whether to append to the file.
    * @return The file offset from which the buffer was appended.
    */
-  public static long copyDeviceBufferToFile(File path, DeviceMemoryBuffer buffer, boolean append) {
-    return copyToFile(path.getAbsolutePath(), buffer.getAddress(), buffer.getLength(), append);
+  public static long appendDeviceBufferToFile(File path, BaseDeviceMemoryBuffer buffer) {
+    return appendToFile(path.getAbsolutePath(), buffer.getAddress(), buffer.getLength());
   }
 
   /**
-   * Copy a file into a device buffer synchronously.
+   * Read a file into a device buffer synchronously.
    * <p>
    * This method is NOT thread safe if the path points to the same file on disk.
    *
@@ -87,11 +110,14 @@ public class CuFile {
    * @param path       The file path to copy from.
    * @param fileOffset The file offset from which to copy the content.
    */
-  public static void copyFileToDeviceBuffer(DeviceMemoryBuffer buffer, File path, long fileOffset) {
-    copyFromFile(buffer.getAddress(), buffer.getLength(), path.getAbsolutePath(), fileOffset);
+  public static void readFileToDeviceBuffer(BaseDeviceMemoryBuffer buffer, File path,
+                                            long fileOffset) {
+    readFromFile(buffer.getAddress(), buffer.getLength(), path.getAbsolutePath(), fileOffset);
   }
 
-  private static native long copyToFile(String path, long address, long length, boolean append);
+  private static native void writeToFile(String path, long file_offset, long address, long length);
 
-  private static native void copyFromFile(long address, long length, String path, long fileOffset);
+  private static native long appendToFile(String path, long address, long length);
+
+  private static native void readFromFile(long address, long length, String path, long fileOffset);
 }
