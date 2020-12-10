@@ -817,7 +817,8 @@ inline __device__ void gpuOutputDecimalAsFloat(volatile page_state_s *s,
 
 inline __device__ void gpuOutputFixedLenByteArrayAsInt64(volatile page_state_s *s,
                                                          int src_pos,
-                                                         int64_t *dst) {
+                                                         int64_t *dst)
+{
   const uint8_t *dict;
   uint32_t dict_pos, dict_size = s->dict_size, dtype_len_in;
 
@@ -842,9 +843,9 @@ inline __device__ void gpuOutputFixedLenByteArrayAsInt64(volatile page_state_s *
     unscaled64 <<= 64 - dtype_len_in * 8;
     unscaled64 >>= 64 - dtype_len_in * 8;
   }
-//  uint2 unscaledValue;
-//  unscaledValue.x = unscaled64 & 4294967295;
-//  unscaledValue.y = unscaled64 >> 32;
+  //  uint2 unscaledValue;
+  //  unscaledValue.x = unscaled64 & 4294967295;
+  //  unscaledValue.y = unscaled64 >> 32;
   *dst = unscaled64;
 }
 

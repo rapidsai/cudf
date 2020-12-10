@@ -12,6 +12,7 @@
 - PR #6275 Update to official libcu++ on Github
 - PR #6838 Fix `columns` & `index` handling in dataframe constructor
 - PR #6750 Remove **kwargs from string/categorical methods
+- PR #6909 Support reading byte array backed decimal columns from parquet files
 
 ## Bug Fixes
 
