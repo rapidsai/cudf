@@ -432,7 +432,7 @@ struct dispatch_from_durations_fn {
     auto chars_view = chars_column->mutable_view();
     auto d_chars    = chars_view.template data<char>();
 
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        strings_count,
                        duration_to_string_fn<T>{
@@ -683,7 +683,7 @@ struct dispatch_to_durations_fn {
     auto d_items   = compiler.compiled_format_items();
     auto d_results = results_view.data<T>();
     parse_duration<T> pfn{d_strings, d_items, compiler.items_count()};
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(results_view.size()),
                       d_results,

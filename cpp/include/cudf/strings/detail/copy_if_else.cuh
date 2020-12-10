@@ -23,6 +23,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace strings {
@@ -62,7 +63,6 @@ std::unique_ptr<cudf::column> copy_if_else(
   auto strings_count = std::distance(lhs_begin, lhs_end);
   if (strings_count == 0) return make_empty_strings_column(stream, mr);
 
-  auto execpol = rmm::exec_policy(stream);
   // create null mask
   auto valid_mask = cudf::detail::valid_if(
     thrust::make_counting_iterator<size_type>(0),
@@ -97,7 +97,7 @@ std::unique_ptr<cudf::column> copy_if_else(
   auto d_chars      = chars_column->mutable_view().template data<char>();
   // fill in chars
   thrust::for_each_n(
-    execpol->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     [lhs_begin, rhs_begin, filter_fn, d_offsets, d_chars] __device__(size_type idx) {

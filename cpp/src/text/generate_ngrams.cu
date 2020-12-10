@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <nvtext/generate_ngrams.hpp>
-
 #include <strings/utilities.cuh>
 
 #include <cudf/column/column.hpp>
@@ -30,7 +28,10 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <nvtext/generate_ngrams.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/transform_scan.h>
 
@@ -143,8 +144,8 @@ std::unique_ptr<cudf::column> generate_ngrams(
   auto chars_column =
     cudf::strings::detail::create_chars_child_column(ngrams_count, 0, total_bytes, stream, mr);
   char* const d_chars = chars_column->mutable_view().data<char>();
-  auto execpol        = rmm::exec_policy(stream);
-  thrust::for_each_n(execpol->on(stream.value()),
+
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      ngrams_count,
                      ngram_generator_fn{d_strings, ngrams, d_separator, d_offsets, d_chars});
@@ -216,14 +217,13 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
   if (strings_count == 0)  // if no strings, return an empty column
     return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
-  auto const execpol        = rmm::exec_policy(stream);
   auto const strings_column = cudf::column_device_view::create(strings.parent(), stream);
   auto const d_strings      = *strings_column;
 
   // create a vector of ngram offsets for each string
   rmm::device_vector<cudf::size_type> ngram_offsets(strings_count + 1);
   thrust::transform_exclusive_scan(
-    execpol->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
     thrust::make_counting_iterator<cudf::size_type>(strings_count + 1),
     ngram_offsets.begin(),
@@ -255,14 +255,14 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
   auto d_offsets      = offsets_column->mutable_view().data<int32_t>();
   // compute the size of each ngram -- output goes in d_offsets
   character_ngram_generator_fn generator{d_strings, ngrams, d_ngram_offsets, d_offsets};
-  thrust::for_each_n(execpol->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,
                      generator);
 
   // convert sizes into offsets in-place
   thrust::exclusive_scan(
-    execpol->on(stream.value()), d_offsets, d_offsets + total_ngrams + 1, d_offsets);
+    rmm::exec_policy(stream), d_offsets, d_offsets + total_ngrams + 1, d_offsets);
 
   // build the chars column
   auto const chars_bytes =
@@ -270,7 +270,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
   auto chars_column =
     cudf::strings::detail::create_chars_child_column(total_ngrams, 0, chars_bytes, stream, mr);
   generator.d_chars = chars_column->mutable_view().data<char>();  // output chars
-  thrust::for_each_n(execpol->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,
                      generator);

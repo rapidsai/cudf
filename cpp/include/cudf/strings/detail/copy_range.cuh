@@ -24,6 +24,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -187,7 +188,7 @@ std::unique_ptr<column> copy_range(
     // copy to the chars column
 
     auto p_chars = (p_chars_column->mutable_view()).template data<char>();
-    thrust::for_each(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::for_each(rmm::exec_policy(stream),
                      thrust::make_counting_iterator(0),
                      thrust::make_counting_iterator(target.size()),
                      [source_value_begin,
