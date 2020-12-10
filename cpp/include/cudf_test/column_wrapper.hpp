@@ -547,7 +547,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    * auto const col = fixed_point_column_wrapper<int32_t>{{420, 42, 4}, scale_type{-1}};
    * @endcode
    *
-   * @param values The list of already shifted values
+   * @param values The initializer list of already shifted values
    * @param scale  The scale of the elements in the column
    */
   fixed_point_column_wrapper(std::initializer_list<Rep> values, numeric::scale_type scale)
@@ -605,8 +605,8 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
   }
 
   /**
-   * @brief Construct a nullable column from a list of decimal elements using another list to
-   * indicate the validity of each element.
+   * @brief Construct a nullable column from an initializer list of decimal elements using another
+   * list to indicate the validity of each element.
    *
    * The validity of each element is determined by an `initializer_list` of booleans where `true`
    * indicates the element is valid, and `false` indicates the element is null.
@@ -617,8 +617,8 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    * fixed_width_column_wrapper<int32_t> w{ {1,2,3,4}, {1, 0, 1, 0}, scale_type{0}};
    * @endcode
    *
-   * @param elements The list of elements
-   * @param validity The list of validity indicator booleans
+   * @param elements The initializer list of elements
+   * @param validity The initializer list of validity indicator booleans
    * @param scale    The scale of the elements in the column
    **/
   fixed_point_column_wrapper(std::initializer_list<Rep> elements,
@@ -630,8 +630,9 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
   }
 
   /**
-   * @brief Construct a nullable column from a list of decimal elements and the the range `[v, v +
-   * element_list.size())` interpreted as booleans to indicate the validity of each element.
+   * @brief Construct a nullable column from an initializer list of decimal elements and the the
+   * range `[v, v + element_list.size())` interpreted as booleans to indicate the validity of each
+   * element.
    *
    * Example:
    * @code{.cpp}
@@ -640,7 +641,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    * auto w        = fixed_width_column_wrapper<int32_t>{ {1,2,3,4}, validity, scale_type{0}};
    * @endcode
    *
-   * @param element_list The list of elements
+   * @param element_list The initializer list of elements
    * @param v            The beginning of the sequence of validity indicators
    * @param scale        The scale of the elements in the column
    **/
@@ -667,7 +668,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    *
    * @param begin    The beginning of the sequence of elements
    * @param end      The end of the sequence of elements
-   * @param validity The list of validity indicator booleans
+   * @param validity The initializer list of validity indicator booleans
    * @param scale    The scale of the elements in the column
    **/
   template <typename FixedPointRepIterator>
