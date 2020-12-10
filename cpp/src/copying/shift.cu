@@ -27,6 +27,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -105,8 +106,7 @@ struct shift_functor {
         return out_of_bounds(size, src_idx) ? *fill : input.element<Type>(src_idx);
       };
 
-    thrust::transform(
-      rmm::exec_policy(stream)->on(stream.value()), index_begin, index_end, data, func_value);
+    thrust::transform(rmm::exec_policy(stream), index_begin, index_end, data, func_value);
 
     return output;
   }

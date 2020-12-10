@@ -30,8 +30,9 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/logical.h>
 #include <thrust/transform_reduce.h>
@@ -85,8 +86,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   auto const null_count = valid_mask.second;
 
   // build offsets column by computing sizes of each string in the output
-  auto offsets_transformer = [d_table, num_columns, d_separator, d_narep] __device__(
-                               size_type row_idx) {
+  auto offsets_transformer = [d_table, d_separator, d_narep] __device__(size_type row_idx) {
     // for this row (idx), iterate over each column and add up the bytes
     bool null_element =
       thrust::any_of(thrust::seq, d_table.begin(), d_table.end(), [row_idx](auto const& d_column) {
@@ -122,7 +122,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   // fill the chars column
   auto d_results_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     [d_table, num_columns, d_separator, d_narep, d_results_offsets, d_results_chars] __device__(
@@ -166,7 +166,6 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
 
   CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be a valid string_scalar");
 
-  auto execpol = rmm::exec_policy(stream);
   string_view d_separator(separator.data(), separator.size());
   auto d_narep = get_scalar_device_view(const_cast<string_scalar&>(narep));
 
@@ -178,7 +177,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
   auto d_output_offsets = output_offsets.data().get();
   // using inclusive-scan to compute last entry which is the total size
   thrust::transform_inclusive_scan(
-    execpol->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     d_output_offsets + 1,
@@ -222,7 +221,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.data<char>();
   thrust::for_each_n(
-    execpol->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     [d_strings, d_separator, d_narep, d_output_offsets, d_chars] __device__(size_type idx) {
@@ -286,7 +285,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 
     // Execute it on every element
     thrust::transform(
-      rmm::exec_policy(stream)->on(stream.value()),
+      rmm::exec_policy(stream),
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(strings_count),
       out_col_strings.data().get(),
@@ -382,7 +381,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 
   // Fill the chars column
   auto d_results_chars = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      [d_table,

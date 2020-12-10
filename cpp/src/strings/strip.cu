@@ -26,6 +26,7 @@
 #include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/logical.h>
 #include <thrust/transform.h>
@@ -115,7 +116,6 @@ std::unique_ptr<column> strip(
   CUDF_EXPECTS(to_strip.is_valid(), "Parameter to_strip must be valid");
   string_view d_to_strip(to_strip.data(), to_strip.size());
 
-  auto execpol         = rmm::exec_policy(stream);
   auto strings_column  = column_device_view::create(strings.parent(), stream);
   auto d_column        = *strings_column;
   size_type null_count = strings.null_count();
@@ -136,7 +136,7 @@ std::unique_ptr<column> strip(
   auto chars_column = create_chars_child_column(strings_count, null_count, bytes, stream, mr);
   auto chars_view   = chars_column->mutable_view();
   auto d_chars      = chars_view.data<char>();
-  thrust::for_each_n(execpol->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      strip_fn<ExecuteOp>{d_column, stype, d_to_strip, d_offsets, d_chars});
