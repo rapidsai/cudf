@@ -210,7 +210,7 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type *)>> build_join_
   CUDF_EXPECTS(0 != build_device_table->num_columns(), "Selected build dataset is empty");
   CUDF_EXPECTS(0 != build_device_table->num_rows(), "Build side table has no rows");
 
-  const size_type build_table_num_rows{build_device_table->num_rows()};
+  size_type const build_table_num_rows{build_device_table->num_rows()};
   size_t const hash_table_size = compute_hash_table_size(build_table_num_rows);
 
   auto hash_table = multimap_type::create(hash_table_size,
@@ -225,10 +225,7 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type *)>> build_join_
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   detail::grid_1d config(build_table_num_rows, block_size);
   auto const row_bitmask = [compare_nulls, &stream, &build]() {
-    if (compare_nulls == null_equality::EQUAL)
-      return rmm::device_buffer{0, stream};
-    else
-      return cudf::detail::bitmask_and(build, stream);
+    return compare_nulls == null_equality::EQUAL ? rmm::device_buffer{0, stream} : cudf::detail::bitmask_and(build, stream);
   }();
   build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
     *hash_table,
