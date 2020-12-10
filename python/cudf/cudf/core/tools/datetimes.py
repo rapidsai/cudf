@@ -383,7 +383,7 @@ class DateOffset(pd.DateOffset, Container):
         if len(wrong_kwargs) > 0:
             raise ValueError(
                 f"Keyword arguments '{','.join(list(wrong_kwargs))}'"
-                " are not supported in cuDF DateOffsets"
+                " are not yet supported in cuDF DateOffsets"
             )
 
     def _generate_column(self, size, op):
