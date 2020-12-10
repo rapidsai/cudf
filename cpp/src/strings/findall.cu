@@ -28,6 +28,7 @@
 #include <strings/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/extrema.h>
 
@@ -125,26 +126,25 @@ std::unique_ptr<table> findall_re(
   // compile regex into device object
   auto prog       = reprog_device::create(pattern, d_flags, strings_count, stream.value());
   auto d_prog     = *prog;
-  auto execpol    = rmm::exec_policy(stream);
   int regex_insts = prog->insts_counts();
 
   rmm::device_vector<size_type> find_counts(strings_count);
   auto d_find_counts = find_counts.data().get();
 
   if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
-    thrust::transform(execpol->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_count),
                       d_find_counts,
                       findall_count_fn<RX_STACK_SMALL>{d_strings, d_prog});
   else if (regex_insts <= RX_MEDIUM_INSTS)
-    thrust::transform(execpol->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_count),
                       d_find_counts,
                       findall_count_fn<RX_STACK_MEDIUM>{d_strings, d_prog});
   else
-    thrust::transform(execpol->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_count),
                       d_find_counts,
@@ -153,7 +153,7 @@ std::unique_ptr<table> findall_re(
   std::vector<std::unique_ptr<column>> results;
 
   size_type columns =
-    *thrust::max_element(execpol->on(stream.value()), find_counts.begin(), find_counts.end());
+    *thrust::max_element(rmm::exec_policy(stream), find_counts.begin(), find_counts.end());
   // boundary case: if no columns, return all nulls column (issue #119)
   if (columns == 0)
     results.emplace_back(std::make_unique<column>(
@@ -168,20 +168,20 @@ std::unique_ptr<table> findall_re(
     string_index_pair* d_indices = indices.data().get();
 
     if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
-      thrust::transform(execpol->on(stream.value()),
+      thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
                         d_indices,
                         findall_fn<RX_STACK_SMALL>{d_strings, d_prog, column_index, d_find_counts});
     else if (regex_insts <= RX_MEDIUM_INSTS)
       thrust::transform(
-        execpol->on(stream.value()),
+        rmm::exec_policy(stream),
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(strings_count),
         d_indices,
         findall_fn<RX_STACK_MEDIUM>{d_strings, d_prog, column_index, d_find_counts});
     else
-      thrust::transform(execpol->on(stream.value()),
+      thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
                         d_indices,

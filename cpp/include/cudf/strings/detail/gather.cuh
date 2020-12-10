@@ -24,6 +24,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 
@@ -70,7 +71,6 @@ std::unique_ptr<cudf::column> gather(
   auto strings_count = strings.size();
   if (output_count == 0) return make_empty_strings_column(stream, mr);
 
-  auto execpol        = rmm::exec_policy(stream);
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
 
@@ -104,7 +104,7 @@ std::unique_ptr<cudf::column> gather(
       string_view d_str = d_strings.element<string_view>(index);
       memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes());
     };
-  thrust::for_each_n(execpol->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      output_count,
                      gather_chars);

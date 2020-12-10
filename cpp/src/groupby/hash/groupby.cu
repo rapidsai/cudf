@@ -243,7 +243,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
     cudf::detail::initialize_with_identity(var_table_view, {agg.kind}, stream);
 
     thrust::for_each_n(
-      rmm::exec_policy(stream)->on(stream.value()),
+      rmm::exec_policy(stream),
       thrust::make_counting_iterator(0),
       col.size(),
       ::cudf::detail::var_hash_functor<Map>{
@@ -431,7 +431,7 @@ void compute_single_pass_aggs(table_view const& keys,
   auto row_bitmask =
     skip_key_rows_with_nulls ? cudf::detail::bitmask_and(keys, stream) : rmm::device_buffer{};
   thrust::for_each_n(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator(0),
     keys.num_rows(),
     hash::compute_single_pass_aggs_fn<Map>{map,
@@ -467,7 +467,7 @@ std::pair<rmm::device_vector<size_type>, size_type> extract_populated_keys(
   };
 
   auto end_it = thrust::copy_if(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_transform_iterator(map.data(), get_key),
     thrust::make_transform_iterator(map.data() + map.capacity(), get_key),
     populated_keys.begin(),

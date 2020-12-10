@@ -31,6 +31,7 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
@@ -149,7 +150,6 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
   auto strings_count = strings.size();
   if (strings.is_empty()) return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
 
-  auto execpol        = rmm::exec_policy(stream);
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
 
@@ -160,7 +160,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
   // Ex. token-counts = [3,2]; token-offsets = [0,3,5]
   rmm::device_vector<int32_t> token_offsets(strings_count + 1);
   auto d_token_offsets = token_offsets.data().get();
-  thrust::transform_inclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::transform_inclusive_scan(rmm::exec_policy(stream),
                                    thrust::make_counting_iterator<cudf::size_type>(0),
                                    thrust::make_counting_iterator<cudf::size_type>(strings_count),
                                    d_token_offsets + 1,
@@ -174,7 +174,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
   rmm::device_vector<position_pair> token_positions(total_tokens);
   auto d_token_positions = token_positions.data().get();
   thrust::for_each_n(
-    execpol->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
     strings_count,
     string_tokens_positions_fn{d_strings, d_delimiter, d_token_offsets, d_token_positions});
@@ -184,7 +184,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
   rmm::device_vector<int32_t> ngram_offsets(strings_count + 1);
   auto d_ngram_offsets = ngram_offsets.data().get();
   thrust::transform_inclusive_scan(
-    execpol->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
     thrust::make_counting_iterator<cudf::size_type>(strings_count),
     d_ngram_offsets + 1,
@@ -207,7 +207,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
   rmm::device_vector<int32_t> chars_offsets(strings_count + 1);  // output memory offsets
   auto d_chars_offsets = chars_offsets.data().get();             // per input string
   thrust::transform_inclusive_scan(
-    execpol->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
     thrust::make_counting_iterator<cudf::size_type>(strings_count),
     d_chars_offsets + 1,
@@ -226,7 +226,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
   // Generate the ngrams into the chars column data buffer.
   // The ngram_builder_fn functor also fills the d_ngram_sizes vector with the
   // size of each ngram.
-  thrust::for_each_n(execpol->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<int32_t>(0),
                      strings_count,
                      ngram_builder_fn{d_strings,

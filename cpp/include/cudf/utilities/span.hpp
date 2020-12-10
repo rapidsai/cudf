@@ -16,9 +16,9 @@
 
 #pragma once
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/device_vector.hpp>
 
 #include <thrust/detail/raw_pointer_cast.h>
 #include <thrust/device_vector.h>
