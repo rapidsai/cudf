@@ -28,6 +28,8 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace detail {
@@ -72,7 +74,7 @@ struct ScanDispatcher {
 
     if (input_view.has_nulls()) {
       auto input = make_null_replacement_iterator(*d_input, Op::template identity<T>());
-      thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::exclusive_scan(rmm::exec_policy(stream),
                              input,
                              input + size,
                              output.data<T>(),
@@ -80,7 +82,7 @@ struct ScanDispatcher {
                              Op{});
     } else {
       auto input = d_input->begin<T>();
-      thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::exclusive_scan(rmm::exec_policy(stream),
                              input,
                              input + size,
                              output.data<T>(),
@@ -108,13 +110,12 @@ struct ScanDispatcher {
   {
     rmm::device_buffer mask =
       detail::create_null_mask(input_view.size(), mask_state::UNINITIALIZED, stream, mr);
-    auto d_input             = column_device_view::create(input_view, stream);
-    auto v                   = detail::make_validity_iterator(*d_input);
-    auto first_null_position = thrust::find_if_not(rmm::exec_policy(stream)->on(stream.value()),
-                                                   v,
-                                                   v + input_view.size(),
-                                                   thrust::identity<bool>{}) -
-                               v;
+    auto d_input = column_device_view::create(input_view, stream);
+    auto v       = detail::make_validity_iterator(*d_input);
+    auto first_null_position =
+      thrust::find_if_not(
+        rmm::exec_policy(stream), v, v + input_view.size(), thrust::identity<bool>{}) -
+      v;
     cudf::set_null_mask(
       static_cast<cudf::bitmask_type*>(mask.data()), 0, first_null_position, true);
     cudf::set_null_mask(
@@ -147,12 +148,10 @@ struct ScanDispatcher {
 
     if (input_view.has_nulls()) {
       auto input = make_null_replacement_iterator(*d_input, Op::template identity<T>());
-      thrust::inclusive_scan(
-        rmm::exec_policy(stream)->on(stream.value()), input, input + size, output.data<T>(), Op{});
+      thrust::inclusive_scan(rmm::exec_policy(stream), input, input + size, output.data<T>(), Op{});
     } else {
       auto input = d_input->begin<T>();
-      thrust::inclusive_scan(
-        rmm::exec_policy(stream)->on(stream.value()), input, input + size, output.data<T>(), Op{});
+      thrust::inclusive_scan(rmm::exec_policy(stream), input, input + size, output.data<T>(), Op{});
     }
 
     CHECK_CUDA(stream.value());
@@ -173,18 +172,12 @@ struct ScanDispatcher {
 
     if (input_view.has_nulls()) {
       auto input = make_null_replacement_iterator(*d_input, Op::template identity<T>());
-      thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
-                             input,
-                             input + size,
-                             result.data().get(),
-                             Op{});
+      thrust::inclusive_scan(
+        rmm::exec_policy(stream), input, input + size, result.data().get(), Op{});
     } else {
       auto input = d_input->begin<T>();
-      thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
-                             input,
-                             input + size,
-                             result.data().get(),
-                             Op{});
+      thrust::inclusive_scan(
+        rmm::exec_policy(stream), input, input + size, result.data().get(), Op{});
     }
     CHECK_CUDA(stream.value());
 

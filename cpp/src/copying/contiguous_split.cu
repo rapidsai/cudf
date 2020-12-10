@@ -25,7 +25,7 @@
 #include <cudf/utilities/bit.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
 
@@ -789,7 +789,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
 
   // compute sizes of each column in each partition, including alignment.
   thrust::transform(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_t>(0),
     thrust::make_counting_iterator<size_t>(num_bufs),
     d_dst_buf_info,
@@ -862,7 +862,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
     auto values = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
                                                   buf_size_functor{d_dst_buf_info});
 
-    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::reduce_by_key(rmm::exec_policy(stream),
                           keys,
                           keys + num_bufs,
                           values,
@@ -876,7 +876,7 @@ std::vector<contiguous_split_result> contiguous_split(cudf::table_view const& in
                                                 split_key_functor{static_cast<int>(num_src_bufs)});
     auto values = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
                                                   buf_size_functor{d_dst_buf_info});
-    thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
                                   keys,
                                   keys + num_bufs,
                                   values,

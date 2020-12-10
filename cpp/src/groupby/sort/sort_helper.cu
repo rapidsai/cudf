@@ -27,6 +27,7 @@
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/iterator/constant_iterator.h>
@@ -120,7 +121,7 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
 
     auto d_key_sorted_order = _key_sorted_order->mutable_view().data<size_type>();
 
-    thrust::sequence(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::sequence(rmm::exec_policy(stream),
                      d_key_sorted_order,
                      d_key_sorted_order + _key_sorted_order->size(),
                      0);
@@ -165,18 +166,17 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
   auto device_input_table = table_device_view::create(_keys, stream.value());
   auto sorted_order       = key_sort_order().data<size_type>();
   decltype(_group_offsets->begin()) result_end;
-  auto exec = rmm::exec_policy(stream);
 
   if (has_nulls(_keys)) {
     result_end = thrust::unique_copy(
-      exec->on(stream.value()),
+      rmm::exec_policy(stream),
       thrust::make_counting_iterator<size_type>(0),
       thrust::make_counting_iterator<size_type>(num_keys(stream)),
       _group_offsets->begin(),
       permuted_row_equality_comparator<true>(*device_input_table, sorted_order));
   } else {
     result_end = thrust::unique_copy(
-      exec->on(stream.value()),
+      rmm::exec_policy(stream),
       thrust::make_counting_iterator<size_type>(0),
       thrust::make_counting_iterator<size_type>(num_keys(stream)),
       _group_offsets->begin(),
@@ -202,15 +202,14 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_labels(
 
   if (num_keys(stream) == 0) return group_labels;
 
-  auto exec = rmm::exec_policy(stream);
-  thrust::scatter(exec->on(stream.value()),
+  thrust::scatter(rmm::exec_policy(stream),
                   thrust::make_constant_iterator(1, decltype(num_groups())(1)),
                   thrust::make_constant_iterator(1, num_groups()),
                   group_offsets().begin() + 1,
                   group_labels.begin());
 
   thrust::inclusive_scan(
-    exec->on(stream.value()), group_labels.begin(), group_labels.end(), group_labels.begin());
+    rmm::exec_policy(stream), group_labels.begin(), group_labels.end(), group_labels.begin());
 
   return group_labels;
 }
@@ -254,10 +253,8 @@ column_view sort_groupby_helper::keys_bitmask_column(rmm::cuda_stream_view strea
 
   auto keys_bitmask_view = _keys_bitmask_column->mutable_view();
   using T                = id_to_type<type_id::INT8>;
-  thrust::fill(rmm::exec_policy(stream)->on(stream.value()),
-               keys_bitmask_view.begin<T>(),
-               keys_bitmask_view.end<T>(),
-               0);
+  thrust::fill(
+    rmm::exec_policy(stream), keys_bitmask_view.begin<T>(), keys_bitmask_view.end<T>(), 0);
 
   return _keys_bitmask_column->view();
 }
