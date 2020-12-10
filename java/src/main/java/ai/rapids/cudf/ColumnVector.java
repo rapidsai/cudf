@@ -83,8 +83,8 @@ public final class ColumnVector extends ColumnView {
     super(ColumnVector.initViewHandle(
         type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
         dataBuffer, validityBuffer, offsetBuffer, null));
-    assert type != DType.LIST : "This constructor should not be used for list type";
-    if (type != DType.STRING) {
+    assert !type.equals(DType.LIST) : "This constructor should not be used for list type";
+    if (!type.equals(DType.STRING)) {
       assert offsetBuffer == null : "offsets are only supported for STRING";
     }
     assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
@@ -120,7 +120,7 @@ public final class ColumnVector extends ColumnView {
     super(initViewHandle(type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
         dataBuffer, validityBuffer,
         offsetBuffer, childHandles));
-    if (type != DType.STRING && type != DType.LIST) {
+    if (!type.equals(DType.STRING) && !type.equals(DType.LIST)) {
       assert offsetBuffer == null : "offsets are only supported for STRING, LISTS";
     }
     assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
@@ -393,15 +393,15 @@ public final class ColumnVector extends ColumnView {
   public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnView[] columns) {
     assert columns.length >= 2 : ".stringConcatenate() operation requires at least 2 columns";
     assert separator != null : "separator scalar provided may not be null";
-    assert separator.getType() == DType.STRING : "separator scalar must be a string scalar";
+    assert separator.getType().equals(DType.STRING) : "separator scalar must be a string scalar";
     assert narep != null : "narep scalar provided may not be null";
-    assert narep.getType() == DType.STRING : "narep scalar must be a string scalar";
+    assert narep.getType().equals(DType.STRING) : "narep scalar must be a string scalar";
     long size = columns[0].getRowCount();
     long[] column_views = new long[columns.length];
 
     for(int i = 0; i < columns.length; i++) {
       assert columns[i] != null : "Column vectors passed may not be null";
-      assert columns[i].getType() == DType.STRING : "All columns must be of type string for .cat() operation";
+      assert columns[i].getType().equals(DType.STRING) : "All columns must be of type string for .cat() operation";
       assert columns[i].getRowCount() == size : "Row count mismatch, all columns must have the same number of rows";
       column_views[i] = columns[i].getNativeView();
     }
@@ -426,8 +426,8 @@ public final class ColumnVector extends ColumnView {
       assert columns[i] != null : "Column vectors passed may not be null";
       assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
       assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
-      assert !columns[i].getType().isTimestamp() : "Unsupported column type Timestamp";
-      assert !columns[i].getType().isNestedType() || columns[i].getType() == DType.LIST :
+      assert !columns[i].getType().isTimestampType() : "Unsupported column type Timestamp";
+      assert !columns[i].getType().isNestedType() || columns[i].getType().equals(DType.LIST) :
           "Unsupported nested type column";
       columnViews[i] = columns[i].getNativeView();
     }
@@ -452,7 +452,7 @@ public final class ColumnVector extends ColumnView {
       assert columns[i] != null : "Column vectors passed may not be null";
       assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
       assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
-      assert !columns[i].getType().isTimestamp() : "Unsupported column type Timestamp";
+      assert !columns[i].getType().isTimestampType() : "Unsupported column type Timestamp";
       assert !columns[i].getType().isNestedType() : "Unsupported column of nested type";
       columnViews[i] = columns[i].getNativeView();
     }
@@ -492,7 +492,7 @@ public final class ColumnVector extends ColumnView {
    */
   @Override
   public ColumnVector castTo(DType type) {
-    if (this.type == type) {
+    if (this.type.equals(type)) {
       // Optimization
       return incRefCount();
     }

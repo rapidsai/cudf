@@ -24,8 +24,9 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/reduce.h>
@@ -37,7 +38,7 @@ namespace {
 
 template <typename ResultType, typename Iterator>
 struct var_transform {
-  // column_device_view d_values;
+  column_device_view const d_values;
   Iterator values_iter;
   ResultType const* d_means;
   size_type const* d_group_sizes;
@@ -46,25 +47,24 @@ struct var_transform {
 
   __device__ ResultType operator()(size_type i)
   {
-    // if (d_values.is_null(i)) return 0.0;
-    if (!thrust::get<1>(values_iter[i])) return 0.0;
+    if (d_values.is_null(i)) return 0.0;
 
-    // ResultType x         = d_values.element<T>(i);
-    ResultType x = static_cast<ResultType>(thrust::get<0>(values_iter[i]));
+    ResultType x = static_cast<ResultType>(values_iter[i]);
 
     size_type group_idx  = d_group_labels[i];
-    size_type group_size = d_group_sizes[group_idx];  //.element<size_type>(group_idx);
+    size_type group_size = d_group_sizes[group_idx];
 
     // prevent divide by zero error
     if (group_size == 0 or group_size - ddof <= 0) return 0.0;
 
-    ResultType mean = d_means[group_idx];  //.element<ResultType>(group_idx);
+    ResultType mean = d_means[group_idx];
     return (x - mean) * (x - mean) / (group_size - ddof);
   }
 };
 
 template <typename ResultType, typename Iterator>
-void reduce_by_key_fn(Iterator values_iter,
+void reduce_by_key_fn(column_device_view const& values,
+                      Iterator values_iter,
                       rmm::device_vector<size_type> const& group_labels,
                       ResultType const* d_means,
                       size_type const* d_group_sizes,
@@ -75,9 +75,9 @@ void reduce_by_key_fn(Iterator values_iter,
   auto var_iter = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
     var_transform<ResultType, decltype(values_iter)>{
-      values_iter, d_means, d_group_sizes, group_labels.data().get(), ddof});
+      values, values_iter, d_means, d_group_sizes, group_labels.data().get(), ddof});
 
-  thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::reduce_by_key(rmm::exec_policy(stream),
                         group_labels.begin(),
                         group_labels.end(),
                         var_iter,
@@ -116,28 +116,18 @@ struct var_functor {
     auto d_result       = result->mutable_view().data<ResultType>();
 
     if (!cudf::is_dictionary(values.type())) {
-      if (values.has_nulls()) {
-        auto values_iter = d_values.pair_begin<T, true>();
-        reduce_by_key_fn(values_iter, group_labels, d_means, d_group_sizes, ddof, d_result, stream);
-      } else {
-        auto values_iter = d_values.pair_begin<T, false>();
-        reduce_by_key_fn(values_iter, group_labels, d_means, d_group_sizes, ddof, d_result, stream);
-      }
-    } else {  // dictionary column type uses special pair iterator
-      if (values.has_nulls()) {
-        auto values_iter =
-          cudf::dictionary::detail::make_dictionary_pair_iterator<T, true>(*values_view);
-        reduce_by_key_fn(values_iter, group_labels, d_means, d_group_sizes, ddof, d_result, stream);
-      } else {
-        auto values_iter =
-          cudf::dictionary::detail::make_dictionary_pair_iterator<T, false>(*values_view);
-        reduce_by_key_fn(values_iter, group_labels, d_means, d_group_sizes, ddof, d_result, stream);
-      }
+      auto values_iter = d_values.begin<T>();
+      reduce_by_key_fn(
+        d_values, values_iter, group_labels, d_means, d_group_sizes, ddof, d_result, stream);
+    } else {
+      auto values_iter = cudf::dictionary::detail::make_dictionary_iterator<T>(*values_view);
+      reduce_by_key_fn(
+        d_values, values_iter, group_labels, d_means, d_group_sizes, ddof, d_result, stream);
     }
 
     // set nulls
     auto result_view = mutable_column_device_view::create(*result, stream);
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator(0),
                        group_sizes.size(),
                        [d_result = *result_view, d_group_sizes, ddof] __device__(size_type i) {

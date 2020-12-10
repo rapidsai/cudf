@@ -26,8 +26,9 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
 
@@ -76,7 +77,7 @@ struct reduce_functor {
     auto valuesview = column_device_view::create(values, stream);
 
     if (!cudf::is_dictionary(values.type())) {
-      thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::for_each_n(rmm::exec_policy(stream),
                          thrust::make_counting_iterator(0),
                          values.size(),
                          [d_values     = *valuesview,
@@ -86,7 +87,7 @@ struct reduce_functor {
                              d_result, dest_indices[i], d_values, i);
                          });
     } else {
-      thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::for_each_n(rmm::exec_policy(stream),
                          thrust::make_counting_iterator(0),
                          values.size(),
                          [d_values     = *valuesview,

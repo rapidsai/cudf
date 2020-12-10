@@ -25,8 +25,9 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
@@ -68,20 +69,16 @@ rmm::device_vector<size_type> sorted_dense_rank(column_view input_col,
     auto unique_it =
       thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), conv);
 
-    thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
-                           unique_it,
-                           unique_it + input_size,
-                           dense_rank_sorted.data().get());
+    thrust::inclusive_scan(
+      rmm::exec_policy(stream), unique_it, unique_it + input_size, dense_rank_sorted.data().get());
   } else {
     auto conv = unique_comparator<false, size_type, decltype(sorted_index_order)>(
       *device_table, sorted_index_order);
     auto unique_it =
       thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), conv);
 
-    thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
-                           unique_it,
-                           unique_it + input_size,
-                           dense_rank_sorted.data().get());
+    thrust::inclusive_scan(
+      rmm::exec_policy(stream), unique_it, unique_it + input_size, dense_rank_sorted.data().get());
   }
   return dense_rank_sorted;
 }
@@ -116,7 +113,7 @@ void tie_break_ranks_transform(rmm::device_vector<size_type> const &dense_rank_s
   rmm::device_vector<TieType> tie_sorted(input_size, 0);
   // algorithm: reduce_by_key(dense_rank, 1, n, reduction_tie_breaker)
   // reduction_tie_breaker = min, max, min_count
-  thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::reduce_by_key(rmm::exec_policy(stream),
                         dense_rank_sorted.begin(),
                         dense_rank_sorted.end(),
                         tie_iter,
@@ -129,7 +126,7 @@ void tie_break_ranks_transform(rmm::device_vector<size_type> const &dense_rank_s
     [tied_rank = tie_sorted.begin(), transformer] __device__(auto dense_pos) {
       return transformer(tied_rank[dense_pos - 1]);
     });
-  thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::scatter(rmm::exec_policy(stream),
                   sorted_tied_rank,
                   sorted_tied_rank + input_size,
                   sorted_order_view.begin<size_type>(),
@@ -142,7 +139,7 @@ void rank_first(column_view sorted_order_view,
                 rmm::cuda_stream_view stream)
 {
   // stable sort order ranking (no ties)
-  thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::scatter(rmm::exec_policy(stream),
                   thrust::make_counting_iterator<size_type>(1),
                   thrust::make_counting_iterator<size_type>(rank_mutable_view.size() + 1),
                   sorted_order_view.begin<size_type>(),
@@ -156,7 +153,7 @@ void rank_dense(rmm::device_vector<size_type> const &dense_rank_sorted,
                 rmm::cuda_stream_view stream)
 {
   // All equal values have same rank and rank always increases by 1 between groups
-  thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::scatter(rmm::exec_policy(stream),
                   dense_rank_sorted.begin(),
                   dense_rank_sorted.end(),
                   sorted_order_view.begin<size_type>(),
@@ -320,7 +317,7 @@ std::unique_ptr<column> rank(column_view const &input,
       (null_handling == null_policy::EXCLUDE) ? input.size() - input.null_count() : input.size();
     auto drs            = dense_rank_sorted.data().get();
     bool const is_dense = (method == rank_method::DENSE);
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       rank_iter,
                       rank_iter + input.size(),
                       rank_iter,

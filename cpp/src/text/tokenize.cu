@@ -27,6 +27,7 @@
 #include <text/utilities/tokenize_ops.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/count.h>
 #include <thrust/transform.h>
@@ -49,7 +50,7 @@ std::unique_ptr<cudf::column> token_count_fn(cudf::size_type strings_count,
                                                 mr);
   auto d_token_counts = token_counts->mutable_view().data<int32_t>();
   // add the counts to the column
-  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(strings_count),
                     d_token_counts,
@@ -64,14 +65,13 @@ std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
-  auto execpol = rmm::exec_policy(stream);
   // get the number of tokens in each string
   auto const token_counts =
     token_count_fn(strings_count, tokenizer, stream, rmm::mr::get_current_device_resource());
   auto d_token_counts = token_counts->view();
   // create token-index offsets from the counts
   rmm::device_vector<int32_t> token_offsets(strings_count + 1);
-  thrust::inclusive_scan(execpol->on(stream.value()),
+  thrust::inclusive_scan(rmm::exec_policy(stream),
                          d_token_counts.template begin<int32_t>(),
                          d_token_counts.template end<int32_t>(),
                          token_offsets.begin() + 1);
@@ -82,7 +82,7 @@ std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
   // now go get the tokens
   tokenizer.d_offsets = token_offsets.data().get();
   tokenizer.d_tokens  = tokens.data().get();
-  thrust::for_each_n(execpol->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,
                      tokenizer);
@@ -178,10 +178,9 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   // To minimize memory, count the number of characters so we can
   // build the output offsets without an intermediate buffer.
   // In the worst case each byte is a character so the output is 4x the input.
-  auto execpol      = rmm::exec_policy(stream);
   auto strings_view = cudf::column_device_view::create(strings_column.parent(), stream);
   cudf::size_type num_characters = thrust::count_if(
-    execpol->on(stream.value()), d_chars, d_chars + chars_bytes, [] __device__(uint8_t byte) {
+    rmm::exec_policy(stream), d_chars, d_chars + chars_bytes, [] __device__(uint8_t byte) {
       return cudf::strings::detail::is_begin_utf8_char(byte);
     });
 
@@ -200,7 +199,7 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
                                                   mr);
   auto d_new_offsets  = offsets_column->mutable_view().begin<int32_t>();
   thrust::copy_if(
-    execpol->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<int32_t>(0),
     thrust::make_counting_iterator<int32_t>(chars_bytes + 1),
     d_new_offsets,

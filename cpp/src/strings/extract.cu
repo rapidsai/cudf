@@ -89,26 +89,26 @@ std::unique_ptr<table> extract(
 
   // build a result column for each group
   std::vector<std::unique_ptr<column>> results;
-  auto execpol     = rmm::exec_policy(stream);
   auto regex_insts = d_prog.insts_counts();
+
   for (int32_t column_index = 0; column_index < groups; ++column_index) {
     rmm::device_vector<string_index_pair> indices(strings_count);
     string_index_pair* d_indices = indices.data().get();
 
     if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
-      thrust::transform(execpol->on(stream.value()),
+      thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
                         d_indices,
                         extract_fn<RX_STACK_SMALL>{d_prog, d_strings, column_index});
     else if (regex_insts <= RX_MEDIUM_INSTS)
-      thrust::transform(execpol->on(stream.value()),
+      thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
                         d_indices,
                         extract_fn<RX_STACK_MEDIUM>{d_prog, d_strings, column_index});
     else
-      thrust::transform(execpol->on(stream.value()),
+      thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
                         d_indices,
