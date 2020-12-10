@@ -1,10 +1,12 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import glob
 import io
 import os
 import pandas as pd
 import pytest
 
+from bench_cudf_io import get_dataset_dir, get_dtypes
 from get_datasets import create_pandas_dataset
 
 
@@ -70,3 +72,34 @@ def bench_read_parquet(benchmark, use_buffer, dtype):
         file = file_path
     benchmark(pd.read_parquet, file)
     os.remove(file_path)
+
+
+@pytest.mark.parametrize("dtype", ["infer", "provide"])
+@pytest.mark.parametrize("file_path", glob.glob(get_dataset_dir() + "json_*"))
+def bench_json(benchmark, file_path, use_buffer, dtype):
+    if "bz2" in file_path:
+        compression = "bz2"
+    elif "gzip" in file_path:
+        compression = "gzip"
+    elif "infer" in file_path:
+        compression = "infer"
+    else:
+        raise TypeError("Unsupported compression type")
+
+    if dtype == "infer":
+        dtype = True
+    else:
+        dtype = get_dtypes(file_path)
+
+    if use_buffer == "True":
+        with open(file_path, "rb") as f:
+            file_path = io.BytesIO(f.read())
+
+    benchmark(
+        pd.read_json,
+        file_path,
+        compression=compression,
+        lines=True,
+        orient="records",
+        dtype=dtype,
+    )
