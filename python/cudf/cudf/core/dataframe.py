@@ -4018,6 +4018,11 @@ class DataFrame(Frame, Serializable):
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
 
+        if group_keys is not True:
+            raise NotImplementedError(
+                "The group_keys keyword is not yet implemented"
+            )
+
         if squeeze is not False:
             raise NotImplementedError(
                 "squeeze parameter is not yet implemented"
@@ -4028,13 +4033,9 @@ class DataFrame(Frame, Serializable):
                 "observed parameter is not yet implemented"
             )
 
-        if group_keys is not True:
-            raise NotImplementedError(
-                "The group_keys keyword is not yet implemented"
-            )
         if by is None and level is None:
             raise TypeError(
-                "groupby() requires either by or level to be" "specified."
+                "groupby() requires either by or level to be specified."
             )
 
         return DataFrameGroupBy(
