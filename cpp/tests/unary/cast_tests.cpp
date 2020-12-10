@@ -791,3 +791,20 @@ TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeidUp)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
+
+TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeidUpNullMask)
+{
+  using namespace numeric;
+  using decimalA    = TypeParam;
+  using RepTypeA    = cudf::device_storage_type_t<decimalA>;
+  using RepTypeB    = std::conditional_t<std::is_same<RepTypeA, int32_t>::value, int64_t, int32_t>;
+  using fp_wrapperA = cudf::test::fixed_point_column_wrapper<RepTypeA>;
+  using fp_wrapperB = cudf::test::fixed_point_column_wrapper<RepTypeB>;
+
+  auto const vec      = std::vector<int32_t>{1729, 17290, 172900, 1729000};
+  auto const input    = fp_wrapperB{vec.cbegin(), vec.cend(), {1, 1, 1, 0}, scale_type{-3}};
+  auto const expected = fp_wrapperA{{1, 17, 172, 1729000}, {1, 1, 1, 0}, scale_type{0}};
+  auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalA>(0));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
