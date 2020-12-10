@@ -244,7 +244,7 @@ public class JCudfSerialization {
         children = new SerializedColumnHeader[childProviders.length];
         long childRowOffset = rowOffset;
         long childNumRows = numRows;
-        if (dtype == DType.LIST) {
+        if (dtype.equals(DType.LIST)) {
           if (numRows > 0) {
             childRowOffset = column.getOffset(rowOffset);
             childNumRows = column.getOffset(rowOffset + numRows) - childRowOffset;
@@ -293,9 +293,9 @@ public class JCudfSerialization {
 
       if (dtype.isNestedType()) {
         assert children != null;
-        if (dtype == DType.LIST) {
+        if (dtype.equals(DType.LIST)) {
           total += 4;  // 4-byte child row count
-        } else if (dtype == DType.STRUCT) {
+        } else if (dtype.equals(DType.STRUCT)) {
           total += 4;  // 4-byte child count
         } else {
           throw new IllegalStateException("Unexpected nested type: " + dtype);
@@ -315,9 +315,9 @@ public class JCudfSerialization {
       dout.writeInt((int) nullCount);
       if (dtype.isNestedType()) {
         assert children != null;
-        if (dtype == DType.LIST) {
+        if (dtype.equals(DType.LIST)) {
           dout.writeInt((int) children[0].getRowCount());
-        } else if (dtype == DType.STRUCT) {
+        } else if (dtype.equals(DType.STRUCT)) {
           dout.writeInt(getNumChildren());
         } else {
           throw new IllegalStateException("Unexpected nested type: " + dtype);
@@ -335,10 +335,10 @@ public class JCudfSerialization {
       if (dtype.isNestedType()) {
         int numChildren;
         long childRowCount;
-        if (dtype == DType.LIST) {
+        if (dtype.equals(DType.LIST)) {
           numChildren = 1;
           childRowCount = din.readInt();
-        } else if (dtype == DType.STRUCT) {
+        } else if (dtype.equals(DType.STRUCT)) {
           numChildren = din.readInt();
           childRowCount = rowCount;
         } else {
@@ -718,7 +718,7 @@ public class JCudfSerialization {
       if (numRows > 0) {
         // Add in size of offsets vector
         totalDataSize += padFor64byteAlignment((numRows + 1) * Integer.BYTES);
-        if (type == DType.STRING) {
+        if (type.equals(DType.STRING)) {
           totalDataSize += padFor64byteAlignment(getRawStringDataLength(column, rowOffset, numRows));
         }
       }
@@ -727,12 +727,12 @@ public class JCudfSerialization {
     }
 
     if (numRows > 0 && type.isNestedType()) {
-      if (type == DType.LIST) {
+      if (type.equals(DType.LIST)) {
         ColumnBufferProvider child = column.getChildProviders()[0];
         long childStartRow = column.getOffset(rowOffset);
         long childNumRows = column.getOffset(rowOffset + numRows) - childStartRow;
         totalDataSize += getSlicedSerializedDataSizeInBytes(child, childStartRow, childNumRows);
-      } else if (type == DType.STRUCT) {
+      } else if (type.equals(DType.STRUCT)) {
         for (ColumnBufferProvider childProvider : column.getChildProviders()) {
           totalDataSize += getSlicedSerializedDataSizeInBytes(childProvider, rowOffset, numRows);
         }
@@ -813,7 +813,7 @@ public class JCudfSerialization {
         int startOffset = buffer.getInt(bufferOffset);
         int endOffset = buffer.getInt(bufferOffset + (rowCount * Integer.BYTES));
         bufferOffset += padFor64byteAlignment(offsetsLen);
-        if (dtype == DType.STRING) {
+        if (dtype.equals(DType.STRING)) {
           dataLen = endOffset - startOffset;
           data = bufferOffset;
           bufferOffset += padFor64byteAlignment(dataLen);
@@ -1046,7 +1046,7 @@ public class JCudfSerialization {
     if (dtype.hasOffsets()) {
       if (rowCount > 0) {
         totalSize += padFor64byteAlignment((rowCount + 1) * Integer.BYTES);
-        if (dtype == DType.STRING) {
+        if (dtype.equals(DType.STRING)) {
           long stringDataLen = 0;
           for (ColumnBufferProvider provider : providers) {
             stringDataLen += getRawStringDataLength(provider, 0, provider.getRowCount());
@@ -1425,7 +1425,7 @@ public class JCudfSerialization {
     if (dtype.hasOffsets()) {
       if (header.getRowCount() > 0) {
         copyConcatOffsets(out, providers);
-        if (dtype == DType.STRING) {
+        if (dtype.equals(DType.STRING)) {
           copyConcatStringData(out, providers);
         }
       }
@@ -1462,7 +1462,7 @@ public class JCudfSerialization {
       if (numRows > 0) {
         try (NvtxRange offsetRange = new NvtxRange("Write Offset Data", NvtxColor.ORANGE)) {
           copySlicedOffsets(out, column, rowOffset, numRows);
-          if (type == DType.STRING) {
+          if (type.equals(DType.STRING)) {
             try (NvtxRange dataRange = new NvtxRange("Write String Data", NvtxColor.RED)) {
               copySlicedStringData(out, column, rowOffset, numRows);
             }
@@ -1476,14 +1476,14 @@ public class JCudfSerialization {
     }
 
     if (numRows > 0 && type.isNestedType()) {
-      if (type == DType.LIST) {
+      if (type.equals(DType.LIST)) {
         try (NvtxRange range = new NvtxRange("Write List Child", NvtxColor.PURPLE)) {
           ColumnBufferProvider child = column.getChildProviders()[0];
           long childStartRow = column.getOffset(rowOffset);
           long childNumRows = column.getOffset(rowOffset + numRows) - childStartRow;
           writeSliced(out, child, childStartRow, childNumRows);
         }
-      } else if (type == DType.STRUCT) {
+      } else if (type.equals(DType.STRUCT)) {
         try (NvtxRange range = new NvtxRange("Write Struct Children", NvtxColor.PURPLE)) {
           for (ColumnBufferProvider child : column.getChildProviders()) {
             writeSliced(out, child, rowOffset, numRows);
