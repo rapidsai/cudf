@@ -224,10 +224,9 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type *)>> build_join_
   rmm::device_scalar<int> failure(0, stream);
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   detail::grid_1d config(build_table_num_rows, block_size);
-  auto const row_bitmask = [compare_nulls, &stream, &build]() {
-    return compare_nulls == null_equality::EQUAL ? rmm::device_buffer{0, stream}
-                                                 : cudf::detail::bitmask_and(build, stream);
-  }();
+  auto const row_bitmask = (compare_nulls == null_equality::EQUAL)
+                             ? rmm::device_buffer{0, stream}
+                             : cudf::detail::bitmask_and(build, stream);
   build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
     *hash_table,
     hash_build,
