@@ -145,7 +145,7 @@ type_id to_type_id(SchemaElement const &schema,
         }
         return type_id::FLOAT64;
       } else {
-        CUDF_EXPECTS(strict_decimal_types == false, "Unsupported decimal type read!");
+        CUDF_FAIL("Unsupported decimal type read!");
       }
       break;
 
