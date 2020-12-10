@@ -119,3 +119,16 @@ then build the jar:
 cd src/cudf/java
 mvn clean install -DPER_THREAD_DEFAULT_STREAM=ON
 ```
+
+## GPUDirect Storage (GDS)
+
+The JNI code can be built with *GPUDirect Storage* (GDS) support, which enables direct copying 
+between GPU device buffers and supported filesystems (see
+https://docs.nvidia.com/gpudirect-storage/).
+
+To enable GDS support, first make sure GDS is installed (see
+https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html), then run:  
+```shell script
+cd src/cudf/java
+mvn clean install -DUSE_GDS=ON
+```
