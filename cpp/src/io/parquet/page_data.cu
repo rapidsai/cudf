@@ -815,6 +815,13 @@ inline __device__ void gpuOutputDecimalAsFloat(volatile page_state_s *s,
   *dst  = (scale < 0) ? (d * kPow10[min(-scale, 39)]) : (d / kPow10[min(scale, 39)]);
 }
 
+/**
+ * @brief Output a fixed-length byte array(len <= 8) as a 64-bit int
+ *
+ * @param[in,out] s Page state input/output
+ * @param[in] src_pos Source position
+ * @param[in] dst Pointer to row output data
+ */
 inline __device__ void gpuOutputFixedLenByteArrayAsInt64(volatile page_state_s *s,
                                                          int src_pos,
                                                          int64_t *dst)
@@ -843,9 +850,6 @@ inline __device__ void gpuOutputFixedLenByteArrayAsInt64(volatile page_state_s *
     unscaled64 <<= 64 - dtype_len_in * 8;
     unscaled64 >>= 64 - dtype_len_in * 8;
   }
-  //  uint2 unscaledValue;
-  //  unscaledValue.x = unscaled64 & 4294967295;
-  //  unscaledValue.y = unscaled64 >> 32;
   *dst = unscaled64;
 }
 
