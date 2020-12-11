@@ -410,7 +410,6 @@ timezone_table build_timezone_transition_table(std::string const &timezone_name)
       return {};
     }
     // No transitions to use for the time/offset - use the first offset and apply to all timestamps
-    CUDF_EXPECTS(tzf.typecnt() != 0, "Need at least one offset");
     ttimes[0]  = std::numeric_limits<int64_t>::max();
     offsets[0] = tzf.ttype[0].utcoff;
   }
