@@ -403,14 +403,51 @@ class MultiIndex(Index):
         else:
             preprocess = self
 
-        if any(
+        preprocess = preprocess.to_pandas(nullable=True)
+        output = preprocess.__repr__()
+        cols_nulls = [
             self._source_data._data[col].has_nulls
             for col in self._source_data._data
-        ):
-            preprocess = preprocess._clean_nulls_from_index()
+        ]
 
-        output = preprocess.to_pandas().__repr__()
+        output = output.lstrip("MultiIndex")
         lines = output.split("\n")
+
+        if any(cols_nulls):
+            row_tuples = list(
+                self._source_data.to_pandas(nullable=True).itertuples(
+                    index=None, name=None
+                )
+            )
+            new_lines = []
+            for row_idx, line in enumerate(lines[:-1]):
+                current_row = row_tuples[row_idx]
+                current_row_repr = line.split(", ")
+                for col_idx, value in enumerate(current_row):
+                    if value is pd.NA:
+                        current_row_repr[col_idx] = current_row_repr[
+                            col_idx
+                        ].replace("nan", "<NA>")
+                    elif value is np.nan:
+                        # Leave nan as is.
+                        pass
+                    elif cols_nulls[col_idx]:
+                        if col_idx == 0:
+                            current_row_repr[col_idx] = current_row_repr[
+                                col_idx
+                            ].replace("( ", "(  ")
+                        elif col_idx == len(current_row) - 1:
+                            current_row_repr[col_idx] = (
+                                " " + current_row_repr[col_idx]
+                            )
+                        else:
+                            current_row_repr[col_idx] = (
+                                " " + current_row_repr[col_idx]
+                            )
+
+                new_lines.append(", ".join(current_row_repr))
+            new_lines.append(lines[-1])
+            lines = new_lines
 
         if len(lines) > 1:
             if "length=" in lines[-1] and len(self) != len(preprocess):
@@ -420,7 +457,8 @@ class MultiIndex(Index):
                 lines = lines[:-1]
                 lines.append(last_line)
 
-        return "\n".join(lines)
+        data_output = "\n".join(lines)
+        return "MultiIndex" + data_output
 
     @classmethod
     def from_arrow(cls, table):
@@ -1182,9 +1220,9 @@ class MultiIndex(Index):
         else:
             return mi
 
-    def to_pandas(self, **kwargs):
+    def to_pandas(self, nullable=False, **kwargs):
         if hasattr(self, "_source_data"):
-            result = self._source_data.to_pandas()
+            result = self._source_data.to_pandas(nullable=nullable)
             result.columns = self.names
             return pd.MultiIndex.from_frame(result)
 
