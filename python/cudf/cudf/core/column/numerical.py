@@ -3,6 +3,7 @@
 from numbers import Number
 
 import numpy as np
+import pandas as pd
 from nvtx import annotate
 from pandas.api.types import is_integer_dtype
 
@@ -448,6 +449,8 @@ class NumericalColumn(column.ColumnBase):
         columns, returns the offset of the first larger value
         if closest=True.
         """
+        if not pd.api.types.is_number(value):
+            raise ValueError("Expected a numeric value")
         found = 0
         if len(self):
             found = cudautils.find_first(
@@ -474,6 +477,8 @@ class NumericalColumn(column.ColumnBase):
         columns, returns the offset of the last smaller value
         if closest=True.
         """
+        if not pd.api.types.is_number(value):
+            raise ValueError("Expected a numeric value")
         found = 0
         if len(self):
             found = cudautils.find_last(

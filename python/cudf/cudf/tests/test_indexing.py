@@ -9,7 +9,7 @@ import cudf
 from cudf import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_110
 from cudf.tests import utils
-from cudf.tests.utils import INTEGER_TYPES, assert_eq
+from cudf.tests.utils import INTEGER_TYPES, assert_eq, assert_exceptions_equal
 
 index_dtypes = INTEGER_TYPES
 
@@ -1300,3 +1300,19 @@ def test_iloc_with_lists(data, key):
     psr = pd.Series(data)
     gsr = cudf.Series(data)
     assert_eq(psr.iloc[key], gsr.iloc[key])
+
+
+@pytest.mark.parametrize("key", [5, -10, "0", "a"])
+def test_loc_bad_key_type(key):
+    psr = pd.Series([1, 2, 3])
+    gsr = cudf.from_pandas(psr)
+    assert_exceptions_equal(lambda: psr[key], lambda: gsr[key])
+    assert_exceptions_equal(lambda: psr.loc[key], lambda: gsr.loc[key])
+
+
+@pytest.mark.parametrize("key", ["b", 1.0])
+def test_loc_bad_key_type_string_index(key):
+    psr = pd.Series([1, 2, 3], index=["a", "1", "c"])
+    gsr = cudf.from_pandas(psr)
+    assert_exceptions_equal(lambda: psr[key], lambda: gsr[key])
+    assert_exceptions_equal(lambda: psr.loc[key], lambda: gsr.loc[key])
