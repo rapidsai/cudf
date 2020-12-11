@@ -839,6 +839,8 @@ inline __device__ void gpuOutputFixedLenByteArrayAsInt64(volatile page_state_s *
     uint32_t v = (dict_pos + i < dict_size) ? dict[dict_pos + i] : 0;
     unscaled64 = (unscaled64 << 8) | v;
   }
+  // Shift the unscaled value up and back down when it isn't all 8 bytes,
+  // which sign extend the value for correctly representing negative numbers.
   if (dtype_len_in < 8) {
     unscaled64 <<= 64 - dtype_len_in * 8;
     unscaled64 >>= 64 - dtype_len_in * 8;
