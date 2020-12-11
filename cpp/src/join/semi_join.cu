@@ -26,8 +26,6 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
-#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace detail {
@@ -130,7 +128,7 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
                                                 equality_build);
   auto hash_table     = *hash_table_ptr;
 
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
                      thrust::make_counting_iterator<size_type>(0),
                      right_num_rows,
                      [hash_table] __device__(size_type idx) mutable {
@@ -149,7 +147,7 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
 
   // gather_map_end will be the end of valid data in gather_map
   auto gather_map_end = thrust::copy_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream)->on(stream.value()),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(left_num_rows),
     gather_map.begin(),

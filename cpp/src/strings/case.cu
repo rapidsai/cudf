@@ -31,7 +31,6 @@
 #include <strings/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace strings {
@@ -141,6 +140,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& strings,
   auto strings_count = strings.size();
   if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
 
+  auto execpol         = rmm::exec_policy(stream);
   auto strings_column  = column_device_view::create(strings.parent(), stream);
   auto d_column        = *strings_column;
   size_type null_count = strings.null_count();
@@ -170,7 +170,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& strings,
   auto d_chars    = chars_view.data<char>();
 
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    execpol->on(stream.value()),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     upper_lower_fn<ExecuteOp>{

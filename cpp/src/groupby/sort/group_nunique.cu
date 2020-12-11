@@ -21,7 +21,6 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -64,7 +63,7 @@ struct nunique_functor {
           return static_cast<size_type>(is_unique);
         });
 
-      thrust::reduce_by_key(rmm::exec_policy(stream),
+      thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream.value()),
                             group_labels.begin(),
                             group_labels.end(),
                             is_unique_iterator,
@@ -82,7 +81,7 @@ struct nunique_functor {
                            (not equal.operator()<T>(i, i - 1));    // new unique value in sorted
           return static_cast<size_type>(is_unique);
         });
-      thrust::reduce_by_key(rmm::exec_policy(stream),
+      thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream.value()),
                             group_labels.begin(),
                             group_labels.end(),
                             is_unique_iterator,

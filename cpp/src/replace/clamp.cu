@@ -33,7 +33,6 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace detail {
@@ -137,7 +136,8 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
       }
     };
 
-  thrust::for_each_n(rmm::exec_policy(stream),
+  auto exec = rmm::exec_policy(stream);
+  thrust::for_each_n(exec->on(stream.value()),
                      thrust::make_counting_iterator<size_type>(0),
                      input.size(),
                      copy_transformer);
@@ -189,7 +189,7 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
 
   if (input.has_nulls()) {
     auto input_pair_iterator = make_pair_iterator<T, true>(*input_device_view);
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                       input_pair_iterator,
                       input_pair_iterator + input.size(),
                       scalar_zip_itr,
@@ -197,7 +197,7 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
                       trans);
   } else {
     auto input_pair_iterator = make_pair_iterator<T, false>(*input_device_view);
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                       input_pair_iterator,
                       input_pair_iterator + input.size(),
                       scalar_zip_itr,

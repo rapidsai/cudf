@@ -25,7 +25,6 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
 
 #include <vector>
 
@@ -47,7 +46,7 @@ void row_comparison(cudf::table_view input1,
   auto comparator = cudf::row_lexicographic_comparator<false>(
     *device_table_1, *device_table_2, d_column_order.data().get());
 
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                     thrust::make_counting_iterator(0),
                     thrust::make_counting_iterator(input1.num_rows()),
                     thrust::make_counting_iterator(0),

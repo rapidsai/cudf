@@ -29,8 +29,6 @@
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
-#include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/transform_scan.h>
@@ -276,7 +274,10 @@ std::unique_ptr<column> for_each_concatenate(std::vector<column_view> const& vie
 
   auto count = 0;
   for (auto& v : views) {
-    thrust::copy(rmm::exec_policy(stream), v.begin<T>(), v.end<T>(), m_view.begin<T>() + count);
+    thrust::copy(rmm::exec_policy(stream)->on(stream.value()),
+                 v.begin<T>(),
+                 v.end<T>(),
+                 m_view.begin<T>() + count);
     count += v.size();
   }
 

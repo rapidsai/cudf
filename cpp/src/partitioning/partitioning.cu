@@ -27,7 +27,6 @@
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace {
@@ -535,7 +534,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
   // Compute exclusive scan of all blocks' partition sizes in-place to determine
   // the starting point for each blocks portion of each partition in the output
-  thrust::exclusive_scan(rmm::exec_policy(stream),
+  thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
                          block_partition_sizes.begin(),
                          block_partition_sizes.end(),
                          scanned_block_partition_sizes.data().get());
@@ -544,7 +543,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   // location of each partition in final output.
   // TODO This can be done independently on a separate stream
   size_type* scanned_global_partition_sizes{global_partition_sizes.data().get()};
-  thrust::exclusive_scan(rmm::exec_policy(stream),
+  thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
                          global_partition_sizes.begin(),
                          global_partition_sizes.end(),
                          scanned_global_partition_sizes);
@@ -682,8 +681,10 @@ struct dispatch_map_type {
 
     // `histogram` was created with an extra entry at the end such that an
     // exclusive scan will put the total number of rows at the end
-    thrust::exclusive_scan(
-      rmm::exec_policy(stream), histogram.begin(), histogram.end(), histogram.begin());
+    thrust::exclusive_scan(rmm::exec_policy()->on(stream.value()),
+                           histogram.begin(),
+                           histogram.end(),
+                           histogram.begin());
 
     // Copy offsets to host
     std::vector<size_type> partition_offsets(histogram.size());
@@ -695,7 +696,7 @@ struct dispatch_map_type {
 
     // For each `partition_map[i]`, atomically increment the corresponding
     // partition offset to determine `i`s location in the output
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
                       partition_map.begin<MapType>(),
                       partition_map.end<MapType>(),
                       scatter_map.begin(),

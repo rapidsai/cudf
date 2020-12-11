@@ -30,7 +30,6 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace detail {
@@ -70,7 +69,7 @@ auto scatter_to_gather(MapIterator scatter_map_begin,
 
   // Convert scatter map to a gather map
   thrust::scatter(
-    rmm::exec_policy(stream),
+    rmm::exec_policy(stream)->on(stream.value()),
     thrust::make_counting_iterator<MapValueType>(0),
     thrust::make_counting_iterator<MapValueType>(std::distance(scatter_map_begin, scatter_map_end)),
     scatter_map_begin,
@@ -95,7 +94,7 @@ struct column_scatterer_impl {
 
     // NOTE use source.begin + scatter rows rather than source.end in case the
     // scatter map is smaller than the number of source rows
-    thrust::scatter(rmm::exec_policy(stream),
+    thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
                     source.begin<Type>(),
                     source.begin<Type>() + cudf::distance(scatter_map_begin, scatter_map_end),
                     scatter_map_begin,
@@ -181,7 +180,7 @@ struct column_scatterer_impl<dictionary32, MapIterator> {
     auto source_itr  = indexalator_factory::make_input_iterator(source_view.indices());
     auto new_indices = std::make_unique<column>(target_view.get_indices_annotated(), stream, mr);
     auto target_itr  = indexalator_factory::make_output_iterator(new_indices->mutable_view());
-    thrust::scatter(rmm::exec_policy(stream),
+    thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
                     source_itr,
                     source_itr + std::distance(scatter_map_begin, scatter_map_end),
                     scatter_map_begin,
@@ -263,7 +262,8 @@ std::unique_ptr<table> scatter(
     auto bounds      = bounds_checker<MapType>{begin, end};
     CUDF_EXPECTS(
       std::distance(scatter_map_begin, scatter_map_end) ==
-        thrust::count_if(rmm::exec_policy(stream), scatter_map_begin, scatter_map_end, bounds),
+        thrust::count_if(
+          rmm::exec_policy(stream)->on(stream.value()), scatter_map_begin, scatter_map_end, bounds),
       "Scatter map index out of bounds");
   }
 
