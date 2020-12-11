@@ -1,6 +1,7 @@
 # cuDF 0.18.0 (Date TBD)
 
 ## New Features
+- PR #6856 Add groupby idxmin, idxmax aggregation
 
 - PR #6847 Add a cmake find module for cuFile in JNI code
 - PR #6902 Implement `DataFrame.quantile` for `datetime` and `timedelta` data types
