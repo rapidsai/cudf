@@ -139,7 +139,7 @@ class _SeriesLocIndexer(object):
                 )
                 return found_index
             except (TypeError, KeyError, IndexError, ValueError):
-                raise IndexError("label scalar is out of bound")
+                raise KeyError("label scalar is out of bound")
 
         elif isinstance(arg, slice):
             return get_label_range_or_mask(
@@ -158,7 +158,7 @@ class _SeriesLocIndexer(object):
             else:
                 indices = indices_from_labels(self._sr, arg)
                 if indices.null_count > 0:
-                    raise IndexError("label scalar is out of bound")
+                    raise KeyError("label scalar is out of bound")
                 return indices
 
 

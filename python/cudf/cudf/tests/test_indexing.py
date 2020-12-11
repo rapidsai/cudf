@@ -328,7 +328,7 @@ def test_dataframe_loc_mask(mask, arg):
     assert_eq(pdf.loc[mask, arg], gdf.loc[mask, arg])
 
 
-@pytest.mark.xfail(raises=IndexError, reason="label scalar is out of bound")
+@pytest.mark.xfail(raises=KeyError, reason="label scalar is out of bound")
 def test_dataframe_loc_outbound():
     df = DataFrame()
     size = 10
@@ -1118,19 +1118,39 @@ def test_iloc_negative_indices():
 
 
 def test_out_of_bounds_indexing():
-    a = cudf.Series([1, 2, 3])
-    with pytest.raises(IndexError):
-        a[[0, 1, 9]]
-    with pytest.raises(IndexError):
-        a[[0, 1, -4]]
-    with pytest.raises(IndexError):
-        a[[0, 1, 9]] = 2
-    with pytest.raises(IndexError):
-        a[[0, 1, -4]] = 2
-    with pytest.raises(IndexError):
-        a[4:6].iloc[-1] = 2
-    with pytest.raises(IndexError):
-        a[4:6].iloc[1] = 2
+    psr = pd.Series([1, 2, 3])
+    gsr = cudf.from_pandas(psr)
+
+    assert_exceptions_equal(
+        lambda: psr[[0, 1, 9]],
+        lambda: gsr[[0, 1, 9]],
+        compare_error_message=False,
+    )
+    assert_exceptions_equal(
+        lambda: psr[[0, 1, -4]],
+        lambda: gsr[[0, 1, -4]],
+        compare_error_message=False,
+    )
+    assert_exceptions_equal(
+        lambda: psr.__setitem__([0, 1, 9], 2),
+        lambda: gsr.__setitem__([0, 1, 9], 2),
+        compare_error_message=False,
+    )
+    assert_exceptions_equal(
+        lambda: psr.__setitem__([0, 1, -4], 2),
+        lambda: gsr.__setitem__([0, 1, -4], 2),
+        compare_error_message=False,
+    )
+    assert_exceptions_equal(
+        lambda: psr[4:6].iloc.__setitem__(-1, 2),
+        lambda: gsr[4:6].iloc.__setitem__(-1, 2),
+        compare_error_message=False,
+    )
+    assert_exceptions_equal(
+        lambda: psr[4:6].iloc.__setitem__(1, 2),
+        lambda: gsr[4:6].iloc.__setitem__(1, 2),
+        compare_error_message=False,
+    )
 
 
 def test_sliced_indexing():
