@@ -515,6 +515,19 @@ class fixed_point {
     Rep const value = detail::shift<Rep, Rad>(_value, scale_type{scale - _scale});
     return fixed_point<Rep, Rad>{scaled_integer<Rep>{value, scale}};
   }
+
+  /**
+   * @brief Returns a string representation of the fixed_point value.
+   */
+  explicit operator std::string() const
+  {
+    int const n          = std::pow(10, -_scale);
+    int const f          = _value % n;
+    auto const num_zeros = std::max(0, (-_scale - static_cast<int32_t>(std::to_string(f).size())));
+    auto const zeros     = num_zeros <= 0 ? std::string("") : std::string(num_zeros, '0');
+    return std::to_string(_value / n) + std::string(".") + zeros +
+           std::to_string(std::abs(_value) % n);
+  }
 };  // namespace numeric
 
 /** @brief Function that converts Rep to `std::string`

@@ -34,6 +34,18 @@ namespace cudf {
  */
 
 /**
+ * @brief Policy to account for possible out-of-bounds indices
+ *
+ * `NULLIFY` means to nullify output values corresponding to out-of-bounds gather_map values.
+ * `DONT_CHECK` means do not check whether the indices are out-of-bounds, for better performance.
+ */
+
+enum class out_of_bounds_policy : bool {
+  NULLIFY,    /// Output values corresponding to out-of-bounds indices are null
+  DONT_CHECK  /// No bounds checking is performed, better performance
+};
+
+/**
  * @brief Gathers the specified rows (including null values) of a set of columns.
  *
  * @ingroup copy_gather
@@ -49,22 +61,24 @@ namespace cudf {
  * For dictionary columns, the keys column component is copied and not trimmed
  * if the gather results in abandoned key elements.
  *
- * @throws cudf::logic_error if `check_bounds == true` and an index exists in
- * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
- * the source table. If `check_bounds == false`, the behavior is undefined.
+ * @throws cudf::logic_error if gather_map contains null values.
  *
  * @param[in] source_table The input columns whose rows will be gathered
  * @param[in] gather_map View into a non-nullable column of integral indices that maps the
  * rows in the source columns to rows in the destination columns.
- * @param[in] check_bounds Optionally perform bounds checking on the values
- * of `gather_map` and throw an error if any of its values are out of bounds.
+ * @param[in] bounds_policy Policy to apply to account for possible out-of-bounds indices
+ * `DONT_CHECK` skips all bounds checking for gather map values. `NULLIFY` coerces rows that
+ * corresponds to out-of-bounds indices in the gather map to be null elements. Callers should
+ * use `DONT_CHECK` when they are certain that the gather_map contains only valid indices for
+ * better performance. If `policy` is set to `DONT_CHECK` and there are out-of-bounds indices
+ * in the gather map, the behavior is undefined. Defaults to `DONT_CHECK`.
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return std::unique_ptr<table> Result of the gather
  */
 std::unique_ptr<table> gather(
   table_view const& source_table,
   column_view const& gather_map,
-  bool check_bounds                   = false,
+  out_of_bounds_policy bounds_policy  = out_of_bounds_policy::DONT_CHECK,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

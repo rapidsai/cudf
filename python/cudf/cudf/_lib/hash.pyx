@@ -59,7 +59,7 @@ def hash_partition(Table source_table, object columns_to_hash,
     )
 
 
-def hash(Table source_table, object initial_hash_values=None):
+def hash(Table source_table, object initial_hash_values=None, int seed=0):
     cdef vector[uint32_t] c_initial_hash = initial_hash_values or []
     cdef table_view c_source_view = source_table.data_view()
 
@@ -69,7 +69,8 @@ def hash(Table source_table, object initial_hash_values=None):
             cpp_hash(
                 c_source_view,
                 libcudf_types.hash_id.HASH_MURMUR3,
-                c_initial_hash
+                c_initial_hash,
+                seed
             )
         )
 

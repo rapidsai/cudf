@@ -18,6 +18,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <cudf/copying.hpp>
 #include <cudf/table/table.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -25,9 +26,8 @@
 #include <memory>
 
 namespace cudf {
-namespace detail {
 
-enum class out_of_bounds_policy : int8_t { FAIL, NULLIFY, IGNORE };
+namespace detail {
 
 enum class negative_index_policy : bool { ALLOWED, NOT_ALLOWED };
 
@@ -49,11 +49,11 @@ enum class negative_index_policy : bool { ALLOWED, NOT_ALLOWED };
  * @param[in] source_table The input columns whose rows will be gathered
  * @param[in] gather_map View into a non-nullable column of integral indices that maps the
  * rows in the source columns to rows in the destination columns.
- * @param[in] out_of_bounds_policy How to treat out of bounds indices. FAIL: check `gather_map`
- * values and throw an exception if any are out of bounds. `NULLIFY` means to nullify output values
- * corresponding to out-of-bounds gather_map values. `IGNORE` means to ignore values in
- * `gather_map` that are out of bounds. `IGNORE` is incompatible with `negative_index_policy ==
- * ALLOW`.
+ * @param[in] bounds_policy How to treat out-of-bounds indices. `NULLIFY` coerces rows that
+ * correspond to out-of-bounds indices in the gather map to be null elements. For better
+ * performance, use `DONT_CHECK` when the `gather_map` is known to contain only valid
+ * indices. If `policy` is set to `DONT_CHECK` and there are out-of-bounds indices in `gather_map`,
+ * the behavior is undefined.
  * @param[in] negative_index_policy Interpret each negative index `i` in the
  * gathermap as the positive index `i+num_source_rows`.
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
@@ -63,7 +63,7 @@ enum class negative_index_policy : bool { ALLOWED, NOT_ALLOWED };
 std::unique_ptr<table> gather(
   table_view const& source_table,
   column_view const& gather_map,
-  out_of_bounds_policy bounds,
+  out_of_bounds_policy bounds_policy,
   negative_index_policy neg_indices,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

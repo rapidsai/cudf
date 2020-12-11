@@ -114,12 +114,13 @@ std::unique_ptr<column> remove_keys_fn(
   // Example: gather([0,max,1,max,2],[4,0,3,1,2,2,2,4,0]) => [2,0,max,max,1,1,1,2,0]
   auto table_indices = cudf::detail::gather(table_view{{map_indices->view()}},
                                             indices_view,
-                                            cudf::detail::out_of_bounds_policy::NULLIFY,
+                                            cudf::out_of_bounds_policy::NULLIFY,
                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
                                             stream,
                                             mr)
                          ->release();
   std::unique_ptr<column> indices_column(std::move(table_indices.front()));
+  indices_column->set_null_mask(rmm::device_buffer{}, 0);
 
   // compute new nulls -- merge the existing nulls with the newly created ones (value<0)
   auto const offset = dictionary_column.offset();

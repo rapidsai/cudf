@@ -76,7 +76,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
 
     keys_table = cudf::detail::gather(keys_table->view(),
                                       gather_map_column,
-                                      cudf::detail::out_of_bounds_policy::FAIL,
+                                      cudf::out_of_bounds_policy::DONT_CHECK,
                                       cudf::detail::negative_index_policy::NOT_ALLOWED,
                                       stream,
                                       mr);

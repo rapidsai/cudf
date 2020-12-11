@@ -39,6 +39,7 @@ std::unique_ptr<column> hash(
   table_view const& input,
   hash_id hash_function                     = hash_id::HASH_MURMUR3,
   std::vector<uint32_t> const& initial_hash = {},
+  uint32_t seed                             = 0,
   rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

@@ -15,6 +15,7 @@
  */
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/lists/extract.hpp>
 
@@ -98,7 +99,7 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
   auto result = cudf::detail::gather(table_view({child_column}),
                                      d_gather_map,
                                      d_gather_map + gather_map->size(),
-                                     true,  // nullify-out-of-bounds
+                                     out_of_bounds_policy::NULLIFY,  // nullify-out-of-bounds
                                      stream,
                                      mr)
                   ->release();

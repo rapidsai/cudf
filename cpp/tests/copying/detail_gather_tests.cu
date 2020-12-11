@@ -86,7 +86,7 @@ TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest)
   std::unique_ptr<cudf::table> result =
     cudf::detail::gather(source_table,
                          gather_map,
-                         cudf::detail::out_of_bounds_policy::IGNORE,
+                         cudf::out_of_bounds_policy::NULLIFY,
                          cudf::detail::negative_index_policy::NOT_ALLOWED);
 
   auto expect_data =

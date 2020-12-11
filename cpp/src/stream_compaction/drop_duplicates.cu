@@ -198,7 +198,7 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
   // run gather operation to establish new order
   return detail::gather(input,
                         unique_indices_view,
-                        detail::out_of_bounds_policy::NULLIFY,
+                        out_of_bounds_policy::DONT_CHECK,
                         detail::negative_index_policy::NOT_ALLOWED,
                         stream,
                         mr);
