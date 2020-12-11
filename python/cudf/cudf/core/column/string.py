@@ -4925,7 +4925,12 @@ class StringColumn(column.ColumnBase):
         replacement = column.as_column(replacement, dtype=self.dtype)
         return libcudf.replace.replace(self, to_replace, replacement)
 
-    def fillna(self, fill_value):
+    def fillna(self, fill_value, method=None):
+        if method is not None:
+            raise NotImplementedError(
+                'fillna for string column with `method` parameter is not' 
+                'supported.'
+            )
         if not is_scalar(fill_value):
             fill_value = column.as_column(fill_value, dtype=self.dtype)
         return libcudf.replace.replace_nulls(self, fill_value, dtype="object")

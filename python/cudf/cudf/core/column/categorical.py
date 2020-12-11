@@ -1038,36 +1038,37 @@ class CategoricalColumn(column.ColumnBase):
             ordered=self.dtype.ordered,
         )
 
-    def fillna(self, fill_value):
+    def fillna(self, fill_value=None, method=None):
         """
         Fill null values with *fill_value*
         """
         if not self.nullable:
             return self
 
-        fill_is_scalar = np.isscalar(fill_value)
+        if fill_value is not None:
+            fill_is_scalar = np.isscalar(fill_value)
 
-        if fill_is_scalar:
-            if fill_value == self.default_na_value():
-                fill_value = self.codes.dtype.type(fill_value)
-            else:
-                try:
-                    fill_value = self._encode(fill_value)
+            if fill_is_scalar:
+                if fill_value == self.default_na_value():
                     fill_value = self.codes.dtype.type(fill_value)
-                except (ValueError) as err:
-                    err_msg = "fill value must be in categories"
-                    raise ValueError(err_msg) from err
-        else:
-            fill_value = column.as_column(fill_value, nan_as_null=False)
-            # TODO: only required if fill_value has a subset of the categories:
-            fill_value = fill_value.cat()._set_categories(
-                fill_value.cat().categories, self.categories, is_unique=True
-            )
-            fill_value = column.as_column(fill_value.codes).astype(
-                self.codes.dtype
-            )
+                else:
+                    try:
+                        fill_value = self._encode(fill_value)
+                        fill_value = self.codes.dtype.type(fill_value)
+                    except (ValueError) as err:
+                        err_msg = "fill value must be in categories"
+                        raise ValueError(err_msg) from err
+            else:
+                fill_value = column.as_column(fill_value, nan_as_null=False)
+                # TODO: only required if fill_value has a subset of the categories:
+                fill_value = fill_value.cat()._set_categories(
+                    fill_value.cat().categories, self.categories, is_unique=True
+                )
+                fill_value = column.as_column(fill_value.codes).astype(
+                    self.codes.dtype
+                )
 
-        result = libcudf.replace.replace_nulls(self, fill_value)
+        result = super().fillna(value=fill_value, method=method)
 
         result = column.build_categorical_column(
             categories=self.dtype.categories,
