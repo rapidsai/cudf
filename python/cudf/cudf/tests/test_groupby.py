@@ -1345,3 +1345,40 @@ def test_groupby_apply_return_series_dataframe(cust_func):
     actual = gdf.groupby(["key"]).apply(cust_func)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "pdf", [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([])]
+)
+def test_groupby_no_keys(pdf):
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(
+        pdf.groupby([]).max(),
+        gdf.groupby([]).max(),
+        check_dtype=False,
+        check_index_type=False,  # Int64Index v/s Float64Index
+    )
+
+
+@pytest.mark.parametrize(
+    "pdf", [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([])]
+)
+def test_groupby_apply_no_keys(pdf):
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(
+        pdf.groupby([]).apply(lambda x: x.max()),
+        gdf.groupby([]).apply(lambda x: x.max()),
+    )
+
+
+@pytest.mark.parametrize(
+    "pdf",
+    [pd.DataFrame({"a": [1, 2]}), pd.DataFrame({"a": [1, 2], "b": [2, 3]})],
+)
+def test_groupby_nonempty_no_keys(pdf):
+    gdf = cudf.from_pandas(pdf)
+    assert_exceptions_equal(
+        lambda: pdf.groupby([]),
+        lambda: gdf.groupby([]),
+        compare_error_message=False,
+    )
