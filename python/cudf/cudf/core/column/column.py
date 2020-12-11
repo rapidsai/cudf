@@ -755,7 +755,9 @@ class ColumnBase(Column, Serializable):
 
         Returns a copy with null filled.
         """
-        return libcudf.replace.replace_nulls(input_col=self, replacement=value, method=method)
+        return libcudf.replace.replace_nulls(
+            input_col=self, replacement=value, method=method
+        )
 
     def isnull(self):
         """Identify missing values in a Column.

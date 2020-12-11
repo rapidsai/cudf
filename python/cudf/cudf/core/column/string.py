@@ -4928,8 +4928,8 @@ class StringColumn(column.ColumnBase):
     def fillna(self, fill_value, method=None):
         if method is not None:
             raise NotImplementedError(
-                'fillna for string column with `method` parameter is not' 
-                'supported.'
+                "fillna for string column with `method` parameter is not"
+                "supported."
             )
         if not is_scalar(fill_value):
             fill_value = column.as_column(fill_value, dtype=self.dtype)

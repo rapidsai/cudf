@@ -217,23 +217,20 @@ def test_series_fillna_numerical(psr, data_dtype, fill_value, inplace):
         [1, 2, None, 3, 4, None, None],
     ],
 )
-@pytest.mark.parametrize(
-    "container",
-    [pd.Series, pd.DataFrame]
-)
+@pytest.mark.parametrize("container", [pd.Series, pd.DataFrame])
 @pytest.mark.parametrize("data_dtype", NUMERIC_TYPES)
-@pytest.mark.parametrize("method", ['ffill', 'bfill'])
+@pytest.mark.parametrize("method", ["ffill", "bfill"])
 @pytest.mark.parametrize("inplace", [True, False])
 def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
     if container == pd.DataFrame:
-        data = {'a': data, 'b': data, 'c': data}
-    
+        data = {"a": data, "b": data, "c": data}
+
     pdata = container(data)
 
     if np.dtype(data_dtype).kind not in ("f"):
         data_dtype = cudf.utils.dtypes.cudf_dtypes_to_pandas_dtypes[
-                np.dtype(data_dtype)
-            ]
+            np.dtype(data_dtype)
+        ]
     pdata = pdata.astype(data_dtype)
 
     # Explicitly using nans_as_nulls=True
@@ -415,36 +412,63 @@ def test_fillna_datetime(psr, fill_value, inplace):
     [
         # Categorical
         pd.Categorical([1, 2, None, None, 3, 4]),
-        pd.Categorical([None, None ,1, None, 3, 4]),
+        pd.Categorical([None, None, 1, None, 3, 4]),
         pd.Categorical([1, 2, None, 3, 4, None, None]),
-        pd.Categorical(['1', '20', None, None, '3', '40']),
-        pd.Categorical([None, None ,'10', None, '30', '4']),
-        pd.Categorical(['1', '20', None, '30', '4', None, None]),
+        pd.Categorical(["1", "20", None, None, "3", "40"]),
+        pd.Categorical([None, None, "10", None, "30", "4"]),
+        pd.Categorical(["1", "20", None, "30", "4", None, None]),
         # Datetime
-        np.array(['2020-01-01 08:00:00', '2020-01-01 09:00:00', None, 
-        '2020-01-01 10:00:00', None, '2020-01-01 10:00:00'], dtype='datetime64[ns]'),
-
-        np.array([None, None, '2020-01-01 09:00:00',
-        '2020-01-01 10:00:00', None, '2020-01-01 10:00:00'], dtype='datetime64[ns]'),
-
-        np.array(['2020-01-01 09:00:00', None, None,
-        '2020-01-01 10:00:00', None, None], dtype='datetime64[ns]'),
-
+        np.array(
+            [
+                "2020-01-01 08:00:00",
+                "2020-01-01 09:00:00",
+                None,
+                "2020-01-01 10:00:00",
+                None,
+                "2020-01-01 10:00:00",
+            ],
+            dtype="datetime64[ns]",
+        ),
+        np.array(
+            [
+                None,
+                None,
+                "2020-01-01 09:00:00",
+                "2020-01-01 10:00:00",
+                None,
+                "2020-01-01 10:00:00",
+            ],
+            dtype="datetime64[ns]",
+        ),
+        np.array(
+            [
+                "2020-01-01 09:00:00",
+                None,
+                None,
+                "2020-01-01 10:00:00",
+                None,
+                None,
+            ],
+            dtype="datetime64[ns]",
+        ),
         # Timedelta
-        np.array([10, 100, 1000, None, None, 1000, 100, 10], dtype='datetime64[ns]'),
-        np.array([None, None, 1000, None, 1000, 100, 10], dtype='datetime64[ns]'),
-        np.array([10, 100, None, None, 1000, None, None], dtype='datetime64[ns]'),
-    ]
+        np.array(
+            [10, 100, 1000, None, None, 1000, 100, 10], dtype="datetime64[ns]"
+        ),
+        np.array(
+            [None, None, 1000, None, 1000, 100, 10], dtype="datetime64[ns]"
+        ),
+        np.array(
+            [10, 100, None, None, 1000, None, None], dtype="datetime64[ns]"
+        ),
+    ],
 )
-@pytest.mark.parametrize(
-    "container",
-    [pd.Series, pd.DataFrame]
-)
-@pytest.mark.parametrize("method", ['ffill', 'bfill'])
+@pytest.mark.parametrize("container", [pd.Series, pd.DataFrame])
+@pytest.mark.parametrize("method", ["ffill", "bfill"])
 @pytest.mark.parametrize("inplace", [True, False])
 def test_fillna_method_fixed_width_non_num(data, container, method, inplace):
     if container == pd.DataFrame:
-        data = {'a': data, 'b': data, 'c': data}
+        data = {"a": data, "b": data, "c": data}
 
     pdata = container(data)
 
@@ -459,6 +483,7 @@ def test_fillna_method_fixed_width_non_num(data, container, method, inplace):
         actual = gdata
 
     assert_eq(expected, actual)
+
 
 @pytest.mark.parametrize(
     "df",

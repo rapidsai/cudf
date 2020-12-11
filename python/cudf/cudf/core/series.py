@@ -1896,7 +1896,9 @@ class Series(Frame, Serializable):
     def fill(self, fill_value, begin=0, end=-1, inplace=False):
         return self._fill([fill_value], begin, end, inplace)
 
-    def fillna(self, value=None, method=None, axis=None, inplace=False, limit=None):
+    def fillna(
+        self, value=None, method=None, axis=None, inplace=False, limit=None
+    ):
         if isinstance(value, pd.Series):
             value = Series.from_pandas(value)
 

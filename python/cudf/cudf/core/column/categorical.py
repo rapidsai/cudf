@@ -1060,9 +1060,12 @@ class CategoricalColumn(column.ColumnBase):
                         raise ValueError(err_msg) from err
             else:
                 fill_value = column.as_column(fill_value, nan_as_null=False)
-                # TODO: only required if fill_value has a subset of the categories:
+                # TODO: only required if fill_value has a subset of the
+                # categories:
                 fill_value = fill_value.cat()._set_categories(
-                    fill_value.cat().categories, self.categories, is_unique=True
+                    fill_value.cat().categories,
+                    self.categories,
+                    is_unique=True,
                 )
                 fill_value = column.as_column(fill_value.codes).astype(
                     self.codes.dtype

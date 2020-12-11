@@ -1311,7 +1311,9 @@ class Frame(libcudf.table.Table):
 
         return self._mimic_inplace(result, inplace=inplace)
 
-    def fillna(self, value=None, method=None, axis=None, inplace=False, limit=None):
+    def fillna(
+        self, value=None, method=None, axis=None, inplace=False, limit=None
+    ):
         """Fill null values with ``value``.
 
         Parameters
@@ -1387,7 +1389,7 @@ class Frame(libcudf.table.Table):
         if value is not None and method is not None:
             raise ValueError("Cannot specify both 'value' and 'method'.")
 
-        if method and not method in {"ffill", "bfill"}:
+        if method and method not in {"ffill", "bfill"}:
             raise NotImplementedError(f"Fill method {method} is not supported")
 
         if isinstance(value, cudf.Series):
@@ -1411,10 +1413,9 @@ class Frame(libcudf.table.Table):
 
         for name in copy_data.keys():
             should_fill = (
-                (name in value and
-                    not libcudf.scalar._is_null_host_scalar(value[name]))
-                or method is not None
-            )
+                name in value
+                and not libcudf.scalar._is_null_host_scalar(value[name])
+            ) or method is not None
             if should_fill:
                 copy_data[name] = copy_data[name].fillna(value[name], method)
         result = self._from_table(Frame(copy_data, self._index))
