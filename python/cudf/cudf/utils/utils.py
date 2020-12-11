@@ -473,11 +473,34 @@ def search_range(start, stop, x, step=1, side="left"):
     return max(min(length, i), 0)
 
 
+UFUNC_ALIASES = {
+    "subtract": "sub",
+    "multiply": "mul",
+    "floor_divide": "floordiv",
+    "true_divide": "truediv",
+    "power": "pow",
+    "remainder": "mod",
+    "divide": "div",
+    "equal": "eq",
+    "not_equal": "ne",
+    "less": "lt",
+    "less_equal": "le",
+    "greater": "gt",
+    "greater_equal": "ge",
+    "bitwise_or": "or",
+    "bitwise_and": "and",
+    "bitwise_xor": "xor",
+    "absolute": "abs",
+}
+
+
 # Utils for using appropriate dispatch for array functions
 def get_appropriate_dispatched_func(
     cudf_submodule, cudf_ser_submodule, cupy_submodule, func, args, kwargs
 ):
     fname = func.__name__
+    # Dispatch these functions to appropiate alias from the UFUNC_ALIASES
+    fname = UFUNC_ALIASES.get(fname, fname)
 
     if hasattr(cudf_submodule, fname):
         cudf_func = getattr(cudf_submodule, fname)

@@ -20,6 +20,7 @@ from cudf.tests.utils import assert_eq
         np.equal,
         np.not_equal,
         np.fmod,
+        np.power,
     ],
 )
 def test_ufunc_cudf_series(np_ar_tup, func):
@@ -39,12 +40,19 @@ def test_ufunc_cudf_series(np_ar_tup, func):
 @pytest.mark.parametrize(
     "func",
     [
-        np.greater,
-        np.greater_equal,
-        np.less,
-        np.less_equal,
+        np.subtract,
+        np.multiply,
+        np.floor_divide,
+        np.true_divide,
+        np.power,
+        np.remainder,
+        np.divide,
         np.equal,
         np.not_equal,
+        np.less,
+        np.less_equal,
+        np.greater,
+        np.greater_equal,
     ],
 )
 def test_ufunc_cudf_series_cudf_dispatch(np_ar_tup, func):
@@ -54,10 +62,11 @@ def test_ufunc_cudf_series_cudf_dispatch(np_ar_tup, func):
     s_1, s_2 = cudf.Series(x), cudf.Series(y)
     expect = func(x, y)
     got = func(s_1, s_2)
+    got = got.fillna(np.nan)
     if np.isscalar(expect):
         assert_eq(expect, got)
     else:
-        assert_eq(expect, got.to_array())
+        assert_eq(expect, got.fillna(np.nan).to_array())
 
 
 @pytest.mark.parametrize(
@@ -118,7 +127,7 @@ def test_ufunc_cudf_series_with_index(func):
 
 
 @pytest.mark.parametrize(
-    "func", [np.logaddexp2, np.power],
+    "func", [np.logaddexp2],
 )
 def test_ufunc_cudf_series_with_nonaligned_index(func):
     cudf_s1 = cudf.Series(data=[-1, 2, 3, 0], index=[2, 3, 1, 0])
