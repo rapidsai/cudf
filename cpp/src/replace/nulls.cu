@@ -357,6 +357,12 @@ std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<
   return cudf::dictionary::detail::replace_nulls(dict_input, replacement, stream, mr);
 }
 
+/**
+ * @brief Functor used by `inclusive_scan` to determine the index to gather from in
+ *        the result column. When current row in input column is NULL, return previous
+ *        accumulated index, otherwise return the current index. The second element in
+ *        the return tuple is discarded.
+ */
 struct replace_policy_functor {
   __device__ thrust::tuple<cudf::size_type, bool> operator()(
     thrust::tuple<cudf::size_type, bool> const& lhs,
