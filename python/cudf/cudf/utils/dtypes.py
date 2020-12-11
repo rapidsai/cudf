@@ -232,7 +232,7 @@ def is_list_dtype(obj):
 
 def is_struct_dtype(obj):
     return (
-        type(obj) is cudf.core.dtypes.StructDtype
+        isinstance(obj, cudf.core.dtypes.StructDtype)
         or obj is cudf.core.dtypes.StructDtype
         # or type(obj) is cudf.core.column.StructColumn
         # or obj is cudf.core.column.StructColumn

@@ -132,6 +132,10 @@ class ColumnBase(Column, Serializable):
             pd_series = pd.Series(pandas_array, copy=False)
         elif str(self.dtype) in NUMERIC_TYPES and self.null_count == 0:
             pd_series = pd.Series(cupy.asnumpy(self.values), copy=False)
+        elif isinstance(self.dtype, cudf.core.dtypes.IntervalDtype):
+            pd_series = pd.Series(
+                pd.IntervalDtype().__from_arrow__(self.to_arrow())
+            )
         else:
             pd_series = self.to_arrow().to_pandas(**kwargs)
 
@@ -364,7 +368,6 @@ class ColumnBase(Column, Serializable):
         """
         if not isinstance(array, (pa.Array, pa.ChunkedArray)):
             raise TypeError("array should be PyArrow array or chunked array")
-
         data = pa.table([array], [None])
         if isinstance(array.type, pa.DictionaryType):
             indices_table = pa.table(
@@ -400,6 +403,10 @@ class ColumnBase(Column, Serializable):
             )
         elif isinstance(array.type, pa.StructType):
             return cudf.core.column.StructColumn.from_arrow(array)
+        elif isinstance(
+            array.type, pd.core.arrays._arrow_utils.ArrowIntervalType
+        ):
+            return cudf.core.column.IntervalColumn.from_arrow(array)
 
         return libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
@@ -1478,6 +1485,15 @@ def build_column(
             null_count=null_count,
             children=children,
         )
+    elif isinstance(dtype, cudf.core.dtypes.IntervalDtype):
+        return cudf.core.column.IntervalColumn(
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+        )
     else:
         return cudf.core.column.NumericalColumn(
             data=data,
@@ -1515,14 +1531,12 @@ def build_categorical_column(
     ordered : bool
         Indicates whether the categories are ordered
     """
-
     codes_dtype = min_unsigned_type(len(categories))
     codes = as_column(codes)
     if codes.dtype != codes_dtype:
         codes = codes.astype(codes_dtype)
 
     dtype = CategoricalDtype(categories=as_column(categories), ordered=ordered)
-
     return build_column(
         data=None,
         dtype=dtype,
@@ -1654,6 +1668,8 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         ):
             return as_column(arbitrary.array)
         if is_categorical_dtype(arbitrary):
+            data = as_column(pa.array(arbitrary, from_pandas=True))
+        elif isinstance(arbitrary.dtype, cudf.core.dtypes.IntervalDtype):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool:
             data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype)
@@ -1852,7 +1868,10 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                             )
                         return as_column(data, nan_as_null=nan_as_null)
                     dtype = pd.api.types.pandas_dtype(dtype)
-                    if is_categorical_dtype(dtype):
+                    if (
+                        is_categorical_dtype(dtype)
+                        or type(dtype) == pd.core.dtypes.dtypes.IntervalDtype
+                    ):
                         raise TypeError
                     else:
                         np_type = np.dtype(dtype).type
@@ -1877,6 +1896,9 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
                 elif np_type == np.str_:
                     sr = pd.Series(arbitrary, dtype="str")
+                    data = as_column(sr, nan_as_null=nan_as_null)
+                elif type(dtype) == pd.core.dtypes.dtypes.IntervalDtype:
+                    sr = pd.Series(arbitrary, dtype="interval")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
                     native_dtype = dtype

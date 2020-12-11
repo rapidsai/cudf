@@ -11,6 +11,7 @@ from cudf.core.dtypes import (
     ListDtype,
     StructDtype,
     DecimalDtype,
+    IntervalDtype,
 )
 from cudf.tests.utils import assert_eq
 
@@ -139,3 +140,13 @@ def test_decimal_dtype():
     dt = DecimalDtype(4, 2)
     assert dt.to_arrow() == pa.decimal128(4, 2)
     assert dt == DecimalDtype.from_arrow(pa.decimal128(4, 2))
+
+
+@pytest.mark.parametrize("fields", ["int64", "datetime64[ms]", "int32"])
+def test_interval_dtype_pyarrow_round_trip(fields):
+    pa_array = pd.core.arrays._arrow_utils.ArrowIntervalType(
+        "int64", closed="right"
+    )
+    expect = pa_array
+    got = IntervalDtype.from_arrow(expect).to_arrow()
+    assert expect.equals(got)

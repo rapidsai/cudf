@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.api.extensions import ExtensionDtype
+from pandas.core.arrays._arrow_utils import ArrowIntervalType
 
 import cudf
 
@@ -211,7 +212,7 @@ class StructDtype(ExtensionDtype):
         return self._typ.equals(other._typ)
 
     def __repr__(self):
-        return f"StructDtype({self.fields})"
+        return f"{type(self).__name__}({self.fields})"
 
 
 class DecimalDtype(ExtensionDtype):
@@ -241,3 +242,28 @@ class DecimalDtype(ExtensionDtype):
     @classmethod
     def from_arrow(cls, typ):
         return cls(typ.precision, typ.scale)
+
+
+class IntervalDtype(StructDtype):
+    name = "interval"
+
+    def __init__(self, subtype, closed="right"):
+        """
+        subtype: str, np.dtype
+            The dtype of the Interval bounds.
+        """
+        super().__init__(fields={"left": subtype, "right": subtype})
+        self.closed = closed
+
+    @property
+    def subtype(self):
+        return self.fields["left"]
+
+    @classmethod
+    def from_arrow(cls, typ):
+        return IntervalDtype(typ.subtype.to_pandas_dtype())
+
+    def to_arrow(self):
+        return ArrowIntervalType(
+            pa.from_numpy_dtype(self.subtype), self.closed
+        )
