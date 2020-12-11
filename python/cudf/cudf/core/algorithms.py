@@ -1,4 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
+from warnings import warn
+
 from cudf.core.series import Series
 
 
@@ -43,12 +45,11 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
         raise NotImplementedError(
             "Sorting not yet supported during factorization."
         )
-    if size_hint:
-        raise NotImplementedError(
-            "size_hint is not applicable for cudf.factorize"
-        )
     if not na_sentinel:
         raise NotImplementedError("na_sentinel can not be None.")
+
+    if size_hint:
+        warn("size_hint is not applicable for cudf.factorize")
 
     values = Series(values)
 
