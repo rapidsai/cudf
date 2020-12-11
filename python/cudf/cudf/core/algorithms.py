@@ -47,7 +47,7 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
         raise NotImplementedError(
             "Sorting not yet supported during factorization."
         )
-    if not na_sentinel:
+    if na_sentinel is None:
         raise NotImplementedError("na_sentinel can not be None.")
 
     if size_hint:
