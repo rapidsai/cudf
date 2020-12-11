@@ -388,7 +388,7 @@ class parquet_writer_options {
   // Specify the sink to use for writer output
   sink_info _sink;
   // Specify the compression format to use
-  compression_type _compression = compression_type::AUTO;
+  compression_type _compression = compression_type::SNAPPY;
   // Specify the level of statistics in the output file
   statistics_freq _stats_level = statistics_freq::STATISTICS_ROWGROUP;
   // Sets of columns to output
