@@ -51,7 +51,7 @@ std::unique_ptr<table> inner_join(
   // building/probing the hash map. Because building is typically more expensive than probing, we
   // build the hash map from the smaller table.
   if (right.num_rows() > left.num_rows()) {
-    cudf::hash_join hj_obj(left, left_on, stream);
+    cudf::hash_join hj_obj(left, left_on, compare_nulls, stream);
     auto actual_columns_in_common = columns_in_common;
     std::for_each(actual_columns_in_common.begin(), actual_columns_in_common.end(), [](auto& pair) {
       std::swap(pair.first, pair.second);
@@ -66,7 +66,7 @@ std::unique_ptr<table> inner_join(
     return cudf::detail::combine_table_pair(std::move(probe_build_pair.second),
                                             std::move(probe_build_pair.first));
   } else {
-    cudf::hash_join hj_obj(right, right_on, stream);
+    cudf::hash_join hj_obj(right, right_on, compare_nulls, stream);
     auto probe_build_pair = hj_obj.inner_join(left,
                                               left_on,
                                               columns_in_common,
@@ -99,7 +99,7 @@ std::unique_ptr<table> left_join(
   table_view const left  = scatter_columns(matched.second.front(), left_on, left_input);
   table_view const right = scatter_columns(matched.second.back(), right_on, right_input);
 
-  cudf::hash_join hj_obj(right, right_on, stream);
+  cudf::hash_join hj_obj(right, right_on, compare_nulls, stream);
   return hj_obj.left_join(left, left_on, columns_in_common, compare_nulls, stream, mr);
 }
 
@@ -123,7 +123,7 @@ std::unique_ptr<table> full_join(
   table_view const left  = scatter_columns(matched.second.front(), left_on, left_input);
   table_view const right = scatter_columns(matched.second.back(), right_on, right_input);
 
-  cudf::hash_join hj_obj(right, right_on, stream);
+  cudf::hash_join hj_obj(right, right_on, compare_nulls, stream);
   return hj_obj.full_join(left, left_on, columns_in_common, compare_nulls, stream, mr);
 }
 
@@ -133,8 +133,9 @@ hash_join::~hash_join() = default;
 
 hash_join::hash_join(cudf::table_view const& build,
                      std::vector<size_type> const& build_on,
+                     null_equality compare_nulls,
                      rmm::cuda_stream_view stream)
-  : impl{std::make_unique<const hash_join::hash_join_impl>(build, build_on, stream)}
+  : impl{std::make_unique<const hash_join::hash_join_impl>(build, build_on, compare_nulls, stream)}
 {
 }
 

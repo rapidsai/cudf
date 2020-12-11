@@ -56,6 +56,34 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUpZero)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUpZeroNoOp)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const input  = fp_wrapper{{1125, 1150, 1160, 1240, 1250, 1260}, scale_type{0}};
+  auto const result = cudf::round(input);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, result->view());
+}
+
+TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUpZeroNullMask)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const null_mask = std::vector<int>{1, 1, 0, 1};
+  auto const input     = fp_wrapper{{1150, 1160, 1240, 1250}, null_mask.cbegin(), scale_type{-2}};
+  auto const expected  = fp_wrapper{{12, 12, 1240, 13}, null_mask.cbegin(), scale_type{0}};
+  auto const result    = cudf::round(input);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfEvenZero)
 {
   using namespace numeric;
