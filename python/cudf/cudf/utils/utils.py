@@ -496,7 +496,7 @@ _REVERSED_NAMES = {
     "ne": "__ne__",
 }
 
-# can probably be used to remove cudf/core/ops.py
+# todo: can probably be used to remove cudf/core/ops.py
 def _get_cudf_series_ufunc(fname, args, kwargs, cudf_ser_submodule):
     if isinstance(args[0], cudf.Series):
         cudf_ser_func = getattr(cudf_ser_submodule, fname)

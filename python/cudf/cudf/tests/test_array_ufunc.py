@@ -154,3 +154,15 @@ def test_ufunc_cudf_series_with_nonaligned_index(func):
         ValueError, match="Can only compare identically-labeled Series objects"
     ):
         func(cudf_s1, cudf_s2)
+
+
+@pytest.mark.parametrize(
+    "func", [np.add],
+)
+def test_ufunc_cudf_series_error_with_out_kwarg(func):
+    cudf_s1 = cudf.Series(data=[-1, 2, 3, 0])
+    cudf_s2 = cudf.Series(data=[-1, 2, 3, 0])
+    cudf_s3 = cudf.Series(data=[0, 0, 0, 0])
+    # this throws a value-error because of presence of out kwarg
+    with pytest.raises(TypeError):
+        func(x1=cudf_s1, x2=cudf_s2, out=cudf_s3)
