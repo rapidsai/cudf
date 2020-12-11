@@ -118,6 +118,25 @@ void verify_valid_requests(std::vector<aggregation_request> const& requests)
           });
       }),
     "Invalid type/aggregation combination.");
+
+// The aggregations listed in the lambda below will not work with a values column of type
+// dictionary if this is compiled with nvcc/ptxas 10.2.
+// https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
+#if (__CUDACC_VER_MAJOR__ != 10) or (__CUDACC_VER_MINOR__ != 2)
+  CUDF_EXPECTS(
+    std::all_of(
+      requests.begin(),
+      requests.end(),
+      [](auto const& request) {
+        return std::all_of(
+          request.aggregations.begin(), request.aggregations.end(), [&request](auto const& agg) {
+            return (!cudf::is_dictionary(request.values.type()) ||
+                    !(agg->kind == aggregation::SUM or agg->kind == aggregation::MEAN or
+                      agg->kind == aggregation::STD or agg->kind == aggregation::VARIANCE))
+          });
+      }),
+    "dictionary type not supported for this aggregation");
+#endif
 }
 
 }  // namespace
