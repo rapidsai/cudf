@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import DataFrame, Series
+from cudf.core import DataFrame, Index
 from cudf.tests.utils import assert_eq
 
 
@@ -20,12 +20,12 @@ def test_factorize_series_obj(ncats, nelem):
 
     uvals, labels = df["cats"].factorize()
     np.testing.assert_array_equal(labels.to_array(), sorted(set(arr)))
-    assert isinstance(uvals, Series)
-    assert isinstance(labels, Series)
+    assert isinstance(uvals, cp.core.core.ndarray)
+    assert isinstance(labels, Index)
 
     encoder = dict((labels[idx], idx) for idx in range(len(labels)))
     handcoded = [encoder[v] for v in arr]
-    np.testing.assert_array_equal(uvals.to_array(), handcoded)
+    np.testing.assert_array_equal(uvals.get(), handcoded)
 
 
 @pytest.mark.parametrize("ncats,nelem", [(2, 2), (2, 10), (10, 100)])
@@ -38,13 +38,13 @@ def test_factorize_index_obj(ncats, nelem):
     df = df.set_index("cats")
 
     uvals, labels = df.index.factorize()
-    np.testing.assert_array_equal(labels.to_array(), sorted(set(arr)))
-    assert isinstance(uvals, Series)
-    assert isinstance(labels, Series)
+    np.testing.assert_array_equal(labels.values.get(), sorted(set(arr)))
+    assert isinstance(uvals, cp.core.core.ndarray)
+    assert isinstance(labels, Index)
 
     encoder = dict((labels[idx], idx) for idx in range(len(labels)))
     handcoded = [encoder[v] for v in arr]
-    np.testing.assert_array_equal(uvals.to_array(), handcoded)
+    np.testing.assert_array_equal(uvals.get(), handcoded)
 
 
 def test_factorize_series_index():
@@ -62,9 +62,7 @@ def test_factorize_series_index():
         2992446.0,
         2992448.0,
     ]
-    assert_eq(
-        df.col1.factorize()[0].to_array(), df.to_pandas().col1.factorize()[0]
-    )
+    assert_eq(df.col1.factorize()[0].get(), df.to_pandas().col1.factorize()[0])
     assert_eq(
         df.col1.factorize()[1].to_pandas().values,
         df.to_pandas().col1.factorize()[1].values,
@@ -72,9 +70,7 @@ def test_factorize_series_index():
 
     df = df.set_index("col2")
 
-    assert_eq(
-        df.col1.factorize()[0].to_array(), df.to_pandas().col1.factorize()[0]
-    )
+    assert_eq(df.col1.factorize()[0].get(), df.to_pandas().col1.factorize()[0])
     assert_eq(
         df.col1.factorize()[1].to_pandas().values,
         df.to_pandas().col1.factorize()[1].values,
@@ -92,8 +88,8 @@ def test_cudf_factorize_series():
 
     assert len(expect) == len(got)
 
-    np.testing.assert_array_equal(expect[0], got[0].to_array())
-    np.testing.assert_array_equal(expect[1], got[1].to_array())
+    np.testing.assert_array_equal(expect[0], got[0].get())
+    np.testing.assert_array_equal(expect[1], got[1].values.get())
 
 
 def test_cudf_factorize_index():
@@ -107,8 +103,8 @@ def test_cudf_factorize_index():
 
     assert len(expect) == len(got)
 
-    np.testing.assert_array_equal(expect[0], got[0].to_array())
-    np.testing.assert_array_equal(expect[1], got[1].to_array())
+    np.testing.assert_array_equal(expect[0], got[0].get())
+    np.testing.assert_array_equal(expect[1], got[1].values.get())
 
 
 def test_cudf_factorize_array():
@@ -122,5 +118,24 @@ def test_cudf_factorize_array():
 
     assert len(expect) == len(got)
 
-    np.testing.assert_array_equal(expect[0], got[0].to_array())
-    np.testing.assert_array_equal(expect[1], got[1].to_array())
+    np.testing.assert_array_equal(expect[0], got[0].get())
+    np.testing.assert_array_equal(expect[1], got[1].get())
+
+
+def test_factorize_result_classes():
+    data = [1, 2, 3]
+
+    labels, cats = cudf.factorize(cudf.Series(data))
+
+    assert isinstance(labels, cp.core.core.ndarray)
+    assert isinstance(cats, cudf.Index)
+
+    labels, cats = cudf.factorize(cudf.Index(data))
+
+    assert isinstance(labels, cp.core.core.ndarray)
+    assert isinstance(cats, cudf.Index)
+
+    labels, cats = cudf.factorize(cp.array(data))
+
+    assert isinstance(labels, cp.core.core.ndarray)
+    assert isinstance(cats, cp.core.core.ndarray)
