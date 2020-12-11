@@ -23,8 +23,8 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/transform_reduce.h>
@@ -46,14 +46,12 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
 
   using string_index_pair = thrust::pair<const char*, size_type>;
 
-  auto execpol = rmm::exec_policy(stream);
-
   // check total size is not too large for cudf column
   auto size_checker = [] __device__(string_index_pair const& item) {
     return (item.first != nullptr) ? item.second : 0;
   };
   size_t bytes = thrust::transform_reduce(
-    execpol->on(stream.value()), begin, end, size_checker, 0, thrust::plus<size_t>());
+    rmm::exec_policy(stream), begin, end, size_checker, 0, thrust::plus<size_t>());
   CUDF_EXPECTS(bytes < std::numeric_limits<size_type>::max(),
                "total size of strings is too large for cudf column");
 
@@ -83,7 +81,7 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
     string_index_pair const item = begin[idx];
     if (item.first != nullptr) memcpy(d_chars + d_offsets[idx], item.first, item.second);
   };
-  thrust::for_each_n(execpol->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      copy_chars);

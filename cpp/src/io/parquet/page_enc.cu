@@ -13,19 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
 
-#include <chrono>
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <cub/cub.cuh>
 
 #include <thrust/gather.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <cub/cub.cuh>
+#include <cuda/std/chrono>
 
 namespace cudf {
 namespace io {
@@ -916,8 +917,8 @@ static __device__ void PlainBoolEncode(page_enc_state_s *s,
 
 constexpr auto julian_calendar_epoch_diff()
 {
-  using namespace simt::std::chrono;
-  using namespace simt::std::chrono_literals;
+  using namespace cuda::std::chrono;
+  using namespace cuda::std::chrono_literals;
   return sys_days{January / 1 / 1970} - (sys_days{November / 24 / -4713} + 12h);
 }
 
@@ -929,10 +930,10 @@ constexpr auto julian_calendar_epoch_diff()
  * @return std::pair<nanoseconds,days> where nanoseconds is the number of nanoseconds
  * elapsed in the day and days is the number of days from Julian epoch.
  */
-static __device__ std::pair<simt::std::chrono::nanoseconds, simt::std::chrono::days>
-convert_nanoseconds(simt::std::chrono::sys_time<simt::std::chrono::nanoseconds> const ns)
+static __device__ std::pair<cuda::std::chrono::nanoseconds, cuda::std::chrono::days>
+convert_nanoseconds(cuda::std::chrono::sys_time<cuda::std::chrono::nanoseconds> const ns)
 {
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
   auto const nanosecond_ticks = ns.time_since_epoch();
   auto const gregorian_days   = floor<days>(nanosecond_ticks);
   auto const julian_days      = gregorian_days + ceil<days>(julian_calendar_epoch_diff());
@@ -1189,7 +1190,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
             }
 
             auto const ret = convert_nanoseconds([&]() {
-              using namespace simt::std::chrono;
+              using namespace cuda::std::chrono;
 
               switch (s->col.converted_type) {
                 case TIMESTAMP_MILLIS: {
@@ -1680,12 +1681,12 @@ dremel_data get_dremel_data(column_view h_col,
     auto d_off = lcv.offsets().data<size_type>();
 
     auto empties_idx_end =
-      thrust::copy_if(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::copy_if(rmm::exec_policy(stream),
                       thrust::make_counting_iterator(start),
                       thrust::make_counting_iterator(end),
                       empties_idx.begin(),
                       [d_off] __device__(auto i) { return d_off[i] == d_off[i + 1]; });
-    auto empties_end = thrust::gather(rmm::exec_policy(stream)->on(stream.value()),
+    auto empties_end = thrust::gather(rmm::exec_policy(stream),
                                       empties_idx.begin(),
                                       empties_idx_end,
                                       lcv.offsets().begin<size_type>(),
@@ -1822,7 +1823,7 @@ dremel_data get_dremel_data(column_view h_col,
     auto output_zip_it =
       thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
 
-    auto ends = thrust::merge_by_key(rmm::exec_policy(stream)->on(stream.value()),
+    auto ends = thrust::merge_by_key(rmm::exec_policy(stream),
                                      empties.begin(),
                                      empties.begin() + empties_size,
                                      thrust::make_counting_iterator(column_offsets[level + 1]),
@@ -1840,14 +1841,12 @@ dremel_data get_dremel_data(column_view h_col,
                                       [off = lcv.offsets().data<size_type>()] __device__(
                                         auto i) -> int { return off[i] == off[i + 1]; });
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
-    thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
-                           scan_it,
-                           scan_it + offset_size_at_level,
-                           scan_out.begin());
+    thrust::exclusive_scan(
+      rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
 
     // Add scan output to existing offsets to get new offsets into merged rep level values
     new_offsets = rmm::device_uvector<size_type>(offset_size_at_level, stream);
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator(0),
                        offset_size_at_level,
                        [off      = lcv.offsets().data<size_type>() + column_offsets[level],
@@ -1858,7 +1857,7 @@ dremel_data get_dremel_data(column_view h_col,
 
     // Set rep level values at level starts to appropriate rep level
     auto scatter_it = thrust::make_constant_iterator(level);
-    thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::scatter(rmm::exec_policy(stream),
                     scatter_it,
                     scatter_it + new_offsets.size() - 1,
                     new_offsets.begin(),
@@ -1911,7 +1910,7 @@ dremel_data get_dremel_data(column_view h_col,
     auto output_zip_it =
       thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
 
-    auto ends = thrust::merge_by_key(rmm::exec_policy(stream)->on(stream.value()),
+    auto ends = thrust::merge_by_key(rmm::exec_policy(stream),
                                      transformed_empties,
                                      transformed_empties + empties_size,
                                      thrust::make_counting_iterator(0),
@@ -1930,14 +1929,12 @@ dremel_data get_dremel_data(column_view h_col,
                                       [off = lcv.offsets().data<size_type>()] __device__(
                                         auto i) -> int { return off[i] == off[i + 1]; });
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
-    thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
-                           scan_it,
-                           scan_it + offset_size_at_level,
-                           scan_out.begin());
+    thrust::exclusive_scan(
+      rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
 
     // Add scan output to existing offsets to get new offsets into merged rep level values
     rmm::device_uvector<size_type> temp_new_offsets(offset_size_at_level, stream);
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator(0),
                        offset_size_at_level,
                        [off      = lcv.offsets().data<size_type>() + column_offsets[level],
@@ -1950,7 +1947,7 @@ dremel_data get_dremel_data(column_view h_col,
 
     // Set rep level values at level starts to appropriate rep level
     auto scatter_it = thrust::make_constant_iterator(level);
-    thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::scatter(rmm::exec_policy(stream),
                     scatter_it,
                     scatter_it + new_offsets.size() - 1,
                     new_offsets.begin(),

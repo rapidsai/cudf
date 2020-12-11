@@ -64,6 +64,10 @@ class parquet_reader_options {
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
+  // force decimal reading to error if resorting to
+  // doubles for storage of types unsupported by cudf
+  bool _strict_decimal_types = false;
+
   /**
    * @brief Constructor from source info.
    *
@@ -129,6 +133,12 @@ class parquet_reader_options {
    * @brief Returns timestamp type used to cast timestamp columns.
    */
   data_type get_timestamp_type() const { return _timestamp_type; }
+
+  /**
+   * @brief Returns true if strict decimal types is set, which errors if reading
+   * a decimal type that is unsupported.
+   */
+  bool is_enabled_strict_decimal_types() const { return _strict_decimal_types; }
 
   /**
    * @brief Sets names of the columns to be read.
@@ -199,6 +209,14 @@ class parquet_reader_options {
    * @param type The timestamp data_type to which all timestamp columns need to be cast.
    */
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
+
+  /**
+   * @brief Enables/disables strict decimal type checking.
+   *
+   * @param val If true, cudf will error if reading a decimal type that is unsupported. If false,
+   * cudf will convert unsupported types to double.
+   */
+  void set_strict_decimal_types(bool val) { _strict_decimal_types = val; }
 };
 
 class parquet_reader_options_builder {
@@ -300,6 +318,18 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& timestamp_type(data_type type)
   {
     options._timestamp_type = type;
+    return *this;
+  }
+
+  /**
+   * @brief Sets to enable/disable error with unsupported decimal types.
+   *
+   * @param val Boolean value whether to error with unsupported decimal types.
+   * @return this for chaining.
+   */
+  parquet_reader_options_builder& use_strict_decimal_types(bool val)
+  {
+    options._strict_decimal_types = val;
     return *this;
   }
 

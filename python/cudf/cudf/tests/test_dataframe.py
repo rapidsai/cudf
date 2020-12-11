@@ -784,7 +784,8 @@ a b  c
     assert got.split() == expect.split()
 
 
-def test_dataframe_to_string_wide():
+def test_dataframe_to_string_wide(monkeypatch):
+    monkeypatch.setenv("COLUMNS", 79)
     # Test basic
     df = gd.DataFrame()
     for i in range(100):
@@ -800,7 +801,6 @@ def test_dataframe_to_string_wide():
 [3 rows x 100 columns]
 """
     # values should match despite whitespace difference
-
     assert got.split() == expect.split()
 
 
@@ -1966,9 +1966,29 @@ def test_iteritems(gdf):
 
 
 @pytest.mark.parametrize("q", [0.5, 1, 0.001, [0.5], [], [0.005, 0.5, 1]])
-def test_quantile(pdf, gdf, q):
-    assert_eq(pdf["x"].quantile(q), gdf["x"].quantile(q))
-    assert_eq(pdf.quantile(q), gdf.quantile(q))
+@pytest.mark.parametrize("numeric_only", [True, False])
+def test_quantile(q, numeric_only):
+    ts = pd.date_range("2018-08-24", periods=5, freq="D")
+    td = pd.to_timedelta(np.arange(5), unit="h")
+    pdf = pd.DataFrame(
+        {"date": ts, "delta": td, "val": np.random.randn(len(ts))}
+    )
+    gdf = gd.DataFrame.from_pandas(pdf)
+
+    assert_eq(pdf["date"].quantile(q), gdf["date"].quantile(q))
+    assert_eq(pdf["delta"].quantile(q), gdf["delta"].quantile(q))
+    assert_eq(pdf["val"].quantile(q), gdf["val"].quantile(q))
+
+    if numeric_only:
+        assert_eq(pdf.quantile(q), gdf.quantile(q))
+    else:
+        q = q if isinstance(q, list) else [q]
+        assert_eq(
+            pdf.quantile(
+                q if isinstance(q, list) else [q], numeric_only=False
+            ),
+            gdf.quantile(q, numeric_only=False),
+        )
 
 
 def test_empty_quantile():
@@ -7995,3 +8015,62 @@ def test_dataframe_from_pandas_duplicate_columns():
         ValueError, match="Duplicate column names are not allowed"
     ):
         gd.from_pandas(pdf)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(
+            {"a": [1, 2, 3], "b": [10, 11, 20], "c": ["a", "bcd", "xyz"]}
+        ),
+        pd.DataFrame(),
+    ],
+)
+@pytest.mark.parametrize(
+    "columns",
+    [
+        None,
+        ["a"],
+        ["c", "a"],
+        ["b", "a", "c"],
+        [],
+        pd.Index(["c", "a"]),
+        gd.Index(["c", "a"]),
+        ["abc", "a"],
+        ["column_not_exists1", "column_not_exists2"],
+    ],
+)
+@pytest.mark.parametrize("index", [["abc", "def", "ghi"]])
+def test_dataframe_constructor_columns(df, columns, index):
+    def assert_local_eq(actual, df, expected, host_columns):
+        check_index_type = False if expected.empty else True
+        if host_columns is not None and any(
+            col not in df.columns for col in host_columns
+        ):
+            assert_eq(
+                expected,
+                actual,
+                check_dtype=False,
+                check_index_type=check_index_type,
+            )
+        else:
+            assert_eq(expected, actual, check_index_type=check_index_type)
+
+    gdf = gd.from_pandas(df)
+    host_columns = (
+        columns.to_pandas() if isinstance(columns, gd.Index) else columns
+    )
+
+    expected = pd.DataFrame(df, columns=host_columns, index=index)
+    actual = gd.DataFrame(gdf, columns=columns, index=index)
+
+    assert_local_eq(actual, df, expected, host_columns)
+
+    expected = pd.DataFrame(df, columns=host_columns)
+    actual = gd.DataFrame(gdf._data, columns=columns, index=index)
+    if index is not None:
+        if df.shape == (0, 0):
+            expected = pd.DataFrame(columns=host_columns, index=index)
+        else:
+            expected.index = index
+    assert_local_eq(actual, df, expected, host_columns)

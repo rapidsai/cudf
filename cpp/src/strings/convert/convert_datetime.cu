@@ -383,7 +383,7 @@ struct dispatch_to_timestamps_fn {
     auto d_results = results_view.data<T>();
     parse_datetime<T> pfn{
       d_strings, d_items, compiler.items_count(), units, compiler.subsecond_precision()};
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(results_view.size()),
                       d_results,
@@ -578,7 +578,7 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& strings,
 
   format_compiler compiler(format.c_str(), stream);
   thrust::transform(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     d_results,
@@ -623,7 +623,7 @@ struct datetime_formatter {
 
   __device__ cudf::timestamp_D::duration convert_to_days(int64_t timestamp, timestamp_units units)
   {
-    using namespace simt::std::chrono;
+    using namespace cuda::std::chrono;
     using minutes = duration<timestamp_s::rep, minutes::period>;
     using hours   = duration<timestamp_s::rep, hours::period>;
     switch (units) {
@@ -638,7 +638,7 @@ struct datetime_formatter {
   }
 
   // divide timestamp integer into time components (year, month, day, etc)
-  // TODO call the simt::std::chrono methods here instead when they are ready
+  // TODO call the cuda::std::chrono methods here instead when they are ready
   __device__ void dissect_timestamp(int64_t timestamp, int32_t* timeparts)
   {
     if (units == timestamp_units::years) {
@@ -679,7 +679,7 @@ struct datetime_formatter {
 
     // first, convert to days so we can handle months, years, day of the year.
     auto const days  = convert_to_days(timestamp, units);
-    auto const ymd   = simt::std::chrono::year_month_day(simt::std::chrono::sys_days(days));
+    auto const ymd   = cuda::std::chrono::year_month_day(cuda::std::chrono::sys_days(days));
     auto const year  = static_cast<int32_t>(ymd.year());
     auto const month = static_cast<unsigned>(ymd.month());
     auto const day   = static_cast<unsigned>(ymd.day());
@@ -850,7 +850,7 @@ struct dispatch_from_timestamps_fn {
                   rmm::cuda_stream_view stream) const
   {
     datetime_formatter<T> pfn{d_timestamps, d_format_items, items_count, units, d_offsets, d_chars};
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<cudf::size_type>(0),
                        d_timestamps.size(),
                        pfn);

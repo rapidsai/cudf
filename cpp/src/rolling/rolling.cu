@@ -14,9 +14,13 @@
  * limitations under the License.
  */
 
-#include <rolling/jit/code/code.h>
-#include <rolling/rolling_detail.hpp>
-#include <rolling/rolling_jit_detail.hpp>
+#include <jit/launcher.h>
+#include <jit/parser.h>
+#include <jit/type.h>
+
+#include "jit/code/code.h"
+#include "rolling_detail.hpp"
+#include "rolling_jit_detail.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -37,20 +41,15 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <jit/launcher.h>
-#include <jit/parser.h>
-#include <jit/type.h>
 #include <jit/bit.hpp.jit>
 #include <jit/rolling_jit_detail.hpp.jit>
 #include <jit/types.hpp.jit>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/device_vector.hpp>
 
 #include <thrust/binary_search.h>
-#include <thrust/detail/execution_policy.h>
-#include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>

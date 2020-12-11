@@ -5,6 +5,7 @@ from collections import defaultdict
 from uuid import uuid4
 
 from fsspec.core import get_fs_token_paths
+from fsspec.utils import stringify_path
 from pyarrow import dataset as ds, parquet as pq
 
 import cudf
@@ -200,14 +201,22 @@ def read_parquet(
 
     filepaths_or_buffers = []
     for source in filepath_or_buffer:
+        if ioutils.is_directory(source, **kwargs):
+            fs = _ensure_filesystem(passed_filesystem=None, path=source)
+            source = stringify_path(source)
+            source = fs.sep.join([source, "*.parquet"])
+
         tmp_source, compression = ioutils.get_filepath_or_buffer(
-            path_or_data=source, compression=None, **kwargs
+            path_or_data=source, compression=None, **kwargs,
         )
         if compression is not None:
             raise ValueError(
                 "URL content-encoding decompression is not supported"
             )
-        filepaths_or_buffers.append(tmp_source)
+        if isinstance(tmp_source, list):
+            filepath_or_buffer.extend(tmp_source)
+        else:
+            filepaths_or_buffers.append(tmp_source)
 
     if filters is not None:
         # Convert filters to ds.Expression

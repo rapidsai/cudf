@@ -24,7 +24,7 @@
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <simt/type_traits>
+#include <cuda/std/type_traits>
 
 namespace cudf {
 
@@ -66,14 +66,14 @@ struct is_equality_comparable_impl<L, R, void_t<equality_comparable<L, R>>> : st
 };
 
 template <typename T>
-using is_timestamp_t = simt::std::disjunction<std::is_same<cudf::timestamp_D, T>,
+using is_timestamp_t = cuda::std::disjunction<std::is_same<cudf::timestamp_D, T>,
                                               std::is_same<cudf::timestamp_s, T>,
                                               std::is_same<cudf::timestamp_ms, T>,
                                               std::is_same<cudf::timestamp_us, T>,
                                               std::is_same<cudf::timestamp_ns, T>>;
 
 template <typename T>
-using is_duration_t = simt::std::disjunction<std::is_same<cudf::duration_D, T>,
+using is_duration_t = cuda::std::disjunction<std::is_same<cudf::duration_D, T>,
                                              std::is_same<cudf::duration_s, T>,
                                              std::is_same<cudf::duration_ms, T>,
                                              std::is_same<cudf::duration_us, T>,

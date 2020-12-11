@@ -81,11 +81,11 @@ public final class HostColumnVector extends HostColumnVectorCore {
                    HostMemoryBuffer hostDataBuffer, HostMemoryBuffer hostValidityBuffer,
                    HostMemoryBuffer offsetBuffer) {
     super(type, rows, nullCount, hostDataBuffer, hostValidityBuffer, offsetBuffer, new ArrayList<>());
-    assert type != DType.LIST : "This constructor should not be used for list type";
+    assert !type.equals(DType.LIST) : "This constructor should not be used for list type";
     if (nullCount.isPresent() && nullCount.get() > 0 && hostValidityBuffer == null) {
       throw new IllegalStateException("Buffer cannot have a nullCount without a validity buffer");
     }
-    if (type != DType.STRING && type != DType.LIST) {
+    if (!type.equals(DType.STRING) && !type.equals(DType.LIST)) {
       assert offsetBuffer == null : "offsets are only supported for STRING and LIST";
     }
     refCount = 0;
@@ -184,7 +184,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
         HostMemoryBuffer hdata = this.offHeap.data;
         if (hdata != null) {
           long dataLen = rows * type.getSizeInBytes();
-          if (type == DType.STRING) {
+          if (type.equals(DType.STRING)) {
             // This needs a different type
             dataLen = getEndStringOffset(rows - 1);
             if (dataLen == 0 && getNullCount() == 0) {
@@ -845,7 +845,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       long targetDataSize = 0;
 
       if (!type.isNestedType()) {
-        if (type == DType.STRING) {
+        if (type.equals(DType.STRING)) {
           targetDataSize = data == null ? length : currentByteIndex + length;
         } else {
           targetDataSize = data == null ? estimatedRows * type.getSizeInBytes() : rows * type.getSizeInBytes();
@@ -857,7 +857,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
           data = HostMemoryBuffer.allocate(targetDataSize);
         } else {
           long maxLen;
-          if (type == DType.STRING) {
+          if (type.equals(DType.STRING)) {
             maxLen = Integer.MAX_VALUE;
           } else {
             maxLen = Integer.MAX_VALUE * (long) type.getSizeInBytes();
@@ -877,7 +877,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
           }
         }
       }
-      if (type == DType.LIST || type == DType.STRING) {
+      if (type.equals(DType.LIST) || type.equals(DType.STRING)) {
         if (offsets == null) {
           offsets = HostMemoryBuffer.allocate((estimatedRows + 1) * OFFSET_SIZE);
           offsets.setInt(0, 0);
@@ -930,13 +930,13 @@ public final class HostColumnVector extends HostColumnVectorCore {
       currentIndex++;
       currentByteIndex += type.getSizeInBytes();
       if (type.hasOffsets()) {
-        if (type.getTypeId() == DType.DTypeEnum.LIST) {
+        if (type.equals(DType.LIST)) {
           offsets.setInt(currentIndex * OFFSET_SIZE, childBuilders.get(0).getCurrentIndex());
         } else {
           // It is a String
           offsets.setInt(currentIndex * OFFSET_SIZE, currentByteIndex);
         }
-      } else if (type == DType.STRUCT) {
+      } else if (type.equals(DType.STRUCT)) {
         // structs propagate nulls to children and even further down if needed
         for (ColumnBuilder childBuilder : childBuilders) {
           childBuilder.appendNull();
@@ -948,7 +948,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     //For structs
     private ColumnBuilder append(StructData structData) {
       assert type.isNestedType();
-      if (type == DType.STRUCT) {
+      if (type.equals(DType.STRUCT)) {
         if (structData == null || structData.dataRecord == null) {
           return appendNull();
         } else {
@@ -982,7 +982,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
      * @return this for chaining.
      */
     public ColumnBuilder endStruct() {
-      assert type.getTypeId() == DType.DTypeEnum.STRUCT : "This only works for structs";
+      assert type.equals(DType.STRUCT) : "This only works for structs";
       assert allChildrenHaveSameIndex() : "Appending structs data appears to be off " +
           childBuilders + " should all have the same currentIndex " + type;
       growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
@@ -998,7 +998,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
      * @return this for chaining.
      */
     public ColumnBuilder endList() {
-      assert type.getTypeId() == DType.DTypeEnum.LIST;
+      assert type.equals(DType.LIST);
       growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
       currentIndex++;
       offsets.setInt(currentIndex * OFFSET_SIZE, childBuilders.get(0).getCurrentIndex());
@@ -1064,7 +1064,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
 
     public final ColumnBuilder append(byte value) {
       growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
-      assert type == DType.INT8 || type == DType.UINT8 || type == DType.BOOL8;
+      assert type.isBackedByByte();
       assert currentIndex < rows;
       data.setByte(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
@@ -1074,7 +1074,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
 
     public final ColumnBuilder append(short value) {
       growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
-      assert type == DType.INT16 || type == DType.UINT16;
+      assert type.isBackedByShort();
       assert currentIndex < rows;
       data.setShort(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
@@ -1104,7 +1104,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
 
     public final ColumnBuilder append(float value) {
       growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
-      assert type == DType.FLOAT32;
+      assert type.equals(DType.FLOAT32);
       assert currentIndex < rows;
       data.setFloat(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
@@ -1114,7 +1114,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
 
     public final ColumnBuilder append(double value) {
       growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
-      assert type == DType.FLOAT64;
+      assert type.equals(DType.FLOAT64);
       assert currentIndex < rows;
       data.setDouble(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
@@ -1124,7 +1124,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
 
     public final ColumnBuilder append(boolean value) {
       growBuffersAndRows(false, currentIndex * type.getSizeInBytes() + type.getSizeInBytes());
-      assert type == DType.BOOL8;
+      assert type.equals(DType.BOOL8);
       assert currentIndex < rows;
       data.setBoolean(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
@@ -1163,7 +1163,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       assert srcOffset >= 0;
       assert length >= 0;
       assert value.length + srcOffset <= length;
-      assert type == DType.STRING : " type " + type + " is not String";
+      assert type.equals(DType.STRING) : " type " + type + " is not String";
       currentIndex++;
       growBuffersAndRows(false, length);
       assert currentIndex < rows + 1;
@@ -1251,7 +1251,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     Builder(DType type, long rows, long stringBufferSize) {
       this.type = type;
       this.rows = rows;
-      if (type == DType.STRING) {
+      if (type.equals(DType.STRING)) {
         if (stringBufferSize <= 0) {
           // We need at least one byte or we will get NULL back for data
           stringBufferSize = 1;
@@ -1284,7 +1284,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public final Builder append(boolean value) {
-      assert type == DType.BOOL8;
+      assert type.equals(DType.BOOL8);
       assert currentIndex < rows;
       data.setByte(currentIndex * type.getSizeInBytes(), value ? (byte)1 : (byte)0);
       currentIndex++;
@@ -1332,7 +1332,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public final Builder append(float value) {
-      assert type == DType.FLOAT32;
+      assert type.equals(DType.FLOAT32);
       assert currentIndex < rows;
       data.setFloat(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
@@ -1340,7 +1340,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public final Builder append(double value) {
-      assert type == DType.FLOAT64;
+      assert type.equals(DType.FLOAT64);
       assert currentIndex < rows;
       data.setDouble(currentIndex * type.getSizeInBytes(), value);
       currentIndex++;
@@ -1414,7 +1414,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       assert offset >= 0;
       assert length >= 0;
       assert value.length + offset <= length;
-      assert type == DType.STRING;
+      assert type.equals(DType.STRING);
       assert currentIndex < rows;
       // just for strings we want to throw a real exception if we would overrun the buffer
       long oldLen = data.getLength();
@@ -1481,7 +1481,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public Builder appendArray(float... values) {
-      assert type == DType.FLOAT32;
+      assert type.equals(DType.FLOAT32);
       assert (values.length + currentIndex) <= rows;
       data.setFloats(currentIndex * type.getSizeInBytes(), values, 0, values.length);
       currentIndex += values.length;
@@ -1489,7 +1489,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     public Builder appendArray(double... values) {
-      assert type == DType.FLOAT64;
+      assert type.equals(DType.FLOAT64);
       assert (values.length + currentIndex) <= rows;
       data.setDoubles(currentIndex * type.getSizeInBytes(), values, 0, values.length);
       currentIndex += values.length;
@@ -1676,7 +1676,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
       assert columnVector.rows <= (rows - currentIndex);
       assert columnVector.type.equals(type);
 
-      if (type == DType.STRING) {
+      if (type.equals(DType.STRING)) {
         throw new UnsupportedOperationException(
             "Appending a string column vector client side is not currently supported");
       } else {
@@ -1712,7 +1712,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     public final Builder appendNull() {
       setNullAt(currentIndex);
       currentIndex++;
-      if (type == DType.STRING) {
+      if (type.equals(DType.STRING)) {
         offsets.setInt(currentIndex * OFFSET_SIZE, currentStringByteIndex);
       }
       return this;

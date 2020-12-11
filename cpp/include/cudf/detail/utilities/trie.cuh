@@ -89,6 +89,8 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(
   // Serialize the tree trie
   std::deque<IndexedTrieNode> to_visit;
   thrust::host_vector<SerialTrieNode> nodes;
+  // suport for matching empty input
+  nodes.push_back(SerialTrieNode(trie_terminating_character, tree_trie.is_end_of_word));
   // Add root node to queue. this node is not included to the serialized trie
   to_visit.emplace_back(&tree_trie, -1);
   while (!to_visit.empty()) {
@@ -112,7 +114,7 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(
         has_children = true;
       }
     }
-    // Only add the terminating character is there any nodes were added
+    // Only add the terminating character any nodes were added
     if (has_children) { nodes.push_back(SerialTrieNode(trie_terminating_character)); }
   }
   return nodes;
@@ -133,8 +135,9 @@ __host__ __device__ inline bool serialized_trie_contains(device_span<SerialTrieN
                                                          char const *key,
                                                          size_t key_len)
 {
-  if (trie.data() == nullptr) return false;
-  int curr_node = 0;
+  if (trie.data() == nullptr || trie.empty()) return false;
+  if (key_len == 0) return trie[0].is_leaf;
+  int curr_node = 1;
   for (size_t i = 0; i < key_len; ++i) {
     // Don't jump away from root node
     if (i != 0) { curr_node += trie[curr_node].children_offset; }

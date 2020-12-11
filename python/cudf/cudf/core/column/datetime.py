@@ -9,7 +9,6 @@ from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.scalar import as_device_scalar
 from cudf.core.column import column, string
 from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import _fillna_natwise
@@ -181,20 +180,18 @@ class DatetimeColumn(column.ColumnBase):
             f"cannot astype a datetimelike from [{self.dtype}] to [{dtype}]"
         )
 
-    def as_numerical_column(self, dtype, **kwargs):
+    def as_numerical_column(self, dtype):
         return self.as_numerical.astype(dtype)
 
-    def as_string_column(self, dtype, **kwargs):
-
-        if not kwargs.get("format"):
-            fmt = _dtype_to_format_conversion.get(
+    def as_string_column(self, dtype, format=None):
+        if format is None:
+            format = _dtype_to_format_conversion.get(
                 self.dtype.name, "%Y-%m-%d %H:%M:%S"
             )
-            kwargs["format"] = fmt
         if len(self) > 0:
-            return string._numeric_to_str_typecast_functions[
+            return string._datetime_to_str_typecast_functions[
                 np.dtype(self.dtype)
-            ](self, **kwargs)
+            ](self, format)
         else:
             return column.column_empty(0, dtype="object", masked=False)
 
@@ -215,12 +212,7 @@ class DatetimeColumn(column.ColumnBase):
         )
         if isinstance(q, Number):
             return pd.Timestamp(result, unit=self.time_unit)
-
-        result = result * as_device_scalar(
-            _numpy_to_pandas_conversion[self.time_unit]
-        )
-
-        return result.astype("datetime64[ns]")
+        return result.astype(self.dtype)
 
     def binary_operator(self, op, rhs, reflect=False):
         lhs, rhs = self, rhs

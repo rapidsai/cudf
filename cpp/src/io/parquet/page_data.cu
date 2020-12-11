@@ -21,8 +21,8 @@
 #include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/utilities/bit.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
@@ -745,10 +745,10 @@ static const __device__ __constant__ double kPow10[40] = {
  * @param[in] dst Pointer to row output data
  * @param[in] dtype Stored data type
  */
-inline __device__ void gpuOutputDecimal(volatile page_state_s *s,
-                                        int src_pos,
-                                        double *dst,
-                                        int dtype)
+inline __device__ void gpuOutputDecimalAsFloat(volatile page_state_s *s,
+                                               int src_pos,
+                                               double *dst,
+                                               int dtype)
 {
   const uint8_t *dict;
   uint32_t dict_pos, dict_size = s->dict_size, dtype_len_in;
@@ -983,15 +983,16 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
           break;
       }
       // Special check for downconversions
-      s->dtype_len_in = s->dtype_len;
-      if (s->col.converted_type == DECIMAL) {
-        s->dtype_len = 8;  // Convert DECIMAL to 64-bit float
-      } else if ((s->col.data_type & 7) == INT32) {
+      s->dtype_len_in          = s->dtype_len;
+      uint16_t const data_type = s->col.data_type & 7;
+      if (s->col.converted_type == DECIMAL && data_type != INT32 && data_type != INT64) {
+        s->dtype_len = 8;  // FLOAT output
+      } else if (data_type == INT32) {
         if (dtype_len_out == 1) s->dtype_len = 1;  // INT8 output
         if (dtype_len_out == 2) s->dtype_len = 2;  // INT16 output
-      } else if ((s->col.data_type & 7) == BYTE_ARRAY && dtype_len_out == 4) {
+      } else if (data_type == BYTE_ARRAY && dtype_len_out == 4) {
         s->dtype_len = 4;  // HASH32 output
-      } else if ((s->col.data_type & 7) == INT96) {
+      } else if (data_type == INT96) {
         s->dtype_len = 8;  // Convert to 64-bit timestamp
       }
 
@@ -1685,9 +1686,13 @@ extern "C" __global__ void __launch_bounds__(block_size)
           gpuOutputString(s, src_pos, dst);
         else if (dtype == BOOLEAN)
           gpuOutputBoolean(s, src_pos, static_cast<uint8_t *>(dst));
-        else if (s->col.converted_type == DECIMAL)
-          gpuOutputDecimal(s, src_pos, static_cast<double *>(dst), dtype);
-        else if (dtype == INT96)
+        else if (s->col.converted_type == DECIMAL) {
+          switch (dtype) {
+            case INT32: gpuOutputFast(s, src_pos, static_cast<uint32_t *>(dst)); break;
+            case INT64: gpuOutputFast(s, src_pos, static_cast<uint2 *>(dst)); break;
+            default: gpuOutputDecimalAsFloat(s, src_pos, static_cast<double *>(dst), dtype); break;
+          }
+        } else if (dtype == INT96)
           gpuOutputInt96Timestamp(s, src_pos, static_cast<int64_t *>(dst));
         else if (dtype_len == 8) {
           if (s->ts_scale)
@@ -1787,7 +1792,7 @@ void PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
     pages.device_ptr(), [] __device__(PageInfo const &page) { return page.chunk_idx; });
   auto page_input = thrust::make_transform_iterator(
     pages.device_ptr(), [] __device__(PageInfo const &page) { return page.num_rows; });
-  thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
                                 key_input,
                                 key_input + pages.size(),
                                 page_input,
@@ -1822,15 +1827,14 @@ void PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
   rmm::device_uvector<int> page_keys(pages.size(), stream);
   rmm::device_uvector<int> page_index(pages.size(), stream);
   {
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       pages.device_ptr(),
                       pages.device_ptr() + pages.size(),
                       page_keys.begin(),
                       [] __device__(PageInfo const &page) { return page.src_col_schema; });
 
-    thrust::sequence(
-      rmm::exec_policy(stream)->on(stream.value()), page_index.begin(), page_index.end());
-    thrust::stable_sort_by_key(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::sequence(rmm::exec_policy(stream), page_index.begin(), page_index.end());
+    thrust::stable_sort_by_key(rmm::exec_policy(stream),
                                page_keys.begin(),
                                page_keys.end(),
                                page_index.begin(),
@@ -1863,8 +1867,7 @@ void PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
       // for struct columns, higher levels of the output columns are shared between input
       // columns. so don't compute any given level more than once.
       if (out_buf.size == 0) {
-        int size = thrust::reduce(
-          rmm::exec_policy(stream)->on(stream.value()), size_input, size_input + pages.size());
+        int size = thrust::reduce(rmm::exec_policy(stream), size_input, size_input + pages.size());
 
         // if this is a list column add 1 for non-leaf levels for the terminating offset
         if (out_buf.type.id() == type_id::LIST && l_idx < max_depth) { size++; }
@@ -1874,7 +1877,7 @@ void PreprocessColumnData(hostdevice_vector<PageInfo> &pages,
       }
 
       // compute per-page start offset
-      thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
                                     page_keys.begin(),
                                     page_keys.end(),
                                     size_input,

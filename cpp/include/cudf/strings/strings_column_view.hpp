@@ -18,8 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
 
 /**
  * @file

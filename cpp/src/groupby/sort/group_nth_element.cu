@@ -50,7 +50,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
   if (null_handling == null_policy::INCLUDE || !values.has_nulls()) {
     // Returns index of nth value.
     thrust::transform_if(
-      rmm::exec_policy(stream)->on(stream.value()),
+      rmm::exec_policy(stream),
       group_sizes.begin<size_type>(),
       group_sizes.end<size_type>(),
       group_offsets.begin(),
@@ -70,7 +70,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
                                       [] __device__(auto b) { return static_cast<size_type>(b); });
     rmm::device_vector<size_type> intra_group_index(values.size());
     // intra group index for valids only.
-    thrust::exclusive_scan_by_key(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
                                   group_labels.begin(),
                                   group_labels.end(),
                                   bitmask_iterator,
@@ -79,7 +79,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
     rmm::device_vector<size_type> group_count = [&] {
       if (n < 0) {
         rmm::device_vector<size_type> group_count(num_groups);
-        thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream.value()),
+        thrust::reduce_by_key(rmm::exec_policy(stream),
                               group_labels.begin(),
                               group_labels.end(),
                               bitmask_iterator,
@@ -91,7 +91,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
       }
     }();
     // gather the valid index == n
-    thrust::scatter_if(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::scatter_if(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        thrust::make_counting_iterator<size_type>(values.size()),
                        group_labels.begin(),                          // map

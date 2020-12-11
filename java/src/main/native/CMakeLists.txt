@@ -168,7 +168,7 @@ find_path(CUB_INCLUDE "cub"
           "${CUDF_CPP_BUILD_DIR}/_deps/thrust-src"
           "$ENV{CONDA_PREFIX}/include")
 
-find_path(LIBCUDACXX_INCLUDE "simt"
+find_path(LIBCUDACXX_INCLUDE "cuda"
     HINTS "$ENV{CUDF_ROOT}/_deps/libcudacxx-src/include"
           "${CUDF_CPP_BUILD_DIR}/_deps/libcudacxx-src/include")
 
@@ -289,8 +289,7 @@ include_directories("${THRUST_INCLUDE}"
                     "${JNI_INCLUDE_DIRS}"
                     "${CUDF_INCLUDE}"
                     "${RMM_INCLUDE}"
-                    "${ARROW_INCLUDE}"
-                    "$<$<BOOL:${cuFile_FOUND}>:${cuFile_INCLUDE_DIRS}>")
+                    "${ARROW_INCLUDE}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -320,6 +319,12 @@ add_library(cudfjni SHARED ${SOURCE_FILES})
 
 #Override RPATH for cudfjni
 SET_TARGET_PROPERTIES(cudfjni PROPERTIES BUILD_RPATH "\$ORIGIN")
+
+if(USE_GDS)
+    add_library(cufilejni SHARED "src/CuFileJni.cpp")
+    target_include_directories(cufilejni PRIVATE "${cuFile_INCLUDE_DIRS}")
+    target_link_libraries(cufilejni PRIVATE "${cuFile_LIBRARIES}")
+endif(USE_GDS)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------

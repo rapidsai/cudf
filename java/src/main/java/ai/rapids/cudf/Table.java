@@ -219,15 +219,17 @@ public final class Table implements AutoCloseable {
 
   /**
    * Read in Parquet formatted data.
-   * @param filterColumnNames name of the columns to read, or an empty array if we want to read
-   *                          all of them
-   * @param filePath          the path of the file to read, or null if no path should be read.
-   * @param address           the address of the buffer to read from or 0 if we should not.
-   * @param length            the length of the buffer to read from.
-   * @param timeUnit          return type of TimeStamp in units
+   * @param filterColumnNames  name of the columns to read, or an empty array if we want to read
+   *                           all of them
+   * @param filePath           the path of the file to read, or null if no path should be read.
+   * @param address            the address of the buffer to read from or 0 if we should not.
+   * @param length             the length of the buffer to read from.
+   * @param timeUnit           return type of TimeStamp in units
+   * @param strictDecimalTypes whether strictly reading all decimal columns as fixed-point decimal type
    */
   private static native long[] readParquet(String[] filterColumnNames, String filePath,
-                                           long address, long length, int timeUnit) throws CudfException;
+                                           long address, long length, int timeUnit,
+                                           boolean strictDecimalTypes) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a file.
@@ -618,7 +620,8 @@ public final class Table implements AutoCloseable {
    */
   public static Table readParquet(ParquetOptions opts, File path) {
     return new Table(readParquet(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId()));
+        path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId(),
+        opts.isStrictDecimalType()));
   }
 
   /**
@@ -678,7 +681,8 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(readParquet(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()));
+        null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId(),
+        opts.isStrictDecimalType()));
   }
 
   /**
@@ -1297,7 +1301,7 @@ public final class Table implements AutoCloseable {
     assert this.getRowCount() != 0 : "Input table cannot be empty";
     assert valueTable.getRowCount() != 0 : "Value table cannot be empty";
     for (int i = 0; i < Math.min(columns.length, valueTable.columns.length); i++) {
-      assert valueTable.columns[i].getType() == this.getColumn(i).getType() :
+      assert valueTable.columns[i].getType().equals(this.getColumn(i).getType()) :
           "Input and values tables' data types do not match";
     }
   }
@@ -1573,7 +1577,7 @@ public final class Table implements AutoCloseable {
    * the filter defined by the boolean mask
    */
   public Table filter(ColumnVector mask) {
-    assert mask.getType() == DType.BOOL8 : "Mask column must be of type BOOL8";
+    assert mask.getType().equals(DType.BOOL8) : "Mask column must be of type BOOL8";
     assert getRowCount() == 0 || getRowCount() == mask.getRowCount() : "Mask column has incorrect size";
     return new Table(filter(nativeHandle, mask.getNativeView()));
   }
@@ -2664,9 +2668,9 @@ public final class Table implements AutoCloseable {
           DType dtype = dataType.getType();
           Object dataArray = typeErasedData.get(i);
           if (dtype.isNestedType()) {
-            if (dtype == DType.LIST) {
+            if (dtype.equals(DType.LIST)) {
               columns.add(fromLists(dataType, (Object[][]) dataArray));
-            } else if (dtype == DType.STRUCT) {
+            } else if (dtype.equals(DType.STRUCT)) {
               columns.add(fromStructs(dataType, (StructData[]) dataArray));
             } else {
               throw new IllegalStateException("Unexpected nested type: " + dtype);

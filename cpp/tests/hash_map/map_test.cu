@@ -19,10 +19,9 @@
 #include <cudf/types.hpp>
 #include <cudf_test/base_fixture.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
 
-#include <thrust/device_vector.h>
 #include <thrust/logical.h>
 
 #include <gtest/gtest.h>
