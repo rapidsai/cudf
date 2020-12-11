@@ -15,8 +15,8 @@
  */
 #pragma once
 
-#include <cudf/types.hpp>
 #include <cudf/replace.hpp>
+#include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
