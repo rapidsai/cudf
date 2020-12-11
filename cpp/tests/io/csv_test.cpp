@@ -1768,4 +1768,18 @@ TEST_F(CsvReaderTest, ReadMaxNumericValue)
   expect_column_data_equal(std::vector<uint64_t>(sequence, sequence + num_rows), view.column(0));
 }
 
+TEST_F(CsvReaderTest, DefaultWriteChunkSize)
+{
+  for (auto num_rows : {1, 20, 100, 1000}) {
+    auto sequence = cudf::test::make_counting_transform_iterator(
+      0, [](auto i) { return static_cast<int32_t>(i + 1000.50f); });
+    auto input_column = column_wrapper<int32_t>(sequence, sequence + num_rows);
+    auto input_table  = cudf::table_view{std::vector<cudf::column_view>{input_column}};
+
+    cudf_io::csv_writer_options opts =
+      cudf_io::csv_writer_options::builder(cudf_io::sink_info{"unused.path"}, input_table);
+    ASSERT_EQ(num_rows, opts.get_rows_per_chunk());
+  }
+}
+
 CUDF_TEST_PROGRAM_MAIN()
