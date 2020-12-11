@@ -1120,7 +1120,7 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
   Table t1(std::move(cols1));
 
-  cudf::hash_join hash_join(t1, {0, 1});
+  cudf::hash_join hash_join(t1, {0, 1}, cudf::null_equality::EQUAL);
 
   {
     CVector cols0;

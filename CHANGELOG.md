@@ -20,6 +20,7 @@
 
 - PR #6922 Fix N/A detection for empty fields in CSV reader
 - PR #6912 Fix rmm_mode=managed parameter for gtests
+- PR #6943 Fix join with nulls not equal performance
 - PR #6945 Fix groupby agg/apply behaviour when no key columns are provided 
 - PR #6942 Fix cudf::merge gtest for dictionary columns
 
