@@ -1264,6 +1264,24 @@ def test_mulitIndex_repr(pmi, max_seq_items):
             "   (  10.0,   <NA>)],"
             "    names=['c', 'a'])",
         ),
+        (
+            cudf.DataFrame(
+                {
+                    "a": [None, None, None, None],
+                    "b": cudf.Series(
+                        [None, None, None, None], dtype="timedelta64[ns]"
+                    ),
+                    "c": [0.345, np.nan, 100, 10],
+                }
+            )
+            .set_index(["b", "a"])
+            .index,
+            "MultiIndex([(<NA>, <NA>),"
+            "   (<NA>, <NA>),"
+            "   (<NA>, <NA>),"
+            "   (<NA>, <NA>)],"
+            "    names=['b', 'a'])",
+        ),
     ],
 )
 def test_mulitIndex_null_repr(gdi, expected_repr):
