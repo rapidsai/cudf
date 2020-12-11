@@ -52,7 +52,8 @@ static void BM_join(benchmark::State &state)
     if (Nullable) {
       // roughly 25% nulls
       auto validity = thrust::make_transform_iterator(
-        thrust::make_counting_iterator(0), [&rand_gen](auto i) { return (rand_gen.generate() & 3) == 0; });
+        thrust::make_counting_iterator(0),
+        [&rand_gen](auto i) { return (rand_gen.generate() & 3) == 0; });
       return cudf::test::detail::make_null_mask(validity, validity + size);
     } else {
       return cudf::create_null_mask(size, cudf::mask_state::UNINITIALIZED);
