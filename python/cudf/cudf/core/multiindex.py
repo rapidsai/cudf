@@ -410,44 +410,12 @@ class MultiIndex(Index):
             for col in self._source_data._data
         ]
 
-        output = output.lstrip("MultiIndex")
+        output_prefix = "MultiIndex("
+        output = output.lstrip(output_prefix)
         lines = output.split("\n")
 
         if any(cols_nulls):
-            row_tuples = list(
-                self._source_data.to_pandas(nullable=True).itertuples(
-                    index=None, name=None
-                )
-            )
-            new_lines = []
-            for row_idx, line in enumerate(lines[:-1]):
-                current_row = row_tuples[row_idx]
-                current_row_repr = line.split(", ")
-                for col_idx, value in enumerate(current_row):
-                    if value is pd.NA:
-                        current_row_repr[col_idx] = current_row_repr[
-                            col_idx
-                        ].replace("nan", "<NA>")
-                    elif value is np.nan:
-                        # Leave nan as is.
-                        pass
-                    elif cols_nulls[col_idx]:
-                        if col_idx == 0:
-                            current_row_repr[col_idx] = current_row_repr[
-                                col_idx
-                            ].replace("( ", "(  ")
-                        elif col_idx == len(current_row) - 1:
-                            current_row_repr[col_idx] = (
-                                " " + current_row_repr[col_idx]
-                            )
-                        else:
-                            current_row_repr[col_idx] = (
-                                " " + current_row_repr[col_idx]
-                            )
-
-                new_lines.append(", ".join(current_row_repr))
-            new_lines.append(lines[-1])
-            lines = new_lines
+            lines = self.post_process_repr_for_nulls(cols_nulls, lines)
 
         if len(lines) > 1:
             if "length=" in lines[-1] and len(self) != len(preprocess):
@@ -458,7 +426,60 @@ class MultiIndex(Index):
                 lines.append(last_line)
 
         data_output = "\n".join(lines)
-        return "MultiIndex" + data_output
+        return output_prefix + data_output
+
+    def post_process_repr_for_nulls(self, cols_nulls, lines):
+        row_tuples = list(
+            self._source_data.astype("str")
+            .to_pandas(nullable=True)
+            .itertuples(index=None, name=None)
+        )
+        new_lines = []
+        for row_idx, line in enumerate(lines[:-1]):
+            current_row = row_tuples[row_idx]
+            current_row_repr = line.split(", ")
+            for col_idx, value in enumerate(current_row):
+                if value is pd.NA:
+                    if isinstance(
+                        self._source_data._data.columns[col_idx],
+                        (
+                            cudf.core.column.DatetimeColumn,
+                            cudf.core.column.TimeDeltaColumn,
+                        ),
+                    ):
+                        current_row_repr[col_idx] = current_row_repr[
+                            col_idx
+                        ].replace("NaT", "<NA>")
+                    else:
+                        current_row_repr[col_idx] = current_row_repr[
+                            col_idx
+                        ].replace("nan", "<NA>")
+                elif value is np.nan:
+                    # Leave nan's as is.
+                    pass
+                elif cols_nulls[col_idx]:
+                    # Need to pad the values with extra space
+                    # as pandas MultiIndex return 3 character
+                    # string "nan", which are replaced by
+                    # 4 character string "<NA>", hence the
+                    # adjustment is needed for aligned output.
+                    if col_idx == 0:
+                        current_row_repr[col_idx] = current_row_repr[
+                            col_idx
+                        ].replace("(", "( ")
+                    elif col_idx == len(current_row) - 1:
+                        current_row_repr[col_idx] = (
+                            " " + current_row_repr[col_idx]
+                        )
+                    else:
+                        current_row_repr[col_idx] = (
+                            " " + current_row_repr[col_idx]
+                        )
+
+            new_lines.append(", ".join(current_row_repr))
+        new_lines.append(lines[-1])
+        lines = new_lines
+        return lines
 
     @classmethod
     def from_arrow(cls, table):
