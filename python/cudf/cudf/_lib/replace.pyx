@@ -16,6 +16,7 @@ from cudf._lib.cpp.column.column_view cimport (
     mutable_column_view
 )
 from cudf._lib.cpp.replace cimport (
+    replace_policy as cpp_replace_policy,
     find_and_replace_all as cpp_find_and_replace_all,
     replace_nulls as cpp_replace_nulls,
     clamp as cpp_clamp,
@@ -93,13 +94,51 @@ def replace_nulls_scalar(Column input_col, DeviceScalar replacement_value):
     return Column.from_unique_ptr(move(c_result))
 
 
-def replace_nulls(Column input_col, object replacement, object dtype=None):
+def replace_nulls_fill(Column input_col, object method):
+    """
+    Replaces null values in input_col with replacement_value
+
+    Parameters
+    ----------
+    input_col : Column whose value will be updated
+    method : 'ffill' or 'bfill'
+    """
+
+    cdef column_view input_col_view = input_col.view()
+
+    cdef unique_ptr[column] c_result
+    cdef cpp_replace_policy policy = (
+        cpp_replace_policy.PRECEDING
+        if method == 'ffill'
+        else cpp_replace_policy.FOLLOWING
+    )
+
+    with nogil:
+        c_result = move(cpp_replace_nulls(input_col_view, policy))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def replace_nulls(
+    Column input_col,
+    object replacement=None,
+    object method=None,
+    object dtype=None
+):
     """
     Calls one of the version of replace_nulls depending on type
     of replacement
     """
 
-    if is_scalar(replacement):
+    if replacement is None and method is None:
+        raise ValueError("Must specify a fill 'value' or 'method'.")
+
+    if replacement and method:
+        raise ValueError("Cannot specify both 'value' and 'method'.")
+
+    if method:
+        return replace_nulls_fill(input_col, method)
+    elif is_scalar(replacement):
         return replace_nulls_scalar(
             input_col,
             as_device_scalar(replacement, dtype=dtype)
