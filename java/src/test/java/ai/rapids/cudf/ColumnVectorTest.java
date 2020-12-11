@@ -1188,21 +1188,21 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testFromScalarNull() {
     final int rowCount = 4;
-    for (DType.DTypeEnum type : DType.DTypeEnum.values()) {
-      if (type == DType.DTypeEnum.EMPTY || type == DType.DTypeEnum.LIST || type == DType.DTypeEnum.STRUCT) {
+    for (DType.DTypeEnum typeEnum : DType.DTypeEnum.values()) {
+      if (typeEnum == DType.DTypeEnum.EMPTY || typeEnum == DType.DTypeEnum.LIST || typeEnum == DType.DTypeEnum.STRUCT) {
         continue;
       }
       DType dType;
-      if (type.isDecimalType()) {
+      if (typeEnum.isDecimalType()) {
         // magic number to invoke factory method specialized for decimal types
-        dType = DType.create(type, -8);
+        dType = DType.create(typeEnum, -8);
       } else {
-        dType = DType.create(type);
+        dType = DType.create(typeEnum);
       }
       try (Scalar s = Scalar.fromNull(dType);
            ColumnVector c = ColumnVector.fromScalar(s, rowCount);
            HostColumnVector hc = c.copyToHost()) {
-        assertEquals(type, c.getType().typeId);
+        assertEquals(typeEnum, c.getType().typeId);
         assertEquals(rowCount, c.getRowCount());
         assertEquals(rowCount, c.getNullCount());
         for (int i = 0; i < rowCount; ++i) {
@@ -2473,6 +2473,66 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector res1 = testStrings.containsRe(patternString1);
          ColumnVector expected1 = ColumnVector.fromBoxedBooleans(true)) {
       assertColumnsAreEqual(expected1, res1);
+    }
+  }
+
+  @Test
+  void testUrlDecode() {
+    String[] inputs = new String[] {
+        "foobar.site%2Fq%3Fx%3D%C3%A9%25",
+        "a%2Bb%2Dc%2Ad%2Fe",
+        "1%092%0A3",
+        "abc%401%2523",
+        "abc123",
+        " %09%0D%0A%0C",
+        "",
+        null
+    };
+    String[] expectedOutputs = new String[] {
+        "foobar.site/q?x=é%",
+        "a+b-c*d/e",
+        "1\t2\n3",
+        "abc@1%23",
+        "abc123",
+        " \t\r\n\f",
+        "",
+        null
+    };
+
+    try (ColumnVector v = ColumnVector.fromStrings(inputs);
+         ColumnVector expected = ColumnVector.fromStrings(expectedOutputs);
+         ColumnVector actual = v.urlDecode()) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testUrlEncode() {
+    String[] inputs = new String[] {
+        "foobar.site/q?x=é%",
+        "a+b-c*d/e",
+        "1\t2\n3",
+        "abc@1%23",
+        "abc123",
+        " \t\r\n\f",
+        "",
+        null
+    };
+    String[] expectedOutputs = new String[] {
+        "foobar.site%2Fq%3Fx%3D%C3%A9%25",
+        "a%2Bb-c%2Ad%2Fe",
+        "1%092%0A3",
+        "abc%401%2523",
+        "abc123",
+        "%20%09%0D%0A%0C",
+        "",
+        null
+    };
+
+    try (ColumnVector v = ColumnVector.fromStrings(inputs);
+         ColumnVector expected = ColumnVector.fromStrings(expectedOutputs);
+         ColumnVector actual = v.urlEncode()) {
+      assertColumnsAreEqual(expected, actual);
     }
   }
 

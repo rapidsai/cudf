@@ -21,10 +21,10 @@ from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
     TimeDeltaColumn,
+    arange,
     as_column,
     column,
     column_empty_like,
-    arange,
     full,
 )
 from cudf.core.column.categorical import (
@@ -50,8 +50,10 @@ from cudf.utils.dtypes import (
     min_scalar_type,
     numeric_normalize_types,
 )
-from cudf.utils.utils import get_relevant_submodule
-from cudf.utils.utils import get_appropriate_dispatched_func
+from cudf.utils.utils import (
+    get_appropriate_dispatched_func,
+    get_relevant_submodule,
+)
 
 
 class Series(Frame, Serializable):
@@ -4146,21 +4148,41 @@ class Series(Frame, Serializable):
     def groupby(
         self,
         by=None,
-        group_series=None,
+        axis=0,
         level=None,
+        as_index=True,
         sort=True,
         group_keys=True,
-        as_index=None,
+        squeeze=False,
+        observed=False,
         dropna=True,
     ):
+        if axis not in (0, "index"):
+            raise NotImplementedError("axis parameter is not yet implemented")
+
         if group_keys is not True:
             raise NotImplementedError(
                 "The group_keys keyword is not yet implemented"
             )
-        else:
-            return SeriesGroupBy(
-                self, by=by, level=level, dropna=dropna, sort=sort
+
+        if squeeze is not False:
+            raise NotImplementedError(
+                "squeeze parameter is not yet implemented"
             )
+
+        if observed is not False:
+            raise NotImplementedError(
+                "observed parameter is not yet implemented"
+            )
+
+        if by is None and level is None:
+            raise TypeError(
+                "groupby() requires either by or level to be specified."
+            )
+
+        return SeriesGroupBy(
+            self, by=by, level=level, dropna=dropna, sort=sort
+        )
 
     @copy_docstring(Rolling)
     def rolling(
