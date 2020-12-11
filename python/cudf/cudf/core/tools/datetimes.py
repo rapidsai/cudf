@@ -342,11 +342,15 @@ class Container(object):
 class DateOffset(pd.DateOffset, Container):
     def __init__(self, n=1, normalize=False, **kwds):
         if normalize:
-            raise NotImplementedError("normalize not yet supported for DateOffset")
+            raise NotImplementedError(
+                "normalize not yet supported for DateOffset"
+            )
 
         # TODO: Pandas supports combinations
         if len(kwds) > 1:
-            raise ValueError("only a single unit may" "be specified at a time")
+            raise NotImplementedError(
+                "only a single unit may" "be specified at a time"
+            )
 
         all_possible_kwargs = {
             "years",
