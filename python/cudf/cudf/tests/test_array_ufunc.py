@@ -68,6 +68,21 @@ def test_ufunc_cudf_series_cudf_dispatch(np_ar_tup, func):
     else:
         assert_eq(expect, got.fillna(np.nan).to_array())
 
+    scalar = 0.5
+    expect = func(x, scalar)
+    got = func(s_1, scalar)
+    if np.isscalar(expect):
+        assert_eq(expect, got)
+    else:
+        assert_eq(expect, got.fillna(np.nan).to_array())
+
+    expect = func(scalar, x)
+    got = func(scalar, s_1)
+    if np.isscalar(expect):
+        assert_eq(expect, got)
+    else:
+        assert_eq(expect, got.fillna(np.nan).to_array())
+
 
 @pytest.mark.parametrize(
     "np_ar_tup", [(np.random.random(100), np.random.random(100))]
