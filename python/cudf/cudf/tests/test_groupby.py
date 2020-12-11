@@ -16,6 +16,7 @@ _now = np.datetime64("now")
 _tomorrow = _now + np.timedelta64(1, "D")
 _now = np.int64(_now.astype("datetime64[ns]"))
 _tomorrow = np.int64(_tomorrow.astype("datetime64[ns]"))
+_index_type_aggs = {"count", "idxmin", "idxmax"}
 
 
 def make_frame(
@@ -134,14 +135,16 @@ def test_groupby_agg_min_max_dictlist(nelem):
 
 
 @pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
-@pytest.mark.parametrize("func", ["mean", "min", "max", "count", "sum"])
+@pytest.mark.parametrize(
+    "func", ["mean", "min", "max", "idxmin", "idxmax", "count", "sum"]
+)
 def test_groupby_2keys_agg(nelem, func):
     # gdf (Note: lack of multiIndex)
     expect_df = (
         make_frame(pd.DataFrame, nelem=nelem).groupby(["x", "y"]).agg(func)
     )
     got_df = make_frame(DataFrame, nelem=nelem).groupby(["x", "y"]).agg(func)
-    check_dtype = False if func == "count" else True
+    check_dtype = False if func in _index_type_aggs else True
     assert_eq(got_df, expect_df, check_dtype=check_dtype)
 
 
@@ -295,7 +298,8 @@ def test_groupby_apply_grouped():
 
 @pytest.mark.parametrize("nelem", [100, 500])
 @pytest.mark.parametrize(
-    "func", ["mean", "std", "var", "min", "max", "count", "sum"]
+    "func",
+    ["mean", "std", "var", "min", "max", "idxmin", "idxmax", "count", "sum"],
 )
 def test_groupby_cudf_2keys_agg(nelem, func):
     got_df = make_frame(DataFrame, nelem=nelem).groupby(["x", "y"]).agg(func)
@@ -304,11 +308,13 @@ def test_groupby_cudf_2keys_agg(nelem, func):
     expect_df = (
         make_frame(pd.DataFrame, nelem=nelem).groupby(["x", "y"]).agg(func)
     )
-    check_dtype = False if func == "count" else True
+    check_dtype = False if func in _index_type_aggs else True
     assert_eq(got_df, expect_df, check_dtype=check_dtype)
 
 
-@pytest.mark.parametrize("agg", ["min", "max", "count", "sum", "mean"])
+@pytest.mark.parametrize(
+    "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "mean"]
+)
 def test_series_groupby(agg):
     s = pd.Series([1, 2, 3])
     g = Series([1, 2, 3])
@@ -316,41 +322,77 @@ def test_series_groupby(agg):
     gg = g.groupby(g // 2)
     sa = getattr(sg, agg)()
     ga = getattr(gg, agg)()
-    check_dtype = False if agg == "count" else True
+    check_dtype = False if agg in _index_type_aggs else True
     assert_eq(sa, ga, check_dtype=check_dtype)
 
 
-@pytest.mark.parametrize("agg", ["min", "max", "count", "sum", "mean"])
+@pytest.mark.parametrize(
+    "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "mean"]
+)
 def test_series_groupby_agg(agg):
     s = pd.Series([1, 2, 3])
     g = Series([1, 2, 3])
     sg = s.groupby(s // 2).agg(agg)
     gg = g.groupby(g // 2).agg(agg)
-    check_dtype = False if agg == "count" else True
+    check_dtype = False if agg in _index_type_aggs else True
     assert_eq(sg, gg, check_dtype=check_dtype)
 
 
-@pytest.mark.parametrize("agg", ["min", "max", "count", "sum", "mean"])
+@pytest.mark.parametrize(
+    "agg",
+    [
+        "min",
+        "max",
+        "count",
+        "sum",
+        "mean",
+        pytest.param(
+            "idxmin",
+            marks=pytest.mark.xfail(reason="gather needed for idxmin"),
+        ),
+        pytest.param(
+            "idxmax",
+            marks=pytest.mark.xfail(reason="gather needed for idxmax"),
+        ),
+    ],
+)
 def test_groupby_level_zero(agg):
-    pdf = pd.DataFrame({"x": [1, 2, 3]}, index=[0, 1, 1])
+    pdf = pd.DataFrame({"x": [1, 2, 3]}, index=[2, 5, 5])
     gdf = DataFrame.from_pandas(pdf)
     pdg = pdf.groupby(level=0)
     gdg = gdf.groupby(level=0)
     pdresult = getattr(pdg, agg)()
     gdresult = getattr(gdg, agg)()
-    check_dtype = False if agg == "count" else True
+    check_dtype = False if agg in _index_type_aggs else True
     assert_eq(pdresult, gdresult, check_dtype=check_dtype)
 
 
-@pytest.mark.parametrize("agg", ["min", "max", "count", "sum", "mean"])
+@pytest.mark.parametrize(
+    "agg",
+    [
+        "min",
+        "max",
+        "count",
+        "sum",
+        "mean",
+        pytest.param(
+            "idxmin",
+            marks=pytest.mark.xfail(reason="gather needed for idxmin"),
+        ),
+        pytest.param(
+            "idxmax",
+            marks=pytest.mark.xfail(reason="gather needed for idxmax"),
+        ),
+    ],
+)
 def test_groupby_series_level_zero(agg):
-    pdf = pd.Series([1, 2, 3], index=[0, 1, 1])
+    pdf = pd.Series([1, 2, 3], index=[2, 5, 5])
     gdf = Series.from_pandas(pdf)
     pdg = pdf.groupby(level=0)
     gdg = gdf.groupby(level=0)
     pdresult = getattr(pdg, agg)()
     gdresult = getattr(gdg, agg)()
-    check_dtype = False if agg == "count" else True
+    check_dtype = False if agg in _index_type_aggs else True
     assert_eq(pdresult, gdresult, check_dtype=check_dtype)
 
 
@@ -374,6 +416,14 @@ def test_groupby_column_name():
     gxx = g["xx"].max()
     pxx = p["xx"].max()
     assert_eq(pxx, gxx)
+
+    gxx = g["xx"].idxmin()
+    pxx = p["xx"].idxmin()
+    assert_eq(pxx, gxx, check_dtype=False)
+
+    gxx = g["xx"].idxmax()
+    pxx = p["xx"].idxmax()
+    assert_eq(pxx, gxx, check_dtype=False)
 
     gxx = g["xx"].mean()
     pxx = p["xx"].mean()
@@ -685,9 +735,11 @@ def test_groupby_multi_agg_hash_groupby(agg):
     assert_eq(pdg, gdg, check_dtype=check_dtype)
 
 
-@pytest.mark.parametrize("agg", ["min", "max", "sum", "count", "mean"])
+@pytest.mark.parametrize(
+    "agg", ["min", "max", "idxmax", "idxmax", "sum", "count", "mean"]
+)
 def test_groupby_nulls_basic(agg):
-    check_dtype = False if agg == "count" else True
+    check_dtype = False if agg in _index_type_aggs else True
 
     pdf = pd.DataFrame({"a": [0, 0, 1, 1, 2, 2], "b": [1, 2, 1, 2, 1, None]})
     gdf = cudf.from_pandas(pdf)
@@ -871,11 +923,13 @@ def test_groupby_size():
 
 @pytest.mark.parametrize("nelem", get_nelem())
 @pytest.mark.parametrize("as_index", [True, False])
-@pytest.mark.parametrize("agg", ["min", "max", "mean", "count"])
+@pytest.mark.parametrize(
+    "agg", ["min", "max", "idxmin", "idxmax", "mean", "count"]
+)
 def test_groupby_datetime(nelem, as_index, agg):
     if agg == "mean" and as_index is True:
         return
-    check_dtype = agg not in ("mean", "count")
+    check_dtype = agg not in ("mean", "count", "idxmin", "idxmax")
     pdf = make_frame(pd.DataFrame, nelem=nelem, with_datetime=True)
     gdf = make_frame(cudf.DataFrame, nelem=nelem, with_datetime=True)
     pdg = pdf.groupby("datetime", as_index=as_index)
@@ -1345,3 +1399,40 @@ def test_groupby_apply_return_series_dataframe(cust_func):
     actual = gdf.groupby(["key"]).apply(cust_func)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "pdf", [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([])]
+)
+def test_groupby_no_keys(pdf):
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(
+        pdf.groupby([]).max(),
+        gdf.groupby([]).max(),
+        check_dtype=False,
+        check_index_type=False,  # Int64Index v/s Float64Index
+    )
+
+
+@pytest.mark.parametrize(
+    "pdf", [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([])]
+)
+def test_groupby_apply_no_keys(pdf):
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(
+        pdf.groupby([]).apply(lambda x: x.max()),
+        gdf.groupby([]).apply(lambda x: x.max()),
+    )
+
+
+@pytest.mark.parametrize(
+    "pdf",
+    [pd.DataFrame({"a": [1, 2]}), pd.DataFrame({"a": [1, 2], "b": [2, 3]})],
+)
+def test_groupby_nonempty_no_keys(pdf):
+    gdf = cudf.from_pandas(pdf)
+    assert_exceptions_equal(
+        lambda: pdf.groupby([]),
+        lambda: gdf.groupby([]),
+        compare_error_message=False,
+    )

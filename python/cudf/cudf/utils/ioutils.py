@@ -188,7 +188,7 @@ Parameters
 path : str
     File path or Root Directory path. Will be used as Root Directory path
     while writing a partitioned dataset.
-compression : {'snappy', 'gzip', 'brotli', None}, default 'snappy'
+compression : {'snappy', None}, default 'snappy'
     Name of the compression to use. Use ``None`` for no compression.
 index : bool, default None
     If ``True``, include the dataframe's index(es) in the file output. If
