@@ -227,7 +227,7 @@ class SerialMurmurHash3Test : public cudf::test::BaseFixture {
 TEST_F(SerialMurmurHash3Test, MultiValueWithSeeds)
 {
   fixed_width_column_wrapper<int32_t> const strings_col_result(
-    {1467149710, -680899318, -1620282500, 91106683, -1165223012});
+    {1467149710, -680899318, -1620282500, 91106683, -1564993834});
   fixed_width_column_wrapper<int32_t> const ints_col_result(
     {933211791, 751823303, -1080202046, 723455942, 133916647});
 
@@ -235,7 +235,7 @@ TEST_F(SerialMurmurHash3Test, MultiValueWithSeeds)
                                             "The quick brown fox",
                                             "jumps over the lazy dog.",
                                             "All work and no play makes Jack a dull boy",
-                                            "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
+                                            "!\"#$%&\'()*+,-./]:;<=>?@[\\]^_`{|}~\ud720\ud721"});
 
   using limits = std::numeric_limits<int32_t>;
   fixed_width_column_wrapper<int32_t> const ints_col({0, 100, -100, limits::min(), limits::max()});
@@ -265,7 +265,7 @@ class SparkMurmurHash3Test : public cudf::test::BaseFixture {
 TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
 {
   fixed_width_column_wrapper<int32_t> const strings_col_result(
-    {1467149710, 723257560, -1620282500, -2001858707, 1905352078});
+    {1467149710, 723257560, -1620282500, -2001858707, 1280155256});
   fixed_width_column_wrapper<int32_t> const ints_col_result(
     {933211791, 751823303, -1080202046, 723455942, 133916647});
 
@@ -273,7 +273,7 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
                                             "The quick brown fox",
                                             "jumps over the lazy dog.",
                                             "All work and no play makes Jack a dull boy",
-                                            "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
+                                            "!\"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~\ud720\ud721"});
 
   using limits = std::numeric_limits<int32_t>;
   fixed_width_column_wrapper<int32_t> const ints_col({0, 100, -100, limits::min(), limits::max()});

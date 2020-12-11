@@ -284,7 +284,7 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testMD5HashStrings() {
     try (ColumnVector v0 = ColumnVector.fromStrings(
-          "a", "B\n", "dE\"\u0100\t\u0101 \u0500\u0501",
+          "a", "B\n", "dE\"\u0100\t\u0101 \ud720\ud721",
           "A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
           "in the MD5 hash function. This string needed to be longer.",
           null, null);
@@ -293,7 +293,7 @@ public class ColumnVectorTest extends CudfTestBase {
            "A 60 character string to test MD5's message padding algorithm",
            "hiJ\ud720\ud721\ud720\ud721", null);
          ColumnVector v2 = ColumnVector.fromStrings(
-           "a", "B\nc",  "dE\"\u0100\t\u0101 \u0500\u0501\\Fg2\'",
+           "a", "B\nc",  "dE\"\u0100\t\u0101 \ud720\ud721\\Fg2\'",
            "A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
            "in the MD5 hash function. This string needed to be longer.A 60 character string to " +
            "test MD5's message padding algorithm",
@@ -376,7 +376,7 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testMD5HashMixed() {
     try (ColumnVector strings = ColumnVector.fromStrings(
-          "a", "B\n", "dE\"\u0100\t\u0101 \u0500\u0501",
+          "a", "B\n", "dE\"\u0100\t\u0101 \ud720\ud721",
           "A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
           "in the MD5 hash function. This string needed to be longer.",
           null, null);
@@ -397,7 +397,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testMD5HashLists() {
-    List<String> list1 = Arrays.asList("dE\"\u0100\t\u0101 \u0500\u0501", "\\Fg2\'");
+    List<String> list1 = Arrays.asList("dE\"\u0100\t\u0101 \ud720\ud721", "\\Fg2\'");
     List<String> list2 = Arrays.asList("A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
     "in the MD5 hash function. This string needed to be longer.", "", null, "A 60 character string to test MD5's message padding algorithm");
     List<String> list3 = Arrays.asList("hiJ\ud720\ud721\ud720\ud721");
@@ -415,7 +415,7 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testSpark32BitMurmur3HashStrings() {
     try (ColumnVector v0 = ColumnVector.fromStrings(
-           "a", "B\nc",  "dE\"\u0100\t\u0101 \u0500\u0501\\Fg2\'",
+           "a", "B\nc",  "dE\"\u0100\t\u0101 \ud720\ud721\\Fg2\'",
            "A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
            "in the MD5 hash function. This string needed to be longer.A 60 character string to " +
            "test MD5's message padding algorithm",
@@ -475,7 +475,7 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testSpark32BitMurmur3HashMixed() {
     try (ColumnVector strings = ColumnVector.fromStrings(
-          "a", "B\n", "dE\"\u0100\t\u0101 \u0500\u0501",
+          "a", "B\n", "dE\"\u0100\t\u0101 \ud720\ud721",
           "A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
           "in the MD5 hash function. This string needed to be longer.",
           null, null);

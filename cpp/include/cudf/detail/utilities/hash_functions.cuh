@@ -613,7 +613,7 @@ struct SparkMurmurHash3_32 {
   result_type CUDA_HOST_DEVICE_CALLABLE compute(TKey const& key) const
   {
     constexpr int len         = sizeof(argument_type);
-    const uint8_t* const data = (const uint8_t*)&key;
+    const int8_t* const data = (const int8_t*)&key;
     constexpr int nblocks     = len / 4;
 
     uint32_t h1           = m_seed;
@@ -623,7 +623,7 @@ struct SparkMurmurHash3_32 {
     // body
     const uint32_t* const blocks = (const uint32_t*)(data + nblocks * 4);
     for (int i = -nblocks; i; i++) {
-      uint32_t k1 = blocks[i];  // getblock32(blocks,i);
+      uint32_t k1 = blocks[i];
       k1 *= c1;
       k1 = rotl32(k1, 15);
       k1 *= c2;
@@ -632,19 +632,16 @@ struct SparkMurmurHash3_32 {
       h1 = h1 * 5 + 0xe6546b64;
     }
     //----------
-    // tail
-    const uint8_t* tail = (const uint8_t*)(data + nblocks * 4);
-    uint32_t k1         = 0;
-    switch (len & 3) {
-      case 3: k1 ^= tail[2] << 16;
-      case 2: k1 ^= tail[1] << 8;
-      case 1:
-        k1 ^= tail[0];
-        k1 *= c1;
-        k1 = rotl32(k1, 15);
-        k1 *= c2;
-        h1 ^= k1;
-    };
+    // Spark's byte by byte tail processing
+    for (int i = nblocks * 4; i < len; i++) {
+      int32_t k1 = data[i] & 0xff;
+      k1 *= c1;
+      k1 = rotl32(k1, 15);
+      k1 *= c2;
+      h1 ^= k1;
+      h1 = rotl32(h1, 13);
+      h1 = h1 * 5 + 0xe6546b64;
+    }
     //----------
     // finalization
     h1 ^= len;
@@ -671,7 +668,7 @@ hash_value_type CUDA_HOST_DEVICE_CALLABLE
 SparkMurmurHash3_32<cudf::string_view>::operator()(cudf::string_view const& key) const
 {
   const int len         = (int)key.size_bytes();
-  const uint8_t* data   = (const uint8_t*)key.data();
+  const int8_t* data   = (const int8_t*)key.data();
   const int nblocks     = len / 4;
   result_type h1        = m_seed;
   constexpr uint32_t c1 = 0xcc9e2d51;
@@ -701,7 +698,7 @@ SparkMurmurHash3_32<cudf::string_view>::operator()(cudf::string_view const& key)
   //----------
   // Spark's byte by byte tail processing
   for (int i = nblocks * 4; i < len; i++) {
-    uint32_t k1 = data[i] & 0xff;
+    int32_t k1 = data[i] & 0xff;
     k1 *= c1;
     k1 = rotl32(k1, 15);
     k1 *= c2;
