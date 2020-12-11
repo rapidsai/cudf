@@ -99,7 +99,20 @@ non-owning view of device memory as a column. Most libcudf public APIs take view
 
 ### `cudf::mutable_column_view`
 
-A *mutable*, non-owning view of device memory as a column. 
+A *mutable*, non-owning view of device memory as a column. Used for detail APIs and (rare) public
+APIs that modify columns in place.
+
+### `cudf::column_device_view`
+
+An immutable, non-owning view of device data as a column of elements that is trivially copyable and 
+usable in CUDA device code. Used to pass `column_view` data as input to CUDA kernels and device 
+functions (including Thrust algorithms)
+
+### `cudf::mutable_column_device_view`
+
+A mutable, non-owning view of device data as a column of elements that is trivially copyable and 
+usable in CUDA device code. Used to pass `column_view` data to be modified on the device by CUDA
+kernels and device functions (including Thrust algorithms).
 
 ## `cudf::table`
 
