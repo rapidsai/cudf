@@ -132,7 +132,7 @@ void verify_valid_requests(std::vector<aggregation_request> const& requests)
           request.aggregations.begin(), request.aggregations.end(), [&request](auto const& agg) {
             return (!cudf::is_dictionary(request.values.type()) ||
                     !(agg->kind == aggregation::SUM or agg->kind == aggregation::MEAN or
-                      agg->kind == aggregation::STD or agg->kind == aggregation::VARIANCE))
+                      agg->kind == aggregation::STD or agg->kind == aggregation::VARIANCE));
           });
       }),
     "dictionary type not supported for this aggregation");
