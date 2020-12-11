@@ -35,6 +35,22 @@ def test_ufunc_cudf_series(np_ar_tup, func):
 
 
 @pytest.mark.parametrize(
+    "func", [np.bitwise_and, np.bitwise_or, np.bitwise_xor],
+)
+def test_ufunc_cudf_series_bitwise(func):
+    x = np.random.randint(size=100, low=0, high=100)
+    y = np.random.randint(size=100, low=0, high=100)
+
+    s_1, s_2 = cudf.Series(x), cudf.Series(y)
+    expect = func(x, y)
+    got = func(s_1, s_2)
+    if np.isscalar(expect):
+        assert_eq(expect, got)
+    else:
+        assert_eq(expect, got.to_array())
+
+
+@pytest.mark.parametrize(
     "np_ar_tup", [(np.random.random(100), np.random.random(100))]
 )
 @pytest.mark.parametrize(
@@ -104,7 +120,8 @@ def test_ufunc_cudf_series_cupy_array(np_ar_tup, func):
 
 
 @pytest.mark.parametrize(
-    "func", [np.fmod, np.logaddexp],
+    "func",
+    [np.fmod, np.logaddexp, np.bitwise_and, np.bitwise_or, np.bitwise_xor],
 )
 def test_error_with_null_cudf_series(func):
     s_1 = cudf.Series([1, 2])

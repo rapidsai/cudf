@@ -481,9 +481,6 @@ _UFUNC_ALIASES = {
     "less_equal": "le",
     "greater": "gt",
     "greater_equal": "ge",
-    "bitwise_or": "or",
-    "bitwise_and": "and",
-    "bitwise_xor": "xor",
     "absolute": "abs",
 }
 # For op(., cudf.Series) -> cudf.Series.__r{op}__
