@@ -328,7 +328,6 @@ def test_dataframe_loc_mask(mask, arg):
     assert_eq(pdf.loc[mask, arg], gdf.loc[mask, arg])
 
 
-@pytest.mark.xfail(raises=KeyError, reason="label scalar is out of bound")
 def test_dataframe_loc_outbound():
     df = DataFrame()
     size = 10
@@ -341,7 +340,7 @@ def test_dataframe_loc_outbound():
     pdf["a"] = ha
     pdf["b"] = hb
 
-    np.testing.assert_equal(df.loc[11].to_array(), pdf.loc[11])
+    assert_exceptions_equal(lambda: pdf.loc[11], lambda: df.loc[11])
 
 
 def test_series_loc_numerical():

@@ -337,7 +337,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     df.drop(columns=[tmp_col_name], inplace=True)
                     # There were no indices found
                     if len(df) == 0:
-                        raise IndexError
+                        raise KeyError(arg)
 
         # Step 3: Gather index
         if df.shape[0] == 1:  # we have a single row
