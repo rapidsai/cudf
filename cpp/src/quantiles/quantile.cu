@@ -45,19 +45,23 @@ struct quantile_functor {
   rmm::mr::device_memory_resource* mr;
 
   template <typename T>
-  std::enable_if_t<not std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
-    column_view const& input)
+  std::enable_if_t<not std::is_arithmetic<T>::value and not cudf::is_fixed_point<T>(),
+                   std::unique_ptr<column>>
+  operator()(column_view const& input)
   {
     CUDF_FAIL("quantile does not support non-numeric types");
   }
 
   template <typename T>
-  std::enable_if_t<std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
-    column_view const& input)
+  std::enable_if_t<std::is_arithmetic<T>::value or cudf::is_fixed_point<T>(),
+                   std::unique_ptr<column>>
+  operator()(column_view const& input)
   {
-    using Result = std::conditional_t<exact, double, T>;
+    using Type        = cudf::device_storage_type_t<T>;
+    using ExactResult = std::conditional_t<exact and not cudf::is_fixed_point<T>(), double, T>;
+    using Result      = cudf::device_storage_type_t<ExactResult>;
 
-    auto type = data_type{type_to_id<Result>()};
+    auto const type = is_fixed_point(input.type()) ? input.type() : data_type{type_to_id<Result>()};
     auto output =
       make_fixed_width_column(type, q.size(), mask_state::UNALLOCATED, stream.value(), mr);
 
@@ -75,7 +79,7 @@ struct quantile_functor {
     rmm::device_vector<double> q_device{q};
 
     if (!cudf::is_dictionary(input.type())) {
-      auto sorted_data = thrust::make_permutation_iterator(input.data<T>(), ordered_indices);
+      auto sorted_data = thrust::make_permutation_iterator(input.data<Type>(), ordered_indices);
       thrust::transform(q_device.begin(),
                         q_device.end(),
                         d_output->template begin<Result>(),

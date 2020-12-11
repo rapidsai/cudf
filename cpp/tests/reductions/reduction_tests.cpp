@@ -1299,8 +1299,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumOfSquares)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
   for (int i = -2; i <= 0; ++i) {
-    auto const scale = scale_type{i};
-
+    auto const scale  = scale_type{i};
     auto const column = fp_wrapper{{1, 2, 3, 4}, scale};
     // auto const out_type = cudf::data_type{cudf::type_to_id<decimalXX>(), scale_type{i * 2}};
     auto const out_type = static_cast<cudf::column_view>(column).type();
