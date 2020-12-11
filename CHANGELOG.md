@@ -7,6 +7,7 @@
 - PR #6902 Implement `DataFrame.quantile` for `datetime` and `timedelta` data types
 - PR #6814 Implement `cudf::reduce` for `decimal32` and `decimal64` (part 1)
 - PR #6929 Add `Index.set_names` api
+- PR #6907 Add `replace_null` API with `replace_policy` parameter, `fixed_width` column support
 
 ## Improvements
 
