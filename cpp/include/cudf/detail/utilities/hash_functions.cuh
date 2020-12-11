@@ -430,7 +430,7 @@ struct MurmurHash3_32 {
   result_type CUDA_HOST_DEVICE_CALLABLE compute(TKey const& key) const
   {
     constexpr int len         = sizeof(argument_type);
-    const uint8_t* const data = (const uint8_t*)&key;
+    uint8_t const* const data = reinterpret_cast<uint8_t const*>(&key);
     constexpr int nblocks     = len / 4;
 
     uint32_t h1           = m_seed;
@@ -438,7 +438,7 @@ struct MurmurHash3_32 {
     constexpr uint32_t c2 = 0x1b873593;
     //----------
     // body
-    const uint32_t* const blocks = (const uint32_t*)(data + nblocks * 4);
+    uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
     for (int i = -nblocks; i; i++) {
       uint32_t k1 = blocks[i];  // getblock32(blocks,i);
       k1 *= c1;
@@ -450,7 +450,7 @@ struct MurmurHash3_32 {
     }
     //----------
     // tail
-    const uint8_t* tail = (const uint8_t*)(data + nblocks * 4);
+    uint8_t const* tail = reinterpret_cast<uint8_t const*>(data + nblocks * 4);
     uint32_t k1         = 0;
     switch (len & 3) {
       case 3: k1 ^= tail[2] << 16;
@@ -486,13 +486,13 @@ template <>
 hash_value_type CUDA_HOST_DEVICE_CALLABLE
 MurmurHash3_32<cudf::string_view>::operator()(cudf::string_view const& key) const
 {
-  const int len         = (int)key.size_bytes();
-  const uint8_t* data   = (const uint8_t*)key.data();
-  const int nblocks     = len / 4;
+  int const len         = (int)key.size_bytes();
+  uint8_t const* data   = reinterpret_cast<uint8_t const*>(key.data());
+  int const nblocks     = len / 4;
   result_type h1        = m_seed;
   constexpr uint32_t c1 = 0xcc9e2d51;
   constexpr uint32_t c2 = 0x1b873593;
-  auto getblock32       = [] __host__ __device__(const uint32_t* p, int i) -> uint32_t {
+  auto getblock32       = [] __host__ __device__(uint32_t const* p, int i) -> uint32_t {
   // Individual byte reads for unaligned accesses (very likely)
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Hashing a string in host code is not supported.");
@@ -504,7 +504,7 @@ MurmurHash3_32<cudf::string_view>::operator()(cudf::string_view const& key) cons
 
   //----------
   // body
-  const uint32_t* const blocks = (const uint32_t*)(data + nblocks * 4);
+  uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
   for (int i = -nblocks; i; i++) {
     uint32_t k1 = getblock32(blocks, i);
     k1 *= c1;
@@ -516,7 +516,7 @@ MurmurHash3_32<cudf::string_view>::operator()(cudf::string_view const& key) cons
   }
   //----------
   // tail
-  const uint8_t* tail = (const uint8_t*)(data + nblocks * 4);
+  uint8_t const* tail = reinterpret_cast<uint8_t const*>(data + nblocks * 4);
   uint32_t k1         = 0;
   switch (len & 3) {
     case 3: k1 ^= tail[2] << 16;
@@ -612,16 +612,16 @@ struct SparkMurmurHash3_32 {
   template <typename TKey>
   result_type CUDA_HOST_DEVICE_CALLABLE compute(TKey const& key) const
   {
-    constexpr int len         = sizeof(argument_type);
-    const int8_t* const data = (const int8_t*)&key;
-    constexpr int nblocks     = len / 4;
+    constexpr int len        = sizeof(argument_type);
+    const int8_t* const data = reinterpret_cast<int8_t const*>(&key);
+    constexpr int nblocks    = len / 4;
 
     uint32_t h1           = m_seed;
     constexpr uint32_t c1 = 0xcc9e2d51;
     constexpr uint32_t c2 = 0x1b873593;
     //----------
     // body
-    const uint32_t* const blocks = (const uint32_t*)(data + nblocks * 4);
+    uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
     for (int i = -nblocks; i; i++) {
       uint32_t k1 = blocks[i];
       k1 *= c1;
@@ -667,13 +667,13 @@ template <>
 hash_value_type CUDA_HOST_DEVICE_CALLABLE
 SparkMurmurHash3_32<cudf::string_view>::operator()(cudf::string_view const& key) const
 {
-  const int len         = (int)key.size_bytes();
-  const int8_t* data   = (const int8_t*)key.data();
-  const int nblocks     = len / 4;
+  int const len         = (int)key.size_bytes();
+  int8_t const* data    = reinterpret_cast<int8_t const*>(key.data());
+  int const nblocks     = len / 4;
   result_type h1        = m_seed;
   constexpr uint32_t c1 = 0xcc9e2d51;
   constexpr uint32_t c2 = 0x1b873593;
-  auto getblock32       = [] __host__ __device__(const uint32_t* p, int i) -> uint32_t {
+  auto getblock32       = [] __host__ __device__(uint32_t const* p, int i) -> uint32_t {
   // Individual byte reads for unaligned accesses (very likely)
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Hashing a string in host code is not supported.");
@@ -685,7 +685,7 @@ SparkMurmurHash3_32<cudf::string_view>::operator()(cudf::string_view const& key)
 
   //----------
   // body
-  const uint32_t* const blocks = (const uint32_t*)(data + nblocks * 4);
+  uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
   for (int i = -nblocks; i; i++) {
     uint32_t k1 = getblock32(blocks, i);
     k1 *= c1;
@@ -761,7 +761,7 @@ struct IdentityHash {
 
   template <typename return_type = result_type>
   CUDA_HOST_DEVICE_CALLABLE std::enable_if_t<!std::is_arithmetic<Key>::value, return_type>
-  operator()(const Key& key) const
+  operator()(Key const& key) const
   {
     release_assert(false && "IdentityHash does not support this data type");
     return 0;
@@ -769,7 +769,7 @@ struct IdentityHash {
 
   template <typename return_type = result_type>
   CUDA_HOST_DEVICE_CALLABLE std::enable_if_t<std::is_arithmetic<Key>::value, return_type>
-  operator()(const Key& key) const
+  operator()(Key const& key) const
   {
     return static_cast<result_type>(key);
   }
