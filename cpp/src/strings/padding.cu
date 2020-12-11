@@ -26,6 +26,7 @@
 #include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace strings {
@@ -64,7 +65,6 @@ std::unique_ptr<column> pad(
   char_utf8 d_fill_char    = 0;
   size_type fill_char_size = to_char_utf8(fill_char.c_str(), d_fill_char);
 
-  auto execpol        = rmm::exec_policy(stream);
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
 
@@ -87,7 +87,7 @@ std::unique_ptr<column> pad(
 
   if (side == pad_side::LEFT) {
     thrust::for_each_n(
-      execpol->on(stream.value()),
+      rmm::exec_policy(stream),
       thrust::make_counting_iterator<cudf::size_type>(0),
       strings_count,
       [d_strings, width, d_fill_char, d_offsets, d_chars] __device__(size_type idx) {
@@ -100,7 +100,7 @@ std::unique_ptr<column> pad(
       });
   } else if (side == pad_side::RIGHT) {
     thrust::for_each_n(
-      execpol->on(stream.value()),
+      rmm::exec_policy(stream),
       thrust::make_counting_iterator<cudf::size_type>(0),
       strings_count,
       [d_strings, width, d_fill_char, d_offsets, d_chars] __device__(size_type idx) {
@@ -113,7 +113,7 @@ std::unique_ptr<column> pad(
       });
   } else if (side == pad_side::BOTH) {
     thrust::for_each_n(
-      execpol->on(stream.value()),
+      rmm::exec_policy(stream),
       thrust::make_counting_iterator<cudf::size_type>(0),
       strings_count,
       [d_strings, width, d_fill_char, d_offsets, d_chars] __device__(size_type idx) {
@@ -173,7 +173,7 @@ std::unique_ptr<column> zfill(
     strings_count, strings.null_count(), bytes, stream, mr);
   auto d_chars = chars_column->mutable_view().data<char>();
 
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,
                      [d_strings, width, d_offsets, d_chars] __device__(size_type idx) {

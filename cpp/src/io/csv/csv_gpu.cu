@@ -33,6 +33,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/detail/copy.h>
 #include <thrust/transform.h>
@@ -224,7 +225,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
       long tempPos   = pos - 1;
       long field_len = pos - start;
 
-      if (field_len <= 0 || serialized_trie_contains(opts.trie_na, raw_csv + start, field_len)) {
+      if (field_len < 0 || serialized_trie_contains(opts.trie_na, raw_csv + start, field_len)) {
         atomicAdd(&d_columnData[actual_col].null_count, 1);
       } else if (serialized_trie_contains(opts.trie_true, raw_csv + start, field_len) ||
                  serialized_trie_contains(opts.trie_false, raw_csv + start, field_len)) {
@@ -273,10 +274,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
           --int_req_number_cnt;
         }
 
-        if (field_len == 0) {
-          // Ignoring whitespace and quotes can result in empty fields
-          atomicAdd(&d_columnData[actual_col].null_count, 1);
-        } else if (column_flags[col] & column_parse::as_datetime) {
+        if (column_flags[col] & column_parse::as_datetime) {
           // PANDAS uses `object` dtype if the date is unparseable
           if (is_datetime(countString, countDecimal, countColon, countDash, countSlash)) {
             atomicAdd(&d_columnData[actual_col].datetime_count, 1);
@@ -592,16 +590,15 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
     if (column_flags[col] & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas
-      const bool is_na = serialized_trie_contains(options.trie_na, raw_csv + start, pos - start);
+      auto const is_valid =
+        !serialized_trie_contains(options.trie_na, raw_csv + start, pos - start);
 
       // Modify start & end to ignore whitespace and quotechars
       long tempPos = pos - 1;
-      if (!is_na && dtypes[actual_col].id() != cudf::type_id::STRING) {
+      if (is_valid && dtypes[actual_col].id() != cudf::type_id::STRING) {
         trim_field_start_end(raw_csv, &start, &tempPos, options.quotechar);
       }
-
-      if (!is_na && start <= (tempPos)) {  // Empty fields are not legal values
-
+      if (is_valid) {
         // Type dispatcher does not handle STRING
         if (dtypes[actual_col].id() == cudf::type_id::STRING) {
           long end = pos;
@@ -1017,7 +1014,7 @@ size_t __host__ count_blank_rows(const cudf::io::parse_options_view &opts,
   const auto comment  = opts.comment != '\0' ? opts.comment : newline;
   const auto carriage = (opts.skipblanklines && opts.terminator == '\n') ? '\r' : comment;
   return thrust::count_if(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     row_offsets.begin(),
     row_offsets.end(),
     [data = data, newline, comment, carriage] __device__(const uint64_t pos) {
@@ -1036,7 +1033,7 @@ void __host__ remove_blank_rows(cudf::io::parse_options_view const &options,
   const auto comment  = options.comment != '\0' ? options.comment : newline;
   const auto carriage = (options.skipblanklines && options.terminator == '\n') ? '\r' : comment;
   auto new_end        = thrust::remove_if(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     row_offsets.begin(),
     row_offsets.end(),
     [data = data, d_size, newline, comment, carriage] __device__(const uint64_t pos) {

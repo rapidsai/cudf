@@ -25,6 +25,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <memory>
 
@@ -69,7 +70,7 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
                                                       : 0);
       column_device_view offsets(c.offsets(), nullptr, nullptr);
       thrust::transform(
-        rmm::exec_policy(stream)->on(stream.value()),
+        rmm::exec_policy(stream),
         offsets.begin<size_type>() + c.offset(),
         offsets.begin<size_type>() + c.offset() + c.size() + 1,
         d_merged_offsets.begin<size_type>() + count,

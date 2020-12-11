@@ -27,6 +27,7 @@
 #include <strings/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace strings {
@@ -90,22 +91,21 @@ std::unique_ptr<column> contains_util(
   auto d_results = results->mutable_view().data<bool>();
 
   // fill the output column
-  auto execpol    = rmm::exec_policy(stream);
   int regex_insts = d_prog.insts_counts();
   if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
-    thrust::transform(execpol->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_count),
                       d_results,
                       contains_fn<RX_STACK_SMALL>{d_prog, d_column, beginning_only});
   else if (regex_insts <= RX_MEDIUM_INSTS)
-    thrust::transform(execpol->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_count),
                       d_results,
                       contains_fn<RX_STACK_MEDIUM>{d_prog, d_column, beginning_only});
   else
-    thrust::transform(execpol->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_count),
                       d_results,
@@ -211,22 +211,21 @@ std::unique_ptr<column> count_re(
   auto d_results = results->mutable_view().data<int32_t>();
 
   // fill the output column
-  auto execpol    = rmm::exec_policy(stream);
   int regex_insts = d_prog.insts_counts();
   if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
-    thrust::transform(execpol->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_count),
                       d_results,
                       count_fn<RX_STACK_SMALL>{d_prog, d_column});
   else if (regex_insts <= RX_MEDIUM_INSTS)
-    thrust::transform(execpol->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_count),
                       d_results,
                       count_fn<RX_STACK_MEDIUM>{d_prog, d_column});
   else
-    thrust::transform(execpol->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_count),
                       d_results,

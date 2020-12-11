@@ -28,6 +28,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
 
@@ -148,7 +149,7 @@ rmm::device_uvector<unbound_list_view> list_vector_from_column(
 
   auto vector = rmm::device_uvector<unbound_list_view>(n_rows, stream, mr);
 
-  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(n_rows),
                     vector.begin(),
@@ -233,7 +234,7 @@ void print(std::string const& msg, column_view const& col, rmm::cuda_stream_view
 
   std::cout << msg << " = [";
   thrust::for_each_n(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     col.size(),
     [c = col.template data<int32_t>()] __device__(auto const& i) { printf("%d,", c[i]); });
@@ -246,7 +247,7 @@ void print(std::string const& msg,
 {
   std::cout << msg << " == [";
 
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      scatter.size(),
                      [s = scatter.begin()] __device__(auto const& i) {
@@ -420,7 +421,7 @@ struct list_child_constructor {
     };
 
     // For each list-row, copy underlying elements to the child column.
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        list_vector.size(),
                        copy_child_values_for_list_index);
@@ -490,7 +491,7 @@ struct list_child_constructor {
         });
     };
 
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        list_vector.size(),
                        populate_string_views);
@@ -581,7 +582,7 @@ struct list_child_constructor {
         });
     };
 
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        list_vector.size(),
                        populate_child_list_views);
@@ -780,7 +781,7 @@ std::unique_ptr<column> scatter(
                                                mr);
 
   // Scatter.
-  thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::scatter(rmm::exec_policy(stream),
                   source_vector.begin(),
                   source_vector.end(),
                   scatter_map_begin,

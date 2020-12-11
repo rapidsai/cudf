@@ -51,25 +51,65 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
                                          rmm::mr::device_memory_resource* mr)
 {
   // reduction by iterator
-  auto dcol = cudf::column_device_view::create(col, stream);
-  std::unique_ptr<scalar> result;
-  Op simple_op{};
+  auto dcol      = cudf::column_device_view::create(col, stream);
+  auto simple_op = Op{};
 
-  if (col.has_nulls()) {
-    auto it = thrust::make_transform_iterator(
-      dcol->pair_begin<ElementType, true>(),
-      simple_op.template get_null_replacing_element_transformer<ResultType>());
-    result = detail::reduce(it, col.size(), simple_op, stream, mr);
-  } else {
-    auto it = thrust::make_transform_iterator(
-      dcol->begin<ElementType>(), simple_op.template get_element_transformer<ResultType>());
-    result = detail::reduce(it, col.size(), simple_op, stream, mr);
-  }
+  auto result = [&] {
+    if (col.has_nulls()) {
+      auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
+      auto it = thrust::make_transform_iterator(dcol->pair_begin<ElementType, true>(), f);
+      return detail::reduce(it, col.size(), simple_op, stream, mr);
+    } else {
+      auto f  = simple_op.template get_element_transformer<ResultType>();
+      auto it = thrust::make_transform_iterator(dcol->begin<ElementType>(), f);
+      return detail::reduce(it, col.size(), simple_op, stream, mr);
+    }
+  }();
 
   // set scalar is valid
   result->set_valid((col.null_count() < col.size()), stream);
   return result;
-};
+}
+
+/**
+ * @brief Reduction for `sum`, `product`, `min` and `max` for decimal types
+ *
+ * @tparam DecimalXX  The `decimal32` or `decimal64` type
+ * @tparam Op         The operator of cudf::reduction::op::
+ * @param col         Input column of data to reduce
+
+ * @param mr          Device memory resource used to allocate the returned scalar's device memory
+ * @param stream      Used for device memory operations and kernel launches.
+ * @return            Output scalar in device memory
+ */
+template <typename DecimalXX, typename Op>
+std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr)
+{
+  using Type = device_storage_type_t<DecimalXX>;
+
+  auto dcol      = cudf::column_device_view::create(col, stream);
+  auto simple_op = Op{};
+
+  auto result = [&] {
+    if (col.has_nulls()) {
+      auto f  = simple_op.template get_null_replacing_element_transformer<Type>();
+      auto it = thrust::make_transform_iterator(dcol->pair_begin<Type, true>(), f);
+      return detail::reduce(it, col.size(), simple_op, stream, mr);
+    } else {
+      auto f  = simple_op.template get_element_transformer<Type>();
+      auto it = thrust::make_transform_iterator(dcol->begin<Type>(), f);
+      return detail::reduce(it, col.size(), simple_op, stream, mr);
+    }
+  }();
+
+  auto const scale = std::is_same<Op, cudf::reduction::op::product>::value
+                       ? numeric::scale_type{col.type().scale() * (col.size() - col.null_count())}
+                       : numeric::scale_type{col.type().scale()};
+  auto const val = static_cast<cudf::scalar_type_t<Type>*>(result.get());
+  return cudf::make_fixed_point_scalar<DecimalXX>(val->value(), scale);
+}
 
 /**
  * @brief Reduction for 'sum', 'product', 'sum of squares' for dictionary columns.
@@ -88,26 +128,27 @@ std::unique_ptr<scalar> dictionary_reduction(column_view const& col,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
-  auto dcol = cudf::column_device_view::create(col, stream);
-  std::unique_ptr<scalar> result;
-  Op simple_op{};
+  auto dcol      = cudf::column_device_view::create(col, stream);
+  auto simple_op = Op{};
 
-  if (col.has_nulls()) {
-    auto it = thrust::make_transform_iterator(
-      cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType, true>(*dcol),
-      simple_op.template get_null_replacing_element_transformer<ResultType>());
-    result = detail::reduce(it, col.size(), simple_op, stream, mr);
-  } else {
-    auto it = thrust::make_transform_iterator(
-      cudf::dictionary::detail::make_dictionary_iterator<ElementType>(*dcol),
-      simple_op.template get_element_transformer<ResultType>());
-    result = detail::reduce(it, col.size(), simple_op, stream, mr);
-  }
+  auto result = [&] {
+    if (col.has_nulls()) {
+      auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
+      auto p  = cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType, true>(*dcol);
+      auto it = thrust::make_transform_iterator(p, f);
+      return detail::reduce(it, col.size(), simple_op, stream, mr);
+    } else {
+      auto f  = simple_op.template get_element_transformer<ResultType>();
+      auto p  = cudf::dictionary::detail::make_dictionary_iterator<ElementType>(*dcol);
+      auto it = thrust::make_transform_iterator(p, f);
+      return detail::reduce(it, col.size(), simple_op, stream, mr);
+    }
+  }();
 
   // set scalar is valid
   result->set_valid((col.null_count() < col.size()), stream);
   return result;
-};
+}
 
 /**
  * @brief Convert a numeric scalar to another numeric scalar.
@@ -212,7 +253,7 @@ struct same_element_type_dispatcher {
   template <typename ElementType>
   static constexpr bool is_supported()
   {
-    return !(cudf::is_fixed_point<ElementType>() || cudf::is_dictionary<ElementType>() ||
+    return !(cudf::is_dictionary<ElementType>() ||
              std::is_same<ElementType, cudf::list_view>::value ||
              std::is_same<ElementType, cudf::struct_view>::value);
   }
@@ -239,7 +280,9 @@ struct same_element_type_dispatcher {
   }
 
  public:
-  template <typename ElementType, std::enable_if_t<is_supported<ElementType>()>* = nullptr>
+  template <typename ElementType,
+            std::enable_if_t<is_supported<ElementType>() &&
+                             not cudf::is_fixed_point<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
@@ -252,6 +295,14 @@ struct same_element_type_dispatcher {
       stream,
       rmm::mr::get_current_device_resource());
     return resolve_key<ElementType>(dictionary_column_view(col).keys(), *index, stream, mr);
+  }
+
+  template <typename ElementType, std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& col,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    return fixed_point_reduction<ElementType, Op>(col, stream, mr);
   }
 
   template <typename ElementType, std::enable_if_t<not is_supported<ElementType>()>* = nullptr>
@@ -331,8 +382,7 @@ struct element_type_dispatcher {
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   template <typename ElementType,
-            typename std::enable_if_t<std::is_floating_point<ElementType>::value or
-                                      std::is_integral<ElementType>::value>* = nullptr>
+            typename std::enable_if_t<cudf::is_numeric<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      data_type const output_type,
                                      rmm::cuda_stream_view stream,
@@ -346,9 +396,24 @@ struct element_type_dispatcher {
     return reduce_numeric<ElementType>(col, output_type, stream, mr);
   }
 
+  /**
+   * @brief Specialization for reducing integer column types to any output type.
+   */
   template <typename ElementType,
-            typename std::enable_if_t<!std::is_floating_point<ElementType>::value and
-                                      !std::is_integral<ElementType>::value>* = nullptr>
+            typename std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& col,
+                                     data_type const output_type,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    CUDF_EXPECTS(output_type == col.type(), "Output type must be same as input column type.");
+
+    return fixed_point_reduction<ElementType, Op>(col, stream, mr);
+  }
+
+  template <typename ElementType,
+            typename std::enable_if_t<not cudf::is_numeric<ElementType>() and
+                                      not cudf::is_fixed_point<ElementType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const&,
                                      data_type const,
                                      rmm::cuda_stream_view,

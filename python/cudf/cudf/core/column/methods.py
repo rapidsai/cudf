@@ -4,13 +4,13 @@ import cudf
 
 
 class ColumnMethodsMixin:
-    def _return_or_inplace(self, new_col, **kwargs):
+    def _return_or_inplace(
+        self, new_col, inplace=False, expand=False, retain_index=True
+    ):
         """
         Returns an object of the type of the column owner or updates the column
         of the owner (Series or Index) to mimic an inplace operation
         """
-        inplace = kwargs.get("inplace", False)
-
         if inplace:
             if self._parent is not None:
                 self._parent._mimic_inplace(
@@ -22,7 +22,6 @@ class ColumnMethodsMixin:
             else:
                 self._column._mimic_inplace(new_col, inplace=True)
         else:
-            expand = kwargs.get("expand", False)
             if expand or isinstance(
                 self._parent, (cudf.DataFrame, cudf.MultiIndex)
             ):
@@ -47,7 +46,6 @@ class ColumnMethodsMixin:
                         index=self._parent.index,
                     )
             elif isinstance(self._parent, cudf.Series):
-                retain_index = kwargs.get("retain_index", True)
                 if retain_index:
                     return cudf.Series(
                         new_col,

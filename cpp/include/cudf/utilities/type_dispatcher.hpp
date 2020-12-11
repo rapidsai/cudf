@@ -17,14 +17,14 @@
 #pragma once
 
 #include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/wrappers/dictionary.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-#include <string>
 
-#include <cudf/fixed_point/fixed_point.hpp>
+#include <string>
 
 /**
  * @file

@@ -112,7 +112,7 @@ class CudfEngine(ArrowEngine):
         partition_on,
         return_metadata,
         fmd=None,
-        compression=None,
+        compression="snappy",
         index_cols=None,
         **kwargs,
     ):

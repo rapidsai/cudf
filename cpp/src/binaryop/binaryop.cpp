@@ -17,13 +17,14 @@
  * limitations under the License.
  */
 
-#include <binaryop/jit/code/code.h>
-#include <binaryop/compiled/binary_ops.hpp>
-#include <binaryop/jit/util.hpp>
+#include "compiled/binary_ops.hpp"
+#include "jit/code/code.h"
+#include "jit/util.hpp"
 
 #include <jit/launcher.h>
 #include <jit/parser.h>
 #include <jit/type.h>
+
 #include <jit/bit.hpp.jit>
 #include <jit/common_headers.hpp>
 #include <jit/durations.hpp.jit>
@@ -33,7 +34,6 @@
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/datetime.hpp>  // replace eventually
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
