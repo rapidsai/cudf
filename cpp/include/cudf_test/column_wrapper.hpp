@@ -516,10 +516,12 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    * auto w = fixed_width_column_wrapper<int32_t>(elements, elements + 5, scale_type{0});
    * @endcode
    *
+   * @tparam FixedPointRepIterator Iterator for fixed_point::rep
+   *
    * @param begin The beginning of the sequence of elements
    * @param end   The end of the sequence of elements
    * @param scale The scale of the elements in the column
-   **/
+   */
   template <typename FixedPointRepIterator>
   fixed_point_column_wrapper(FixedPointRepIterator begin,
                              FixedPointRepIterator end,
@@ -620,7 +622,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    * @param elements The initializer list of elements
    * @param validity The initializer list of validity indicator booleans
    * @param scale    The scale of the elements in the column
-   **/
+   */
   fixed_point_column_wrapper(std::initializer_list<Rep> elements,
                              std::initializer_list<bool> validity,
                              numeric::scale_type scale)
@@ -641,10 +643,12 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    * auto w        = fixed_width_column_wrapper<int32_t>{ {1,2,3,4}, validity, scale_type{0}};
    * @endcode
    *
+   * @tparam ValidityIterator Dereferencing a ValidityIterator must be convertible to `bool`
+   *
    * @param element_list The initializer list of elements
    * @param v            The beginning of the sequence of validity indicators
    * @param scale        The scale of the elements in the column
-   **/
+   */
   template <typename ValidityIterator>
   fixed_point_column_wrapper(std::initializer_list<Rep> element_list,
                              ValidityIterator v,
@@ -666,11 +670,13 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    * fixed_point_column_wrapper<int32_t> w(elements, elements + 5, {0, 1, 0, 1, 0}, scale_type{0});
    * @endcode
    *
+   * @tparam FixedPointRepIterator Iterator for fixed_point::rep
+   *
    * @param begin    The beginning of the sequence of elements
    * @param end      The end of the sequence of elements
    * @param validity The initializer list of validity indicator booleans
    * @param scale    The scale of the elements in the column
-   **/
+   */
   template <typename FixedPointRepIterator>
   fixed_point_column_wrapper(FixedPointRepIterator begin,
                              FixedPointRepIterator end,
@@ -743,8 +749,8 @@ class strings_column_wrapper : public detail::column_wrapper {
    *
    * @tparam StringsIterator A `std::string` must be constructible from
    * dereferencing a `StringsIterator`.
-   * @tparam ValidityIterator Dereferencing a ValidityIterator must be
-   * convertible to `bool`
+   * @tparam ValidityIterator Dereferencing a ValidityIterator must be convertible to `bool`
+   *
    * @param begin The beginning of the sequence
    * @param end The end of the sequence
    * @param v The beginning of the sequence of validity indicators
