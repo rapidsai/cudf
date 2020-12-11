@@ -15,6 +15,8 @@
  */
 
 #include <cub/cub.cuh>
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/utilities/bit.hpp>
 #include <io/utilities/block_utils.cuh>
 #include <rmm/cuda_stream_view.hpp>
 #include "orc_common.h"
@@ -715,16 +717,8 @@ __global__ void __launch_bounds__(block_size)
             size_type current_valid_offset = row + s->chunk.column_offset;
             size_type next_valid_offset    = current_valid_offset + min(32, s->chunk.valid_rows);
 
-            size_type current_byte_index = current_valid_offset / 32;
-            size_type next_byte_index    = next_valid_offset / 32;
-
-            bitmask_type current_mask_word = s->chunk.valid_map_base[current_byte_index];
-            bitmask_type next_mask_word    = 0;
-            if (next_byte_index != current_byte_index) {
-              next_mask_word = s->chunk.valid_map_base[next_byte_index];
-            }
-            bitmask_type mask =
-              __funnelshift_r(current_mask_word, next_mask_word, current_valid_offset);
+            bitmask_type mask = cudf::detail::get_mask_offset_word(
+              s->chunk.valid_map_base, 0, current_valid_offset, next_valid_offset);
             valid = 0xff & mask;
           } else {
             valid = 0xff;
