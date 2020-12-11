@@ -1374,6 +1374,29 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionQuantile)
   }
 }
 
+TYPED_TEST(FixedPointTestBothReps, FixedPointReductionNthElement)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1, -2, -3, -4}) {
+    auto const scale    = scale_type{i};
+    auto const values   = std::vector<RepType>{4104, 42, 1729, 55};
+    auto const column   = fp_wrapper{values.cbegin(), values.cend(), scale};
+    auto const out_type = static_cast<cudf::column_view>(column).type();
+
+    for (auto const i : {0, 1, 2, 3}) {
+      auto const expected = decimalXX{scaled_integer<RepType>{values[i], scale}};
+      auto const result   = cudf::reduce(
+        column, cudf::make_nth_element_aggregation(i, cudf::null_policy::INCLUDE), out_type);
+      auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX> *>(result.get());
+      EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+    }
+  }
+}
+
 TYPED_TEST(ReductionTest, NthElement)
 {
   using T = TypeParam;
