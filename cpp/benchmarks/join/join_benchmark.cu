@@ -23,6 +23,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
 #include <fixture/benchmark_fixture.hpp>
@@ -46,12 +47,12 @@ static void BM_join(benchmark::State &state)
   const bool is_build_table_key_unique = true;
 
   // Generate build and probe tables
-   cudf::test::UniformRandomGenerator<size_type> rand_gen(0, build_table_size);
-  auto build_random_null_mask = [](int size) {
+  cudf::test::UniformRandomGenerator<cudf::size_type> rand_gen(0, build_table_size);
+  auto build_random_null_mask = [&rand_gen](int size) {
     if (Nullable) {
       // roughly 25% nulls
       auto validity = thrust::make_transform_iterator(
-        thrust::make_counting_iterator(0), [](auto i) { return (rand_gen.generate() & 3) == 0; });
+        thrust::make_counting_iterator(0), [&rand_gen](auto i) { return (rand_gen.generate() & 3) == 0; });
       return cudf::test::detail::make_null_mask(validity, validity + size);
     } else {
       return cudf::create_null_mask(size, cudf::mask_state::UNINITIALIZED);
