@@ -1,6 +1,7 @@
 # cuDF 0.18.0 (Date TBD)
 
 ## New Features
+- PR #6856 Add groupby idxmin, idxmax aggregation
 
 - PR #6847 Add a cmake find module for cuFile in JNI code
 - PR #6902 Implement `DataFrame.quantile` for `datetime` and `timedelta` data types
@@ -13,11 +14,13 @@
 - PR #6838 Fix `columns` & `index` handling in dataframe constructor
 - PR #6750 Remove **kwargs from string/categorical methods
 - PR #6909 Support reading byte array backed decimal columns from parquet files
+- PR #6939 Use simplified `rmm::exec_policy`
 
 ## Bug Fixes
 
 - PR #6922 Fix N/A detection for empty fields in CSV reader
 - PR #6912 Fix rmm_mode=managed parameter for gtests
+- PR #6945 Fix groupby agg/apply behaviour when no key columns are provided 
 - PR #6942 Fix cudf::merge gtest for dictionary columns
 
 

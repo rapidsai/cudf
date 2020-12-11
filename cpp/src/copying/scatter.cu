@@ -113,7 +113,7 @@ struct column_scalar_scatterer_impl {
     auto scalar_iter =
       thrust::make_permutation_iterator(scalar_impl->data(), thrust::make_constant_iterator(0));
 
-    thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::scatter(rmm::exec_policy(stream),
                     scalar_iter,
                     scalar_iter + scatter_rows,
                     scatter_iter,
@@ -189,11 +189,8 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
     auto new_indices = std::make_unique<column>(dict_view.get_indices_annotated(), stream, mr);
     auto target_iter = indexalator_factory::make_output_iterator(new_indices->mutable_view());
 
-    thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
-                    scalar_iter,
-                    scalar_iter + scatter_rows,
-                    scatter_iter,
-                    target_iter);
+    thrust::scatter(
+      rmm::exec_policy(stream), scalar_iter, scalar_iter + scatter_rows, scatter_iter, target_iter);
 
     // build the dictionary indices column from the result
     auto const indices_type = new_indices->type();
@@ -281,7 +278,7 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>>
   auto const n_rows = target.num_rows();
   if (check_bounds) {
     CUDF_EXPECTS(
-      indices.size() == thrust::count_if(rmm::exec_policy(stream)->on(stream.value()),
+      indices.size() == thrust::count_if(rmm::exec_policy(stream),
                                          map_begin,
                                          map_end,
                                          [n_rows] __device__(size_type index) {
@@ -328,7 +325,7 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
     data_type{type_id::INT32}, target.size(), mask_state::UNALLOCATED, stream);
   auto mutable_indices = indices->mutable_view();
 
-  thrust::sequence(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::sequence(rmm::exec_policy(stream),
                    mutable_indices.begin<size_type>(),
                    mutable_indices.end<size_type>(),
                    0);
