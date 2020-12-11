@@ -137,15 +137,12 @@ type_id to_type_id(SchemaElement const &schema,
         return type_id::DECIMAL32;
       else if (physical == parquet::INT64)
         return type_id::DECIMAL64;
-      else if (physical == parquet::FIXED_LEN_BYTE_ARRAY) {
-        if (strict_decimal_types) {
-          CUDF_EXPECTS(schema.type_length <= 8,
-                       "Max supported type length of strict decimal read is 64 bits!");
-          return type_id::DECIMAL64;
-        }
-        return type_id::FLOAT64;
+      else if (physical == parquet::FIXED_LEN_BYTE_ARRAY && schema.type_length <=8) {
+        return type_id::DECIMAL64;
       } else {
-        CUDF_FAIL("Unsupported decimal type read!");
+        CUDF_EXPECTS(strict_decimal_types == false, "Unsupported decimal type read!");
+        return type_id::FLOAT64;
+      }
       }
       break;
 
