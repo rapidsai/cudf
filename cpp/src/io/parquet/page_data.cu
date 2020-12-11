@@ -826,7 +826,7 @@ inline __device__ void gpuOutputFixedLenByteArrayAsInt64(volatile page_state_s *
                                                          int src_pos,
                                                          int64_t *dst)
 {
-  const uint8_t *dict;
+  uint8_t const *dict = s->dict_base ? s->dict_base : s->data_start;
   uint32_t dict_pos, dict_size = s->dict_size, dtype_len_in;
 
   if (s->dict_base) {
