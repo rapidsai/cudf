@@ -155,7 +155,6 @@ struct ColumnChunkDesc {
                                      int8_t codec_,
                                      int8_t converted_type_,
                                      int8_t decimal_scale_,
-                                     bool strict_decimal_type,
                                      int32_t ts_clock_rate_,
                                      int32_t src_col_index_,
                                      int32_t src_col_schema_)
@@ -178,7 +177,6 @@ struct ColumnChunkDesc {
       codec(codec_),
       converted_type(converted_type_),
       decimal_scale(decimal_scale_),
-      strict_decimal_type(strict_decimal_type),
       ts_clock_rate(ts_clock_rate_),
       src_col_index(src_col_index_),
       src_col_schema(src_col_schema_)
@@ -207,7 +205,6 @@ struct ColumnChunkDesc {
   int8_t codec;                               // compressed codec enum
   int8_t converted_type;                      // converted type enum
   int8_t decimal_scale;                       // decimal scale pow(10, -decimal_scale)
-  bool strict_decimal_type;                   // read decimal data strictly as decimal type
   int32_t ts_clock_rate;  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
   int32_t src_col_index;   // my input column index

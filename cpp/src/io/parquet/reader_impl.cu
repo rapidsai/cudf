@@ -137,12 +137,11 @@ type_id to_type_id(SchemaElement const &schema,
         return type_id::DECIMAL32;
       else if (physical == parquet::INT64)
         return type_id::DECIMAL64;
-      else if (physical == parquet::FIXED_LEN_BYTE_ARRAY && schema.type_length <=8) {
+      else if (physical == parquet::FIXED_LEN_BYTE_ARRAY && schema.type_length <= 8) {
         return type_id::DECIMAL64;
       } else {
         CUDF_EXPECTS(strict_decimal_types == false, "Unsupported decimal type read!");
         return type_id::FLOAT64;
-      }
       }
       break;
 
@@ -1466,7 +1465,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                            col_meta.codec,
                                            converted_type,
                                            schema.decimal_scale,
-                                           _strict_decimal_types,
                                            clock_rate,
                                            i,
                                            col.schema_idx));
