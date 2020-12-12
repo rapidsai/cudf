@@ -25,7 +25,7 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
-#include "cudf/utilities/type_dispatcher.hpp"
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -33,6 +33,8 @@
 #include <cudf_test/detail/column_utilities.hpp>
 
 #include <jit/type.h>
+
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/equal.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -516,7 +518,7 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
   // normalize the offset values for the column offset
   size_type const* d_offsets = offsets.head<size_type>() + c.offset();
   thrust::transform(
-    rmm::exec_policy(0)->on(0),
+    rmm::exec_policy(),
     d_offsets,
     d_offsets + output_size,
     shifted_offsets.begin(),

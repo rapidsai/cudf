@@ -34,6 +34,7 @@
 
 #include <rmm/device_buffer.hpp>
 
+#include <thrust/copy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
@@ -505,6 +506,22 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
 template <typename Rep>
 class fixed_point_column_wrapper : public detail::column_wrapper {
  public:
+  /**
+   * @brief Construct a non-nullable column of the decimal elements in the range `[begin,end)`.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a non-nullable column of INT32 elements with 5 elements: {0, 2, 4, 6, 8}
+   * auto elements = make_counting_transform_iterator(0, [](auto i) { return i * 2;});
+   * auto w = fixed_width_column_wrapper<int32_t>(elements, elements + 5, scale_type{0});
+   * @endcode
+   *
+   * @tparam FixedPointRepIterator Iterator for fixed_point::rep
+   *
+   * @param begin The beginning of the sequence of elements
+   * @param end   The end of the sequence of elements
+   * @param scale The scale of the elements in the column
+   */
   template <typename FixedPointRepIterator>
   fixed_point_column_wrapper(FixedPointRepIterator begin,
                              FixedPointRepIterator end,
@@ -523,6 +540,18 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
       new cudf::column{data_type, size, rmm::device_buffer{elements.data(), size * sizeof(Rep)}});
   }
 
+  /**
+   * @brief Construct a non-nullable column of decimal elements from an initializer list.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a non-nullable `decimal32` column with 4 elements: {42.0, 4.2, 0.4}
+   * auto const col = fixed_point_column_wrapper<int32_t>{{420, 42, 4}, scale_type{-1}};
+   * @endcode
+   *
+   * @param values The initializer list of already shifted values
+   * @param scale  The scale of the elements in the column
+   */
   fixed_point_column_wrapper(std::initializer_list<Rep> values, numeric::scale_type scale)
     : fixed_point_column_wrapper(std::cbegin(values), std::cend(values), scale)
   {
@@ -542,8 +571,8 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    * // Creates a nullable column of DECIMAL32 elements with 5 elements: {null, 100, null, 300,
    * null}
    * auto elements = make_counting_transform_iterator(0, [](auto i){ return i; });
-   * auto validity = make_counting_transform_iterator(0, [](auto i){ return i%2; });
-   * fixed_point_column_wrapper<int32_t> w(elements, elements + 5, validity, 2);
+   * auto validity = make_counting_transform_iterator(0, [](auto i){ return i % 2; });
+   * fixed_point_column_wrapper<int32_t> w(elements, elements + 5, validity, scale_type{2});
    * @endcode
    *
    * Note: similar to `std::vector`, this "range" constructor should be used
@@ -551,8 +580,8 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    *       be used for the `initializer_list` constructors
    *
    * @param begin The beginning of the sequence of elements
-   * @param end The end of the sequence of elements
-   * @param v The beginning of the sequence of validity indicators
+   * @param end   The end of the sequence of elements
+   * @param v     The beginning of the sequence of validity indicators
    * @param scale The scale of the elements in the column
    */
   template <typename FixedPointRepIterator, typename ValidityIterator>
@@ -575,6 +604,86 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
                                    rmm::device_buffer{elements.data(), size * sizeof(Rep)},
                                    detail::make_null_mask(v, v + size),
                                    cudf::UNKNOWN_NULL_COUNT});
+  }
+
+  /**
+   * @brief Construct a nullable column from an initializer list of decimal elements using another
+   * list to indicate the validity of each element.
+   *
+   * The validity of each element is determined by an `initializer_list` of booleans where `true`
+   * indicates the element is valid, and `false` indicates the element is null.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable INT32 column with 4 elements: {1, null, 3, null}
+   * fixed_width_column_wrapper<int32_t> w{ {1,2,3,4}, {1, 0, 1, 0}, scale_type{0}};
+   * @endcode
+   *
+   * @param elements The initializer list of elements
+   * @param validity The initializer list of validity indicator booleans
+   * @param scale    The scale of the elements in the column
+   */
+  fixed_point_column_wrapper(std::initializer_list<Rep> elements,
+                             std::initializer_list<bool> validity,
+                             numeric::scale_type scale)
+    : fixed_point_column_wrapper(
+        std::cbegin(elements), std::cend(elements), std::cbegin(validity), scale)
+  {
+  }
+
+  /**
+   * @brief Construct a nullable column from an initializer list of decimal elements and the the
+   * range `[v, v + element_list.size())` interpreted as booleans to indicate the validity of each
+   * element.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable INT32 column with 4 elements: {null, 1, null, 3}
+   * auto validity = make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+   * auto w        = fixed_width_column_wrapper<int32_t>{ {1,2,3,4}, validity, scale_type{0}};
+   * @endcode
+   *
+   * @tparam ValidityIterator Dereferencing a ValidityIterator must be convertible to `bool`
+   *
+   * @param element_list The initializer list of elements
+   * @param v            The beginning of the sequence of validity indicators
+   * @param scale        The scale of the elements in the column
+   */
+  template <typename ValidityIterator>
+  fixed_point_column_wrapper(std::initializer_list<Rep> element_list,
+                             ValidityIterator v,
+                             numeric::scale_type scale)
+    : fixed_point_column_wrapper(std::cbegin(element_list), std::cend(element_list), v, scale)
+  {
+  }
+
+  /**
+   * @brief Construct a nullable column of the decimal elements in the range `[begin,end)` using a
+   * validity initializer list to indicate the validity of each element.
+   *
+   * The validity of each element is determined by an `initializer_list` of booleans where `true`
+   * indicates the element is valid, and `false` indicates the element is null.
+   *
+   * Example:
+   * @code{.cpp}
+   * // Creates a nullable column of DECIMAL32 elements with 5 elements: {null, 1, null, 3, null}
+   * fixed_point_column_wrapper<int32_t> w(elements, elements + 5, {0, 1, 0, 1, 0}, scale_type{0});
+   * @endcode
+   *
+   * @tparam FixedPointRepIterator Iterator for fixed_point::rep
+   *
+   * @param begin    The beginning of the sequence of elements
+   * @param end      The end of the sequence of elements
+   * @param validity The initializer list of validity indicator booleans
+   * @param scale    The scale of the elements in the column
+   */
+  template <typename FixedPointRepIterator>
+  fixed_point_column_wrapper(FixedPointRepIterator begin,
+                             FixedPointRepIterator end,
+                             std::initializer_list<bool> const& validity,
+                             numeric::scale_type scale)
+    : fixed_point_column_wrapper(begin, end, std::cbegin(validity), scale)
+  {
   }
 };
 
@@ -640,8 +749,8 @@ class strings_column_wrapper : public detail::column_wrapper {
    *
    * @tparam StringsIterator A `std::string` must be constructible from
    * dereferencing a `StringsIterator`.
-   * @tparam ValidityIterator Dereferencing a ValidityIterator must be
-   * convertible to `bool`
+   * @tparam ValidityIterator Dereferencing a ValidityIterator must be convertible to `bool`
+   *
    * @param begin The beginning of the sequence
    * @param end The end of the sequence
    * @param v The beginning of the sequence of validity indicators
