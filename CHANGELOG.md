@@ -20,11 +20,12 @@
 
 - PR #6922 Fix N/A detection for empty fields in CSV reader
 - PR #6912 Fix rmm_mode=managed parameter for gtests
+- PR #6943 Fix join with nulls not equal performance
 - PR #6945 Fix groupby agg/apply behaviour when no key columns are provided 
 - PR #6942 Fix cudf::merge gtest for dictionary columns
 
 
-# cuDF 0.17.0 (Date TBD)
+# cuDF 0.17.0 (10 Dec 2020)
 
 ## New Features
 
@@ -63,6 +64,7 @@
 - PR #6765 Cupy fallback for __array_function__ and __array_ufunc__ for cudf.Series
 - PR #6817 Add support for scatter() on lists-of-struct columns
 - PR #6805 Implement `cudf::detail::copy_if` for `decimal32` and `decimal64`
+- PR #6483 Add `agg` function to aggregate dataframe using one or more operations
 - PR #6726 Support selecting different hash functions in hash_partition
 - PR #6619 Improve Dockerfile
 - PR #6831 Added parquet chunked writing ability for list columns
@@ -153,6 +155,7 @@
 - PR #6837 Avoid gather when copying strings view from start of strings column
 - PR #6859 Move align_ptr_for_type() from cuda.cuh to alignment.hpp
 - PR #6807 Refactor `std::array` usage in row group index writing in ORC
+- PR #6914 Enable groupby `list` aggregation for strings
 - PR #6908 Parquet option for strictly decimal reading
 
 ## Bug Fixes
