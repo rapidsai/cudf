@@ -2239,6 +2239,40 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new Table(extractRe(this.getNativeView(), pattern));
   }
 
+  /**
+   * Converts all character sequences starting with '%' into character code-points
+   * interpreting the 2 following characters as hex values to create the code-point.
+   * For example, the sequence '%20' is converted into byte (0x20) which is a single
+   * space character. Another example converts '%C3%A9' into 2 sequential bytes
+   * (0xc3 and 0xa9 respectively) which is the é character. Overall, 3 characters
+   * are converted into one char byte whenever a '%%' (single percent) character
+   * is encountered in the string.
+   * <p>
+   * Any null entries will result in corresponding null entries in the output column.
+   *
+   * @return a new column instance containing the decoded strings
+   */
+  public final ColumnVector urlDecode() throws CudfException {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    return new ColumnVector(urlDecode(getNativeView()));
+  }
+
+  /**
+   * Converts mostly non-ascii characters and control characters into UTF-8 hex code-points
+   * prefixed with '%'. For example, the space character must be converted to characters '%20' where
+   * the '20' indicates the hex value for space in UTF-8. Likewise, multi-byte characters are
+   * converted to multiple hex characters. For example, the é character is converted to characters
+   * '%C3%A9' where 'C3A9' is the UTF-8 bytes 0xC3A9 for this character.
+   * <p>
+   * Any null entries will result in corresponding null entries in the output column.
+   *
+   * @return a new column instance containing the encoded strings
+   */
+  public final ColumnVector urlEncode() throws CudfException {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    return new ColumnVector(urlEncode(getNativeView()));
+  }
+
   /** For a column of type List<Struct<String, String>> and a passed in String key, return a string column
    * for all the values in the struct that match the key, null otherwise.
    * @param key the String scalar to lookup in the column
@@ -2446,6 +2480,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Native method for extracting results from an regular expressions.  Returns a table handle.
    */
   private static native long[] extractRe(long cudfViewHandle, String pattern) throws CudfException;
+
+  private static native long urlDecode(long cudfViewHandle);
+
+  private static native long urlEncode(long cudfViewHandle);
 
   /**
    * Native method to concatenate columns of strings together, combining a row from
