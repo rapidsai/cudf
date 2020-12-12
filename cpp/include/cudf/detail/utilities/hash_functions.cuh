@@ -571,28 +571,6 @@ struct SparkMurmurHash3_32 {
     return h;
   }
 
-  /* --------------------------------------------------------------------------*/
-  /**
-   * @brief  Combines two hash values into a new single hash value. Called
-   * repeatedly to create a hash value from several variables.
-   * Taken from the Boost hash_combine function
-   * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
-   *
-   * @param lhs The first hash value to combine
-   * @param rhs The second hash value to combine
-   *
-   * @returns A hash value that intelligently combines the lhs and rhs hash values
-   */
-  /* ----------------------------------------------------------------------------*/
-  CUDA_HOST_DEVICE_CALLABLE result_type hash_combine(result_type lhs, result_type rhs)
-  {
-    result_type combined{lhs};
-
-    combined ^= rhs + 0x9e3779b9 + (combined << 6) + (combined >> 2);
-
-    return combined;
-  }
-
   result_type CUDA_HOST_DEVICE_CALLABLE operator()(Key const& key) const { return compute(key); }
 
   // compute wrapper for floating point types
@@ -632,9 +610,9 @@ struct SparkMurmurHash3_32 {
       h1 = h1 * 5 + 0xe6546b64;
     }
     //----------
-    // Spark's byte by byte tail processing
+    // byte by byte tail processing
     for (int i = nblocks * 4; i < len; i++) {
-      int32_t k1 = data[i] & 0xff;
+      int32_t k1 = data[i];
       k1 *= c1;
       k1 = rotl32(k1, 15);
       k1 *= c2;
@@ -698,7 +676,7 @@ SparkMurmurHash3_32<cudf::string_view>::operator()(cudf::string_view const& key)
   //----------
   // Spark's byte by byte tail processing
   for (int i = nblocks * 4; i < len; i++) {
-    int32_t k1 = data[i] & 0xff;
+    int32_t k1 = data[i];
     k1 *= c1;
     k1 = rotl32(k1, 15);
     k1 *= c2;
