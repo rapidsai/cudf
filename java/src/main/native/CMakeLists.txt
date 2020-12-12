@@ -19,6 +19,8 @@ project(CUDF_JNI VERSION 0.7.0 LANGUAGES C CXX CUDA)
 
 set(CUDF_CPP_BUILD_DIR "${PROJECT_SOURCE_DIR}/../../../../cpp/build")
 
+include(../../../../cpp/cmake/Modules/ccache.cmake)
+
 ###################################################################################################
 # - build type ------------------------------------------------------------------------------------
 
