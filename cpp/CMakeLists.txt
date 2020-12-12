@@ -22,6 +22,8 @@ if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
 endif(NOT CMAKE_CUDA_COMPILER)
 
+include(cmake/Modules/ccache.cmake)
+
 ###################################################################################################
 # - build type ------------------------------------------------------------------------------------
 

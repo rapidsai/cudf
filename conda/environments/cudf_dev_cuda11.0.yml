@@ -6,6 +6,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  - ccache>=4.1
   - clang=8.0.1
   - clang-tools=8.0.1
   - cupy>7.1.0,<9.0.0a0
