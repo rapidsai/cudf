@@ -163,7 +163,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a new ColumnVector with NaNs converted to nulls, preserving the existing null values.
    */
   public final ColumnVector nansToNulls() {
-    assert type == DType.FLOAT32 || type == DType.FLOAT64;
+    assert type.equals(DType.FLOAT32) || type.equals(DType.FLOAT64);
     return new ColumnVector(nansToNulls(this.getNativeView()));
   }
 
@@ -177,7 +177,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return ColumnVector holding length of string at index 'i' in the original vector
    */
   public final ColumnVector getCharLengths() {
-    assert DType.STRING == type : "char length only available for String type";
+    assert DType.STRING.equals(type) : "char length only available for String type";
     return new ColumnVector(charLengths(getNativeView()));
   }
 
@@ -187,7 +187,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return ColumnVector, where each element at i = byte count of string at index 'i' in the original vector
    */
   public final ColumnVector getByteCount() {
-    assert type == DType.STRING : "type has to be a String";
+    assert type.equals(DType.STRING) : "type has to be a String";
     return new ColumnVector(byteCount(getNativeView()));
   }
 
@@ -223,7 +223,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - Boolean vector
    */
   public final ColumnVector isInteger() {
-    assert type == DType.STRING;
+    assert type.equals(DType.STRING);
     return new ColumnVector(isInteger(getNativeView()));
   }
 
@@ -240,7 +240,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - Boolean vector
    */
   public final ColumnVector isFloat() {
-    assert type == DType.STRING;
+    assert type.equals(DType.STRING);
     return new ColumnVector(isFloat(getNativeView()));
   }
 
@@ -314,7 +314,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return the computed vector
    */
   public final ColumnVector ifElse(ColumnView trueValues, ColumnView falseValues) {
-    if (type != DType.BOOL8) {
+    if (!type.equals(DType.BOOL8)) {
       throw new IllegalArgumentException("Cannot select with a predicate vector of type " + type);
     }
     long result = ifElseVV(getNativeView(), trueValues.getNativeView(), falseValues.getNativeView());
@@ -334,7 +334,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return the computed vector
    */
   public final ColumnVector ifElse(ColumnView trueValues, Scalar falseValue) {
-    if (type != DType.BOOL8) {
+    if (!type.equals(DType.BOOL8)) {
       throw new IllegalArgumentException("Cannot select with a predicate vector of type " + type);
     }
     long result = ifElseVS(getNativeView(), trueValues.getNativeView(), falseValue.getScalarHandle());
@@ -354,7 +354,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return the computed vector
    */
   public final ColumnVector ifElse(Scalar trueValue, ColumnView falseValues) {
-    if (type != DType.BOOL8) {
+    if (!type.equals(DType.BOOL8)) {
       throw new IllegalArgumentException("Cannot select with a predicate vector of type " + type);
     }
     long result = ifElseSV(getNativeView(), trueValue.getScalarHandle(), falseValues.getNativeView());
@@ -372,7 +372,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return the computed vector
    */
   public final ColumnVector ifElse(Scalar trueValue, Scalar falseValue) {
-    if (type != DType.BOOL8) {
+    if (!type.equals(DType.BOOL8)) {
       throw new IllegalArgumentException("Cannot select with a predicate vector of type " + type);
     }
     long result = ifElseSS(getNativeView(), trueValue.getScalarHandle(), falseValue.getScalarHandle());
@@ -545,7 +545,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector year() {
-    assert type.isTimestamp();
+    assert type.isTimestampType();
     return new ColumnVector(year(getNativeView()));
   }
 
@@ -557,7 +557,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector month() {
-    assert type.isTimestamp();
+    assert type.isTimestampType();
     return new ColumnVector(month(getNativeView()));
   }
 
@@ -569,7 +569,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - A new INT16 vector allocated on the GPU.
    */
   public final ColumnVector day() {
-    assert type.isTimestamp();
+    assert type.isTimestampType();
     return new ColumnVector(day(getNativeView()));
   }
 
@@ -617,7 +617,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new INT16 vector allocated on the GPU. Monday=1, ..., Sunday=7
    */
   public final ColumnVector weekDay() {
-    assert type.isTimestamp();
+    assert type.isTimestampType();
     return new ColumnVector(weekDay(getNativeView()));
   }
 
@@ -629,7 +629,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new TIMESTAMP_DAYS vector allocated on the GPU.
    */
   public final ColumnVector lastDayOfMonth() {
-    assert type.isTimestamp();
+    assert type.isTimestampType();
     return new ColumnVector(lastDayOfMonth(getNativeView()));
   }
 
@@ -641,7 +641,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new INT16 vector allocated on the GPU. The value is between [1, {365-366}]
    */
   public final ColumnVector dayOfYear() {
-    assert type.isTimestamp();
+    assert type.isTimestampType();
     return new ColumnVector(dayOfYear(getNativeView()));
   }
 
@@ -1264,7 +1264,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Any null string entries return corresponding null output column entries
    */
   public final ColumnVector toTitle() {
-    assert type == DType.STRING;
+    assert type.equals(DType.STRING);
     return new ColumnVector(title(getNativeView()));
   }
   /////////////////////////////////////////////////////////////////////////////
@@ -1294,6 +1294,20 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector castTo(DType type) {
     return new ColumnVector(castTo(getNativeView(), type.typeId.getNativeId(), type.getScale()));
+  }
+
+  /**
+   * Zero-copy cast between types with the same underlying representation.
+   *
+   * Similar to reinterpret_cast or bit_cast in C++. This will essentially take the underlying data
+   * and update the metadata to reflect a new type. Not all types are supported the width of the
+   * types must match.
+   * @param type the type you want to go to.
+   * @return a ColumnView that cannot outlive the Column that owns the actual data it points to.
+   */
+  public ColumnView logicalCastTo(DType type) {
+    return new ColumnView(logicalCastTo(getNativeView(),
+        type.typeId.getNativeId(), type.getScale()));
   }
 
   /**
@@ -1451,7 +1465,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public final ColumnVector asTimestampDays() {
-    if (type == DType.STRING) {
+    if (type.equals(DType.STRING)) {
       return asTimestamp(DType.TIMESTAMP_DAYS, "%Y-%m-%dT%H:%M:%SZ%f");
     }
     return castTo(DType.TIMESTAMP_DAYS);
@@ -1464,7 +1478,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public final ColumnVector asTimestampDays(String format) {
-    assert type == DType.STRING : "A column of type string is required when using a format string";
+    assert type.equals(DType.STRING) : "A column of type string is required when using a format string";
     return asTimestamp(DType.TIMESTAMP_DAYS, format);
   }
 
@@ -1474,7 +1488,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public final ColumnVector asTimestampSeconds() {
-    if (type == DType.STRING) {
+    if (type.equals(DType.STRING)) {
       return asTimestamp(DType.TIMESTAMP_SECONDS, "%Y-%m-%dT%H:%M:%SZ%f");
     }
     return castTo(DType.TIMESTAMP_SECONDS);
@@ -1487,7 +1501,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public final ColumnVector asTimestampSeconds(String format) {
-    assert type == DType.STRING : "A column of type string is required when using a format string";
+    assert type.equals(DType.STRING) : "A column of type string is required when using a format string";
     return asTimestamp(DType.TIMESTAMP_SECONDS, format);
   }
 
@@ -1497,7 +1511,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public final ColumnVector asTimestampMicroseconds() {
-    if (type == DType.STRING) {
+    if (type.equals(DType.STRING)) {
       return asTimestamp(DType.TIMESTAMP_MICROSECONDS, "%Y-%m-%dT%H:%M:%SZ%f");
     }
     return castTo(DType.TIMESTAMP_MICROSECONDS);
@@ -1510,7 +1524,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public final ColumnVector asTimestampMicroseconds(String format) {
-    assert type == DType.STRING : "A column of type string is required when using a format string";
+    assert type.equals(DType.STRING) : "A column of type string is required when using a format string";
     return asTimestamp(DType.TIMESTAMP_MICROSECONDS, format);
   }
 
@@ -1520,7 +1534,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public final ColumnVector asTimestampMilliseconds() {
-    if (type == DType.STRING) {
+    if (type.equals(DType.STRING)) {
       return asTimestamp(DType.TIMESTAMP_MILLISECONDS, "%Y-%m-%dT%H:%M:%SZ%f");
     }
     return castTo(DType.TIMESTAMP_MILLISECONDS);
@@ -1533,7 +1547,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public final ColumnVector asTimestampMilliseconds(String format) {
-    assert type == DType.STRING : "A column of type string is required when using a format string";
+    assert type.equals(DType.STRING) : "A column of type string is required when using a format string";
     return asTimestamp(DType.TIMESTAMP_MILLISECONDS, format);
   }
 
@@ -1543,7 +1557,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public final ColumnVector asTimestampNanoseconds() {
-    if (type == DType.STRING) {
+    if (type.equals(DType.STRING)) {
       return asTimestamp(DType.TIMESTAMP_NANOSECONDS, "%Y-%m-%dT%H:%M:%SZ%9f");
     }
     return castTo(DType.TIMESTAMP_NANOSECONDS);
@@ -1556,7 +1570,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public final ColumnVector asTimestampNanoseconds(String format) {
-    assert type == DType.STRING : "A column of type string is required when using a format string";
+    assert type.equals(DType.STRING) : "A column of type string is required when using a format string";
     return asTimestamp(DType.TIMESTAMP_NANOSECONDS, format);
   }
 
@@ -1572,10 +1586,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *         original column vector.
    */
   public final ColumnVector asTimestamp(DType timestampType, String format) {
-    assert type == DType.STRING : "A column of type string " +
+    assert type.equals(DType.STRING) : "A column of type string " +
         "is required for .to_timestamp() operation";
     assert format != null : "Format string may not be NULL";
-    assert timestampType.isTimestamp() : "unsupported conversion to non-timestamp DType";
+    assert timestampType.isTimestampType() : "unsupported conversion to non-timestamp DType";
     // Only nativeID is passed in the below function as timestamp type does not have `scale`.
     return new ColumnVector(stringTimestampToTimestamp(getNativeView(),
         timestampType.typeId.getNativeId(), format));
@@ -1640,7 +1654,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public final ColumnVector asStrings(String format) {
-    assert type.isTimestamp() : "unsupported conversion from non-timestamp DType";
+    assert type.isTimestampType() : "unsupported conversion from non-timestamp DType";
     assert format != null || format.isEmpty(): "Format string may not be NULL or empty";
 
     return new ColumnVector(timestampToStringTimestamp(this.getNativeView(), format));
@@ -1696,7 +1710,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return a new column of the values at those indexes.
    */
   public final ColumnVector extractListElement(int index) {
-    assert type == DType.LIST : "A column of type LIST is required for .extractListElement()";
+    assert type.equals(DType.LIST) : "A column of type LIST is required for .extractListElement()";
     return new ColumnVector(extractListElement(getNativeView(), index));
   }
 
@@ -1708,7 +1722,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Convert a string to upper case.
    */
   public final ColumnVector upper() {
-    assert type == DType.STRING : "A column of type string is required for .upper() operation";
+    assert type.equals(DType.STRING) : "A column of type string is required for .upper() operation";
     return new ColumnVector(upperStrings(getNativeView()));
   }
 
@@ -1716,7 +1730,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Convert a string to lower case.
    */
   public final ColumnVector lower() {
-    assert type == DType.STRING : "A column of type string is required for .lower() operation";
+    assert type.equals(DType.STRING) : "A column of type string is required for .lower() operation";
     return new ColumnVector(lowerStrings(getNativeView()));
   }
 
@@ -1750,9 +1764,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param end character index to end the search on (exclusive).
    */
   public final ColumnVector stringLocate(Scalar substring, int start, int end) {
-    assert type == DType.STRING : "column type must be a String";
+    assert type.equals(DType.STRING) : "column type must be a String";
     assert substring != null : "target string may not be null";
-    assert substring.getType() == DType.STRING : "substring scalar must be a string scalar";
+    assert substring.getType().equals(DType.STRING) : "substring scalar must be a string scalar";
     assert start >= 0 : "start index must be a positive value";
     assert end >= start || end == -1 : "end index must be -1 or >= the start index";
 
@@ -1770,9 +1784,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return New table of strings columns.
    */
   public final Table stringSplit(Scalar delimiter) {
-    assert type == DType.STRING : "column type must be a String";
+    assert type.equals(DType.STRING) : "column type must be a String";
     assert delimiter != null : "delimiter may not be null";
-    assert delimiter.getType() == DType.STRING : "delimiter must be a string scalar";
+    assert delimiter.getType().equals(DType.STRING) : "delimiter must be a string scalar";
     return new Table(stringSplit(this.getNativeView(), delimiter.getScalarHandle()));
   }
 
@@ -1824,9 +1838,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return New table of strings columns.
    */
   public final ColumnVector stringSplitRecord(Scalar delimiter, int maxSplit) {
-    assert type == DType.STRING : "column type must be a String";
+    assert type.equals(DType.STRING) : "column type must be a String";
     assert delimiter != null : "delimiter may not be null";
-    assert delimiter.getType() == DType.STRING : "delimiter must be a string scalar";
+    assert delimiter.getType().equals(DType.STRING) : "delimiter must be a string scalar";
     return new ColumnVector(
         stringSplitRecord(this.getNativeView(), delimiter.getScalarHandle(), maxSplit));
   }
@@ -1850,7 +1864,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new java column vector containing the substrings.
    */
   public final ColumnVector substring(int start, int end) {
-    assert type == DType.STRING : "column type must be a String";
+    assert type.equals(DType.STRING) : "column type must be a String";
     return new ColumnVector(substring(getNativeView(), start, end));
   }
 
@@ -1862,9 +1876,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new java column vector containing the substrings/
    */
   public final ColumnVector substring(ColumnView start, ColumnView end) {
-    assert type == DType.STRING : "column type must be a String";
+    assert type.equals(DType.STRING) : "column type must be a String";
     assert (rows == start.getRowCount() && rows == end.getRowCount()) : "Number of rows must be equal";
-    assert (start.getType() == DType.INT32 && end.getType() == DType.INT32) : "start and end " +
+    assert (start.getType().equals(DType.INT32) && end.getType().equals(DType.INT32)) : "start and end " +
         "vectors must be of integer type";
     return new ColumnVector(substringColumn(getNativeView(), start.getNativeView(), end.getNativeView()));
   }
@@ -1884,9 +1898,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final ColumnVector stringReplace(Scalar target, Scalar replace) {
 
-    assert type == DType.STRING : "column type must be a String";
+    assert type.equals(DType.STRING) : "column type must be a String";
     assert target != null : "target string may not be null";
-    assert target.getType() == DType.STRING : "target string must be a string scalar";
+    assert target.getType().equals(DType.STRING) : "target string must be a string scalar";
     assert target.getJavaString().isEmpty() == false : "target scalar may not be empty";
 
     return new ColumnVector(stringReplace(getNativeView(), target.getScalarHandle(),
@@ -1980,9 +1994,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new java column vector containing the boolean results.
    */
   public final ColumnVector startsWith(Scalar pattern) {
-    assert type == DType.STRING : "column type must be a String";
+    assert type.equals(DType.STRING) : "column type must be a String";
     assert pattern != null : "pattern scalar may not be null";
-    assert pattern.getType() == DType.STRING : "pattern scalar must be a string scalar";
+    assert pattern.getType().equals(DType.STRING) : "pattern scalar must be a string scalar";
     return new ColumnVector(stringStartWith(getNativeView(), pattern.getScalarHandle()));
   }
 
@@ -1993,9 +2007,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new java column vector containing the boolean results.
    */
   public final ColumnVector endsWith(Scalar pattern) {
-    assert type == DType.STRING : "column type must be a String";
+    assert type.equals(DType.STRING) : "column type must be a String";
     assert pattern != null : "pattern scalar may not be null";
-    assert pattern.getType() == DType.STRING : "pattern scalar must be a string scalar";
+    assert pattern.getType().equals(DType.STRING) : "pattern scalar must be a string scalar";
     return new ColumnVector(stringEndWith(getNativeView(), pattern.getScalarHandle()));
   }
 
@@ -2004,7 +2018,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new java column vector containing the stripped strings.
    */
   public final ColumnVector strip() {
-    assert type == DType.STRING : "column type must be a String";
+    assert type.equals(DType.STRING) : "column type must be a String";
     try (Scalar emptyString = Scalar.fromString("")) {
       return new ColumnVector(stringStrip(getNativeView(), StripType.BOTH.nativeId,
           emptyString.getScalarHandle()));
@@ -2017,9 +2031,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new java column vector containing the stripped strings.
    */
   public final ColumnVector strip(Scalar toStrip) {
-    assert type == DType.STRING : "column type must be a String";
+    assert type.equals(DType.STRING) : "column type must be a String";
     assert toStrip != null : "toStrip scalar may not be null";
-    assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
+    assert toStrip.getType().equals(DType.STRING) : "toStrip must be a string scalar";
     return new ColumnVector(stringStrip(getNativeView(), StripType.BOTH.nativeId, toStrip.getScalarHandle()));
   }
 
@@ -2028,7 +2042,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new java column vector containing the stripped strings.
    */
   public final ColumnVector lstrip() {
-    assert type == DType.STRING : "column type must be a String";
+    assert type.equals(DType.STRING) : "column type must be a String";
     try (Scalar emptyString = Scalar.fromString("")) {
       return new ColumnVector(stringStrip(getNativeView(), StripType.LEFT.nativeId,
           emptyString.getScalarHandle()));
@@ -2041,9 +2055,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new java column vector containing the stripped strings.
    */
   public final ColumnVector lstrip(Scalar toStrip) {
-    assert type == DType.STRING : "column type must be a String";
+    assert type.equals(DType.STRING) : "column type must be a String";
     assert toStrip != null : "toStrip  Scalar may not be null";
-    assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
+    assert toStrip.getType().equals(DType.STRING) : "toStrip must be a string scalar";
     return new ColumnVector(stringStrip(getNativeView(), StripType.LEFT.nativeId, toStrip.getScalarHandle()));
   }
 
@@ -2052,7 +2066,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new java column vector containing the stripped strings.
    */
   public final ColumnVector rstrip() {
-    assert type == DType.STRING : "column type must be a String";
+    assert type.equals(DType.STRING) : "column type must be a String";
     try (Scalar emptyString = Scalar.fromString("")) {
       return new ColumnVector(stringStrip(getNativeView(), StripType.RIGHT.nativeId,
           emptyString.getScalarHandle()));
@@ -2065,9 +2079,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return A new java column vector containing the stripped strings.
    */
   public final ColumnVector rstrip(Scalar toStrip) {
-    assert type == DType.STRING : "column type must be a String";
+    assert type.equals(DType.STRING) : "column type must be a String";
     assert toStrip != null : "toStrip  Scalar may not be null";
-    assert toStrip.getType() == DType.STRING : "toStrip must be a string scalar";
+    assert toStrip.getType().equals(DType.STRING) : "toStrip must be a string scalar";
     return new ColumnVector(stringStrip(getNativeView(), StripType.RIGHT.nativeId, toStrip.getScalarHandle()));
   }
 
@@ -2079,9 +2093,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
 
   public final ColumnVector stringContains(Scalar compString) {
-    assert type == DType.STRING : "column type must be a String";
+    assert type.equals(DType.STRING) : "column type must be a String";
     assert compString != null : "compString scalar may not be null";
-    assert compString.getType() == DType.STRING : "compString scalar must be a string scalar";
+    assert compString.getType().equals(DType.STRING) : "compString scalar must be a string scalar";
     return new ColumnVector(stringContains(getNativeView(), compString.getScalarHandle()));
   }
 
@@ -2178,7 +2192,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return New ColumnVector of boolean results for each string.
    */
   public final ColumnVector matchesRe(String pattern) {
-    assert type == DType.STRING : "column type must be a String";
+    assert type.equals(DType.STRING) : "column type must be a String";
     assert pattern != null : "pattern may not be null";
     assert !pattern.isEmpty() : "pattern string may not be empty";
     return new ColumnVector(matchesRe(getNativeView(), pattern));
@@ -2201,7 +2215,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return New ColumnVector of boolean results for each string.
    */
   public final ColumnVector containsRe(String pattern) {
-    assert type == DType.STRING : "column type must be a String";
+    assert type.equals(DType.STRING) : "column type must be a String";
     assert pattern != null : "pattern may not be null";
     assert !pattern.isEmpty() : "pattern string may not be empty";
     return new ColumnVector(containsRe(getNativeView(), pattern));
@@ -2220,9 +2234,43 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * not contain any capture groups.
    */
   public final Table extractRe(String pattern) throws CudfException {
-    assert type == DType.STRING : "column type must be a String";
+    assert type.equals(DType.STRING) : "column type must be a String";
     assert pattern != null : "pattern may not be null";
     return new Table(extractRe(this.getNativeView(), pattern));
+  }
+
+  /**
+   * Converts all character sequences starting with '%' into character code-points
+   * interpreting the 2 following characters as hex values to create the code-point.
+   * For example, the sequence '%20' is converted into byte (0x20) which is a single
+   * space character. Another example converts '%C3%A9' into 2 sequential bytes
+   * (0xc3 and 0xa9 respectively) which is the é character. Overall, 3 characters
+   * are converted into one char byte whenever a '%%' (single percent) character
+   * is encountered in the string.
+   * <p>
+   * Any null entries will result in corresponding null entries in the output column.
+   *
+   * @return a new column instance containing the decoded strings
+   */
+  public final ColumnVector urlDecode() throws CudfException {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    return new ColumnVector(urlDecode(getNativeView()));
+  }
+
+  /**
+   * Converts mostly non-ascii characters and control characters into UTF-8 hex code-points
+   * prefixed with '%'. For example, the space character must be converted to characters '%20' where
+   * the '20' indicates the hex value for space in UTF-8. Likewise, multi-byte characters are
+   * converted to multiple hex characters. For example, the é character is converted to characters
+   * '%C3%A9' where 'C3A9' is the UTF-8 bytes 0xC3A9 for this character.
+   * <p>
+   * Any null entries will result in corresponding null entries in the output column.
+   *
+   * @return a new column instance containing the encoded strings
+   */
+  public final ColumnVector urlEncode() throws CudfException {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    return new ColumnVector(urlEncode(getNativeView()));
   }
 
   /** For a column of type List<Struct<String, String>> and a passed in String key, return a string column
@@ -2232,9 +2280,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final ColumnVector getMapValue(Scalar key) {
 
-    assert type == DType.LIST : "column type must be a LIST";
+    assert type.equals(DType.LIST) : "column type must be a LIST";
     assert key != null : "target string may not be null";
-    assert key.getType() == DType.STRING : "target string must be a string scalar";
+    assert key.getType().equals(DType.STRING) : "target string must be a string scalar";
 
     return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
   }
@@ -2433,6 +2481,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long[] extractRe(long cudfViewHandle, String pattern) throws CudfException;
 
+  private static native long urlDecode(long cudfViewHandle);
+
+  private static native long urlEncode(long cudfViewHandle);
+
   /**
    * Native method to concatenate columns of strings together, combining a row from
    * each colunm into a single string.
@@ -2471,6 +2523,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long extractListElement(long nativeView, int index);
 
   private static native long castTo(long nativeHandle, int type, int scale);
+
+  private static native long logicalCastTo(long nativeHandle, int type, int scale);
 
   private static native long byteListCast(long nativeHandle, boolean config);
 
@@ -2781,7 +2835,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       DeviceMemoryBuffer offsets = null;
       if (dataBuffer != null) {
         long dataLen = rows * type.getSizeInBytes();
-        if (type == DType.STRING) {
+        if (type.equals(DType.STRING)) {
           // This needs a different type
           dataLen = getEndStringOffset(rows, rows - 1, offsetBuffer);
           if (dataLen == 0 && nullCount.get() == 0) {

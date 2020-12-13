@@ -21,7 +21,6 @@
 
 #include <cudf/fixed_point/fixed_point.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
@@ -350,7 +349,7 @@ class fixed_point_scalar : public scalar {
                      bool is_valid                       = true,
                      rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : scalar{data_type{type_to_id<T>()}, is_valid, stream, mr},  // note that scale is ignored here
+    : scalar{data_type{type_to_id<T>()}, is_valid, stream, mr},
       _data{std::forward<rmm::device_scalar<rep_type>>(data)}
   {
   }
@@ -363,6 +362,17 @@ class fixed_point_scalar : public scalar {
   rep_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
   {
     return _data.value(stream);
+  }
+
+  /**
+   * @brief Get the decimal32 or decimal64
+   *
+   * @param stream CUDA stream used for device memory operations.
+   */
+  T fixed_point_value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const
+  {
+    using namespace numeric;
+    return T{scaled_integer<rep_type>{_data.value(stream), scale_type{type().scale()}}};
   }
 
   /**

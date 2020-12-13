@@ -18,10 +18,7 @@
 
 #include <limits>
 
-#define _LIBCUDACXX_USE_CXX20_CHRONO
-#define _LIBCUDACXX_USE_CXX17_TYPE_TRAITS
-
-#include <simt/chrono>
+#include <cuda/std/chrono>
 
 namespace cudf {
 
@@ -35,23 +32,23 @@ namespace cudf {
 /**
  * @brief Type alias representing an int32_t duration of days.
  **/
-using duration_D = simt::std::chrono::duration<int32_t, simt::std::chrono::days::period>;
+using duration_D = cuda::std::chrono::duration<int32_t, cuda::std::chrono::days::period>;
 /**
  * @brief Type alias representing an int64_t duration of seconds.
  **/
-using duration_s = simt::std::chrono::duration<int64_t, simt::std::chrono::seconds::period>;
+using duration_s = cuda::std::chrono::duration<int64_t, cuda::std::chrono::seconds::period>;
 /**
  * @brief Type alias representing an int64_t duration of milliseconds.
  **/
-using duration_ms = simt::std::chrono::duration<int64_t, simt::std::chrono::milliseconds::period>;
+using duration_ms = cuda::std::chrono::duration<int64_t, cuda::std::chrono::milliseconds::period>;
 /**
  * @brief Type alias representing an int64_t duration of microseconds.
  **/
-using duration_us = simt::std::chrono::duration<int64_t, simt::std::chrono::microseconds::period>;
+using duration_us = cuda::std::chrono::duration<int64_t, cuda::std::chrono::microseconds::period>;
 /**
  * @brief Type alias representing an int64_t duration of nanoseconds.
  **/
-using duration_ns = simt::std::chrono::duration<int64_t, simt::std::chrono::nanoseconds::period>;
+using duration_ns = cuda::std::chrono::duration<int64_t, cuda::std::chrono::nanoseconds::period>;
 
 static_assert(sizeof(duration_D) == sizeof(typename duration_D::rep), "");
 static_assert(sizeof(duration_s) == sizeof(typename duration_s::rep), "");

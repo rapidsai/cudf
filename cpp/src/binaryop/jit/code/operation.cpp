@@ -25,10 +25,14 @@ namespace code {
 const char* operation =
   R"***(
     #pragma once
-    #include <cmath>
-    #include <type_traits>
+
     #include "traits.h"
-    using namespace simt::std;
+
+    #include <cmath>
+
+    #include <cuda/std/type_traits>
+
+    using namespace cuda::std;
 
     struct Add {
         // Allow sum between chronos only when both input and output types
@@ -514,9 +518,9 @@ const char* operation =
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  enable_if_t<(is_integral_v<typename simt::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
+                  enable_if_t<(is_integral_v<typename cuda::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using common_t = typename simt::std::common_type<TypeLhs, TypeRhs>::type;
+            using common_t = typename cuda::std::common_type<TypeLhs, TypeRhs>::type;
             common_t xconv{x};
             common_t yconv{y};
             auto rem = xconv % yconv;
@@ -527,9 +531,9 @@ const char* operation =
         template <typename TypeOut,
                   typename TypeLhs,
                   typename TypeRhs,
-                  enable_if_t<!(is_integral_v<typename simt::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
+                  enable_if_t<!(is_integral_v<typename cuda::std::common_type<TypeLhs, TypeRhs>::type>)>* = nullptr>
         static TypeOut operate(TypeLhs x, TypeRhs y) {
-            using common_t = typename simt::std::common_type<TypeLhs, TypeRhs>::type;
+            using common_t = typename cuda::std::common_type<TypeLhs, TypeRhs>::type;
             common_t xconv{x};
             common_t yconv{y};
             auto rem = std::fmod(xconv, yconv);

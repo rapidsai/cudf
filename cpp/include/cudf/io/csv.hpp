@@ -116,24 +116,7 @@ class csv_reader_options {
   // Additional values to recognize as boolean false values
   std::vector<std::string> _false_values{"False", "FALSE", "false"};
   // Additional values to recognize as null values
-  std::vector<std::string> _na_values{"#N/A",
-                                      "#N/A N/A",
-                                      "#NA",
-                                      "-1.#IND",
-                                      "-1.#QNAN",
-                                      "-NaN",
-                                      "-nan",
-                                      "1.#IND",
-                                      "1.#QNAN",
-                                      "<NA>",
-                                      "N/A",
-                                      "NA",
-                                      "NULL",
-                                      "NaN",
-                                      "n/a",
-                                      "nan",
-                                      "null"};
-
+  std::vector<std::string> _na_values;
   // Whether to keep the built-in default NA values
   bool _keep_default_na = true;
   // Whether to disable null filter; disabling can improve performance
@@ -613,11 +596,7 @@ class csv_reader_options {
       CUDF_FAIL("Can't set na_values when na_filtering is disabled");
     }
 
-    if (_keep_default_na) {
-      _na_values.insert(_na_values.end(), vals.begin(), vals.end());
-    } else {
-      _na_values = std::move(vals);
-    }
+    _na_values = std::move(vals);
   }
 
   /**
@@ -1138,8 +1117,8 @@ class csv_writer_options {
   std::string _na_rep = "";
   // Indicates whether to write headers to csv
   bool _include_header = true;
-  // maximum number of rows to process for each file write
-  int _rows_per_chunk = 8;
+  // maximum number of rows to write in each chunk (limits memory use)
+  size_type _rows_per_chunk = std::numeric_limits<size_type>::max();
   // character to use for separating lines (default "\n")
   std::string _line_terminator = "\n";
   // character to use for separating lines (default "\n")
@@ -1158,7 +1137,7 @@ class csv_writer_options {
    * @param table Table to be written to output.
    */
   explicit csv_writer_options(sink_info const& sink, table_view const& table)
-    : _sink(sink), _table(table)
+    : _sink(sink), _table(table), _rows_per_chunk(table.num_rows())
   {
   }
 
@@ -1210,7 +1189,7 @@ class csv_writer_options {
   /**
    * @brief Returns maximum number of rows to process for each file write.
    */
-  int get_rows_per_chunk(void) const { return _rows_per_chunk; }
+  size_type get_rows_per_chunk(void) const { return _rows_per_chunk; }
 
   /**
    * @brief Returns character used for separating lines.
@@ -1259,7 +1238,7 @@ class csv_writer_options {
    *
    * @param val Number of rows per chunk.
    */
-  void set_rows_per_chunk(int val) { _rows_per_chunk = val; }
+  void set_rows_per_chunk(size_type val) { _rows_per_chunk = val; }
 
   /**
    * @brief Sets character used for separating lines.

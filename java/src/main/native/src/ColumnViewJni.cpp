@@ -44,6 +44,7 @@
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
+#include <cudf/strings/convert/convert_urls.hpp>
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/find.hpp>
 #include <cudf/strings/padding.hpp>
@@ -724,6 +725,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_logicalCastTo(JNIEnv *env, jclass,
+                                                                     jlong handle, jint type,
+                                                                     jint scale) {
+  JNI_NULL_CHECK(env, handle, "native handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
+    cudf::data_type n_data_type = cudf::jni::make_data_type(type, scale);
+    std::unique_ptr<cudf::column_view> result = std::make_unique<cudf::column_view>();
+    *result = cudf::logical_cast(*column, n_data_type);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_byteListCast(JNIEnv *env, jobject j_object,
                                                                     jlong handle,
                                                                     jboolean endianness_config) {
@@ -1167,8 +1183,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringStrip(JNIEnv *env, 
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_extractRe(JNIEnv *env,
-                                                                      jobject j_object,
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_extractRe(JNIEnv *env, jclass,
                                                                       jlong j_view_handle,
                                                                       jstring patternObj) {
   JNI_NULL_CHECK(env, j_view_handle, "column is null", nullptr);
@@ -1183,6 +1198,34 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_extractRe(JNIEnv *en
     std::unique_ptr<cudf::table> table_result =
         cudf::strings::extract(strings_column, pattern.get());
     return cudf::jni::convert_table_for_return(env, table_result);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_urlDecode(JNIEnv *env, jclass,
+                                                                 jlong j_view_handle) {
+  JNI_NULL_CHECK(env, j_view_handle, "column is null", 0);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    auto view_ptr = reinterpret_cast<cudf::column_view *>(j_view_handle);
+    cudf::strings_column_view strings_view(*view_ptr);
+    auto result = cudf::strings::url_decode(strings_view);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_urlEncode(JNIEnv *env, jclass,
+                                                                 jlong j_view_handle) {
+  JNI_NULL_CHECK(env, j_view_handle, "column is null", 0);
+
+  try {
+    cudf::jni::auto_set_device(env);
+    auto view_ptr = reinterpret_cast<cudf::column_view *>(j_view_handle);
+    cudf::strings_column_view strings_view(*view_ptr);
+    auto result = cudf::strings::url_encode(strings_view);
+    return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
 }

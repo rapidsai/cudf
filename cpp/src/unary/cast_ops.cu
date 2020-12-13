@@ -25,8 +25,8 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace detail {
@@ -51,7 +51,7 @@ struct unary_cast {
     // Convert source tick counts into target tick counts without blindly truncating them
     // by dividing the respective duration time periods (which may not work for time before
     // UNIX epoch)
-    return TargetT{simt::std::chrono::floor<TargetT::duration>(element.time_since_epoch())};
+    return TargetT{cuda::std::chrono::floor<TargetT::duration>(element.time_since_epoch())};
   }
 
   template <typename SourceT,
@@ -60,7 +60,7 @@ struct unary_cast {
                                        cudf::is_duration<TargetT>())>* = nullptr>
   CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
   {
-    return TargetT{simt::std::chrono::floor<TargetT>(element)};
+    return TargetT{cuda::std::chrono::floor<TargetT>(element)};
   }
 
   template <typename SourceT,
@@ -78,7 +78,7 @@ struct unary_cast {
                                        cudf::is_duration<TargetT>())>* = nullptr>
   CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
   {
-    return TargetT{simt::std::chrono::floor<TargetT>(element.time_since_epoch())};
+    return TargetT{cuda::std::chrono::floor<TargetT>(element.time_since_epoch())};
   }
 
   template <typename SourceT,
@@ -96,7 +96,7 @@ struct unary_cast {
                                        cudf::is_timestamp<TargetT>())>* = nullptr>
   CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
   {
-    return TargetT{simt::std::chrono::floor<TargetT::duration>(element)};
+    return TargetT{cuda::std::chrono::floor<TargetT::duration>(element)};
   }
 };
 
@@ -211,7 +211,7 @@ struct dispatch_unary_cast_to {
 
     mutable_column_view output_mutable = *output;
 
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       input.begin<SourceT>(),
                       input.end<SourceT>(),
                       output_mutable.begin<TargetT>(),
@@ -241,7 +241,7 @@ struct dispatch_unary_cast_to {
     using DeviceT    = device_storage_type_t<SourceT>;
     auto const scale = numeric::scale_type{input.type().scale()};
 
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       input.begin<DeviceT>(),
                       input.end<DeviceT>(),
                       output_mutable.begin<TargetT>(),
@@ -271,7 +271,7 @@ struct dispatch_unary_cast_to {
     using DeviceT    = device_storage_type_t<TargetT>;
     auto const scale = numeric::scale_type{type.scale()};
 
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       input.begin<SourceT>(),
                       input.end<SourceT>(),
                       output_mutable.begin<DeviceT>(),
@@ -318,7 +318,7 @@ struct dispatch_unary_cast_to {
 
     mutable_column_view output_mutable = *temporary;
 
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       input.begin<SourceDeviceT>(),
                       input.end<SourceDeviceT>(),
                       output_mutable.begin<TargetDeviceT>(),

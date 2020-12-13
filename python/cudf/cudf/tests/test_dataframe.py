@@ -784,7 +784,8 @@ a b  c
     assert got.split() == expect.split()
 
 
-def test_dataframe_to_string_wide():
+def test_dataframe_to_string_wide(monkeypatch):
+    monkeypatch.setenv("COLUMNS", 79)
     # Test basic
     df = gd.DataFrame()
     for i in range(100):
@@ -800,7 +801,6 @@ def test_dataframe_to_string_wide():
 [3 rows x 100 columns]
 """
     # values should match despite whitespace difference
-
     assert got.split() == expect.split()
 
 
@@ -8015,3 +8015,164 @@ def test_dataframe_from_pandas_duplicate_columns():
         ValueError, match="Duplicate column names are not allowed"
     ):
         gd.from_pandas(pdf)
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(
+            {"a": [1, 2, 3], "b": [10, 11, 20], "c": ["a", "bcd", "xyz"]}
+        ),
+        pd.DataFrame(),
+    ],
+)
+@pytest.mark.parametrize(
+    "columns",
+    [
+        None,
+        ["a"],
+        ["c", "a"],
+        ["b", "a", "c"],
+        [],
+        pd.Index(["c", "a"]),
+        gd.Index(["c", "a"]),
+        ["abc", "a"],
+        ["column_not_exists1", "column_not_exists2"],
+    ],
+)
+@pytest.mark.parametrize("index", [["abc", "def", "ghi"]])
+def test_dataframe_constructor_columns(df, columns, index):
+    def assert_local_eq(actual, df, expected, host_columns):
+        check_index_type = False if expected.empty else True
+        if host_columns is not None and any(
+            col not in df.columns for col in host_columns
+        ):
+            assert_eq(
+                expected,
+                actual,
+                check_dtype=False,
+                check_index_type=check_index_type,
+            )
+        else:
+            assert_eq(expected, actual, check_index_type=check_index_type)
+
+    gdf = gd.from_pandas(df)
+    host_columns = (
+        columns.to_pandas() if isinstance(columns, gd.Index) else columns
+    )
+
+    expected = pd.DataFrame(df, columns=host_columns, index=index)
+    actual = gd.DataFrame(gdf, columns=columns, index=index)
+
+    assert_local_eq(actual, df, expected, host_columns)
+
+    expected = pd.DataFrame(df, columns=host_columns)
+    actual = gd.DataFrame(gdf._data, columns=columns, index=index)
+    if index is not None:
+        if df.shape == (0, 0):
+            expected = pd.DataFrame(columns=host_columns, index=index)
+        else:
+            expected.index = index
+    assert_local_eq(actual, df, expected, host_columns)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]},
+        {"a": [1.0, 2.0, 3.0], "b": [3.0, 4.0, 5.0], "c": [True, True, False]},
+        {"a": [1, 2, 3], "b": [3, 4, 5], "c": [True, True, False]},
+        {"a": [1, 2, 3], "b": [True, True, False], "c": [False, True, False]},
+        {
+            "a": [1.0, 2.0, 3.0],
+            "b": [True, True, False],
+            "c": [False, True, False],
+        },
+        {"a": [1, 2, 3], "b": [3, 4, 5], "c": [2.0, 3.0, 4.0]},
+        {"a": [1, 2, 3], "b": [2.0, 3.0, 4.0], "c": [5.0, 6.0, 4.0]},
+    ],
+)
+@pytest.mark.parametrize(
+    "aggs",
+    [
+        ["min", "sum", "max"],
+        ("min", "sum", "max"),
+        {"min", "sum", "max"},
+        "sum",
+        {"a": "sum", "b": "min", "c": "max"},
+        {"a": ["sum"], "b": ["min"], "c": ["max"]},
+        {"a": ("sum"), "b": ("min"), "c": ("max")},
+        {"a": {"sum"}, "b": {"min"}, "c": {"max"}},
+        {"a": ["sum", "min"], "b": ["sum", "max"], "c": ["min", "max"]},
+        {"a": ("sum", "min"), "b": ("sum", "max"), "c": ("min", "max")},
+        {"a": {"sum", "min"}, "b": {"sum", "max"}, "c": {"min", "max"}},
+    ],
+)
+def test_agg_for_dataframes(data, aggs):
+    pdf = pd.DataFrame(data)
+    gdf = gd.DataFrame(data)
+
+    expect = pdf.agg(aggs)
+    got = gdf.agg(aggs)
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize("aggs", [{"a": np.sum, "b": np.min, "c": np.max}])
+def test_agg_for_unsupported_function(aggs):
+    gdf = gd.DataFrame(
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
+    )
+
+    with pytest.raises(NotImplementedError):
+        gdf.agg(aggs)
+
+
+@pytest.mark.parametrize("aggs", ["asdf"])
+def test_agg_for_dataframe_with_invalid_function(aggs):
+    gdf = gd.DataFrame(
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
+    )
+
+    with pytest.raises(
+        AttributeError,
+        match=f"{aggs} is not a valid function for 'DataFrame' object",
+    ):
+        gdf.agg(aggs)
+
+
+@pytest.mark.parametrize("aggs", [{"a": "asdf"}])
+def test_agg_for_series_with_invalid_function(aggs):
+    gdf = gd.DataFrame(
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
+    )
+
+    with pytest.raises(
+        AttributeError,
+        match=f"{aggs['a']} is not a valid function for 'Series' object",
+    ):
+        gdf.agg(aggs)
+
+
+@pytest.mark.parametrize(
+    "aggs",
+    [
+        "sum",
+        ["min", "sum", "max"],
+        {"a": {"sum", "min"}, "b": {"sum", "max"}, "c": {"min", "max"}},
+    ],
+)
+def test_agg_for_dataframe_with_string_columns(aggs):
+    gdf = gd.DataFrame(
+        {"a": ["m", "n", "o"], "b": ["t", "u", "v"], "c": ["x", "y", "z"]},
+        index=["a", "b", "c"],
+    )
+
+    with pytest.raises(
+        NotImplementedError,
+        match=re.escape(
+            "DataFrame.agg() is not supported for "
+            "frames containing string columns"
+        ),
+    ):
+        gdf.agg(aggs)

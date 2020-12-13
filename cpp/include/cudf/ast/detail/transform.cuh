@@ -76,7 +76,7 @@ struct unary_row_output : public row_output {
                              detail::device_data_reference output) const
   {
     using OperatorFunctor = detail::operator_functor<op>;
-    using Out             = simt::std::invoke_result_t<OperatorFunctor, Input>;
+    using Out             = cuda::std::invoke_result_t<OperatorFunctor, Input>;
     resolve_output<Out>(output, row_index, OperatorFunctor{}(input));
   }
 
@@ -104,7 +104,7 @@ struct binary_row_output : public row_output {
                              detail::device_data_reference output) const
   {
     using OperatorFunctor = detail::operator_functor<op>;
-    using Out             = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
+    using Out             = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
     resolve_output<Out>(output, row_index, OperatorFunctor{}(lhs, rhs));
   }
 
