@@ -16,9 +16,7 @@ def from_dlpack(pycapsule_obj):
 
     This function takes a PyCapsule object which contains a pointer to
     a DLPack tensor as input, and returns a cuDF object. This function deep
-    copies the data in the DLPack tensor into a cuDF object. This function
-    assumes column-major (Fortran order) input. If the input tensor is
-    row-major, transpose it before passing it to this function.
+    copies the data in the DLPack tensor into a cuDF object.
 
     Parameters
     ----------
@@ -30,7 +28,12 @@ def from_dlpack(pycapsule_obj):
     -------
     A cuDF DataFrame or Series depending on if the input DLPack tensor is 1D
     or 2D.
-    """
+
+    Notes
+    -----
+    cuDF from_dlpack() assumes column-major (Fortran order) input. If the input
+    tensor is row-major, transpose it before passing it to this function.
+"""
 
     res = libdlpack.from_dlpack(pycapsule_obj)
 
@@ -49,9 +52,7 @@ def to_dlpack(cudf_obj):
 
     This function takes a cuDF object as input, and returns a PyCapsule object
     which contains a pointer to DLPack tensor. This function deep copies
-    the data in the cuDF object into the DLPack tensor. This function produces
-    column-major (Fortran order) output. If the output tensor needs to be
-    row major, transpose the output of this function.
+    the data in the cuDF object into the DLPack tensor.
 
     Parameters
     ----------
@@ -61,6 +62,11 @@ def to_dlpack(cudf_obj):
     Returns
     -------
     A  DLPack tensor pointer which is encapsulated in a PyCapsule object.
+
+    Notes
+    -----
+    cuDF to_dlpack() produces column-major (Fortran order) output. If the
+    output tensor needs to be row major, transpose the output of this function.
     """
     if len(cudf_obj) == 0:
         raise ValueError("Cannot create DLPack tensor of 0 size")
