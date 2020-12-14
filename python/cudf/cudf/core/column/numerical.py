@@ -17,6 +17,7 @@ from cudf.utils.dtypes import (
     min_column_type,
     min_signed_type,
     numeric_normalize_types,
+    to_cudf_compatible_scalar,
 )
 
 
@@ -449,6 +450,7 @@ class NumericalColumn(column.ColumnBase):
         columns, returns the offset of the first larger value
         if closest=True.
         """
+        value = to_cudf_compatible_scalar(value)
         if not pd.api.types.is_number(value):
             raise ValueError("Expected a numeric value")
         found = 0
@@ -477,6 +479,7 @@ class NumericalColumn(column.ColumnBase):
         columns, returns the offset of the last smaller value
         if closest=True.
         """
+        value = to_cudf_compatible_scalar(value)
         if not pd.api.types.is_number(value):
             raise ValueError("Expected a numeric value")
         found = 0

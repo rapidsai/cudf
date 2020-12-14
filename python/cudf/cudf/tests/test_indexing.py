@@ -1335,3 +1335,11 @@ def test_loc_bad_key_type_string_index(key):
     gsr = cudf.from_pandas(psr)
     assert_exceptions_equal(lambda: psr[key], lambda: gsr[key])
     assert_exceptions_equal(lambda: psr.loc[key], lambda: gsr.loc[key])
+
+
+def test_loc_zero_dim_array():
+    psr = pd.Series([1, 2, 3])
+    gsr = cudf.from_pandas(psr)
+
+    assert_eq(psr[np.array(0)], gsr[np.array(0)])
+    assert_eq(psr[np.array([0])[0]], gsr[np.array([0])[0]])
