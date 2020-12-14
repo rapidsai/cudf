@@ -1321,7 +1321,7 @@ def test_iloc_with_lists(data, key):
     assert_eq(psr.iloc[key], gsr.iloc[key])
 
 
-@pytest.mark.parametrize("key", [5, -10, "0", "a"])
+@pytest.mark.parametrize("key", [5, -10, "0", "a", np.array(5), np.array("a")])
 def test_loc_bad_key_type(key):
     psr = pd.Series([1, 2, 3])
     gsr = cudf.from_pandas(psr)
@@ -1329,7 +1329,7 @@ def test_loc_bad_key_type(key):
     assert_exceptions_equal(lambda: psr.loc[key], lambda: gsr.loc[key])
 
 
-@pytest.mark.parametrize("key", ["b", 1.0])
+@pytest.mark.parametrize("key", ["b", 1.0, np.array("b")])
 def test_loc_bad_key_type_string_index(key):
     psr = pd.Series([1, 2, 3], index=["a", "1", "c"])
     gsr = cudf.from_pandas(psr)
