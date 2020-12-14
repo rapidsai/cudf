@@ -140,47 +140,22 @@ TYPED_TEST(groupby_sum_test, null_keys_and_values)
 TYPED_TEST(groupby_sum_test, dictionary)
 {
   using K = int32_t;
-  using V = TypeParam;  // int32_t;
+  using V = TypeParam;
   using R = cudf::detail::target_type_t<V, aggregation::SUM>;
 
   // clang-format off
-  fixed_width_column_wrapper<K> keys_w     { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-  fixed_width_column_wrapper<V, int> vals_w{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  fixed_width_column_wrapper<K>     keys{ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  dictionary_column_wrapper<V, int> vals{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-  fixed_width_column_wrapper<K> expect_keys_w   { 1, 2,  3 };
+  fixed_width_column_wrapper<K>      expect_keys{ 1, 2,  3 };
   fixed_width_column_wrapper<R, int> expect_vals{ 9, 19, 17};
   // clang-format on
 
-  auto keys        = cudf::dictionary::encode(keys_w);
-  auto vals        = cudf::dictionary::encode(vals_w);
-  auto expect_keys = cudf::dictionary::encode(expect_keys_w);
-
-  test_single_agg(
-    keys->view(), vals_w, expect_keys->view(), expect_vals, cudf::make_sum_aggregation());
-  test_single_agg(keys->view(),
-                  vals_w,
-                  expect_keys->view(),
-                  expect_vals,
-                  cudf::make_sum_aggregation(),
-                  force_use_sort_impl::YES);
-
   // These tests will not work until the following ptxas bug is fixed in 10.2
   // https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
-  // test_single_agg(keys_w, vals->view(), expect_keys_w, expect_vals,
-  // cudf::make_sum_aggregation()); test_single_agg(
-  //  keys->view(), vals->view(), expect_keys->view(), expect_vals, cudf::make_sum_aggregation());
-  // test_single_agg(keys_w,
-  //                vals->view(),
-  //                expect_keys_w,
-  //                expect_vals,
-  //                cudf::make_sum_aggregation(),
-  //                force_use_sort_impl::YES);
-  // test_single_agg(keys->view(),
-  //                vals->view(),
-  //                expect_keys->view(),
-  //                expect_vals,
-  //                cudf::make_sum_aggregation(),
-  //                force_use_sort_impl::YES);
+  // test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_sum_aggregation());
+  // test_single_agg(
+  //  keys, vals, expect_keys, expect_vals, cudf::make_sum_aggregation(), force_use_sort_impl::YES);
 }
 
 }  // namespace test

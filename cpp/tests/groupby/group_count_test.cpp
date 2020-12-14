@@ -175,42 +175,19 @@ struct groupby_dictionary_count_test : public cudf::test::BaseFixture {
 TEST_F(groupby_dictionary_count_test, basic)
 {
   using K = int32_t;
-  using V = cudf::string_view;
+  using V = std::string;
   using R = cudf::detail::target_type_t<V, aggregation::COUNT_VALID>;
 
-  strings_column_wrapper keys_w{"1", "3", "3", "5", "5", "0"};
-  fixed_width_column_wrapper<K> vals_w{1, 1, 1, 1, 1, 1};
-  strings_column_wrapper expect_keys_w{"0", "1", "3", "5"};
-  fixed_width_column_wrapper<R, int> expect_vals{1, 1, 2, 2};
+  // clang-format off
+  strings_column_wrapper       keys{"1", "3", "3", "5", "5", "0"};
+  dictionary_column_wrapper<K> vals{ 1,   1,   1,   1,   1,   1};
+  strings_column_wrapper             expect_keys{"0", "1", "3", "5"};
+  fixed_width_column_wrapper<R, int> expect_vals{ 1,   1,   2,   2};
+  // clang-format on
 
-  auto keys        = cudf::dictionary::encode(keys_w);
-  auto vals        = cudf::dictionary::encode(vals_w);
-  auto expect_keys = cudf::dictionary::encode(expect_keys_w);
-
+  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_count_aggregation());
   test_single_agg(
-    keys->view(), vals_w, expect_keys->view(), expect_vals, cudf::make_count_aggregation());
-  test_single_agg(keys_w, vals->view(), expect_keys_w, expect_vals, cudf::make_count_aggregation());
-  test_single_agg(
-    keys->view(), vals->view(), expect_keys->view(), expect_vals, cudf::make_count_aggregation());
-
-  test_single_agg(keys->view(),
-                  vals_w,
-                  expect_keys->view(),
-                  expect_vals,
-                  cudf::make_count_aggregation(),
-                  force_use_sort_impl::YES);
-  test_single_agg(keys_w,
-                  vals->view(),
-                  expect_keys_w,
-                  expect_vals,
-                  cudf::make_count_aggregation(),
-                  force_use_sort_impl::YES);
-  test_single_agg(keys->view(),
-                  vals->view(),
-                  expect_keys->view(),
-                  expect_vals,
-                  cudf::make_count_aggregation(),
-                  force_use_sort_impl::YES);
+    keys, vals, expect_keys, expect_vals, cudf::make_count_aggregation(), force_use_sort_impl::YES);
 }
 
 }  // namespace test

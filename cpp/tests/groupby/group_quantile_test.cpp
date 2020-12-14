@@ -199,32 +199,18 @@ TYPED_TEST(groupby_quantile_test, dictionary)
   using R = cudf::detail::target_type_t<V, aggregation::QUANTILE>;
 
   // clang-format off
-  fixed_width_column_wrapper<K> keys_w{ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-  fixed_width_column_wrapper<V> vals_w{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  fixed_width_column_wrapper<K> keys{ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  dictionary_column_wrapper<V>  vals{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
                                         //  { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3}
-  fixed_width_column_wrapper<K> expect_keys_w { 1,       2,          3      };
+  fixed_width_column_wrapper<K> expect_keys({ 1,       2,          3      });
                                         //  { 0, 3, 6, 1, 4, 5, 9, 2, 7, 8}
-  fixed_width_column_wrapper<R> expect_vals(  {   3.,        4.5,      7.   }, all_valid());
+  fixed_width_column_wrapper<R> expect_vals({ 3.,      4.5,        7.   }, all_valid());
   // clang-format on
 
-  auto keys        = cudf::dictionary::encode(keys_w);
-  auto vals        = cudf::dictionary::encode(vals_w);
-  auto expect_keys = cudf::dictionary::encode(expect_keys_w);
-
-  test_single_agg(keys->view(),
-                  vals_w,
-                  expect_keys->view(),
-                  expect_vals,
-                  cudf::make_quantile_aggregation({0.5}, interpolation::LINEAR));
-  test_single_agg(keys_w,
-                  vals->view(),
-                  expect_keys_w,
-                  expect_vals,
-                  cudf::make_quantile_aggregation({0.5}, interpolation::LINEAR));
-  test_single_agg(keys->view(),
-                  vals->view(),
-                  expect_keys->view(),
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
                   expect_vals,
                   cudf::make_quantile_aggregation({0.5}, interpolation::LINEAR));
 }
