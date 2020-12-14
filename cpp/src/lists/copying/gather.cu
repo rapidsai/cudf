@@ -198,44 +198,29 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  //repeat offsets of value_column for gather_map list sizes.
-  //Add to gather_map values
-  //pass to another gather.
-
-  // gather_map.child().type() == index_type.
   CUDF_EXPECTS(is_index_type(gather_map.child().type()), "Gather map should be list of index type");
   CUDF_EXPECTS(gather_map.size() == value_column.size(),
                "Gather map and list column should be same size");
   auto const gather_map_size = gather_map.child().size();
-  auto value_offsets  = value_column.offsets().begin<size_type>();
+  auto value_offsets         = value_column.offsets().begin<size_type>();
 
+  // Flattened gather indices
   auto child_gather_index =
     make_numeric_column(data_type{type_to_id<size_type>()}, gather_map_size);
   auto child_gather_index_begin = child_gather_index->mutable_view().begin<size_type>();
-  auto child_gather_index_end   = child_gather_index_begin + gather_map_size;
-  thrust::device_ptr<size_type> pt(child_gather_index_begin);
-  #define DEBUG_SEG_GATHER 1
+  auto child_gather_index_end   = child_gather_index->mutable_view().end<size_type>();
 
-  //*
   thrust::upper_bound(rmm::exec_policy(stream),
-                      gather_map.offsets().begin<size_type>()+1,
+                      gather_map.offsets().begin<size_type>() + 1,
                       gather_map.offsets().end<size_type>(),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(gather_map_size),
                       child_gather_index_begin);
-  if(DEBUG_SEG_GATHER) {
-    printf("\nv1:");
-    for (auto i : thrust::host_vector<size_type>(pt, pt + gather_map_size)) printf("%d,", i);
-    printf("\n");
-  }
-  thrust::gather(rmm::exec_policy(stream),
-                 child_gather_index_begin,
-                 child_gather_index_end,
-                 value_offsets,
-                 child_gather_index_begin);
 
-  if(DEBUG_SEG_GATHER) {
-    printf("\nv2:");
+  thrust::device_ptr<size_type> pt(child_gather_index_begin);
+  #define DEBUG_SEG_GATHER 1
+  if (DEBUG_SEG_GATHER) {
+    printf("\nv1:");
     for (auto i : thrust::host_vector<size_type>(pt, pt + gather_map_size)) printf("%d,", i);
     printf("\n");
   }
@@ -247,21 +232,15 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
     child_gather_index_end,
     map_begin,
     child_gather_index_begin,
-    [] __device__(size_type offset_idx, size_type sub_index) -> size_type {
-      return offset_idx + sub_index;
+    [value_offsets] __device__(size_type offset_idx, size_type sub_index) -> size_type {
+      return value_offsets[offset_idx] + sub_index;
     });
 
-  if(DEBUG_SEG_GATHER) {
+  if (DEBUG_SEG_GATHER) {
     printf("\nv3:");
     for (auto i : thrust::host_vector<size_type>(pt, pt + gather_map_size)) printf("%d,", i);
     printf("\n");
   }
-
-  // return child_gather_index;
-  // Add value_column offsets to gather_map.
-  // scatter offset to offset index, scan_by_key?
-  // binary search?
-  // then add gather_map values.
 
   // Call gather on child of value_column
   auto child_table = cudf::gather(table_view({value_column.child()}), *child_gather_index);
