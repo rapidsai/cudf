@@ -16,6 +16,7 @@
 
 #include <cudf/detail/gather.cuh>
 #include <cudf/lists/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -218,7 +219,7 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
                       child_gather_index_begin);
 
   thrust::device_ptr<size_type> pt(child_gather_index_begin);
-  #define DEBUG_SEG_GATHER 1
+#define DEBUG_SEG_GATHER 1
   if (DEBUG_SEG_GATHER) {
     printf("\nv1:");
     for (auto i : thrust::host_vector<size_type>(pt, pt + gather_map_size)) printf("%d,", i);
@@ -243,16 +244,22 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
   }
 
   // Call gather on child of value_column
-  auto child_table = cudf::gather(table_view({value_column.child()}), *child_gather_index);
+  auto child_table = cudf::detail::gather(table_view({value_column.child()}),
+                                          *child_gather_index,
+                                          out_of_bounds_policy::DONT_CHECK,
+                                          cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                          stream,
+                                          mr);
   auto child       = std::move(child_table->release().front());
 
   // Create list offsets from gather_map.
-  auto output_offset      = cudf::allocate_like(gather_map.offsets());
+  auto output_offset =
+    cudf::allocate_like(gather_map.offsets(), mask_allocation_policy::RETAIN, mr);
   auto output_offset_view = output_offset->mutable_view();
   cudf::copy_range_in_place(
     gather_map.offsets(), output_offset_view, 0, gather_map.offsets().size(), 0);
   // Assemble list column & return
-  auto null_mask       = cudf::copy_bitmask(gather_map.parent());
+  auto null_mask       = cudf::detail::copy_bitmask(gather_map.parent(), stream, mr);
   size_type null_count = gather_map.null_count();
   return make_lists_column(gather_map.size(),
                            std::move(output_offset),
