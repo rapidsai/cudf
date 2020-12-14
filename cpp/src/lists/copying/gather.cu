@@ -207,10 +207,7 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
   CUDF_EXPECTS(gather_map.size() == value_column.size(),
                "Gather map and list column should be same size");
   auto const gather_map_size = gather_map.child().size();
-  // cudf::detail::get_value<size_type>(gather_map.offsets(), gather_map.offsets().size() +
-  // gather_map.offset(), stream);
   auto value_offsets  = value_column.offsets().begin<size_type>();
-  auto gather_offsets = gather_map.offsets().begin<size_type>();
 
   auto child_gather_index =
     make_numeric_column(data_type{type_to_id<size_type>()}, gather_map_size);
@@ -218,30 +215,25 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
   auto child_gather_index_end   = child_gather_index_begin + gather_map_size;
   thrust::device_ptr<size_type> pt(child_gather_index_begin);
   #define DEBUG_SEG_GATHER 1
-  thrust::fill(rmm::exec_policy(stream), child_gather_index_begin, child_gather_index_end, 0);
 
-  auto size_not_zero  = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0), [gather_offsets] __device__(size_type i) -> int {
-      return (gather_offsets[i + 1] - gather_offsets[i]);
-    });
-  thrust::scatter_if(rmm::exec_policy(stream),
-                     value_offsets,
-                     value_offsets + gather_map.offsets().size() - 1,
-                     gather_map.offsets().begin<size_type>(),
-                     size_not_zero,
-                     child_gather_index_begin);
-  // FIXME: If null column is there, then index is missing for null column. so wrong indices.
+  //*
+  thrust::upper_bound(rmm::exec_policy(stream),
+                      gather_map.offsets().begin<size_type>()+1,
+                      gather_map.offsets().end<size_type>(),
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(gather_map_size),
+                      child_gather_index_begin);
   if(DEBUG_SEG_GATHER) {
     printf("\nv1:");
     for (auto i : thrust::host_vector<size_type>(pt, pt + gather_map_size)) printf("%d,", i);
     printf("\n");
   }
-  thrust::inclusive_scan(rmm::exec_policy(stream),
-                         child_gather_index_begin,
-                         child_gather_index_end,
-                         child_gather_index_begin,
-                         thrust::maximum<int>{});
-  //  */
+  thrust::gather(rmm::exec_policy(stream),
+                 child_gather_index_begin,
+                 child_gather_index_end,
+                 value_offsets,
+                 child_gather_index_begin);
+
   if(DEBUG_SEG_GATHER) {
     printf("\nv2:");
     for (auto i : thrust::host_vector<size_type>(pt, pt + gather_map_size)) printf("%d,", i);
