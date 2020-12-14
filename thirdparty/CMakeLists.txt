@@ -13,7 +13,7 @@ FetchContent_Declare(
     GIT_TAG        1.10.0
     GIT_SHALLOW    true
     # NOTE: If you change the GIT_TAG you will likely need to change this patch file too
-    PATCH_COMMAND  (git apply -R ${CMAKE_CURRENT_SOURCE_DIR}/thrust.patch || true) && git apply ${CMAKE_CURRENT_SOURCE_DIR}/thrust.patch
+    PATCH_COMMAND  git apply ${CMAKE_CURRENT_SOURCE_DIR}/thrust.patch
 )
 
 FetchContent_GetProperties(thrust)
