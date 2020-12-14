@@ -436,3 +436,24 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
     }
   }
 }
+
+TEST(SegmentedGather, child_index) {
+  using T = int32_t;
+  // List<T>
+  LCW<T> list{{1, 2, 3, 4}, {5}, {6, 7}, {8, 9, 10}};
+  // value_offsets 0, 4, 5, 7, 10
+  LCW<cudf::size_type> gather_map{{3, 2, 1, 0}, {0}, {}, {2,1}};
+  // gather_offsets 0, 4, 5, 5, 7
+  // 0,0,0,0,  0,  0,0
+  // 0,0,0,0,  4,  5/7,0
+  // 0,0,0,0,  4,  7, 7
+
+  auto results = cudf::lists::detail::segmented_gather(
+    cudf::lists_column_view{list}, cudf::lists_column_view{gather_map}, rmm::cuda_stream_view{0});
+
+  LCW<cudf::size_type> expected{{4, 3, 2, 1}, {5}, {}, {10, 9}};
+  cudf::test::print(*results);
+  cudf::test::print(expected);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+}
