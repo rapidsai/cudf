@@ -142,11 +142,10 @@ def test_decimal_dtype():
     assert dt == DecimalDtype.from_arrow(pa.decimal128(4, 2))
 
 
-@pytest.mark.parametrize("fields", ["int64", "datetime64[ms]", "int32"])
-def test_interval_dtype_pyarrow_round_trip(fields):
-    pa_array = pd.core.arrays._arrow_utils.ArrowIntervalType(
-        "int64", closed="right"
-    )
+@pytest.mark.parametrize("fields", ["int64", "int32"])
+@pytest.mark.parametrize("closed", ["left", "right"])
+def test_interval_dtype_pyarrow_round_trip(fields, closed):
+    pa_array = pd.core.arrays._arrow_utils.ArrowIntervalType(fields, closed)
     expect = pa_array
     got = IntervalDtype.from_arrow(expect).to_arrow()
     assert expect.equals(got)

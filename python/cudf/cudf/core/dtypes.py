@@ -261,7 +261,7 @@ class IntervalDtype(StructDtype):
 
     @classmethod
     def from_arrow(cls, typ):
-        return IntervalDtype(typ.subtype.to_pandas_dtype())
+        return IntervalDtype(typ.subtype.to_pandas_dtype(), typ.closed)
 
     def to_arrow(self):
         return ArrowIntervalType(

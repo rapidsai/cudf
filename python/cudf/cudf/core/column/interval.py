@@ -12,6 +12,7 @@ class IntervalColumn(StructColumn):
         offset=0,
         null_count=None,
         children=(),
+        closed="right",
     ):
 
         super().__init__(
@@ -23,9 +24,11 @@ class IntervalColumn(StructColumn):
             null_count=null_count,
             children=children,
         )
+        self.closed = closed
 
     @classmethod
     def from_arrow(self, data):
+        # breakpoint()
         new_col = super().from_arrow(data.storage)
         size = len(data)
         dtype = cudf.core.dtypes.IntervalDtype.from_arrow(data.type)
@@ -36,6 +39,7 @@ class IntervalColumn(StructColumn):
         offset = data.offset
         null_count = data.null_count
         children = new_col.children
+        closed = dtype.closed
 
         return IntervalColumn(
             size=size,
@@ -44,6 +48,7 @@ class IntervalColumn(StructColumn):
             offset=offset,
             null_count=null_count,
             children=children,
+            closed=closed,
         )
 
     def to_arrow(self):
@@ -51,4 +56,4 @@ class IntervalColumn(StructColumn):
         return pa.ExtensionArray.from_storage(typ, super().to_arrow())
 
     def copy(self, deep=True):
-        return super().copy(deep=deep).as_interval_column()
+        return super().copy(deep=deep).as_interval_column(self.closed)

@@ -1898,6 +1898,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                     sr = pd.Series(arbitrary, dtype="str")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 elif type(dtype) == pd.core.dtypes.dtypes.IntervalDtype:
+                    # breakpoint()
                     sr = pd.Series(arbitrary, dtype="interval")
                     data = as_column(sr, nan_as_null=nan_as_null)
                 else:
