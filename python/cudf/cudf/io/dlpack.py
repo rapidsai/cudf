@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 from cudf._lib import interop as libdlpack
 from cudf.core.column import ColumnBase
