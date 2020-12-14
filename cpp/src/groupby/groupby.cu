@@ -122,7 +122,7 @@ void verify_valid_requests(std::vector<aggregation_request> const& requests)
 // The aggregations listed in the lambda below will not work with a values column of type
 // dictionary if this is compiled with nvcc/ptxas 10.2.
 // https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
-#if (__CUDACC_VER_MAJOR__ != 10) or (__CUDACC_VER_MINOR__ != 2)
+#if (__CUDACC_VER_MAJOR__ == 10) and (__CUDACC_VER_MINOR__ == 2)
   CUDF_EXPECTS(
     std::all_of(
       requests.begin(),
