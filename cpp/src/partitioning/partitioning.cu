@@ -28,7 +28,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include "cudf/utilities/type_dispatcher.hpp"
 
 namespace cudf {
 namespace {
