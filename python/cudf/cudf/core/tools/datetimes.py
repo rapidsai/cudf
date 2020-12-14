@@ -334,6 +334,11 @@ def get_units(value):
     return value
 
 
+class _DateOffsetScalars(object):
+    def __init__(self, scalars):
+        self._gpu_scalars = scalars
+
+
 class DateOffset(pd.DateOffset):
     def __init__(self, n=1, normalize=False, **kwds):
         """
@@ -434,11 +439,12 @@ class DateOffset(pd.DateOffset):
 
         supported_kwargs = {"months"}
 
+        scalars = {}
         for k, v in kwds.items():
             if k in all_possible_kwargs:
                 # Months must be int16
                 dtype = "int16" if k == "months" else None
-                kwds[k] = cudf.Scalar(v, dtype=dtype)
+                scalars[k] = cudf.Scalar(v, dtype=dtype)
 
         super().__init__(n=n, normalize=normalize, **kwds)
 
@@ -448,9 +454,11 @@ class DateOffset(pd.DateOffset):
                 f"Keyword arguments '{','.join(list(wrong_kwargs))}'"
                 " are not yet supported in cuDF DateOffsets"
             )
+        self._scalars = _DateOffsetScalars(scalars)
 
     def _generate_column(self, size, op):
-        months = -self.months if op == "sub" else self.months
+        months = self._scalars._gpu_scalars["months"]
+        months = -months if op == "sub" else months
         col = cudf.core.column.as_column(months, length=size)
         return col
 
@@ -459,3 +467,9 @@ class DateOffset(pd.DateOffset):
         # some logic could be implemented here for more complex cases
         # such as +1 year, -12 months
         return all([i == 0 for i in self.kwds.values()])
+
+    def __setattr__(self, name, value):
+        if not isinstance(value, _DateOffsetScalars):
+            raise AttributeError("DateOffset objects are immutable.")
+        else:
+            object.__setattr__(self, name, value)
