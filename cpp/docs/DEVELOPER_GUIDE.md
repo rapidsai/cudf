@@ -30,12 +30,12 @@ with the `*_view` suffix is non-owning. For more detail see the
 and produce `unique_ptr`s to owning objects as output. For example, 
 
 ```c++
-std::unique_ptr<table> sort(table_view input);
+std::unique_ptr<table> sort(table_view const& input);
 ```
 
 ## `rmm::device_memory_resource`<a name="memory_resource"></a>
 
-`libcudf` Allocates all memory via RMM memory resources (MR). See the 
+`libcudf` Allocates all device memory via RMM memory resources (MR). See the 
 [RMM documentation](https://github.com/rapidsai/rmm/blob/main/README.md) for details.
 
 ### Current Device Memory Resource
@@ -200,12 +200,11 @@ namespace detail{
     // defaulted stream parameter
     void external_function(..., rmm::cuda_stream_view stream){
         // implementation uses stream w/ async APIs
-        RMM_ALLOC(...,stream);
+        rmm::device_buffer buff(...,stream);
         CUDA_TRY(cudaMemcpyAsync(...,stream.value()));
         kernel<<<..., stream>>>(...);
         thrust::algorithm(rmm::exec_policy(stream), ...);
         stream.synchronize();
-        RMM_FREE(...,stream);
     }
 } // namespace detail
 
@@ -260,7 +259,6 @@ rmm::device_buffer some_function(..., rmm::mr::device_memory_resource mr * = rmm
 
 ### Memory Management
 
-Explicit memory management through calls to `RMM_ALLOC/RMM_FREE` should be avoided whenever possible in favor of a construct with automated lifetime management, i.e., a RAII object. 
 RMM provides three classes built to use `device_memory_resource`(*)s for device memory allocation with automated lifetime management:
 
 #### `rmm::device_buffer`
@@ -372,8 +370,6 @@ namespace cudf{
 For most functions, the top-level `cudf` namespace is sufficient. However, for logically grouping a broad set of functions, further namespaces may be used. For example, there are numerous functions that are specific to columns of Strings. These functions are put in the `cudf::strings::` namespace. Similarly, functionality used exclusively for unit testing is placed in the `cudf::test::` namespace. 
 
 
-### `experimental`
-During the transition period, symbols in `libcudf++` that conflict with old symbol names should be placed in the `cudf::experimental` namespace to prevent collision with the old symbols, e.g., `cudf::experimental::table` and `cudf::experimental::type_dispatcher`. Once the transition is complete, the `experimental` namespace will be removed.
 
 ### Internal
 
@@ -499,7 +495,7 @@ template<cudf::type_id t> struct always_int{ using type = int32_t; }
 // This will always invoke `operator()<int32_t>`
 cudf::type_dispatcher<always_int>(data_type, f);
 ```
-
+## Specializing Type Dispatched Code Paths
 It is often necessary to customize the dispatched `operator()` for different types. 
 This can be done in several ways.
 
@@ -881,13 +877,6 @@ cdef extern from "cudf/legacy/copying.hpp" namespace "cudf" nogil:
 
 ## Strings Support<a name="string_support"></a>
 
-One of the more significant changes in `libcudf++` is the addition of native support for columns of strings. 
-Previously, string support in libcudf was accomplished via the `NVCategory` class.
-See the [NVCategory](#nvcategory_changes) section for more detail. 
-This class will no longer exist in `libcudf++`, but a replacement "dictionary" column type is planned for the future to replace the functionality of NVCategory.
-
-All libcudf functions will now need to be able to operate on a column of string elements directly. 
-This poses a set of unique challenges, as unlike all previous libcudf types, the elements in a string column are variable width. 
 In order to represent variable width strings, libcudf uses a *compound* column (i.e., column with children).
 The parent column's type is `STRING` and contains no data, but contains the count of the number of strings and the bitmask representing the validity of each string element.
 The parent has two children.
@@ -955,27 +944,3 @@ The cudf strings column only supports UTF-8 encoding for strings data. [UTF-8](h
 
 The `string_view.cuh` also includes some utility methods for reading and writing (`to_char_utf8/from_char_utf8`) individual UTF-8 characters to/from byte arrays.
 
-
-### NVCategory<a name="nvcategory_changes"></a>
-
-Previously, libcudf's support for strings columns relied on the `NVCategory` class. 
-`NVCategory` was an object that emulated a *categorical* or *dictionary* column. A dictionary column is a compound column composed of a *dictionary* and *indices* into that dictionary. 
-The dictionary contains the unique set of values within the column.
-The indices contain the offset into the dictionary for each element in the column, e.g., element `i` is given by `dictionary[indices[i]]`.
-See the example below.
-
-Furthermore, the dictionary is sorted.
-This means the indices are order preserving, and relational comparisons between values in the indices column will provide the same ordering as if the strings were compared directly.
-For example, in the snippet below, `"green"` is ordered lexicographically before `"red"`, and `"green"`'s index is `0` where `"red"`'s is `1`.
-Since `0` is ordered before `1`, comparing `0` and `1` will provide the same ordering as comparing `"green"` and `"red"` directly.
-
-```c++
-strings:    {"red", "yellow", "red", "green", "yellow"}
-dictionary: {"green", "red", "yellow"}
-indices:    {1, 2, 1, 0, 2}
-```
-`libcudf` leveraged the order preserving nature of the indices to allow comparing string elements without ever having to compare strings directly. 
-In effect, this allowed us to treat columns of strings as fixed-width, numeric columns which greatly simplified handling of string columns. 
-
-However, there was extra work required to manage the `NVCategory` columns--all of which should be removed when porting to libcudf++.
-Any use of a function from `cudf/cpp/include/cudf/utilities/legacy/nvcategory_util.hpp` should be removed from the new implementation.
