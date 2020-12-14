@@ -33,7 +33,7 @@ def from_dlpack(pycapsule_obj):
     -----
     cuDF from_dlpack() assumes column-major (Fortran order) input. If the input
     tensor is row-major, transpose it before passing it to this function.
-"""
+    """
 
     res = libdlpack.from_dlpack(pycapsule_obj)
 
