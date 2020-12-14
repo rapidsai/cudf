@@ -33,6 +33,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/detail/copy.h>
 #include <thrust/transform.h>
@@ -331,7 +332,11 @@ __inline__ __device__ cudf::timestamp_s decode_value(char const *begin,
                                                      parse_options_view const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
-  return timestamp_s{cudf::duration_s{milli / 1000}};
+  if (milli == -1) {
+    return timestamp_s{cudf::duration_s{convertStrToInteger<int64_t>(begin, end)}};
+  } else {
+    return timestamp_s{cudf::duration_s{milli / 1000}};
+  }
 }
 
 template <>
@@ -340,7 +345,11 @@ __inline__ __device__ cudf::timestamp_ms decode_value(char const *begin,
                                                       parse_options_view const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
-  return timestamp_ms{cudf::duration_ms{milli}};
+  if (milli == -1) {
+    return timestamp_ms{cudf::duration_ms{convertStrToInteger<int64_t>(begin, end)}};
+  } else {
+    return timestamp_ms{cudf::duration_ms{milli}};
+  }
 }
 
 template <>
@@ -349,7 +358,11 @@ __inline__ __device__ cudf::timestamp_us decode_value(char const *begin,
                                                       parse_options_view const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
-  return timestamp_us{cudf::duration_us{milli * 1000}};
+  if (milli == -1) {
+    return timestamp_us{cudf::duration_us{convertStrToInteger<int64_t>(begin, end)}};
+  } else {
+    return timestamp_us{cudf::duration_us{milli * 1000}};
+  }
 }
 
 template <>
@@ -358,7 +371,11 @@ __inline__ __device__ cudf::timestamp_ns decode_value(char const *begin,
                                                       parse_options_view const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
-  return timestamp_ns{cudf::duration_ns{milli * 1000000}};
+  if (milli == -1) {
+    return timestamp_ns{cudf::duration_ns{convertStrToInteger<int64_t>(begin, end)}};
+  } else {
+    return timestamp_ns{cudf::duration_ns{milli * 1000000}};
+  }
 }
 
 #ifndef DURATION_DECODE_VALUE
@@ -1013,7 +1030,7 @@ size_t __host__ count_blank_rows(const cudf::io::parse_options_view &opts,
   const auto comment  = opts.comment != '\0' ? opts.comment : newline;
   const auto carriage = (opts.skipblanklines && opts.terminator == '\n') ? '\r' : comment;
   return thrust::count_if(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     row_offsets.begin(),
     row_offsets.end(),
     [data = data, newline, comment, carriage] __device__(const uint64_t pos) {
@@ -1032,7 +1049,7 @@ void __host__ remove_blank_rows(cudf::io::parse_options_view const &options,
   const auto comment  = options.comment != '\0' ? options.comment : newline;
   const auto carriage = (options.skipblanklines && options.terminator == '\n') ? '\r' : comment;
   auto new_end        = thrust::remove_if(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     row_offsets.begin(),
     row_offsets.end(),
     [data = data, d_size, newline, comment, carriage] __device__(const uint64_t pos) {

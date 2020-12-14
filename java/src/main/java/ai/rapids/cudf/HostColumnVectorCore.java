@@ -124,9 +124,9 @@ public class HostColumnVectorCore implements AutoCloseable {
    * @return an object that would need to be casted to appropriate type based on this vector's data type
    */
   Object getElement(int rowIndex) {
-    if (type == DType.LIST) {
+    if (type.equals(DType.LIST)) {
       return getList(rowIndex);
-    } else if (type == DType.STRUCT) {
+    } else if (type.equals(DType.STRUCT)) {
       return getStruct(rowIndex);
     } else {
       if (isNull(rowIndex)) {
@@ -399,7 +399,7 @@ public class HostColumnVectorCore implements AutoCloseable {
    */
   public List getList(long rowIndex) {
     assert rowIndex < rows;
-    assert type == DType.LIST;
+    assert type.equals(DType.LIST);
     List retList = new ArrayList();
     int start = (int)getStartListOffset(rowIndex);
     int end = (int)getEndListOffset(rowIndex);
@@ -421,7 +421,7 @@ public class HostColumnVectorCore implements AutoCloseable {
    */
   public HostColumnVector.StructData getStruct(int rowIndex) {
     assert rowIndex < rows;
-    assert type == DType.STRUCT;
+    assert type.equals(DType.STRUCT);
     List<Object> retList = new ArrayList<>();
     // check if null or empty
     if (isNull(rowIndex)) {

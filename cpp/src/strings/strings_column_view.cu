@@ -21,6 +21,7 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/transform.h>
@@ -147,7 +148,7 @@ std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>> create_offset
   rmm::device_vector<size_type> offsets(count + 1);
   // normalize the offset values for the column offset
   thrust::transform(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     d_offsets,
     d_offsets + count + 1,
     offsets.begin(),

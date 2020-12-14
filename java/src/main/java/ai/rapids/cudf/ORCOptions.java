@@ -68,7 +68,7 @@ public class ORCOptions extends ColumnFilterOptions {
      * @return builder for chaining
      */
     public ORCOptions.Builder withTimeUnit(DType unit) {
-      assert unit.isTimestamp();
+      assert unit.isTimestampType();
       this.unit = unit;
       return this;
     }

@@ -24,6 +24,7 @@
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace detail {
@@ -228,10 +229,10 @@ struct update_target_element<
 
     using Target = target_type_t<Source, aggregation::ARGMAX>;
     auto old     = atomicCAS(&target.element<Target>(target_index), ARGMAX_SENTINEL, source_index);
-    if (old == ARGMAX_SENTINEL) { return; }
-
-    while (source.element<Source>(source_index) > source.element<Source>(old)) {
-      old = atomicCAS(&target.element<Target>(target_index), old, source_index);
+    if (old != ARGMAX_SENTINEL) {
+      while (source.element<Source>(source_index) > source.element<Source>(old)) {
+        old = atomicCAS(&target.element<Target>(target_index), old, source_index);
+      }
     }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
@@ -255,10 +256,10 @@ struct update_target_element<
 
     using Target = target_type_t<Source, aggregation::ARGMIN>;
     auto old     = atomicCAS(&target.element<Target>(target_index), ARGMIN_SENTINEL, source_index);
-    if (old == ARGMIN_SENTINEL) { return; }
-
-    while (source.element<Source>(source_index) < source.element<Source>(old)) {
-      old = atomicCAS(&target.element<Target>(target_index), old, source_index);
+    if (old != ARGMIN_SENTINEL) {
+      while (source.element<Source>(source_index) < source.element<Source>(old)) {
+        old = atomicCAS(&target.element<Target>(target_index), old, source_index);
+      }
     }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
@@ -423,10 +424,7 @@ struct identity_initializer {
   std::enable_if_t<is_supported<T, k>(), void> operator()(mutable_column_view const& col,
                                                           rmm::cuda_stream_view stream)
   {
-    thrust::fill(rmm::exec_policy(stream)->on(stream.value()),
-                 col.begin<T>(),
-                 col.end<T>(),
-                 get_identity<T, k>());
+    thrust::fill(rmm::exec_policy(stream), col.begin<T>(), col.end<T>(), get_identity<T, k>());
   }
 
   template <typename T, aggregation::Kind k>

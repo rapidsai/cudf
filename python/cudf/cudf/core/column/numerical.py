@@ -107,6 +107,8 @@ class NumericalColumn(column.ColumnBase):
         if other is None:
             return other
         if isinstance(other, cudf.Scalar):
+            if self.dtype == other.dtype:
+                return other
             # expensive device-host transfer just to
             # adjust the dtype
             other = other.value
@@ -130,7 +132,7 @@ class NumericalColumn(column.ColumnBase):
                     other, size=len(self), dtype=other_dtype
                 )
                 return column.build_column(
-                    data=Buffer.from_array_lik(ary),
+                    data=Buffer.from_array_like(ary),
                     dtype=ary.dtype,
                     mask=self.mask,
                 )

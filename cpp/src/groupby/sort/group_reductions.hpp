@@ -19,8 +19,8 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
 
 #include <memory>
 
