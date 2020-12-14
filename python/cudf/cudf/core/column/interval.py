@@ -28,7 +28,6 @@ class IntervalColumn(StructColumn):
 
     @classmethod
     def from_arrow(self, data):
-        # breakpoint()
         new_col = super().from_arrow(data.storage)
         size = len(data)
         dtype = cudf.core.dtypes.IntervalDtype.from_arrow(data.type)

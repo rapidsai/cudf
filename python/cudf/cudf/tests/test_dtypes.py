@@ -143,7 +143,7 @@ def test_decimal_dtype():
 
 
 @pytest.mark.parametrize("fields", ["int64", "int32"])
-@pytest.mark.parametrize("closed", ["left", "right"])
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
 def test_interval_dtype_pyarrow_round_trip(fields, closed):
     pa_array = pd.core.arrays._arrow_utils.ArrowIntervalType(fields, closed)
     expect = pa_array
