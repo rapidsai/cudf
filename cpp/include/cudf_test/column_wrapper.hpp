@@ -1054,6 +1054,16 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
   operator dictionary_column_view() const { return cudf::dictionary_column_view{wrapped->view()}; }
 
   /**
+   * @brief Access keys column view
+   */
+  column_view keys() const { return cudf::dictionary_column_view{wrapped->view()}.keys(); }
+
+  /**
+   * @brief Access indices column view
+   */
+  column_view indices() const { return cudf::dictionary_column_view{wrapped->view()}.indices(); }
+
+  /**
    * @brief Default constructor initializes an empty dictionary column of strings
    */
   dictionary_column_wrapper() : dictionary_column_wrapper(std::initializer_list<std::string>{}) {}
