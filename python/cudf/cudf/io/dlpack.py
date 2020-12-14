@@ -17,8 +17,8 @@ def from_dlpack(pycapsule_obj):
     This function takes a PyCapsule object which contains a pointer to
     a DLPack tensor as input, and returns a cuDF object. This function deep
     copies the data in the DLPack tensor into a cuDF object. This function
-    assumes column-major (Fortran order) input. If the input tensor is row-major,
-    transpose it before passing it to this function.
+    assumes column-major (Fortran order) input. If the input tensor is
+    row-major, transpose it before passing it to this function.
 
     Parameters
     ----------
@@ -50,7 +50,7 @@ def to_dlpack(cudf_obj):
     This function takes a cuDF object as input, and returns a PyCapsule object
     which contains a pointer to DLPack tensor. This function deep copies
     the data in the cuDF object into the DLPack tensor. This function produces
-    column-major (Fortran order) output. If the output tensor needs to be 
+    column-major (Fortran order) output. If the output tensor needs to be
     row major, transpose the output of this function.
 
     Parameters
