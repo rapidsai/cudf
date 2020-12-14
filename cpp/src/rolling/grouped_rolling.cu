@@ -180,7 +180,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
   }
 }
 
-} // namespace detail;
+}  // namespace detail
 
 std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                column_view const& input,
@@ -191,17 +191,15 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                std::unique_ptr<aggregation> const& aggr,
                                                rmm::mr::device_memory_resource* mr)
 {
-  return detail::grouped_rolling_window(
-    group_keys,
-    input,
-    default_outputs,
-    preceding_window_bounds,
-    following_window_bounds,
-    min_periods,
-    aggr,
-    rmm::cuda_stream_default,
-    mr
-  );
+  return detail::grouped_rolling_window(group_keys,
+                                        input,
+                                        default_outputs,
+                                        preceding_window_bounds,
+                                        following_window_bounds,
+                                        min_periods,
+                                        aggr,
+                                        rmm::cuda_stream_default,
+                                        mr);
 }
 
 namespace {
@@ -263,18 +261,13 @@ std::unique_ptr<column> expand_to_column(Calculator const& calc,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  auto window_column = cudf::make_fixed_width_column(cudf::data_type{type_id::INT32},
-                                                     num_rows,
-                                                     cudf::mask_state::UNALLOCATED,
-                                                     stream,
-                                                     mr);
+  auto window_column = cudf::make_fixed_width_column(
+    cudf::data_type{type_id::INT32}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
 
   auto begin = thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), calc);
 
-  thrust::copy_n(rmm::exec_policy(stream),
-                 begin,
-                 num_rows,
-                 window_column->mutable_view().data<size_type>());
+  thrust::copy_n(
+    rmm::exec_policy(stream), begin, num_rows, window_column->mutable_view().data<size_type>());
 
   return window_column;
 }
@@ -872,7 +865,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
     mr);
 }
 
-} // namespace detail;
+}  // namespace detail
 
 std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& group_keys,
                                                           column_view const& timestamp_column,
@@ -884,18 +877,16 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                                           std::unique_ptr<aggregation> const& aggr,
                                                           rmm::mr::device_memory_resource* mr)
 {
-  return grouped_time_range_rolling_window(
-    group_keys,
-    timestamp_column,
-    timestamp_order,
-    input,
-    window_bounds::get(preceding_window_in_days),
-    window_bounds::get(following_window_in_days),
-    min_periods,
-    aggr,
-    rmm::cuda_stream_default,
-    mr
-  );
+  return grouped_time_range_rolling_window(group_keys,
+                                           timestamp_column,
+                                           timestamp_order,
+                                           input,
+                                           window_bounds::get(preceding_window_in_days),
+                                           window_bounds::get(following_window_in_days),
+                                           min_periods,
+                                           aggr,
+                                           rmm::cuda_stream_default,
+                                           mr);
 }
 
 std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& group_keys,
@@ -908,18 +899,16 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                                           std::unique_ptr<aggregation> const& aggr,
                                                           rmm::mr::device_memory_resource* mr)
 {
-  return detail::grouped_time_range_rolling_window(
-    group_keys,
-    timestamp_column,
-    timestamp_order,
-    input,
-    preceding_window_in_days,
-    following_window_in_days,
-    min_periods,
-    aggr,
-    rmm::cuda_stream_default,
-    mr
-  );
+  return detail::grouped_time_range_rolling_window(group_keys,
+                                                   timestamp_column,
+                                                   timestamp_order,
+                                                   input,
+                                                   preceding_window_in_days,
+                                                   following_window_in_days,
+                                                   min_periods,
+                                                   aggr,
+                                                   rmm::cuda_stream_default,
+                                                   mr);
 }
 
 }  // namespace cudf
