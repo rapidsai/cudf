@@ -298,7 +298,26 @@ int host_value = int_scalar.value();
 Allocates a specified number of elements of the specified type.
 If no initialization value is provided, all elements are default initialized (this incurs a kernel launch).
 
-(*) Note: `rmm::device_vector<T>` is not yet updated to use `device_memory_resource`s, but support is forthcoming.
+(*) Note: `rmm::device_vector<T>` is not yet updated to use `device_memory_resource`s, but support is forthcoming. Likewise, `device_vector` operations cannot be stream ordered.
+
+#### `rmm::device_uvector<T>`
+
+Similar to a `device_vector`, allocates a contiguous set of elements in device memory but with key differences:
+- As an optimization, elements are uninitialized and no synchronization occurs at construction. This limits the types `T` to trivially copyable types.
+- All operations are stream ordered (i.e., they accept a `cuda_stream_view` specifying the stream on which the operation is performed).
+
+```c++
+cuda_stream s;
+// Allocates uninitialized storage for 100 `int32_t` elements on stream `s` using the
+// default resource
+rmm::device_uvector<int32_t> v(100, s);
+// Initializes the elements to 0
+thrust::uninitialized_fill(thrust::cuda::par.on(s.value()), v.begin(), v.end(), int32_t{0}); 
+
+rmm::mr::device_memory_resource * mr = new my_custom_resource{...};
+// Allocates uninitialized storage for 100 `int32_t` elements on stream `s` using the resource `mr`
+rmm::device_uvector<int32_t> v2{100, s, mr}; 
+```
 
 
 ## Input/Output Style<a name="inout_style"></a>
@@ -943,4 +962,3 @@ The `type-dispatcher` dispatches to the `string_view` data type when invoked on 
 The cudf strings column only supports UTF-8 encoding for strings data. [UTF-8](https://en.wikipedia.org/wiki/UTF-8) is a variable-length character encoding where each character can be 1-4 bytes. This means the length of a string is not the same as its size in bytes. For this reason, it recommended to use the `string_view` class to access these characters for most operations.
 
 The `string_view.cuh` also includes some utility methods for reading and writing (`to_char_utf8/from_char_utf8`) individual UTF-8 characters to/from byte arrays.
-
