@@ -28,6 +28,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include "cudf/utilities/type_dispatcher.hpp"
 
 namespace cudf {
 namespace {
@@ -399,10 +400,12 @@ struct copy_block_partitions_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    rmm::device_buffer output(input.size() * sizeof(DataType), stream, mr);
+    using Type = device_storage_type_t<DataType>;
 
-    copy_block_partitions_impl(input.data<DataType>(),
-                               static_cast<DataType*>(output.data()),
+    rmm::device_buffer output(input.size() * sizeof(Type), stream, mr);
+
+    copy_block_partitions_impl(input.data<Type>(),
+                               static_cast<Type*>(output.data()),
                                input.size(),
                                num_partitions,
                                row_partition_numbers,
