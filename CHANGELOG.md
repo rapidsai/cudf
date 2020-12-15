@@ -2,7 +2,6 @@
 
 ## New Features
 - PR #6856 Add groupby idxmin, idxmax aggregation
-
 - PR #6847 Add a cmake find module for cuFile in JNI code
 - PR #6902 Implement `DataFrame.quantile` for `datetime` and `timedelta` data types
 - PR #6814 Implement `cudf::reduce` for `decimal32` and `decimal64` (part 1)
@@ -11,15 +10,20 @@
 
 ## Improvements
 
+- PR #6938 Pass numeric scalars of the same dtype through numeric binops
 - PR #6275 Update to official libcu++ on Github
 - PR #6838 Fix `columns` & `index` handling in dataframe constructor
 - PR #6750 Remove **kwargs from string/categorical methods
+- PR #6909 Support reading byte array backed decimal columns from parquet files
 - PR #6939 Use simplified `rmm::exec_policy`
+- PR #6982 Disable some pragma unroll statements in thrust `sort.h`
 
 ## Bug Fixes
 
+- PR #6903 Add null count test for apply_boolean_mask
 - PR #6922 Fix N/A detection for empty fields in CSV reader
 - PR #6912 Fix rmm_mode=managed parameter for gtests
+- PR #6943 Fix join with nulls not equal performance
 - PR #6945 Fix groupby agg/apply behaviour when no key columns are provided 
 - PR #6942 Fix cudf::merge gtest for dictionary columns
 
