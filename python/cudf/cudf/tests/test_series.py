@@ -859,3 +859,24 @@ def test_series_pipe_error():
         lfunc_args_and_kwargs=([(custom_add_func, "val")], {"val": 11}),
         rfunc_args_and_kwargs=([(custom_add_func, "val")], {"val": 11}),
     )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, None, 11, 2.0, np.nan],
+        [np.nan],
+        [None, None, None],
+        [np.nan, 1, 10, 393.32, np.nan],
+    ],
+)
+@pytest.mark.parametrize("nan_as_null", [True, False])
+@pytest.mark.parametrize("fill_value", [1.2, 332, np.nan])
+def test_fillna_with_nan(data, nan_as_null, fill_value):
+    gs = cudf.Series(data, nan_as_null=nan_as_null)
+    ps = gs.to_pandas()
+
+    expected = ps.fillna(fill_value)
+    actual = gs.fillna(fill_value)
+
+    assert_eq(expected, actual)

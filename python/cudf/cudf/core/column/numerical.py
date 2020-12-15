@@ -419,28 +419,31 @@ class NumericalColumn(column.ColumnBase):
         """
         Fill null values with *fill_value*
         """
+
+        col = self.nans_to_nulls()
+
         if (
             isinstance(fill_value, cudf.Scalar)
-            and fill_value.dtype == self.dtype
+            and fill_value.dtype == col.dtype
         ):
-            return libcudf.replace.replace_nulls(self, fill_value)
+            return libcudf.replace.replace_nulls(col, fill_value)
         if np.isscalar(fill_value):
             # castsafely to the same dtype as self
-            fill_value_casted = self.dtype.type(fill_value)
+            fill_value_casted = col.dtype.type(fill_value)
             if not np.isnan(fill_value) and (fill_value_casted != fill_value):
                 raise TypeError(
                     f"Cannot safely cast non-equivalent "
-                    f"{type(fill_value).__name__} to {self.dtype.name}"
+                    f"{type(fill_value).__name__} to {col.dtype.name}"
                 )
             fill_value = cudf.Scalar(fill_value_casted)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
             # cast safely to the same dtype as self
-            if is_integer_dtype(self.dtype):
-                fill_value = _safe_cast_to_int(fill_value, self.dtype)
+            if is_integer_dtype(col.dtype):
+                fill_value = _safe_cast_to_int(fill_value, col.dtype)
             else:
-                fill_value = fill_value.astype(self.dtype)
-        result = libcudf.replace.replace_nulls(self, fill_value)
+                fill_value = fill_value.astype(col.dtype)
+        result = libcudf.replace.replace_nulls(col, fill_value)
 
         return result
 
@@ -581,6 +584,9 @@ class NumericalColumn(column.ColumnBase):
 
         # want to cast float to int:
         elif self.dtype.kind == "f" and to_dtype.kind in {"i", "u"}:
+            if libcudf.unary.is_nan(self).any():
+                return False
+
             info = np.iinfo(to_dtype)
             min_, max_ = info.min, info.max
             # best we can do is hope to catch it here and avoid compare
