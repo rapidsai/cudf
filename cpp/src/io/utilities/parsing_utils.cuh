@@ -20,7 +20,7 @@
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/device_vector.hpp>
 
 using cudf::detail::device_span;
 

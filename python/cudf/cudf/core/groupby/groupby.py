@@ -164,6 +164,9 @@ class GroupBy(Serializable):
         """
         normalized_aggs = self._normalize_aggs(func)
 
+        # Note: When there are no key columns, the below produces
+        # a Float64Index, while Pandas returns an Int64Index
+        # (GH: 6945)
         result = self._groupby.aggregate(self.obj, normalized_aggs)
 
         result = cudf.DataFrame._from_table(result)
@@ -190,7 +193,8 @@ class GroupBy(Serializable):
                         raise
 
         # set index names to be group key names
-        result.index.names = self.grouping.names
+        if len(result):
+            result.index.names = self.grouping.names
 
         # copy categorical information from keys to the result index:
         result.index._postprocess_columns(self.grouping.keys)
@@ -417,16 +421,15 @@ class GroupBy(Serializable):
         ]
         chunk_results = [function(chk) for chk in chunks]
 
-        if len(chunk_results) > 0 and cudf.utils.dtypes.is_scalar(
-            chunk_results[0]
-        ):
+        if not len(chunk_results):
+            return self.obj.__class__()
+
+        if cudf.utils.dtypes.is_scalar(chunk_results[0]):
             result = cudf.Series(
                 chunk_results, index=self.grouping.keys[offsets[:-1]]
             )
             result.index.names = self.grouping.names
-        elif len(chunk_results) > 0 and isinstance(
-            chunk_results[0], cudf.Series
-        ):
+        elif isinstance(chunk_results[0], cudf.Series):
             result = cudf.concat(chunk_results, axis=1).T
             result.index.names = self.grouping.names
         else:
@@ -775,8 +778,9 @@ class SeriesGroupBy(GroupBy):
         result = super().agg(func)
 
         # downcast the result to a Series:
-        if result.shape[1] == 1 and not pd.api.types.is_list_like(func):
-            return result.iloc[:, 0]
+        if len(result._data):
+            if result.shape[1] == 1 and not pd.api.types.is_list_like(func):
+                return result.iloc[:, 0]
 
         # drop the first level if we have a multiindex
         if (
@@ -809,6 +813,9 @@ class _Grouping(Serializable):
         self._named_columns = []
         self._handle_by_or_level(by, level)
 
+        if len(obj) and not len(self._key_columns):
+            raise ValueError("No group keys passed")
+
     def _handle_by_or_level(self, by=None, level=None):
         if level is not None:
             if by is not None:
@@ -839,7 +846,10 @@ class _Grouping(Serializable):
     @property
     def keys(self):
         nkeys = len(self._key_columns)
-        if nkeys > 1:
+
+        if nkeys == 0:
+            return cudf.core.index.as_index([], name=None)
+        elif nkeys > 1:
             return cudf.MultiIndex(
                 source_data=cudf.DataFrame(
                     dict(zip(range(nkeys), self._key_columns))

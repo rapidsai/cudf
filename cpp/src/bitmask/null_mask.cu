@@ -24,10 +24,10 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/device_vector.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <thrust/binary_search.h>
@@ -225,28 +225,6 @@ __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
 }
 
 /**
- * @brief Convenience function to get offset word from a bitmask
- *
- * @see copy_offset_bitmask
- * @see offset_bitmask_and
- */
-__device__ bitmask_type get_mask_offset_word(bitmask_type const *__restrict__ source,
-                                             size_type destination_word_index,
-                                             size_type source_begin_bit,
-                                             size_type source_end_bit)
-{
-  size_type source_word_index = destination_word_index + word_index(source_begin_bit);
-  bitmask_type curr_word      = source[source_word_index];
-  bitmask_type next_word      = 0;
-  if (word_index(source_end_bit) >
-      word_index(source_begin_bit +
-                 destination_word_index * detail::size_in_bits<bitmask_type>())) {
-    next_word = source[source_word_index + 1];
-  }
-  return __funnelshift_r(curr_word, next_word, source_begin_bit);
-}
-
-/**
  * For each range `[first_bit_indices[i], last_bit_indices[i])`
  * (where 0 <= i < `num_ranges`), count the number of bits set outside the range
  * in the boundary words (i.e. words that include either
@@ -332,8 +310,8 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
   for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
        destination_word_index < number_of_mask_words;
        destination_word_index += blockDim.x * gridDim.x) {
-    destination[destination_word_index] =
-      get_mask_offset_word(source, destination_word_index, source_begin_bit, source_end_bit);
+    destination[destination_word_index] = detail::get_mask_offset_word(
+      source, destination_word_index, source_begin_bit, source_end_bit);
   }
 }
 
@@ -360,7 +338,7 @@ __global__ void offset_bitmask_and(bitmask_type *__restrict__ destination,
        destination_word_index += blockDim.x * gridDim.x) {
     bitmask_type destination_word = ~bitmask_type{0};  // All bits 1
     for (size_type i = 0; i < num_sources; i++) {
-      destination_word &= get_mask_offset_word(
+      destination_word &= detail::get_mask_offset_word(
         source[i], destination_word_index, begin_bit[i], begin_bit[i] + source_size);
     }
 

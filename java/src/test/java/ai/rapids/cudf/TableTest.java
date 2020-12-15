@@ -321,7 +321,7 @@ public class TableTest extends CudfTestBase {
       for (long row = 0; row < numRows; row++) {
         try (HostColumnVector cv = table.getColumn(col).copyToHost()) {
           Object key = 0;
-          if (cv.getType() == DType.INT32) {
+          if (cv.getType().equals(DType.INT32)) {
             key = cv.getInt(row);
           } else {
             key = cv.getDouble(row);
@@ -735,7 +735,7 @@ public class TableTest extends CudfTestBase {
       };
       assertTableTypes(expectedTypes, table);
     }
-    // An CudfException will be thrown here because we haven't support reading decimal stored as FIXED_LEN_BYTE_ARRAY.
+    // An CudfException will be thrown here because it contains a FIXED_LEN_BYTE_ARRAY column whose type length exceeds 8.
     ParquetOptions opts = ParquetOptions.builder().enableStrictDecimalType(true).build();
     assertThrows(ai.rapids.cudf.CudfException.class, () -> {
       try (Table table = Table.readParquet(opts, TEST_DECIMAL_PARQUET_FILE)) {}
@@ -804,7 +804,7 @@ public class TableTest extends CudfTestBase {
     try (Table table = Table.readORC(TEST_ORC_TIMESTAMP_DATE_FILE)) {
       assertEquals(2, table.getNumberOfColumns());
       found = table.getColumn(0).getType();
-      assertTrue(found.isTimestamp());
+      assertTrue(found.isTimestampType());
       assertEquals(DType.TIMESTAMP_MILLISECONDS, table.getColumn(1).getType());
     }
 

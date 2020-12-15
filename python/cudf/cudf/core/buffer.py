@@ -43,7 +43,6 @@ class Buffer(Serializable):
         elif hasattr(data, "__array_interface__") or hasattr(
             data, "__cuda_array_interface__"
         ):
-
             self._init_from_array_like(data, owner)
         elif isinstance(data, memoryview):
             self._init_from_array_like(np.asarray(data), owner)

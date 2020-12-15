@@ -26,8 +26,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace datetime {
@@ -146,7 +146,7 @@ struct launch_functor {
   typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void> operator()(
     rmm::cuda_stream_view stream) const
   {
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       input.begin<Timestamp>(),
                       input.end<Timestamp>(),
                       output.begin<OutputColT>(),
@@ -219,7 +219,7 @@ struct add_calendrical_months_functor {
   typename std::enable_if_t<cudf::is_timestamp_t<Timestamp>::value, void> operator()(
     rmm::cuda_stream_view stream) const
   {
-    thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform(rmm::exec_policy(stream),
                       timestamp_column.begin<Timestamp>(),
                       timestamp_column.end<Timestamp>(),
                       months_column.begin<int16_t>(),
