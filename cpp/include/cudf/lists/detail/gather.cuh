@@ -289,8 +289,8 @@ std::unique_ptr<column> gather_list_leaf(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> segmented_gather(
-  lists_column_view const& value_column,
-  lists_column_view const& gather_map,
+  column_view const& list_column,
+  column_view const& gather_map_list,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
