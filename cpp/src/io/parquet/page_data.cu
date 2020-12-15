@@ -827,8 +827,8 @@ inline __device__ void gpuOutputFixedLenByteArrayAsInt64(volatile page_state_s *
                                                          int64_t *dst)
 {
   uint32_t const dtype_len_in = s->dtype_len_in;
-  uint8_t const *dict         = s->dict_base ? s->dict_base : s->data_start;
-  uint32_t const dict_pos =
+  uint8_t const *data         = s->dict_base ? s->dict_base : s->data_start;
+  uint32_t const pos =
     (s->dict_base ? ((s->dict_bits > 0) ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] : 0)
                   : src_pos) *
     dtype_len_in;
@@ -836,7 +836,7 @@ inline __device__ void gpuOutputFixedLenByteArrayAsInt64(volatile page_state_s *
 
   int64_t unscaled64 = 0;
   for (unsigned int i = 0; i < dtype_len_in; i++) {
-    uint32_t v = (dict_pos + i < dict_size) ? dict[dict_pos + i] : 0;
+    uint32_t v = (pos + i < dict_size) ? data[pos + i] : 0;
     unscaled64 = (unscaled64 << 8) | v;
   }
   // Shift the unscaled value up and back down when it isn't all 8 bytes,
