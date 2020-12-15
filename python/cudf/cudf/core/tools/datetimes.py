@@ -459,6 +459,8 @@ class DateOffset(pd.DateOffset):
     def _generate_column(self, size, op):
         months = self._scalars._gpu_scalars["months"]
         months = -months if op == "sub" else months
+        # TODO: pass a scalar instead of constructing a column
+        # https://github.com/rapidsai/cudf/issues/6990
         col = cudf.core.column.as_column(months, length=size)
         return col
 
