@@ -105,12 +105,13 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
   }();
 
   auto const scale = [&] {
-    if (std::is_same<Op, cudf::reduction::op::product>::value)
-      return numeric::scale_type{col.type().scale() * (col.size() - col.null_count())};
-    else if (std::is_same<Op, cudf::reduction::op::sum_of_squares>::value)
+    if (std::is_same<Op, cudf::reduction::op::product>::value) {
+      auto const valid_count = static_cast<int32_t>(col.size() - col.null_count());
+      return numeric::scale_type{col.type().scale() * valid_count};
+    } else if (std::is_same<Op, cudf::reduction::op::sum_of_squares>::value) {
       return numeric::scale_type{col.type().scale() * 2};
-    else
-      return numeric::scale_type{col.type().scale()};
+    }
+    return numeric::scale_type{col.type().scale()};
   }();
 
   auto const val = static_cast<cudf::scalar_type_t<Type>*>(result.get());

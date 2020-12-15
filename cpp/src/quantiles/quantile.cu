@@ -57,11 +57,12 @@ struct quantile_functor {
                    std::unique_ptr<column>>
   operator()(column_view const& input)
   {
-    using Type        = cudf::device_storage_type_t<T>;
-    using ExactResult = std::conditional_t<exact and not cudf::is_fixed_point<T>(), double, T>;
-    using Result      = cudf::device_storage_type_t<ExactResult>;
+    using StorageType   = cudf::device_storage_type_t<T>;
+    using ExactResult   = std::conditional_t<exact and not cudf::is_fixed_point<T>(), double, T>;
+    using StorageResult = cudf::device_storage_type_t<ExactResult>;
 
-    auto const type = is_fixed_point(input.type()) ? input.type() : data_type{type_to_id<Result>()};
+    auto const type =
+      is_fixed_point(input.type()) ? input.type() : data_type{type_to_id<StorageResult>()};
     auto output =
       make_fixed_width_column(type, q.size(), mask_state::UNALLOCATED, stream.value(), mr);
 
@@ -79,21 +80,22 @@ struct quantile_functor {
     rmm::device_vector<double> q_device{q};
 
     if (!cudf::is_dictionary(input.type())) {
-      auto sorted_data = thrust::make_permutation_iterator(input.data<Type>(), ordered_indices);
+      auto sorted_data =
+        thrust::make_permutation_iterator(input.data<StorageType>(), ordered_indices);
       thrust::transform(q_device.begin(),
                         q_device.end(),
-                        d_output->template begin<Result>(),
+                        d_output->template begin<StorageResult>(),
                         [sorted_data, interp = interp, size = size] __device__(double q) {
-                          return select_quantile_data<Result>(sorted_data, size, q, interp);
+                          return select_quantile_data<StorageResult>(sorted_data, size, q, interp);
                         });
     } else {
       auto sorted_data = thrust::make_permutation_iterator(
         dictionary::detail::make_dictionary_iterator<T>(*d_input), ordered_indices);
       thrust::transform(q_device.begin(),
                         q_device.end(),
-                        d_output->template begin<Result>(),
+                        d_output->template begin<StorageResult>(),
                         [sorted_data, interp = interp, size = size] __device__(double q) {
-                          return select_quantile_data<Result>(sorted_data, size, q, interp);
+                          return select_quantile_data<StorageResult>(sorted_data, size, q, interp);
                         });
     }
 
