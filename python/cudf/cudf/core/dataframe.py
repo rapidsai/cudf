@@ -1435,7 +1435,9 @@ class DataFrame(Frame, Serializable):
         return self._apply_op("add", other, fill_value)
 
 
-    def update(self, other, join="left", overwrite=True, filter_func=None, errors="ignore"):
+    def update(
+        self, other, join="left", overwrite=True, filter_func=None, errors="ignore"
+        ):
         """
         Modify a DataFrame in place using non-NA values from another DataFrame.
 
@@ -1487,20 +1489,28 @@ class DataFrame(Frame, Serializable):
         if errors not in ["ignore", "raise"]:
             raise ValueError("The parameter errors must be either 'ignore' or 'raise'")
 
+        if not isinstance(other, DataFrame):
+            other = DataFrame(other)
+
         other = other.reindex(self.index, axis=0)
         other = other.reindex(self.columns, axis=1)
         for col in self.columns: 
-            original = self[col] 
+            original = self[col]
             new = other[col]  
-
+#             if filter_func is not None:
+#                 with np.errstate(all="ignore"):
+# >                   mask = ~filter_func(original) | new.isna()
+            # else:
+            
             if errors == "raise":
-                mask_original = original.notna() 
-                mask_new = new.notna()
+                mask_original = new.notna() 
+                mask_new = original.notna()
                 if any(mask_original & mask_new):
                     raise ValueError("Data overlaps.") 
 
             if overwrite: 
                 mask = new.isna() #overwrite original with values from other 
+
             else:
                 mask = original.notna() #only update values that are na in the original 
 
