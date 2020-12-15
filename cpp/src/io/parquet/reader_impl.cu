@@ -1209,7 +1209,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
   // offset into `chunk_nested_data`/`chunk_nested_valids` for the array of pointers for chunk `i`
   auto chunk_nested_valids = hostdevice_vector<uint32_t *>(sum_max_depths);
   auto chunk_nested_data   = hostdevice_vector<void *>(sum_max_depths);
-  auto chunk_offsets       = std::vector<size_t>(chunks.size());
+  auto chunk_offsets       = std::vector<size_t>();
 
   // Update chunks with pointers to column data.
   for (size_t c = 0, page_count = 0, str_ofs = 0, chunk_off = 0; c < chunks.size(); c++) {
