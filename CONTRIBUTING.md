@@ -165,7 +165,9 @@ conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda10.0.yml
 conda activate cudf_dev
 ```
 - For other CUDA versions, check the corresponding cudf_dev_cuda*.yml file in conda/environments
-
+- (Optional) install `ccache` to speed up recompilation by following the
+[ccache installation guide](https://github.com/ccache/ccache/blob/master/doc/INSTALL.md). For cuDF, you don't need to
+create the symbolic links.
 - Build and install `libcudf` after its dependencies. CMake depends on the `nvcc` executable being on your path or defined in `$CUDACXX`.
 ```bash
 $ cd $CUDF_HOME/cpp                                                       # navigate to C/C++ CUDA source root directory
