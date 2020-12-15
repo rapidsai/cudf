@@ -21,7 +21,7 @@
 
     <groupId>ai.rapids</groupId>
     <artifactId>cudf</artifactId>
-    <version>0.17-SNAPSHOT</version>
+    <version>0.18-SNAPSHOT</version>
 
     <name>cudfjni</name>
     <description>
@@ -147,6 +147,7 @@
         <CUDA_STATIC_RUNTIME>OFF</CUDA_STATIC_RUNTIME>
         <PER_THREAD_DEFAULT_STREAM>OFF</PER_THREAD_DEFAULT_STREAM>
         <RMM_LOGGING_LEVEL>INFO</RMM_LOGGING_LEVEL>
+        <USE_GDS>OFF</USE_GDS>
         <native.build.path>${project.build.directory}/cmake-build</native.build.path>
         <slf4j.version>1.7.30</slf4j.version>
     </properties>
@@ -157,6 +158,27 @@
             <properties>
                 <cxx.flags>-Wno-deprecated-declarations</cxx.flags>
             </properties>
+        </profile>
+        <profile>
+            <id>no-cufile-tests</id>
+            <activation>
+                <property>
+                    <name>USE_GDS</name>
+                    <value>!ON</value>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <excludes>
+                                <exclude>**/CuFileTest.java</exclude>
+                            </excludes>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
         <profile>
             <id>release</id>
@@ -349,6 +371,7 @@
                                     <arg value="-DCUDA_STATIC_RUNTIME=${CUDA_STATIC_RUNTIME}" />
                                     <arg value="-DPER_THREAD_DEFAULT_STREAM=${PER_THREAD_DEFAULT_STREAM}" />
                                     <arg value="-DRMM_LOGGING_LEVEL=${RMM_LOGGING_LEVEL}" />
+                                    <arg value="-DUSE_GDS=${USE_GDS}" />
                                     <arg value="-DCMAKE_CXX_FLAGS=${cxx.flags}"/>
                                     <arg value="-DCMAKE_EXPORT_COMPILE_COMMANDS=${CMAKE_EXPORT_COMPILE_COMMANDS}"/>
                                     <arg value="-DCUDF_CPP_BUILD_DIR=${CUDF_CPP_BUILD_DIR}"/>
@@ -479,6 +502,7 @@
                                     <directory>${native.build.path}</directory>
                                     <includes>
                                         <include>libcudfjni.so</include>
+                                        <include>libcufilejni.so</include>
                                     </includes>
                                 </resource>
                                 <resource>

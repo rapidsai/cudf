@@ -22,8 +22,9 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/reduce.h>
@@ -90,7 +91,7 @@ struct var_functor {
       thrust::make_counting_iterator(0),
       var_transform<ResultType, T>{d_values, d_means, d_group_sizes, d_group_labels, ddof});
 
-    thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::reduce_by_key(rmm::exec_policy(stream),
                           group_labels.begin(),
                           group_labels.end(),
                           values_it,
@@ -101,7 +102,7 @@ struct var_functor {
     auto result_view = mutable_column_device_view::create(*result, stream);
 
     thrust::for_each_n(
-      rmm::exec_policy(stream)->on(stream.value()),
+      rmm::exec_policy(stream),
       thrust::make_counting_iterator(0),
       group_sizes.size(),
       [d_result = *result_view, d_group_sizes = *group_size_view, ddof] __device__(size_type i) {

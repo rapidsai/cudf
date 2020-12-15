@@ -14,6 +14,13 @@
  * limitations under the License.
  */
 
+#include "jit/code/code.h"
+
+#include <jit/launcher.h>
+#include <jit/parser.h>
+#include <jit/type.h>
+#include <jit/common_headers.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -22,12 +29,6 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <jit/launcher.h>
-#include <jit/parser.h>
-#include <jit/type.h>
-#include "jit/code/code.h"
-
-#include <jit/common_headers.hpp>
 #include <jit/timestamps.hpp.jit>
 #include <jit/types.hpp.jit>
 

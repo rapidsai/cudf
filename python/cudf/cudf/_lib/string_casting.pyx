@@ -84,7 +84,7 @@ def string_to_floating(Column input_col, object out_type):
     return Column.from_unique_ptr(move(c_result))
 
 
-def dtos(Column input_col, **kwargs):
+def dtos(Column input_col):
     """
     Converting/Casting input column of type double to string column
 
@@ -116,7 +116,7 @@ def stod(Column input_col, **kwargs):
     return string_to_floating(input_col, np.dtype("float64"))
 
 
-def ftos(Column input_col, **kwargs):
+def ftos(Column input_col):
     """
     Converting/Casting input column of type float to string column
 
@@ -177,7 +177,7 @@ def string_to_integer(Column input_col, object out_type):
     return Column.from_unique_ptr(move(c_result))
 
 
-def i8tos(Column input_col, **kwargs):
+def i8tos(Column input_col):
     """
     Converting/Casting input column of type int8 to string column
 
@@ -209,7 +209,7 @@ def stoi8(Column input_col, **kwargs):
     return string_to_integer(input_col, np.dtype("int8"))
 
 
-def i16tos(Column input_col, **kwargs):
+def i16tos(Column input_col):
     """
     Converting/Casting input column of type int16 to string column
 
@@ -225,7 +225,7 @@ def i16tos(Column input_col, **kwargs):
     return integer_to_string(input_col)
 
 
-def stoi16(Column input_col, **kwargs):
+def stoi16(Column input_col):
     """
     Converting/Casting input column of type string to int16
 
@@ -241,7 +241,7 @@ def stoi16(Column input_col, **kwargs):
     return string_to_integer(input_col, np.dtype("int16"))
 
 
-def itos(Column input_col, **kwargs):
+def itos(Column input_col):
     """
     Converting/Casting input column of type int32 to string column
 
@@ -257,7 +257,7 @@ def itos(Column input_col, **kwargs):
     return integer_to_string(input_col)
 
 
-def stoi(Column input_col, **kwargs):
+def stoi(Column input_col):
     """
     Converting/Casting input column of type string to int32
 
@@ -273,7 +273,7 @@ def stoi(Column input_col, **kwargs):
     return string_to_integer(input_col, np.dtype("int32"))
 
 
-def ltos(Column input_col, **kwargs):
+def ltos(Column input_col):
     """
     Converting/Casting input column of type int64 to string column
 
@@ -305,7 +305,7 @@ def stol(Column input_col, **kwargs):
     return string_to_integer(input_col, np.dtype("int64"))
 
 
-def ui8tos(Column input_col, **kwargs):
+def ui8tos(Column input_col):
     """
     Converting/Casting input column of type uint8 to string column
 
@@ -337,7 +337,7 @@ def stoui8(Column input_col, **kwargs):
     return string_to_integer(input_col, np.dtype("uint8"))
 
 
-def ui16tos(Column input_col, **kwargs):
+def ui16tos(Column input_col):
     """
     Converting/Casting input column of type uint16 to string column
 
@@ -369,7 +369,7 @@ def stoui16(Column input_col, **kwargs):
     return string_to_integer(input_col, np.dtype("uint16"))
 
 
-def uitos(Column input_col, **kwargs):
+def uitos(Column input_col):
     """
     Converting/Casting input column of type uint32 to string column
 
@@ -401,7 +401,7 @@ def stoui(Column input_col, **kwargs):
     return string_to_integer(input_col, np.dtype("uint32"))
 
 
-def ultos(Column input_col, **kwargs):
+def ultos(Column input_col):
     """
     Converting/Casting input column of type uint64 to string column
 
@@ -502,14 +502,13 @@ def _from_booleans(
     return Column.from_unique_ptr(move(c_result))
 
 
-def from_booleans(Column input_col, **kwargs):
-
+def from_booleans(Column input_col):
     return _from_booleans(input_col)
 
 
 def int2timestamp(
         Column input_col,
-        **kwargs):
+        format):
     """
     Converting/Casting input date-time column to string
     column with specified format
@@ -523,10 +522,8 @@ def int2timestamp(
     A Column with date-time represented in string format
 
     """
-
     cdef column_view input_column_view = input_col.view()
-    cdef string c_timestamp_format = kwargs.get(
-        'format', "%Y-%m-%dT%H:%M:%SZ").encode('UTF-8')
+    cdef string c_timestamp_format = format.encode("UTF-8")
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(
@@ -537,9 +534,7 @@ def int2timestamp(
     return Column.from_unique_ptr(move(c_result))
 
 
-def timestamp2int(
-        Column input_col,
-        **kwargs):
+def timestamp2int(Column input_col, dtype, format):
     """
     Converting/Casting input string column to date-time column with specified
     timestamp_format
@@ -553,16 +548,14 @@ def timestamp2int(
     A Column with string represented in date-time format
 
     """
-    if input_col.size == 0:
-        return as_column([], dtype=kwargs.get('dtype'))
     cdef column_view input_column_view = input_col.view()
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[kwargs.get('dtype')]
+            np_to_cudf_types[dtype]
         )
     )
     cdef data_type out_type = data_type(tid)
-    cdef string c_timestamp_format = kwargs.get('format').encode('UTF-8')
+    cdef string c_timestamp_format = format.encode('UTF-8')
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(
@@ -606,9 +599,7 @@ def istimestamp(
     return Column.from_unique_ptr(move(c_result))
 
 
-def timedelta2int(
-        Column input_col,
-        **kwargs):
+def timedelta2int(Column input_col, dtype, format):
     """
     Converting/Casting input string column to TimeDelta column with specified
     format
@@ -622,16 +613,14 @@ def timedelta2int(
     A Column with string represented in TimeDelta format
 
     """
-    if input_col.size == 0:
-        return as_column([], dtype=kwargs.get('dtype'))
     cdef column_view input_column_view = input_col.view()
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[kwargs.get('dtype')]
+            np_to_cudf_types[dtype]
         )
     )
     cdef data_type out_type = data_type(tid)
-    cdef string c_duration_format = kwargs.get('format').encode('UTF-8')
+    cdef string c_duration_format = format.encode('UTF-8')
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(

@@ -308,8 +308,8 @@ cdef class Column:
             self._size = other_col.size
             self._dtype = other_col._dtype
             self.set_base_data(other_col.base_data)
-            self.set_base_mask(other_col.base_mask)
             self.set_base_children(other_col.base_children)
+            self.set_base_mask(other_col.base_mask)
         else:
             return other_col
 

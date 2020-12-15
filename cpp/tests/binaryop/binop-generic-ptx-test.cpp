@@ -17,8 +17,9 @@
  * limitations under the License.
  */
 
-#include <tests/binaryop/assert-binops.h>
 #include <cudf/binaryop.hpp>
+
+#include <tests/binaryop/assert-binops.h>
 #include <tests/binaryop/binop-fixture.hpp>
 
 namespace cudf {

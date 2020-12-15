@@ -24,8 +24,9 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
@@ -66,7 +67,7 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
   auto results_view = results->mutable_view();
   auto d_lengths    = results_view.data<int32_t>();
   // fill in the lengths
-  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<cudf::size_type>(0),
                     thrust::make_counting_iterator<cudf::size_type>(strings_count),
                     d_lengths,
@@ -142,7 +143,7 @@ std::unique_ptr<column> code_points(
   rmm::device_vector<size_type> offsets(strings.size() + 1);
   size_type* d_offsets = offsets.data().get();
   thrust::transform_inclusive_scan(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings.size()),
     d_offsets + 1,
@@ -163,7 +164,7 @@ std::unique_ptr<column> code_points(
   // fill column with character code-point values
   auto d_results = results_view.data<int32_t>();
   // now set the ranges from each strings' character values
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings.size(),
                      code_points_fn{d_column, d_offsets, d_results});

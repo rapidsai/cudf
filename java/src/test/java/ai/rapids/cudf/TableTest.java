@@ -92,7 +92,7 @@ public class TableTest extends CudfTestBase {
    * @param expect The expected result column
    * @param cv The input column
    */
-  public static void assertColumnsAreEqual(ColumnVector expect, ColumnVector cv) {
+  public static void assertColumnsAreEqual(ColumnView expect, ColumnView cv) {
     assertColumnsAreEqual(expect, cv, "unnamed");
   }
 
@@ -102,7 +102,7 @@ public class TableTest extends CudfTestBase {
    * @param cv The input column
    * @param colName The name of the column
    */
-  public static void assertColumnsAreEqual(ColumnVector expected, ColumnVector cv, String colName) {
+  public static void assertColumnsAreEqual(ColumnView expected, ColumnView cv, String colName) {
     assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true);
   }
 
@@ -121,7 +121,7 @@ public class TableTest extends CudfTestBase {
    * @param expected The expected result Struct column
    * @param cv The input Struct column
    */
-  public static void assertStructColumnsAreEqual(ColumnVector expected, ColumnVector cv) {
+  public static void assertStructColumnsAreEqual(ColumnView expected, ColumnView cv) {
     assertPartialStructColumnsAreEqual(expected, 0, expected.getRowCount(), cv, "unnamed", true);
   }
 
@@ -134,8 +134,8 @@ public class TableTest extends CudfTestBase {
    * @param colName The name of the column
    * @param enableNullCheck Whether to check for nulls in the Struct column
    */
-  public static void assertPartialStructColumnsAreEqual(ColumnVector expected, long rowOffset, long length,
-                                                        ColumnVector cv, String colName, boolean enableNullCheck) {
+  public static void assertPartialStructColumnsAreEqual(ColumnView expected, long rowOffset, long length,
+      ColumnView cv, String colName, boolean enableNullCheck) {
     try (HostColumnVector hostExpected = expected.copyToHost();
          HostColumnVector hostcv = cv.copyToHost()) {
       assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck);
@@ -149,8 +149,8 @@ public class TableTest extends CudfTestBase {
    * @param colName The name of the column
    * @param enableNullCheck Whether to check for nulls in the column
    */
-  public static void assertPartialColumnsAreEqual(ColumnVector expected, long rowOffset, long length,
-                                                  ColumnVector cv, String colName, boolean enableNullCheck) {
+  public static void assertPartialColumnsAreEqual(ColumnView expected, long rowOffset, long length,
+      ColumnView cv, String colName, boolean enableNullCheck) {
     try (HostColumnVector hostExpected = expected.copyToHost();
          HostColumnVector hostcv = cv.copyToHost()) {
       assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck);
@@ -321,7 +321,7 @@ public class TableTest extends CudfTestBase {
       for (long row = 0; row < numRows; row++) {
         try (HostColumnVector cv = table.getColumn(col).copyToHost()) {
           Object key = 0;
-          if (cv.getType() == DType.INT32) {
+          if (cv.getType().equals(DType.INT32)) {
             key = cv.getInt(row);
           } else {
             key = cv.getDouble(row);
@@ -804,7 +804,7 @@ public class TableTest extends CudfTestBase {
     try (Table table = Table.readORC(TEST_ORC_TIMESTAMP_DATE_FILE)) {
       assertEquals(2, table.getNumberOfColumns());
       found = table.getColumn(0).getType();
-      assertTrue(found.isTimestamp());
+      assertTrue(found.isTimestampType());
       assertEquals(DType.TIMESTAMP_MILLISECONDS, table.getColumn(1).getType());
     }
 
