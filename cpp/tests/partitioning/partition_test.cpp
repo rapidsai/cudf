@@ -201,3 +201,54 @@ TYPED_TEST(PartitionTest, EmptyPartitions)
 
   run_partition_test(table_to_partition, map, 5, expected_partitioned_table, expected_offsets);
 }
+
+template <typename T>
+class PartitionTestFixedPoint : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(PartitionTestFixedPoint, cudf::test::FixedPointTypes);
+
+TYPED_TEST(PartitionTestFixedPoint, Partition)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const input    = fp_wrapper({11, 22, 33, 44, 55, 66}, scale_type{-1});
+  auto const map      = fixed_width_column_wrapper<int32_t>{0, 1, 2, 3, 4, 5};
+  auto const expected = cudf::table_view{{input}};
+  auto const offsets  = std::vector<cudf::size_type>{0, 1, 2, 3, 4, 5, 6};
+
+  run_partition_test(expected, map, 6, expected, offsets);
+}
+
+TYPED_TEST(PartitionTestFixedPoint, Partition1)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const input    = fp_wrapper({11, 22, 33, 44, 55, 66}, scale_type{-1});
+  auto const map      = fixed_width_column_wrapper<int32_t>{5, 4, 3, 2, 1, 0};
+  auto const expected = fp_wrapper({66, 55, 44, 33, 22, 11}, scale_type{-1});
+  auto const offsets  = std::vector<cudf::size_type>{0, 1, 2, 3, 4, 5, 6};
+
+  run_partition_test(cudf::table_view{{input}}, map, 6, cudf::table_view{{expected}}, offsets);
+}
+
+TYPED_TEST(PartitionTestFixedPoint, Partition2)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const input    = fp_wrapper({11, 22, 33, 44, 55, 66}, scale_type{-1});
+  auto const map      = fixed_width_column_wrapper<int32_t>{2, 1, 0, 2, 1, 0};
+  auto const expected = fp_wrapper({33, 66, 22, 55, 11, 44}, scale_type{-1});
+  auto const offsets  = std::vector<cudf::size_type>{0, 2, 4, 6};
+
+  run_partition_test(cudf::table_view{{input}}, map, 3, cudf::table_view{{expected}}, offsets);
+}
