@@ -15,6 +15,7 @@
 - PR #6838 Fix `columns` & `index` handling in dataframe constructor
 - PR #6750 Remove **kwargs from string/categorical methods
 - PR #6585 Add dictionary support to libcudf groupby functions
+- PR #6909 Support reading byte array backed decimal columns from parquet files
 - PR #6939 Use simplified `rmm::exec_policy`
 - PR #6982 Disable some pragma unroll statements in thrust `sort.h`
 
