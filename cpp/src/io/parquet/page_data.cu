@@ -1725,7 +1725,7 @@ extern "C" __global__ void __launch_bounds__(block_size)
             case INT64: gpuOutputFast(s, src_pos, static_cast<uint2 *>(dst)); break;
             default:
               // we currently do not support reading byte arrays larger than DECIMAL64
-              if (dtype_len <= 8) {
+              if (s->dtype_len_in <= 8) {
                 gpuOutputFixedLenByteArrayAsInt64(s, src_pos, static_cast<int64_t *>(dst));
               } else {
                 gpuOutputDecimalAsFloat(s, src_pos, static_cast<double *>(dst), dtype);
