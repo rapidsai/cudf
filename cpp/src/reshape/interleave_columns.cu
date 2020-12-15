@@ -23,6 +23,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace detail {
@@ -95,7 +96,7 @@ struct interleave_columns_functor {
     // Fill the chars column
     auto d_results_chars = chars_column->mutable_view().data<char>();
     thrust::for_each_n(
-      rmm::exec_policy(stream)->on(stream.value()),
+      rmm::exec_policy(stream),
       thrust::make_counting_iterator<size_type>(0),
       num_strings,
       [num_columns, d_table, d_results_offsets, d_results_chars] __device__(size_type idx) {
@@ -144,11 +145,8 @@ struct interleave_columns_functor {
     };
 
     if (not create_mask) {
-      thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
-                        index_begin,
-                        index_end,
-                        device_output->begin<Type>(),
-                        func_value);
+      thrust::transform(
+        rmm::exec_policy(stream), index_begin, index_end, device_output->begin<Type>(), func_value);
 
       return output;
     }
@@ -158,7 +156,7 @@ struct interleave_columns_functor {
       return input.column(idx % divisor).is_valid(idx / divisor);
     };
 
-    thrust::transform_if(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::transform_if(rmm::exec_policy(stream),
                          index_begin,
                          index_end,
                          device_output->begin<Type>(),

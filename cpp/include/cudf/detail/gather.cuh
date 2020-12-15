@@ -34,8 +34,9 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <algorithm>
 
@@ -125,7 +126,7 @@ void gather_helper(InputItr source_itr,
 {
   using map_type = typename std::iterator_traits<MapIterator>::value_type;
   if (nullify_out_of_bounds) {
-    thrust::gather_if(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::gather_if(rmm::exec_policy(stream),
                       gather_map_begin,
                       gather_map_end,
                       gather_map_begin,
@@ -133,11 +134,8 @@ void gather_helper(InputItr source_itr,
                       target_itr,
                       bounds_checker<map_type>{0, source_size});
   } else {
-    thrust::gather(rmm::exec_policy(stream)->on(stream.value()),
-                   gather_map_begin,
-                   gather_map_end,
-                   source_itr,
-                   target_itr);
+    thrust::gather(
+      rmm::exec_policy(stream), gather_map_begin, gather_map_end, source_itr, target_itr);
   }
 }
 

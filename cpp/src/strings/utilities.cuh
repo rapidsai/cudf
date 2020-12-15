@@ -88,7 +88,7 @@ auto make_strings_children(
   // This is called twice -- once for offsets and once for chars.
   // Reducing the number of places size_and_exec_fn is inlined speeds up compile time.
   auto for_each_fn = [strings_count, stream](SizeAndExecuteFunction& size_and_exec_fn) {
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        strings_count,
                        size_and_exec_fn);
@@ -96,10 +96,8 @@ auto make_strings_children(
 
   // Compute the offsets values
   for_each_fn(size_and_exec_fn);
-  thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
-                         d_offsets,
-                         d_offsets + strings_count + 1,
-                         d_offsets);
+  thrust::exclusive_scan(
+    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
 
   // Now build the chars column
   std::unique_ptr<column> chars_column = create_chars_child_column(

@@ -198,13 +198,13 @@ TEST_F(ApplyBooleanMask, FixedPointLargeColumnTest)
 
   std::vector<int32_t> expect_dec32_data;
   std::vector<int64_t> expect_dec64_data;
-  thrust::copy_if(thrust::host,
+  thrust::copy_if(thrust::seq,
                   dec32_data.cbegin(),
                   dec32_data.cend(),
                   mask_data.cbegin(),
                   std::back_inserter(expect_dec32_data),
                   thrust::identity<bool>());
-  thrust::copy_if(thrust::host,
+  thrust::copy_if(thrust::seq,
                   dec64_data.cbegin(),
                   dec64_data.cend(),
                   mask_data.cbegin(),
@@ -245,6 +245,28 @@ TEST_F(ApplyBooleanMask, NoNullInput)
   cudf::table_view expected({col_expected});
   auto got = cudf::apply_boolean_mask(input, mask);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got->view());
+}
+
+TEST_F(ApplyBooleanMask, CorrectNullCount)
+{
+  cudf::size_type inputRows = 75000;
+
+  auto seq1       = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto valid_seq1 = cudf::test::make_counting_transform_iterator(0, [](auto row) { return true; });
+  cudf::test::fixed_width_column_wrapper<int64_t, typename decltype(seq1)::value_type> col1(
+    seq1, seq1 + inputRows, valid_seq1);
+
+  cudf::table_view input{{col1}};
+
+  auto seq3 =
+    cudf::test::make_counting_transform_iterator(0, [](auto i) { return (i % 277) == 0; });
+  cudf::test::fixed_width_column_wrapper<bool> boolean_mask(seq3, seq3 + inputRows);
+
+  auto got                 = cudf::apply_boolean_mask(input, boolean_mask);
+  auto out_col             = got->get_column(0).view();
+  auto expected_null_count = cudf::count_unset_bits(out_col.null_mask(), 0, out_col.size());
+
+  ASSERT_EQ(out_col.null_count(), expected_null_count);
 }
 
 TEST_F(ApplyBooleanMask, StructFiltering)

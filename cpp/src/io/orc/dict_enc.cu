@@ -19,8 +19,8 @@
 
 #include <io/utilities/block_utils.cuh>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
@@ -75,11 +75,14 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
         s->scratch_red[t] = 0xffffffffu;
       } else {
         uint32_t row = s->chunk.start_row + i + t * 32;
-        uint32_t v   = (row < s->chunk.start_row + s->chunk.num_rows) ? valid_map[row >> 5] : 0;
+        uint32_t v   = (row < s->chunk.start_row + s->chunk.num_rows)
+                       ? valid_map[(row + s->chunk.column_offset) / 32]
+                       : 0;
         if (row & 0x1f) {
-          uint32_t v1 =
-            (row + 32 < s->chunk.start_row + s->chunk.num_rows) ? valid_map[(row >> 5) + 1] : 0;
-          v = __funnelshift_r(v, v1, row & 0x1f);
+          uint32_t v1 = (row + 32 < s->chunk.start_row + s->chunk.num_rows)
+                          ? valid_map[((row + s->chunk.column_offset) / 32) + 1]
+                          : 0;
+          v = __funnelshift_r(v, v1, row + s->chunk.column_offset);
         }
         s->scratch_red[t] = v;
       }
@@ -473,7 +476,7 @@ void BuildStripeDictionaries(StripeDictionary *stripes,
       const nvstrdesc_s *str_data =
         static_cast<const nvstrdesc_s *>(stripes_host[i].column_data_base);
       // NOTE: Requires the --expt-extended-lambda nvcc flag
-      thrust::sort(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::sort(rmm::exec_policy(stream),
                    p,
                    p + stripes_host[i].num_strings,
                    [str_data] __device__(const uint32_t &lhs, const uint32_t &rhs) {

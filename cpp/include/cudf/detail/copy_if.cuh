@@ -283,7 +283,7 @@ struct scatter_gather_functor {
   {
     rmm::device_uvector<cudf::size_type> indices(output_size, stream);
 
-    thrust::copy_if(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::copy_if(rmm::exec_policy(stream),
                     thrust::counting_iterator<cudf::size_type>(0),
                     thrust::counting_iterator<cudf::size_type>(input.size()),
                     indices.begin(),

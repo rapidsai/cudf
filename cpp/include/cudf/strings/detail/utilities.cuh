@@ -18,8 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/scan.h>
 
@@ -59,7 +59,7 @@ std::unique_ptr<column> make_offsets_child_column(
   // Rather than manually computing the final offset using values in device memory,
   // we use inclusive-scan on a shifted output (d_offsets+1) and then set the first
   // offset values to zero manually.
-  thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()), begin, end, d_offsets + 1);
+  thrust::inclusive_scan(rmm::exec_policy(stream), begin, end, d_offsets + 1);
   CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(int32_t), stream.value()));
   return offsets_column;
 }

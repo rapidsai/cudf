@@ -276,7 +276,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
    */
   public static Scalar durationFromLong(DType type, long value) {
     if (type.isDurationType()) {
-      if (type == DType.DURATION_DAYS) {
+      if (type.equals(DType.DURATION_DAYS)) {
         int intValue = (int)value;
         if (value != intValue) {
           throw new IllegalArgumentException("value too large for type " + type + ": " + value);
@@ -304,8 +304,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   }
 
   public static Scalar timestampFromLong(DType type, long value) {
-    if (type.isTimestamp()) {
-      if (type == DType.TIMESTAMP_DAYS) {
+    if (type.isTimestampType()) {
+      if (type.equals(DType.TIMESTAMP_DAYS)) {
         int intValue = (int)value;
         if (value != intValue) {
           throw new IllegalArgumentException("value too large for type " + type + ": " + value);
@@ -507,7 +507,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
     Scalar other = (Scalar) o;
-    if (type != other.type) return false;
+    if (!type.equals(other.type)) return false;
     boolean valid = isValid();
     if (valid != other.isValid()) return false;
     if (!valid) return true;
