@@ -15,7 +15,6 @@
  */
 
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/dictionary/encode.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <cudf_test/base_fixture.hpp>
