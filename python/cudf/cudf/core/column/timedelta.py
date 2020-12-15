@@ -9,7 +9,7 @@ from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
-from cudf.core.column import column, string
+from cudf.core.column import ColumnBase, column, string
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
 from cudf.utils.utils import _fillna_natwise
@@ -281,7 +281,7 @@ class TimeDeltaColumn(column.ColumnBase):
             else:
                 fill_value = column.as_column(fill_value, nan_as_null=False)
 
-            return libcudf.replace.replace_nulls(col, fill_value)
+            return ColumnBase.fillna(col, fill_value)
         else:
             return super().fillna(method=method)
 
