@@ -20,6 +20,7 @@
 
 ## Bug Fixes
 
+- PR #6903 Add null count test for apply_boolean_mask
 - PR #6922 Fix N/A detection for empty fields in CSV reader
 - PR #6912 Fix rmm_mode=managed parameter for gtests
 - PR #6943 Fix join with nulls not equal performance
