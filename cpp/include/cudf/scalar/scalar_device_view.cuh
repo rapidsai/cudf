@@ -214,7 +214,7 @@ class fixed_point_scalar_device_view : public detail::scalar_device_view_base {
   using rep_type = typename T::rep;
 
   fixed_point_scalar_device_view(data_type type, rep_type* data, bool* is_valid)
-    : detail::scalar_device_view_base(type, is_valid)
+    : detail::scalar_device_view_base(type, is_valid), _data(data)
   {
   }
 
