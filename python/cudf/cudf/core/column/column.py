@@ -290,12 +290,14 @@ class ColumnBase(Column, Serializable):
 
         return col
 
-    def dropna(self, drop_nan=True):
+    def dropna(self, drop_nan=False):
         if drop_nan:
             col = self.nans_to_nulls()
         else:
             col = self
-        dropped_col = col.as_frame()._drop_na_rows(drop_nan=False)._as_column()
+        dropped_col = (
+            col.as_frame()._drop_na_rows(drop_nan=drop_nan)._as_column()
+        )
         return dropped_col
 
     def to_arrow(self):
@@ -1251,10 +1253,7 @@ class ColumnBase(Column, Serializable):
 
     def nans_to_nulls(self):
         if self.dtype.kind == "f" and libcudf.unary.is_nan(self).any():
-            col = libcudf.replace.replace_nulls(
-                self, cudf.Scalar(self.dtype.type(np.nan))
-            )
-            newmask = libcudf.transform.nans_to_nulls(col)
+            newmask = libcudf.transform.nans_to_nulls(self)
             return self.set_mask(newmask)
         else:
             return self
