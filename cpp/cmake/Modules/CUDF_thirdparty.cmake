@@ -154,7 +154,7 @@ find_path(DLPACK_INCLUDE
 if (DLPACK_INCLUDE)
     set(dlpack_FOUND TRUE)
 else()
-    find_package(dlpack ${CUDF_MIN_VERSION_dlpack})
+    find_package(dlpack ${CUDF_MIN_VERSION_dlpack} QUIET)
 endif()
 
 if(NOT dlpack_FOUND)
