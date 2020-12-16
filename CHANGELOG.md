@@ -8,6 +8,8 @@
 - PR #6929 Add `Index.set_names` api
 - PR #6907 Add `replace_null` API with `replace_policy` parameter, `fixed_width` column support
 
+- PR #6775 Implement cudf.DateOffset for months
+
 ## Improvements
 
 - PR #6938 Pass numeric scalars of the same dtype through numeric binops

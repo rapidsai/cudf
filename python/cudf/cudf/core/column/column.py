@@ -2138,5 +2138,4 @@ def full(
     4    7
     dtype: int8
     """
-
-    return ColumnBase.from_scalar(as_device_scalar(fill_value, dtype), size)
+    return ColumnBase.from_scalar(cudf.Scalar(fill_value, dtype), size)

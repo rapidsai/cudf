@@ -151,6 +151,8 @@ class DatetimeColumn(column.ColumnBase):
             other = other.to_datetime64()
         elif isinstance(other, pd.Timedelta):
             other = other.to_timedelta64()
+        elif isinstance(other, cudf.DateOffset):
+            return other
         if isinstance(other, np.datetime64):
             if np.isnat(other):
                 return cudf.Scalar(None, dtype=self.dtype)
@@ -247,6 +249,8 @@ class DatetimeColumn(column.ColumnBase):
         rhs: Union["ColumnBase", "cudf.Scalar"],
         reflect: bool = False,
     ) -> "ColumnBase":
+        if isinstance(rhs, cudf.DateOffset):
+            return binop_offset(self, rhs, op)
         lhs, rhs = self, rhs
         if op in ("eq", "ne", "lt", "gt", "le", "ge"):
             out_dtype = np.bool
@@ -350,6 +354,15 @@ def binop(
         lhs, rhs = rhs, lhs
     out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
     return out
+
+
+def binop_offset(lhs, rhs, op):
+    if rhs._is_no_op:
+        return lhs
+    else:
+        rhs = rhs._generate_column(len(lhs), op)
+        out = libcudf.datetime.add_months(lhs, rhs)
+        return out
 
 
 def infer_format(element: str, **kwargs) -> str:
