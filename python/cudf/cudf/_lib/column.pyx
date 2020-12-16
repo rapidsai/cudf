@@ -567,7 +567,7 @@ cdef class Column:
         return result
 
     @staticmethod
-    def from_scalar(val, size_type size):
+    def from_scalar(py_val, size_type size):
         cdef DeviceScalar val = py_val.device_value
         cdef const scalar* c_val = val.get_raw_ptr()
         cdef unique_ptr[column] c_result
