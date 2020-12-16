@@ -244,9 +244,8 @@ def is_struct_dtype(obj):
 def is_interval_dtype(obj):
     return (
         isinstance(obj, cudf.core.dtypes.IntervalDtype)
+        or isinstance(obj, pd.core.dtypes.dtypes.IntervalDtype)
         or obj is cudf.core.dtypes.IntervalDtype
-        # or type(obj) is cudf.core.column.StructColumn
-        # or obj is cudf.core.column.StructColumn
         or (
             isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
         )
