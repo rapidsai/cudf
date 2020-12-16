@@ -224,10 +224,10 @@ size_t multiplication_factor(cudf::data_type const& data_type)
     case cudf::type_id::TIMESTAMP_SECONDS: return 24L * 60 * 60;
     case cudf::type_id::TIMESTAMP_MILLISECONDS: return 24L * 60 * 60 * 1000;
     case cudf::type_id::TIMESTAMP_MICROSECONDS: return 24L * 60 * 60 * 1000 * 1000;
+    case cudf::type_id::TIMESTAMP_NANOSECONDS: return 24L * 60 * 60 * 1000 * 1000 * 1000;
     default:
-      CUDF_EXPECTS(data_type.id() == cudf::type_id::TIMESTAMP_NANOSECONDS,
-                   "Unexpected data-type for timestamp-based rolling window operation!");
-      return 24L * 60 * 60 * 1000 * 1000 * 1000;
+      CUDF_FAIL("Unexpected data-type for timestamp-based rolling window operation!");
+      return {};
   }
 }
 
