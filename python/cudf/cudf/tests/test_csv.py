@@ -1912,6 +1912,7 @@ def test_csv_writer_datetime_sep():
     df["a"] = df["a"].astype("datetime64[s]")
     expected = df.to_pandas().to_csv(date_format="%Y-%m-%dT%H:%M:%SZ", sep="-")
     actual = df.to_csv(sep="-")
+    assert expected == actual
 
 
 def test_na_filter_empty_fields():
