@@ -513,7 +513,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    * @code{.cpp}
    * // Creates a non-nullable column of INT32 elements with 5 elements: {0, 2, 4, 6, 8}
    * auto elements = make_counting_transform_iterator(0, [](auto i) { return i * 2;});
-   * auto w = fixed_width_column_wrapper<int32_t>(elements, elements + 5, scale_type{0});
+   * auto w = fixed_point_column_wrapper<int32_t>(elements, elements + 5, scale_type{0});
    * @endcode
    *
    * @tparam FixedPointRepIterator Iterator for fixed_point::rep

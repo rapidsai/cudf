@@ -116,7 +116,7 @@ class writer {
     const table_metadata* metadata            = nullptr,
     bool return_filemetadata                  = false,
     const std::string column_chunks_file_path = "",
-    bool int96_timestamps                     = false,
+    std::vector<uint8_t>* decimal_precision   = nullptr,
     rmm::cuda_stream_view stream              = rmm::cuda_stream_default);
 
   /**

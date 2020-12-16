@@ -53,8 +53,11 @@ struct pq_chunked_state {
   /// only used in the write_chunked() case. copied from the (optionally) user supplied
   /// argument to write_parquet_chunked_begin()
   bool single_write_mode;
-  ///  timestamps should be written as int96 types
+  /// timestamps should be written as int96 types
   bool int96_timestamps;
+  /// vector of precision values for decimal writing. Exactly one entry
+  /// per decimal column.
+  std::vector<uint8_t> decimal_precisions;
 
   pq_chunked_state() = default;
 
