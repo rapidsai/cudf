@@ -7,6 +7,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class CuFileTest extends CudfTestBase {
   @TempDir File tempDir;
@@ -20,6 +21,7 @@ public class CuFileTest extends CudfTestBase {
 
   @Test
   public void testCopyToFile() {
+    assumeTrue(CuFile.libraryLoaded());
     File tempFile = new File(tempDir, "tempFile");
     try (HostMemoryBuffer orig = HostMemoryBuffer.allocate(16);
          DeviceMemoryBuffer from = DeviceMemoryBuffer.allocate(16);
@@ -36,6 +38,7 @@ public class CuFileTest extends CudfTestBase {
 
   @Test
   public void testAppendToFile() {
+    assumeTrue(CuFile.libraryLoaded());
     File tempFile = new File(tempDir, "tempFile");
     try (HostMemoryBuffer orig = HostMemoryBuffer.allocate(16);
          DeviceMemoryBuffer from = DeviceMemoryBuffer.allocate(16);

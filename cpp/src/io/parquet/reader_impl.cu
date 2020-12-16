@@ -137,7 +137,9 @@ type_id to_type_id(SchemaElement const &schema,
         return type_id::DECIMAL32;
       else if (physical == parquet::INT64)
         return type_id::DECIMAL64;
-      else {
+      else if (physical == parquet::FIXED_LEN_BYTE_ARRAY && schema.type_length <= 8) {
+        return type_id::DECIMAL64;
+      } else {
         CUDF_EXPECTS(strict_decimal_types == false, "Unsupported decimal type read!");
         return type_id::FLOAT64;
       }

@@ -16,6 +16,7 @@
 #pragma once
 #include <stdint.h>
 
+#include <cudf/types.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -43,6 +44,7 @@ struct stats_column_desc {
   uint32_t num_values;  //!< Number of data values in column. Different from num_rows in case of
                         //!< nested columns
   const uint32_t *valid_map_base;  //!< base of valid bit map for this column (null if not present)
+  size_type column_offset;         //! < index of the first element relative to the base memory
   const void *column_data_base;    //!< base ptr to column data
   int32_t ts_scale;  //!< timestamp scale (>0: multiply by scale, <0: divide by -scale)
 };
