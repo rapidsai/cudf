@@ -635,7 +635,7 @@ template <>
 hash_value_type CUDA_HOST_DEVICE_CALLABLE
 SparkMurmurHash3_32<bool>::operator()(bool const& key) const
 {
-  if(key) {
+  if (key) {
     return this->compute<uint32_t>(1);
   } else {
     return this->compute<uint32_t>(0);
