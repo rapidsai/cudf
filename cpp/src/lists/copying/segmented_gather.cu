@@ -73,9 +73,12 @@ std::unique_ptr<column> segmented_gather(column_view const& list_column,
     child_gather_index_end,
     map_begin,
     child_gather_index_begin,
-    [value_offsets] __device__(size_type offset_idx, size_type sub_index) -> size_type {
-      return value_offsets[offset_idx] + sub_index;
-    });
+                    [value_offsets, gather_offsets] __device__(size_type offset_idx,
+                                                               size_type sub_index) -> size_type {
+                      auto list_size = value_offsets[offset_idx + 1] - value_offsets[offset_idx];
+                      auto wrapped_sub_index = (sub_index % list_size + list_size) % list_size;
+                      return value_offsets[offset_idx] + wrapped_sub_index;
+                    });
 
   if (DEBUG_SEG_GATHER) {
     printf("\nv3:");
