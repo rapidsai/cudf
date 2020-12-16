@@ -28,6 +28,7 @@ option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
 option(ARROW_STATIC_LIB "Build and statically link with Arrow libraries" OFF)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
+option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 
 # Set a default build type if none was specified
 set(DEFAULT_BUILD_TYPE "Release")
@@ -55,6 +56,10 @@ endif()
 if(HT_DEFAULT_ALLOCATOR)
     message(STATUS "Using default allocator for hash tables")
 endif()
+
+if(PER_THREAD_DEFAULT_STREAM)
+    message(STATUS "Using per-thread default stream")
+endif(PER_THREAD_DEFAULT_STREAM)
 
 ###################################################################################################
 # - conda environment -----------------------------------------------------------------------------
@@ -110,15 +115,6 @@ endif(Boost_FOUND)
 
 # Stringify libcudf and libcudacxx headers used in JIT operations
 include(cmake/Modules/StringifyJITHeaders.cmake)
-
-###################################################################################################
-# - per-thread default stream option --------------------------------------------------------------
-# This needs to be defined first so tests and benchmarks can inherit it.
-
-option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
-if(PER_THREAD_DEFAULT_STREAM)
-    message(STATUS "Using per-thread default stream")
-endif(PER_THREAD_DEFAULT_STREAM)
 
 ###################################################################################################
 # - add tests -------------------------------------------------------------------------------------
