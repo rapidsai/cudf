@@ -210,13 +210,28 @@ def test_dropna_thresh_cols(thresh, subset, inplace):
     )
 
 
-def test_dropna_dataframe_np_nan():
-    import numpy as np
-
-    import cudf
-
-    data = {"key": [1, 2], "val": [np.nan, 3]}
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "key": [1, 2, 10],
+            "val": cudf.Series([np.nan, 3, 1], nan_as_null=False),
+            "abc": [np.nan, None, 1],
+        },
+        {
+            "key": [None, 2, 1],
+            "val": cudf.Series([3, np.nan, 0.1], nan_as_null=True),
+            "abc": [None, 1, None],
+        },
+    ],
+)
+@pytest.mark.parametrize("axis", [0, 1])
+def test_dropna_dataframe_np_nan(data, axis):
     gdf = cudf.DataFrame(data)
-    pdf = pd.DataFrame(data)
+    pd_data = {
+        key: value.to_pandas() if isinstance(value, cudf.Series) else value
+        for key, value in data.items()
+    }
+    pdf = pd.DataFrame(pd_data)
 
-    assert_eq(pdf.dropna(), gdf.dropna(), check_dtype=False)
+    assert_eq(pdf.dropna(axis=axis), gdf.dropna(axis=axis), check_dtype=False)
