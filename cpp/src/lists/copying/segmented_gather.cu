@@ -42,8 +42,9 @@ std::unique_ptr<column> segmented_gather(column_view const& list_column,
   std::cout << value_column.size() << "==" << gather_map.size() << "\n";
   CUDF_EXPECTS(value_column.size() == gather_map.size(),
                "Gather map and list column should be same size");
-  auto const gather_map_size = gather_map.child().size();
+  auto const gather_map_size = gather_map.get_sliced_child(stream).size();
   auto value_offsets         = value_column.offsets().begin<size_type>();
+  auto gather_offsets        = gather_map.offsets().begin<size_type>();
 
   // Flattened gather indices
   auto child_gather_index =
@@ -66,13 +67,13 @@ std::unique_ptr<column> segmented_gather(column_view const& list_column,
     printf("\n");
   }
 
-  auto map_begin = cudf::detail::indexalator_factory::make_input_iterator(gather_map.child());
-  thrust::transform(
-    rmm::exec_policy(stream),
-    child_gather_index_begin,
-    child_gather_index_end,
-    map_begin,
-    child_gather_index_begin,
+  auto map_begin =
+    cudf::detail::indexalator_factory::make_input_iterator(gather_map.get_sliced_child(stream));
+  thrust::transform(rmm::exec_policy(stream),
+                    child_gather_index_begin,
+                    child_gather_index_end,
+                    map_begin,
+                    child_gather_index_begin,
                     [value_offsets, gather_offsets] __device__(size_type offset_idx,
                                                                size_type sub_index) -> size_type {
                       auto list_size = value_offsets[offset_idx + 1] - value_offsets[offset_idx];
@@ -87,7 +88,7 @@ std::unique_ptr<column> segmented_gather(column_view const& list_column,
   }
 
   // Call gather on child of value_column
-  auto child_table = cudf::detail::gather(table_view({value_column.child()}),
+  auto child_table = cudf::detail::gather(table_view({value_column.get_sliced_child(stream)}),
                                           *child_gather_index,
                                           out_of_bounds_policy::DONT_CHECK,
                                           cudf::detail::negative_index_policy::NOT_ALLOWED,
