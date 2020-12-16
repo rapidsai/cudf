@@ -1,5 +1,5 @@
 # Copyright (c) 2018-2020, NVIDIA CORPORATION.
-from __future__ import division, print_function
+from __future__ import division
 
 import inspect
 import itertools
@@ -8,7 +8,7 @@ import pickle
 import sys
 import warnings
 from collections import OrderedDict, defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 import cupy
 import numpy as np
@@ -200,34 +200,52 @@ class DataFrame(Frame, Serializable):
         """
         super().__init__()
 
+        if isinstance(columns, (Series, cudf.Index)):
+            columns = columns.to_pandas()
+
         if isinstance(data, ColumnAccessor):
-            self._data = data
             if index is None:
-                index = as_index(range(self._data.nrows))
-            self.index = as_index(index)
-            return None
+                index = as_index(range(data.nrows))
+            else:
+                index = as_index(index)
+            self._index = index
 
-        if isinstance(data, DataFrame):
-            self._data = data._data
-            self._index = data._index
-            self.columns = data.columns
-            return
+            if columns is not None:
+                self._data = data
+                self._reindex(columns=columns, deep=True, inplace=True)
+            else:
+                self._data = data
 
-        if isinstance(data, pd.DataFrame):
-            data = self.from_pandas(data)
-            self._data = data._data
-            self._index = data._index
-            self.columns = data.columns
-            return
+        elif isinstance(data, (DataFrame, pd.DataFrame)):
+            if isinstance(data, pd.DataFrame):
+                data = self.from_pandas(data)
 
-        if data is None:
+            if index is not None:
+                if not data.index.equals(index):
+                    data = data.reindex(index)
+                    index = data._index
+                else:
+                    index = as_index(index)
+            else:
+                index = data._index
+
+            self._index = index
+
+            if columns is not None:
+                self._data = data._data
+                self._reindex(
+                    columns=columns, index=index, deep=False, inplace=True
+                )
+            else:
+                self._data = data._data
+                self.columns = data.columns
+
+        elif data is None:
             if index is None:
                 self._index = RangeIndex(0)
             else:
                 self._index = as_index(index)
             if columns is not None:
-                if isinstance(columns, (Series, cudf.Index)):
-                    columns = columns.to_pandas()
 
                 self._data = ColumnAccessor(
                     OrderedDict.fromkeys(
@@ -1088,7 +1106,7 @@ class DataFrame(Frame, Serializable):
         else:
             for col in self._data:
                 result._data[col] = self._data[col].astype(
-                    dtype=dtype, errors=errors, copy=copy, **kwargs
+                    dtype=dtype, **kwargs
                 )
 
         return result
@@ -1371,7 +1389,9 @@ class DataFrame(Frame, Serializable):
                         l_opr = self[col]
                 result[col] = op(l_opr, r_opr)
 
-        elif isinstance(other, (numbers.Number, cudf.Scalar)):
+        elif isinstance(other, (numbers.Number, cudf.Scalar)) or (
+            isinstance(other, np.ndarray) and other.ndim == 0
+        ):
             for col in self._data:
                 result[col] = op(self[col], other)
         else:
@@ -2642,48 +2662,16 @@ class DataFrame(Frame, Serializable):
 
         df = self
         cols = columns
-        original_cols = df._data
         dtypes = OrderedDict(df.dtypes)
         idx = labels if index is None and axis in (0, "index") else index
         cols = labels if cols is None and axis in (1, "columns") else cols
         df = df if cols is None else df[list(set(df.columns) & set(cols))]
 
-        if idx is not None:
-            idx = as_index(idx)
+        result = df._reindex(
+            columns=cols, dtypes=dtypes, deep=copy, index=idx, inplace=False
+        )
 
-            if isinstance(idx, cudf.core.MultiIndex):
-                idx_dtype_match = (
-                    df.index._source_data.dtypes == idx._source_data.dtypes
-                ).all()
-            else:
-                idx_dtype_match = df.index.dtype == idx.dtype
-
-            if not idx_dtype_match:
-                cols = cols if cols is not None else list(df.columns)
-                df = DataFrame()
-            else:
-                df = DataFrame(None, idx).join(df, how="left", sort=True)
-                # double-argsort to map back from sorted to unsorted positions
-                df = df.take(idx.argsort(ascending=True).argsort())
-
-        idx = idx if idx is not None else df.index
-        names = cols if cols is not None else list(df.columns)
-
-        length = len(idx)
-        cols = OrderedDict()
-
-        for name in names:
-            if name in df:
-                cols[name] = df._data[name].copy(deep=copy)
-            else:
-                dtype = dtypes.get(name, np.float64)
-                col = original_cols.get(name, Series(dtype=dtype)._column)
-                col = column.column_empty_like(
-                    col, dtype=dtype, masked=True, newsize=length
-                )
-                cols[name] = col
-
-        return DataFrame(cols, idx)
+        return result
 
     def _set_index(
         self, index, to_drop=None, inplace=False, verify_integrity=False,
@@ -3810,6 +3798,137 @@ class DataFrame(Frame, Serializable):
             keep_index=not ignore_index,
         )
 
+    def agg(self, aggs, axis=None):
+        """
+        Aggregate using one or more operations over the specified axis.
+
+        Parameters
+        ----------
+        aggs : Iterable (set, list, string, tuple or dict)
+            Function to use for aggregating data. Accepted types are:
+             * string name, e.g. ``"sum"``
+             * list of functions, e.g. ``["sum", "min", "max"]``
+             * dict of axis labels specified operations per column,
+               e.g. ``{"a": "sum"}``
+
+        axis : not yet supported
+
+        Returns
+        -------
+        Aggregation Result : ``Series`` or ``DataFrame``
+            When ``DataFrame.agg`` is called with single agg,
+            ``Series`` is returned.
+            When ``DataFrame.agg`` is called with several aggs,
+            ``DataFrame`` is returned.
+
+        Notes
+        -----
+        Difference from pandas:
+          * Not supporting: ``axis``, ``*args``, ``**kwargs``
+
+        """
+        # TODO: Remove the typecasting below once issue #6846 is fixed
+        # link <https://github.com/rapidsai/cudf/issues/6846>
+        dtypes = [self[col].dtype for col in self._column_names]
+        common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
+        df_normalized = self.astype(common_dtype)
+
+        if any(is_string_dtype(dt) for dt in dtypes):
+            raise NotImplementedError(
+                "DataFrame.agg() is not supported for "
+                "frames containing string columns"
+            )
+
+        if axis == 0 or axis is not None:
+            raise NotImplementedError("axis not implemented yet")
+
+        if isinstance(aggs, Iterable) and not isinstance(aggs, (str, dict)):
+            result = cudf.DataFrame()
+            # TODO : Allow simultaneous pass for multi-aggregation as
+            # a future optimization
+            for agg in aggs:
+                result[agg] = getattr(df_normalized, agg)()
+            return result.T.sort_index(axis=1, ascending=True)
+
+        elif isinstance(aggs, str):
+            if not hasattr(df_normalized, aggs):
+                raise AttributeError(
+                    f"{aggs} is not a valid function for "
+                    f"'DataFrame' object"
+                )
+            result = cudf.DataFrame()
+            result[aggs] = getattr(df_normalized, aggs)()
+            result = result.iloc[:, 0]
+            result.name = None
+            return result
+
+        elif isinstance(aggs, dict):
+            cols = aggs.keys()
+            if any([callable(val) for val in aggs.values()]):
+                raise NotImplementedError(
+                    "callable parameter is not implemented yet"
+                )
+            elif all([isinstance(val, str) for val in aggs.values()]):
+                result = cudf.Series(index=cols)
+                for key, value in aggs.items():
+                    col = df_normalized[key]
+                    if not hasattr(col, value):
+                        raise AttributeError(
+                            f"{value} is not a valid function for "
+                            f"'Series' object"
+                        )
+                    result[key] = getattr(col, value)()
+            elif all([isinstance(val, Iterable) for val in aggs.values()]):
+                idxs = set()
+                for val in aggs.values():
+                    if isinstance(val, Iterable):
+                        idxs.update(val)
+                    elif isinstance(val, str):
+                        idxs.add(val)
+                idxs = sorted(list(idxs))
+                for agg in idxs:
+                    if agg is callable:
+                        raise NotImplementedError(
+                            "callable parameter is not implemented yet"
+                        )
+                result = cudf.DataFrame(index=idxs, columns=cols)
+                for key in aggs.keys():
+                    col = df_normalized[key]
+                    col_empty = column_empty(
+                        len(idxs), dtype=col.dtype, masked=True
+                    )
+                    ans = cudf.Series(data=col_empty, index=idxs)
+                    if isinstance(aggs.get(key), Iterable):
+                        # TODO : Allow simultaneous pass for multi-aggregation
+                        # as a future optimization
+                        for agg in aggs.get(key):
+                            if not hasattr(col, agg):
+                                raise AttributeError(
+                                    f"{agg} is not a valid function for "
+                                    f"'Series' object"
+                                )
+                            ans[agg] = getattr(col, agg)()
+                    elif isinstance(aggs.get(key), str):
+                        if not hasattr(col, aggs.get(key)):
+                            raise AttributeError(
+                                f"{aggs.get(key)} is not a valid function for "
+                                f"'Series' object"
+                            )
+                        ans[aggs.get(key)] = getattr(col, agg)()
+                    result[key] = ans
+            else:
+                raise ValueError("values of dict must be a string or list")
+
+            return result
+
+        elif callable(aggs):
+            raise NotImplementedError(
+                "callable parameter is not implemented yet"
+            )
+
+        else:
+            raise ValueError("argument must be a string, list or dict")
+
     def nlargest(self, n, columns, keep="first"):
         """Get the rows of the DataFrame sorted by the n largest value of *columns*
 
@@ -4114,6 +4233,11 @@ class DataFrame(Frame, Serializable):
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
 
+        if group_keys is not True:
+            raise NotImplementedError(
+                "The group_keys keyword is not yet implemented"
+            )
+
         if squeeze is not False:
             raise NotImplementedError(
                 "squeeze parameter is not yet implemented"
@@ -4124,13 +4248,9 @@ class DataFrame(Frame, Serializable):
                 "observed parameter is not yet implemented"
             )
 
-        if group_keys is not True:
-            raise NotImplementedError(
-                "The group_keys keyword is not yet implemented"
-            )
         if by is None and level is None:
             raise TypeError(
-                "groupby() requires either by or level to be" "specified."
+                "groupby() requires either by or level to be specified."
             )
 
         return DataFrameGroupBy(
@@ -5332,8 +5452,9 @@ class DataFrame(Frame, Serializable):
             0 <= q <= 1, the quantile(s) to compute
         axis : int
             axis is a NON-FUNCTIONAL parameter
-        numeric_only : boolean
-            numeric_only is a NON-FUNCTIONAL parameter
+        numeric_only : bool, default True
+            If False, the quantile of datetime and timedelta data will be
+            computed as well.
         interpolation : {`linear`, `lower`, `higher`, `midpoint`, `nearest`}
             This parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.
@@ -5345,42 +5466,64 @@ class DataFrame(Frame, Serializable):
 
         Returns
         -------
+        Series or DataFrame
+            If q is an array or numeric_only is set to False, a DataFrame
+            will be returned where index is q, the columns are the columns
+            of self, and the values are the quantile.
 
-        DataFrame
+            If q is a float, a Series will be returned where the index is
+            the columns of self and the values are the quantiles.
+
+        Notes
+        -----
+        One notable difference from Pandas is when DataFrame is of
+        non-numeric types and result is expected to be a Series in case of
+        Pandas. cuDF will return a DataFrame as it doesn't support mixed
+        types under Series.
         """
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
 
-        if not numeric_only:
-            raise NotImplementedError("numeric_only is not implemented yet")
+        if numeric_only:
+            data_df = self.select_dtypes(
+                include=[np.number], exclude=["datetime64", "timedelta64"]
+            )
+        else:
+            data_df = self
+
         if columns is None:
-            columns = self._data.names
+            columns = data_df._data.names
 
         result = DataFrame()
 
-        for k in self._data.names:
+        for k in data_df._data.names:
 
             if k in columns:
-                res = self[k].quantile(
+                res = data_df[k].quantile(
                     q,
                     interpolation=interpolation,
                     exact=exact,
                     quant_index=False,
                 )
-                if not isinstance(res, numbers.Number) and len(res) == 0:
+                if (
+                    not isinstance(
+                        res, (numbers.Number, pd.Timestamp, pd.Timedelta)
+                    )
+                    and len(res) == 0
+                ):
                     res = column.column_empty_like(
-                        q, dtype="float64", masked=True, newsize=len(q)
+                        q, dtype=data_df[k].dtype, masked=True, newsize=len(q)
                     )
                 result[k] = column.as_column(res)
 
-        if isinstance(q, numbers.Number):
+        if isinstance(q, numbers.Number) and numeric_only:
             result = result.fillna(np.nan)
             result = result.iloc[0]
-            result.index = as_index(self.columns)
+            result.index = as_index(data_df.columns)
             result.name = q
             return result
         else:
-            q = list(map(float, q))
+            q = list(map(float, [q] if isinstance(q, numbers.Number) else q))
             result.index = q
             return result
 

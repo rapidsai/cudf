@@ -27,10 +27,10 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/device_vector.hpp>
 
 #include <algorithm>
 #include <array>
@@ -98,7 +98,8 @@ parquet::ConvertedType logical_type_to_converted_type(parquet::LogicalType const
  */
 type_id to_type_id(SchemaElement const &schema,
                    bool strings_to_categorical,
-                   type_id timestamp_type_id)
+                   type_id timestamp_type_id,
+                   bool strict_decimal_types)
 {
   parquet::Type physical                = schema.type;
   parquet::ConvertedType converted_type = schema.converted_type;
@@ -132,7 +133,14 @@ type_id to_type_id(SchemaElement const &schema,
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_MILLISECONDS;
     case parquet::DECIMAL:
-      if (decimal_scale != 0 || (physical != parquet::INT32 && physical != parquet::INT64)) {
+      if (physical == parquet::INT32)
+        return type_id::DECIMAL32;
+      else if (physical == parquet::INT64)
+        return type_id::DECIMAL64;
+      else if (physical == parquet::FIXED_LEN_BYTE_ARRAY && schema.type_length <= 8) {
+        return type_id::DECIMAL64;
+      } else {
+        CUDF_EXPECTS(strict_decimal_types == false, "Unsupported decimal type read!");
         return type_id::FLOAT64;
       }
       break;
@@ -215,8 +223,9 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
   }
 
   int8_t converted_type = converted;
-  if (converted_type == parquet::DECIMAL && column_type_id != type_id::FLOAT64) {
-    converted_type = parquet::UNKNOWN;  // Not converting to float64
+  if (converted_type == parquet::DECIMAL && column_type_id != type_id::FLOAT64 &&
+      column_type_id != type_id::DECIMAL32 && column_type_id != type_id::DECIMAL64) {
+    converted_type = parquet::UNKNOWN;  // Not converting to float64 or decimal
   }
   return std::make_tuple(type_width, clock_rate, converted_type);
 }
@@ -443,7 +452,7 @@ class aggregate_metadata {
         R"(\])"                           // Match closing square brackets
       };
       std::smatch sm;
-      if (std::regex_search(it->second, sm, index_columns_expr)) { return std::move(sm[1].str()); }
+      if (std::regex_search(it->second, sm, index_columns_expr)) { return sm[1].str(); }
     }
     return "";
   }
@@ -463,7 +472,7 @@ class aggregate_metadata {
         if (sm.size() == 2) {  // 2 = whole match, first item
           if (std::find(names.begin(), names.end(), sm[1].str()) == names.end()) {
             std::regex esc_quote{R"(\\")"};
-            names.emplace_back(std::move(std::regex_replace(sm[1].str(), esc_quote, R"(")")));
+            names.emplace_back(std::regex_replace(sm[1].str(), esc_quote, R"(")"));
           }
         }
         str = sm.suffix();
@@ -549,6 +558,7 @@ class aggregate_metadata {
    * reproduce the linear list of output columns that correspond to an input column.
    * @param[in] strings_to_categorical Type conversion parameter
    * @param[in] timestamp_type_id Type conversion parameter
+   * @param[in] strict_decimal_types True if it is an error to load an unsupported decimal type
    *
    */
   void build_column_info(int &schema_idx,
@@ -556,7 +566,8 @@ class aggregate_metadata {
                          std::vector<column_buffer> &output_columns,
                          std::deque<int> &nesting,
                          bool strings_to_categorical,
-                         type_id timestamp_type_id) const
+                         type_id timestamp_type_id,
+                         bool strict_decimal_types) const
   {
     int start_schema_idx = schema_idx;
     auto const &schema   = get_schema(schema_idx);
@@ -571,16 +582,19 @@ class aggregate_metadata {
                         output_columns,
                         nesting,
                         strings_to_categorical,
-                        timestamp_type_id);
+                        timestamp_type_id,
+                        strict_decimal_types);
       return;
     }
 
     // if we're at the root, this is a new output column
-    int index = (int)output_columns.size();
     nesting.push_back(static_cast<int>(output_columns.size()));
-    output_columns.emplace_back(
-      data_type{to_type_id(schema, strings_to_categorical, timestamp_type_id)},
-      schema.repetition_type == OPTIONAL ? true : false);
+    auto const col_type =
+      to_type_id(schema, strings_to_categorical, timestamp_type_id, strict_decimal_types);
+    auto const dtype = col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64
+                         ? data_type{col_type, numeric::scale_type{-schema.decimal_scale}}
+                         : data_type{col_type};
+    output_columns.emplace_back(dtype, schema.repetition_type == OPTIONAL ? true : false);
     column_buffer &output_col = output_columns.back();
     output_col.name           = schema.name;
 
@@ -591,7 +605,8 @@ class aggregate_metadata {
                         output_col.children,
                         nesting,
                         strings_to_categorical,
-                        timestamp_type_id);
+                        timestamp_type_id,
+                        strict_decimal_types);
     }
 
     // if I have no children, we're at a leaf and I'm an input column (that is, one with actual
@@ -619,7 +634,8 @@ class aggregate_metadata {
   auto select_columns(std::vector<std::string> const &use_names,
                       bool include_index,
                       bool strings_to_categorical,
-                      type_id timestamp_type_id) const
+                      type_id timestamp_type_id,
+                      bool strict_decimal_types) const
   {
     auto const &pfm = per_file_metadata[0];
 
@@ -670,7 +686,8 @@ class aggregate_metadata {
                         output_columns,
                         nesting,
                         strings_to_categorical,
-                        timestamp_type_id);
+                        timestamp_type_id,
+                        strict_decimal_types);
     }
 
     return std::make_tuple(
@@ -1343,6 +1360,8 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
     _timestamp_type = options.get_timestamp_type();
   }
 
+  _strict_decimal_types = options.is_enabled_strict_decimal_types();
+
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
@@ -1351,7 +1370,8 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
     _metadata->select_columns(options.get_columns(),
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
-                              _timestamp_type.id());
+                              _timestamp_type.id(),
+                              _strict_decimal_types);
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
@@ -1418,12 +1438,12 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         int32_t clock_rate;
         int8_t converted_type;
 
-        std::tie(type_width, clock_rate, converted_type) =
-          conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
-                          _timestamp_type.id(),
-                          schema.type,
-                          schema.converted_type,
-                          schema.type_length);
+        std::tie(type_width, clock_rate, converted_type) = conversion_info(
+          to_type_id(schema, _strings_to_categorical, _timestamp_type.id(), _strict_decimal_types),
+          _timestamp_type.id(),
+          schema.type,
+          schema.converted_type,
+          schema.type_length);
 
         column_chunk_offsets[chunks.size()] =
           (col_meta.dictionary_page_offset != 0)

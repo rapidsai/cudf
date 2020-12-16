@@ -9,7 +9,6 @@ from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.scalar import as_device_scalar
 from cudf.core.column import column, string
 from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import _fillna_natwise
@@ -129,7 +128,11 @@ class DatetimeColumn(column.ColumnBase):
     def normalize_binop_value(self, other):
         if isinstance(other, cudf.Scalar):
             return other
-        elif isinstance(other, dt.datetime):
+
+        if isinstance(other, np.ndarray) and other.ndim == 0:
+            other = other.item()
+
+        if isinstance(other, dt.datetime):
             other = np.datetime64(other)
         elif isinstance(other, dt.timedelta):
             other = np.timedelta64(other)
@@ -137,6 +140,8 @@ class DatetimeColumn(column.ColumnBase):
             other = other.to_datetime64()
         elif isinstance(other, pd.Timedelta):
             other = other.to_timedelta64()
+        elif isinstance(other, cudf.DateOffset):
+            return other
         if isinstance(other, np.datetime64):
             if np.isnat(other):
                 return cudf.Scalar(None, dtype=self.dtype)
@@ -177,20 +182,18 @@ class DatetimeColumn(column.ColumnBase):
             f"cannot astype a datetimelike from [{self.dtype}] to [{dtype}]"
         )
 
-    def as_numerical_column(self, dtype, **kwargs):
+    def as_numerical_column(self, dtype):
         return self.as_numerical.astype(dtype)
 
-    def as_string_column(self, dtype, **kwargs):
-
-        if not kwargs.get("format"):
-            fmt = _dtype_to_format_conversion.get(
+    def as_string_column(self, dtype, format=None):
+        if format is None:
+            format = _dtype_to_format_conversion.get(
                 self.dtype.name, "%Y-%m-%d %H:%M:%S"
             )
-            kwargs["format"] = fmt
         if len(self) > 0:
-            return string._numeric_to_str_typecast_functions[
+            return string._datetime_to_str_typecast_functions[
                 np.dtype(self.dtype)
-            ](self, **kwargs)
+            ](self, format)
         else:
             return column.column_empty(0, dtype="object", masked=False)
 
@@ -211,14 +214,11 @@ class DatetimeColumn(column.ColumnBase):
         )
         if isinstance(q, Number):
             return pd.Timestamp(result, unit=self.time_unit)
-
-        result = result * as_device_scalar(
-            _numpy_to_pandas_conversion[self.time_unit]
-        )
-
-        return result.astype("datetime64[ns]")
+        return result.astype(self.dtype)
 
     def binary_operator(self, op, rhs, reflect=False):
+        if isinstance(rhs, cudf.DateOffset):
+            return binop_offset(self, rhs, op)
         lhs, rhs = self, rhs
         if op in ("eq", "ne", "lt", "gt", "le", "ge"):
             out_dtype = np.bool
@@ -318,6 +318,15 @@ class DatetimeColumn(column.ColumnBase):
 def binop(lhs, rhs, op, out_dtype):
     out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
     return out
+
+
+def binop_offset(lhs, rhs, op):
+    if rhs._is_no_op:
+        return lhs
+    else:
+        rhs = rhs._generate_column(len(lhs), op)
+        out = libcudf.datetime.add_months(lhs, rhs)
+        return out
 
 
 def infer_format(element, **kwargs):

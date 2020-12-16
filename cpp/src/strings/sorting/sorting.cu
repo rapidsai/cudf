@@ -20,8 +20,9 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
@@ -37,15 +38,14 @@ std::unique_ptr<cudf::column> sort(strings_column_view strings,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
-  auto execpol        = rmm::exec_policy(stream);
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
 
   // sort the indices of the strings
   size_type num_strings = strings.size();
   rmm::device_vector<size_type> indices(num_strings);
-  thrust::sequence(execpol->on(stream.value()), indices.begin(), indices.end());
-  thrust::sort(execpol->on(stream.value()),
+  thrust::sequence(rmm::exec_policy(stream), indices.begin(), indices.end());
+  thrust::sort(rmm::exec_policy(stream),
                indices.begin(),
                indices.end(),
                [d_column, stype, order, null_order] __device__(size_type lhs, size_type rhs) {
@@ -67,7 +67,7 @@ std::unique_ptr<cudf::column> sort(strings_column_view strings,
   // now build a new strings column from the indices
   auto table_sorted = cudf::detail::gather(table_view{{strings.parent()}},
                                            indices_view,
-                                           cudf::detail::out_of_bounds_policy::NULLIFY,
+                                           cudf::out_of_bounds_policy::DONT_CHECK,
                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
                                            stream,
                                            mr)

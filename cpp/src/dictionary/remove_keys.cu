@@ -27,6 +27,7 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
@@ -59,7 +60,6 @@ std::unique_ptr<column> remove_keys_fn(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto const keys_view    = dictionary_column.keys();
-  auto execpol            = rmm::exec_policy(stream);
   auto const indices_type = dictionary_column.indices().type();
   auto const max_size     = dictionary_column.size();
 
@@ -69,7 +69,7 @@ std::unique_ptr<column> remove_keys_fn(
   auto map_itr =
     cudf::detail::indexalator_factory::make_output_iterator(map_indices->mutable_view());
   // init to max to identify new nulls
-  thrust::fill(execpol->on(stream.value()),
+  thrust::fill(rmm::exec_policy(stream),
                map_itr,
                map_itr + keys_view.size(),
                max_size);  // all valid indices are less than this value
@@ -81,7 +81,7 @@ std::unique_ptr<column> remove_keys_fn(
       auto positions = make_fixed_width_column(
         indices_type, keys_view.size(), cudf::mask_state::UNALLOCATED, stream);
       auto itr = cudf::detail::indexalator_factory::make_output_iterator(positions->mutable_view());
-      thrust::sequence(execpol->on(stream.value()), itr, itr + keys_view.size());
+      thrust::sequence(rmm::exec_policy(stream), itr, itr + keys_view.size());
       return positions;
     }();
     // copy the non-removed keys ( keys_to_keep_fn(idx)==true )
@@ -95,7 +95,7 @@ std::unique_ptr<column> remove_keys_fn(
       cudf::detail::indexalator_factory::make_input_iterator(keys_positions->view());
     // build indices mapper
     // Example scatter([0,1,2][0,2,4][max,max,max,max,max]) => [0,max,1,max,2]
-    thrust::scatter(execpol->on(stream.value()),
+    thrust::scatter(rmm::exec_policy(stream),
                     positions_itr,
                     positions_itr + filtered_view.size(),
                     filtered_itr,
@@ -114,12 +114,13 @@ std::unique_ptr<column> remove_keys_fn(
   // Example: gather([0,max,1,max,2],[4,0,3,1,2,2,2,4,0]) => [2,0,max,max,1,1,1,2,0]
   auto table_indices = cudf::detail::gather(table_view{{map_indices->view()}},
                                             indices_view,
-                                            cudf::detail::out_of_bounds_policy::NULLIFY,
+                                            cudf::out_of_bounds_policy::NULLIFY,
                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
                                             stream,
                                             mr)
                          ->release();
   std::unique_ptr<column> indices_column(std::move(table_indices.front()));
+  indices_column->set_null_mask(rmm::device_buffer{}, 0);
 
   // compute new nulls -- merge the existing nulls with the newly created ones (value<0)
   auto const offset = dictionary_column.offset();
@@ -175,8 +176,7 @@ std::unique_ptr<column> remove_unused_keys(
   auto const matches = [&] {
     // build keys index to verify against indices values
     rmm::device_uvector<uint32_t> keys_positions(keys_size, stream);
-    thrust::sequence(
-      rmm::exec_policy(stream)->on(stream.value()), keys_positions.begin(), keys_positions.end());
+    thrust::sequence(rmm::exec_policy(stream), keys_positions.begin(), keys_positions.end());
     // wrap the indices for comparison in contains()
     column_view keys_positions_view(data_type{type_id::UINT32}, keys_size, keys_positions.data());
     return cudf::detail::contains(keys_positions_view, indices_view, stream, mr);

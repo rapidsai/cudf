@@ -54,7 +54,8 @@ std::unique_ptr<table> tile(const table_view &in,
   auto counting_it  = thrust::make_counting_iterator<size_type>(0);
   auto tiled_it     = thrust::make_transform_iterator(counting_it, tile_functor{in_num_rows});
 
-  return detail::gather(in, tiled_it, tiled_it + out_num_rows, false, stream, mr);
+  return detail::gather(
+    in, tiled_it, tiled_it + out_num_rows, out_of_bounds_policy::DONT_CHECK, stream, mr);
 }
 }  // namespace detail
 

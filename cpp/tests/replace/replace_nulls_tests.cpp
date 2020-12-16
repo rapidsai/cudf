@@ -19,6 +19,8 @@
 
 #include <cudf/replace.hpp>
 
+#include <tests/groupby/groupby_test_util.hpp>
+
 #include <cudf/dictionary/detail/replace.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -297,6 +299,87 @@ TYPED_TEST(ReplaceNullsTest, LargeScaleScalar)
                                 replacement,
                                 cudf::test::fixed_width_column_wrapper<TypeParam>(
                                   expectedColumn.begin(), expectedColumn.end()));
+}
+
+template <typename T>
+struct ReplaceNullsPolicyTest : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(ReplaceNullsPolicyTest, test_types);
+
+template <typename T>
+void TestReplaceNullsWithPolicy(cudf::test::fixed_width_column_wrapper<T> input,
+                                cudf::test::fixed_width_column_wrapper<T> expected,
+                                cudf::replace_policy policy)
+{
+  auto result = cudf::replace_nulls(input, policy);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
+}
+
+TYPED_TEST(ReplaceNullsPolicyTest, PrecedingFill)
+{
+  std::vector<TypeParam> col =
+    cudf::test::make_type_param_vector<TypeParam>({42, 2, 1, -10, 20, -30});
+  std::vector<cudf::valid_type> mask =
+    cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 0, 1, 0, 1});
+  std::vector<TypeParam> expect_col =
+    cudf::test::make_type_param_vector<TypeParam>({42, 42, 42, -10, -10, -30});
+
+  TestReplaceNullsWithPolicy(
+    cudf::test::fixed_width_column_wrapper<TypeParam>(col.begin(), col.end(), mask.begin()),
+    cudf::test::fixed_width_column_wrapper<TypeParam>(
+      expect_col.begin(), expect_col.end(), cudf::test::all_valid()),
+    cudf::replace_policy::PRECEDING);
+}
+
+TYPED_TEST(ReplaceNullsPolicyTest, FollowingFill)
+{
+  std::vector<TypeParam> col =
+    cudf::test::make_type_param_vector<TypeParam>({42, 2, 1, -10, 20, -30});
+  std::vector<cudf::valid_type> mask =
+    cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 0, 1, 0, 1});
+  std::vector<TypeParam> expect_col =
+    cudf::test::make_type_param_vector<TypeParam>({42, -10, -10, -10, -30, -30});
+
+  TestReplaceNullsWithPolicy(
+    cudf::test::fixed_width_column_wrapper<TypeParam>(col.begin(), col.end(), mask.begin()),
+    cudf::test::fixed_width_column_wrapper<TypeParam>(
+      expect_col.begin(), expect_col.end(), cudf::test::all_valid()),
+    cudf::replace_policy::FOLLOWING);
+}
+
+TYPED_TEST(ReplaceNullsPolicyTest, PrecedingFillLeadingNulls)
+{
+  std::vector<TypeParam> col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
+  std::vector<cudf::valid_type> mask =
+    cudf::test::make_type_param_vector<cudf::valid_type>({0, 0, 1, 0, 1});
+  std::vector<TypeParam> expect_col =
+    cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 3, 5});
+  std::vector<cudf::valid_type> expect_mask =
+    cudf::test::make_type_param_vector<cudf::valid_type>({0, 0, 1, 1, 1});
+
+  TestReplaceNullsWithPolicy(
+    cudf::test::fixed_width_column_wrapper<TypeParam>(col.begin(), col.end(), mask.begin()),
+    cudf::test::fixed_width_column_wrapper<TypeParam>(
+      expect_col.begin(), expect_col.end(), expect_mask.begin()),
+    cudf::replace_policy::PRECEDING);
+}
+
+TYPED_TEST(ReplaceNullsPolicyTest, FollowingFillTrailingNulls)
+{
+  std::vector<TypeParam> col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
+  std::vector<cudf::valid_type> mask =
+    cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 1, 0, 0});
+  std::vector<TypeParam> expect_col =
+    cudf::test::make_type_param_vector<TypeParam>({1, 3, 3, 4, 5});
+  std::vector<cudf::valid_type> expect_mask =
+    cudf::test::make_type_param_vector<cudf::valid_type>({1, 1, 1, 0, 0});
+
+  TestReplaceNullsWithPolicy(
+    cudf::test::fixed_width_column_wrapper<TypeParam>(col.begin(), col.end(), mask.begin()),
+    cudf::test::fixed_width_column_wrapper<TypeParam>(
+      expect_col.begin(), expect_col.end(), expect_mask.begin()),
+    cudf::replace_policy::FOLLOWING);
 }
 
 struct ReplaceDictionaryTest : public cudf::test::BaseFixture {

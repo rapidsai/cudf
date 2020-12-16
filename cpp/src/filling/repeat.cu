@@ -28,8 +28,9 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/binary_search.h>
@@ -86,14 +87,11 @@ struct compute_offsets {
                    "count should not have values larger than size_type's limit.");
     }
     rmm::device_vector<cudf::size_type> offsets(p_column->size());
-    thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
-                           p_column->begin<T>(),
-                           p_column->end<T>(),
-                           offsets.begin());
+    thrust::inclusive_scan(
+      rmm::exec_policy(stream), p_column->begin<T>(), p_column->end<T>(), offsets.begin());
     if (check_count == true) {
       CUDF_EXPECTS(
-        thrust::is_sorted(
-          rmm::exec_policy(stream)->on(stream.value()), offsets.begin(), offsets.end()) == true,
+        thrust::is_sorted(rmm::exec_policy(stream), offsets.begin(), offsets.end()) == true,
         "count has negative values or the resulting table has more \
                     rows than size_type's limit.");
     }
@@ -128,14 +126,15 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 
   size_type output_size{offsets.back()};
   rmm::device_vector<size_type> indices(output_size);
-  thrust::upper_bound(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::upper_bound(rmm::exec_policy(stream),
                       offsets.begin(),
                       offsets.end(),
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(output_size),
                       indices.begin());
 
-  return gather(input_table, indices.begin(), indices.end(), false, stream, mr);
+  return gather(
+    input_table, indices.begin(), indices.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
 }
 
 std::unique_ptr<table> repeat(table_view const& input_table,
@@ -155,7 +154,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
     thrust::make_counting_iterator(0), [count] __device__(auto i) { return i / count; });
   auto map_end = map_begin + output_size;
 
-  return gather(input_table, map_begin, map_end, false, stream, mr);
+  return gather(input_table, map_begin, map_end, out_of_bounds_policy::DONT_CHECK, stream, mr);
 }
 
 }  // namespace detail

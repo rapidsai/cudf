@@ -13,19 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
 
-#include <chrono>
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <cub/cub.cuh>
 
 #include <thrust/gather.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <cub/cub.cuh>
+#include <cuda/std/chrono>
 
 namespace cudf {
 namespace io {
@@ -190,12 +191,16 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
   size_type nvals           = s->frag.num_leaf_values;
   size_type start_value_idx = s->start_value_idx;
 
+  size_type validity_offset = (s->col.nesting_offsets == nullptr) ? s->col.column_offset : 0;
   for (uint32_t i = 0; i < nvals; i += block_size) {
     const uint32_t *valid = s->col.valid_map_base;
     uint32_t val_idx      = start_value_idx + i + t;
-    uint32_t is_valid     = (i + t < nvals && val_idx < s->col.num_values)
-                          ? (valid) ? (valid[val_idx >> 5] >> (val_idx & 0x1f)) & 1 : 1
-                          : 0;
+    uint32_t is_valid =
+      (i + t < nvals && val_idx < s->col.num_values)
+        ? (valid)
+            ? (valid[(val_idx + validity_offset) / 32] >> ((val_idx + validity_offset) % 32)) & 1
+            : 1
+        : 0;
     uint32_t valid_warp = ballot(is_valid);
     uint32_t len, nz_pos, hash;
     if (is_valid) {
@@ -916,8 +921,8 @@ static __device__ void PlainBoolEncode(page_enc_state_s *s,
 
 constexpr auto julian_calendar_epoch_diff()
 {
-  using namespace simt::std::chrono;
-  using namespace simt::std::chrono_literals;
+  using namespace cuda::std::chrono;
+  using namespace cuda::std::chrono_literals;
   return sys_days{January / 1 / 1970} - (sys_days{November / 24 / -4713} + 12h);
 }
 
@@ -929,10 +934,10 @@ constexpr auto julian_calendar_epoch_diff()
  * @return std::pair<nanoseconds,days> where nanoseconds is the number of nanoseconds
  * elapsed in the day and days is the number of days from Julian epoch.
  */
-static __device__ std::pair<simt::std::chrono::nanoseconds, simt::std::chrono::days>
-convert_nanoseconds(simt::std::chrono::sys_time<simt::std::chrono::nanoseconds> const ns)
+static __device__ std::pair<cuda::std::chrono::nanoseconds, cuda::std::chrono::days>
+convert_nanoseconds(cuda::std::chrono::sys_time<cuda::std::chrono::nanoseconds> const ns)
 {
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
   auto const nanosecond_ticks = ns.time_since_epoch();
   auto const gregorian_days   = floor<days>(nanosecond_ticks);
   auto const julian_days      = gregorian_days + ceil<days>(julian_calendar_epoch_diff());
@@ -963,6 +968,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   }
   __syncthreads();
 
+  size_type validity_offset = (s->col.nesting_offsets == nullptr) ? s->col.column_offset : 0;
   // Encode Repetition and Definition levels
   if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.level_bits != 0 &&
       s->col.nesting_levels == 0) {
@@ -983,9 +989,12 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         uint32_t row         = s->page.start_row + rle_numvals + t;
         // Definition level encodes validity. Checks the valid map and if it is valid, then sets the
         // def_lvl accordingly and sets it in s->vals which is then given to RleEncode to encode
-        uint32_t def_lvl = (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
-                             ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1
-                             : 0;
+        uint32_t def_lvl =
+          (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
+            ? (valid != nullptr)
+                ? (valid[(row + validity_offset) / 32] >> ((row + validity_offset) % 32)) & 1
+                : 1
+            : 0;
         s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = def_lvl;
         __syncthreads();
         rle_numvals += nrows;
@@ -1082,9 +1091,12 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       val_idx  = (is_valid) ? s->col.dict_data[val_idx] : val_idx;
     } else {
       const uint32_t *valid = s->col.valid_map_base;
-      is_valid = (val_idx < s->col.num_values && cur_val_idx + t < s->page.num_leaf_values)
-                   ? (valid) ? (valid[val_idx >> 5] >> (val_idx & 0x1f)) & 1 : 1
-                   : 0;
+      is_valid =
+        (val_idx < s->col.num_values && cur_val_idx + t < s->page.num_leaf_values)
+          ? (valid != nullptr)
+              ? (valid[(val_idx + validity_offset) / 32] >> ((val_idx + validity_offset) % 32)) & 1
+              : 1
+          : 0;
     }
     warp_valids = ballot(is_valid);
     cur_val_idx += nvals;
@@ -1189,7 +1201,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
             }
 
             auto const ret = convert_nanoseconds([&]() {
-              using namespace simt::std::chrono;
+              using namespace cuda::std::chrono;
 
               switch (s->col.converted_type) {
                 case TIMESTAMP_MILLIS: {
@@ -1666,7 +1678,9 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
  *
  * Similarly we merge up all the way till level 0 offsets
  */
-dremel_data get_dremel_data(column_view h_col, rmm::cuda_stream_view stream)
+dremel_data get_dremel_data(column_view h_col,
+                            std::vector<bool> const &level_nullability,
+                            rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(h_col.type().id() == type_id::LIST,
                "Can only get rep/def levels for LIST type column");
@@ -1678,12 +1692,12 @@ dremel_data get_dremel_data(column_view h_col, rmm::cuda_stream_view stream)
     auto d_off = lcv.offsets().data<size_type>();
 
     auto empties_idx_end =
-      thrust::copy_if(rmm::exec_policy(stream)->on(stream.value()),
+      thrust::copy_if(rmm::exec_policy(stream),
                       thrust::make_counting_iterator(start),
                       thrust::make_counting_iterator(end),
                       empties_idx.begin(),
                       [d_off] __device__(auto i) { return d_off[i] == d_off[i + 1]; });
-    auto empties_end = thrust::gather(rmm::exec_policy(stream)->on(stream.value()),
+    auto empties_end = thrust::gather(rmm::exec_policy(stream),
                                       empties_idx.begin(),
                                       empties_idx_end,
                                       lcv.offsets().begin<size_type>(),
@@ -1699,28 +1713,37 @@ dremel_data get_dremel_data(column_view h_col, rmm::cuda_stream_view stream)
   size_t max_vals_size = 0;
   std::vector<column_view> nesting_levels;
   std::vector<uint8_t> def_at_level;
+  size_type level       = 0;
+  auto add_def_at_level = [&](size_type level) {
+    auto is_level_nullable =
+      curr_col.nullable() or (not level_nullability.empty() and level_nullability[level]);
+    def_at_level.push_back(is_level_nullable ? 2 : 1);
+  };
   while (curr_col.type().id() == type_id::LIST) {
     nesting_levels.push_back(curr_col);
-    def_at_level.push_back(curr_col.nullable() ? 2 : 1);
+    add_def_at_level(level);
     auto lcv = lists_column_view(curr_col);
     max_vals_size += lcv.offsets().size();
     curr_col = lcv.child();
+    level++;
   }
   // One more entry for leaf col
-  def_at_level.push_back(curr_col.nullable() ? 2 : 1);
+  add_def_at_level(level);
   max_vals_size += curr_col.size();
 
+  // Add one more value at the end so that we can have the max def level
+  def_at_level.push_back(0);
   thrust::exclusive_scan(
     thrust::host, def_at_level.begin(), def_at_level.end(), def_at_level.begin());
 
   // Sliced list column views only have offsets applied to top level. Get offsets for each level.
-  hostdevice_vector<size_type> column_offsets(nesting_levels.size() + 1, stream);
-  hostdevice_vector<size_type> column_ends(nesting_levels.size() + 1, stream);
+  rmm::device_uvector<size_type> d_column_offsets(nesting_levels.size() + 1, stream);
+  rmm::device_uvector<size_type> d_column_ends(nesting_levels.size() + 1, stream);
 
   auto d_col = column_device_view::create(h_col, stream);
   cudf::detail::device_single_thread(
-    [offset_at_level  = column_offsets.device_ptr(),
-     end_idx_at_level = column_ends.device_ptr(),
+    [offset_at_level  = d_column_offsets.data(),
+     end_idx_at_level = d_column_ends.data(),
      col              = *d_col] __device__() {
       auto curr_col           = col;
       size_type off           = curr_col.offset();
@@ -1741,8 +1764,20 @@ dremel_data get_dremel_data(column_view h_col, rmm::cuda_stream_view stream)
     },
     stream);
 
-  column_offsets.device_to_host(stream, true);
-  column_ends.device_to_host(stream, true);
+  thrust::host_vector<size_type> column_offsets(nesting_levels.size() + 1);
+  CUDA_TRY(cudaMemcpyAsync(column_offsets.data(),
+                           d_column_offsets.data(),
+                           d_column_offsets.size() * sizeof(size_type),
+                           cudaMemcpyDeviceToHost,
+                           stream.value()));
+  thrust::host_vector<size_type> column_ends(nesting_levels.size() + 1);
+  CUDA_TRY(cudaMemcpyAsync(column_ends.data(),
+                           d_column_ends.data(),
+                           d_column_ends.size() * sizeof(size_type),
+                           cudaMemcpyDeviceToHost,
+                           stream.value()));
+
+  stream.synchronize();
 
   rmm::device_uvector<uint8_t> rep_level(max_vals_size, stream);
   rmm::device_uvector<uint8_t> def_level(max_vals_size, stream);
@@ -1773,15 +1808,21 @@ dremel_data get_dremel_data(column_view h_col, rmm::cuda_stream_view stream)
       thrust::make_counting_iterator(0),
       [idx            = empties_idx.data(),
        mask           = lcv.null_mask(),
+       level_nullable = level_nullability.empty() ? false : level_nullability[level],
        curr_def_level = def_at_level[level]] __device__(auto i) {
-        return curr_def_level + ((mask && bit_is_set(mask, idx[i])) ? 1 : 0);
+        return curr_def_level +
+               ((mask && bit_is_set(mask, idx[i]) or (!mask && level_nullable)) ? 1 : 0);
       });
 
     auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size());
     auto input_child_def_it = thrust::make_transform_iterator(
       thrust::make_counting_iterator(column_offsets[level + 1]),
-      [mask = lcv.child().null_mask(), curr_def_level = def_at_level[level + 1]] __device__(
-        auto i) { return curr_def_level + ((mask && bit_is_set(mask, i)) ? 1 : 0); });
+      [mask           = lcv.child().null_mask(),
+       level_nullable = level_nullability.empty() ? false : level_nullability[level + 1],
+       curr_def_level = def_at_level[level + 1]] __device__(auto i) {
+        return curr_def_level +
+               ((mask && bit_is_set(mask, i) or (!mask && level_nullable)) ? 1 : 0);
+      });
 
     // Zip the input and output value iterators so that merge operation is done only once
     auto input_parent_zip_it =
@@ -1793,7 +1834,7 @@ dremel_data get_dremel_data(column_view h_col, rmm::cuda_stream_view stream)
     auto output_zip_it =
       thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
 
-    auto ends = thrust::merge_by_key(rmm::exec_policy(stream)->on(stream.value()),
+    auto ends = thrust::merge_by_key(rmm::exec_policy(stream),
                                      empties.begin(),
                                      empties.begin() + empties_size,
                                      thrust::make_counting_iterator(column_offsets[level + 1]),
@@ -1811,14 +1852,12 @@ dremel_data get_dremel_data(column_view h_col, rmm::cuda_stream_view stream)
                                       [off = lcv.offsets().data<size_type>()] __device__(
                                         auto i) -> int { return off[i] == off[i + 1]; });
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
-    thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
-                           scan_it,
-                           scan_it + offset_size_at_level,
-                           scan_out.begin());
+    thrust::exclusive_scan(
+      rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
 
     // Add scan output to existing offsets to get new offsets into merged rep level values
     new_offsets = rmm::device_uvector<size_type>(offset_size_at_level, stream);
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator(0),
                        offset_size_at_level,
                        [off      = lcv.offsets().data<size_type>() + column_offsets[level],
@@ -1829,7 +1868,7 @@ dremel_data get_dremel_data(column_view h_col, rmm::cuda_stream_view stream)
 
     // Set rep level values at level starts to appropriate rep level
     auto scatter_it = thrust::make_constant_iterator(level);
-    thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::scatter(rmm::exec_policy(stream),
                     scatter_it,
                     scatter_it + new_offsets.size() - 1,
                     new_offsets.begin(),
@@ -1866,8 +1905,10 @@ dremel_data get_dremel_data(column_view h_col, rmm::cuda_stream_view stream)
       thrust::make_counting_iterator(0),
       [idx            = empties_idx.data(),
        mask           = lcv.null_mask(),
+       level_nullable = level_nullability.empty() ? false : level_nullability[level],
        curr_def_level = def_at_level[level]] __device__(auto i) {
-        return curr_def_level + ((mask && bit_is_set(mask, idx[i])) ? 1 : 0);
+        return curr_def_level +
+               ((mask && bit_is_set(mask, idx[i]) or (!mask && level_nullable)) ? 1 : 0);
       });
 
     // Zip the input and output value iterators so that merge operation is done only once
@@ -1880,7 +1921,7 @@ dremel_data get_dremel_data(column_view h_col, rmm::cuda_stream_view stream)
     auto output_zip_it =
       thrust::make_zip_iterator(thrust::make_tuple(rep_level.begin(), def_level.begin()));
 
-    auto ends = thrust::merge_by_key(rmm::exec_policy(stream)->on(stream.value()),
+    auto ends = thrust::merge_by_key(rmm::exec_policy(stream),
                                      transformed_empties,
                                      transformed_empties + empties_size,
                                      thrust::make_counting_iterator(0),
@@ -1899,14 +1940,12 @@ dremel_data get_dremel_data(column_view h_col, rmm::cuda_stream_view stream)
                                       [off = lcv.offsets().data<size_type>()] __device__(
                                         auto i) -> int { return off[i] == off[i + 1]; });
     rmm::device_uvector<size_type> scan_out(offset_size_at_level, stream);
-    thrust::exclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
-                           scan_it,
-                           scan_it + offset_size_at_level,
-                           scan_out.begin());
+    thrust::exclusive_scan(
+      rmm::exec_policy(stream), scan_it, scan_it + offset_size_at_level, scan_out.begin());
 
     // Add scan output to existing offsets to get new offsets into merged rep level values
     rmm::device_uvector<size_type> temp_new_offsets(offset_size_at_level, stream);
-    thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator(0),
                        offset_size_at_level,
                        [off      = lcv.offsets().data<size_type>() + column_offsets[level],
@@ -1919,7 +1958,7 @@ dremel_data get_dremel_data(column_view h_col, rmm::cuda_stream_view stream)
 
     // Set rep level values at level starts to appropriate rep level
     auto scatter_it = thrust::make_constant_iterator(level);
-    thrust::scatter(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::scatter(rmm::exec_policy(stream),
                     scatter_it,
                     scatter_it + new_offsets.size() - 1,
                     new_offsets.begin(),
@@ -1934,12 +1973,14 @@ dremel_data get_dremel_data(column_view h_col, rmm::cuda_stream_view stream)
 
   size_type leaf_col_offset = column_offsets[column_offsets.size() - 1];
   size_type leaf_data_size  = column_ends[column_ends.size() - 1] - leaf_col_offset;
+  uint8_t max_def_level     = def_at_level.back() - 1;
 
   return dremel_data{std::move(new_offsets),
                      std::move(rep_level),
                      std::move(def_level),
                      leaf_col_offset,
-                     leaf_data_size};
+                     leaf_data_size,
+                     max_def_level};
 }
 
 /**

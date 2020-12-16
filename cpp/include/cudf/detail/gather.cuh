@@ -34,8 +34,9 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <algorithm>
 
@@ -125,7 +126,7 @@ void gather_helper(InputItr source_itr,
 {
   using map_type = typename std::iterator_traits<MapIterator>::value_type;
   if (nullify_out_of_bounds) {
-    thrust::gather_if(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::gather_if(rmm::exec_policy(stream),
                       gather_map_begin,
                       gather_map_end,
                       gather_map_begin,
@@ -133,11 +134,8 @@ void gather_helper(InputItr source_itr,
                       target_itr,
                       bounds_checker<map_type>{0, source_size});
   } else {
-    thrust::gather(rmm::exec_policy(stream)->on(stream.value()),
-                   gather_map_begin,
-                   gather_map_end,
-                   source_itr,
-                   target_itr);
+    thrust::gather(
+      rmm::exec_policy(stream), gather_map_begin, gather_map_end, source_itr, target_itr);
   }
 }
 
@@ -610,7 +608,12 @@ struct column_gatherer_impl<struct_view, MapItRoot> {
  * the source columns to rows in the destination columns
  * @param[in] gather_map_end End of iterator range of integer indices that map the rows in the
  * source columns to rows in the destination columns
- * @param[in] nullify_out_of_bounds Nullify values in `gather_map` that are out of bounds.
+ * @param[in] bounds_policy Policy to apply to account for possible out-of-bound indices
+ * `DONT_CHECK` skips all bound checking for gather map values. `NULLIFY` coerces rows that
+ * corresponds to out-of-bound indices in the gather map to be null elements. Callers should
+ * use `DONT_CHECK` when they are certain that the gather_map contains only valid indices for
+ * better performance. In case there are out-of-bound indices in the gather map, the behavior
+ * is undefined. Defaults to `DONT_CHECK`.
  * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @return cudf::table Result of the gather
@@ -620,7 +623,7 @@ std::unique_ptr<table> gather(
   table_view const& source_table,
   MapIterator gather_map_begin,
   MapIterator gather_map_end,
-  bool nullify_out_of_bounds          = false,
+  out_of_bounds_policy bounds_policy  = out_of_bounds_policy::DONT_CHECK,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -630,18 +633,21 @@ std::unique_ptr<table> gather(
 
   for (auto const& source_column : source_table) {
     // The data gather for n columns will be put on the first n streams
-    destination_columns.push_back(cudf::type_dispatcher(source_column.type(),
-                                                        column_gatherer{},
-                                                        source_column,
-                                                        gather_map_begin,
-                                                        gather_map_end,
-                                                        nullify_out_of_bounds,
-                                                        stream,
-                                                        mr));
+    destination_columns.push_back(
+      cudf::type_dispatcher(source_column.type(),
+                            column_gatherer{},
+                            source_column,
+                            gather_map_begin,
+                            gather_map_end,
+                            bounds_policy == out_of_bounds_policy::NULLIFY,
+                            stream,
+                            mr));
   }
 
-  auto const op =
-    nullify_out_of_bounds ? gather_bitmask_op::NULLIFY : gather_bitmask_op::DONT_CHECK;
+  gather_bitmask_op const op = bounds_policy == out_of_bounds_policy::NULLIFY
+                                 ? gather_bitmask_op::NULLIFY
+                                 : gather_bitmask_op::DONT_CHECK;
+
   gather_bitmask(source_table, gather_map_begin, destination_columns, op, stream, mr);
 
   return std::make_unique<table>(std::move(destination_columns));

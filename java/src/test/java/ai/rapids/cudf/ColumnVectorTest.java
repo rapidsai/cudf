@@ -413,6 +413,85 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void test32BitMurmur3HashStrings() {
+    try (ColumnVector v0 = ColumnVector.fromStrings(
+           "a", "B\nc",  "dE\"\u0100\t\u0101 \u0500\u0501\\Fg2\'",
+           "A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
+           "in the MD5 hash function. This string needed to be longer.A 60 character string to " +
+           "test MD5's message padding algorithm",
+           "hiJ\ud720\ud721\ud720\ud721", null);
+         ColumnVector result = ColumnVector.serial32BitMurmurHash3(42, new ColumnVector[]{v0});
+         ColumnVector expected = ColumnVector.fromBoxedInts(-1293573533, 1163854319, 1247767417, 1504480835, 1249086584, 42)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void test32BitMurmur3HashInts() {
+    try (ColumnVector v0 = ColumnVector.fromBoxedInts(0, 100, null, null, Integer.MIN_VALUE, null);
+         ColumnVector v1 = ColumnVector.fromBoxedInts(0, null, -100, null, null, Integer.MAX_VALUE);
+         ColumnVector result = ColumnVector.serial32BitMurmurHash3(42, new ColumnVector[]{v0, v1});
+         ColumnVector expected = ColumnVector.fromBoxedInts(59727262, 751823303, -1080202046, 42, 723455942, 133916647)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void test32BitMurmur3HashDoubles() {
+    try (ColumnVector v = ColumnVector.fromBoxedDoubles(
+          0.0, null, 100.0, -100.0, Double.MIN_NORMAL, Double.MAX_VALUE,
+          POSITIVE_DOUBLE_NAN_UPPER_RANGE, POSITIVE_DOUBLE_NAN_LOWER_RANGE,
+          NEGATIVE_DOUBLE_NAN_UPPER_RANGE, NEGATIVE_DOUBLE_NAN_LOWER_RANGE,
+          Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY);
+         ColumnVector result = ColumnVector.serial32BitMurmurHash3(new ColumnVector[]{v});
+         ColumnVector expected = ColumnVector.fromBoxedInts(1669671676, 0, -544903190, -1831674681, 150502665, 474144502, 1428788237, 1428788237, 1428788237, 1428788237, 420913893, 1915664072)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void test32BitMurmur3HashFloats() {
+    try (ColumnVector v = ColumnVector.fromBoxedFloats(
+          0f, 100f, -100f, Float.MIN_NORMAL, Float.MAX_VALUE, null,
+          POSITIVE_FLOAT_NAN_LOWER_RANGE, POSITIVE_FLOAT_NAN_UPPER_RANGE,
+          NEGATIVE_FLOAT_NAN_LOWER_RANGE, NEGATIVE_FLOAT_NAN_UPPER_RANGE,
+          Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY);
+         ColumnVector result = ColumnVector.serial32BitMurmurHash3(411, new ColumnVector[]{v});
+         ColumnVector expected = ColumnVector.fromBoxedInts(-235179434, 1812056886, 2028471189, 1775092689, -1531511762, 411, -1053523253, -1053523253, -1053523253, -1053523253, -1526256646, 930080402)){
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void test32BitMurmur3HashBools() {
+    try (ColumnVector v0 = ColumnVector.fromBoxedBooleans(null, true, false, true, null, false);
+         ColumnVector v1 = ColumnVector.fromBoxedBooleans(null, true, false, null, false, true);
+         ColumnVector result = ColumnVector.serial32BitMurmurHash3(0, new ColumnVector[]{v0, v1});
+         ColumnVector expected = ColumnVector.fromBoxedInts(0, 884701402, 1032769583, -463810133, 1364076727, -991270669)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void test32BitMurmur3HashMixed() {
+    try (ColumnVector strings = ColumnVector.fromStrings(
+          "a", "B\n", "dE\"\u0100\t\u0101 \u0500\u0501",
+          "A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
+          "in the MD5 hash function. This string needed to be longer.",
+          null, null);
+         ColumnVector integers = ColumnVector.fromBoxedInts(0, 100, -100, Integer.MIN_VALUE, Integer.MAX_VALUE, null);
+         ColumnVector doubles = ColumnVector.fromBoxedDoubles(
+          0.0, 100.0, -100.0, POSITIVE_DOUBLE_NAN_LOWER_RANGE, POSITIVE_DOUBLE_NAN_UPPER_RANGE, null);
+         ColumnVector floats = ColumnVector.fromBoxedFloats(
+          0f, 100f, -100f, NEGATIVE_FLOAT_NAN_LOWER_RANGE, NEGATIVE_FLOAT_NAN_UPPER_RANGE, null);
+         ColumnVector bools = ColumnVector.fromBoxedBooleans(true, false, null, false, true, null);
+         ColumnVector result = ColumnVector.serial32BitMurmurHash3(1868, new ColumnVector[]{strings, integers, doubles, floats, bools});
+         ColumnVector expected = ColumnVector.fromBoxedInts(387200465, 1988790727, 1843539474, 814731646, -1073686048, 1868)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   void testNullReconfigureNulls() {
     try (ColumnVector v0 = ColumnVector.fromBoxedInts(0, 100, null, null, Integer.MIN_VALUE, null);
          ColumnVector v1 = ColumnVector.fromBoxedInts(0, 100, 1, 2, Integer.MIN_VALUE, null);
@@ -1109,21 +1188,21 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testFromScalarNull() {
     final int rowCount = 4;
-    for (DType.DTypeEnum type : DType.DTypeEnum.values()) {
-      if (type == DType.DTypeEnum.EMPTY || type == DType.DTypeEnum.LIST || type == DType.DTypeEnum.STRUCT) {
+    for (DType.DTypeEnum typeEnum : DType.DTypeEnum.values()) {
+      if (typeEnum == DType.DTypeEnum.EMPTY || typeEnum == DType.DTypeEnum.LIST || typeEnum == DType.DTypeEnum.STRUCT) {
         continue;
       }
       DType dType;
-      if (type.isDecimalType()) {
+      if (typeEnum.isDecimalType()) {
         // magic number to invoke factory method specialized for decimal types
-        dType = DType.create(type, -8);
+        dType = DType.create(typeEnum, -8);
       } else {
-        dType = DType.create(type);
+        dType = DType.create(typeEnum);
       }
       try (Scalar s = Scalar.fromNull(dType);
            ColumnVector c = ColumnVector.fromScalar(s, rowCount);
            HostColumnVector hc = c.copyToHost()) {
-        assertEquals(type, c.getType().typeId);
+        assertEquals(typeEnum, c.getType().typeId);
         assertEquals(rowCount, c.getRowCount());
         assertEquals(rowCount, c.getNullCount());
         for (int i = 0; i < rowCount; ++i) {
@@ -1903,6 +1982,15 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testLogicalCast() {
+    try (ColumnVector cv = ColumnVector.decimalFromLongs(-2, 1L, 2L, 100L, 552L);
+         ColumnVector expected = ColumnVector.fromLongs(1L, 2L, 100L, 552L);
+         ColumnView casted = cv.logicalCastTo(DType.INT64)) {
+      assertColumnsAreEqual(expected, casted);
+    }
+  }
+
+  @Test
   void testFixedWidthCast() {
     int[] values = new int[]{1,3,4,5,2};
     long[] longValues = Arrays.stream(values).asLongStream().toArray();
@@ -2385,6 +2473,66 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector res1 = testStrings.containsRe(patternString1);
          ColumnVector expected1 = ColumnVector.fromBoxedBooleans(true)) {
       assertColumnsAreEqual(expected1, res1);
+    }
+  }
+
+  @Test
+  void testUrlDecode() {
+    String[] inputs = new String[] {
+        "foobar.site%2Fq%3Fx%3D%C3%A9%25",
+        "a%2Bb%2Dc%2Ad%2Fe",
+        "1%092%0A3",
+        "abc%401%2523",
+        "abc123",
+        " %09%0D%0A%0C",
+        "",
+        null
+    };
+    String[] expectedOutputs = new String[] {
+        "foobar.site/q?x=é%",
+        "a+b-c*d/e",
+        "1\t2\n3",
+        "abc@1%23",
+        "abc123",
+        " \t\r\n\f",
+        "",
+        null
+    };
+
+    try (ColumnVector v = ColumnVector.fromStrings(inputs);
+         ColumnVector expected = ColumnVector.fromStrings(expectedOutputs);
+         ColumnVector actual = v.urlDecode()) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testUrlEncode() {
+    String[] inputs = new String[] {
+        "foobar.site/q?x=é%",
+        "a+b-c*d/e",
+        "1\t2\n3",
+        "abc@1%23",
+        "abc123",
+        " \t\r\n\f",
+        "",
+        null
+    };
+    String[] expectedOutputs = new String[] {
+        "foobar.site%2Fq%3Fx%3D%C3%A9%25",
+        "a%2Bb-c%2Ad%2Fe",
+        "1%092%0A3",
+        "abc%401%2523",
+        "abc123",
+        "%20%09%0D%0A%0C",
+        "",
+        null
+    };
+
+    try (ColumnVector v = ColumnVector.fromStrings(inputs);
+         ColumnVector expected = ColumnVector.fromStrings(expectedOutputs);
+         ColumnVector actual = v.urlEncode()) {
+      assertColumnsAreEqual(expected, actual);
     }
   }
 

@@ -401,6 +401,32 @@ class element_hasher {
   }
 };
 
+template <template <typename> class hash_function, bool has_nulls = true>
+class element_hasher_with_seed {
+ public:
+  __device__ element_hasher_with_seed()
+    : _seed{0}, _null_hash(std::numeric_limits<hash_value_type>::max())
+  {
+  }
+  __device__ element_hasher_with_seed(
+    uint32_t seed = 0, hash_value_type null_hash = std::numeric_limits<hash_value_type>::max())
+    : _seed{seed}, _null_hash(null_hash)
+  {
+  }
+  // seed, null_hash, byte endianness
+  template <typename T>
+  __device__ inline hash_value_type operator()(column_device_view col, size_type row_index)
+  {
+    if (has_nulls && col.is_null(row_index)) { return _null_hash; }
+
+    return hash_function<T>{_seed}(col.element<T>(row_index));
+  }
+
+ private:
+  uint32_t _seed;
+  hash_value_type _null_hash;
+};
+
 /**
  * @brief Computes the hash value of a row in the given table.
  *

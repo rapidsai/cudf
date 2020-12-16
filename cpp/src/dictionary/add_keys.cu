@@ -28,7 +28,6 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -90,7 +89,7 @@ std::unique_ptr<column> add_keys(
   // and the corresponding index is therefore invalid/undefined
   auto table_indices = cudf::detail::gather(table_view{{map_indices->view()}},
                                             indices_view,
-                                            cudf::detail::out_of_bounds_policy::IGNORE,
+                                            cudf::out_of_bounds_policy::NULLIFY,
                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
                                             stream,
                                             mr)

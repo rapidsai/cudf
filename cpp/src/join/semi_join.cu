@@ -26,6 +26,8 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace detail {
@@ -128,7 +130,7 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
                                                 equality_build);
   auto hash_table     = *hash_table_ptr;
 
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      right_num_rows,
                      [hash_table] __device__(size_type idx) mutable {
@@ -147,7 +149,7 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
 
   // gather_map_end will be the end of valid data in gather_map
   auto gather_map_end = thrust::copy_if(
-    rmm::exec_policy(stream)->on(stream.value()),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(left_num_rows),
     gather_map.begin(),
@@ -158,8 +160,12 @@ std::unique_ptr<cudf::table> left_semi_anti_join(
 
   // rebuild left table for call to gather
   auto const left_updated = scatter_columns(left_selected, left_on, left);
-  return cudf::detail::gather(
-    left_updated.select(return_columns), gather_map.begin(), gather_map_end, false, stream, mr);
+  return cudf::detail::gather(left_updated.select(return_columns),
+                              gather_map.begin(),
+                              gather_map_end,
+                              out_of_bounds_policy::DONT_CHECK,
+                              stream,
+                              mr);
 }
 }  // namespace detail
 

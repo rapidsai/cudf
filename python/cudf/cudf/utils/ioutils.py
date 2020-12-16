@@ -3,7 +3,6 @@
 import datetime
 import os
 import urllib
-import warnings
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 
 import fsspec
@@ -189,7 +188,7 @@ Parameters
 path : str
     File path or Root Directory path. Will be used as Root Directory path
     while writing a partitioned dataset.
-compression : {'snappy', 'gzip', 'brotli', None}, default 'snappy'
+compression : {'snappy', None}, default 'snappy'
     Name of the compression to use. Use ``None`` for no compression.
 index : bool, default None
     If ``True``, include the dataframe's index(es) in the file output. If
@@ -1041,8 +1040,55 @@ def _is_local_filesystem(fs):
     return isinstance(fs, fsspec.implementations.local.LocalFileSystem)
 
 
+def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
+    """Return False if `path_or_data` resolves to multiple filepaths or buffers
+    """
+    path_or_data = fsspec.utils.stringify_path(path_or_data)
+    if isinstance(path_or_data, str):
+        storage_options = kwargs.get("storage_options")
+        path_or_data = os.path.expanduser(path_or_data)
+        try:
+            fs, _, paths = fsspec.get_fs_token_paths(
+                path_or_data, mode="rb", storage_options=storage_options
+            )
+        except ValueError as e:
+            if str(e).startswith("Protocol not known"):
+                return True
+            else:
+                raise e
+
+        if len(paths) > 1:
+            return False
+    elif isinstance(path_or_data, (list, tuple)) and len(path_or_data) > 1:
+        return False
+
+    return True
+
+
+def is_directory(path_or_data, **kwargs):
+    """Returns True if the provided filepath is a directory
+    """
+    path_or_data = fsspec.utils.stringify_path(path_or_data)
+    if isinstance(path_or_data, str):
+        storage_options = kwargs.get("storage_options")
+        path_or_data = os.path.expanduser(path_or_data)
+        try:
+            fs, _, paths = fsspec.get_fs_token_paths(
+                path_or_data, mode="rb", storage_options=storage_options
+            )
+        except ValueError as e:
+            if str(e).startswith("Protocol not known"):
+                return True
+            else:
+                raise e
+
+        return fs.isdir(path_or_data)
+
+    return False
+
+
 def get_filepath_or_buffer(
-    path_or_data, compression, mode="rb", iotypes=(BytesIO), **kwargs
+    path_or_data, compression, mode="rb", iotypes=(BytesIO), **kwargs,
 ):
     """Return either a filepath string to data, or a memory buffer of data.
     If filepath, then the source filepath is expanded to user's environment.
@@ -1061,11 +1107,14 @@ def get_filepath_or_buffer(
 
     Returns
     -------
-    filepath_or_buffer : str, bytes, BytesIO
-        Filepath string or in-memory buffer of data
+    filepath_or_buffer : str, bytes, BytesIO, list
+        Filepath string or in-memory buffer of data or a
+        list of Filepath strings or in-memory buffers of data.
     compression : str
         Type of compression algorithm for the content
     """
+    path_or_data = fsspec.utils.stringify_path(path_or_data)
+
     if isinstance(path_or_data, str):
         storage_options = kwargs.get("storage_options")
         # fsspec does not expanduser so handle here
@@ -1082,22 +1131,20 @@ def get_filepath_or_buffer(
                 raise e
 
         if len(paths) == 0:
-            raise IOError(f"{path_or_data} could not be resolved to any files")
-        elif len(paths) > 1:
-            warnings.warn(
-                f"`path_or_data` resolved to more than 1 file. "
-                f"Only the first file {paths[0]} will be read.",
-                UserWarning,
+            raise FileNotFoundError(
+                f"{path_or_data} could not be resolved to any files"
             )
 
         if _is_local_filesystem(fs):
             # Doing this as `read_json` accepts a json string
             # path_or_data need not be a filepath like string
             if os.path.exists(paths[0]):
-                path_or_data = paths[0]
+                path_or_data = paths if len(paths) > 1 else paths[0]
+
         else:
-            with fs.open(paths[0]) as f:
-                path_or_data = BytesIO(f.read())
+            path_or_data = [BytesIO(fs.open(fpath).read()) for fpath in paths]
+            if len(path_or_data) == 1:
+                path_or_data = path_or_data[0]
 
     elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
         if isinstance(path_or_data, TextIOWrapper):

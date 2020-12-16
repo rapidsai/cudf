@@ -200,6 +200,26 @@ __launch_bounds__(block_size) __global__
   }
 }
 
+template <typename T, typename Enable = void>
+struct DeviceType {
+  using type = T;
+};
+
+template <typename T>
+struct DeviceType<T, std::enable_if_t<cudf::is_timestamp<T>()>> {
+  using type = typename T::rep;
+};
+
+template <typename T>
+struct DeviceType<T, std::enable_if_t<std::is_same<numeric::decimal32, T>::value>> {
+  using type = typename cudf::device_storage_type_t<T>;
+};
+
+template <typename T>
+struct DeviceType<T, std::enable_if_t<std::is_same<numeric::decimal64, T>::value>> {
+  using type = typename cudf::device_storage_type_t<T>;
+};
+
 // Dispatch functor which performs the scatter for fixed column types and gather for other
 template <typename Filter, int block_size>
 struct scatter_gather_functor {
@@ -219,7 +239,8 @@ struct scatter_gather_functor {
 
     bool has_valid = input.nullable();
 
-    using Type   = cudf::device_storage_type_t<T>;
+    using Type = typename DeviceType<T>::type;
+
     auto scatter = (has_valid) ? scatter_kernel<Type, Filter, block_size, true>
                                : scatter_kernel<Type, Filter, block_size, false>;
 
@@ -262,14 +283,18 @@ struct scatter_gather_functor {
   {
     rmm::device_uvector<cudf::size_type> indices(output_size, stream);
 
-    thrust::copy_if(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::copy_if(rmm::exec_policy(stream),
                     thrust::counting_iterator<cudf::size_type>(0),
                     thrust::counting_iterator<cudf::size_type>(input.size()),
                     indices.begin(),
                     filter);
 
-    auto output_table = cudf::detail::gather(
-      cudf::table_view{{input}}, indices.begin(), indices.end(), false, stream, mr);
+    auto output_table = cudf::detail::gather(cudf::table_view{{input}},
+                                             indices.begin(),
+                                             indices.end(),
+                                             cudf::out_of_bounds_policy::DONT_CHECK,
+                                             stream,
+                                             mr);
 
     // There will be only one column
     return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));

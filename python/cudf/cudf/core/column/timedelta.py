@@ -220,7 +220,11 @@ class TimeDeltaColumn(column.ColumnBase):
     def normalize_binop_value(self, other):
         if isinstance(other, cudf.Scalar):
             return other
-        elif isinstance(other, dt.timedelta):
+
+        if isinstance(other, np.ndarray) and other.ndim == 0:
+            other = other.item()
+
+        if isinstance(other, dt.timedelta):
             other = np.timedelta64(other)
         elif isinstance(other, pd.Timestamp):
             other = other.to_datetime64()
@@ -279,7 +283,7 @@ class TimeDeltaColumn(column.ColumnBase):
         result = libcudf.replace.replace_nulls(col, fill_value)
         return result
 
-    def as_numerical_column(self, dtype, **kwargs):
+    def as_numerical_column(self, dtype):
         return self.as_numerical.astype(dtype)
 
     def as_datetime_column(self, dtype, **kwargs):
@@ -295,7 +299,7 @@ class TimeDeltaColumn(column.ColumnBase):
             )
             kwargs["format"] = fmt
         if len(self) > 0:
-            return string._numeric_to_str_typecast_functions[
+            return string._timedelta_to_str_typecast_functions[
                 np.dtype(self.dtype)
             ](self, **kwargs)
         else:

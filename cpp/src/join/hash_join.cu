@@ -20,6 +20,8 @@
 #include <cudf/detail/gather.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <numeric>
 
@@ -148,7 +150,7 @@ get_left_join_indices_complement(rmm::device_vector<size_type> &right_indices,
   // right_indices will be JoinNoneValue, i.e. -1. This if path should
   // produce exactly the same result as the else path but will be faster.
   if (left_table_row_count == 0) {
-    thrust::sequence(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::sequence(rmm::exec_policy(stream),
                      right_indices_complement.begin(),
                      right_indices_complement.end(),
                      0);
@@ -160,7 +162,7 @@ get_left_join_indices_complement(rmm::device_vector<size_type> &right_indices,
 
     // invalid_index_map[index_ptr[i]] = 0 for i = 0 to right_table_row_count
     // Thus specifying that those locations are valid
-    thrust::scatter_if(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::scatter_if(rmm::exec_policy(stream),
                        thrust::make_constant_iterator(0),
                        thrust::make_constant_iterator(0) + right_indices.size(),
                        right_indices.begin(),      // Index locations
@@ -171,7 +173,7 @@ get_left_join_indices_complement(rmm::device_vector<size_type> &right_indices,
     size_type end_counter   = static_cast<size_type>(right_table_row_count);
 
     // Create list of indices that have been marked as invalid
-    size_type indices_count = thrust::copy_if(rmm::exec_policy(stream)->on(stream.value()),
+    size_type indices_count = thrust::copy_if(rmm::exec_policy(stream),
                                               thrust::make_counting_iterator(begin_counter),
                                               thrust::make_counting_iterator(end_counter),
                                               invalid_index_map.begin(),
@@ -196,18 +198,21 @@ get_left_join_indices_complement(rmm::device_vector<size_type> &right_indices,
  * @throw std::out_of_range if elements of `build_on` exceed the number of columns in the `build`
  * table.
  *
- * @param build_table Table of build side columns to join.
+ * @param build Table of columns used to build join hash.
+ * @param compare_nulls Controls whether null join-key values should match or not.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return Built hash table.
  */
 std::unique_ptr<multimap_type, std::function<void(multimap_type *)>> build_join_hash_table(
-  cudf::table_device_view build_table, rmm::cuda_stream_view stream)
+  cudf::table_view const &build, null_equality compare_nulls, rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(0 != build_table.num_columns(), "Selected build dataset is empty");
-  CUDF_EXPECTS(0 != build_table.num_rows(), "Build side table has no rows");
+  auto build_device_table = cudf::table_device_view::create(build, stream);
 
-  const size_type build_table_num_rows{build_table.num_rows()};
+  CUDF_EXPECTS(0 != build_device_table->num_columns(), "Selected build dataset is empty");
+  CUDF_EXPECTS(0 != build_device_table->num_rows(), "Build side table has no rows");
+
+  size_type const build_table_num_rows{build_device_table->num_rows()};
   size_t const hash_table_size = compute_hash_table_size(build_table_num_rows);
 
   auto hash_table = multimap_type::create(hash_table_size,
@@ -217,12 +222,19 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type *)>> build_join_
                                           multimap_type::key_equal(),
                                           multimap_type::allocator_type());
 
-  row_hash hash_build{build_table};
+  row_hash hash_build{*build_device_table};
   rmm::device_scalar<int> failure(0, stream);
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   detail::grid_1d config(build_table_num_rows, block_size);
+  auto const row_bitmask = (compare_nulls == null_equality::EQUAL)
+                             ? rmm::device_buffer{0, stream}
+                             : cudf::detail::bitmask_and(build, stream);
   build_hash_table<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-    *hash_table, hash_build, build_table_num_rows, failure.data());
+    *hash_table,
+    hash_build,
+    build_table_num_rows,
+    static_cast<bitmask_type const *>(row_bitmask.data()),
+    failure.data());
   // Check error code from the kernel
   if (failure.value(stream) == 1) { CUDF_FAIL("Hash Table insert failure."); }
 
@@ -407,7 +419,9 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
   std::vector<size_type> build_noncommon_col =
     non_common_column_indices(build.num_columns(), build_common_col);
 
-  bool const nullify_out_of_bounds{JoinKind != join_kind::INNER_JOIN};
+  out_of_bounds_policy const bounds_policy = JoinKind != join_kind::INNER_JOIN
+                                               ? out_of_bounds_policy::NULLIFY
+                                               : out_of_bounds_policy::DONT_CHECK;
 
   std::unique_ptr<table> common_table = std::make_unique<table>();
   // Construct the joined columns
@@ -418,13 +432,13 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
       auto common_from_build = detail::gather(build.select(build_common_col),
                                               complement_indices.second.begin(),
                                               complement_indices.second.end(),
-                                              nullify_out_of_bounds,
+                                              bounds_policy,
                                               stream,
                                               rmm::mr::get_current_device_resource());
       auto common_from_probe = detail::gather(probe.select(probe_common_col),
                                               joined_indices.first.begin(),
                                               joined_indices.first.end(),
-                                              nullify_out_of_bounds,
+                                              bounds_policy,
                                               stream,
                                               rmm::mr::get_current_device_resource());
       common_table           = cudf::detail::concatenate(
@@ -436,7 +450,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
       common_table = detail::gather(probe.select(probe_common_col),
                                     joined_indices.first.begin(),
                                     joined_indices.first.end(),
-                                    nullify_out_of_bounds,
+                                    bounds_policy,
                                     stream,
                                     mr);
     }
@@ -446,14 +460,14 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> construct_join_output_
   std::unique_ptr<table> probe_table = detail::gather(probe.select(probe_noncommon_col),
                                                       joined_indices.first.begin(),
                                                       joined_indices.first.end(),
-                                                      nullify_out_of_bounds,
+                                                      bounds_policy,
                                                       stream,
                                                       mr);
 
   std::unique_ptr<table> build_table = detail::gather(build.select(build_noncommon_col),
                                                       joined_indices.second.begin(),
                                                       joined_indices.second.end(),
-                                                      nullify_out_of_bounds,
+                                                      bounds_policy,
                                                       stream,
                                                       mr);
 
@@ -484,6 +498,7 @@ hash_join::hash_join_impl::~hash_join_impl() = default;
 
 hash_join::hash_join_impl::hash_join_impl(cudf::table_view const &build,
                                           std::vector<size_type> const &build_on,
+                                          null_equality compare_nulls,
                                           rmm::cuda_stream_view stream)
   : _build(build),
     _build_selected(build.select(build_on)),
@@ -497,8 +512,7 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const &build,
 
   if (_build_on.empty() || 0 == build.num_rows()) { return; }
 
-  auto build_table = cudf::table_device_view::create(_build_selected, stream);
-  _hash_table      = build_join_hash_table(*build_table, stream);
+  _hash_table = build_join_hash_table(_build_selected, compare_nulls, stream);
 }
 
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>>

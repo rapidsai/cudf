@@ -1011,7 +1011,7 @@ class ColumnBase(Column, Serializable):
         elif np.issubdtype(dtype, np.timedelta64):
             return self.as_timedelta_column(dtype, **kwargs)
         else:
-            return self.as_numerical_column(dtype, **kwargs)
+            return self.as_numerical_column(dtype)
 
     def as_categorical_column(self, dtype, **kwargs):
         if "ordered" in kwargs:
@@ -1056,7 +1056,7 @@ class ColumnBase(Column, Serializable):
             ordered=ordered,
         )
 
-    def as_numerical_column(self, dtype, **kwargs):
+    def as_numerical_column(self, dtype):
         raise NotImplementedError
 
     def as_datetime_column(self, dtype, **kwargs):
@@ -1676,7 +1676,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
         if dtype is not None:
             data = data.astype(dtype)
 
-    elif isinstance(arbitrary, pd.Timestamp):
+    elif isinstance(arbitrary, (pd.Timestamp, pd.Timedelta)):
         # This will always treat NaTs as nulls since it's not technically a
         # discrete value like NaN
         data = as_column(pa.array(pd.Series([arbitrary]), from_pandas=True))
@@ -2108,5 +2108,5 @@ def full(size, fill_value, dtype=None):
     """
 
     return libcudf.column.make_column_from_scalar(
-        as_device_scalar(fill_value, dtype), size
+        cudf.Scalar(fill_value, dtype), size
     )

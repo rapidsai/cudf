@@ -83,8 +83,8 @@ public final class ColumnVector extends ColumnView {
     super(ColumnVector.initViewHandle(
         type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
         dataBuffer, validityBuffer, offsetBuffer, null));
-    assert type != DType.LIST : "This constructor should not be used for list type";
-    if (type != DType.STRING) {
+    assert !type.equals(DType.LIST) : "This constructor should not be used for list type";
+    if (!type.equals(DType.STRING)) {
       assert offsetBuffer == null : "offsets are only supported for STRING";
     }
     assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
@@ -120,7 +120,7 @@ public final class ColumnVector extends ColumnView {
     super(initViewHandle(type, (int)rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
         dataBuffer, validityBuffer,
         offsetBuffer, childHandles));
-    if (type != DType.STRING && type != DType.LIST) {
+    if (!type.equals(DType.STRING) && !type.equals(DType.LIST)) {
       assert offsetBuffer == null : "offsets are only supported for STRING, LISTS";
     }
     assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
@@ -393,15 +393,15 @@ public final class ColumnVector extends ColumnView {
   public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnView[] columns) {
     assert columns.length >= 2 : ".stringConcatenate() operation requires at least 2 columns";
     assert separator != null : "separator scalar provided may not be null";
-    assert separator.getType() == DType.STRING : "separator scalar must be a string scalar";
+    assert separator.getType().equals(DType.STRING) : "separator scalar must be a string scalar";
     assert narep != null : "narep scalar provided may not be null";
-    assert narep.getType() == DType.STRING : "narep scalar must be a string scalar";
+    assert narep.getType().equals(DType.STRING) : "narep scalar must be a string scalar";
     long size = columns[0].getRowCount();
     long[] column_views = new long[columns.length];
 
     for(int i = 0; i < columns.length; i++) {
       assert columns[i] != null : "Column vectors passed may not be null";
-      assert columns[i].getType() == DType.STRING : "All columns must be of type string for .cat() operation";
+      assert columns[i].getType().equals(DType.STRING) : "All columns must be of type string for .cat() operation";
       assert columns[i].getRowCount() == size : "Row count mismatch, all columns must have the same number of rows";
       column_views[i] = columns[i].getNativeView();
     }
@@ -426,12 +426,47 @@ public final class ColumnVector extends ColumnView {
       assert columns[i] != null : "Column vectors passed may not be null";
       assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
       assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
-      assert !columns[i].getType().isTimestamp() : "Unsupported column type Timestamp";
-      assert !columns[i].getType().isNestedType() || columns[i].getType() == DType.LIST :
+      assert !columns[i].getType().isTimestampType() : "Unsupported column type Timestamp";
+      assert !columns[i].getType().isNestedType() || columns[i].getType().equals(DType.LIST) :
           "Unsupported nested type column";
       columnViews[i] = columns[i].getNativeView();
     }
-    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId()));
+    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId(), new int[0], 0));
+  }
+
+  /**
+   * Create a new vector containing the MD5 hash of each row in the table.
+   *
+   * @param seed integer seed for the murmur3 hash function
+   * @param columns array of columns to hash, must have identical number of rows.
+   * @return the new ColumnVector of 32 character hex strings representing each row's hash value.
+   */
+  public static ColumnVector serial32BitMurmurHash3(int seed, ColumnView columns[]) {
+    if (columns.length < 1) {
+      throw new IllegalArgumentException("MD5 hashing requires at least 1 column of input");
+    }
+    long[] columnViews = new long[columns.length];
+    long size = columns[0].getRowCount();
+
+    for(int i = 0; i < columns.length; i++) {
+      assert columns[i] != null : "Column vectors passed may not be null";
+      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
+      assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
+      assert !columns[i].getType().isTimestampType() : "Unsupported column type Timestamp";
+      assert !columns[i].getType().isNestedType() : "Unsupported column of nested type";
+      columnViews[i] = columns[i].getNativeView();
+    }
+    return new ColumnVector(hash(columnViews, HashType.HASH_SERIAL_MURMUR3.getNativeId(), new int[0], seed));
+  }
+
+  /**
+   * Create a new vector containing the MD5 hash of each row in the table, seed defaulted to 0.
+   *
+   * @param columns array of columns to hash, must have identical number of rows.
+   * @return the new ColumnVector of 32 character hex strings representing each row's hash value.
+   */
+  public static ColumnVector serial32BitMurmurHash3(ColumnView columns[]) {
+    return serial32BitMurmurHash3(0, columns);
   }
 
   /**
@@ -457,7 +492,7 @@ public final class ColumnVector extends ColumnView {
    */
   @Override
   public ColumnVector castTo(DType type) {
-    if (this.type == type) {
+    if (this.type.equals(type)) {
       // Optimization
       return incRefCount();
     }
@@ -479,10 +514,15 @@ public final class ColumnVector extends ColumnView {
    * native side using the hashId.
    *
    * @param viewHandles array of native handles to the cudf::column_view columns being operated on.
-   * @param hashId integer native ID of the hashing function identifier HashType
+   * @param hashId integer native ID of the hashing function identifier HashType.
+   * @param initialValues array of integer values, one per column, only used by non-serial murmur3
+   *                      hash. Each element's hash value is merged with its column's initial value
+   *                      before the row is merged into a single value.
+   * @param seed integer seed for the hash. Only used by serial murmur3 hash.
    * @return native handle of the resulting cudf column containing the hex-string hashing results.
    */
-  private static native long hash(long[] viewHandles, int hashId) throws CudfException;
+  private static native long hash(long[] viewHandles, int hashId, int[] initialValues,
+                                  int seed) throws CudfException;
 
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS

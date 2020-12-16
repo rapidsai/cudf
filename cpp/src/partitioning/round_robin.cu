@@ -26,11 +26,10 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
-#include <thrust/device_vector.h>
-#include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -94,13 +93,12 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
 
   if (num_partitions == nrows) {
     VectorT<cudf::size_type> partition_offsets(num_partitions, cudf::size_type{0});
-    auto exec = rmm::exec_policy(stream);
-    thrust::sequence(exec->on(stream.value()), partition_offsets.begin(), partition_offsets.end());
+    thrust::sequence(rmm::exec_policy(stream), partition_offsets.begin(), partition_offsets.end());
 
     auto uniq_tbl = cudf::detail::gather(input,
                                          rotated_iter_begin,
                                          rotated_iter_begin + nrows,  // map
-                                         false,
+                                         cudf::out_of_bounds_policy::DONT_CHECK,
                                          stream,
                                          mr);
 
@@ -123,8 +121,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
     // fall in the interval [0, nrows):
     //(this relies on a _stable_ copy_if())
     //
-    auto exec = rmm::exec_policy(stream);
-    thrust::copy_if(exec->on(stream.value()),
+    thrust::copy_if(rmm::exec_policy(stream),
                     rotated_iter_begin,
                     rotated_iter_begin + num_partitions,
                     d_row_indices.begin(),
@@ -135,7 +132,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
     auto uniq_tbl = cudf::detail::gather(input,
                                          d_row_indices.begin(),
                                          d_row_indices.end(),  // map
-                                         false,
+                                         cudf::out_of_bounds_policy::DONT_CHECK,
                                          stream,
                                          mr);
 
@@ -153,7 +150,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
     // offsets (part 2: compute partition offsets):
     //
     VectorT<cudf::size_type> partition_offsets(num_partitions, cudf::size_type{0});
-    thrust::exclusive_scan(exec->on(stream.value()),
+    thrust::exclusive_scan(rmm::exec_policy(stream),
                            nedges_iter_begin,
                            nedges_iter_begin + num_partitions,
                            partition_offsets.begin());
@@ -253,7 +250,8 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
       return num_partitions * index_within_partition + partition_index;
     });
 
-  auto uniq_tbl = cudf::detail::gather(input, iter_begin, iter_begin + nrows, false, stream, mr);
+  auto uniq_tbl = cudf::detail::gather(
+    input, iter_begin, iter_begin + nrows, cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
   auto ret_pair = std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
 
   // this has the effect of rotating the set of partition sizes

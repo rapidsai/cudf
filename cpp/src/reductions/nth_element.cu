@@ -22,6 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
 
@@ -43,15 +44,13 @@ std::unique_ptr<cudf::scalar> cudf::reduction::nth_element(column_view const& co
                                       [] __device__(auto b) { return static_cast<size_type>(b); });
     rmm::device_uvector<size_type> null_skipped_index(col.size(), stream);
     // null skipped index for valids only.
-    thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::inclusive_scan(rmm::exec_policy(stream),
                            bitmask_iterator,
                            bitmask_iterator + col.size(),
                            null_skipped_index.begin());
 
-    auto n_pos          = thrust::upper_bound(rmm::exec_policy(stream)->on(stream.value()),
-                                     null_skipped_index.begin(),
-                                     null_skipped_index.end(),
-                                     n);
+    auto n_pos = thrust::upper_bound(
+      rmm::exec_policy(stream), null_skipped_index.begin(), null_skipped_index.end(), n);
     auto null_skipped_n = n_pos - null_skipped_index.begin();
     return cudf::detail::get_element(col, null_skipped_n, stream, mr);
   } else {

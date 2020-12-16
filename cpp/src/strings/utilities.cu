@@ -24,8 +24,9 @@
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/transform_reduce.h>
 #include <thrust/transform_scan.h>
@@ -55,14 +56,13 @@ std::unique_ptr<string_view, std::function<void(string_view*)>> string_from_host
 rmm::device_vector<string_view> create_string_vector_from_column(cudf::strings_column_view strings,
                                                                  rmm::cuda_stream_view stream)
 {
-  auto execpol        = rmm::exec_policy(stream);
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
 
   auto count = strings.size();
   rmm::device_vector<string_view> strings_vector(count);
   string_view* d_strings = strings_vector.data().get();
-  thrust::for_each_n(execpol->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      count,
                      [d_column, d_strings] __device__(size_type idx) {
@@ -93,7 +93,6 @@ std::unique_ptr<cudf::column> child_chars_from_string_vector(
 {
   size_type count = strings.size();
   auto d_strings  = strings.data().get();
-  auto execpol    = rmm::exec_policy(stream);
   size_type bytes = thrust::device_pointer_cast(d_offsets)[count];
 
   // create column
@@ -101,7 +100,7 @@ std::unique_ptr<cudf::column> child_chars_from_string_vector(
     make_numeric_column(data_type{type_id::INT8}, bytes, mask_state::UNALLOCATED, stream, mr);
   // get it's view
   auto d_chars = chars_column->mutable_view().data<int8_t>();
-  thrust::for_each_n(execpol->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      count,
                      [d_strings, d_offsets, d_chars] __device__(size_type idx) {

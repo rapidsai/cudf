@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <hash/hash_constants.hpp>
 
@@ -370,6 +371,7 @@ struct MurmurHash3_32 {
   using result_type   = hash_value_type;
 
   CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32() : m_seed(0) {}
+  CUDA_HOST_DEVICE_CALLABLE MurmurHash3_32(uint32_t seed) : m_seed(seed) {}
 
   CUDA_HOST_DEVICE_CALLABLE uint32_t rotl32(uint32_t x, int8_t r) const
   {
@@ -415,7 +417,7 @@ struct MurmurHash3_32 {
   hash_value_type CUDA_HOST_DEVICE_CALLABLE compute_floating_point(T const& key) const
   {
     if (key == T{0.0}) {
-      return 0;
+      return compute(T{0.0});
     } else if (isnan(key)) {
       T nan = std::numeric_limits<T>::quiet_NaN();
       return compute(nan);
@@ -578,7 +580,17 @@ struct IdentityHash {
     return combined;
   }
 
-  CUDA_HOST_DEVICE_CALLABLE result_type operator()(const Key& key) const
+  template <typename return_type = result_type>
+  CUDA_HOST_DEVICE_CALLABLE std::enable_if_t<!std::is_arithmetic<Key>::value, return_type>
+  operator()(const Key& key) const
+  {
+    release_assert(false && "IdentityHash does not support this data type");
+    return 0;
+  }
+
+  template <typename return_type = result_type>
+  CUDA_HOST_DEVICE_CALLABLE std::enable_if_t<std::is_arithmetic<Key>::value, return_type>
+  operator()(const Key& key) const
   {
     return static_cast<result_type>(key);
   }

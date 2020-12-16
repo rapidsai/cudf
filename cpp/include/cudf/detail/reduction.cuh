@@ -20,10 +20,10 @@
 
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_reduce.cuh>
 
@@ -49,16 +49,17 @@ namespace detail {
 template <typename Op,
           typename InputIterator,
           typename OutputType = typename thrust::iterator_value<InputIterator>::type,
-          typename std::enable_if_t<is_fixed_width<OutputType>()>* = nullptr>
+          typename std::enable_if_t<is_fixed_width<OutputType>() &&
+                                    not cudf::is_fixed_point<OutputType>()>* = nullptr>
 std::unique_ptr<scalar> reduce(InputIterator d_in,
                                cudf::size_type num_items,
                                op::simple_op<Op> sop,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  auto binary_op      = sop.get_binary_op();
-  OutputType identity = sop.template get_identity<OutputType>();
-  rmm::device_scalar<OutputType> dev_result{identity, stream, mr};
+  auto binary_op  = sop.get_binary_op();
+  auto identity   = sop.template get_identity<OutputType>();
+  auto dev_result = rmm::device_scalar<OutputType>{identity, stream, mr};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -88,6 +89,22 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   return std::unique_ptr<scalar>(s);
 }
 
+template <typename Op,
+          typename InputIterator,
+          typename OutputType = typename thrust::iterator_value<InputIterator>::type,
+          typename std::enable_if_t<is_fixed_point<OutputType>()>* = nullptr>
+std::unique_ptr<scalar> reduce(InputIterator d_in,
+                               cudf::size_type num_items,
+                               op::simple_op<Op> sop,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FAIL(
+    "This function should never be called. fixed_point reduce should always go through the reduce "
+    "for the corresponding device_storage_type_t");
+  ;
+}
+
 // @brief string_view specialization of simple reduction
 template <typename Op,
           typename InputIterator,
@@ -99,9 +116,9 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  auto binary_op      = sop.get_binary_op();
-  OutputType identity = sop.template get_identity<OutputType>();
-  rmm::device_scalar<OutputType> dev_result{identity, stream};
+  auto binary_op  = sop.get_binary_op();
+  auto identity   = sop.template get_identity<OutputType>();
+  auto dev_result = rmm::device_scalar<OutputType>{identity, stream};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -192,7 +209,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   // compute the result value from intermediate value in device
   using ScalarType = cudf::scalar_type_t<OutputType>;
   auto result      = new ScalarType(OutputType{0}, true, stream, mr);
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      intermediate_result.data(),
                      1,
                      [dres = result->data(), cop, valid_count, ddof] __device__(auto i) {

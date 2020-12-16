@@ -89,7 +89,7 @@ std::unique_ptr<column> ipv4_to_integers(
                                      mr);
   auto d_results = results->mutable_view().data<int64_t>();
   // fill output column with ipv4 integers
-  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_results,
@@ -194,7 +194,7 @@ std::unique_ptr<column> integers_to_ipv4(
   auto chars_column =
     create_chars_child_column(strings_count, integers.null_count(), bytes, stream, mr);
   auto d_chars = chars_column->mutable_view().data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      integers_to_ipv4_fn{d_column, d_offsets, d_chars});
@@ -222,7 +222,7 @@ std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
                                      stream,
                                      mr);
   auto d_results = results->mutable_view().data<bool>();
-  thrust::transform(rmm::exec_policy(stream)->on(stream.value()),
+  thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings.size()),
                     d_results,

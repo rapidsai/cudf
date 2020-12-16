@@ -22,6 +22,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
@@ -77,12 +78,11 @@ struct find_index_fn {
     using ScalarType = cudf::scalar_type_t<Element>;
     auto find_key    = static_cast<ScalarType const&>(key).value(stream);
     auto keys_view   = column_device_view::create(input.keys(), stream);
-    auto iter =
-      thrust::equal_range(thrust::device,  // segfaults: rmm::exec_policy(stream)->on(stream) and
-                                           // thrust::cuda::par.on(stream)
-                          keys_view->begin<Type>(),
-                          keys_view->end<Type>(),
-                          find_key);
+    auto iter = thrust::equal_range(thrust::device,  // segfaults: rmm::exec_policy(stream) and
+                                                     // thrust::cuda::par.on(stream)
+                                    keys_view->begin<Type>(),
+                                    keys_view->end<Type>(),
+                                    find_key);
     return type_dispatcher(input.indices().type(),
                            dispatch_scalar_index{},
                            thrust::distance(keys_view->begin<Type>(), iter.first),
@@ -139,10 +139,8 @@ struct find_insert_index_fn {
     using ScalarType = cudf::scalar_type_t<Element>;
     auto find_key    = static_cast<ScalarType const&>(key).value(stream);
     auto keys_view   = column_device_view::create(input.keys(), stream);
-    auto iter        = thrust::lower_bound(rmm::exec_policy(stream)->on(stream.value()),
-                                    keys_view->begin<Type>(),
-                                    keys_view->end<Type>(),
-                                    find_key);
+    auto iter        = thrust::lower_bound(
+      rmm::exec_policy(stream), keys_view->begin<Type>(), keys_view->end<Type>(), find_key);
     return type_dispatcher(input.indices().type(),
                            dispatch_scalar_index{},
                            thrust::distance(keys_view->begin<Type>(), iter),

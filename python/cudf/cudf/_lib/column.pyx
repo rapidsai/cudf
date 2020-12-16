@@ -308,8 +308,8 @@ cdef class Column:
             self._size = other_col.size
             self._dtype = other_col._dtype
             self.set_base_data(other_col.base_data)
-            self.set_base_mask(other_col.base_mask)
             self.set_base_children(other_col.base_children)
+            self.set_base_mask(other_col.base_mask)
         else:
             return other_col
 
@@ -567,7 +567,10 @@ cdef class Column:
         return result
 
 
-def make_column_from_scalar(DeviceScalar val, size_type size):
+def make_column_from_scalar(object py_val, size_type size):
+
+    cdef DeviceScalar val = py_val.device_value
+
     cdef const scalar* c_val = val.get_raw_ptr()
     cdef unique_ptr[column] c_result
     with nogil:

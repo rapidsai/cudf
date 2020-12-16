@@ -60,13 +60,13 @@ std::unique_ptr<table> sample(table_view const& input,
       thrust::make_transform_iterator(thrust::counting_iterator<size_type>(0), RandomGen);
     auto end = thrust::make_transform_iterator(thrust::counting_iterator<size_type>(n), RandomGen);
 
-    return detail::gather(input, begin, end, false, stream, mr);
+    return detail::gather(input, begin, end, out_of_bounds_policy::DONT_CHECK, stream, mr);
   } else {
     auto gather_map = make_numeric_column(
       data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, stream.value());
     auto gather_map_mutable_view = gather_map->mutable_view();
     // Shuffle all the row indices
-    thrust::shuffle_copy(rmm::exec_policy(stream)->on(stream.value()),
+    thrust::shuffle_copy(rmm::exec_policy(stream),
                          thrust::counting_iterator<size_type>(0),
                          thrust::counting_iterator<size_type>(num_rows),
                          gather_map_mutable_view.begin<size_type>(),
@@ -77,7 +77,7 @@ std::unique_ptr<table> sample(table_view const& input,
     return detail::gather(input,
                           gather_map_view.begin<size_type>(),
                           gather_map_view.end<size_type>(),
-                          false,
+                          out_of_bounds_policy::DONT_CHECK,
                           stream,
                           mr);
   }
