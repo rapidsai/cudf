@@ -23,7 +23,7 @@ endif(NOT CMAKE_CUDA_COMPILER)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-error=deprecated-declarations")
-    if(BUILD_TESTS OR BUILD_BENCHMARKS)
+    if(CUDF_BUILD_TESTS OR CUDF_BUILD_BENCHMARKS)
         # Suppress parentheses warning which causes gmock to fail
         set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler=-Wno-parentheses")
     endif()

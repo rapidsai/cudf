@@ -22,16 +22,27 @@ project(CUDA_DATAFRAME VERSION 0.18.0 LANGUAGES C CXX CUDA)
 # - build options ---------------------------------------------------------------------------------
 
 option(USE_NVTX "Build with NVTX support" ON)
-option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
-option(ARROW_STATIC_LIB "Build and statically link with Arrow libraries" OFF)
+option(BUILD_SHARED_LIBS "Build cuDF shared libraries" ON)
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
+option(ARROW_STATIC_LIB "Build and statically link Arrow libraries" OFF)
 option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
 option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 
+message(STATUS "Build with NVTX support: ${USE_NVTX}")
+message(STATUS "Configure CMake to build tests: ${BUILD_TESTS}")
+message(STATUS "Configure CMake to build (google) benchmarks: ${BUILD_BENCHMARKS}")
+message(STATUS "Build cuDF shared libraries: ${BUILD_SHARED_LIBS}")
+message(STATUS "Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
+message(STATUS "Build and statically link Arrow libraries: ${ARROW_STATIC_LIB}")
+message(STATUS "Use the default allocator for hash tables: ${HT_DEFAULT_ALLOCATOR}")
+message(STATUS "Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
+
 # Set a default build type if none was specified
 set(DEFAULT_BUILD_TYPE "Release")
+set(CUDF_BUILD_TESTS ${BUILD_TESTS})
+set(CUDF_BUILD_BENCHMARKS ${BUILD_BENCHMARKS})
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}' since none specified.")
@@ -44,22 +55,6 @@ endif(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 set(RMM_LOGGING_LEVEL "INFO" CACHE STRING "Choose the logging level.")
 set_property(CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF")
 message(STATUS "RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
-
-if(USE_NVTX)
-    message(STATUS "Using Nvidia Tools Extension")
-endif()
-
-if(JITIFY_USE_CACHE)
-    message(STATUS "Using file cache for JIT compiled kernels")
-endif()
-
-if(HT_DEFAULT_ALLOCATOR)
-    message(STATUS "Using default allocator for hash tables")
-endif()
-
-if(PER_THREAD_DEFAULT_STREAM)
-    message(STATUS "Using per-thread default stream")
-endif(PER_THREAD_DEFAULT_STREAM)
 
 ###################################################################################################
 # - conda environment -----------------------------------------------------------------------------
@@ -92,46 +87,45 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 include(cmake/Modules/ConfigureCUDA.cmake)
 
 ###################################################################################################
-# - cmake modules ---------------------------------------------------------------------------------
+# - dependencies ----------------------------------------------------------------------------------
 
-set(CMAKE_MODULE_PATH "${CUDA_DATAFRAME_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
-
-include(cmake/Modules/CPM.cmake)
-
-###################################################################################################
-# - third party dependencies-----------------------------------------------------------------------
-
+# find zlib
+find_package(ZLIB REQUIRED)
 # add third party dependencies using CPM
-include(cmake/Modules/CUDF_thirdparty.cmake)
-
-if(Boost_FOUND)
-    message(STATUS "Boost found in ${Boost_INCLUDE_DIRS}")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DBOOST_NO_CXX14_CONSTEXPR")
-else()
-    message(FATAL_ERROR "Boost not found, please check your settings.")
-endif(Boost_FOUND)
-
+include(cmake/thirdparty/CUDF_GetCPM.cmake)
+# find boost
+include(cmake/thirdparty/CUDF_FindBoost.cmake)
+# find jitify
+include(cmake/thirdparty/CUDF_FindJitify.cmake)
+# find thrust/cub
+include(cmake/thirdparty/CUDF_FindThrust.cmake)
+# find rmm
+include(cmake/thirdparty/CUDF_FindRMM.cmake)
+# find arrow
+include(cmake/thirdparty/CUDF_FindArrow.cmake)
+# find dlpack
+include(cmake/thirdparty/CUDF_FindDLPack.cmake)
+# find libcu++
+include(cmake/thirdparty/CUDF_FindLibcudacxx.cmake)
 # Stringify libcudf and libcudacxx headers used in JIT operations
 include(cmake/Modules/StringifyJITHeaders.cmake)
 
 ###################################################################################################
 # - add tests -------------------------------------------------------------------------------------
 
-if(BUILD_TESTS)
+if(CUDF_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
-endif(BUILD_TESTS)
+endif()
 
 message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 
 ###################################################################################################
 # - add benchmarks --------------------------------------------------------------------------------
 
-if(BUILD_BENCHMARKS)
+if(CUDF_BUILD_BENCHMARKS)
     add_subdirectory(benchmarks)
-endif(BUILD_BENCHMARKS)
+endif()
 
 message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
 
@@ -146,8 +140,8 @@ function(add_library_module NAMESPACE MODULE MODULE_SOURCE_DIRS)
         file(GLOB_RECURSE MODULE_SOURCE "${MODULE_SOURCE_DIR}/*")
         list(APPEND MODULE_SRC ${MODULE_SOURCE})
     endforeach(MODULE_SOURCE_DIR IN LISTS MODULE_SOURCE_DIRS)
-    message(STATUS "Adding library module with name ${MODULE} under namespace ${NAMESPACE} ...")
-    message(STATUS "Using sources: ${MODULE_SRC}")
+    message(STATUS "Adding library module ${NAMESPACE}_${MODULE} ...")
+    message(TRACE "Using sources: ${MODULE_SRC}")
     add_library("${NAMESPACE}_${MODULE}" "${MODULE_SRC}")
     set_target_properties("${NAMESPACE}_${MODULE}" PROPERTIES BUILD_RPATH "\$ORIGIN")
     # Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
@@ -155,7 +149,6 @@ function(add_library_module NAMESPACE MODULE MODULE_SOURCE_DIRS)
     # Specify include paths for the current target and dependents
     target_include_directories("${NAMESPACE}_${MODULE}"
         PUBLIC      "$<BUILD_INTERFACE:${DLPACK_INCLUDE}>"
-                    "$<BUILD_INTERFACE:${ARROW_INCLUDE_DIR}>"
                     "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
                     "$<BUILD_INTERFACE:${LIBCUDACXX_INCLUDE_DIR}>"
                     "$<BUILD_INTERFACE:${CUDA_DATAFRAME_SOURCE_DIR}/include>"
@@ -315,9 +308,9 @@ add_custom_target(install_cudf
                   COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=cudf -P "${CUDA_DATAFRAME_BINARY_DIR}/cmake_install.cmake"
                   DEPENDS cudf)
 
-if(BUILD_TESTS)
+if(CUDF_BUILD_TESTS)
     add_dependencies(install_cudf cudftestutil)
-endif(BUILD_TESTS)
+endif()
 
 add_custom_target(build_tests_cudf
                   DEPENDS ${CUDF_TEST_LIST})

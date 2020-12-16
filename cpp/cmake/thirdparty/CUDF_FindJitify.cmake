@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,16 +14,24 @@
 # limitations under the License.
 #=============================================================================
 
-project(cudf-Arrow)
+# Jitify doesn't have a version :/
 
-include(ExternalProject)
+CPMFindPackage(NAME jitify
+    VERSION         1.0.0
+    GIT_REPOSITORY  https://github.com/rapidsai/jitify.git
+    GIT_TAG         cudf_0.16
+    GIT_SHALLOW     TRUE
+    DONWLOAD_ONLY   TRUE)
 
-ExternalProject_Add(Arrow
-    GIT_REPOSITORY    https://github.com/apache/arrow.git
-    GIT_TAG           apache-arrow-1.0.1
-    GIT_SHALLOW       true
-    SOURCE_DIR        "${ARROW_ROOT}/arrow"
-    SOURCE_SUBDIR     "cpp"
-    BINARY_DIR        "${ARROW_ROOT}/build"
-    INSTALL_DIR       "${ARROW_ROOT}/install"
-    CMAKE_ARGS        ${ARROW_CMAKE_ARGS} -DCMAKE_INSTALL_PREFIX=${ARROW_ROOT}/install)
+message(STATUS "jitify_ADDED: ${jitify_ADDED}")
+message(STATUS "jitify_FOUND: ${jitify_FOUND}")
+
+if(NOT (jitify_ADDED OR jitify_FOUND))
+    message(FATAL_ERROR "jitify package not found")
+endif()
+
+message(STATUS "libcudacxx_SOURCE_DIR: ${libcudacxx_SOURCE_DIR}")
+
+set(JITIFY_INCLUDE_DIR "${jitify_SOURCE_DIR}")
+
+message(STATUS "JITIFY_INCLUDE_DIR: ${JITIFY_INCLUDE_DIR}")
