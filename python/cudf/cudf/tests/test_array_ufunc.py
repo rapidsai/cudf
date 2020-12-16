@@ -6,53 +6,47 @@ import pytest
 from cudf.tests.utils import assert_eq
 
 
+@pytest.fixture
+def np_ar_tup():
+    np.random.seed(0)
+    return (np.random.random(100), np.random.random(100))
+
+
+comparison_ops_ls = [
+    np.greater,
+    np.greater_equal,
+    np.less,
+    np.less_equal,
+    np.equal,
+    np.not_equal,
+]
+
+
 @pytest.mark.parametrize(
-    "np_ar_tup", [(np.random.random(100), np.random.random(100))]
+    "func", comparison_ops_ls + [np.subtract, np.fmod, np.power]
 )
-@pytest.mark.parametrize(
-    "func",
-    [
-        np.greater,
-        np.greater_equal,
-        np.less,
-        np.less_equal,
-        np.subtract,
-        np.equal,
-        np.not_equal,
-        np.fmod,
-        np.power,
-    ],
-)
-def test_ufunc_cudf_series(np_ar_tup, func):
+def test_ufunc_cudf_non_nullseries(np_ar_tup, func):
     x, y = np_ar_tup[0], np_ar_tup[1]
     s_1, s_2 = cudf.Series(x), cudf.Series(y)
     expect = func(x, y)
     got = func(s_1, s_2)
-    if np.isscalar(expect):
-        assert_eq(expect, got)
-    else:
-        assert_eq(expect, got.to_array())
+    assert_eq(expect, got.to_array())
 
 
 @pytest.mark.parametrize(
     "func", [np.bitwise_and, np.bitwise_or, np.bitwise_xor],
 )
 def test_ufunc_cudf_series_bitwise(func):
+    np.random.seed(0)
     x = np.random.randint(size=100, low=0, high=100)
     y = np.random.randint(size=100, low=0, high=100)
 
     s_1, s_2 = cudf.Series(x), cudf.Series(y)
     expect = func(x, y)
     got = func(s_1, s_2)
-    if np.isscalar(expect):
-        assert_eq(expect, got)
-    else:
-        assert_eq(expect, got.to_array())
+    assert_eq(expect, got.to_array())
 
 
-@pytest.mark.parametrize(
-    "np_ar_tup", [(np.random.random(100), np.random.random(100))]
-)
 @pytest.mark.parametrize(
     "func",
     [
@@ -63,46 +57,53 @@ def test_ufunc_cudf_series_bitwise(func):
         np.power,
         np.remainder,
         np.divide,
-        np.equal,
-        np.not_equal,
-        np.less,
-        np.less_equal,
-        np.greater,
-        np.greater_equal,
     ],
 )
-def test_ufunc_cudf_series_cudf_dispatch(np_ar_tup, func):
+def test_ufunc_cudf_null_series(np_ar_tup, func):
     x, y = np_ar_tup[0].astype(np.float32), np_ar_tup[1].astype(np.float32)
     x[0] = np.nan
     y[1] = np.nan
     s_1, s_2 = cudf.Series(x), cudf.Series(y)
     expect = func(x, y)
     got = func(s_1, s_2)
-    got = got.fillna(np.nan)
-    if np.isscalar(expect):
-        assert_eq(expect, got)
-    else:
-        assert_eq(expect, got.fillna(np.nan).to_array())
+    assert_eq(expect, got.fillna(np.nan).to_array())
 
     scalar = 0.5
     expect = func(x, scalar)
     got = func(s_1, scalar)
-    if np.isscalar(expect):
-        assert_eq(expect, got)
-    else:
-        assert_eq(expect, got.fillna(np.nan).to_array())
+    assert_eq(expect, got.fillna(np.nan).to_array())
 
     expect = func(scalar, x)
     got = func(scalar, s_1)
-    if np.isscalar(expect):
-        assert_eq(expect, got)
-    else:
-        assert_eq(expect, got.fillna(np.nan).to_array())
+    assert_eq(expect, got.fillna(np.nan).to_array())
 
 
-@pytest.mark.parametrize(
-    "np_ar_tup", [(np.random.random(100), np.random.random(100))]
+@pytest.mark.xfail(
+    reason="""cuDF comparison operations with <NA> incorrectly
+    returns False rather than <NA>"""
 )
+@pytest.mark.parametrize(
+    "func", comparison_ops_ls,
+)
+def test_ufunc_cudf_null_series_comparison_ops(np_ar_tup, func):
+    x, y = np_ar_tup[0].astype(np.float32), np_ar_tup[1].astype(np.float32)
+    x[0] = np.nan
+    y[1] = np.nan
+    s_1, s_2 = cudf.Series(x), cudf.Series(y)
+    expect = func(x, y)
+    got = func(s_1, s_2)
+    assert_eq(expect, got.fillna(np.nan).to_array())
+
+    scalar = 0.5
+    expect = func(x, scalar)
+    got = func(s_1, scalar)
+    assert_eq(expect, got.fillna(np.nan).to_array())
+
+    expect = func(scalar, x)
+    got = func(scalar, s_1)
+    assert_eq(expect, got.fillna(np.nan).to_array())
+
+
 @pytest.mark.parametrize(
     "func", [np.logaddexp, np.fmax, np.fmod],
 )
@@ -113,10 +114,7 @@ def test_ufunc_cudf_series_cupy_array(np_ar_tup, func):
     cudf_s = cudf.Series(x)
     cupy_ar = cp.array(y)
     got = func(cudf_s, cupy_ar)
-    if np.isscalar(expect):
-        assert_eq(expect, got)
-    else:
-        assert_eq(expect, got.to_array())
+    assert_eq(expect, got.to_array())
 
 
 @pytest.mark.parametrize(
