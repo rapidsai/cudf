@@ -1,4 +1,4 @@
-set(ARROW_ROOT ${CMAKE_BINARY_DIR}/arrow)
+set(ARROW_ROOT ${CUDA_DATAFRAME_BINARY_DIR}/arrow)
 
 set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
     " -DARROW_WITH_ZSTD=OFF"
@@ -24,7 +24,7 @@ set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
     " -DARROW_HDFS=OFF"
     " -DCMAKE_VERBOSE_MAKEFILE=ON")
 
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Templates/Arrow.CMakeLists.txt.cmake"
+configure_file("${CUDA_DATAFRAME_SOURCE_DIR}/cmake/Templates/Arrow.CMakeLists.txt.cmake"
     "${ARROW_ROOT}/CMakeLists.txt")
 
 file(MAKE_DIRECTORY "${ARROW_ROOT}/build")

@@ -18,165 +18,43 @@ cmake_minimum_required(VERSION 3.14...3.18 FATAL_ERROR)
 
 project(CUDA_DATAFRAME VERSION 0.18.0 LANGUAGES C CXX CUDA)
 
-if(NOT CMAKE_CUDA_COMPILER)
-  message(SEND_ERROR "CMake cannot locate a CUDA compiler")
-endif(NOT CMAKE_CUDA_COMPILER)
-
 ###################################################################################################
-# - build type ------------------------------------------------------------------------------------
+# - build options ---------------------------------------------------------------------------------
+
+option(USE_NVTX "Build with NVTX support" ON)
+option(BUILD_SHARED_LIBS "Build shared libraries" ON)
+option(BUILD_TESTS "Configure CMake to build tests" ON)
+option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
+option(ARROW_STATIC_LIB "Build and statically link with Arrow libraries" OFF)
+option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
+option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
 
 # Set a default build type if none was specified
 set(DEFAULT_BUILD_TYPE "Release")
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-  message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}' since none specified.")
-  set(CMAKE_BUILD_TYPE "${DEFAULT_BUILD_TYPE}" CACHE
-      STRING "Choose the type of build." FORCE)
-  # Set the possible values of build type for cmake-gui
-  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
-    "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+    message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}' since none specified.")
+    set(CMAKE_BUILD_TYPE "${DEFAULT_BUILD_TYPE}" CACHE STRING  "Choose the type of build." FORCE)
+    # Set the possible values of build type for cmake-gui
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 
-###################################################################################################
-# - compiler options ------------------------------------------------------------------------------
+# Set RMM logging level
+set(RMM_LOGGING_LEVEL "INFO" CACHE STRING "Choose the logging level.")
+set_property(CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF")
+message(STATUS "RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
 
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_C_COMPILER $ENV{CC})
-set(CMAKE_CXX_COMPILER $ENV{CXX})
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-set(CMAKE_CUDA_STANDARD 14)
-set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-
-if(CMAKE_COMPILER_IS_GNUCXX)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-error=deprecated-declarations")
-    # Suppress parentheses warning which causes gmock to fail
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-parentheses")
-endif(CMAKE_COMPILER_IS_GNUCXX)
-
-if(CMAKE_CUDA_COMPILER_VERSION)
-  # Compute the version. from  CMAKE_CUDA_COMPILER_VERSION
-  string(REGEX REPLACE "([0-9]+)\\.([0-9]+).*" "\\1" CUDA_VERSION_MAJOR ${CMAKE_CUDA_COMPILER_VERSION})
-  string(REGEX REPLACE "([0-9]+)\\.([0-9]+).*" "\\2" CUDA_VERSION_MINOR ${CMAKE_CUDA_COMPILER_VERSION})
-  set(CUDA_VERSION "${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR}" CACHE STRING "Version of CUDA as computed from nvcc.")
-  mark_as_advanced(CUDA_VERSION)
+if(USE_NVTX)
+    message(STATUS "Using Nvidia Tools Extension")
 endif()
 
-message(STATUS "CUDA_VERSION_MAJOR: ${CUDA_VERSION_MAJOR}")
-message(STATUS "CUDA_VERSION_MINOR: ${CUDA_VERSION_MINOR}")
-message(STATUS "CUDA_VERSION: ${CUDA_VERSION}")
-
-# Always set this convenience variable
-set(CUDA_VERSION_STRING "${CUDA_VERSION}")
-
-# Auto-detect available GPU compute architectures
-set(GPU_ARCHS "ALL" CACHE STRING
-  "List of GPU architectures (semicolon-separated) to be compiled for. Pass 'ALL' if you want to compile for all supported GPU architectures. Empty string means to auto-detect the GPUs on the current system")
-
-if("${GPU_ARCHS}" STREQUAL "")
-  include(cmake/EvalGpuArchs.cmake)
-  evaluate_gpu_archs(GPU_ARCHS)
+if(JITIFY_USE_CACHE)
+    message(STATUS "Using file cache for JIT compiled kernels")
 endif()
 
-if("${GPU_ARCHS}" STREQUAL "ALL")
-  
-  # Check for embedded vs workstation architectures
-  if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
-    # This is being built for Linux4Tegra or SBSA ARM64
-    set(GPU_ARCHS "62")
-    if((CUDA_VERSION_MAJOR EQUAL 9) OR (CUDA_VERSION_MAJOR GREATER 9))
-      set(GPU_ARCHS "${GPU_ARCHS};72")
-    endif()
-    if((CUDA_VERSION_MAJOR EQUAL 11) OR (CUDA_VERSION_MAJOR GREATER 11))
-      set(GPU_ARCHS "${GPU_ARCHS};75;80")
-    endif()
-
-  else()
-    # This is being built for an x86 or x86_64 architecture
-    set(GPU_ARCHS "60")
-    if((CUDA_VERSION_MAJOR EQUAL 9) OR (CUDA_VERSION_MAJOR GREATER 9))
-      set(GPU_ARCHS "${GPU_ARCHS};70")
-    endif()
-    if((CUDA_VERSION_MAJOR EQUAL 10) OR (CUDA_VERSION_MAJOR GREATER 10))
-      set(GPU_ARCHS "${GPU_ARCHS};75")
-    endif()
-    if((CUDA_VERSION_MAJOR EQUAL 11) OR (CUDA_VERSION_MAJOR GREATER 11))
-      set(GPU_ARCHS "${GPU_ARCHS};80")
-    endif()
-
-  endif()
-  
+if(HT_DEFAULT_ALLOCATOR)
+    message(STATUS "Using default allocator for hash tables")
 endif()
-message("GPU_ARCHS = ${GPU_ARCHS}")
-
-foreach(arch ${GPU_ARCHS})
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_${arch},code=sm_${arch}")
-endforeach()
-
-list(GET GPU_ARCHS -1 ptx)
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode=arch=compute_${ptx},code=compute_${ptx}")
-
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
-
-# set warnings as errors
-# TODO: remove `no-maybe-unitialized` used to suppress warnings in rmm::exec_policy
-set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror=cross-execution-space-call -Xcompiler -Wall,-Werror,-Wno-error=deprecated-declarations")
-
-option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated declarations." OFF)
-if(DISABLE_DEPRECATION_WARNING)
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -Wno-deprecated-declarations")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
-endif(DISABLE_DEPRECATION_WARNING)
-
-# Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
-option(CMAKE_CUDA_LINEINFO "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF)
-if(CMAKE_CUDA_LINEINFO)
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -lineinfo")
-endif(CMAKE_CUDA_LINEINFO)
-
-# Debug options
-if(CMAKE_BUILD_TYPE MATCHES Debug)
-    message(STATUS "Building with debugging flags")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G -Xcompiler -rdynamic")
-endif(CMAKE_BUILD_TYPE MATCHES Debug)
-
-# To apply RUNPATH to transitive dependencies (this is a temporary solution)
-set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--disable-new-dtags")
-set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
-
-# Build options
-option(BUILD_SHARED_LIBS "Build shared libraries" ON)
-option(BUILD_TESTS "Configure CMake to build tests" ON)
-option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
-
-###################################################################################################
-# - cudart options --------------------------------------------------------------------------------
-# cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
-
-option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
-
-if(CUDA_STATIC_RUNTIME)
-    message(STATUS "Enabling static linking of cudart")
-    set(CUDART_LIBRARY "cudart_static")
-else()
-    set(CUDART_LIBRARY "cudart")
-endif(CUDA_STATIC_RUNTIME)
-
-###################################################################################################
-# - cmake modules ---------------------------------------------------------------------------------
-
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
-
-include(FeatureSummary)
-include(CheckIncludeFiles)
-include(CheckLibraryExists)
-
-###################################################################################################
-# - third party dependencies-----------------------------------------------------------------------
-# add third party dependencies using CMake FetchContent
-
-add_subdirectory(thirdparty)
 
 ###################################################################################################
 # - conda environment -----------------------------------------------------------------------------
@@ -194,86 +72,32 @@ elseif(DEFINED ENV{CONDA_PREFIX})
 endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 
 ###################################################################################################
-# - find arrow ------------------------------------------------------------------------------------
+# - compiler options ------------------------------------------------------------------------------
 
-option(ARROW_STATIC_LIB "Build and statically link with Arrow libraries" OFF)
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_C_COMPILER $ENV{CC})
+set(CMAKE_CXX_COMPILER $ENV{CXX})
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if(ARROW_STATIC_LIB)
-  message(STATUS "BUILDING ARROW")
-  include(ConfigureArrow)
+set(CMAKE_CUDA_STANDARD 14)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-  if(ARROW_FOUND)
-    message(STATUS "Apache Arrow found in ${ARROW_INCLUDE_DIR}")
-  else()
-    message(FATAL_ERROR "Apache Arrow not found, please check your settings.")
-  endif(ARROW_FOUND)
-
-  add_library(arrow STATIC IMPORTED ${ARROW_LIB})
-  add_library(arrow_cuda STATIC IMPORTED ${ARROW_CUDA_LIB})
-else()
-  find_path(ARROW_INCLUDE_DIR "arrow"
-      HINTS "$ENV{ARROW_ROOT}/include")
-
-  find_library(ARROW_LIB "arrow"
-      NAMES libarrow
-      HINTS "$ENV{ARROW_ROOT}/lib" "$ENV{ARROW_ROOT}/build")
-
-  find_library(ARROW_CUDA_LIB "arrow_cuda"
-      NAMES libarrow_cuda
-      HINTS "$ENV{ARROW_ROOT}/lib" "$ENV{ARROW_ROOT}/build")
-
-  message(STATUS "ARROW: ARROW_INCLUDE_DIR set to ${ARROW_INCLUDE_DIR}")
-  message(STATUS "ARROW: ARROW_LIB set to ${ARROW_LIB}")
-  message(STATUS "ARROW: ARROW_CUDA_LIB set to ${ARROW_CUDA_LIB}")
-
-  add_library(arrow SHARED IMPORTED ${ARROW_LIB})
-  add_library(arrow_cuda SHARED IMPORTED ${ARROW_CUDA_LIB})
-endif(ARROW_STATIC_LIB)
-
-if(ARROW_INCLUDE_DIR AND ARROW_LIB AND ARROW_CUDA_LIB)
-  set_target_properties(arrow PROPERTIES IMPORTED_LOCATION ${ARROW_LIB})
-  set_target_properties(arrow_cuda PROPERTIES IMPORTED_LOCATION ${ARROW_CUDA_LIB})
-endif(ARROW_INCLUDE_DIR AND ARROW_LIB AND ARROW_CUDA_LIB)
+# find CUDAToolkit package, set CUDA compilation flags
+include(cmake/Modules/ConfigureCUDA.cmake)
 
 ###################################################################################################
-# - copy libcu++ ----------------------------------------------------------------------------------
+# - cmake modules ---------------------------------------------------------------------------------
 
-file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include")
+set(CMAKE_MODULE_PATH "${CUDA_DATAFRAME_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
 
-# `${LIBCUDACXX_INCLUDE_DIR}/` specifies that the contents of this directory will be installed (not the directory itself)
-file(INSTALL "${LIBCUDACXX_INCLUDE_DIR}/" DESTINATION "${CMAKE_BINARY_DIR}/include/libcudacxx")  
-file(INSTALL ${LIBCXX_INCLUDE_DIR}     DESTINATION "${CMAKE_BINARY_DIR}/include/libcxx")
-
-# Stringify libcudacxx and libcudf headers used in JIT codepaths
-include(cmake/Modules/StringifyJITHeaders.cmake)
+include(cmake/Modules/CPM.cmake)
 
 ###################################################################################################
-# - find zlib -------------------------------------------------------------------------------------
+# - third party dependencies-----------------------------------------------------------------------
 
-find_package(ZLIB REQUIRED)
-
-message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
-message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
-
-if(ZLIB_FOUND)
-    message(STATUS "ZLib found in ${ZLIB_INCLUDE_DIRS}")
-else()
-    message(FATAL_ERROR "ZLib not found, please check your settings.")
-endif(ZLIB_FOUND)
-
-###################################################################################################
-# - find boost ------------------------------------------------------------------------------------
-
-# Don't look for a CMake configuration file
-set(Boost_NO_BOOST_CMAKE ON)
-
-find_package(
-    Boost REQUIRED MODULE
-    COMPONENTS filesystem
-)
-
-message(STATUS "BOOST: Boost_LIBRARIES set to ${Boost_LIBRARIES}")
-message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
+# add third party dependencies using CPM
+include(cmake/Modules/CUDF_thirdparty.cmake)
 
 if(Boost_FOUND)
     message(STATUS "Boost found in ${Boost_INCLUDE_DIRS}")
@@ -284,32 +108,8 @@ else()
     message(FATAL_ERROR "Boost not found, please check your settings.")
 endif(Boost_FOUND)
 
-###################################################################################################
-# - RMM -------------------------------------------------------------------------------------------
-
-find_path(RMM_INCLUDE "rmm"
-          HINTS "$ENV{RMM_ROOT}/include")
-
-message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
-
-###################################################################################################
-# - DLPACK -------------------------------------------------------------------------------------------
-
-find_path(
-    DLPACK_INCLUDE "dlpack"
-    HINTS "$ENV{DLPACK_ROOT}/include"
-)
-
-message(STATUS "DLPACK: DLPACK_INCLUDE set to ${DLPACK_INCLUDE}")
-
-###################################################################################################
-# - jitify ----------------------------------------------------------------------------------------
-
-option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
-if(JITIFY_USE_CACHE)
-    message(STATUS "Using file cache for JIT compiled kernels")
-    add_definitions("-DJITIFY_USE_CACHE -DCUDF_VERSION=${CMAKE_PROJECT_VERSION}")
-endif(JITIFY_USE_CACHE)
+# Stringify libcudf and libcudacxx headers used in JIT operations
+include(cmake/Modules/StringifyJITHeaders.cmake)
 
 ###################################################################################################
 # - per-thread default stream option --------------------------------------------------------------
@@ -321,100 +121,23 @@ if(PER_THREAD_DEFAULT_STREAM)
 endif(PER_THREAD_DEFAULT_STREAM)
 
 ###################################################################################################
-# - add gtest -------------------------------------------------------------------------------------
+# - add tests -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
-    include(CTest)
-    include(ConfigureGoogleTest)
-
-    if(GTEST_FOUND)
-        message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
-        include_directories(${GTEST_INCLUDE_DIR})
-        add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
-    else()
-        message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
-    endif(GTEST_FOUND)
+    enable_testing()
+    add_subdirectory(tests)
 endif(BUILD_TESTS)
 
 message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
 
 ###################################################################################################
-# - add google benchmark --------------------------------------------------------------------------
+# - add benchmarks --------------------------------------------------------------------------------
 
 if(BUILD_BENCHMARKS)
-
-  include(ConfigureGoogleBenchmark)
-
-  if(GBENCH_FOUND)
-    message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) found in ${GBENCH_ROOT}")
-    include_directories(${GBENCH_INCLUDE_DIR})
-    add_subdirectory(${CMAKE_SOURCE_DIR}/benchmarks)
-  else()
-    message(AUTHOR_WARNING "Google C++ Benchmarking Framework (Google Benchmark) not found: automated tests are disabled.")
-  endif(GBENCH_FOUND)
-
+    add_subdirectory(benchmarks)
 endif(BUILD_BENCHMARKS)
 
 message(STATUS "BENCHMARK_LIST set to: ${BENCHMARK_LIST}")
-
-###################################################################################################
-# - include paths ---------------------------------------------------------------------------------
-
-include_directories("${THRUST_INCLUDE_DIR}"
-                    "${JITIFY_INCLUDE_DIR}"
-                    "${LIBCUDACXX_INCLUDE_DIR}")
-
-if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
-	include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
-endif(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
-
-include_directories("${CMAKE_BINARY_DIR}/include"
-                    "${CMAKE_SOURCE_DIR}/include"
-                    "${CMAKE_SOURCE_DIR}/src"
-                    "${ARROW_INCLUDE_DIR}"
-                    "${ZLIB_INCLUDE_DIRS}"
-                    "${Boost_INCLUDE_DIRS}"
-                    "${RMM_INCLUDE}"
-                    "${DLPACK_INCLUDE}")
-
-if(CONDA_INCLUDE_DIRS)
-    include_directories("${CONDA_INCLUDE_DIRS}")
-endif(CONDA_INCLUDE_DIRS)
-
-###################################################################################################
-# - library paths ---------------------------------------------------------------------------------
-
-link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
-                 "${CMAKE_BINARY_DIR}/lib"
-                 "${CMAKE_BINARY_DIR}"
-                 "${GTEST_LIBRARY_DIR}")
-
-if(CONDA_LINK_DIRS)
-    link_directories("${CONDA_LINK_DIRS}")
-endif(CONDA_LINK_DIRS)
-
-###################################################################################################
-# - build options ---------------------------------------------------------------------------------
-
-option(USE_NVTX "Build with NVTX support" ON)
-if(USE_NVTX)
-    message(STATUS "Using Nvidia Tools Extension")
-endif(USE_NVTX)
-
-option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
-if(HT_DEFAULT_ALLOCATOR)
-    message(STATUS "Using default allocator for hash tables")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -DHT_DEFAULT_ALLOCATOR")
-endif(HT_DEFAULT_ALLOCATOR)
-
-###################################################################################################
-# - rmm logging level -----------------------------------------------------------------------------
-
-set(RMM_LOGGING_LEVEL "INFO" CACHE STRING "Choose the logging level.")
-# Set the possible values of build type for cmake-gui
-set_property(CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS
-        "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF")
-message(STATUS "RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
@@ -433,49 +156,87 @@ function(add_library_module NAMESPACE MODULE MODULE_SOURCE_DIRS)
     set_target_properties("${NAMESPACE}_${MODULE}" PROPERTIES BUILD_RPATH "\$ORIGIN")
     # Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
     target_compile_definitions("${NAMESPACE}_${MODULE}" PRIVATE "JITIFY_PRINT_LOG=0")
-    # per-thread default stream
+    # Specify include paths for the current target and dependents
+    target_include_directories("${NAMESPACE}_${MODULE}"
+        PUBLIC      "$<BUILD_INTERFACE:${RMM_INCLUDE}>"
+                    "$<BUILD_INTERFACE:${DLPACK_INCLUDE}>"
+                    "$<BUILD_INTERFACE:${ARROW_INCLUDE_DIR}>"
+                    "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
+                    "$<BUILD_INTERFACE:${LIBCUDACXX_INCLUDE_DIR}>"
+                    "$<BUILD_INTERFACE:${CUDA_DATAFRAME_SOURCE_DIR}/include>"
+                    "$<BUILD_INTERFACE:${CUDA_DATAFRAME_BINARY_DIR}/include>"
+        PRIVATE     "$<BUILD_INTERFACE:${CUDA_DATAFRAME_SOURCE_DIR}/src>"
+        INTERFACE   "$<INSTALL_INTERFACE:include>")
+    # Add Conda library paths if specified
+    if(CONDA_LINK_DIRS)
+        target_link_directories("${NAMESPACE}_${MODULE}" PUBLIC "$<BUILD_INTERFACE:${CONDA_LINK_DIRS}>")
+    endif()
+    # Add Conda include paths if specified
+    if(CONDA_INCLUDE_DIRS)
+        target_include_directories("${NAMESPACE}_${MODULE}" PUBLIC "$<BUILD_INTERFACE:${CONDA_INCLUDE_DIRS}>")
+    endif(CONDA_INCLUDE_DIRS)
+    # Instruct jitify to use the kernel JIT cache
+    if(JITIFY_USE_CACHE)
+        target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC
+            JITIFY_USE_CACHE CUDF_VERSION=${CMAKE_PROJECT_VERSION})
+    endif(JITIFY_USE_CACHE)
+    # Set hash table allocator
+    if(HT_DEFAULT_ALLOCATOR)
+        target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC HT_DEFAULT_ALLOCATOR)
+    endif(HT_DEFAULT_ALLOCATOR)
+    # Per-thread default stream
     if(PER_THREAD_DEFAULT_STREAM)
         target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM)
     endif(PER_THREAD_DEFAULT_STREAM)
-    # nvtx
+    # Disable NVTX if necessary
     if(NOT USE_NVTX)
         target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC NVTX_DISABLE)
     endif(NOT USE_NVTX)
-    # spdlog level
+    # Define spdlog level
     target_compile_definitions("${NAMESPACE}_${MODULE}" PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${LOGGING_LEVEL}")
+    # Compile stringified JIT sources first
     add_dependencies("${NAMESPACE}_${MODULE}" stringify_run)
-    target_link_libraries("${NAMESPACE}_${MODULE}" arrow arrow_cuda nvrtc ${CUDART_LIBRARY} cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
+    # Specify the target module library dependencies
+    target_link_libraries("${NAMESPACE}_${MODULE}"
+                   PUBLIC ZLIB::ZLIB
+                          Boost::filesystem
+                          arrow arrow_cuda
+                          cudf::Thrust
+                          CUDA::nvrtc
+                          ${CUDART_LIBRARY}
+                          CUDA::cuda_driver)
+    # Add alias target cudf::<module_name> for exporting
     add_library("${NAMESPACE}::${MODULE}" ALIAS "${NAMESPACE}_${MODULE}")
 endfunction()
 
 # define a list of modules for the base library
 set(
     CUDF_BASE_MODULE_LIST
-        "${CMAKE_SOURCE_DIR}/src/aggregation"
-        "${CMAKE_SOURCE_DIR}/src/binaryop"
-        "${CMAKE_SOURCE_DIR}/src/bitmask"
-        "${CMAKE_SOURCE_DIR}/src/column"
-        "${CMAKE_SOURCE_DIR}/src/copying"
-        "${CMAKE_SOURCE_DIR}/src/datetime"
-        "${CMAKE_SOURCE_DIR}/src/dictionary"
-        "${CMAKE_SOURCE_DIR}/src/filling"
-        "${CMAKE_SOURCE_DIR}/src/groupby"
-        "${CMAKE_SOURCE_DIR}/src/jit"
-        "${CMAKE_SOURCE_DIR}/src/lists"
-        "${CMAKE_SOURCE_DIR}/src/quantiles"
-        "${CMAKE_SOURCE_DIR}/src/reshape"
-        "${CMAKE_SOURCE_DIR}/src/round"
-        "${CMAKE_SOURCE_DIR}/src/scalar"
-        "${CMAKE_SOURCE_DIR}/src/search"
-        "${CMAKE_SOURCE_DIR}/src/sort"
-        "${CMAKE_SOURCE_DIR}/src/stream_compaction"
-        "${CMAKE_SOURCE_DIR}/src/strings"
-        "${CMAKE_SOURCE_DIR}/src/structs"
-        "${CMAKE_SOURCE_DIR}/src/table"
-        "${CMAKE_SOURCE_DIR}/src/text"
-        "${CMAKE_SOURCE_DIR}/src/transform"
-        "${CMAKE_SOURCE_DIR}/src/unary"
-        "${CMAKE_SOURCE_DIR}/src/utilities"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/aggregation"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/binaryop"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/bitmask"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/column"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/copying"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/datetime"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/dictionary"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/filling"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/groupby"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/jit"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/lists"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/quantiles"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/reshape"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/round"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/scalar"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/search"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/sort"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/stream_compaction"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/strings"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/structs"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/table"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/text"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/transform"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/unary"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/utilities"
 )
 
 set(CUDF_BASE_NAME "base")
@@ -483,31 +244,32 @@ add_library_module("${CUDF_NAMESPACE}" "${CUDF_BASE_NAME}" "${CUDF_BASE_MODULE_L
 
 set(
     CUDF_MODULE_LIST
-        "${CMAKE_SOURCE_DIR}/src/ast"
-        "${CMAKE_SOURCE_DIR}/src/comms"
-        "${CMAKE_SOURCE_DIR}/src/hash"
-        "${CMAKE_SOURCE_DIR}/src/interop"
-        "${CMAKE_SOURCE_DIR}/src/io"
-        "${CMAKE_SOURCE_DIR}/src/join"
-        "${CMAKE_SOURCE_DIR}/src/merge"
-        "${CMAKE_SOURCE_DIR}/src/partitioning"
-        "${CMAKE_SOURCE_DIR}/src/reductions"
-        "${CMAKE_SOURCE_DIR}/src/replace"
-        "${CMAKE_SOURCE_DIR}/src/reshape"
-        "${CMAKE_SOURCE_DIR}/src/rolling"
-        "${CMAKE_SOURCE_DIR}/src/transpose"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/ast"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/comms"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/hash"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/interop"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/io"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/join"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/merge"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/partitioning"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/reductions"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/replace"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/reshape"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/rolling"
+        "${CUDA_DATAFRAME_SOURCE_DIR}/src/transpose"
 )
 
 # generate names of cudf library modules based on source tree under cpp/src
 foreach(CUDF_MODULE_DIR IN LISTS CUDF_MODULE_LIST)
     get_filename_component(CUDF_MODULE_NAME ${CUDF_MODULE_DIR} NAME)
     add_library_module(${CUDF_NAMESPACE} ${CUDF_MODULE_NAME} ${CUDF_MODULE_DIR})
-    target_link_libraries("${CUDF_NAMESPACE}_${CUDF_MODULE_NAME}" "${CUDF_NAMESPACE}::${CUDF_BASE_NAME}")
+    target_link_libraries("${CUDF_NAMESPACE}_${CUDF_MODULE_NAME}"
+                   PUBLIC "${CUDF_NAMESPACE}::${CUDF_BASE_NAME}")
     list(APPEND CUDF_MODULES "${CUDF_NAMESPACE}_${CUDF_MODULE_NAME}")
 endforeach()
 
 set(CUDF_PROXY_NAME "${CUDF_NAMESPACE}")
-set(CUDF_PROXY_SRC "${CMAKE_BINARY_DIR}/cudf.cpp")  # this file will be generated
+set(CUDF_PROXY_SRC "${CUDA_DATAFRAME_BINARY_DIR}/cudf.cpp")  # this file will be generated
 message(STATUS "Generating proxy library: cudf")
 file(WRITE "${CUDF_PROXY_SRC}" "// This file is generated by ${CMAKE_CURRENT_LIST_FILE} \n")
 add_library("${CUDF_PROXY_NAME}" "${CUDF_PROXY_SRC}")
@@ -515,46 +277,52 @@ add_library("${CUDF_PROXY_NAME}" "${CUDF_PROXY_SRC}")
 target_link_options("${CUDF_PROXY_NAME}" PRIVATE "LINKER:--no-as-needed")
 set_target_properties("${CUDF_PROXY_NAME}" PROPERTIES BUILD_RPATH "\$ORIGIN")
 add_library("${CUDF_PROXY_NAME}::${CUDF_PROXY_NAME}" ALIAS "${CUDF_PROXY_NAME}")
-
-###################################################################################################
-# - link libraries --------------------------------------------------------------------------------
-
-target_link_libraries("${CUDF_PROXY_NAME}" "${CUDF_NAMESPACE}::${CUDF_BASE_NAME}" "${CUDF_MODULES}")
+# Link the proxy libcudf.so to libcudf_base.so and each `libcudf_<module>.so`
+target_link_libraries("${CUDF_PROXY_NAME}" PUBLIC "${CUDF_NAMESPACE}::${CUDF_BASE_NAME}" "${CUDF_MODULES}")
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
 
-# install targets for cuDF
-install(TARGETS cudf_base
-        DESTINATION lib
-        COMPONENT cudf)
+include(GNUInstallDirs)
 
+set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/cudf)
+
+# install target for cudf_base
+install(TARGETS "${CUDF_NAMESPACE}_${CUDF_BASE_NAME}"
+        DESTINATION lib
+        COMPONENT cudf
+        EXPORT cudf-targets)
+
+# install target for each cudf_<module>
 install(TARGETS ${CUDF_MODULES}
         DESTINATION lib
-        COMPONENT cudf)
+        COMPONENT cudf
+        EXPORT cudf-targets)
 
-install(TARGETS cudf
+# install target for the proxy libcudf.so
+install(TARGETS ${CUDF_PROXY_NAME}
         DESTINATION lib
+        COMPONENT cudf
+        EXPORT cudf-targets)
+
+install(DIRECTORY ${CUDA_DATAFRAME_SOURCE_DIR}/include/cudf
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
         COMPONENT cudf)
 
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
-        DESTINATION include
+install(DIRECTORY ${CUDA_DATAFRAME_SOURCE_DIR}/include/cudf_test
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
         COMPONENT cudf)
 
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf_test
-        DESTINATION include
+install(DIRECTORY ${CUDA_DATAFRAME_BINARY_DIR}/include/libcxx
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf
         COMPONENT cudf)
 
-install(DIRECTORY ${CMAKE_BINARY_DIR}/include/libcxx
-        DESTINATION include/libcudf
-        COMPONENT cudf)
-
-install(DIRECTORY ${CMAKE_BINARY_DIR}/include/libcudacxx
-        DESTINATION include/libcudf
+install(DIRECTORY ${CUDA_DATAFRAME_BINARY_DIR}/include/libcudacxx
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf
         COMPONENT cudf)
 
 add_custom_target(install_cudf
-                  COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=cudf -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
+                  COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=cudf -P "${CUDA_DATAFRAME_BINARY_DIR}/cmake_install.cmake"
                   DEPENDS cudf)
 
 if(BUILD_TESTS)
@@ -571,12 +339,30 @@ add_custom_target(test_cudf
 add_custom_target(build_benchmarks_cudf
                   DEPENDS ${BENCHMARK_LIST})
 
+include(CMakePackageConfigHelpers)
+
+configure_package_config_file(cmake/cudf-config.cmake.in "${CUDA_DATAFRAME_BINARY_DIR}/cudf-config.cmake"
+                              INSTALL_DESTINATION "${INSTALL_CONFIGDIR}")
+
+write_basic_package_version_file("${CUDA_DATAFRAME_BINARY_DIR}/cudf-config-version.cmake"
+                                 COMPATIBILITY SameMinorVersion)
+
+install(FILES   "${CUDA_DATAFRAME_BINARY_DIR}/cudf-config.cmake"
+                "${CUDA_DATAFRAME_BINARY_DIR}/cudf-config-version.cmake"
+                "${CUDA_DATAFRAME_SOURCE_DIR}/cmake/install/FindThrust.cmake"
+    DESTINATION "${INSTALL_CONFIGDIR}")
+
+install(EXPORT  cudf-targets
+    FILE        cudf-targets.cmake
+    NAMESPACE   cudf::
+    DESTINATION "${INSTALL_CONFIGDIR}")
+
 ###################################################################################################
 # - make documentation ----------------------------------------------------------------------------
 
 # doc targets for cuDF
 add_custom_command(OUTPUT CUDF_DOXYGEN
-                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doxygen
+                   WORKING_DIRECTORY ${CUDA_DATAFRAME_SOURCE_DIR}/doxygen
                    COMMAND doxygen Doxyfile
                    VERBATIM)
 
