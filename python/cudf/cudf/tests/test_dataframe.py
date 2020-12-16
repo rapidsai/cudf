@@ -7999,14 +7999,12 @@ def test_dataframe_from_pandas_duplicate_columns():
 
 @pytest.mark.parametrize("join",["left", "right"],)
 @pytest.mark.parametrize("overwrite",[True, False],)
-@pytest.mark.parametrize("filter_func",[None],)
 @pytest.mark.parametrize("errors",["raise", "ignore"],)
 @pytest.mark.parametrize(
     "data",
     [
         {"a": [1, 2, 3], "b": [3, 4, 5]},
         {"a": [1.0, 2.0, 3.0], "b": [3.0, 4.0, 5.0]},
-        #{"a": ["n", "p", "q"],"b": ["t", "l", "s"]},
         {"a": [False, False, True], "b": [True, True, False]},
         {"a": [2.0, np.nan, 4.0], "b": [np.nan, np.nan, np.nan]},
         {"a": [np.nan, np.nan, np.nan], "b": [np.nan, np.nan, np.nan]},
@@ -8016,13 +8014,12 @@ def test_dataframe_from_pandas_duplicate_columns():
     "data2",
     [
         {"a": [7, 5, 8], "b": [2.0, 7.0, 9.0]},
-        #{"a": ["yp", "zn", "uf"],"b": ["md", "rl", "sv"]},
-        {"a": [True, False, True], "b":[3.0, 4.0, 5.0], "c": [False, True, False]},
+        {"a": [True, False, True], "b":[3.0, 4.0, 5.0]},
         {"a": [np.nan, np.nan, np.nan], "b": [np.nan, np.nan, np.nan]},
-        {"a": [np.nan, 2.0, False], "b": [2, np.nan, 5.0], "c": [np.nan, np.nan, np.nan]},
+        {"a": [np.nan, 2.0, False], "b": [2, np.nan, 5.0]}, 
     ],
 )
-def test_update_for_dataframes(data, data2, join, overwrite, filter_func, errors):
+def test_update_for_dataframes(data, data2, join, overwrite, errors):
     pdf = pd.DataFrame(data)
     gdf = gd.DataFrame(data)
 

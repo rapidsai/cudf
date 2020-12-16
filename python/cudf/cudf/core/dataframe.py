@@ -1435,9 +1435,7 @@ class DataFrame(Frame, Serializable):
         return self._apply_op("add", other, fill_value)
 
 
-    def update(
-        self, other, join="left", overwrite=True, filter_func=None, errors="ignore"
-        ):
+    def update(self, other, join="left", overwrite=True, filter_func=None, errors="ignore"):
         """
         Modify a DataFrame in place using non-NA values from another DataFrame.
 
@@ -1488,38 +1486,36 @@ class DataFrame(Frame, Serializable):
             raise NotImplementedError("Only left join is supported")
         if errors not in ["ignore", "raise"]:
             raise ValueError("The parameter errors must be either 'ignore' or 'raise'")
+        if filter_func != None:
+            raise NotImplementedError("filter_func is not supported yet")
 
         if not isinstance(other, DataFrame):
             other = DataFrame(other)
 
         other = other.reindex(self.index, axis=0)
         other = other.reindex(self.columns, axis=1)
+
         for col in self.columns: 
-            original = self[col]
-            new = other[col]  
-#             if filter_func is not None:
-#                 with np.errstate(all="ignore"):
-# >                   mask = ~filter_func(original) | new.isna()
-            # else:
+            this = df[col]
+            that = other[col]  
             
             if errors == "raise":
-                mask_original = new.notna() 
-                mask_new = original.notna()
-                if any(mask_original & mask_new):
-                    raise ValueError("Data overlaps.") 
+                mask_this = that.notna()
+                mask_that = this.notna()
+                if any(mask_this & mask_that):
+                    raise ValueError("Data overlaps.")
 
-            if overwrite: 
-                mask = new.isna() #overwrite original with values from other 
-
+            if overwrite:
+                mask = that.isna()
             else:
-                mask = original.notna() #only update values that are na in the original 
+                mask = this.notna()
 
             # don't overwrite columns unnecessarily
             if mask.all():
                 continue
 
-            self.loc[mask, col] = original[mask]
-            self.loc[~mask, col] = newr[~mask]
+            df.loc[mask, col] = this[mask]
+            df.loc[~mask, col] = that[~mask]
 
         
     def __add__(self, other):
