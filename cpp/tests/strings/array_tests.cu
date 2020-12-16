@@ -182,6 +182,15 @@ struct column_to_string_view_vector {
   }
 };
 
+TEST_F(StringsColumnTest, GatherTooBig)
+{
+  cudf::test::strings_column_wrapper strings({"0123456789012345678901234567890123456789"});
+  auto map = thrust::constant_iterator<int8_t>(0);
+  cudf::test::fixed_width_column_wrapper<int8_t> gather_map(
+    map, map + std::numeric_limits<cudf::size_type>::max() / 20);
+  EXPECT_THROW(cudf::gather(cudf::table_view{{strings}}, gather_map), cudf::logic_error);
+}
+
 TEST_F(StringsColumnTest, Scatter)
 {
   std::vector<const char*> h_strings1{"eee", "bb", nullptr, "", "aa", "bbb", "ééé"};
