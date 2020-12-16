@@ -16,7 +16,21 @@ the source files that implement the API. For example, the implementation of the 
 `cudf/cpp/include/cudf/copying.hpp` are located in `cudf/src/copying`. Likewise, the unit tests for 
 the APIs reside in `cudf/tests/copying/`.
 
+## File extensions
+
+- `.hpp` : C++ header files
+- `.cpp` : C++ source files
+- `.cu`  : CUDA C++ source files
+- `.cuh` : Headers containing CUDA device code
+
+Only use `.cu` and `.cuh` if necessary. A good indicator is the inclusion of `__device__` and other
+symbols that are only recognized by `nvcc`. Also, Thrust APIs executed on a device execution policy,
+which should always be `rmm::exec_policy` in libcudf.
+
 # libcudf Data Structures
+
+Application data in libcudf is contained in Columns and Tables, but there are a variety of other
+data structures you will use when developing libcudf code.
 
 ## Views and Ownership
 
