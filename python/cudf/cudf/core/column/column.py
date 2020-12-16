@@ -37,6 +37,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
     is_struct_dtype,
+    is_interval_dtype,
     min_signed_type,
     min_unsigned_type,
     np_to_pa_dtype,
@@ -132,7 +133,7 @@ class ColumnBase(Column, Serializable):
             pd_series = pd.Series(pandas_array, copy=False)
         elif str(self.dtype) in NUMERIC_TYPES and self.null_count == 0:
             pd_series = pd.Series(cupy.asnumpy(self.values), copy=False)
-        elif isinstance(self.dtype, cudf.core.dtypes.IntervalDtype):
+        elif is_interval_dtype(self.dtype):
             pd_series = pd.Series(
                 pd.IntervalDtype().__from_arrow__(self.to_arrow())
             )
@@ -1013,6 +1014,8 @@ class ColumnBase(Column, Serializable):
                     "Casting list columns not currently supported"
                 )
             return self
+        elif is_interval_dtype(self.dtype):
+            return self
         elif np.issubdtype(dtype, np.datetime64):
             return self.as_datetime_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.timedelta64):
@@ -1485,7 +1488,7 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif isinstance(dtype, cudf.core.dtypes.IntervalDtype):
+    elif is_interval_dtype(dtype):
         return cudf.core.column.IntervalColumn(
             data=data,
             dtype=dtype,
@@ -1669,7 +1672,7 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
             return as_column(arbitrary.array)
         if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
-        elif isinstance(arbitrary.dtype, cudf.core.dtypes.IntervalDtype):
+        elif is_interval_dtype(arbitrary.dtype):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool:
             data = as_column(cupy.asarray(arbitrary), dtype=arbitrary.dtype)
@@ -1790,9 +1793,17 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 data=buffer, mask=mask, dtype=arbitrary.dtype
             )
         elif arb_dtype.kind in ("O", "U"):
-            data = as_column(
-                pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
-            )
+            if isinstance(arbitrary[0], pd._libs.interval.Interval):
+                # changing from pd array to series,possible arrow bug
+                interval_series = pd.Series(arbitrary)
+                data = as_column(
+                    pa.Array.from_pandas(interval_series),
+                    dtype=arbitrary.dtype,
+                )
+            else:
+                data = as_column(
+                    pa.Array.from_pandas(arbitrary), dtype=arbitrary.dtype
+                )
             # There is no cast operation available for pa.Array from int to
             # str, Hence instead of handling in pa.Array block, we
             # will have to type-cast here.
@@ -1820,7 +1831,16 @@ def as_column(arbitrary, nan_as_null=None, dtype=None, length=None):
                 if arb_dtype != arbitrary.dtype.numpy_dtype:
                     arbitrary = arbitrary.astype(arb_dtype)
         if arb_dtype.kind in ("O", "U"):
-            data = as_column(pa.Array.from_pandas(arbitrary), dtype=arb_dtype)
+            if isinstance(arbitrary[0], pd._libs.interval.Interval):
+                # changing from pd array to series,possible arrow bug
+                interval_series = pd.Series(arbitrary)
+                data = as_column(
+                    pa.Array.from_pandas(interval_series), dtype=arb_dtype
+                )
+            else:
+                data = as_column(
+                    pa.Array.from_pandas(arbitrary), dtype=arb_dtype
+                )
         else:
             data = as_column(
                 pa.array(

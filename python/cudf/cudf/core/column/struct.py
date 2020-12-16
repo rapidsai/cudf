@@ -71,10 +71,8 @@ class StructColumn(ColumnBase):
             result = result._rename_fields(self.dtype.fields.keys())
         return result
 
-    def as_interval_column(self, closed="rght"):
+    def as_interval_column(self, closed="right"):
         from cudf.core.column import IntervalColumn
-
-        # breakpoint()
 
         return IntervalColumn(
             size=self.size,

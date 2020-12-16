@@ -241,6 +241,19 @@ def is_struct_dtype(obj):
     )
 
 
+def is_interval_dtype(obj):
+    return (
+        isinstance(obj, cudf.core.dtypes.IntervalDtype)
+        or obj is cudf.core.dtypes.IntervalDtype
+        # or type(obj) is cudf.core.column.StructColumn
+        # or obj is cudf.core.column.StructColumn
+        or (
+            isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
+        )
+        or (hasattr(obj, "dtype") and is_interval_dtype(obj.dtype))
+    )
+
+
 def cudf_dtype_from_pydata_dtype(dtype):
     """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
         Python dtype.
