@@ -177,7 +177,7 @@ else
     KAFKA_CONDA_FILE=${KAFKA_CONDA_FILE//-/=} #convert to conda install
 
     gpuci_logger "Installing $CUDF_CONDA_FILE & $KAFKA_CONDA_FILE"
-    conda install -c $WORKSPACE/ci/artifacts/cudf/cpu/conda-bld/ "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
+    gpuci_conda_retry install --freeze-installed -c $WORKSPACE/ci/artifacts/cudf/cpu/conda-bld/ "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
 
     install_dask
 
