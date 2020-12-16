@@ -1291,6 +1291,87 @@ def test_mulitIndex_repr(pmi, max_seq_items):
             "   (<NA>, <NA>)],"
             "    names=['b', 'a'])",
         ),
+        (
+            cudf.DataFrame(
+                {
+                    "a": [1, 2, None, 3, 5],
+                    "b": [
+                        "abc",
+                        "def, hi, bye",
+                        None,
+                        ", one, two, three, four",
+                        None,
+                    ],
+                    "c": cudf.Series(
+                        [0.3232, np.nan, 1, None, -0.34534], nan_as_null=False
+                    ),
+                    "d": [None, 100, 2000324, None, None],
+                }
+            )
+            .set_index(["a", "b", "c", "d"])
+            .index,
+            "MultiIndex([(   1,                      'abc',    "
+            "0.3232,     <NA>),"
+            "   (   2,             'def, hi, bye',       nan,      100),"
+            "   (<NA>,                       <NA>,       1.0,  2000324),"
+            "   (   3,  ', one, two, three, four',      <NA>,     <NA>),"
+            "   (   5,                       <NA>,  -0.34534,     <NA>)],"
+            "    names=['a', 'b', 'c', 'd'])",
+        ),
+        (
+            cudf.DataFrame(
+                {
+                    "a": [1, 2, None, 3, 5],
+                    "b": [
+                        "abc",
+                        "def, hi, bye",
+                        None,
+                        ", one, two, three, four",
+                        None,
+                    ],
+                    "c": cudf.Series(
+                        [0.3232, np.nan, 1, None, -0.34534], nan_as_null=False
+                    ),
+                    "d": [None, 100, 2000324, None, None],
+                }
+            )
+            .set_index(["b", "a", "c", "d"])
+            .index,
+            "MultiIndex([(                     'abc',    1,    "
+            "0.3232,     <NA>),"
+            "   (            'def, hi, bye',    2,       nan,      100),"
+            "   (                      <NA>, <NA>,       1.0,  2000324),"
+            "   ( ', one, two, three, four',    3,      <NA>,     <NA>),"
+            "   (                      <NA>,    5,  -0.34534,     <NA>)],"
+            "   names=['b', 'a', 'c', 'd'])",
+        ),
+        (
+            cudf.DataFrame(
+                {
+                    "a": ["(abc", "2", None, "3", "5"],
+                    "b": [
+                        "abc",
+                        "def, hi, bye",
+                        None,
+                        ", one, two, three, four",
+                        None,
+                    ],
+                    "c": cudf.Series(
+                        [0.3232, np.nan, 1, None, -0.34534], nan_as_null=False
+                    ),
+                    "d": [None, 100, 2000324, None, None],
+                }
+            )
+            .set_index(["a", "b", "c", "d"])
+            .index,
+            "MultiIndex([( '(abc',                      'abc',    "
+            "0.3232,     <NA>),"
+            "   (    '2',             'def, hi, bye',       nan,      100),"
+            "   (   <NA>,                       <NA>,       1.0,  2000324),"
+            "   (    '3',  ', one, two, three, four',      <NA>,     <NA>),"
+            "   (    '5',                       <NA>,  -0.34534,     <NA>)],"
+            "   names=['a', 'b', 'c', 'd'])",
+        ),
     ],
 )
 def test_mulitIndex_null_repr(gdi, expected_repr):

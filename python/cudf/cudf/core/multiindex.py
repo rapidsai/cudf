@@ -449,6 +449,32 @@ class MultiIndex(Index):
         for row_idx, line in enumerate(lines[:-1]):
             current_row = row_tuples[row_idx]
             current_row_repr = line.split(", ")
+
+            # If there is mismatch in lengths, that means there
+            # is a string in multi-Index which contains ", "
+            # Due to this reason we will have to correctly
+            # calculate the splits by inspecting values in current_row
+            if len(current_row_repr) != len(current_row):
+                correct_row_repr = []
+                repr_idx = 0
+                for val in current_row:
+                    if not isinstance(val, str) or (
+                        isinstance(val, str) and ", " not in val
+                    ):
+                        correct_row_repr.append(current_row_repr[repr_idx])
+                        repr_idx += 1
+                    else:
+                        split_count = val.count(", ")
+                        correct_row_repr.append(
+                            ", ".join(
+                                current_row_repr[
+                                    repr_idx : repr_idx + split_count + 1
+                                ]
+                            )
+                        )
+                        repr_idx += split_count + 1
+                current_row_repr = correct_row_repr
+
             for col_idx, value in enumerate(current_row):
                 if value is pd.NA:
                     if col_idx in date_time_col_indices:
@@ -471,7 +497,7 @@ class MultiIndex(Index):
                     if col_idx == 0:
                         current_row_repr[col_idx] = current_row_repr[
                             col_idx
-                        ].replace("(", "( ")
+                        ].replace("(", "( ", 1)
                     elif col_idx == len(current_row) - 1:
                         current_row_repr[col_idx] = (
                             " " + current_row_repr[col_idx]
