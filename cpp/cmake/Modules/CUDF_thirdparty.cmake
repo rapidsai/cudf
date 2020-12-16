@@ -33,7 +33,7 @@ set(CUDF_MIN_VERSION_Boost 1.71.0)
 find_package(Boost ${CUDF_MIN_VERSION_Boost} QUIET MODULE COMPONENTS filesystem)
 
 if (NOT Boost_FOUND)
-    CPMFindPackage(NAME Boost
+    CPMAddPackage(NAME         Boost
         GIT_REPOSITORY         https://github.com/Orphis/boost-cmake.git
         VERSION                ${CUDF_MIN_VERSION_Boost}
         FIND_PACKAGE_ARGUMENTS "COMPONENTS filesystem"
@@ -47,7 +47,7 @@ message(STATUS "Boost_INCLUDE_DIRS: ${Boost_INCLUDE_DIRS}")
 ###################################################################################################
 # - find jitify -----------------------------------------------------------------------------------
 
-CPMFindPackage(NAME jitify
+CPMAddPackage(NAME  jitify
     VERSION         1.0.0
     GIT_REPOSITORY  https://github.com/rapidsai/jitify.git
     GIT_TAG         cudf_0.16
@@ -63,7 +63,7 @@ message(STATUS "JITIFY_INCLUDE_DIR: ${JITIFY_INCLUDE_DIR}")
 
 set(CUDF_MIN_VERSION_libcudacxx 1.4.0)
 
-CPMFindPackage(NAME libcudacxx
+CPMAddPackage(NAME  libcudacxx
     VERSION         ${CUDF_MIN_VERSION_libcudacxx}
     GIT_REPOSITORY  https://github.com/NVIDIA/libcudacxx.git
     GIT_TAG         ${CUDF_MIN_VERSION_libcudacxx}
@@ -121,7 +121,7 @@ message(STATUS "SPDLOG_INCLUDE: ${SPDLOG_INCLUDE}")
 
 set(CUDF_MIN_VERSION_Thrust 1.10.0)
 
-CPMFindPackage(NAME Thrust
+CPMAddPackage(NAME  Thrust
   GIT_REPOSITORY    https://github.com/NVIDIA/thrust.git
   GIT_TAG           ${CUDF_MIN_VERSION_Thrust}
   VERSION           ${CUDF_MIN_VERSION_Thrust}
@@ -142,16 +142,15 @@ message(STATUS "THRUST_INCLUDE_DIR: ${THRUST_INCLUDE_DIR}")
 set(CUDF_MIN_VERSION_rmm "${CMAKE_PROJECT_VERSION_MAJOR}.${CMAKE_PROJECT_VERSION_MINOR}")
 
 if(RMM_INCLUDE)
-    add_library(rmm INTERFACE IMPORTED)
-    target_include_directories(rmm
-        INTERFACE ${RMM_INCLUDE}
-                  ${SPDLOG_INCLUDE}
-                  ${THRUST_INCLUDE_DIR})
+    add_library(rmm INTERFACE)
+    target_include_directories(rmm INTERFACE "$<BUILD_INTERFACE:${RMM_INCLUDE}>"
+                                             "$<BUILD_INTERFACE:${SPDLOG_INCLUDE}>"
+                                             "$<BUILD_INTERFACE:${THRUST_INCLUDE_DIR}>")
     add_library(rmm::rmm ALIAS rmm)
 else()
     find_package(rmm ${CUDF_MIN_VERSION_rmm} QUIET)
     if (NOT rmm_FOUND)
-        CPMFindPackage(NAME rmm
+        CPMAddPackage(NAME  rmm
             VERSION         ${CUDF_MIN_VERSION_rmm}
             GIT_REPOSITORY  https://github.com/rapidsai/rmm.git
             GIT_TAG         branch-${CUDF_MIN_VERSION_rmm}
