@@ -201,7 +201,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
     make_numeric_column(data_type{type_id::INT32}, 2, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view = offsets_column->mutable_view();
   // set the first entry to 0 and the last entry to bytes
-  int32_t new_offsets[] = {0, bytes};
+  int32_t new_offsets[] = {0, static_cast<int32_t>(bytes)};
   CUDA_TRY(cudaMemcpyAsync(offsets_view.data<int32_t>(),
                            new_offsets,
                            sizeof(new_offsets),
@@ -286,8 +286,8 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
     // Execute it on every element
     thrust::transform(
       rmm::exec_policy(stream),
-      thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(strings_count),
+      thrust::make_counting_iterator<size_type>(0),
+      thrust::make_counting_iterator<size_type>(strings_count),
       out_col_strings.data().get(),
       // Output depends on the separator
       [col0, invalid_str, separator_col_view, separator_rep, col_rep] __device__(auto ridx) {
@@ -366,7 +366,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
     if (bytes == 0) assert(separator_str.size_bytes() == 0);
 
     // Separator goes only in between elements
-    return bytes - separator_str.size_bytes();
+    return static_cast<int32_t>(bytes - separator_str.size_bytes());
   };
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0), offsets_transformer);
