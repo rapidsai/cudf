@@ -545,7 +545,7 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
        input_field_index++) {
     auto const desc =
       next_field_descriptor(current, row_data_range.second, opts, input_field_index, col_map);
-    auto const value_len = static_cast<size_t>(std::max(desc.value_end - desc.value_begin, 0l));
+    auto const value_len = static_cast<size_t>(std::max(desc.value_end - desc.value_begin, 0L));
 
     current = desc.value_end + 1;
 
@@ -616,7 +616,7 @@ __global__ void detect_data_types_kernel(
        input_field_index++) {
     auto const desc =
       next_field_descriptor(current, row_data_range.second, opts, input_field_index, col_map);
-    auto const value_len = static_cast<size_t>(std::max(desc.value_end - desc.value_begin, 0l));
+    auto const value_len = static_cast<size_t>(std::max(desc.value_end - desc.value_begin, 0L));
 
     // Advance to the next field; +1 to skip the delimiter
     current = desc.value_end + 1;
