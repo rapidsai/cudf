@@ -282,40 +282,34 @@ target_link_libraries("${CUDF_PROXY_NAME}" PUBLIC "${CUDF_NAMESPACE}::${CUDF_BAS
 include(GNUInstallDirs)
 
 set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/cudf)
+set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME cudf)
 
 # install target for cudf_base
 install(TARGETS "${CUDF_NAMESPACE}_${CUDF_BASE_NAME}"
         DESTINATION lib
-        COMPONENT cudf
         EXPORT cudf-targets)
 
 # install target for each cudf_<module>
 install(TARGETS ${CUDF_MODULES}
         DESTINATION lib
-        COMPONENT cudf
         EXPORT cudf-targets)
 
 # install target for the proxy libcudf.so
 install(TARGETS ${CUDF_PROXY_NAME}
         DESTINATION lib
-        COMPONENT cudf
         EXPORT cudf-targets)
 
 install(DIRECTORY ${CUDA_DATAFRAME_SOURCE_DIR}/include/cudf
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-        COMPONENT cudf)
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 install(DIRECTORY ${CUDA_DATAFRAME_SOURCE_DIR}/include/cudf_test
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-        COMPONENT cudf)
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 install(DIRECTORY ${CUDA_DATAFRAME_BINARY_DIR}/include/libcxx
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf
-        COMPONENT cudf)
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
 
 install(DIRECTORY ${CUDA_DATAFRAME_BINARY_DIR}/include/libcudacxx
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf
-        COMPONENT cudf)
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
 
 add_custom_target(install_cudf
                   COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=cudf -P "${CUDA_DATAFRAME_BINARY_DIR}/cmake_install.cmake"
