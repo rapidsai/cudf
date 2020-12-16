@@ -45,32 +45,6 @@ message(STATUS "Boost_LIBRARIES: ${Boost_LIBRARIES}")
 message(STATUS "Boost_INCLUDE_DIRS: ${Boost_INCLUDE_DIRS}")
 
 ###################################################################################################
-# - find rmm --------------------------------------------------------------------------------------
-
-find_path(RMM_INCLUDE "rmm"
-          HINTS "$ENV{RMM_ROOT}/include")
-
-set(CUDF_MIN_VERSION_rmm "${CMAKE_PROJECT_VERSION_MAJOR}.${CMAKE_PROJECT_VERSION_MINOR}")
-
-if (NOT RMM_INCLUDE)
-    CPMFindPackage(NAME rmm
-        VERSION         ${CUDF_MIN_VERSION_rmm}
-        GIT_REPOSITORY  https://github.com/rapidsai/rmm.git
-        GIT_TAG         branch-${CUDF_MIN_VERSION_rmm}
-        GIT_SHALLOW     TRUE
-        OPTIONS         "BUILD_TESTS OFF"
-                        "BUILD_BENCHMARKS OFF"
-                        "CUDA_STATIC_RUNTIME ${CUDA_STATIC_RUNTIME}"
-                        "DISABLE_DEPRECATION_WARNING ${DISABLE_DEPRECATION_WARNING}"
-    )
-    set(RMM_INCLUDE "${rmm_SOURCE_DIR}/include")
-endif()
-
-set(RMM_INCLUDE "${RMM_INCLUDE}")
-
-message(STATUS "RMM_INCLUDE: ${RMM_INCLUDE}")
-
-###################################################################################################
 # - find jitify -----------------------------------------------------------------------------------
 
 CPMFindPackage(NAME jitify
@@ -123,6 +97,26 @@ message(STATUS "LIBCXX_DIR: ${LIBCXX_DIR}")
 message(STATUS "LIBCXX_INCLUDE_DIR: ${LIBCXX_INCLUDE_DIR}")
 
 ###################################################################################################
+# - find spdlog -----------------------------------------------------------------------------------
+
+set(CUDF_MIN_VERSION_spdlog 1.7.0)
+
+if (NOT SPDLOG_INCLUDE)
+    CPMAddPackage(NAME  spdlog
+        VERSION         ${CUDF_MIN_VERSION_spdlog}
+        GIT_REPOSITORY  https://github.com/gabime/spdlog.git
+        GIT_TAG         "v${CUDF_MIN_VERSION_spdlog}"
+        GIT_SHALLOW     TRUE
+        # If there is no pre-installed spdlog we can use, we'll install our fetched copy together with cuDF
+        OPTIONS         "SPDLOG_INSTALL TRUE")
+    set(SPDLOG_INCLUDE "${spdlog_SOURCE_DIR}/include")
+endif()
+
+set(SPDLOG_INCLUDE "${SPDLOG_INCLUDE}")
+
+message(STATUS "SPDLOG_INCLUDE: ${SPDLOG_INCLUDE}")
+
+###################################################################################################
 # - find thrust/cub -------------------------------------------------------------------------------
 
 set(CUDF_MIN_VERSION_Thrust 1.10.0)
@@ -143,13 +137,42 @@ set(THRUST_INCLUDE_DIR "${Thrust_SOURCE_DIR}")
 message(STATUS "THRUST_INCLUDE_DIR: ${THRUST_INCLUDE_DIR}")
 
 ###################################################################################################
+# - find rmm --------------------------------------------------------------------------------------
+
+set(CUDF_MIN_VERSION_rmm "${CMAKE_PROJECT_VERSION_MAJOR}.${CMAKE_PROJECT_VERSION_MINOR}")
+
+if(RMM_INCLUDE)
+    add_library(rmm INTERFACE IMPORTED)
+    target_include_directories(rmm
+        INTERFACE ${RMM_INCLUDE}
+                  ${SPDLOG_INCLUDE}
+                  ${THRUST_INCLUDE_DIR})
+    add_library(rmm::rmm ALIAS rmm)
+else()
+    find_package(rmm ${CUDF_MIN_VERSION_rmm} QUIET)
+    if (NOT rmm_FOUND)
+        CPMFindPackage(NAME rmm
+            VERSION         ${CUDF_MIN_VERSION_rmm}
+            GIT_REPOSITORY  https://github.com/rapidsai/rmm.git
+            GIT_TAG         branch-${CUDF_MIN_VERSION_rmm}
+            GIT_SHALLOW     TRUE
+            OPTIONS         "BUILD_TESTS OFF"
+                            "BUILD_BENCHMARKS OFF"
+                            "CUDA_STATIC_RUNTIME ${CUDA_STATIC_RUNTIME}"
+                            "DISABLE_DEPRECATION_WARNING ${DISABLE_DEPRECATION_WARNING}"
+        )
+    endif()
+    set(RMM_INCLUDE "${rmm_SOURCE_DIR}/include")
+endif()
+
+set(RMM_INCLUDE "${RMM_INCLUDE}")
+
+message(STATUS "RMM_INCLUDE: ${RMM_INCLUDE}")
+
+###################################################################################################
 # - find dlpack -----------------------------------------------------------------------------------
 
 set(CUDF_MIN_VERSION_dlpack 0.3)
-
-find_path(DLPACK_INCLUDE
-    NAMES dlpack.h 
-    HINTS "$ENV{DLPACK_ROOT}/include")
 
 if (DLPACK_INCLUDE)
     set(dlpack_FOUND TRUE)
@@ -158,12 +181,12 @@ else()
 endif()
 
 if(NOT dlpack_FOUND)
-    CPMAddPackage(NAME dlpack
+    CPMAddPackage(NAME  dlpack
         VERSION         ${CUDF_MIN_VERSION_dlpack}
         GIT_REPOSITORY  https://github.com/dmlc/dlpack.git
         GIT_TAG         "v${CUDF_MIN_VERSION_dlpack}"
         GIT_SHALLOW     TRUE
-        # If there is no pre-installed thrust we can use, we'll install our fetched copy together with cuDF
+        # If there is no pre-installed dlpack we can use, we'll install our fetched copy together with cuDF
         OPTIONS         "BUILD_MOCK OFF")
     set(DLPACK_INCLUDE "${dlpack_SOURCE_DIR}/include")
 endif()

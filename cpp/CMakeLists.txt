@@ -154,8 +154,7 @@ function(add_library_module NAMESPACE MODULE MODULE_SOURCE_DIRS)
     target_compile_definitions("${NAMESPACE}_${MODULE}" PRIVATE "JITIFY_PRINT_LOG=0")
     # Specify include paths for the current target and dependents
     target_include_directories("${NAMESPACE}_${MODULE}"
-        PUBLIC      "$<BUILD_INTERFACE:${RMM_INCLUDE}>"
-                    "$<BUILD_INTERFACE:${DLPACK_INCLUDE}>"
+        PUBLIC      "$<BUILD_INTERFACE:${DLPACK_INCLUDE}>"
                     "$<BUILD_INTERFACE:${ARROW_INCLUDE_DIR}>"
                     "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
                     "$<BUILD_INTERFACE:${LIBCUDACXX_INCLUDE_DIR}>"
@@ -197,6 +196,7 @@ function(add_library_module NAMESPACE MODULE MODULE_SOURCE_DIRS)
                    PUBLIC ZLIB::ZLIB
                           Boost::filesystem
                           arrow arrow_cuda
+                          rmm::rmm
                           cudf::Thrust
                           CUDA::nvrtc
                           ${CUDART_LIBRARY}
