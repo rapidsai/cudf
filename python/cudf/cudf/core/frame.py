@@ -1303,7 +1303,9 @@ class Frame(libcudf.table.Table):
         0  Alfred  Batmobile 1940-04-25
         """
         if axis == 0:
-            result = self._drop_na_rows(how=how, subset=subset, thresh=thresh)
+            result = self._drop_na_rows(
+                how=how, subset=subset, thresh=thresh, drop_nan=True
+            )
         else:
             result = self._drop_na_columns(
                 how=how, subset=subset, thresh=thresh
@@ -1415,7 +1417,9 @@ class Frame(libcudf.table.Table):
 
         return self._mimic_inplace(result, inplace=inplace)
 
-    def _drop_na_rows(self, how="any", subset=None, thresh=None):
+    def _drop_na_rows(
+        self, how="any", subset=None, thresh=None, drop_nan=False
+    ):
         """
         Drops null rows from `self`.
 
@@ -1447,12 +1451,23 @@ class Frame(libcudf.table.Table):
         ]
         if len(subset_cols) == 0:
             return self.copy(deep=True)
-        result = self.__class__._from_table(
+
+        frame = self.copy(deep=False)
+        if drop_nan:
+            for name, col in frame._data.items():
+                if name in subset and isinstance(
+                    col, cudf.core.column.NumericalColumn
+                ):
+                    frame._data[name] = col.nans_to_nulls()
+                else:
+                    frame._data[name] = col
+
+        result = frame.__class__._from_table(
             libcudf.stream_compaction.drop_nulls(
-                self, how=how, keys=subset, thresh=thresh
+                frame, how=how, keys=subset, thresh=thresh
             )
         )
-        result._postprocess_columns(self)
+        result._postprocess_columns(frame)
         return result
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
@@ -1473,7 +1488,10 @@ class Frame(libcudf.table.Table):
                 thresh = len(df)
 
         for col in self._data.names:
-            if (len(df[col]) - df[col].null_count) < thresh:
+            if ((len(df[col]) - df[col].null_count) < thresh) or (
+                isinstance(df._data[col], cudf.core.column.NumericalColumn)
+                and ((len(df[col]) - df._data[col].nan_count) < thresh)
+            ):
                 continue
             out_cols.append(col)
 

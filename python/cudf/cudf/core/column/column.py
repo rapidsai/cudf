@@ -290,8 +290,12 @@ class ColumnBase(Column, Serializable):
 
         return col
 
-    def dropna(self):
-        dropped_col = self.as_frame().dropna()._as_column()
+    def dropna(self, drop_nan=True):
+        if drop_nan:
+            col = self.nans_to_nulls()
+        else:
+            col = self
+        dropped_col = col.as_frame()._drop_na_rows(drop_nan=False)._as_column()
         return dropped_col
 
     def to_arrow(self):
@@ -430,7 +434,7 @@ class ColumnBase(Column, Serializable):
         if fillna:
             return self.fillna(self.default_na_value()).data_array_view
         else:
-            return self.dropna().data_array_view
+            return self.dropna(drop_nan=False).data_array_view
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.

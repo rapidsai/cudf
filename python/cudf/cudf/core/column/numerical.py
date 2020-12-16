@@ -103,6 +103,14 @@ class NumericalColumn(column.ColumnBase):
     def _apply_scan_op(self, op):
         return libcudf.reduce.scan(op, self, True)
 
+    @property
+    def nan_count(self):
+        if self.dtype.kind == "f":
+            s = cudf.Series(libcudf.unary.is_nan(self))
+            return len(s[s])
+        else:
+            return 0
+
     def normalize_binop_value(self, other):
         if other is None:
             return other
