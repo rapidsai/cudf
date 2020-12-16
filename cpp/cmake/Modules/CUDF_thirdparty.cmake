@@ -131,7 +131,7 @@ CPMFindPackage(NAME Thrust
   GIT_SHALLOW       TRUE
   # If there is no pre-installed thrust we can use, we'll install our fetched copy together with cuDF
   OPTIONS           "THRUST_INSTALL TRUE"
-  PATCH_COMMAND     patch -p1 -N < ${CUDA_DATAFRAME_SOURCE_DIR}/thrust.patch || true)
+  PATCH_COMMAND     patch -p1 -N < ${CUDA_DATAFRAME_SOURCE_DIR}/cmake/thrust.patch || true)
 
 thrust_create_target(cudf::Thrust FROM_OPTIONS)
 
