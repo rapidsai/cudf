@@ -56,10 +56,9 @@ TYPED_TEST(SegmentedGatherTest, Gather)
   // List<T>
   LCW<T> list{{1, 2, 3, 4}, {5}, {6, 7}, {8, 9, 10}};
   LCW<int> gather_map{{3, 2, 1, 0}, {0}, {0, 1}, {0, 2, 1}};
+  LCW<T> expected{{4, 3, 2, 1}, {5}, {6, 7}, {8, 10, 9}};
 
   auto results = cudf::lists::detail::segmented_gather(list, gather_map);
-
-  LCW<T> expected{{4, 3, 2, 1}, {5}, {6, 7}, {8, 10, 9}};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 }
@@ -73,55 +72,47 @@ TYPED_TEST(SegmentedGatherTest, GatherNothing)
   {
     LCW<T> list{{1, 2, 3, 4}, {5}, {6, 7}, {8, 9, 10}};
     LCW<int> gather_map{LCW<int>{}, LCW<int>{}, LCW<int>{}, LCW<int>{}};
-    LCW<T> expected{LCW<T>{},LCW<T>{},LCW<T>{},LCW<T>{}};
 
     auto results = cudf::lists::detail::segmented_gather(list, gather_map);
 
+    LCW<T> expected{LCW<T>{}, LCW<T>{}, LCW<T>{}, LCW<T>{}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   // List<List<T>>
-  if (0) {
+  {
     LCW<T> list{{{1, 2, 3, 4}, {5}}, {{6, 7}}, {{}, {8, 9, 10}}};
     LCW<int> gather_map{LCW<int>{}, LCW<int>{}, LCW<int>{}};
-    LCW<T> expected{{LCW<T>{}}, {LCW<T>{}}, {LCW<T>{}}};
-    //auto temp     = cudf::empty_like(list);
-    //auto expected = *temp;
-    std::cout << "gather_map=";
-    cudf::test::print(gather_map);
-    std::cout << "expected=";
-    cudf::test::print(expected);
 
-    std::cout << column_view{list}.size() << "," << column_view{gather_map}.size() << std::endl;
     auto results = cudf::lists::detail::segmented_gather(list, gather_map);
-    std::cout << "results=";
-    cudf::test::print(*results);
 
+    LCW<T> expected_dummy{{{1, 2, 3, 4}, {5}}, LCW<T>{}, LCW<T>{}, LCW<T>{}};
+    auto expected = cudf::split(expected_dummy, {1})[1];
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 
   // List<List<List<T>>>
-  if (0) {
-    cudf::test::lists_column_wrapper<int> list{{{{1, 2, 3, 4}, {5}}}, {{{6, 7}, {8, 9, 10}}}};
+  {
+    LCW<T> list{{{{1, 2, 3, 4}, {5}}}, {{{6, 7}, {8, 9, 10}}}};
     LCW<int> gather_map{LCW<int>{}, LCW<int>{}};
 
-    std::cout << column_view{list}.size() << "," << column_view{gather_map}.size() << std::endl;
-    auto result = cudf::lists::detail::segmented_gather(list, gather_map);
+    auto results = cudf::lists::detail::segmented_gather(list, gather_map);
 
-    LCW<T> expected{{{LCW<T>{}}}, {{LCW<T>{}}}};
-    //auto temp     = cudf::empty_like(list);
-    //auto expected = *temp;
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
+    LCW<T> expected_dummy{{{{1, 2, 3, 4}, {5}}},  // hack to get column of list of list of list
+                          LCW<T>{},
+                          LCW<T>{}};
+    auto expected = cudf::split(expected_dummy, {1})[1];
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
     // the result should preserve the full List<List<List<int>>> hierarchy
     // even though it is empty past the first level
-    cudf::lists_column_view lcv(result->view());
-    EXPECT_EQ(lcv.size(), 0);
+    cudf::lists_column_view lcv(results->view());
+    EXPECT_EQ(lcv.size(), 2);
     EXPECT_EQ(lcv.child().type().id(), type_id::LIST);
     EXPECT_EQ(lcv.child().size(), 0);
     EXPECT_EQ(lists_column_view(lcv.child()).child().type().id(), type_id::LIST);
     EXPECT_EQ(lists_column_view(lcv.child()).child().size(), 0);
     EXPECT_EQ(lists_column_view(lists_column_view(lcv.child()).child()).child().type().id(),
-              type_id::INT32);
+              type_to_id<T>());
     EXPECT_EQ(lists_column_view(lists_column_view(lcv.child()).child()).child().size(), 0);
   }
 }
@@ -139,11 +130,7 @@ TYPED_TEST(SegmentedGatherTest, GatherNulls)
 
   auto results = cudf::lists::detail::segmented_gather(list, gather_map);
 
-  LCW<T> expected{{{1, 2}, valids},
-                  LCW<T>{},
-                  {{7}, valids + 1},
-                  {{10, 9, 8}, valids}};
-
+  LCW<T> expected{{{1, 2}, valids}, LCW<T>{}, {{7}, valids + 1}, {{10, 9, 8}, valids}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 }
 
@@ -155,21 +142,18 @@ TYPED_TEST(SegmentedGatherTest, GatherNested)
   {
     LCW<T> list{{{2, 3}, {4, 5}},
                 {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}},
-                {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}}};
-    LCW<int> gather_map{{0, 2}, {1}, {1, 0, -1, 0}};
+                {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {-17, -18}}};
+    LCW<int> gather_map{{0, 2, -2}, {1}, {1, 0, -1, 5}};
 
     auto results = cudf::lists::detail::segmented_gather(list, gather_map);
 
     LCW<T> expected{
-      {{2, 3}, {6, 7, 8}}, {{9, 10, 11}}, {{17, 18}, {15, 16}, {12, 13, 14}, {15, 16}}};
-    cudf::test::print(*results);
-    cudf::test::print(expected);
-
+      {{2, 3}, {2, 3}, {2, 3}}, {{9, 10, 11}}, {{17, 18}, {15, 16}, {-17, -18}, {15, 16}}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
 
   // List<List<List<T>>>
-  if (0) {
+  {
     LCW<T> list{{{{2, 3}, {4, 5}}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}},
                 {{{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}}},
                 {{LCW<T>{0}}},
@@ -177,19 +161,19 @@ TYPED_TEST(SegmentedGatherTest, GatherNested)
                  {{0, 1, 3}, {5}},
                  {{11, 12, 13, 14, 15}, {16, 17}, {0}}},
                 {{{10, 20}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}};
-    cudf::test::fixed_width_column_wrapper<int> gather_map{1, 2, 4};
+    LCW<int> gather_map{{1}, LCW<int>{}, {0}, {1}, {0, -1, 1}};
 
     auto results = cudf::lists::detail::segmented_gather(list, gather_map);
 
-    LCW<T> expected{{{{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}}},
+    LCW<T> expected{{{{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}},
+                    LCW<T>{},
                     {{LCW<T>{0}}},
-                    {{{10, 20}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}};
-
+                    {{{0, 1, 3}, {5}}},
+                    {{{10, 20}}, {{40, 50}, {60, 70, 80}}, {LCW<T>{30}}}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
 }
 
-/*/
 TYPED_TEST(SegmentedGatherTest, GatherOutOfOrder)
 {
   using T = TypeParam;
@@ -199,19 +183,39 @@ TYPED_TEST(SegmentedGatherTest, GatherOutOfOrder)
     LCW<T> list{{{2, 3}, {4, 5}},
                 {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}},
                 {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}}};
-    cudf::test::fixed_width_column_wrapper<int> gather_map{1, 2, 0};
+    LCW<int> gather_map{{1, 0}, {1, 2, 0}, {5, 4, 3, 2, 1, 0}};
 
-    cudf::table_view source_table({list});
-    auto results = cudf::gather(source_table, gather_map);
+    auto results = cudf::lists::detail::segmented_gather(list, gather_map);
 
-    LCW<T> expected{{{6, 7, 8}, {9, 10, 11}, {12, 13, 14}},
-                    {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}},
-                    {{2, 3}, {4, 5}}};
+    LCW<T> expected{{{4, 5}, {2, 3}},
+                    {{9, 10, 11}, {12, 13, 14}, {6, 7, 8}},
+                    {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}, {15, 16}}};
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
 }
 
+TYPED_TEST(SegmentedGatherTest, GatherNegatives)
+{
+  using T = TypeParam;
+
+  // List<List<T>>
+  {
+    LCW<T> list{{{2, 3}, {4, 5}},
+                {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}},
+                {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}}};
+    LCW<int> gather_map{{-1, 0}, {-2, -1, 0}, {-5, -4, -3, -2, -1, 0}};
+
+    auto results = cudf::lists::detail::segmented_gather(list, gather_map);
+
+    LCW<T> expected{{{4, 5}, {2, 3}},
+                    {{9, 10, 11}, {12, 13, 14}, {6, 7, 8}},
+                    {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}, {15, 16}}};
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+  }
+}
+/*
 TYPED_TEST(SegmentedGatherTest, GatherNestedNulls)
 {
   using T = TypeParam;
@@ -304,7 +308,7 @@ TYPED_TEST(SegmentedGatherTest, GatherDetailInvalidIndex)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
 }
-
+//
 TEST_F(GatherTestList, GatherIncompleteHierarchies)
 {
   using LCW = cudf::test::lists_column_wrapper<int32_t>;
@@ -464,13 +468,13 @@ TYPED_TEST(SegmentedGatherTest, GatherSliced)
 }
 //*/
 
-TEST(SegmentedGatherTest, child_index)
+TYPED_TEST(SegmentedGatherTest, child_index)
 {
   using T = int32_t;
   // List<T>
   LCW<T> list{{1, 2, 3, 4}, {5}, {6, 7}, {8, 9, 10}};
   // value_offsets 0, 4, 5, 7, 10
-  LCW<cudf::size_type> gather_map{{3, 2, 1, 0}, {0}, {}, {2, 1}};
+  LCW<int8_t> gather_map{{3, 2, 1, 0}, {0}, {}, {2, 1}};
   // gather_offsets 0, 4, 5, 5, 7
   // 0,0,0,0,  0,  0,0
   // 0,0,0,0,  4,  5/7,0
@@ -478,9 +482,32 @@ TEST(SegmentedGatherTest, child_index)
 
   auto results = cudf::lists::detail::segmented_gather(list, gather_map);
 
-  LCW<cudf::size_type> expected{{4, 3, 2, 1}, {5}, {}, {10, 9}};
-  cudf::test::print(*results);
-  cudf::test::print(expected);
+  LCW<T> expected{{4, 3, 2, 1}, {5}, {}, {10, 9}};
+  // cudf::test::print(*results);
+  // cudf::test::print(expected);
+  // CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+  LCW<T> g1{{-1, -2}, {-4, -5, -6}};
+  LCW<T> e1{{-1, -2}, LCW<T>{}, {-4, -5, -6}};
+  cudf::test::print(g1, std::cout << "g1=");
+  cudf::test::print(e1, std::cout << "e1=");
+  LCW<T> g2{{{-1, -2}}, {{-4, -5, -6}}};
+  LCW<T> e2{{{-1, -2}}, LCW<T>{}, {{-4, -5, -6}}};
+  cudf::test::print(g2, std::cout << "g2=");
+  cudf::test::print(e2, std::cout << "e2=");
+  LCW<T> g3{{{2, 3}, {4, 5}}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}};
+  LCW<T> e3{{{2, 3}, {4, 5}}, LCW<T>{}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}};
+  cudf::test::print(g3, std::cout << "g3=");
+  cudf::test::print(e3, std::cout << "e3=");
+  LCW<T> a3{{{-2, -3}, {-4, -5}},  // hack to get column of List<List<int>
+            LCW<T>{},
+            LCW<T>{},
+            LCW<T>{}};
+  auto a33 = cudf::split(a3, {1})[1];
+  LCW<int8_t> gm3{LCW<int8_t>{}, LCW<int8_t>{}, LCW<int8_t>{}};
+  cudf::test::print(gm3, std::cout << "gm3=");
+  auto r3 = cudf::lists::detail::segmented_gather(e3, gm3);
+  cudf::test::print(a3, std::cout << "a3=");
+  cudf::test::print(a33, std::cout << "a33=");
+  cudf::test::print(*r3, std::cout << "r3=");
 }
