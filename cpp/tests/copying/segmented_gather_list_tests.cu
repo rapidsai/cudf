@@ -235,14 +235,12 @@ TYPED_TEST(SegmentedGatherTest, GatherNestedNulls)
 
     auto results = cudf::lists::detail::segmented_gather(list, gather_map);
 
-  auto trues = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return true; });
+    auto trues = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
 
-    LCW<T> expected{
-      {{{2, 3}, valids}, {4, 5}},
-      {{{6, 7, 8}, {12, 13, 14}}, trues},
-      LCW<T>{},
-      {{{{25, 26}, valids}, {27, 28}, {33, 34}}, valids}};
+    LCW<T> expected{{{{2, 3}, valids}, {4, 5}},
+                    {{{6, 7, 8}, {12, 13, 14}}, trues},
+                    LCW<T>{},
+                    {{{{25, 26}, valids}, {27, 28}, {33, 34}}, valids}};
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
@@ -250,20 +248,20 @@ TYPED_TEST(SegmentedGatherTest, GatherNestedNulls)
   // List<List<List<List<T>>>>
   {
     LCW<T> list{{{{{2, 3}, {4, 5}}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}},
-                {{{15, 16}, {{27, 28}, valids}, {{37, 38}, valids}, {47, 48}, {57, 58}}},
-                {{LCW<T>{0}}},
-                {{{10}, {20, 30, 40, 50}, {60, 70, 80}},
-                 {{0, 1, 3}, {5}},
-                 {{11, 12, 13, 14, 15}, {16, 17}, {0}}},
-                {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids}}};
+                 {{{15, 16}, {{27, 28}, valids}, {{37, 38}, valids}, {47, 48}, {57, 58}}},
+                 {{LCW<T>{0}}},
+                 {{{10}, {20, 30, 40, 50}, {60, 70, 80}},
+                  {{0, 1, 3}, {5}},
+                  {{11, 12, 13, 14, 15}, {16, 17}, {0}}},
+                 {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids}}};
 
     LCW<int> gather_map{{1, 2, 4}};
 
     auto results = cudf::lists::detail::segmented_gather(list, gather_map);
 
     LCW<T> expected{{{{{15, 16}, {{27, 28}, valids}, {{37, 38}, valids}, {47, 48}, {57, 58}}},
-                    {{LCW<T>{0}}},
-                    {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids}}};
+                     {{LCW<T>{0}}},
+                     {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids}}};
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
@@ -303,25 +301,19 @@ TYPED_TEST(SegmentedGatherTest, GatherSliced)
     auto result0 =
       cudf::lists::detail::segmented_gather(split_a[0], LCW<int>{{1, 2}, {0, 2}, {0, 1}});
     LCW<T> expected0{
-      {           {2, 2}, {3, 3}},
-      {{4, 4, 4},         {6, 6}},
-      {{7, 7, 7}, {8, 8}        },
+      {{2, 2}, {3, 3}},
+      {{4, 4, 4}, {6, 6}},
+      {{7, 7, 7}, {8, 8}},
     };
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected0, result0->view());
 
-    auto result1 = cudf::lists::detail::segmented_gather(split_a[1], LCW<int>{{0, 1}, LCW<int>{}, LCW<int>{}, {0,1}, LCW<int>{}});
+    auto result1 = cudf::lists::detail::segmented_gather(
+      split_a[1], LCW<int>{{0, 1}, LCW<int>{}, LCW<int>{}, {0, 1}, LCW<int>{}});
     LCW<T> expected1{
-      {{10, 10, 10}, {11, 11}},
-      LCW<T>{},
-      LCW<T>{},
-      {{50, 50, 50, 50}, {6, 13}},
-      LCW<T>{}
-    };
-    cudf::test::print(expected1);
-    cudf::test::print(*result1);
+      {{10, 10, 10}, {11, 11}}, LCW<T>{}, LCW<T>{}, {{50, 50, 50, 50}, {6, 13}}, LCW<T>{}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
   }
-/*
+
   auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<List<List<T>>>
@@ -348,88 +340,79 @@ TYPED_TEST(SegmentedGatherTest, GatherSliced)
 
     // gather from slice 0
     {
-      cudf::table_view tbl({sliced[0]});
-
-      cudf::test::fixed_width_column_wrapper<int> map{0};
-      auto result = cudf::gather(tbl, map);
+      LCW<int> map{{0, 1}};
+      auto result = cudf::lists::detail::segmented_gather(sliced[0], map);
       LCW<T> expected{{{{2, 3}, {4, 5}}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}}};
-      cudf::test::expect_columns_equivalent(expected, result->get_column(0).view());
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->view());
     }
 
     // gather from slice 1
     {
-      cudf::table_view tbl({sliced[1]});
-
-      cudf::test::fixed_width_column_wrapper<int> map{1, 2, 0, 1};
-      auto result = cudf::gather(tbl, map);
+      LCW<int16_t> map{{0}, {1, 2, 0, 1}, {0, 1, 2}};
+      auto result = cudf::lists::detail::segmented_gather(sliced[1], map);
       LCW<T> expected{
-        {{{10}, {20, 30, 40, 50}, {60, 70, 80}},
-         {{0, 1, 3}, {5}},
-         {{11, 12, 13, 14, 15}, {16, 17}, {0}}},
-
-        {{{{1, 6}, {60, 70, 80, 100}}, {{10, 11, 13}, {15}}, {{11, 12, 13, 14, 15}}}, valids},
-
         {{LCW<T>{0}}},
 
-        {{{10}, {20, 30, 40, 50}, {60, 70, 80}},
-         {{0, 1, 3}, {5}},
-         {{11, 12, 13, 14, 15}, {16, 17}, {0}}},
+        {{{0, 1, 3}, {5}},
+         {{11, 12, 13, 14, 15}, {16, 17}, {0}},
+         {{10}, {20, 30, 40, 50}, {60, 70, 80}},
+         {{0, 1, 3}, {5}}},
+
+        {{{{1, 6}, {60, 70, 80, 100}}, {{10, 11, 13}, {15}}, {{11, 12, 13, 14, 15}}}, valids},
       };
-      cudf::test::expect_columns_equivalent(expected, result->get_column(0).view());
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->view());
     }
 
     // gather from slice 2
     {
-      cudf::table_view tbl({sliced[2]});
+      LCW<int> map{{1, 0, 0, 1, 1, 0}, {1, 0, 0, 1, 1, 2}};
+      auto result                       = cudf::lists::detail::segmented_gather(sliced[2], map);
+      std::vector<bool> expected_valids = {false, true, true, false, false, true};
 
-      cudf::test::fixed_width_column_wrapper<int> map{1, 0, 0, 1, 1, 0};
-      auto result = cudf::gather(tbl, map);
-      LCW<T> expected{{{{{10, 20, 30}}, {LCW<T>{30}}, {{{20, 30}, valids}, {62, 72, 82}}}, valids},
-                      {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids},
-                      {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids},
-                      {{{{10, 20, 30}}, {LCW<T>{30}}, {{{20, 30}, valids}, {62, 72, 82}}}, valids},
-                      {{{{10, 20, 30}}, {LCW<T>{30}}, {{{20, 30}, valids}, {62, 72, 82}}}, valids},
-                      {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids}};
-      cudf::test::expect_columns_equivalent(expected, result->get_column(0).view());
+      LCW<T> expected{{{{LCW<T>{30}},
+                        {{{10, 20}, valids}},
+                        {{{10, 20}, valids}},
+                        {LCW<T>{30}},
+                        {LCW<T>{30}},
+                        {{{10, 20}, valids}}},
+                       expected_valids.begin()},
+                      {{{LCW<T>{30}},
+                        {{10, 20, 30}},
+                        {{10, 20, 30}},
+                        {LCW<T>{30}},
+                        {LCW<T>{30}},
+                        {{{20, 30}, valids}, {62, 72, 82}}},
+                       expected_valids.begin()}};
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->view());
     }
   }
-//*/
 }
 
-TYPED_TEST(SegmentedGatherTest, child_index)
+using SegmentedGatherTestInt = SegmentedGatherTest<int>;
+TEST_F(SegmentedGatherTestInt, Fails)
 {
   using T = int32_t;
   // List<T>
   LCW<T> list{{1, 2, 3, 4}, {5}, {6, 7}, {8, 9, 10}};
-  LCW<int8_t> gather_map{{3, 2, 1, 0}, {0}, {}, {2, 1}};
+  LCW<int8_t> size_mismatch_map{{3, 2, 1, 0}, {0}, {0, 1}};
+  cudf::test::fixed_width_column_wrapper<int> nonlist_map0{1, 2, 0, 1};
+  cudf::test::strings_column_wrapper nonlist_map1{"1", "2", "0", "1"};
+  LCW<cudf::string_view> nonlist_map2{{"1", "2", "0", "1"}};
 
-  auto results = cudf::lists::detail::segmented_gather(list, gather_map);
+  CUDF_EXPECT_THROW_MESSAGE(cudf::lists::detail::segmented_gather(list, nonlist_map0),
+                            "lists_column_view only supports lists");
 
-  LCW<T> expected{{4, 3, 2, 1}, {5}, {}, {10, 9}};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
-  return;
+  CUDF_EXPECT_THROW_MESSAGE(cudf::lists::detail::segmented_gather(list, nonlist_map1),
+                            "lists_column_view only supports lists");
 
-  LCW<T> g1{{-1, -2}, {-4, -5, -6}};
-  LCW<T> e1{{-1, -2}, LCW<T>{}, {-4, -5, -6}};
-  cudf::test::print(g1, std::cout << "g1=");
-  cudf::test::print(e1, std::cout << "e1=");
-  LCW<T> g2{{{-1, -2}}, {{-4, -5, -6}}};
-  LCW<T> e2{{{-1, -2}}, LCW<T>{}, {{-4, -5, -6}}};
-  cudf::test::print(g2, std::cout << "g2=");
-  cudf::test::print(e2, std::cout << "e2=");
-  LCW<T> g3{{{2, 3}, {4, 5}}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}};
-  LCW<T> e3{{{2, 3}, {4, 5}}, LCW<T>{}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}};
-  cudf::test::print(g3, std::cout << "g3=");
-  cudf::test::print(e3, std::cout << "e3=");
-  LCW<T> a3{{{-2, -3}, {-4, -5}},  // hack to get column of List<List<int>
-            LCW<T>{},
-            LCW<T>{},
-            LCW<T>{}};
-  auto a33 = cudf::split(a3, {1})[1];
-  LCW<int8_t> gm3{LCW<int8_t>{}, LCW<int8_t>{}, LCW<int8_t>{}};
-  cudf::test::print(gm3, std::cout << "gm3=");
-  auto r3 = cudf::lists::detail::segmented_gather(e3, gm3);
-  cudf::test::print(a3, std::cout << "a3=");
-  cudf::test::print(a33, std::cout << "a33=");
-  cudf::test::print(*r3, std::cout << "r3=");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::lists::detail::segmented_gather(list, nonlist_map2),
+                            "Gather map should be list column of index type");
+
+  auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  LCW<int8_t> nulls_map{{{3, 2, 1, 0}, {0}, {0}, {0, 1}}, valids};
+  CUDF_EXPECT_THROW_MESSAGE(cudf::lists::detail::segmented_gather(list, nulls_map),
+                            "gather_map contains nulls");
+
+  CUDF_EXPECT_THROW_MESSAGE(cudf::lists::detail::segmented_gather(list, size_mismatch_map),
+                            "Gather map and list column should be same size");
 }

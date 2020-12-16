@@ -38,21 +38,19 @@ std::unique_ptr<column> segmented_gather(column_view const& list_column,
 {
   auto const value_column = lists_column_view{list_column};
   auto const gather_map   = lists_column_view{gather_map_list};
-  CUDF_EXPECTS(is_index_type(gather_map.child().type()), "Gather map should be list of index type");
-  CUDF_EXPECTS(gather_map.has_nulls() == false, "gather_map contains nulls");
-  constexpr bool DEBUG_SEG_GATHER=1;
-  if (DEBUG_SEG_GATHER)
-    std::cout << value_column.size() << "==" << gather_map.size() << "\n";
+  CUDF_EXPECTS(is_index_type(gather_map.child().type()),
+               "Gather map should be list column of index type");
+  CUDF_EXPECTS(gather_map.has_nulls() == false, "Gather map contains nulls");
+  constexpr bool DEBUG_SEG_GATHER = 0;
+  if (DEBUG_SEG_GATHER) std::cout << value_column.size() << "==" << gather_map.size() << "\n";
   CUDF_EXPECTS(value_column.size() == gather_map.size(),
                "Gather map and list column should be same size");
   auto const gather_map_size = gather_map.get_sliced_child(stream).size();
   // FIXME: Is this a bug? list.offsets() column_view does not have offset() of parent column_view.
-  auto value_offsets         = value_column.offsets().begin<size_type>() + value_column.offset();
-  auto gather_offsets        = gather_map.offsets().begin<size_type>();
+  auto value_offsets  = value_column.offsets().begin<size_type>() + value_column.offset();
+  auto gather_offsets = gather_map.offsets().begin<size_type>();
 
-  if (DEBUG_SEG_GATHER) {
-    cudf::test::print(value_column.offsets(), std::cout<<"v_ofs=");
-  }
+  if (DEBUG_SEG_GATHER) { cudf::test::print(value_column.offsets(), std::cout << "v_ofs="); }
   // Flattened gather indices
   auto child_gather_index =
     make_numeric_column(data_type{type_to_id<size_type>()}, gather_map_size);
@@ -110,7 +108,7 @@ std::unique_ptr<column> segmented_gather(column_view const& list_column,
     gather_map.offsets(), output_offset_view, 0, gather_map.offsets().size(), 0);
   // Assemble list column & return
   auto null_mask       = cudf::detail::copy_bitmask(list_column, stream, mr);
-  size_type null_count = gather_map.null_count();
+  size_type null_count = value_column.null_count();
   return make_lists_column(gather_map.size(),
                            std::move(output_offset),
                            std::move(child),
