@@ -105,6 +105,9 @@ CPMFindPackage(NAME libcudacxx
                     "LIBCXX_DISABLE_ARCH_BY_DEFAULT ON"
                     "LIBCXX_INSTALL_SUPPORT_HEADERS OFF"
                     "LIBCXX_ENABLE_EXPERIMENTAL_LIBRARY OFF"
+                    # Set this path to a non-existent LLVM to defeat libcu++'s CMakeLists.txt.
+                    # Caused by a CPM bug? https://github.com/TheLartians/CPM.cmake/issues/173
+                    "LLVM_PATH /tmp"
 )
 
 set(LIBCUDACXX_DIR "${libcudacxx_SOURCE_DIR}")
