@@ -397,9 +397,9 @@ class MultiIndex(Index):
 
         if len(self) > max_seq_items:
             n = int(max_seq_items / 2) + 1
-            top = self[:n]
-            bottom = self[-n:]
-            preprocess = cudf.concat([top, bottom])
+            indices = list(range(n))
+            indices.extend(list(range(len(self) - n, len(self))))
+            preprocess = self.take(indices)
         else:
             preprocess = self
 
@@ -434,26 +434,31 @@ class MultiIndex(Index):
             .to_pandas(nullable=True)
             .itertuples(index=None, name=None)
         )
+        date_time_col_indices = {
+            col_idx
+            for col_idx, col_name in enumerate(self._source_data._data.names)
+            if isinstance(
+                self._source_data._data[col_name],
+                (
+                    cudf.core.column.DatetimeColumn,
+                    cudf.core.column.TimeDeltaColumn,
+                ),
+            )
+        }
         new_lines = []
         for row_idx, line in enumerate(lines[:-1]):
             current_row = row_tuples[row_idx]
             current_row_repr = line.split(", ")
             for col_idx, value in enumerate(current_row):
                 if value is pd.NA:
-                    if isinstance(
-                        self._source_data._data.columns[col_idx],
-                        (
-                            cudf.core.column.DatetimeColumn,
-                            cudf.core.column.TimeDeltaColumn,
-                        ),
-                    ):
+                    if col_idx in date_time_col_indices:
                         current_row_repr[col_idx] = current_row_repr[
                             col_idx
-                        ].replace("NaT", "<NA>")
+                        ].replace("NaT", cudf._NA_REP)
                     else:
                         current_row_repr[col_idx] = current_row_repr[
                             col_idx
-                        ].replace("nan", "<NA>")
+                        ].replace("nan", cudf._NA_REP)
                 elif value is np.nan:
                     # Leave nan's as is.
                     pass

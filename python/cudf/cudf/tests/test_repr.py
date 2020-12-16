@@ -52,6 +52,7 @@ def test_null_series(nrows, dtype):
     elif "Int" in psrepr:
         psrepr = psrepr.replace("Int", "int")
     assert psrepr.split() == sr.__repr__().split()
+    pd.reset_option("display.max_rows")
 
 
 dtype_categories = [
@@ -79,9 +80,8 @@ def test_null_dataframe(ncols):
     pdfrepr = pdfrepr.replace("NaN", "<NA>")
     pdfrepr = pdfrepr.replace("NaT", "<NA>")
     pdfrepr = pdfrepr.replace("None", "<NA>")
-    print(pdf)
-    print(gdf)
     assert pdfrepr.split() == gdf.__repr__().split()
+    pd.reset_option("display.max_columns")
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
@@ -92,6 +92,7 @@ def test_full_series(nrows, dtype):
     sr = cudf.from_pandas(ps)
     pd.options.display.max_rows = int(nrows)
     assert ps.__repr__() == sr.__repr__()
+    pd.reset_option("display.max_rows")
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
@@ -111,6 +112,8 @@ def test_full_dataframe_20(dtype, nrows, ncols):
     assert pdf.__repr__() == gdf.__repr__()
     assert pdf._repr_html_() == gdf._repr_html_()
     assert pdf._repr_latex_() == gdf._repr_latex_()
+    pd.reset_option("display.max_rows")
+    pd.reset_option("display.max_columns")
 
 
 @pytest.mark.parametrize("dtype", repr_categories)
@@ -126,6 +129,8 @@ def test_full_dataframe_21(dtype, nrows, ncols):
     pd.options.display.max_rows = int(nrows)
     pd.options.display.max_columns = int(ncols)
     assert pdf.__repr__() == gdf.__repr__()
+    pd.reset_option("display.max_rows")
+    pd.reset_option("display.max_columns")
 
 
 @given(
@@ -142,6 +147,7 @@ def test_integer_dataframe(x):
     pd.options.display.max_columns = 1
     assert gdf.__repr__() == pdf.__repr__()
     assert gdf.T.__repr__() == pdf.T.__repr__()
+    pd.reset_option("display.max_columns")
 
 
 @given(
@@ -153,8 +159,7 @@ def test_integer_dataframe(x):
 def test_integer_series(x):
     sr = cudf.Series(x)
     ps = pd.Series(x)
-    print(sr)
-    print(ps)
+
     assert sr.__repr__() == ps.__repr__()
 
 
@@ -228,6 +233,8 @@ def test_MI():
     assert gdf.__repr__() == pdf.__repr__()
     assert gdf.index.__repr__() == pdf.index.__repr__()
     assert gdfT.__repr__() == pdfT.__repr__()
+    pd.reset_option("display.max_rows")
+    pd.reset_option("display.max_columns")
 
 
 @pytest.mark.parametrize("nrows", [0, 1, 3, 5, 10])
@@ -244,6 +251,8 @@ def test_groupby_MI(nrows, ncols):
     assert gdg.__repr__() == pdg.__repr__()
     assert gdg.index.__repr__() == pdg.index.__repr__()
     assert gdg.T.__repr__() == pdg.T.__repr__()
+    pd.reset_option("display.max_rows")
+    pd.reset_option("display.max_columns")
 
 
 @pytest.mark.parametrize("dtype", utils.NUMERIC_TYPES)
@@ -1162,7 +1171,7 @@ def test_mulitIndex_repr(pmi, max_seq_items):
     gmi = cudf.from_pandas(pmi)
 
     assert gmi.__repr__() == pmi.__repr__()
-    pd.set_option("display.max_seq_items", 100)
+    pd.reset_option("display.max_seq_items")
 
 
 @pytest.mark.parametrize(
