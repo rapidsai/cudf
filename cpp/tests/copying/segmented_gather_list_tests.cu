@@ -216,7 +216,7 @@ TYPED_TEST(SegmentedGatherTest, GatherNegatives)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
 }
-/*
+
 TYPED_TEST(SegmentedGatherTest, GatherNestedNulls)
 {
   using T = TypeParam;
@@ -231,37 +231,39 @@ TYPED_TEST(SegmentedGatherTest, GatherNestedNulls)
                 {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}},
                 {{{{25, 26}, valids}, {27, 28}, {{29, 30}, valids}, {31, 32}, {33, 34}}, valids}};
 
-    cudf::test::fixed_width_column_wrapper<int> gather_map{0, 1, 3};
+    LCW<int> gather_map{{0, 1}, {0, 2}, LCW<int>{}, {0, 1, 4}};
 
-    cudf::table_view source_table({list});
-    auto results = cudf::gather(source_table, gather_map);
+    auto results = cudf::lists::detail::segmented_gather(list, gather_map);
+
+  auto trues = cudf::test::make_counting_transform_iterator(
+    0, [](auto i) { return true; });
 
     LCW<T> expected{
       {{{2, 3}, valids}, {4, 5}},
-      {{{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}, valids},
-      {{{{25, 26}, valids}, {27, 28}, {{29, 30}, valids}, {31, 32}, {33, 34}}, valids}};
+      {{{6, 7, 8}, {12, 13, 14}}, trues},
+      LCW<T>{},
+      {{{{25, 26}, valids}, {27, 28}, {33, 34}}, valids}};
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
 
-  // List<List<List<T>>>
+  // List<List<List<List<T>>>>
   {
-    LCW<T> list{{{{2, 3}, {4, 5}}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}},
+    LCW<T> list{{{{{2, 3}, {4, 5}}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}},
                 {{{15, 16}, {{27, 28}, valids}, {{37, 38}, valids}, {47, 48}, {57, 58}}},
                 {{LCW<T>{0}}},
                 {{{10}, {20, 30, 40, 50}, {60, 70, 80}},
                  {{0, 1, 3}, {5}},
                  {{11, 12, 13, 14, 15}, {16, 17}, {0}}},
-                {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids}};
+                {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids}}};
 
-    cudf::test::fixed_width_column_wrapper<int> gather_map{1, 2, 4};
+    LCW<int> gather_map{{1, 2, 4}};
 
-    cudf::table_view source_table({list});
-    auto results = cudf::gather(source_table, gather_map);
+    auto results = cudf::lists::detail::segmented_gather(list, gather_map);
 
-    LCW<T> expected{{{{15, 16}, {{27, 28}, valids}, {{37, 38}, valids}, {47, 48}, {57, 58}}},
+    LCW<T> expected{{{{{15, 16}, {{27, 28}, valids}, {{37, 38}, valids}, {47, 48}, {57, 58}}},
                     {{LCW<T>{0}}},
-                    {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids}};
+                    {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids}}};
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
@@ -272,12 +274,12 @@ TYPED_TEST(SegmentedGatherTest, GatherNestedWithEmpties)
   using T = TypeParam;
 
   LCW<T> list{{{2, 3}, LCW<T>{}}, {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}}, {LCW<T>{}}};
-  cudf::test::fixed_width_column_wrapper<int> gather_map{0, 2};
+  LCW<int> gather_map{LCW<int>{0}, LCW<int>{0}, LCW<int>{0}};
 
-  cudf::table_view source_table({list});
-  auto results = cudf::gather(source_table, gather_map);
+  auto results = cudf::lists::detail::segmented_gather(list, gather_map);
 
-  LCW<T> expected{{{2, 3}, LCW<T>{}}, {LCW<T>{}}};
+  // skip one null, gather one null.
+  LCW<T> expected{{{2, 3}}, {{6, 7, 8}}, {LCW<T>{}}};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 }
@@ -297,24 +299,29 @@ TYPED_TEST(SegmentedGatherTest, GatherSliced)
       {{70, 70, 70, 70}, {80}},
     };
     auto split_a = cudf::split(a, {3});
-    cudf::table_view tbl0({split_a[0]});
-    cudf::table_view tbl1({split_a[1]});
 
-    auto result0 = cudf::gather(tbl0, cudf::test::fixed_width_column_wrapper<int>{1, 2});
+    auto result0 =
+      cudf::lists::detail::segmented_gather(split_a[0], LCW<int>{{1, 2}, {0, 2}, {0, 1}});
     LCW<T> expected0{
-      {{4, 4, 4}, {5, 5}, {6, 6}},
-      {{7, 7, 7}, {8, 8}, {9, 9}},
+      {           {2, 2}, {3, 3}},
+      {{4, 4, 4},         {6, 6}},
+      {{7, 7, 7}, {8, 8}        },
     };
-    cudf::test::expect_columns_equal(expected0, result0->get_column(0).view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected0, result0->view());
 
-    auto result1 = cudf::gather(tbl1, cudf::test::fixed_width_column_wrapper<int>{0, 3});
+    auto result1 = cudf::lists::detail::segmented_gather(split_a[1], LCW<int>{{0, 1}, LCW<int>{}, LCW<int>{}, {0,1}, LCW<int>{}});
     LCW<T> expected1{
-      {{10, 10, 10}, {11, 11}, {12, 12}},
+      {{10, 10, 10}, {11, 11}},
+      LCW<T>{},
+      LCW<T>{},
       {{50, 50, 50, 50}, {6, 13}},
+      LCW<T>{}
     };
-    cudf::test::expect_columns_equal(expected1, result1->get_column(0).view());
+    cudf::test::print(expected1);
+    cudf::test::print(*result1);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
   }
-
+/*
   auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<List<List<T>>>
@@ -386,8 +393,8 @@ TYPED_TEST(SegmentedGatherTest, GatherSliced)
       cudf::test::expect_columns_equivalent(expected, result->get_column(0).view());
     }
   }
-}
 //*/
+}
 
 TYPED_TEST(SegmentedGatherTest, child_index)
 {
