@@ -265,7 +265,7 @@ class SparkMurmurHash3Test : public cudf::test::BaseFixture {
 TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
 {
   fixed_width_column_wrapper<int32_t> const strings_col_result(
-    {1467149710, 723257560, -1620282500, -2001858707, 1280155256});
+    {1467149710, 723257560, -1620282500, -2001858707, 1588473657});
   fixed_width_column_wrapper<int32_t> const ints_col_result(
     {933211791, 751823303, -1080202046, 723455942, 133916647});
 

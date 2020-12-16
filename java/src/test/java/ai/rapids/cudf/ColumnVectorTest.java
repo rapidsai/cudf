@@ -302,7 +302,7 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector result2 = ColumnVector.md5Hash(v2);
          ColumnVector expected = ColumnVector.fromStrings(
           "0cc175b9c0f1b6a831c399e269772661", "f5112705c2f6dc7d3fc6bd496df6c2e8",
-          "675c30ce6d1b27dcb5009b01be42e9bd", "8fa29148f63c1fe9248fdc4644e3a193",
+          "d49db62680847e0e7107e0937d29668e", "8fa29148f63c1fe9248fdc4644e3a193",
           "1bc221b25e6c4825929e884092f4044f", "d41d8cd98f00b204e9800998ecf8427e")) {
       assertColumnsAreEqual(result01, expected);
       assertColumnsAreEqual(result2, expected);
@@ -389,7 +389,7 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector result = ColumnVector.md5Hash(strings, integers, doubles, floats, bools);
          ColumnVector expected = ColumnVector.fromStrings(
           "c12c8638819fdd8377bbf537a4ebf0b4", "abad86357c1ae28eeb89f4b59700946a",
-          "8c176e687e677a752868fe9d319d9d5c", "2f64d6a1d5b730fd97115924cf9aa486",
+          "7e376255c6354716cd63418208dc7b90", "2f64d6a1d5b730fd97115924cf9aa486",
           "9f9d26bb5d25d56453a91f0558370fa4", "d41d8cd98f00b204e9800998ecf8427e")) {
       assertColumnsAreEqual(expected, result);
     }
@@ -397,7 +397,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testMD5HashLists() {
-    List<String> list1 = Arrays.asList("dE\"\u0100\t\u0101 \ud720\ud721", "\\Fg2\'");
+    List<String> list1 = Arrays.asList("dE\"\u0100\t\u0101 \u0500\u0501", "\\Fg2\'");
     List<String> list2 = Arrays.asList("A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
     "in the MD5 hash function. This string needed to be longer.", "", null, "A 60 character string to test MD5's message padding algorithm");
     List<String> list3 = Arrays.asList("hiJ\ud720\ud721\ud720\ud721");
@@ -466,7 +466,7 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector v0 = ColumnVector.fromBoxedBooleans(null, true, false, true, null, false);
          ColumnVector v1 = ColumnVector.fromBoxedBooleans(null, true, false, null, false, true);
          ColumnVector result = ColumnVector.serial32BitMurmurHash3(0, new ColumnVector[]{v0, v1});
-         ColumnVector expected = ColumnVector.fromBoxedInts(0, 884701402, 1073274277, -463810133, 1364076727, -991270669)) {
+         ColumnVector expected = ColumnVector.fromBoxedInts(0, 884701402, 1032769583, -463810133, 1364076727, -991270669)) {
       assertColumnsAreEqual(expected, result);
     }
   }
@@ -499,7 +499,7 @@ public class ColumnVectorTest extends CudfTestBase {
            "test MD5's message padding algorithm",
            "hiJ\ud720\ud721\ud720\ud721", null);
          ColumnVector result = ColumnVector.spark32BitMurmurHash3(42, new ColumnVector[]{v0});
-         ColumnVector expected = ColumnVector.fromBoxedInts(1485273170, 1709559900, -1453413109, 937685287, 1199621434, 42)) {
+         ColumnVector expected = ColumnVector.fromBoxedInts(1485273170, 1709559900, 1423943036, 176121990, 1199621434, 42)) {
       assertColumnsAreEqual(expected, result);
     }
   }
@@ -545,8 +545,9 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector v0 = ColumnVector.fromBoxedBooleans(null, true, false, true, null, false);
          ColumnVector v1 = ColumnVector.fromBoxedBooleans(null, true, false, null, false, true);
          ColumnVector result = ColumnVector.spark32BitMurmurHash3(0, new ColumnVector[]{v0, v1});
-         ColumnVector expected = ColumnVector.fromBoxedInts(0, 1930541129, 1032769583, -463810133, 1364076727, -991270669)) {
+         ColumnVector expected = ColumnVector.fromBoxedInts(0, -1589400010, -239939054, -68075478, 593689054, -1194558265)) {
       assertColumnsAreEqual(expected, result);
+
     }
   }
 
@@ -564,7 +565,7 @@ public class ColumnVectorTest extends CudfTestBase {
           0f, 100f, -100f, NEGATIVE_FLOAT_NAN_LOWER_RANGE, NEGATIVE_FLOAT_NAN_UPPER_RANGE, null);
          ColumnVector bools = ColumnVector.fromBoxedBooleans(true, false, null, false, true, null);
          ColumnVector result = ColumnVector.spark32BitMurmurHash3(1868, new ColumnVector[]{strings, integers, doubles, floats, bools});
-         ColumnVector expected = ColumnVector.fromBoxedInts(1420302521, -1026239803, 2124071524, 814731646, -1073686048, 1868)) {
+         ColumnVector expected = ColumnVector.fromBoxedInts(1936985022, 720652989, 339312041, 1400354989, 769988643, 1868)) {
       assertColumnsAreEqual(expected, result);
     }
   }

@@ -590,7 +590,7 @@ struct SparkMurmurHash3_32 {
   template <typename TKey>
   result_type CUDA_HOST_DEVICE_CALLABLE compute(TKey const& key) const
   {
-    constexpr int len        = sizeof(argument_type);
+    constexpr int len        = sizeof(TKey);
     const int8_t* const data = reinterpret_cast<int8_t const*>(&key);
     constexpr int nblocks    = len / 4;
 
@@ -635,7 +635,11 @@ template <>
 hash_value_type CUDA_HOST_DEVICE_CALLABLE
 SparkMurmurHash3_32<bool>::operator()(bool const& key) const
 {
-  return this->compute(static_cast<uint8_t>(key));
+  if(key) {
+    return this->compute<uint32_t>(1);
+  } else {
+    return this->compute<uint32_t>(0);
+  }
 }
 
 /**
