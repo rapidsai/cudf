@@ -3238,54 +3238,59 @@ def test_ndim():
     ],
 )
 @pytest.mark.parametrize(
-    "decimal",
+    "decimals",
     [
+        -3,
         0,
-        1,
-        2,
-        3,
-        4,
         5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        pytest.param(
-            -1,
-            marks=[
-                pytest.mark.xfail(reason="NotImplementedError: decimals < 0")
-            ],
-        ),
+        pd.Series([4, 3, -6], index=["x", "y", "z"]),
+        gd.Series([-2, 1, 12], index=["x", "y", "z"]),
+        {"x": 15, "y": -2, "z": 8},
     ],
 )
-def test_round(arr, decimal):
-    pser = pd.Series(arr)
-    ser = gd.Series(arr)
-    result = ser.round(decimal)
-    expected = pser.round(decimal)
+def test_round(decimals):
+    pdf = pd.DataFrame(
+        {
+            "x": np.random.normal(-100, 100, 10),
+            "y": np.array(
+                [
+                    14.123,
+                    2.343,
+                    np.nan,
+                    0.0,
+                    -8.302,
+                    np.nan,
+                    94.313,
+                    -112.236,
+                    -8.029,
+                    np.nan,
+                    235.972,
+                ]
+            ),
+            "z": np.repeat([-0.6459412758761901], 10),
+        }
+    )
+    gdf = gd.DataFrame.from_pandas(pdf)
 
+    result = gdf.round(decimals)
+    expected = pdf.round(decimals)
     assert_eq(result, expected)
 
     # with nulls, maintaining existing null mask
-    arr = arr.astype("float64")  # for pandas nulls
-    mask = np.random.randint(0, 2, arr.shape[0])
-    arr[mask == 1] = np.nan
+    for c in pdf.columns:
+        arr = pdf[c].to_numpy()
+        arr = arr.astype("float64")  # for pandas nulls
+        mask = np.random.randint(0, 2, 10)
+        arr[mask == 1] = np.nan
+        pdf[c] = arr
+    gdf = gd.DataFrame.from_pandas(pdf)
 
-    pser = pd.Series(arr)
-    ser = gd.Series(arr)
-    result = ser.round(decimal)
-    expected = pser.round(decimal)
+    result = gdf.round(decimals)
+    expected = pdf.round(decimals)
 
     assert_eq(result, expected)
-    np.array_equal(ser.nullmask.to_array(), result.to_array())
+    for c in gdf.columns:
+        np.array_equal(gdf[c].nullmask.to_array(), result[c].to_array())
 
 
 @pytest.mark.parametrize(

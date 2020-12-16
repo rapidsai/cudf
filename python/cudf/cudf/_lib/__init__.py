@@ -23,6 +23,7 @@ from . import (
     replace,
     reshape,
     rolling,
+    round,
     search,
     sort,
     stream_compaction,

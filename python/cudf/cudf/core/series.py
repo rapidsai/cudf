@@ -3501,8 +3501,31 @@ class Series(Frame, Serializable):
         return Series(val_counts.index.sort_values(), name=self.name)
 
     def round(self, decimals=0):
-        """Round a Series to a configurable number of decimal places.
         """
+        Round each value in a Series to the given number of decimals.
+
+        Parameters
+        ----------
+        decimals : int, default 0
+            Number of decimal places to round to. If decimals is negative,
+            it specifies the number of positions to the left of the decimal
+            point.
+
+        Returns
+        -------
+        Series
+            Rounded values of the Series.
+
+        Examples
+        --------
+        >>> s = cudf.Series([0.1, 1.4, 2.9])
+        >>> s.round()
+        0    0.0
+        1    1.0
+        2    3.0
+        dtype: float64
+        """
+
         return Series(
             self._column.round(decimals=decimals),
             name=self.name,
