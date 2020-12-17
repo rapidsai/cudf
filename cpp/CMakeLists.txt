@@ -96,17 +96,17 @@ include(cmake/thirdparty/CUDF_GetCPM.cmake)
 # find boost
 include(cmake/thirdparty/CUDF_FindBoost.cmake)
 # find jitify
-include(cmake/thirdparty/CUDF_FindJitify.cmake)
+include(cmake/thirdparty/CUDF_GetJitify.cmake)
 # find thrust/cub
-include(cmake/thirdparty/CUDF_FindThrust.cmake)
+include(cmake/thirdparty/CUDF_GetThrust.cmake)
 # find rmm
-include(cmake/thirdparty/CUDF_FindRMM.cmake)
+include(cmake/thirdparty/CUDF_GetRMM.cmake)
 # find arrow
-include(cmake/thirdparty/CUDF_FindArrow.cmake)
+include(cmake/thirdparty/CUDF_GetArrow.cmake)
 # find dlpack
-include(cmake/thirdparty/CUDF_FindDLPack.cmake)
+include(cmake/thirdparty/CUDF_GetDLPack.cmake)
 # find libcu++
-include(cmake/thirdparty/CUDF_FindLibcudacxx.cmake)
+include(cmake/thirdparty/CUDF_GetLibcudacxx.cmake)
 # Stringify libcudf and libcudacxx headers used in JIT operations
 include(cmake/Modules/StringifyJITHeaders.cmake)
 
@@ -148,7 +148,7 @@ function(add_library_module NAMESPACE MODULE MODULE_SOURCE_DIRS)
     target_compile_definitions("${NAMESPACE}_${MODULE}" PRIVATE "JITIFY_PRINT_LOG=0")
     # Specify include paths for the current target and dependents
     target_include_directories("${NAMESPACE}_${MODULE}"
-        PUBLIC      "$<BUILD_INTERFACE:${DLPACK_INCLUDE}>"
+        PUBLIC      "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>"
                     "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
                     "$<BUILD_INTERFACE:${LIBCUDACXX_INCLUDE_DIR}>"
                     "$<BUILD_INTERFACE:${CUDA_DATAFRAME_SOURCE_DIR}/include>"
@@ -188,9 +188,9 @@ function(add_library_module NAMESPACE MODULE MODULE_SOURCE_DIRS)
     target_link_libraries("${NAMESPACE}_${MODULE}"
                    PUBLIC ZLIB::ZLIB
                           Boost::filesystem
-                          arrow arrow_cuda
-                          rmm::rmm
+                          ${ARROW_LIBRARIES}
                           cudf::Thrust
+                          rmm::rmm
                           CUDA::nvrtc
                           ${CUDART_LIBRARY}
                           CUDA::cuda_driver)

@@ -14,24 +14,20 @@
 # limitations under the License.
 #=============================================================================
 
-# Jitify doesn't have a version :/
+function(find_and_configure_thrust VERSION)
+    CPMFindPackage(NAME Thrust
+        VERSION         ${VERSION}
+        GIT_REPOSITORY  https://github.com/NVIDIA/thrust.git
+        GIT_TAG         ${VERSION}
+        GIT_SHALLOW     TRUE
+        # If there is no pre-installed thrust we can use, we'll install our fetched copy together with cuDF
+        OPTIONS         "THRUST_INSTALL TRUE"
+        PATCH_COMMAND   patch -p1 -N < ${CUDA_DATAFRAME_SOURCE_DIR}/cmake/thrust.patch || true)
 
-CPMFindPackage(NAME jitify
-    VERSION         1.0.0
-    GIT_REPOSITORY  https://github.com/rapidsai/jitify.git
-    GIT_TAG         cudf_0.16
-    GIT_SHALLOW     TRUE
-    DONWLOAD_ONLY   TRUE)
+    thrust_create_target(cudf::Thrust FROM_OPTIONS)
+    set(THRUST_LIBRARY "cudf::Thrust" PARENT_SCOPE)
+endfunction()
 
-message(STATUS "jitify_ADDED: ${jitify_ADDED}")
-message(STATUS "jitify_FOUND: ${jitify_FOUND}")
+set(CUDF_MIN_VERSION_Thrust 1.10.0)
 
-if(NOT (jitify_ADDED OR jitify_FOUND))
-    message(FATAL_ERROR "jitify package not found")
-endif()
-
-message(STATUS "libcudacxx_SOURCE_DIR: ${libcudacxx_SOURCE_DIR}")
-
-set(JITIFY_INCLUDE_DIR "${jitify_SOURCE_DIR}")
-
-message(STATUS "JITIFY_INCLUDE_DIR: ${JITIFY_INCLUDE_DIR}")
+find_and_configure_thrust(${CUDF_MIN_VERSION_Thrust})
