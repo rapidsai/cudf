@@ -29,6 +29,7 @@ option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
 option(ARROW_STATIC_LIB "Build and statically link Arrow libraries" OFF)
 option(HT_DEFAULT_ALLOCATOR "Use the default allocator for hash tables" ON)
 option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
+option(AUTO_DETECT_CUDA_ARCHITECTURES "Auto-detect CUDA architectures to build from the GPUs on the current system" OFF)
 
 message(STATUS "Build with NVTX support: ${USE_NVTX}")
 message(STATUS "Configure CMake to build tests: ${BUILD_TESTS}")
@@ -38,6 +39,7 @@ message(STATUS "Use a file cache for JIT compiled kernels: ${JITIFY_USE_CACHE}")
 message(STATUS "Build and statically link Arrow libraries: ${ARROW_STATIC_LIB}")
 message(STATUS "Use the default allocator for hash tables: ${HT_DEFAULT_ALLOCATOR}")
 message(STATUS "Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
+message(STATUS "Auto-detect CUDA architectures to build from the GPUs on the current system: ${AUTO_DETECT_CUDA_ARCHITECTURES}")
 
 # Set a default build type if none was specified
 set(DEFAULT_BUILD_TYPE "Release")
