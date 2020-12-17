@@ -339,7 +339,29 @@ class _DateOffsetScalars(object):
         self._gpu_scalars = scalars
 
 
-class DateOffset(pd.DateOffset):
+class _UndoOffsetMeta(pd._libs.tslibs.offsets.OffsetMeta):
+    """
+    For backward compatibility reasons, `pd.DateOffset` is defined
+    with a metaclass `OffsetMeta`, which makes it such that any
+    subclass of `pd._libs.tslibs.offset.BaseOffset` is reported as
+    a subclass of `pd.DateOffset`.
+
+    Because we subclass `pd.DateOffset`, we inherit this behaviour,
+    but don't want to. This metaclass inherits from `OffsetMeta`
+    and restores normal instance and subclass checking to any
+    classes that use it.
+    """
+
+    @classmethod
+    def __instancecheck__(cls, obj) -> bool:
+        return type.__instancecheck__(cls, obj)
+
+    @classmethod
+    def __subclasscheck__(cls, obj) -> bool:
+        return type.__subclasscheck__(cls, obj)
+
+
+class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
     def __init__(self, n=1, normalize=False, **kwds):
         """
         An object used for binary ops where calendrical arithmetic

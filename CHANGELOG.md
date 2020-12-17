@@ -18,6 +18,7 @@
 - PR #6750 Remove **kwargs from string/categorical methods
 - PR #6909 Support reading byte array backed decimal columns from parquet files
 - PR #6939 Use simplified `rmm::exec_policy`
+- PR #6512 Refactor rolling.cu to reduce compile time
 - PR #6982 Disable some pragma unroll statements in thrust `sort.h`
 
 ## Bug Fixes
