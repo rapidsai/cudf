@@ -20,7 +20,6 @@ def round(Column input_col, int decimal_places=0):
 
     Parameters
     ----------
-    source_column : input column on which rolling operation is executed
     inout_col : Column whose values will be rounded
     decimal_places : The number or decimal places to round to
 
