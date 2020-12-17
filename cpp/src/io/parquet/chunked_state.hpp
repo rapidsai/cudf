@@ -57,18 +57,20 @@ struct pq_chunked_state {
   bool int96_timestamps;
   /// vector of precision values for decimal writing. Exactly one entry
   /// per decimal column.
-  std::vector<uint8_t> decimal_precisions;
+  std::vector<uint8_t> _decimal_precisions;
 
   pq_chunked_state() = default;
 
   pq_chunked_state(table_metadata const* metadata,
-                   SingleWriteMode mode         = SingleWriteMode::NO,
-                   bool write_int96_timestamps  = false,
-                   rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+                   SingleWriteMode mode                           = SingleWriteMode::NO,
+                   bool write_int96_timestamps                    = false,
+                   std::vector<uint8_t> const& decimal_precisions = {},
+                   rmm::cuda_stream_view stream                   = rmm::cuda_stream_default)
     : stream{stream},
       user_metadata{metadata},
       single_write_mode{mode == SingleWriteMode::YES},
-      int96_timestamps(write_int96_timestamps)
+      int96_timestamps(write_int96_timestamps),
+      _decimal_precisions(decimal_precisions)
   {
   }
 };

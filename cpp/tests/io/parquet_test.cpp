@@ -334,7 +334,7 @@ TEST_F(ParquetWriterTest, MultiColumn)
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
       .metadata(&expected_metadata);
   std::vector<uint8_t> precisions = {10, 20};
-  out_opts.set_decimal_precisions(&precisions);
+  out_opts.set_decimal_precisions(precisions);
   cudf_io::write_parquet(out_opts);
 
   cudf_io::parquet_reader_options in_opts =
@@ -413,7 +413,7 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls)
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
       .metadata(&expected_metadata);
   std::vector<uint8_t> precisions = {9, 20};
-  out_opts.set_decimal_precisions(&precisions);
+  out_opts.set_decimal_precisions(precisions);
 
   cudf_io::write_parquet(out_opts);
 
@@ -1325,8 +1325,7 @@ TEST_F(ParquetChunkedWriterTest, DecimalWrite)
   auto seq_col0                      = random_values<int32_t>(num_rows);
   auto seq_col1                      = random_values<int64_t>(num_rows);
 
-  auto valids = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   auto col0 = cudf::test::fixed_point_column_wrapper<int32_t>{
     seq_col0.begin(), seq_col0.end(), valids, numeric::scale_type{5}};
@@ -1345,25 +1344,25 @@ TEST_F(ParquetChunkedWriterTest, DecimalWrite)
 
   // verify failure if too small a precision is given
   std::vector<uint8_t> precisions{7, 1};
-  args.set_decimal_precision_data(&precisions);
+  args.set_decimal_precision_data(precisions);
   state = cudf_io::write_parquet_chunked_begin(args);
   EXPECT_THROW(cudf_io::write_parquet_chunked(table, state), cudf::logic_error);
 
   // verify failure if too few precisions given
   precisions.pop_back();
-  args.set_decimal_precision_data(&precisions);
+  args.set_decimal_precision_data(precisions);
   state = cudf_io::write_parquet_chunked_begin(args);
   EXPECT_THROW(cudf_io::write_parquet_chunked(table, state), cudf::logic_error);
 
   // verify failure if too many precisions given
   precisions = {7, 14, 11};
-  args.set_decimal_precision_data(&precisions);
+  args.set_decimal_precision_data(precisions);
   state = cudf_io::write_parquet_chunked_begin(args);
   EXPECT_THROW(cudf_io::write_parquet_chunked(table, state), cudf::logic_error);
 
   // write correctly
   precisions.pop_back();
-  args.set_decimal_precision_data(&precisions);
+  args.set_decimal_precision_data(precisions);
   state = cudf_io::write_parquet_chunked_begin(args);
   cudf_io::write_parquet_chunked(table, state);
   cudf_io::write_parquet_chunked_end(state);

@@ -402,8 +402,8 @@ class parquet_writer_options {
   // Column chunks file path to be set in the raw output metadata
   std::string _column_chunks_file_path;
   /// vector of precision values for decimal writing. Exactly one entry
-  /// per decimal column.
-  std::vector<uint8_t>* _decimal_precisions = nullptr;
+  /// per decimal column. Optional unless decimals are being written.
+  std::vector<uint8_t> _decimal_precisions;
 
   /**
    * @brief Constructor from sink and table.
@@ -486,7 +486,7 @@ class parquet_writer_options {
   /**
    * @brief Returns a pointer to the decimal precision vector.
    */
-  std::vector<uint8_t>* get_decimal_precisions() const { return _decimal_precisions; }
+  std::vector<uint8_t> const& get_decimal_precisions() const { return _decimal_precisions; }
 
   /**
    * @brief Sets metadata.
@@ -537,7 +537,7 @@ class parquet_writer_options {
   /**
    * @brief Sets a pointer to the decimal precision vector.
    */
-  void set_decimal_precisions(std::vector<uint8_t>* dp) { _decimal_precisions = dp; }
+  void set_decimal_precisions(std::vector<uint8_t> const& dp) { _decimal_precisions = dp; }
 };
 
 class parquet_writer_options_builder {
@@ -701,7 +701,7 @@ class chunked_parquet_writer_options {
   // Parquet writes can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
   bool _write_timestamps_as_int96 = false;
   // Optional decimal precision data - must be present if writing decimals
-  const std::vector<uint8_t>* _decimal_precision = nullptr;
+  std::vector<uint8_t> _decimal_precision = {};
 
   /**
    * @brief Constructor from sink.
@@ -746,7 +746,7 @@ class chunked_parquet_writer_options {
   /**
    * @brief Returns decimal precision pointer.
    */
-  const std::vector<uint8_t>* get_decimal_precision() const { return _decimal_precision; }
+  std::vector<uint8_t> const& get_decimal_precision() const { return _decimal_precision; }
 
   /**
    * @brief Returns `true` if timestamps will be written as INT96
@@ -769,7 +769,7 @@ class chunked_parquet_writer_options {
    * @param v Vector of precision data flattened with exactly one entry per
    *          decimal column.
    */
-  void set_decimal_precision_data(const std::vector<uint8_t>* v) { _decimal_precision = v; }
+  void set_decimal_precision_data(std::vector<uint8_t> const& v) { _decimal_precision = v; }
 
   /**
    * @brief Sets the level of statistics in parquet_writer_options.

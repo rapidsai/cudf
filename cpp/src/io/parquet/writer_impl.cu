@@ -164,7 +164,7 @@ class parquet_column_view {
                                std::vector<bool> const &nullability,
                                const table_metadata *metadata,
                                bool int96_timestamps,
-                               const std::vector<uint8_t> &decimal_precision,
+                               std::vector<uint8_t> const &decimal_precision,
                                uint &decimal_precision_idx,
                                rmm::cuda_stream_view stream)
     : _col(col),
@@ -686,12 +686,12 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
   const table_metadata *metadata,
   bool return_filemetadata,
   const std::string &column_chunks_file_path,
-  std::vector<uint8_t> *decimal_precisions,
+  std::vector<uint8_t> const &decimal_precisions,
   rmm::cuda_stream_view stream)
 {
-  pq_chunked_state state{metadata, SingleWriteMode::YES, int96_timestamps, stream};
+  pq_chunked_state state{
+    metadata, SingleWriteMode::YES, int96_timestamps, decimal_precisions, stream};
 
-  if (decimal_precisions != nullptr) { state.decimal_precisions = *decimal_precisions; }
   write_chunked_begin(state);
   write_chunk(table, state);
   return write_chunked_end(state, return_filemetadata, column_chunks_file_path);
@@ -747,12 +747,12 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
                                  this_column_nullability,
                                  state.user_metadata,
                                  state.int96_timestamps,
-                                 state.decimal_precisions,
+                                 state._decimal_precisions,
                                  decimal_precision_idx,
                                  state.stream);
   }
 
-  CUDF_EXPECTS(decimal_precision_idx == state.decimal_precisions.size(),
+  CUDF_EXPECTS(decimal_precision_idx == state._decimal_precisions.size(),
                "Too many decimal precision values!");
 
   // first call. setup metadata. num_rows will get incremented as write_chunk is
@@ -1267,7 +1267,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::write(table_view const &table,
                                                     const table_metadata *metadata,
                                                     bool return_filemetadata,
                                                     const std::string column_chunks_file_path,
-                                                    std::vector<uint8_t> *decimal_precisions,
+                                                    std::vector<uint8_t> const &decimal_precisions,
                                                     rmm::cuda_stream_view stream)
 {
   return _impl->write(

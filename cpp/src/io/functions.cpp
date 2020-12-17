@@ -399,11 +399,9 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
     state->user_metadata_with_nullability = *op.get_nullable_metadata();
     state->user_metadata                  = &state->user_metadata_with_nullability;
   }
-  state->int96_timestamps = op.is_enabled_int96_timestamps();
-  if (op.get_decimal_precision() != nullptr) {
-    state->decimal_precisions = *op.get_decimal_precision();
-  }
-  state->stream = 0;
+  state->int96_timestamps    = op.is_enabled_int96_timestamps();
+  state->_decimal_precisions = op.get_decimal_precision();
+  state->stream              = 0;
   state->wp->write_chunked_begin(*state);
   return state;
 }

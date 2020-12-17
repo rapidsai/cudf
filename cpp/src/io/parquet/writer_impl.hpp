@@ -88,7 +88,7 @@ class writer::impl {
                                               const table_metadata* metadata,
                                               bool return_filemetadata,
                                               const std::string& column_chunks_file_path,
-                                              std::vector<uint8_t>* decimal_precisions,
+                                              std::vector<uint8_t> const& decimal_precisions,
                                               rmm::cuda_stream_view stream);
 
   /**
