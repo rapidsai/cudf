@@ -47,7 +47,7 @@ def _internal_read_csv(path, chunksize="256 MiB", **kwargs):
     compression = kwargs.get("compression", "infer")
 
     if compression == "infer":
-        # Infer compression from first path
+        # Infer compression from first path by default
         compression = infer_compression(filenames[0])
 
     if compression and chunksize:
