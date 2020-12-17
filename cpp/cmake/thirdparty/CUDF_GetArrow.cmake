@@ -14,10 +14,9 @@
 # limitations under the License.
 #=============================================================================
 
-set(CUDF_VERSION_Arrow 1.0.1)
-
 function(find_and_configure_arrow VERSION BUILD_STATIC)
 
+    set(ARROW_USE_CCACHE ON)
     set(ARROW_BUILD_SHARED ON)
     set(ARROW_BUILD_STATIC OFF)
     set(CPMAddOrFindPackage CPMFindPackage)
@@ -53,39 +52,58 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
                         "ARROW_PROTOBUF_USE_SHARED      ${ARROW_BUILD_SHARED}"
                         "ARROW_ZSTD_USE_SHARED          ${ARROW_BUILD_SHARED}")
 
-    set(Arrow_DIR "${Arrow_DIR}" PARENT_SCOPE)
-    set(Arrow_ADDED "${Arrow_ADDED}" PARENT_SCOPE)
-    set(Arrow_BINARY_DIR "${Arrow_BINARY_DIR}" PARENT_SCOPE)
 
-    set(ARROW_FOUND TRUE PARENT_SCOPE)
-    set(ARROW_LIBRARIES "" PARENT_SCOPE)
+    set(ARROW_FOUND TRUE)
+    set(ARROW_LIBRARIES "")
 
-    # This will be set if CPM had to download Arrow from Github
-    if(Arrow_ADDED)
-        include(${Arrow_BINARY_DIR}/src/arrow/ArrowConfig.cmake)
+    # Arrow_ADDED: set if CPM downloaded Arrow from Github
+    # Arrow_DIR:   set if CPM found Arrow on the system/conda/etc.
+    if(Arrow_ADDED OR Arrow_DIR)
         if(BUILD_STATIC)
-            list(APPEND ARROW_LIBRARIES arrow_static PARENT_SCOPE)
+            list(APPEND ARROW_LIBRARIES arrow_static)
+            list(APPEND ARROW_LIBRARIES arrow_cuda_static)
         else()
-            list(APPEND ARROW_LIBRARIES arrow_shared PARENT_SCOPE)
+            list(APPEND ARROW_LIBRARIES arrow_shared)
+            list(APPEND ARROW_LIBRARIES arrow_cuda_shared)
         endif()
-    # This will be set if CPM found Arrow on the system (or in conda, etc.)
-    elseif(Arrow_DIR)
-        # Set this for find_package(ArrowCUDA) to work
-        set(ArrowCUDA_DIR ${Arrow_DIR})
-        find_package(Arrow REQUIRED QUIET)
-        find_package(ArrowCUDA REQUIRED QUIET)
-        if(BUILD_STATIC)
-            list(APPEND ARROW_LIBRARIES ${ARROW_STATIC_LIB} PARENT_SCOPE)
-            list(APPEND ARROW_LIBRARIES ${ARROW_CUDA_STATIC_LIB} PARENT_SCOPE)
-        else()
-            list(APPEND ARROW_LIBRARIES ${ARROW_SHARED_LIB} PARENT_SCOPE)
-            list(APPEND ARROW_LIBRARIES ${ARROW_CUDA_SHARED_LIB} PARENT_SCOPE)
+
+        if(Arrow_DIR)
+            # Set this to enable `find_package(ArrowCUDA)`
+            set(ArrowCUDA_DIR "${Arrow_DIR}")
+            find_package(Arrow REQUIRED QUIET)
+            find_package(ArrowCUDA REQUIRED QUIET)
+        elseif(Arrow_ADDED)
+            ###
+            # This shouldn't be necessary!
+            #
+            # Arrow populates INTERFACE_INCLUDE_DIRECTORIES for the `arrow_static`
+            # and `arrow_shared` targets in FindArrow and FindArrowCUDA respectively,
+            # so for static source-builds, we have to do it after-the-fact.
+            # 
+            # This only works because we know exactly which components we're using.
+            # Don't forget to update this list if we add more!
+            ###
+            foreach(ARROW_LIBRARY ${ARROW_LIBRARIES})
+                target_include_directories(${ARROW_LIBRARY}
+                    INTERFACE "$<BUILD_INTERFACE:${Arrow_BINARY_DIR}/src>"
+                              "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src>"
+                              "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src/generated>"
+                              "$<BUILD_INTERFACE:${Arrow_BINARY_DIR}/jemalloc_ep-prefix/src>"
+                              "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/hadoop/include>"
+                              "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/flatbuffers/include>"
+                )
+            endforeach()
         endif()
     else()
-        set(ARROW_FOUND FALSE PARENT_SCOPE)
+        set(ARROW_FOUND FALSE)
         message(FATAL_ERROR "Arrow library not found or downloaded.")
     endif()
 
+    set(ARROW_FOUND "${ARROW_FOUND}" PARENT_SCOPE)
+    set(ARROW_LIBRARIES "${ARROW_LIBRARIES}" PARENT_SCOPE)
+
 endfunction()
+
+set(CUDF_VERSION_Arrow 1.0.1)
 
 find_and_configure_arrow(${CUDF_VERSION_Arrow} ${ARROW_STATIC_LIB})
