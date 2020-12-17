@@ -81,9 +81,7 @@ def test_read_csv_compression(tmp_path):
     df.to_csv(tmp_path / "data.csv.gz", index=False)
 
     with pytest.warns(UserWarning) as w:
-        df2 = dask_cudf.read_csv(
-            tmp_path / "*.csv.gz", chunksize="50 B"
-        )
+        df2 = dask_cudf.read_csv(tmp_path / "*.csv.gz", chunksize="50 B")
 
     assert len(w) == 1
     msg = str(w[0].message)
@@ -93,9 +91,7 @@ def test_read_csv_compression(tmp_path):
     dd.assert_eq(df2, df, check_index=False)
 
     with warnings.catch_warnings(record=True) as record:
-        df2 = dask_cudf.read_csv(
-            tmp_path / "*.csv.gz", chunksize=None
-        )
+        df2 = dask_cudf.read_csv(tmp_path / "*.csv.gz", chunksize=None)
 
         assert not record
 
