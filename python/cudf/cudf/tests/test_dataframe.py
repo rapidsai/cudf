@@ -3233,7 +3233,7 @@ def test_ndim():
         0,
         5,
         pd.Series([4, 3, -6], index=["x", "y", "z"]),
-        gd.Series([-2, 1, 12], index=["x", "y", "z"]),
+        pd.Series([-2, 1, 12], index=["x", "y", "z"]),
         {"x": 15, "y": -2, "z": 8},
     ],
 )
@@ -3253,7 +3253,6 @@ def test_round(decimals):
                     -112.236,
                     -8.029,
                     np.nan,
-                    235.972,
                 ]
             ),
             "z": np.repeat([-0.6459412758761901], 10),
