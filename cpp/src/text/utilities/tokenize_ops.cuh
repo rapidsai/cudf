@@ -139,7 +139,7 @@ struct characters_tokenizer {
 struct strings_tokenizer {
   cudf::column_device_view const d_strings;  ///< strings to tokenize
   cudf::string_view const d_delimiter;       ///< delimiter characters to tokenize around
-  cudf::size_type* d_offsets{};              ///< offsets into the d_tokens vector for each string
+  int32_t* d_offsets{};                      ///< offsets into the d_tokens vector for each string
   string_index_pair* d_tokens{};             ///< token positions in device memory
 
   /**
@@ -184,7 +184,7 @@ struct multi_delimiter_strings_tokenizer {
   cudf::column_device_view const d_strings;  ///< strings column to tokenize
   delimiterator delimiters_begin;            ///< first delimiter
   delimiterator delimiters_end;              ///< last delimiter
-  cudf::size_type* d_offsets{};              ///< offsets into the d_tokens output vector
+  int32_t* d_offsets{};                      ///< offsets into the d_tokens output vector
   string_index_pair* d_tokens{};             ///< token positions found for each string
 
   /**

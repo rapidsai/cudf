@@ -224,7 +224,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
   // We only need memory for half the size of the output matrix since the edit distance calculation
   // is commutative -- `distance(strings[i],strings[j]) == distance(strings[j],strings[i])`
   cudf::size_type n_upper = (strings_count * (strings_count - 1)) / 2;
-  rmm::device_uvector<cudf::size_type> offsets(n_upper, stream);
+  rmm::device_uvector<int32_t> offsets(n_upper, stream);
   auto d_offsets = offsets.data();
   CUDA_TRY(cudaMemsetAsync(d_offsets, 0, n_upper * sizeof(cudf::size_type), stream.value()));
   thrust::for_each_n(

@@ -87,8 +87,8 @@ struct backrefs_fn {
             lpos_template += copy_length;
           }
           // extract the specific group's string for this backref's index
-          size_type spos_extract = begin;  // these are modified
-          size_type epos_extract = end;    // by extract()
+          int32_t spos_extract = begin;  // these are modified
+          int32_t epos_extract = end;    // by extract()
           if ((prog.extract(idx, d_str, spos_extract, epos_extract, backref.first - 1) <= 0) ||
               (epos_extract <= spos_extract))
             return;  // no value for this backref number; that is ok
@@ -109,7 +109,7 @@ struct backrefs_fn {
     if (out_ptr && (lpos < d_str.size_bytes()))  // copy remainder of input string
       memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);
     else if (!out_ptr)
-      d_offsets[idx] = nbytes;
+      d_offsets[idx] = static_cast<int32_t>(nbytes);
   }
 };
 
