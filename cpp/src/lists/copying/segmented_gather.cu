@@ -13,19 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/lists/detail/gather.cuh>
 
-#include <rmm/cuda_stream_view.hpp>
-#include "cudf/stream_compaction.hpp"
-#include "cudf_test/column_utilities.hpp"
-#include "thrust/count.h"
-#include "thrust/iterator/counting_iterator.h"
-
 #include <thrust/binary_search.h>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace lists {
@@ -50,7 +44,6 @@ std::unique_ptr<column> segmented_gather(column_view const& list_column,
   auto value_offsets  = value_column.offsets().begin<size_type>() + value_column.offset();
   auto gather_offsets = gather_map.offsets().begin<size_type>();
 
-  if (DEBUG_SEG_GATHER) { cudf::test::print(value_column.offsets(), std::cout << "v_ofs="); }
   // Flattened gather indices
   auto child_gather_index =
     make_numeric_column(data_type{type_to_id<size_type>()}, gather_map_size);
