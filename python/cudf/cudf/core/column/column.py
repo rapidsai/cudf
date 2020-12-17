@@ -2108,5 +2108,5 @@ def full(size, fill_value, dtype=None):
     """
 
     return libcudf.column.make_column_from_scalar(
-        as_device_scalar(fill_value, dtype), size
+        cudf.Scalar(fill_value, dtype), size
     )
