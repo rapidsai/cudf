@@ -25,26 +25,21 @@ namespace cudf {
 namespace lists {
 namespace detail {
 
-std::unique_ptr<column> segmented_gather(column_view const& list_column,
+std::unique_ptr<column> segmented_gather(column_view const& source_column,
                                          column_view const& gather_map_list,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  auto const value_column = lists_column_view{list_column};
+  auto const value_column = lists_column_view{source_column};
   auto const gather_map   = lists_column_view{gather_map_list};
   CUDF_EXPECTS(is_index_type(gather_map.child().type()),
                "Gather map should be list column of index type");
   CUDF_EXPECTS(gather_map.has_nulls() == false, "Gather map contains nulls");
-  constexpr bool DEBUG_SEG_GATHER = 0;
-  if (DEBUG_SEG_GATHER) std::cout << value_column.size() << "==" << gather_map.size() << "\n";
   CUDF_EXPECTS(value_column.size() == gather_map.size(),
                "Gather map and list column should be same size");
-  auto const gather_map_size = gather_map.get_sliced_child(stream).size();
-  // FIXME: Is this a bug? list.offsets() column_view does not have offset() of parent column_view.
-  auto value_offsets  = value_column.offsets().begin<size_type>() + value_column.offset();
-  auto gather_offsets = gather_map.offsets().begin<size_type>();
 
   // Flattened gather indices
+  auto const gather_map_size = gather_map.get_sliced_child(stream).size();
   auto child_gather_index =
     make_numeric_column(data_type{type_to_id<size_type>()}, gather_map_size);
   auto child_gather_index_begin = child_gather_index->mutable_view().begin<size_type>();
@@ -57,32 +52,22 @@ std::unique_ptr<column> segmented_gather(column_view const& list_column,
                       thrust::make_counting_iterator(gather_map_size),
                       child_gather_index_begin);
 
-  thrust::device_ptr<size_type> pt(child_gather_index_begin);
-  if (DEBUG_SEG_GATHER) {
-    printf("\nv1:");
-    for (auto i : thrust::host_vector<size_type>(pt, pt + gather_map_size)) printf("%d,", i);
-    printf("\n");
-  }
-
+  // FIXME: Is this a bug? list.offsets() column_view does not have offset() of parent column_view.
+  auto value_offsets  = value_column.offsets().begin<size_type>() + value_column.offset();
   auto map_begin =
     cudf::detail::indexalator_factory::make_input_iterator(gather_map.get_sliced_child(stream));
+  // Add sub_index to value_column offsets, to get gather indices of child of value_column
   thrust::transform(rmm::exec_policy(stream),
                     child_gather_index_begin,
                     child_gather_index_end,
                     map_begin,
                     child_gather_index_begin,
-                    [value_offsets, gather_offsets] __device__(size_type offset_idx,
+                    [value_offsets] __device__(size_type offset_idx,
                                                                size_type sub_index) -> size_type {
                       auto list_size = value_offsets[offset_idx + 1] - value_offsets[offset_idx];
                       auto wrapped_sub_index = (sub_index % list_size + list_size) % list_size;
                       return value_offsets[offset_idx] + wrapped_sub_index - value_offsets[0];
                     });
-
-  if (DEBUG_SEG_GATHER) {
-    printf("\nv3:");
-    for (auto i : thrust::host_vector<size_type>(pt, pt + gather_map_size)) printf("%d,", i);
-    printf("\n");
-  }
 
   // Call gather on child of value_column
   auto child_table = cudf::detail::gather(table_view({value_column.get_sliced_child(stream)}),
@@ -100,7 +85,7 @@ std::unique_ptr<column> segmented_gather(column_view const& list_column,
   cudf::copy_range_in_place(
     gather_map.offsets(), output_offset_view, 0, gather_map.offsets().size(), 0);
   // Assemble list column & return
-  auto null_mask       = cudf::detail::copy_bitmask(list_column, stream, mr);
+  auto null_mask       = cudf::detail::copy_bitmask(source_column, stream, mr);
   size_type null_count = value_column.null_count();
   return make_lists_column(gather_map.size(),
                            std::move(output_offset),
