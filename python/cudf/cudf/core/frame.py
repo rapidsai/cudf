@@ -1386,6 +1386,28 @@ class Frame(libcudf.table.Table):
         0  1  3
         1  2  4
         2  3  5
+
+        ``fillna`` specified with fill ``method``
+
+        >>> ser = cudf.Series([1, None, None, 2, 3, None, None])
+        >>> ser.fillna(method='ffill')
+        0    1
+        1    1
+        2    1
+        3    2
+        4    3
+        5    3
+        6    3
+        dtype: int64
+        >>> ser.fillna(method='bfill')
+        0       1
+        1       2
+        2       2
+        3       2
+        4       3
+        5    <NA>
+        6    <NA>
+        dtype: int64
         """
         if limit is not None:
             raise NotImplementedError("The limit keyword is not supported")
