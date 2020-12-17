@@ -53,21 +53,21 @@ std::unique_ptr<column> segmented_gather(column_view const& source_column,
                       child_gather_index_begin);
 
   // FIXME: Is this a bug? list.offsets() column_view does not have offset() of parent column_view.
-  auto value_offsets  = value_column.offsets().begin<size_type>() + value_column.offset();
+  auto value_offsets = value_column.offsets().begin<size_type>() + value_column.offset();
   auto map_begin =
     cudf::detail::indexalator_factory::make_input_iterator(gather_map.get_sliced_child(stream));
   // Add sub_index to value_column offsets, to get gather indices of child of value_column
-  thrust::transform(rmm::exec_policy(stream),
-                    child_gather_index_begin,
-                    child_gather_index_end,
-                    map_begin,
-                    child_gather_index_begin,
-                    [value_offsets] __device__(size_type offset_idx,
-                                                               size_type sub_index) -> size_type {
-                      auto list_size = value_offsets[offset_idx + 1] - value_offsets[offset_idx];
-                      auto wrapped_sub_index = (sub_index % list_size + list_size) % list_size;
-                      return value_offsets[offset_idx] + wrapped_sub_index - value_offsets[0];
-                    });
+  thrust::transform(
+    rmm::exec_policy(stream),
+    child_gather_index_begin,
+    child_gather_index_end,
+    map_begin,
+    child_gather_index_begin,
+    [value_offsets] __device__(size_type offset_idx, size_type sub_index) -> size_type {
+      auto list_size         = value_offsets[offset_idx + 1] - value_offsets[offset_idx];
+      auto wrapped_sub_index = (sub_index % list_size + list_size) % list_size;
+      return value_offsets[offset_idx] + wrapped_sub_index - value_offsets[0];
+    });
 
   // Call gather on child of value_column
   auto child_table = cudf::detail::gather(table_view({value_column.get_sliced_child(stream)}),
