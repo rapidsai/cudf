@@ -1313,8 +1313,10 @@ class Frame(libcudf.table.Table):
 
         return self._mimic_inplace(result, inplace=inplace)
 
-    def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
-        """Fill null values with ``value``.
+    def fillna(
+        self, value=None, method=None, axis=None, inplace=False, limit=None
+    ):
+        """Fill null values with ``value`` or specified ``method``.
 
         Parameters
         ----------
@@ -1322,7 +1324,13 @@ class Frame(libcudf.table.Table):
             Value to use to fill nulls. If Series-like, null values
             are filled with values in corresponding indices.
             A dict can be used to provide different values to fill nulls
-            in different columns.
+            in different columns. Cannot be used with ``method``.
+
+        method : {'ffill', 'bfill'}, default None
+            Method to use for filling null values in the dataframe or series.
+            `ffill` propagates the last non-null values forward to the next
+            non-null value. `bfill` propagates backward with the next non-null
+            value. Cannot be used with ``value``.
 
         Returns
         -------
@@ -1380,13 +1388,39 @@ class Frame(libcudf.table.Table):
         0  1  3
         1  2  4
         2  3  5
+
+        ``fillna`` specified with fill ``method``
+
+        >>> ser = cudf.Series([1, None, None, 2, 3, None, None])
+        >>> ser.fillna(method='ffill')
+        0    1
+        1    1
+        2    1
+        3    2
+        4    3
+        5    3
+        6    3
+        dtype: int64
+        >>> ser.fillna(method='bfill')
+        0       1
+        1       2
+        2       2
+        3       2
+        4       3
+        5    <NA>
+        6    <NA>
+        dtype: int64
         """
-        if method is not None:
-            raise NotImplementedError("The method keyword is not supported")
         if limit is not None:
             raise NotImplementedError("The limit keyword is not supported")
         if axis:
             raise NotImplementedError("The axis keyword is not supported")
+
+        if value is not None and method is not None:
+            raise ValueError("Cannot specify both 'value' and 'method'.")
+
+        if method and method not in {"ffill", "bfill"}:
+            raise NotImplementedError(f"Fill method {method} is not supported")
 
         if isinstance(value, cudf.Series):
             value = value.reindex(self._data.names)
@@ -1408,11 +1442,12 @@ class Frame(libcudf.table.Table):
         copy_data = self._data.copy(deep=True)
 
         for name in copy_data.keys():
-            if name in value and not libcudf.scalar._is_null_host_scalar(
-                value[name]
-            ):
-                copy_data[name] = copy_data[name].fillna(value[name],)
-
+            should_fill = (
+                name in value
+                and not libcudf.scalar._is_null_host_scalar(value[name])
+            ) or method is not None
+            if should_fill:
+                copy_data[name] = copy_data[name].fillna(value[name], method)
         result = self._from_table(Frame(copy_data, self._index))
 
         return self._mimic_inplace(result, inplace=inplace)

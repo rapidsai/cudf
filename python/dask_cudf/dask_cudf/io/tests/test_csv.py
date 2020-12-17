@@ -78,12 +78,10 @@ def test_read_csv_w_bytes(tmp_path):
 
 def test_read_csv_compression(tmp_path):
     df = pd.DataFrame(dict(x=np.arange(20), y=np.arange(20)))
-    df.to_csv(tmp_path / "data.csv.gz", index=False, compression="gzip")
+    df.to_csv(tmp_path / "data.csv.gz", index=False)
 
     with pytest.warns(UserWarning) as w:
-        df2 = dask_cudf.read_csv(
-            tmp_path / "*.csv.gz", chunksize="50 B", compression="gzip"
-        )
+        df2 = dask_cudf.read_csv(tmp_path / "*.csv.gz", chunksize="50 B")
 
     assert len(w) == 1
     msg = str(w[0].message)
@@ -93,9 +91,7 @@ def test_read_csv_compression(tmp_path):
     dd.assert_eq(df2, df, check_index=False)
 
     with warnings.catch_warnings(record=True) as record:
-        df2 = dask_cudf.read_csv(
-            tmp_path / "*.csv.gz", chunksize=None, compression="gzip"
-        )
+        df2 = dask_cudf.read_csv(tmp_path / "*.csv.gz", chunksize=None)
 
         assert not record
 
@@ -119,7 +115,7 @@ def test_read_csv_compression_file_list(tmp_path):
 
 
 @pytest.mark.parametrize("size", [0, 3, 20])
-@pytest.mark.parametrize("compression", ["gzip", "infer"])
+@pytest.mark.parametrize("compression", ["gzip", None])
 def test_read_csv_chunksize_none(tmp_path, compression, size):
     df = pd.DataFrame(dict(x=np.arange(size), y=np.arange(size)))
 
@@ -135,6 +131,6 @@ def test_read_csv_chunksize_none(tmp_path, compression, size):
     else:
         typ = None
 
-    df.to_csv(path, index=False)
+    df.to_csv(path, index=False, compression=compression)
     df2 = dask_cudf.read_csv(path, chunksize=None, dtype=typ)
     dd.assert_eq(df, df2)
