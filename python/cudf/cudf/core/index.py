@@ -1756,7 +1756,7 @@ class RangeIndex(Index):
         name = pickle.loads(header["name"])
         start = h["start"]
         stop = h["stop"]
-        step = h["step"]
+        step = h.get("step", 1)
         return RangeIndex(start=start, stop=stop, step=step, name=name)
 
     @property
