@@ -380,6 +380,19 @@ TYPED_TEST(SegmentedGatherTest, GatherSliced)
   }
 }
 
+using SegmentedGatherTestString = SegmentedGatherTest<int>;
+TEST_F(SegmentedGatherTestString, StringGather)
+{
+  using T = cudf::string_view;
+  // List<T>
+  LCW<T> list{{"a", "b", "c", "d"}, {"1", "2", "3", "4"}, {"x", "y", "z"}};
+  LCW<int8_t> gather_map{{0, 1, 3, 2}, {1, 0, 3, 2}, LCW<int8_t>{}};
+  LCW<T> expected{{"a", "b", "d", "c"}, {"2", "1", "4", "3"}, LCW<T>{}};
+
+  auto result = cudf::lists::detail::segmented_gather(list, gather_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 using SegmentedGatherTestInt = SegmentedGatherTest<int>;
 TEST_F(SegmentedGatherTestInt, Fails)
 {
@@ -403,7 +416,7 @@ TEST_F(SegmentedGatherTestInt, Fails)
   auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
   LCW<int8_t> nulls_map{{{3, 2, 1, 0}, {0}, {0}, {0, 1}}, valids};
   CUDF_EXPECT_THROW_MESSAGE(cudf::lists::detail::segmented_gather(list, nulls_map),
-                            "gather_map contains nulls");
+                            "Gather map contains nulls");
 
   CUDF_EXPECT_THROW_MESSAGE(cudf::lists::detail::segmented_gather(list, size_mismatch_map),
                             "Gather map and list column should be same size");
