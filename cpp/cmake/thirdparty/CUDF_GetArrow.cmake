@@ -40,6 +40,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
                         "ARROW_CUDA                     ON"
                         "ARROW_DATASET                  ON"
                         "ARROW_WITH_BACKTRACE           ON"
+                        "ARROW_CXXFLAGS                 -w"
                         "ARROW_JEMALLOC                 OFF"
                         "ARROW_SIMD_LEVEL               NONE"
                         "ARROW_BUILD_STATIC             ${ARROW_BUILD_STATIC}"
