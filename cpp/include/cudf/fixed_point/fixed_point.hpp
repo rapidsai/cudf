@@ -525,11 +525,11 @@ class fixed_point {
       int const f = _value % n;
       auto const num_zeros =
         std::max(0, (-_scale - static_cast<int32_t>(std::to_string(f).size())));
-      auto const zeros = num_zeros <= 0 ? std::string("") : std::string(num_zeros, '0');
+      auto const zeros = std::string(num_zeros, '0');
       return std::to_string(_value / n) + std::string(".") + zeros +
              std::to_string(std::abs(_value) % n);
     } else {
-      auto const zeros = _scale > 0 ? std::string(_scale, '0') : std::string("");
+      auto const zeros = std::string(_scale, '0');
       return std::to_string(_value) + zeros;
     }
   }

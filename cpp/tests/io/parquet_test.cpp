@@ -1326,7 +1326,7 @@ TEST_F(ParquetChunkedWriterTest, DecimalWrite)
   auto seq_col1                      = random_values<int64_t>(num_rows);
 
   auto valids = cudf::test::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+    0, [](auto i) { return i % 2 == 0; });
 
   auto col0 = cudf::test::fixed_point_column_wrapper<int32_t>{
     seq_col0.begin(), seq_col0.end(), valids, numeric::scale_type{5}};
