@@ -492,10 +492,6 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
         # such as +1 year, -12 months
         return all([i == 0 for i in self.kwds.values()])
 
-    @classmethod
-    def from_pandas(self, obj):
-        return
-
     def __setattr__(self, name, value):
         if not isinstance(value, _DateOffsetScalars):
             raise AttributeError("DateOffset objects are immutable.")
