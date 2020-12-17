@@ -443,7 +443,7 @@ public final class ColumnVector extends ColumnView {
    */
   public static ColumnVector serial32BitMurmurHash3(int seed, ColumnView columns[]) {
     if (columns.length < 1) {
-      throw new IllegalArgumentException("MD5 hashing requires at least 1 column of input");
+      throw new IllegalArgumentException("Murmur3 hashing requires at least 1 column of input");
     }
     long[] columnViews = new long[columns.length];
     long size = columns[0].getRowCount();
@@ -479,7 +479,7 @@ public final class ColumnVector extends ColumnView {
    */
   public static ColumnVector spark32BitMurmurHash3(int seed, ColumnView columns[]) {
     if (columns.length < 1) {
-      throw new IllegalArgumentException("MD5 hashing requires at least 1 column of input");
+      throw new IllegalArgumentException("Murmur3 hashing requires at least 1 column of input");
     }
     long[] columnViews = new long[columns.length];
     long size = columns[0].getRowCount();
