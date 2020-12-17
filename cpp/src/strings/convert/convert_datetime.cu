@@ -587,12 +587,11 @@ struct check_datetime_format {
     if (d_strings.is_null(idx)) return false;
     string_view d_str = d_strings.element<string_view>(idx);
     if (d_str.empty()) return false;
-    int32_t dateparts[] = {0, 0, 0};  // year, month, day
+    int32_t dateparts[] = {1970, 1, 1};  // year, month, day
     if (!check_string(d_str, dateparts)) return false;
     auto year  = dateparts[TP_YEAR];
     auto month = static_cast<uint32_t>(dateparts[TP_MONTH]);
     auto day   = static_cast<uint32_t>(dateparts[TP_DAY]);
-    if (year == 0 || month == 0 || day == 0) return true;
     return cuda::std::chrono::year_month_day(cuda::std::chrono::year{year},
                                              cuda::std::chrono::month{month},
                                              cuda::std::chrono::day{day})
