@@ -1314,7 +1314,7 @@ class Frame(libcudf.table.Table):
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
     ):
-        """Fill null values with ``value``.
+        """Fill null values with ``value`` or specified ``method``.
 
         Parameters
         ----------
@@ -1322,7 +1322,13 @@ class Frame(libcudf.table.Table):
             Value to use to fill nulls. If Series-like, null values
             are filled with values in corresponding indices.
             A dict can be used to provide different values to fill nulls
-            in different columns.
+            in different columns. Cannot be used with ``method``.
+        
+        method : {'ffill', 'bfill'}, default None
+            Method to use for filling null values in the dataframe or series.
+            `ffill` propagates the last non-null values forward to the next
+            non-null value. `bfill` propagates backward with the next non-null
+            value. Cannot be used with ``value``.
 
         Returns
         -------
