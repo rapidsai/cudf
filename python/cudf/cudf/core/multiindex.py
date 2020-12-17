@@ -410,12 +410,12 @@ class MultiIndex(Index):
             for col in self._source_data._data
         ]
 
-        output_prefix = "MultiIndex("
+        output_prefix = self.__class__.__name__ + "("
         output = output.lstrip(output_prefix)
         lines = output.split("\n")
 
         if any(cols_nulls):
-            lines = self.post_process_repr_for_nulls(cols_nulls, lines)
+            lines = self._post_process_repr_for_nulls(cols_nulls, lines)
 
         if len(lines) > 1:
             if "length=" in lines[-1] and len(self) != len(preprocess):
@@ -428,7 +428,7 @@ class MultiIndex(Index):
         data_output = "\n".join(lines)
         return output_prefix + data_output
 
-    def post_process_repr_for_nulls(self, cols_nulls, lines):
+    def _post_process_repr_for_nulls(self, cols_nulls, lines):
         row_tuples = list(
             self._source_data.astype("str")
             .to_pandas(nullable=True)
