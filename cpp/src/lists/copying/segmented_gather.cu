@@ -25,13 +25,11 @@ namespace cudf {
 namespace lists {
 namespace detail {
 
-std::unique_ptr<column> segmented_gather(column_view const& source_column,
-                                         column_view const& gather_map_list,
+std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
+                                         lists_column_view const& gather_map,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  auto const value_column = lists_column_view{source_column};
-  auto const gather_map   = lists_column_view{gather_map_list};
   CUDF_EXPECTS(is_index_type(gather_map.child().type()),
                "Gather map should be list column of index type");
   CUDF_EXPECTS(gather_map.has_nulls() == false, "Gather map contains nulls");
@@ -85,7 +83,7 @@ std::unique_ptr<column> segmented_gather(column_view const& source_column,
   cudf::copy_range_in_place(
     gather_map.offsets(), output_offset_view, 0, gather_map.offsets().size(), 0);
   // Assemble list column & return
-  auto null_mask       = cudf::detail::copy_bitmask(source_column, stream, mr);
+  auto null_mask       = cudf::detail::copy_bitmask(value_column.parent(), stream, mr);
   size_type null_count = value_column.null_count();
   return make_lists_column(gather_map.size(),
                            std::move(output_offset),
