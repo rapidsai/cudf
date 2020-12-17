@@ -635,7 +635,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 
   opts_.trie_true  = createSerializedTrie({"true"});
   opts_.trie_false = createSerializedTrie({"false"});
-  opts_.trie_na    = createSerializedTrie({"null"});
+  opts_.trie_na    = createSerializedTrie({"", "null"});
 
   opts_.dayfirst = options.is_enabled_dayfirst();
 }
