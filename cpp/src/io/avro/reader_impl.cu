@@ -187,11 +187,7 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_
   }
 
   for (int loop_cnt = 0; loop_cnt < 2; loop_cnt++) {
-    CUDA_TRY(cudaMemcpyAsync(inflate_in.device_ptr(),
-                             inflate_in.host_ptr(),
-                             inflate_in.memory_size(),
-                             cudaMemcpyHostToDevice,
-                             stream.value()));
+    inflate_in.host_to_device(stream);
     CUDA_TRY(
       cudaMemsetAsync(inflate_out.device_ptr(), 0, inflate_out.memory_size(), stream.value()));
     if (_metadata->codec == "deflate") {
@@ -203,12 +199,7 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_
     } else {
       CUDF_FAIL("Unsupported compression codec\n");
     }
-    CUDA_TRY(cudaMemcpyAsync(inflate_out.host_ptr(),
-                             inflate_out.device_ptr(),
-                             inflate_out.memory_size(),
-                             cudaMemcpyDeviceToHost,
-                             stream.value()));
-    stream.synchronize();
+    inflate_out.device_to_host(stream, true);
 
     // Check if larger output is required, as it's not known ahead of time
     if (_metadata->codec == "deflate" && !loop_cnt) {
@@ -309,11 +300,7 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
   }
   rmm::device_buffer block_list(
     _metadata->block_list.data(), _metadata->block_list.size() * sizeof(block_desc_s), stream);
-  CUDA_TRY(cudaMemcpyAsync(schema_desc.device_ptr(),
-                           schema_desc.host_ptr(),
-                           schema_desc.memory_size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  schema_desc.host_to_device(stream);
 
   gpu::DecodeAvroColumnData(static_cast<block_desc_s *>(block_list.data()),
                             schema_desc.device_ptr(),
@@ -336,12 +323,7 @@ void reader::impl::decode_data(const rmm::device_buffer &block_data,
                                stream.value()));
     }
   }
-  CUDA_TRY(cudaMemcpyAsync(schema_desc.host_ptr(),
-                           schema_desc.device_ptr(),
-                           schema_desc.memory_size(),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  stream.synchronize();
+  schema_desc.device_to_host(stream, true);
 
   for (size_t i = 0; i < out_buffers.size(); i++) {
     const auto col_idx          = selection[i].first;

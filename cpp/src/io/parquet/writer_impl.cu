@@ -476,11 +476,7 @@ void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &fra
                                        uint32_t fragment_size,
                                        rmm::cuda_stream_view stream)
 {
-  CUDA_TRY(cudaMemcpyAsync(col_desc.device_ptr(),
-                           col_desc.host_ptr(),
-                           col_desc.memory_size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  col_desc.host_to_device(stream);
   gpu::InitPageFragments(frag.device_ptr(),
                          col_desc.device_ptr(),
                          num_fragments,
@@ -488,12 +484,7 @@ void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &fra
                          fragment_size,
                          num_rows,
                          stream);
-  CUDA_TRY(cudaMemcpyAsync(frag.host_ptr(),
-                           frag.device_ptr(),
-                           frag.memory_size(),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  stream.synchronize();
+  frag.device_to_host(stream, true);
 }
 
 void writer::impl::gather_fragment_statistics(statistics_chunk *frag_stats_chunk,
@@ -527,11 +518,7 @@ void writer::impl::build_chunk_dictionaries(hostdevice_vector<gpu::EncColumnChun
 {
   size_t dict_scratch_size = (size_t)num_dictionaries * gpu::kDictScratchSize;
   rmm::device_vector<uint32_t> dict_scratch(dict_scratch_size / sizeof(uint32_t));
-  CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(),
-                           chunks.host_ptr(),
-                           chunks.memory_size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  chunks.host_to_device(stream);
   gpu::BuildChunkDictionaries(chunks.device_ptr(),
                               dict_scratch.data().get(),
                               dict_scratch_size,
@@ -545,12 +532,7 @@ void writer::impl::build_chunk_dictionaries(hostdevice_vector<gpu::EncColumnChun
                         nullptr,
                         nullptr,
                         stream);
-  CUDA_TRY(cudaMemcpyAsync(chunks.host_ptr(),
-                           chunks.device_ptr(),
-                           chunks.memory_size(),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  stream.synchronize();
+  chunks.device_to_host(stream, true);
 }
 
 void writer::impl::init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
@@ -565,11 +547,7 @@ void writer::impl::init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk> &ch
                                       rmm::cuda_stream_view stream)
 {
   rmm::device_vector<statistics_merge_group> page_stats_mrg(num_stats_bfr);
-  CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(),
-                           chunks.host_ptr(),
-                           chunks.memory_size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  chunks.host_to_device(stream);
   InitEncoderPages(chunks.device_ptr(),
                    pages,
                    col_desc.device_ptr(),

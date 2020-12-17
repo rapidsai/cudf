@@ -1010,11 +1010,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
 
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer
-  CUDA_TRY(cudaMemcpyAsync(pages.device_ptr(),
-                           pages.host_ptr(),
-                           pages.memory_size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  pages.host_to_device(stream);
 
   return decomp_pages;
 }
