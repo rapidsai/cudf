@@ -288,8 +288,33 @@ std::unique_ptr<column> gather_list_leaf(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Segmented gather of the elements within a list element in each row of a list column.
+ *
+ * * @code{.pseudo}
+ * source_column   : [{"a", "b", "c", "d"}, {"1", "2", "3", "4"}, {"x", "y", "z"}]
+ * gather_map_list : [{0, 1, 3, 2}, {1, 0, 3, 2}, {}]
+ *
+ * result          : [{"a", "b", "d", "c"}, {"2", "1", "4", "3"}, {}]
+ * @endcode
+ *
+ * @throws cudf::logic_error if `gather_map_list` size is not same as `source_column` size.
+ * @throws cudf::logic_error if gather_map contains null values.
+ * @throws cudf::logic_error if gather_map is not list column of an index type.
+ *
+ * If indices in `gather_map_list` are outside the range `[-n, n)`, where `n` is the number of
+ * elements in corresponding row of the source column, the behavior is undefined.
+ *
+ * @param source_column View into the list column to gather from
+ * @param gather_map_list View into a non-nullable list column of integral indices that maps the
+ * element in list of each row in the source columns to rows of lists in the destination columns.
+ * @param stream CUDA stream on which to execute kernels
+ * @param mr Device memory resource to allocate any returned objects
+ * @return column with elements in list of rows gathered based on `gather_map_list`
+ *
+ */
 std::unique_ptr<column> segmented_gather(
-  column_view const& list_column,
+  column_view const& source_column,
   column_view const& gather_map_list,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
