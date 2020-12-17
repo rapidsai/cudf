@@ -384,9 +384,11 @@ TEST_F(StringsDatetimeTest, IsTimestamp)
                                              "2020-10-32 01:32:03",
                                              "2020-10-07 25:02:03",
                                              "2020-10-07 01:62:03",
-                                             "2020-10-07 01:02:63"};
+                                             "2020-10-07 01:02:63",
+                                             "2020-02-29 01:32:03",
+                                             "2020-02-30 01:32:03"};
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::is_timestamp(strings_view, "%Y-%m-%d %H:%M:%S");
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    *results, cudf::test::fixed_width_column_wrapper<bool>{1, 0, 0, 0, 0, 0, 0, 0});
+    *results, cudf::test::fixed_width_column_wrapper<bool>{1, 0, 0, 0, 0, 0, 0, 0, 1, 0});
 }

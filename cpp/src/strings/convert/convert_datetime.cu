@@ -279,18 +279,11 @@ struct parse_datetime {
     if (units == timestamp_units::months)
       return ((year - 1970) * 12) + (month - 1);  // months are 1-12, need to 0-base it here
     auto day = timeparts[TP_DAY];
-    // The months are shifted so that March is the starting month and February
-    // (possible leap day in it) is the last month for the linear calculation
-    year -= (month <= 2) ? 1 : 0;
-    // date cycle repeats every 400 years (era)
-    constexpr int32_t erasInDays  = 146097;
-    constexpr int32_t erasInYears = (erasInDays / 365);
-    auto era                      = (year >= 0 ? year : year - 399) / erasInYears;
-    auto yoe                      = year - era * erasInYears;
-    auto doy = month == 0 ? day : ((153 * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1);
-    auto doe = (yoe * 365) + (yoe / 4) - (yoe / 100) + doy;
-    int32_t days =
-      (era * erasInDays) + doe - 719468;  // 719468 = days from 0000-00-00 to 1970-03-01
+    auto ymd =  // convenient chrono class handles the leap year calculations for us
+      cuda::std::chrono::year_month_day(cuda::std::chrono::year{year},
+                                        cuda::std::chrono::month{static_cast<uint32_t>(month)},
+                                        cuda::std::chrono::day{static_cast<uint32_t>(day)});
+    int32_t days = cuda::std::chrono::sys_days(ymd).time_since_epoch().count();
     if (units == timestamp_units::days) return days;
 
     auto tzadjust = timeparts[TP_TZ_MINUTES];  // in minutes
@@ -456,6 +449,29 @@ struct check_datetime_format {
   }
 
   /**
+   * @brief Specialized function to return the value and check for non-decimal characters.
+   *
+   * If non-decimal characters are found with `str` and `str + bytes` the false
+   * is returned for the second pair value. Otherwise, true is returned along
+   * with the parsed integer value.
+   *
+   * @param str Beginning of characters to read/check.
+   * @param bytes Number of bytes in str to read/check.
+   * @return Integer value and validity indicator.
+   */
+  __device__ thrust::pair<int32_t, bool> str2int(const char* str, size_type bytes)
+  {
+    const char* ptr = str;
+    int32_t value   = 0;
+    for (size_type idx = 0; idx < bytes; ++idx) {
+      char chr = *ptr++;
+      if (chr < '0' || chr > '9') return {value, false};
+      value = (value * 10) + static_cast<int32_t>(chr - '0');
+    }
+    return {value, true};
+  }
+
+  /**
    * @brief Check the specified characters are between ['0','9']
    * and the resulting integer is within [`min_value`, `max_value`].
    *
@@ -485,7 +501,7 @@ struct check_datetime_format {
    * The checking here is a little more strict than the actual
    * parser used for conversion.
    */
-  __device__ bool check_string(string_view const& d_string)
+  __device__ bool check_string(string_view const& d_string, int32_t* dateparts)
   {
     auto ptr    = d_string.data();
     auto length = d_string.size_bytes();
@@ -507,10 +523,30 @@ struct check_datetime_format {
       // reference: https://man7.org/linux/man-pages/man3/strptime.3.html
       bool result = false;
       switch (item.value) {
-        case 'Y': result = check_digits(ptr, item.length); break;
-        case 'y': result = check_digits(ptr, item.length); break;
-        case 'm': result = check_value(ptr, item.length, 1, 12); break;
-        case 'd': result = check_value(ptr, item.length, 1, 31); break;
+        case 'Y': {
+          auto rtn           = str2int(ptr, item.length);
+          result             = rtn.second;
+          dateparts[TP_YEAR] = rtn.first;
+          break;
+        }
+        case 'y': {
+          auto rtn           = str2int(ptr, item.length);
+          result             = rtn.second;
+          dateparts[TP_YEAR] = rtn.first + 1900;
+          break;
+        }
+        case 'm': {
+          auto rtn            = str2int(ptr, item.length);
+          result              = rtn.second;
+          dateparts[TP_MONTH] = rtn.first;
+          break;
+        }
+        case 'd': {
+          auto rtn          = str2int(ptr, item.length);
+          result            = rtn.second;
+          dateparts[TP_DAY] = rtn.first;
+          break;
+        }
         case 'j': result = check_value(ptr, item.length, 1, 366); break;
         case 'H': result = check_value(ptr, item.length, 0, 23); break;
         case 'I': result = check_value(ptr, item.length, 1, 12); break;
@@ -551,7 +587,16 @@ struct check_datetime_format {
     if (d_strings.is_null(idx)) return false;
     string_view d_str = d_strings.element<string_view>(idx);
     if (d_str.empty()) return false;
-    return check_string(d_str);
+    int32_t dateparts[] = {0, 0, 0};  // year, month, day
+    if (!check_string(d_str, dateparts)) return false;
+    auto year  = dateparts[TP_YEAR];
+    auto month = static_cast<uint32_t>(dateparts[TP_MONTH]);
+    auto day   = static_cast<uint32_t>(dateparts[TP_DAY]);
+    if (year == 0 || month == 0 || day == 0) return true;
+    return cuda::std::chrono::year_month_day(cuda::std::chrono::year{year},
+                                             cuda::std::chrono::month{month},
+                                             cuda::std::chrono::day{day})
+      .ok();
   }
 };
 
