@@ -44,10 +44,5 @@ std::unique_ptr<column> contains(
   cudf::scalar const& skey,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-std::unique_ptr<column> contains(
-  cudf::lists_column_view const& lists,
-  cudf::column_view const& skeys,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
 }  // namespace lists
 }  // namespace cudf

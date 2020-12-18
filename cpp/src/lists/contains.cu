@@ -136,10 +136,10 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
   auto ret_bools = make_fixed_width_column(
     data_type{type_id::BOOL8}, lists.size(), std::move(null_mask), num_nulls, stream, mr);
 
-  auto ret_bools_mutable_device_view =
-    mutable_column_device_view::create(ret_bools->mutable_view(), stream);
-
   if (skey.is_valid()) {
+    auto ret_bools_mutable_device_view =
+      mutable_column_device_view::create(ret_bools->mutable_view(), stream);
+
     cudf::type_dispatcher(
       skey.type(), lookup_functor{}, d_lists, skey, *ret_bools_mutable_device_view, stream, mr);
   }
