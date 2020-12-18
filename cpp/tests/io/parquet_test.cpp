@@ -816,6 +816,26 @@ TEST_F(ParquetWriterTest, MultipleMismatchedSources)
   }
 }
 
+TEST_F(ParquetWriterTest, Slice)
+{
+  auto col =
+    cudf::test::fixed_width_column_wrapper<int>{{1, 2, 3, 4, 5}, {true, true, true, false, true}};
+  std::vector<cudf::size_type> indices{2, 5};
+  std::vector<cudf::column_view> result = cudf::slice(col, indices);
+  cudf::table_view tbl{result};
+
+  auto filepath = temp_env->get_temp_filepath("Slice.parquet");
+  cudf_io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, tbl);
+  cudf_io::write_parquet(out_opts);
+
+  cudf_io::parquet_reader_options in_opts =
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+  auto read_table = cudf_io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(read_table.tbl->view(), tbl);
+}
+
 TEST_F(ParquetChunkedWriterTest, SingleTable)
 {
   srand(31337);

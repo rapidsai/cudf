@@ -332,7 +332,11 @@ __inline__ __device__ cudf::timestamp_s decode_value(char const *begin,
                                                      parse_options_view const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
-  return timestamp_s{cudf::duration_s{milli / 1000}};
+  if (milli == -1) {
+    return timestamp_s{cudf::duration_s{convertStrToInteger<int64_t>(begin, end)}};
+  } else {
+    return timestamp_s{cudf::duration_s{milli / 1000}};
+  }
 }
 
 template <>
@@ -341,7 +345,11 @@ __inline__ __device__ cudf::timestamp_ms decode_value(char const *begin,
                                                       parse_options_view const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
-  return timestamp_ms{cudf::duration_ms{milli}};
+  if (milli == -1) {
+    return timestamp_ms{cudf::duration_ms{convertStrToInteger<int64_t>(begin, end)}};
+  } else {
+    return timestamp_ms{cudf::duration_ms{milli}};
+  }
 }
 
 template <>
@@ -350,7 +358,11 @@ __inline__ __device__ cudf::timestamp_us decode_value(char const *begin,
                                                       parse_options_view const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
-  return timestamp_us{cudf::duration_us{milli * 1000}};
+  if (milli == -1) {
+    return timestamp_us{cudf::duration_us{convertStrToInteger<int64_t>(begin, end)}};
+  } else {
+    return timestamp_us{cudf::duration_us{milli * 1000}};
+  }
 }
 
 template <>
@@ -359,7 +371,11 @@ __inline__ __device__ cudf::timestamp_ns decode_value(char const *begin,
                                                       parse_options_view const &opts)
 {
   auto milli = parseDateTimeFormat(begin, end, opts.dayfirst);
-  return timestamp_ns{cudf::duration_ns{milli * 1000000}};
+  if (milli == -1) {
+    return timestamp_ns{cudf::duration_ns{convertStrToInteger<int64_t>(begin, end)}};
+  } else {
+    return timestamp_ns{cudf::duration_ns{milli * 1000000}};
+  }
 }
 
 #ifndef DURATION_DECODE_VALUE
