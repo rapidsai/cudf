@@ -58,6 +58,10 @@ set(RMM_LOGGING_LEVEL "INFO" CACHE STRING "Choose the logging level.")
 set_property(CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF")
 message(STATUS "RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
 
+if (NOT CUDF_GENERATED_INCLUDE_DIR)
+    set(CUDF_GENERATED_INCLUDE_DIR ${CUDA_DATAFRAME_BINARY_DIR})
+endif()
+
 ###################################################################################################
 # - conda environment -----------------------------------------------------------------------------
 
@@ -154,7 +158,7 @@ function(add_library_module NAMESPACE MODULE MODULE_SOURCE_DIRS)
                     "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
                     "$<BUILD_INTERFACE:${LIBCUDACXX_INCLUDE_DIR}>"
                     "$<BUILD_INTERFACE:${CUDA_DATAFRAME_SOURCE_DIR}/include>"
-                    "$<BUILD_INTERFACE:${CUDA_DATAFRAME_BINARY_DIR}/include>"
+                    "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
         PRIVATE     "$<BUILD_INTERFACE:${CUDA_DATAFRAME_SOURCE_DIR}/src>"
         INTERFACE   "$<INSTALL_INTERFACE:include>")
     # Add Conda library paths if specified
@@ -300,10 +304,10 @@ install(DIRECTORY ${CUDA_DATAFRAME_SOURCE_DIR}/include/cudf
 install(DIRECTORY ${CUDA_DATAFRAME_SOURCE_DIR}/include/cudf_test
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-install(DIRECTORY ${CUDA_DATAFRAME_BINARY_DIR}/include/libcxx
+install(DIRECTORY ${CUDF_GENERATED_INCLUDE_DIR}/include/libcxx
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
 
-install(DIRECTORY ${CUDA_DATAFRAME_BINARY_DIR}/include/libcudacxx
+install(DIRECTORY ${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
 
 add_custom_target(install_cudf
