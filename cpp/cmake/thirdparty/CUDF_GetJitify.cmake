@@ -22,7 +22,7 @@ function(find_and_configure_jitify)
             GIT_REPOSITORY  https://github.com/rapidsai/jitify.git
             GIT_TAG         cudf_0.16
             GIT_SHALLOW     TRUE
-            DONWLOAD_ONLY   TRUE)
+            DOWNLOAD_ONLY   TRUE)
     set(JITIFY_INCLUDE_DIR "${jitify_SOURCE_DIR}" PARENT_SCOPE)
 endfunction()
 

@@ -20,20 +20,7 @@ function(find_and_configure_libcudacxx VERSION)
         GIT_REPOSITORY      https://github.com/NVIDIA/libcudacxx.git
         GIT_TAG             ${VERSION}
         GIT_SHALLOW         TRUE
-        DONWLOAD_ONLY       TRUE
-        OPTIONS             "LIBCXX_CONFIGURE_IDE OFF"
-                            "LIBCXX_ENABLE_STATIC OFF"
-                            "LIBCXX_ENABLE_SHARED OFF"
-                            "LIBCXX_INCLUDE_TESTS OFF"
-                            "LIBCXX_INSTALL_LIBRARY OFF"
-                            "LIBCXX_INSTALL_HEADERS OFF"
-                            "LIBCXX_STANDALONE_BUILD OFF"
-                            "LIBCXX_DISABLE_ARCH_BY_DEFAULT ON"
-                            "LIBCXX_INSTALL_SUPPORT_HEADERS OFF"
-                            "LIBCXX_ENABLE_EXPERIMENTAL_LIBRARY OFF"
-                            # Set this to a place LLVM definitely isn't, to defeat libcu++'s CMakeLists.txt install
-                            # targets. Is this a CPM bug? https://github.com/TheLartians/CPM.cmake/issues/173
-                            "LLVM_PATH /tmp"
+        DOWNLOAD_ONLY       TRUE
     )
     set(LIBCUDACXX_DIR "${libcudacxx_SOURCE_DIR}" PARENT_SCOPE)
     set(LIBCUDACXX_INCLUDE_DIR "${libcudacxx_SOURCE_DIR}/include" PARENT_SCOPE)
