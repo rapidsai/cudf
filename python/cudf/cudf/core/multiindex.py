@@ -397,8 +397,12 @@ class MultiIndex(Index):
 
         if len(self) > max_seq_items:
             n = int(max_seq_items / 2) + 1
-            indices = list(range(n))
-            indices.extend(list(range(len(self) - n, len(self))))
+            indices = cudf.core.column.arange(start=0, stop=n, step=1)
+            indices = indices.append(
+                cudf.core.column.arange(
+                    start=len(self) - n, stop=len(self), step=1
+                )
+            )
             preprocess = self.take(indices)
         else:
             preprocess = self
