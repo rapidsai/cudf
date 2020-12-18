@@ -68,15 +68,15 @@ struct findall_fn {
     u_char data2[stack_size];
     prog.set_stack_mem(data1, data2);
     string_view d_str      = d_strings.element<string_view>(idx);
-    auto nchars            = d_str.length();
-    size_type spos         = 0;
-    size_type epos         = nchars;
+    auto const nchars      = d_str.length();
+    int32_t spos           = 0;
+    int32_t epos           = static_cast<int32_t>(nchars);
     size_type column_count = 0;
     while (spos <= nchars) {
       if (prog.find(idx, d_str, spos, epos) <= 0) break;  // no more matches found
       if (column_count == column_index) break;            // found our column
       spos = epos > spos ? epos : spos + 1;
-      epos = nchars;
+      epos = static_cast<int32_t>(nchars);
       ++column_count;
     }
     if (spos <= epos) {

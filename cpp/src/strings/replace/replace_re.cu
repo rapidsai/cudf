@@ -74,8 +74,8 @@ struct replace_regex_fn {
     auto in_ptr       = d_str.data();                    // input pointer (i)
     auto out_ptr      = d_chars ? d_chars + d_offsets[idx] : nullptr;  // output pointer (o)
     size_type lpos    = 0;
-    size_type begin   = 0;
-    size_type end     = nchars;  // working vars
+    int32_t begin     = 0;
+    int32_t end       = static_cast<int32_t>(nchars);
     // copy input to output replacing strings as we go
     while (mxn-- > 0)  // maximum number of replaces
     {
@@ -91,12 +91,12 @@ struct replace_regex_fn {
         lpos = epos;                                                        // i:bbbbsssseeee
       }                                                                     //  in_ptr --^
       begin = end;
-      end   = nchars;
+      end   = static_cast<int32_t>(nchars);
     }
     if (out_ptr)                                                  // copy the remainder
       memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);  // o:bbbbrrrrrreeee
     else
-      d_offsets[idx] = nbytes;
+      d_offsets[idx] = static_cast<int32_t>(nbytes);
   }
 };
 
