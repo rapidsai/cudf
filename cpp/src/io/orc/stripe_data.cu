@@ -1539,7 +1539,8 @@ __global__ void __launch_bounds__(block_size)
       __syncthreads();
       // Account for skipped values
       if (num_rowgroups > 0 && !s->is_string) {
-        uint32_t run_pos = s->top.data.index.run_pos[CI_DATA];
+        uint32_t run_pos = (s->chunk.type_kind == DECIMAL) ? s->top.data.index.run_pos[CI_DATA2]
+                                                           : s->top.data.index.run_pos[CI_DATA];
         numvals =
           min(numvals + run_pos, (s->chunk.type_kind == BOOLEAN) ? blockDim.x * 2 : blockDim.x);
       }

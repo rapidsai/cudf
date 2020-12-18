@@ -1241,3 +1241,8 @@ def test_datetime_infer_format(data, dtype):
     actual = sr.astype(dtype)
 
     assert_eq(expected, actual)
+
+
+def test_dateoffset_instance_subclass_check():
+    assert not issubclass(pd.DateOffset, cudf.DateOffset)
+    assert not isinstance(pd.DateOffset(), cudf.DateOffset)
