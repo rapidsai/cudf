@@ -40,6 +40,10 @@ message(STATUS "CUDAToolkit_VERSION_MINOR: ${CUDAToolkit_VERSION_MINOR}")
 set(GPU_ARCHS "ALL" CACHE STRING
   "List of GPU architectures (semicolon-separated) to be compiled for. Pass 'ALL' if you want to compile for all supported GPU architectures. Empty string means to auto-detect the GPUs on the current system")
 
+if("${GPU_ARCHS}" STREQUAL "")
+    set(AUTO_DETECT_CUDA_ARCHITECTURES ON)
+endif()
+
 if(AUTO_DETECT_CUDA_ARCHITECTURES)
     set(GPU_ARCHS "")
 else()
