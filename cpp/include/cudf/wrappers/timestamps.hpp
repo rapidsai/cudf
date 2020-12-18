@@ -24,7 +24,7 @@
  * @file timestamps.hpp
  * @brief Concrete type definitions for int32_t and int64_t timestamps in
  * varying resolutions as durations since the UNIX epoch.
- **/
+ */
 namespace cudf {
 namespace detail {
 // TODO: Use chrono::utc_clock when available in libcu++?
@@ -56,28 +56,28 @@ struct timestamp : time_point<Duration> {
 /**
  * @brief Type alias representing an int32_t duration of days since the unix
  * epoch.
- **/
+ */
 using timestamp_D =
   detail::timestamp<cuda::std::chrono::duration<int32_t, cuda::std::ratio<86400>>>;
 /**
  * @brief Type alias representing an int64_t duration of seconds since the
  * unix epoch.
- **/
+ */
 using timestamp_s = detail::timestamp<cuda::std::chrono::duration<int64_t, cuda::std::ratio<1>>>;
 /**
  * @brief Type alias representing an int64_t duration of milliseconds since
  * the unix epoch.
- **/
+ */
 using timestamp_ms = detail::timestamp<cuda::std::chrono::duration<int64_t, cuda::std::milli>>;
 /**
  * @brief Type alias representing an int64_t duration of microseconds since
  * the unix epoch.
- **/
+ */
 using timestamp_us = detail::timestamp<cuda::std::chrono::duration<int64_t, cuda::std::micro>>;
 /**
  * @brief Type alias representing an int64_t duration of nanoseconds since
  * the unix epoch.
- **/
+ */
 using timestamp_ns = detail::timestamp<cuda::std::chrono::duration<int64_t, cuda::std::nano>>;
 
 static_assert(sizeof(timestamp_D) == sizeof(typename timestamp_D::rep), "");
@@ -94,7 +94,7 @@ namespace std {
  * @brief Specialization of std::numeric_limits for cudf::detail::timestamp
  *
  * Pass through to return the limits of the underlying numeric representation.
- **/
+ */
 #define TIMESTAMP_LIMITS(TypeName)                                                                \
   template <>                                                                                     \
   struct numeric_limits<TypeName> {                                                               \

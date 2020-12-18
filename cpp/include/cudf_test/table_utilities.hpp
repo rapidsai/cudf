@@ -47,7 +47,7 @@ void expect_tables_equal(cudf::table_view lhs, cudf::table_view rhs);
  *
  * @param lhs The first table
  * @param rhs The second table
- **/
+ */
 void expect_tables_equivalent(cudf::table_view lhs, cudf::table_view rhs);
 
 }  // namespace test

@@ -26,8 +26,7 @@
  * regardless of the state of `NDEBUG`.
  *
  * Relies on the `__PRETTY_FUNCTION__` macro which is specific to GCC and Clang.
- *
- **/
+ */
 #if defined(__CUDA_ARCH__) && (defined(__clang__) || defined(__GNUC__))
 #define __ASSERT_STR_HELPER(x) #x
 #define release_assert(e)     \

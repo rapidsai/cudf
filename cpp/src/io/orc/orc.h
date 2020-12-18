@@ -108,8 +108,7 @@ struct Metadata {
 
 /**
  * @brief Class for parsing Orc's Protocol Buffers encoded metadata
- *
- **/
+ */
 
 class ProtobufReader {
  public:
@@ -208,8 +207,7 @@ class ProtobufReader {
 
 /**
  * @brief Class for encoding Orc's metadata with Protocol Buffers
- *
- **/
+ */
 class ProtobufWriter {
  public:
   ProtobufWriter() { m_buf = nullptr; }
@@ -258,8 +256,7 @@ class ProtobufWriter {
 
 /**
  * @brief Class for decompressing Orc data blocks using the CPU
- *
- **/
+ */
 
 class OrcDecompressor {
  public:

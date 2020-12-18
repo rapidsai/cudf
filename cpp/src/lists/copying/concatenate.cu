@@ -88,7 +88,6 @@ std::unique_ptr<column> merge_offsets(std::vector<lists_column_view> const& colu
 
 /**
  * @copydoc cudf::lists::detail::concatenate
- *
  */
 std::unique_ptr<column> concatenate(
   std::vector<column_view> const& columns,

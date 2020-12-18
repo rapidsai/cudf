@@ -17,7 +17,6 @@
 /**
  * @brief Serialized trie implementation for C++/CUDA
  * @file trie.cuh
- *
  */
 
 #pragma once

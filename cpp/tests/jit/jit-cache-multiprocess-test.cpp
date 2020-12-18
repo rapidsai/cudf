@@ -36,7 +36,7 @@
  * when multiple processes are reading/writing to it at the same time. Since
  * the public API of JitCache doesn't return the serialized string of the
  * cached kernel, the way to test its validity is to run it on test data.
- **/
+ */
 TEST_F(JitCacheMultiProcessTest, MultiProcessTest)
 {
   int num_tests = 20;

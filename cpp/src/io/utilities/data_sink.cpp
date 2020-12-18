@@ -25,7 +25,6 @@ namespace cudf {
 namespace io {
 /**
  * @brief Implementation class for storing data into a local file.
- *
  */
 class file_sink : public data_sink {
  public:
@@ -52,7 +51,6 @@ class file_sink : public data_sink {
 
 /**
  * @brief Implementation class for storing data into a std::vector.
- *
  */
 class host_buffer_sink : public data_sink {
  public:
@@ -76,7 +74,6 @@ class host_buffer_sink : public data_sink {
 
 /**
  * @brief Implementation class for voiding data (no io performed)
- *
  */
 class void_sink : public data_sink {
  public:

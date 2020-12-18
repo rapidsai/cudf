@@ -23,7 +23,7 @@
  *
  * Portions of this file are derived from Google's Brotli project at
  * https://github.com/google/brotli, original license text below.
- **/
+ */
 
 /* Copyright 2013 Google Inc. All Rights Reserved.
 
@@ -117,7 +117,7 @@ __inline__ __device__ int brotli_context(int p1, int p2, int lut)
 
 /**
  * @brief Various local scratch arrays
- **/
+ */
 struct huff_scratch_s {
   uint16_t code_length_histo[16];
   uint8_t code_length_code_lengths[brotli_code_length_codes];
@@ -132,7 +132,7 @@ struct huff_scratch_s {
  * @brief Contains a collection of Huffman trees with the same alphabet size.
  * max_symbol is needed due to simple codes since log2(alphabet_size) could be
  * greater than log2(max_symbol).
- **/
+ */
 struct debrotli_huff_tree_group_s {
   uint16_t alphabet_size;
   uint16_t max_symbol;
@@ -149,7 +149,7 @@ constexpr int local_heap_size =
 
 /**
  * Brotli decoder state
- **/
+ */
 struct debrotli_state_s {
   // Bitstream
   const uint8_t *cur;
@@ -270,7 +270,7 @@ inline __device__ uint32_t getbits_bytealign(debrotli_state_s *s)
  * 33..64      xxxxx1011
  * 65..128    xxxxxx1101
  * 129..256   xxxxxxx1111
- **/
+ */
 static __device__ uint32_t getbits_u8vlc(debrotli_state_s *s)
 {
   uint32_t next32 = next32bits(s);
@@ -1291,7 +1291,7 @@ static __device__ void DecodeHuffmanTables(debrotli_state_s *s)
  *
  * Most of input values are 0 and 1. To reduce number of branches, we replace
  * inner for loop with do-while.
- **/
+ */
 static __device__ void InverseMoveToFrontTransform(debrotli_state_s *s, uint8_t *v, uint32_t v_len)
 {
   // Reinitialize elements that could have been changed.
@@ -1896,7 +1896,7 @@ static __device__ void ProcessCommands(debrotli_state_s *s, const brotli_diction
  * @param scratch_size Size of scratch heap space (smaller sizes may result in serialization between
  *blocks)
  * @param count Number of blocks to decompress
- **/
+ */
 extern "C" __global__ void __launch_bounds__(block_size, 2)
   gpu_debrotli_kernel(gpu_inflate_input_s *inputs,
                       gpu_inflate_status_s *outputs,
@@ -2027,7 +2027,7 @@ extern "C" __global__ void __launch_bounds__(block_size, 2)
  * @param[in] max_num_inputs The maximum number of compressed input chunks
  *
  * @return The size in bytes of required temporary memory
- **/
+ */
 size_t __host__ get_gpu_debrotli_scratch_size(int max_num_inputs)
 {
   int sm_count = 0;

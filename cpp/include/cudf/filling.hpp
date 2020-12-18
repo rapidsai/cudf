@@ -171,7 +171,7 @@ std::unique_ptr<table> repeat(
  * @param step Increment value
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> The result table containing the sequence
- **/
+ */
 std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,
@@ -197,7 +197,7 @@ std::unique_ptr<column> sequence(
  * @param init First value in the sequence
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> The result table containing the sequence
- **/
+ */
 std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,

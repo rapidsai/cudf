@@ -706,7 +706,6 @@ class aggregate_metadata {
  * @param remap Maps column schema index to the R/D remapping vectors for that column
  * @param src_col_schema The column schema to generate the new mapping for
  * @param md File metadata information
- *
  */
 void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::vector<int>>> &remap,
                                int src_col_schema,

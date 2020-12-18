@@ -32,7 +32,7 @@
  *
  * Uses macros to rename GTests's emulated variadic template types and then
  * redefines them properly.
- **/
+ */
 
 #define Types Types_NOT_USED
 #define Types0 Types0_NOT_USED

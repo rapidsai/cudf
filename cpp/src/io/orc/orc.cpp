@@ -169,16 +169,8 @@ bool ProtobufReader::InitSchema(FileFooter &ff)
   return true;
 }
 
-/* ----------------------------------------------------------------------------*/
-/**
- * @Brief ORC Protobuf Writer class
- *
- */
-/* ----------------------------------------------------------------------------*/
-
 /**
  * @Brief Add a single rowIndexEntry, negative input values treated as not present
- *
  */
 void ProtobufWriter::put_row_index_entry(int32_t present_blk,
                                          int32_t present_ofs,
@@ -322,13 +314,6 @@ size_t ProtobufWriter::write(const Metadata &s)
   return w.value();
 }
 
-/* ----------------------------------------------------------------------------*/
-/**
- * @Brief ORC decompression class
- *
- */
-/* ----------------------------------------------------------------------------*/
-
 OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
   : m_kind(kind), m_blockSize(blockSize)
 {
@@ -353,7 +338,6 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
   }
 }
 
-/* --------------------------------------------------------------------------*/
 /**
  * @Brief ORC block decompression
  *
@@ -363,8 +347,6 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
  *
  * @returns pointer to uncompressed data, nullptr if error
  */
-/* ----------------------------------------------------------------------------*/
-
 const uint8_t *OrcDecompressor::Decompress(const uint8_t *srcBytes, size_t srcLen, size_t *dstLen)
 {
   // If uncompressed, just pass-through the input

@@ -168,7 +168,7 @@ bool container::parse(file_metadata *md, size_t max_num_rows, size_t first_row)
 
 /**
  * @brief Parser state
- **/
+ */
 enum json_state_e {
   state_attrname = 0,
   state_attrcolon,
