@@ -458,7 +458,7 @@ struct check_datetime_format {
    *
    * @param str Beginning of characters to read/check.
    * @param bytes Number of bytes in str to read/check.
-   * @return Integer value and validity indicator.
+   * @return Integer value if characters are valid.
    */
   __device__ thrust::optional<int32_t> str2int(const char* str, size_type bytes)
   {
