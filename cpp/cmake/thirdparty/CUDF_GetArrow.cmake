@@ -73,6 +73,13 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
             find_package(Arrow REQUIRED QUIET)
             find_package(ArrowCUDA REQUIRED QUIET)
         elseif(Arrow_ADDED)
+            # Copy these files so we can avoid adding paths in
+            # Arrow_BINARY_DIR to target_include_directories.
+            # That defeats ccache.
+            file(INSTALL "${Arrow_BINARY_DIR}/src/arrow/util/config.h"
+                 DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/arrow/util")
+            file(INSTALL "${Arrow_BINARY_DIR}/src/arrow/gpu/cuda_version.h"
+                 DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/arrow/gpu")
             ###
             # This shouldn't be necessary!
             #
@@ -85,10 +92,8 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
             ###
             foreach(ARROW_LIBRARY ${ARROW_LIBRARIES})
                 target_include_directories(${ARROW_LIBRARY}
-                    INTERFACE "$<BUILD_INTERFACE:${Arrow_BINARY_DIR}/src>"
-                              "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src>"
+                    INTERFACE "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src>"
                               "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src/generated>"
-                              "$<BUILD_INTERFACE:${Arrow_BINARY_DIR}/jemalloc_ep-prefix/src>"
                               "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/hadoop/include>"
                               "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/flatbuffers/include>"
                 )
