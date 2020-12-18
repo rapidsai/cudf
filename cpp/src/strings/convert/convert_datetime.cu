@@ -238,7 +238,8 @@ struct parse_datetime {
         case 'M': timeparts[TP_MINUTE] = str2int(ptr, item.length); break;
         case 'S': timeparts[TP_SECOND] = str2int(ptr, item.length); break;
         case 'f': {
-          int32_t const read_size = std::min(static_cast<int32_t>(item.length), length);
+          int32_t const read_size =
+            std::min(static_cast<int32_t>(item.length), static_cast<int32_t>(length));
           int64_t const fraction  = str2int(ptr, read_size) * power_of_ten(item.length - read_size);
           timeparts[TP_SUBSECOND] = static_cast<int32_t>(fraction);
           break;

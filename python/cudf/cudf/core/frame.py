@@ -1852,6 +1852,11 @@ class Frame(libcudf.table.Table):
                 n = int(round(self.shape[1] * frac))
 
         if axis is None or axis == 0 or axis == "index":
+            if n > 0 and self.shape[0] == 0:
+                raise ValueError(
+                    "Cannot take a sample larger than 0 when axis is empty"
+                )
+
             if not replace and n > self.shape[0]:
                 raise ValueError(
                     "Cannot take a larger sample than population "
@@ -1890,6 +1895,17 @@ class Frame(libcudf.table.Table):
                 raise ValueError(
                     f"No axis named {axis} for "
                     f"object type {self.__class__}"
+                )
+
+            if replace:
+                raise NotImplementedError(
+                    "Sample is not supported for "
+                    f"axis {axis} when 'replace=True'"
+                )
+
+            if n > 0 and self.shape[1] == 0:
+                raise ValueError(
+                    "Cannot take a sample larger than 0 when axis is empty"
                 )
 
             columns = np.asarray(self._data.names)
