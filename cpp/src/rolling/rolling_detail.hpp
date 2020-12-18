@@ -50,7 +50,7 @@ static constexpr bool is_rolling_supported()
 
     return is_valid_numeric_agg;
 
-  } else if (cudf::is_timestamp<ColumnType>()) {
+  } else if (cudf::is_timestamp<ColumnType>() or cudf::is_fixed_point<ColumnType>()) {
     return (op == aggregation::MIN) or (op == aggregation::MAX) or
            (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
            (op == aggregation::ROW_NUMBER) or (op == aggregation::LEAD) or (op == aggregation::LAG);
