@@ -57,7 +57,7 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
 
     values = Series(values)
 
-    cats = values.dropna().unique().astype(values.dtype)
+    cats = values._column.dropna().unique().astype(values.dtype)
 
     name = values.name  # label_encoding mutates self.name
     labels = values.label_encoding(cats=cats, na_sentinel=na_sentinel).values
