@@ -16,7 +16,6 @@
 
 function(find_and_configure_arrow VERSION BUILD_STATIC)
 
-    set(ARROW_USE_CCACHE ON)
     set(ARROW_BUILD_SHARED ON)
     set(ARROW_BUILD_STATIC OFF)
     set(CPMAddOrFindPackage CPMFindPackage)
