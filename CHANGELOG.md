@@ -18,10 +18,12 @@
 - PR #6750 Remove **kwargs from string/categorical methods
 - PR #6909 Support reading byte array backed decimal columns from parquet files
 - PR #6939 Use simplified `rmm::exec_policy`
+- PR #6512 Refactor rolling.cu to reduce compile time
 - PR #6982 Disable some pragma unroll statements in thrust `sort.h`
 
 ## Bug Fixes
 
+- PR #6884 Correct the sampling range when sampling with replacement
 - PR #6903 Add null count test for apply_boolean_mask
 - PR #6922 Fix N/A detection for empty fields in CSV reader
 - PR #6912 Fix rmm_mode=managed parameter for gtests
