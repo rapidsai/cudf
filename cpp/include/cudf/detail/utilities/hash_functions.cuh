@@ -494,7 +494,7 @@ MurmurHash3_32<cudf::string_view>::operator()(cudf::string_view const& key) cons
   constexpr uint32_t c2 = 0x1b873593;
   auto getblock32       = [] __device__(uint32_t const* p, int i) -> uint32_t {
     // Individual byte reads for unaligned accesses (very likely)
-    auto q = (const uint8_t*)(p + i);
+    auto q = (uint8_t const*)(p + i);
     return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
   };
 
@@ -586,7 +586,7 @@ struct SparkMurmurHash3_32 {
   result_type CUDA_DEVICE_CALLABLE compute(TKey const& key) const
   {
     constexpr int len        = sizeof(TKey);
-    const int8_t* const data = reinterpret_cast<int8_t const*>(&key);
+    int8_t const* const data = reinterpret_cast<int8_t const*>(&key);
     constexpr int nblocks    = len / 4;
 
     uint32_t h1           = m_seed;
