@@ -288,7 +288,7 @@ template <typename StringsIterator, typename ValidityIterator>
 auto make_chars_and_offsets(StringsIterator begin, StringsIterator end, ValidityIterator v)
 {
   std::vector<char> chars{};
-  std::vector<int32_t> offsets(1, 0);
+  std::vector<cudf::size_type> offsets(1, 0);
   for (auto str = begin; str < end; ++str) {
     std::string tmp = (*v++) ? std::string(*str) : std::string{};
     chars.insert(chars.end(), std::cbegin(tmp), std::cend(tmp));
@@ -721,7 +721,7 @@ class strings_column_wrapper : public detail::column_wrapper {
   strings_column_wrapper(StringsIterator begin, StringsIterator end) : column_wrapper{}
   {
     std::vector<char> chars;
-    std::vector<int32_t> offsets;
+    std::vector<cudf::size_type> offsets;
     auto all_valid           = make_counting_transform_iterator(0, [](auto i) { return true; });
     std::tie(chars, offsets) = detail::make_chars_and_offsets(begin, end, all_valid);
     wrapped                  = cudf::make_strings_column(chars, offsets);
@@ -761,7 +761,7 @@ class strings_column_wrapper : public detail::column_wrapper {
   {
     size_type num_strings = std::distance(begin, end);
     std::vector<char> chars;
-    std::vector<int32_t> offsets;
+    std::vector<size_type> offsets;
     std::tie(chars, offsets) = detail::make_chars_and_offsets(begin, end, v);
     wrapped =
       cudf::make_strings_column(chars, offsets, detail::make_null_mask_vector(v, v + num_strings));

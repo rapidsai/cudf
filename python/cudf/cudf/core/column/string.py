@@ -4925,10 +4925,13 @@ class StringColumn(column.ColumnBase):
         replacement = column.as_column(replacement, dtype=self.dtype)
         return libcudf.replace.replace(self, to_replace, replacement)
 
-    def fillna(self, fill_value):
-        if not is_scalar(fill_value):
-            fill_value = column.as_column(fill_value, dtype=self.dtype)
-        return libcudf.replace.replace_nulls(self, fill_value, dtype="object")
+    def fillna(self, fill_value=None, method=None):
+        if fill_value is not None:
+            if not is_scalar(fill_value):
+                fill_value = column.as_column(fill_value, dtype=self.dtype)
+            return super().fillna(value=fill_value, dtype="object")
+        else:
+            return super().fillna(method=method)
 
     def _find_first_and_last(self, value):
         found_indices = self.str().contains(f"^{value}$")
