@@ -181,7 +181,8 @@ struct half_even_negative {
     auto const down_over_n = e / n;            // use this to determine HALF_EVEN case
     auto const down        = down_over_n * n;  // result from rounding down
     auto const diff        = generic_abs(e - down);
-    auto const adjustment  = (diff > n / 2) or (diff == n / 2 && down_over_n % 2 == 1) ? n : 0;
+    auto const adjustment =
+      (diff > n / 2) or (diff == n / 2 && generic_abs(down_over_n) % 2 == 1) ? n : 0;
     return down + generic_sign(e) * adjustment;
   }
 };

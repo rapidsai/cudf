@@ -9,7 +9,7 @@ import cudf
 from cudf import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_110
 from cudf.tests import utils
-from cudf.tests.utils import INTEGER_TYPES, assert_eq
+from cudf.tests.utils import INTEGER_TYPES, assert_eq, assert_exceptions_equal
 
 index_dtypes = INTEGER_TYPES
 
@@ -328,7 +328,6 @@ def test_dataframe_loc_mask(mask, arg):
     assert_eq(pdf.loc[mask, arg], gdf.loc[mask, arg])
 
 
-@pytest.mark.xfail(raises=IndexError, reason="label scalar is out of bound")
 def test_dataframe_loc_outbound():
     df = DataFrame()
     size = 10
@@ -341,7 +340,7 @@ def test_dataframe_loc_outbound():
     pdf["a"] = ha
     pdf["b"] = hb
 
-    np.testing.assert_equal(df.loc[11].to_array(), pdf.loc[11])
+    assert_exceptions_equal(lambda: pdf.loc[11], lambda: df.loc[11])
 
 
 def test_series_loc_numerical():
@@ -1118,19 +1117,39 @@ def test_iloc_negative_indices():
 
 
 def test_out_of_bounds_indexing():
-    a = cudf.Series([1, 2, 3])
-    with pytest.raises(IndexError):
-        a[[0, 1, 9]]
-    with pytest.raises(IndexError):
-        a[[0, 1, -4]]
-    with pytest.raises(IndexError):
-        a[[0, 1, 9]] = 2
-    with pytest.raises(IndexError):
-        a[[0, 1, -4]] = 2
-    with pytest.raises(IndexError):
-        a[4:6].iloc[-1] = 2
-    with pytest.raises(IndexError):
-        a[4:6].iloc[1] = 2
+    psr = pd.Series([1, 2, 3])
+    gsr = cudf.from_pandas(psr)
+
+    assert_exceptions_equal(
+        lambda: psr[[0, 1, 9]],
+        lambda: gsr[[0, 1, 9]],
+        compare_error_message=False,
+    )
+    assert_exceptions_equal(
+        lambda: psr[[0, 1, -4]],
+        lambda: gsr[[0, 1, -4]],
+        compare_error_message=False,
+    )
+    assert_exceptions_equal(
+        lambda: psr.__setitem__([0, 1, 9], 2),
+        lambda: gsr.__setitem__([0, 1, 9], 2),
+        compare_error_message=False,
+    )
+    assert_exceptions_equal(
+        lambda: psr.__setitem__([0, 1, -4], 2),
+        lambda: gsr.__setitem__([0, 1, -4], 2),
+        compare_error_message=False,
+    )
+    assert_exceptions_equal(
+        lambda: psr[4:6].iloc.__setitem__(-1, 2),
+        lambda: gsr[4:6].iloc.__setitem__(-1, 2),
+        compare_error_message=False,
+    )
+    assert_exceptions_equal(
+        lambda: psr[4:6].iloc.__setitem__(1, 2),
+        lambda: gsr[4:6].iloc.__setitem__(1, 2),
+        compare_error_message=False,
+    )
 
 
 def test_sliced_indexing():
@@ -1300,3 +1319,27 @@ def test_iloc_with_lists(data, key):
     psr = pd.Series(data)
     gsr = cudf.Series(data)
     assert_eq(psr.iloc[key], gsr.iloc[key])
+
+
+@pytest.mark.parametrize("key", [5, -10, "0", "a", np.array(5), np.array("a")])
+def test_loc_bad_key_type(key):
+    psr = pd.Series([1, 2, 3])
+    gsr = cudf.from_pandas(psr)
+    assert_exceptions_equal(lambda: psr[key], lambda: gsr[key])
+    assert_exceptions_equal(lambda: psr.loc[key], lambda: gsr.loc[key])
+
+
+@pytest.mark.parametrize("key", ["b", 1.0, np.array("b")])
+def test_loc_bad_key_type_string_index(key):
+    psr = pd.Series([1, 2, 3], index=["a", "1", "c"])
+    gsr = cudf.from_pandas(psr)
+    assert_exceptions_equal(lambda: psr[key], lambda: gsr[key])
+    assert_exceptions_equal(lambda: psr.loc[key], lambda: gsr.loc[key])
+
+
+def test_loc_zero_dim_array():
+    psr = pd.Series([1, 2, 3])
+    gsr = cudf.from_pandas(psr)
+
+    assert_eq(psr[np.array(0)], gsr[np.array(0)])
+    assert_eq(psr[np.array([0])[0]], gsr[np.array([0])[0]])

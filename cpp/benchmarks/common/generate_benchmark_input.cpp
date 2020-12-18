@@ -307,7 +307,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
  */
 struct string_column_data {
   std::vector<char> chars;
-  std::vector<int32_t> offsets;
+  std::vector<cudf::size_type> offsets;
   std::vector<cudf::bitmask_type> null_mask;
   explicit string_column_data(cudf::size_type rows, cudf::size_type size)
   {
