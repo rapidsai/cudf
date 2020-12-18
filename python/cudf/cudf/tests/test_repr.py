@@ -1187,11 +1187,15 @@ def test_mulitIndex_repr(pmi, max_seq_items):
             )
             .set_index(["a", "b"])
             .index,
-            "MultiIndex([(<NA>,  'abc'),"
-            "    (   1,   <NA>),"
-            "    (   2,  'xyz'),"
-            "    (   3,   <NA>)],"
-            "   names=['a', 'b'])",
+            textwrap.dedent(
+                """
+                MultiIndex([(<NA>, 'abc'),
+                            (   1,  <NA>),
+                            (   2, 'xyz'),
+                            (   3,  <NA>)],
+                        names=['a', 'b'])
+                """
+            ),
         ),
         (
             cudf.DataFrame(
@@ -1203,11 +1207,15 @@ def test_mulitIndex_repr(pmi, max_seq_items):
             )
             .set_index(["a", "b"])
             .index,
-            "MultiIndex([(<NA>,  'abc'),"
-            "    ( nan,   <NA>),"
-            "    ( 2.0,  'xyz'),"
-            "    ( 3.0,   <NA>)],"
-            "   names=['a', 'b'])",
+            textwrap.dedent(
+                """
+            MultiIndex([(<NA>, 'abc'),
+                        ( nan,  <NA>),
+                        ( 2.0, 'xyz'),
+                        ( 3.0,  <NA>)],
+                    names=['a', 'b'])
+            """
+            ),
         ),
         (
             cudf.DataFrame(
@@ -1219,11 +1227,15 @@ def test_mulitIndex_repr(pmi, max_seq_items):
             )
             .set_index(["a", "b"])
             .index,
-            "MultiIndex([(                          '<NA>',  'abc'),"
-            "    ( '1970-01-01 00:00:00.000000001',   <NA>),"
-            "    ( '1970-01-01 00:00:00.000000002',  'xyz'),"
-            "    ( '1970-01-01 00:00:00.000000003',   <NA>)],"
-            "   names=['a', 'b'])",
+            textwrap.dedent(
+                """
+            MultiIndex([(                         '<NA>', 'abc'),
+                        ('1970-01-01 00:00:00.000000001',  <NA>),
+                        ('1970-01-01 00:00:00.000000002', 'xyz'),
+                        ('1970-01-01 00:00:00.000000003',  <NA>)],
+                    names=['a', 'b'])
+            """
+            ),
         ),
         (
             cudf.DataFrame(
@@ -1235,11 +1247,15 @@ def test_mulitIndex_repr(pmi, max_seq_items):
             )
             .set_index(["a", "b", "c"])
             .index,
-            "MultiIndex([(                          '<NA>',  'abc',  0.345),"
-            "    ( '1970-01-01 00:00:00.000000001',   <NA>,   <NA>),"
-            "    ( '1970-01-01 00:00:00.000000002',  'xyz',  100.0),"
-            "    ( '1970-01-01 00:00:00.000000003',   <NA>,   10.0)],"
-            "   names=['a', 'b', 'c'])",
+            textwrap.dedent(
+                """
+                MultiIndex([(                         '<NA>', 'abc', 0.345),
+                            ('1970-01-01 00:00:00.000000001',  <NA>,  <NA>),
+                            ('1970-01-01 00:00:00.000000002', 'xyz', 100.0),
+                            ('1970-01-01 00:00:00.000000003',  <NA>,  10.0)],
+                        names=['a', 'b', 'c'])
+                """
+            ),
         ),
         (
             cudf.DataFrame(
@@ -1251,11 +1267,15 @@ def test_mulitIndex_repr(pmi, max_seq_items):
             )
             .set_index(["a", "b", "c"])
             .index,
-            "MultiIndex([( 'abc',                         <NA>,  0.345),"
-            "    (  <NA>,  '0 days 00:00:00.000000001',   <NA>),"
-            "    ( 'xyz',  '0 days 00:00:00.000000002',  100.0),"
-            "    (  <NA>,  '0 days 00:00:00.000000003',   10.0)],"
-            "   names=['a', 'b', 'c'])",
+            textwrap.dedent(
+                """
+                MultiIndex([('abc',                      '<NA>', 0.345),
+                            ( <NA>, '0 days 00:00:00.000000001',  <NA>),
+                            ('xyz', '0 days 00:00:00.000000002', 100.0),
+                            ( <NA>, '0 days 00:00:00.000000003',  10.0)],
+                        names=['a', 'b', 'c'])
+                """
+            ),
         ),
         (
             cudf.DataFrame(
@@ -1267,11 +1287,15 @@ def test_mulitIndex_repr(pmi, max_seq_items):
             )
             .set_index(["c", "a"])
             .index,
-            "MultiIndex([( 0.345,  'abc'),"
-            "   (  <NA>,   <NA>),"
-            "   ( 100.0,  'xyz'),"
-            "   (  10.0,   <NA>)],"
-            "    names=['c', 'a'])",
+            textwrap.dedent(
+                """
+                MultiIndex([(0.345, 'abc'),
+                            ( <NA>,  <NA>),
+                            (100.0, 'xyz'),
+                            ( 10.0,  <NA>)],
+                        names=['c', 'a'])
+                """
+            ),
         ),
         (
             cudf.DataFrame(
@@ -1285,11 +1309,15 @@ def test_mulitIndex_repr(pmi, max_seq_items):
             )
             .set_index(["b", "a"])
             .index,
-            "MultiIndex([(<NA>, <NA>),"
-            "   (<NA>, <NA>),"
-            "   (<NA>, <NA>),"
-            "   (<NA>, <NA>)],"
-            "    names=['b', 'a'])",
+            textwrap.dedent(
+                """
+            MultiIndex([('<NA>', <NA>),
+                        ('<NA>', <NA>),
+                        ('<NA>', <NA>),
+                        ('<NA>', <NA>)],
+                    names=['b', 'a'])
+            """
+            ),
         ),
         (
             cudf.DataFrame(
@@ -1310,13 +1338,16 @@ def test_mulitIndex_repr(pmi, max_seq_items):
             )
             .set_index(["a", "b", "c", "d"])
             .index,
-            "MultiIndex([(   1,                      'abc',    "
-            "0.3232,     <NA>),"
-            "   (   2,             'def, hi, bye',       nan,      100),"
-            "   (<NA>,                       <NA>,       1.0,  2000324),"
-            "   (   3,  ', one, two, three, four',      <NA>,     <NA>),"
-            "   (   5,                       <NA>,  -0.34534,     <NA>)],"
-            "    names=['a', 'b', 'c', 'd'])",
+            textwrap.dedent(
+                """
+    MultiIndex([(   1,                     'abc',   0.3232,    <NA>),
+                (   2,            'def, hi, bye',      nan,     100),
+                (<NA>,                      <NA>,      1.0, 2000324),
+                (   3, ', one, two, three, four',     <NA>,    <NA>),
+                (   5,                      <NA>, -0.34534,    <NA>)],
+            names=['a', 'b', 'c', 'd'])
+    """
+            ),
         ),
         (
             cudf.DataFrame(
@@ -1337,13 +1368,16 @@ def test_mulitIndex_repr(pmi, max_seq_items):
             )
             .set_index(["b", "a", "c", "d"])
             .index,
-            "MultiIndex([(                     'abc',    1,    "
-            "0.3232,     <NA>),"
-            "   (            'def, hi, bye',    2,       nan,      100),"
-            "   (                      <NA>, <NA>,       1.0,  2000324),"
-            "   ( ', one, two, three, four',    3,      <NA>,     <NA>),"
-            "   (                      <NA>,    5,  -0.34534,     <NA>)],"
-            "   names=['b', 'a', 'c', 'd'])",
+            textwrap.dedent(
+                """
+    MultiIndex([(                    'abc',    1,   0.3232,    <NA>),
+                (           'def, hi, bye',    2,      nan,     100),
+                (                     <NA>, <NA>,      1.0, 2000324),
+                (', one, two, three, four',    3,     <NA>,    <NA>),
+                (                     <NA>,    5, -0.34534,    <NA>)],
+            names=['b', 'a', 'c', 'd'])
+    """
+            ),
         ),
         (
             cudf.DataFrame(
@@ -1364,13 +1398,16 @@ def test_mulitIndex_repr(pmi, max_seq_items):
             )
             .set_index(["a", "b", "c", "d"])
             .index,
-            "MultiIndex([( '(abc',                      'abc',    "
-            "0.3232,     <NA>),"
-            "   (    '2',             'def, hi, bye',       nan,      100),"
-            "   (   <NA>,                       <NA>,       1.0,  2000324),"
-            "   (    '3',  ', one, two, three, four',      <NA>,     <NA>),"
-            "   (    '5',                       <NA>,  -0.34534,     <NA>)],"
-            "   names=['a', 'b', 'c', 'd'])",
+            textwrap.dedent(
+                """
+    MultiIndex([('(abc',                     'abc',   0.3232,    <NA>),
+                (   '2',            'def, hi, bye',      nan,     100),
+                (  <NA>,                      <NA>,      1.0, 2000324),
+                (   '3', ', one, two, three, four',     <NA>,    <NA>),
+                (   '5',                      <NA>, -0.34534,    <NA>)],
+            names=['a', 'b', 'c', 'd'])
+    """
+            ),
         ),
     ],
 )

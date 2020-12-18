@@ -403,19 +403,45 @@ class MultiIndex(Index):
         else:
             preprocess = self
 
-        preprocess = preprocess.to_pandas(nullable=True)
-        output = preprocess.__repr__()
         cols_nulls = [
-            self._source_data._data[col].has_nulls
-            for col in self._source_data._data
+            preprocess._source_data._data[col].has_nulls
+            for col in preprocess._source_data._data
         ]
+        if any(cols_nulls):
+            preprocess_df = preprocess._source_data
+            for name, col in preprocess_df._data.items():
+                if isinstance(
+                    col,
+                    (
+                        cudf.core.column.datetime.DatetimeColumn,
+                        cudf.core.column.timedelta.TimeDeltaColumn,
+                    ),
+                ):
+                    preprocess_df[name] = col.astype("str").fillna(
+                        cudf._NA_REP
+                    )
+                else:
+                    preprocess_df[name] = col
 
+            tuples_list = list(
+                zip(
+                    *list(
+                        map(lambda val: pd.NA if val is None else val, col)
+                        for col in preprocess_df.to_arrow()
+                        .to_pydict()
+                        .values()
+                    )
+                )
+            )
+            preprocess = preprocess.to_pandas(nullable=True)
+            preprocess.values[:] = tuples_list
+        else:
+            preprocess = preprocess.to_pandas(nullable=True)
+
+        output = preprocess.__repr__()
         output_prefix = self.__class__.__name__ + "("
         output = output.lstrip(output_prefix)
         lines = output.split("\n")
-
-        if any(cols_nulls):
-            lines = self._post_process_repr_for_nulls(cols_nulls, lines)
 
         if len(lines) > 1:
             if "length=" in lines[-1] and len(self) != len(preprocess):
@@ -427,90 +453,6 @@ class MultiIndex(Index):
 
         data_output = "\n".join(lines)
         return output_prefix + data_output
-
-    def _post_process_repr_for_nulls(self, cols_nulls, lines):
-        row_tuples = list(
-            self._source_data.astype("str")
-            .to_pandas(nullable=True)
-            .itertuples(index=None, name=None)
-        )
-        date_time_col_indices = {
-            col_idx
-            for col_idx, col_name in enumerate(self._source_data._data.names)
-            if isinstance(
-                self._source_data._data[col_name],
-                (
-                    cudf.core.column.DatetimeColumn,
-                    cudf.core.column.TimeDeltaColumn,
-                ),
-            )
-        }
-        new_lines = []
-        for row_idx, line in enumerate(lines[:-1]):
-            current_row = row_tuples[row_idx]
-            current_row_repr = line.split(", ")
-
-            # If there is mismatch in lengths, that means there
-            # is a string in multi-Index which contains ", "
-            # Due to this reason we will have to correctly
-            # calculate the splits by inspecting values in current_row
-            if len(current_row_repr) != len(current_row):
-                correct_row_repr = []
-                repr_idx = 0
-                for val in current_row:
-                    if not isinstance(val, str) or (
-                        isinstance(val, str) and ", " not in val
-                    ):
-                        correct_row_repr.append(current_row_repr[repr_idx])
-                        repr_idx += 1
-                    else:
-                        split_count = val.count(", ")
-                        correct_row_repr.append(
-                            ", ".join(
-                                current_row_repr[
-                                    repr_idx : repr_idx + split_count + 1
-                                ]
-                            )
-                        )
-                        repr_idx += split_count + 1
-                current_row_repr = correct_row_repr
-
-            for col_idx, value in enumerate(current_row):
-                if value is pd.NA:
-                    if col_idx in date_time_col_indices:
-                        current_row_repr[col_idx] = current_row_repr[
-                            col_idx
-                        ].replace("NaT", cudf._NA_REP)
-                    else:
-                        current_row_repr[col_idx] = current_row_repr[
-                            col_idx
-                        ].replace("nan", cudf._NA_REP)
-                elif value is np.nan:
-                    # Leave nan's as is.
-                    pass
-                elif cols_nulls[col_idx]:
-                    # Need to pad the values with extra space
-                    # as pandas MultiIndex return 3 character
-                    # string "nan", which are replaced by
-                    # 4 character string "<NA>", hence the
-                    # adjustment is needed for aligned output.
-                    if col_idx == 0:
-                        current_row_repr[col_idx] = current_row_repr[
-                            col_idx
-                        ].replace("(", "( ", 1)
-                    elif col_idx == len(current_row) - 1:
-                        current_row_repr[col_idx] = (
-                            " " + current_row_repr[col_idx]
-                        )
-                    else:
-                        current_row_repr[col_idx] = (
-                            " " + current_row_repr[col_idx]
-                        )
-
-            new_lines.append(", ".join(current_row_repr))
-        new_lines.append(lines[-1])
-        lines = new_lines
-        return lines
 
     @classmethod
     def from_arrow(cls, table):
