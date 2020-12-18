@@ -8178,9 +8178,10 @@ def test_agg_for_dataframe_with_string_columns(aggs):
         gdf.agg(aggs)
 
 
-@pytest.mark.parametrize("join",["left", "right"],)
+@pytest.mark.parametrize("join",["left"],)
 @pytest.mark.parametrize("overwrite",[True, False],)
-@pytest.mark.parametrize("errors",["raise", "ignore"],)
+@pytest.mark.parametrize("filter_func",[None],)
+@pytest.mark.parametrize("errors",["ignore"],)
 @pytest.mark.parametrize(
     "data",
     [
@@ -8197,17 +8198,41 @@ def test_agg_for_dataframe_with_string_columns(aggs):
         {"a": [7, 5, 8], "b": [2.0, 7.0, 9.0]},
         {"a": [True, False, True], "b":[3.0, 4.0, 5.0]},
         {"a": [np.nan, np.nan, np.nan], "b": [np.nan, np.nan, np.nan]},
-        {"a": [np.nan, 2.0, False], "b": [2, np.nan, 5.0]}, 
+        {"a": [np.nan, 2.0, np.nan], "b": [2, np.nan, 5.0]}, 
     ],
 )
-def test_update_for_dataframes(data, data2, join, overwrite, errors):
+def test_update_for_dataframes(data, data2, join, overwrite, filter_func, errors):
     pdf = pd.DataFrame(data)
     gdf = gd.DataFrame(data)
 
     other_pd = pd.DataFrame(data2)
     other_gd = gd.DataFrame(data2)
 
-    expect = pdf.update(other_pd, join, overwrite, errors)
-    got = gdf.update(other_gd, join, overwrite, errors)
+    expect = pdf.update(other_pd, join, overwrite, filter_func, errors)
+    got = gdf.update(other_gd, join, overwrite, filter_func, errors)
     
     assert_eq(expect, got)
+
+@pytest.mark.parametrize("join",["right"],)
+def test_update_for_right_join(join):
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0]})
+    gdf = gd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0]})
+
+    other_pd = pd.DataFrame({"a": [1, np.nan, 3], "b": [np.nan, 2.0, 5.0]})
+    other_gd = gd.DataFrame({"a": [1, np.nan, 3], "b": [np.nan, 2.0, 5.0]})
+
+    with pytest.raises(
+        NotImplementedError,
+        match="Only left join is supported"
+    ):
+        gdf.update(other_gd,join)
+
+@pytest.mark.parametrize("errors",["raise"],)
+def test_update_for_data_overlap(errors):
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0]})
+    gdf = gd.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0]})
+
+    other_pd = pd.DataFrame({"a": [1, np.nan, 3], "b": [np.nan, 2.0, 5.0]})
+    other_gd = gd.DataFrame({"a": [1, np.nan, 3], "b": [np.nan, 2.0, 5.0]})
+
+    assert_exceptions_equal(lambda: pdf.update(other_pd,errors), lambda: gdf.update(other_gd,errors))

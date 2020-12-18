@@ -1516,13 +1516,13 @@ class DataFrame(Frame, Serializable):
         other = other.reindex(self.columns, axis=1)
 
         for col in self.columns: 
-            this = df[col]
+            this = self[col]
             that = other[col]  
             
             if errors == "raise":
                 mask_this = that.notna()
                 mask_that = this.notna()
-                if any(mask_this & mask_that):
+                if ((mask_this & mask_that).any()):
                     raise ValueError("Data overlaps.")
 
             if overwrite:
@@ -1534,8 +1534,8 @@ class DataFrame(Frame, Serializable):
             if mask.all():
                 continue
 
-            df.loc[mask, col] = this[mask]
-            df.loc[~mask, col] = that[~mask]
+            self.loc[mask, col] = this[mask]
+            self.loc[~mask, col] = that[~mask]
 
         
     def __add__(self, other):
