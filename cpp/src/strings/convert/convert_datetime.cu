@@ -459,16 +459,16 @@ struct check_datetime_format {
    * @param bytes Number of bytes in str to read/check.
    * @return Integer value and validity indicator.
    */
-  __device__ thrust::pair<int32_t, bool> str2int(const char* str, size_type bytes)
+  __device__ thrust::optional<int32_t> str2int(const char* str, size_type bytes)
   {
     const char* ptr = str;
     int32_t value   = 0;
     for (size_type idx = 0; idx < bytes; ++idx) {
       char chr = *ptr++;
-      if (chr < '0' || chr > '9') return {value, false};
+      if (chr < '0' || chr > '9') return thrust::nullopt;
       value = (value * 10) + static_cast<int32_t>(chr - '0');
     }
-    return {value, true};
+    return value;
   }
 
   /**
@@ -524,27 +524,31 @@ struct check_datetime_format {
       bool result = false;
       switch (item.value) {
         case 'Y': {
-          auto rtn           = str2int(ptr, item.length);
-          result             = rtn.second;
-          dateparts[TP_YEAR] = rtn.first;
+          if (auto value = str2int(ptr, item.length)) {
+            result             = true;
+            dateparts[TP_YEAR] = value.value();
+          }
           break;
         }
         case 'y': {
-          auto rtn           = str2int(ptr, item.length);
-          result             = rtn.second;
-          dateparts[TP_YEAR] = rtn.first + 1900;
+          if (auto value = str2int(ptr, item.length)) {
+            result             = true;
+            dateparts[TP_YEAR] = value.value() + 1900;
+          }
           break;
         }
         case 'm': {
-          auto rtn            = str2int(ptr, item.length);
-          result              = rtn.second;
-          dateparts[TP_MONTH] = rtn.first;
+          if (auto value = str2int(ptr, item.length)) {
+            result              = true;
+            dateparts[TP_MONTH] = value.value();
+          }
           break;
         }
         case 'd': {
-          auto rtn          = str2int(ptr, item.length);
-          result            = rtn.second;
-          dateparts[TP_DAY] = rtn.first;
+          if (auto value = str2int(ptr, item.length)) {
+            result            = true;
+            dateparts[TP_DAY] = value.value();
+          }
           break;
         }
         case 'j': result = check_value(ptr, item.length, 1, 366); break;
