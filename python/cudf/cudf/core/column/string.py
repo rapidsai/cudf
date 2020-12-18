@@ -4883,6 +4883,9 @@ class StringColumn(column.ColumnBase):
     @classmethod
     def deserialize(cls, header, frames):
         size = header["size"]
+        if not isinstance(size, int):
+            size = pickle.loads(size)
+
         # Deserialize the mask, value, and offset frames
         buffers = [Buffer(each_frame) for each_frame in frames]
 
