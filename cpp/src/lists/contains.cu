@@ -48,7 +48,7 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask(
   using namespace cudf::detail;
 
   if (skey.is_valid(stream) && !input_column_has_nulls) {
-    return std::make_pair(rmm::device_buffer{0, stream, mr}, size_type{0});
+      return std::make_pair(rmm::device_buffer{0, stream, mr}, size_type{0});
   }
 
   if (!skey.is_valid(stream)) {
@@ -66,35 +66,6 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask(
                              [&list] __device__(auto const& i) { return list.is_null(i); });
     });
 }
-
-/*
-std::pair<rmm::device_buffer, size_type> construct_null_mask(
-  cudf::detail::lists_column_device_view const& d_lists,
-  cudf::column_device_view const& d_skeys,
-  bool input_column_has_nulls,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  using namespace cudf;
-  using namespace cudf::detail;
-
-  return cudf::detail::valid_if(
-    counting_iter(0), counting_iter(d_lists.size()), [d_lists, d_skeys] __device__(auto const&
-row_index) {
-
-      if (d_skeys.is_null(row_index)) { return false; }
-
-      auto list = cudf::list_device_view(d_lists, row_index);
-
-      if (list.is_null()) { return false; }
-
-      return thrust::none_of(thrust::seq,
-                             counting_iter(0),
-                             counting_iter(list.size()),
-                             [&list] __device__(auto const& i) { return list.is_null(i); });
-    });
-}
-*/
 
 struct lookup_functor {
   template <typename T, typename... Args>
