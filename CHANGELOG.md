@@ -7,6 +7,7 @@
 - PR #6814 Implement `cudf::reduce` for `decimal32` and `decimal64` (part 1)
 - PR #6929 Add `Index.set_names` api
 - PR #6907 Add `replace_null` API with `replace_policy` parameter, `fixed_width` column support
+- PR #6885 Share `factorize` implementation with Index and cudf module
 
 - PR #6775 Implement cudf.DateOffset for months
 - PR #7039 Support contains() on lists of primitives

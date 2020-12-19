@@ -452,6 +452,17 @@ class Index(Frame, Serializable):
         else:
             return self
 
+    def factorize(self, na_sentinel=-1):
+        """
+        Encode the input values as integer labels
+
+        See Also
+        --------
+        cudf.Series.factorize
+
+        """
+        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
+
     @property
     def nlevels(self):
         """
@@ -1756,7 +1767,7 @@ class RangeIndex(Index):
         name = pickle.loads(header["name"])
         start = h["start"]
         stop = h["stop"]
-        step = h["step"]
+        step = h.get("step", 1)
         return RangeIndex(start=start, stop=stop, step=step, name=name)
 
     @property
