@@ -48,7 +48,7 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask(
   using namespace cudf::detail;
 
   if (skey.is_valid(stream) && !input_column_has_nulls) {
-      return std::make_pair(rmm::device_buffer{0, stream, mr}, size_type{0});
+    return std::make_pair(rmm::device_buffer{0, stream, mr}, size_type{0});
   }
 
   if (!skey.is_valid(stream)) {
@@ -65,6 +65,38 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask(
                              counting_iter(list.size()),
                              [&list] __device__(auto const& i) { return list.is_null(i); });
     });
+}
+
+std::pair<rmm::device_buffer, size_type> construct_null_mask(
+  cudf::detail::lists_column_device_view const& d_lists,
+  cudf::column_device_view const& d_skeys,
+  bool input_column_has_nulls,
+  bool skeys_column_has_nulls,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  using namespace cudf;
+  using namespace cudf::detail;
+
+  if (!skeys_column_has_nulls && !input_column_has_nulls) {
+    return std::make_pair(rmm::device_buffer{0, stream, mr}, size_type{0});
+  }
+
+  return cudf::detail::valid_if(counting_iter(0),
+                                counting_iter(d_lists.size()),
+                                [d_lists, d_skeys] __device__(auto const& row_index) {
+                                  if (d_skeys.is_null(row_index)) { return false; }
+
+                                  auto list = cudf::list_device_view(d_lists, row_index);
+
+                                  if (list.is_null()) { return false; }
+
+                                  return thrust::none_of(
+                                    thrust::seq,
+                                    counting_iter(0),
+                                    counting_iter(list.size()),
+                                    [&list] __device__(auto const& i) { return list.is_null(i); });
+                                });
 }
 
 struct lookup_functor {
@@ -99,6 +131,32 @@ struct lookup_functor {
                           if (list.is_null(i)) { return false; }
                           auto list_element = list.template element<T>(i);
                           if (list_element == d_scalar.value()) { return true; }
+                        }
+                        return false;
+                      });
+  }
+
+  template <typename T>
+  std::enable_if_t<cudf::is_numeric<T>() || std::is_same<T, cudf::string_view>::value, void>
+  operator()(cudf::detail::lists_column_device_view const& d_lists,
+             cudf::column_device_view const& d_skeys,
+             cudf::mutable_column_device_view output_bools,
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr) const
+  {
+    thrust::transform(rmm::exec_policy(stream),
+                      counting_iter(0),
+                      counting_iter(d_lists.size()),
+                      output_bools.data<bool>(),
+                      [d_lists, d_skeys] __device__(auto row_index) {
+                        if (d_skeys.is_null(row_index)) { return false; }
+                        auto list = cudf::list_device_view(d_lists, row_index);
+                        if (list.is_null()) { return false; }
+                        auto skey = d_skeys.template element<T>(row_index);
+                        for (size_type i{0}; i < list.size(); ++i) {
+                          if (list.is_null(i)) { return false; }
+                          auto list_element = list.template element<T>(i);
+                          if (list_element == skey) { return true; }
                         }
                         return false;
                       });
@@ -146,6 +204,48 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
   return ret_bools;
 }
 
+std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
+                                 cudf::column_view const& skeys,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  using namespace cudf;
+  using namespace cudf::detail;
+
+  CUDF_EXPECTS(!cudf::is_nested(lists.child().type()),
+               "Nested types not supported in lists::contains()");
+  CUDF_EXPECTS(lists.child().type().id() == skeys.type().id(),
+               "Type of search key does not match list column element type.");
+  CUDF_EXPECTS(skeys.size() == lists.size(), "Number of search keys must match list column size.");
+  CUDF_EXPECTS(skeys.type().id() != type_id::EMPTY, "Type cannot be empty.");
+
+  auto const device_view = column_device_view::create(lists.parent(), stream);
+  auto const d_lists     = lists_column_device_view(*device_view);
+  auto const d_skeys     = column_device_view::create(skeys, stream);
+
+  rmm::device_buffer null_mask;
+  size_type num_nulls;
+
+  std::tie(null_mask, num_nulls) =
+    construct_null_mask(d_lists,
+                        *d_skeys,
+                        lists.has_nulls() || lists.child().has_nulls(),
+                        skeys.has_nulls(),
+                        stream,
+                        mr);
+
+  auto ret_bools = make_fixed_width_column(
+    data_type{type_id::BOOL8}, lists.size(), std::move(null_mask), num_nulls, stream, mr);
+
+  auto ret_bools_mutable_device_view =
+    mutable_column_device_view::create(ret_bools->mutable_view(), stream);
+
+  cudf::type_dispatcher(
+    skeys.type(), lookup_functor{}, d_lists, *d_skeys, *ret_bools_mutable_device_view, stream, mr);
+
+  return ret_bools;
+}
+
 }  // namespace detail
 
 std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
@@ -153,6 +253,13 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
                                  rmm::mr::device_memory_resource* mr)
 {
   return detail::contains(lists, skey, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
+                                 cudf::column_view const& skeys,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  return detail::contains(lists, skeys, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace lists
