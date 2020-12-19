@@ -47,12 +47,7 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask(
   using namespace cudf;
   using namespace cudf::detail;
 
-  auto const skey_is_valid    = skey.is_valid(stream);
-  auto const output_has_nulls = !skey_is_valid || input_column_has_nulls;
-
-  if (!output_has_nulls) { return std::make_pair(rmm::device_buffer{0, stream, mr}, size_type{0}); }
-
-  if (!skey_is_valid) {
+  if (!skey.is_valid(stream)) {
     return std::make_pair(cudf::create_null_mask(d_lists.size(), mask_state::ALL_NULL, mr),
                           d_lists.size());
   }
