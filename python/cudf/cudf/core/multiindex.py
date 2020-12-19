@@ -397,6 +397,9 @@ class MultiIndex(Index):
 
         if len(self) > max_seq_items:
             n = int(max_seq_items / 2) + 1
+            # TODO: Update the following two arange calls to
+            # a single arange call once arange has support for
+            # a vector start/end points.
             indices = cudf.core.column.arange(start=0, stop=n, step=1)
             indices = indices.append(
                 cudf.core.column.arange(
