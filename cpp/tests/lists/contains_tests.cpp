@@ -147,12 +147,12 @@ TYPED_TEST(TypedContainsTest, ListContainsNonNullListsWithNullValues)
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4},
     make_counting_transform_iterator(0, [](auto i) -> bool { return i % 3; })};
 
-  auto search_space = make_lists_column(
-    8,
-    fixed_width_column_wrapper<size_type>{0, 1, 3, 7, 7, 7, 10, 12, 15}.release(),
-    numerals.release(),
-    0,
-    {});
+  auto search_space =
+    make_lists_column(8,
+                      fixed_width_column_wrapper<size_type>{0, 1, 3, 7, 7, 7, 10, 12, 15}.release(),
+                      numerals.release(),
+                      0,
+                      {});
 
   auto search_key_one = create_scalar_search_key<T>(1);
 

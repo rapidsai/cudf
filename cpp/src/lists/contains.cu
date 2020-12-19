@@ -47,6 +47,10 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask(
   using namespace cudf;
   using namespace cudf::detail;
 
+  if (skey.is_valid(stream) && !input_column_has_nulls) {
+    return std::make_pair(rmm::device_buffer{0, stream, mr}, size_type{0});
+  }
+
   if (!skey.is_valid(stream)) {
     return std::make_pair(cudf::create_null_mask(d_lists.size(), mask_state::ALL_NULL, mr),
                           d_lists.size());
@@ -62,6 +66,35 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask(
                              [&list] __device__(auto const& i) { return list.is_null(i); });
     });
 }
+
+/*
+std::pair<rmm::device_buffer, size_type> construct_null_mask(
+  cudf::detail::lists_column_device_view const& d_lists,
+  cudf::column_device_view const& d_skeys,
+  bool input_column_has_nulls,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  using namespace cudf;
+  using namespace cudf::detail;
+
+  return cudf::detail::valid_if(
+    counting_iter(0), counting_iter(d_lists.size()), [d_lists, d_skeys] __device__(auto const&
+row_index) {
+
+      if (d_skeys.is_null(row_index)) { return false; }
+
+      auto list = cudf::list_device_view(d_lists, row_index);
+
+      if (list.is_null()) { return false; }
+
+      return thrust::none_of(thrust::seq,
+                             counting_iter(0),
+                             counting_iter(list.size()),
+                             [&list] __device__(auto const& i) { return list.is_null(i); });
+    });
+}
+*/
 
 struct lookup_functor {
   template <typename T, typename... Args>
@@ -126,7 +159,7 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
   size_type num_nulls;
 
   std::tie(null_mask, num_nulls) =
-    construct_null_mask(d_lists, skey, lists.has_nulls(), stream, mr);
+    construct_null_mask(d_lists, skey, lists.has_nulls() || lists.child().has_nulls(), stream, mr);
 
   auto ret_bools = make_fixed_width_column(
     data_type{type_id::BOOL8}, lists.size(), std::move(null_mask), num_nulls, stream, mr);
