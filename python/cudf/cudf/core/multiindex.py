@@ -49,17 +49,11 @@ class MultiIndex(Index):
     >>> import cudf
     >>> cudf.MultiIndex(
     ... levels=[[1, 2], ['blue', 'red']], codes=[[0, 0, 1, 1], [1, 0, 1, 0]])
-    MultiIndex(levels=[0    1
-    1    2
-    dtype: int64, 0    blue
-    1     red
-    dtype: object],
-    codes=   0  1
-    0  0  1
-    1  0  0
-    2  1  1
-    3  1  0)
-
+    MultiIndex([(1,  'red'),
+                (1, 'blue'),
+                (2,  'red'),
+                (2, 'blue')],
+               )
     """
 
     def __new__(
@@ -480,19 +474,11 @@ class MultiIndex(Index):
         >>> import cudf
         >>> import pyarrow as pa
         >>> tbl = pa.table({"a":[1, 2, 3], "b":["a", "b", "c"]})
-
         >>> cudf.MultiIndex.from_arrow(tbl)
-        MultiIndex(levels=[0    1
-        1    2
-        2    3
-        dtype: int64, 0    a
-        1    b
-        2    c
-        dtype: object],
-        codes=   a  b
-        0  0  0
-        1  1  1
-        2  2  2)
+        MultiIndex([(1, 'a'),
+                    (2, 'b'),
+                    (3, 'c')],
+                   names=['a', 'b'])
         """
 
         return super(Index, cls).from_arrow(table)
@@ -510,17 +496,10 @@ class MultiIndex(Index):
         >>> df = cudf.DataFrame({"a":[1, 2, 3], "b":[2, 3, 4]})
         >>> mindex = cudf.Index(df)
         >>> mindex
-        MultiIndex(levels=[0    1
-        1    2
-        2    3
-        dtype: int64, 0    2
-        1    3
-        2    4
-        dtype: int64],
-        codes=   a  b
-        0  0  0
-        1  1  1
-        2  2  2)
+        MultiIndex([(1, 2),
+                    (2, 3),
+                    (3, 4)],
+                   names=['a', 'b'])
         >>> mindex.to_arrow()
         pyarrow.Table
         a: int64
@@ -1176,38 +1155,24 @@ class MultiIndex(Index):
         Dropping level by index:
 
         >>> idx.droplevel(0)
-        MultiIndex(levels=[0    1
-        1    2
-        2    3
-        dtype: int64, 0    0
-        1    1
-        2    2
-        dtype: int64],
-        codes=   second  third
-        0       0      0
-        1       0      1
-        2       1      2
-        3       1      0
-        4       2      1
-        5       2      2)
+        MultiIndex([(1, 0),
+                    (1, 1),
+                    (2, 2),
+                    (2, 0),
+                    (3, 1),
+                    (3, 2)],
+                   names=['second', 'third'])
 
         Dropping level by name:
 
         >>> idx.droplevel("first")
-        MultiIndex(levels=[0    1
-        1    2
-        2    3
-        dtype: int64, 0    0
-        1    1
-        2    2
-        dtype: int64],
-        codes=   second  third
-        0       0      0
-        1       0      1
-        2       1      2
-        3       1      0
-        4       2      1
-        5       2      2)
+        MultiIndex([(1, 0),
+                    (1, 1),
+                    (2, 2),
+                    (2, 0),
+                    (3, 1),
+                    (3, 2)],
+                   names=['second', 'third'])
 
         Dropping multiple levels:
 
@@ -1264,9 +1229,11 @@ class MultiIndex(Index):
         >>> import cudf
         >>> import pandas as pd
         >>> pmi = pd.MultiIndex(levels=[['a', 'b'], ['c', 'd']],
-                                codes=[[0, 1], [1, ]])
+        ...                     codes=[[0, 1], [1, 1]])
         >>> cudf.from_pandas(pmi)
-        MultiIndex( ... )
+        MultiIndex([('a', 'd'),
+                    ('b', 'd')],
+                   )
         """
         if not isinstance(multiindex, pd.MultiIndex):
             raise TypeError("not a pandas.MultiIndex")
@@ -1350,35 +1317,19 @@ class MultiIndex(Index):
         ...         names=["x", "y"],
         ...       )
         >>> index
-        MultiIndex(levels=[0       a
-        1       b
-        2       c
-        3    None
-        dtype: object, 0       1
-        1    None
-        2       5
-        dtype: object],
-        codes=   x  y
-        0  0  0
-        1  0  2
-        2  1  1
-        3  2  1
-        4  3  0)
+        MultiIndex([( 'a',  '1'),
+                    ( 'a',  '5'),
+                    ( 'b', <NA>),
+                    ( 'c', <NA>),
+                    (<NA>,  '1')],
+                   names=['x', 'y'])
         >>> index.fillna('hello')
-        MultiIndex(levels=[0        a
-        1        b
-        2        c
-        3    hello
-        dtype: object, 0        1
-        1        5
-        2    hello
-        dtype: object],
-        codes=   x  y
-        0  0  0
-        1  0  1
-        2  1  2
-        3  2  2
-        4  3  0)
+        MultiIndex([(    'a',     '1'),
+                    (    'a',     '5'),
+                    (    'b', 'hello'),
+                    (    'c', 'hello'),
+                    ('hello',     '1')],
+                   names=['x', 'y'])
         """
 
         return super().fillna(value=value)
@@ -1433,50 +1384,35 @@ class MultiIndex(Index):
         --------
         >>> import cudf
         >>> idx1 = cudf.MultiIndex(
-        ... levels=[[1, 2], ['blue', 'red']],
-        ... codes=[[0, 0, 1, 1], [1, 0, 1, 0]])
+        ...     levels=[[1, 2], ['blue', 'red']],
+        ...     codes=[[0, 0, 1, 1], [1, 0, 1, 0]]
+        ... )
         >>> idx2 = cudf.MultiIndex(
-        ... levels=[[3, 4], ['blue', 'red']],
-        ... codes=[[0, 0, 1, 1], [1, 0, 1, 0]])
+        ...     levels=[[3, 4], ['blue', 'red']],
+        ...     codes=[[0, 0, 1, 1], [1, 0, 1, 0]]
+        ... )
         >>> idx1
-        MultiIndex(levels=[0    1
-        1    2
-        dtype: int64, 0    blue
-        1     red
-        dtype: object],
-        codes=   0  1
-        0  0  1
-        1  0  0
-        2  1  1
-        3  1  0)
+        MultiIndex([(1,  'red'),
+                    (1, 'blue'),
+                    (2,  'red'),
+                    (2, 'blue')],
+                   )
         >>> idx2
-        MultiIndex(levels=[0    3
-        1    4
-        dtype: int64, 0    blue
-        1     red
-        dtype: object],
-        codes=   0  1
-        0  0  1
-        1  0  0
-        2  1  1
-        3  1  0)
+        MultiIndex([(3,  'red'),
+                    (3, 'blue'),
+                    (4,  'red'),
+                    (4, 'blue')],
+                   )
         >>> idx1.append(idx2)
-        MultiIndex(levels=[0    1
-        1    2
-        2    3
-        3    4
-        dtype: int64, 0    blue
-        1     red
-        dtype: object],
-        codes=   0  1
-        0  0  1
-        1  0  0
-        2  1  1
-        3  1  0
-        4  2  1
-        5  2  0
-        6  3  1
-        7  3  0)
+        MultiIndex([(1,  'red'),
+                    (1, 'blue'),
+                    (2,  'red'),
+                    (2, 'blue'),
+                    (3,  'red'),
+                    (3, 'blue'),
+                    (4,  'red'),
+                    (4, 'blue')],
+                   )
         """
         if isinstance(other, (list, tuple)):
             to_concat = [self]

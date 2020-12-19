@@ -119,20 +119,12 @@ class Frame(libcudf.table.Table):
         ...                 names=["x", "y"],
         ...             )
         >>> midx
-        MultiIndex(levels=[0       a
-        1       b
-        2       c
-        3    None
-        dtype: object, 0       1
-        1    None
-        2       5
-        dtype: object],
-        codes=   x  y
-        0  0  0
-        1  0  2
-        2  1  1
-        3  2  1
-        4  3  0)
+        MultiIndex([( 'a',  '1'),
+                    ( 'a',  '5'),
+                    ( 'b', <NA>),
+                    ( 'c', <NA>),
+                    (<NA>,  '1')],
+                   names=['x', 'y'])
         >>> midx.size
         5
         """

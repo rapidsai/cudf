@@ -2305,15 +2305,9 @@ class StringMethods(ColumnMethodsMixin):
         Which will create a MultiIndex:
 
         >>> idx.str.partition()
-        MultiIndex(levels=[0    X
-        1    Y
-        dtype: object, 0
-        dtype: object, 0    123
-        1    999
-        dtype: object],
-        codes=   0  1  2
-        0  0  0  0
-        1  1  0  1)
+        MultiIndex([('X', ' ', '123'),
+                    ('Y', ' ', '999')],
+                   )
         """
         if expand is not True:
             raise NotImplementedError(
@@ -2375,15 +2369,9 @@ class StringMethods(ColumnMethodsMixin):
         Which will create a MultiIndex:
 
         >>> idx.str.rpartition()
-        MultiIndex(levels=[0    X
-        1    Y
-        dtype: object, 0
-        dtype: object, 0    123
-        1    999
-        dtype: object],
-        codes=   0  1  2
-        0  0  0  0
-        1  1  0  1)
+        MultiIndex([('X', ' ', '123'),
+                    ('Y', ' ', '999')],
+                   )
         """
         if expand is not True:
             raise NotImplementedError(
