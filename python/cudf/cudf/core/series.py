@@ -2576,13 +2576,7 @@ class Series(Frame, Serializable):
         1    c
         dtype: object
         """
-        cats = self.dropna().unique().astype(self.dtype)
-
-        name = self.name  # label_encoding mutates self.name
-        labels = self.label_encoding(cats=cats, na_sentinel=na_sentinel)
-        self.name = name
-
-        return labels, cats
+        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
 
     # UDF related
 

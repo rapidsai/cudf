@@ -618,9 +618,9 @@ class MultiIndex(Index):
         codes = cudf.DataFrame()
         for name in self._source_data.columns:
             code, cats = self._source_data[name].factorize()
-            codes[name] = code.reset_index(drop=True).astype(np.int64)
+            codes[name] = code.astype(np.int64)
             cats.name = None
-            cats = cats.reset_index(drop=True)._copy_construct(name=None)
+            cats = cudf.Series(cats)._copy_construct(name=None)
             levels.append(cats)
 
         self._levels = levels
