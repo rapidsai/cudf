@@ -397,24 +397,53 @@ TYPED_TEST(SegmentedGatherTest, GatherSliced)
   }
 }
 
-using SegmentedGatherTestString = SegmentedGatherTest<int>;
+using SegmentedGatherTestString = SegmentedGatherTest<cudf::string_view>;
 TEST_F(SegmentedGatherTestString, StringGather)
 {
   using T = cudf::string_view;
   // List<T>
-  LCW<T> list{{"a", "b", "c", "d"}, {"1", "2", "3", "4"}, {"x", "y", "z"}};
+  LCW<T> list{{"a", "b", "c", "d"}, {"1", "22", "333", "4"}, {"x", "y", "z"}};
   LCW<int8_t> gather_map{{0, 1, 3, 2}, {1, 0, 3, 2}, LCW<int8_t>{}};
-  LCW<T> expected{{"a", "b", "d", "c"}, {"2", "1", "4", "3"}, LCW<T>{}};
+  LCW<T> expected{{"a", "b", "d", "c"}, {"22", "1", "4", "333"}, LCW<T>{}};
 
   auto result =
     cudf::lists::detail::segmented_gather(lists_column_view{list}, lists_column_view{gather_map});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
-using SegmentedGatherTestInt = SegmentedGatherTest<int>;
-TEST_F(SegmentedGatherTestInt, Fails)
+using SegmentedGatherTestFloat = SegmentedGatherTest<float>;
+TEST_F(SegmentedGatherTestFloat, GatherMapSliced)
 {
-  using T = int32_t;
+  using T = float;
+
+  // List<T>
+  LCW<T> list{{1, 2, 3, 4}, {5}, {6, 7}, {8, 9, 10}, {11, 12}, {13, 14, 15, 16}};
+  LCW<int> gather_map{{3, 2, 1, 0}, {0}, {0, 1}, {0, 2, 1}, {0}, {1}};
+  // gather_map.offset: 0, 4, 5, 7, 10, 11, 12
+  LCW<T> expected{{4, 3, 2, 1}, {5}, {6, 7}, {8, 10, 9}, {11}, {14}};
+
+  auto results =
+    cudf::lists::detail::segmented_gather(lists_column_view{list}, lists_column_view{gather_map});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+  auto sliced  = cudf::split(list, {1, 4});
+  auto split_m = cudf::split(gather_map, {1, 4});
+  auto split_e = cudf::split(expected, {1, 4});
+
+  auto result0 = cudf::lists::detail::segmented_gather(lists_column_view{sliced[0]},
+                                                       lists_column_view{split_m[0]});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(split_e[0], result0->view());
+  auto result1 = cudf::lists::detail::segmented_gather(lists_column_view{sliced[1]},
+                                                       lists_column_view{split_m[1]});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(split_e[1], result1->view());
+  auto result2 = cudf::lists::detail::segmented_gather(lists_column_view{sliced[2]},
+                                                       lists_column_view{split_m[2]});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(split_e[2], result2->view());
+}
+
+TEST_F(SegmentedGatherTestFloat, Fails)
+{
+  using T = float;
   // List<T>
   LCW<T> list{{1, 2, 3, 4}, {5}, {6, 7}, {8, 9, 10}};
   LCW<int8_t> size_mismatch_map{{3, 2, 1, 0}, {0}, {0, 1}};
