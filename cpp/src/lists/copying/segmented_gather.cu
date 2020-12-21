@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -36,52 +37,50 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
   CUDF_EXPECTS(value_column.size() == gather_map.size(),
                "Gather map and list column should be same size");
 
-  // Flattened gather indices
-  auto const gather_map_size = gather_map.get_sliced_child(stream).size();
-  auto child_gather_index =
-    make_numeric_column(data_type{type_to_id<size_type>()}, gather_map_size);
-  auto child_gather_index_begin = child_gather_index->mutable_view().begin<size_type>();
-  auto child_gather_index_end   = child_gather_index->mutable_view().end<size_type>();
+  auto gather_map_sliced_child = gather_map.get_sliced_child(stream);
+  auto const gather_map_size   = gather_map_sliced_child.size();
+  auto gather_index_begin      = gather_map.offsets().begin<size_type>() + 1 + gather_map.offset();
+  auto gather_index_end        = gather_index_begin + gather_map.size();
+  auto value_offsets           = value_column.offsets().begin<size_type>() + value_column.offset();
+  auto map_begin = cudf::detail::indexalator_factory::make_input_iterator(gather_map_sliced_child);
 
-  thrust::upper_bound(rmm::exec_policy(stream),
-                      gather_map.offsets().begin<size_type>() + 1,
-                      gather_map.offsets().end<size_type>(),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(gather_map_size),
-                      child_gather_index_begin);
-
-  // FIXME: Is this a bug? list.offsets() column_view does not have offset() of parent column_view.
-  auto value_offsets = value_column.offsets().begin<size_type>() + value_column.offset();
-  auto map_begin =
-    cudf::detail::indexalator_factory::make_input_iterator(gather_map.get_sliced_child(stream));
-  // Add sub_index to value_column offsets, to get gather indices of child of value_column
-  thrust::transform(
-    rmm::exec_policy(stream),
-    child_gather_index_begin,
-    child_gather_index_end,
-    map_begin,
-    child_gather_index_begin,
-    [value_offsets] __device__(size_type offset_idx, size_type sub_index) -> size_type {
-      auto list_size         = value_offsets[offset_idx + 1] - value_offsets[offset_idx];
-      auto wrapped_sub_index = (sub_index % list_size + list_size) % list_size;
-      return value_offsets[offset_idx] + wrapped_sub_index - value_offsets[0];
-    });
+  // Calculate Flattened gather indices  (value_offset[row]+sub_index
+  auto transformer = [value_offsets, map_begin, gather_index_begin, gather_index_end] __device__(
+                       size_type index) -> size_type {
+    // Get each row's offset. (Each row is a list).
+    auto offset_idx =
+      thrust::upper_bound(
+        thrust::seq, gather_index_begin, gather_index_end, gather_index_begin[-1] + index) -
+      gather_index_begin;
+    // Get each sub_index in list in each row of gather_map.
+    auto sub_index         = map_begin[index];
+    auto list_size         = value_offsets[offset_idx + 1] - value_offsets[offset_idx];
+    auto wrapped_sub_index = (sub_index % list_size + list_size) % list_size;
+    // Add sub_index to value_column offsets, to get gather indices of child of value_column
+    return value_offsets[offset_idx] + wrapped_sub_index - value_offsets[0];
+  };
+  auto child_gather_index_begin =
+    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), transformer);
+  auto child_gather_index_end = child_gather_index_begin + gather_map_size;
 
   // Call gather on child of value_column
   auto child_table = cudf::detail::gather(table_view({value_column.get_sliced_child(stream)}),
-                                          *child_gather_index,
+                                          child_gather_index_begin,
+                                          child_gather_index_end,
                                           out_of_bounds_policy::DONT_CHECK,
-                                          cudf::detail::negative_index_policy::NOT_ALLOWED,
                                           stream,
                                           mr);
   auto child       = std::move(child_table->release().front());
 
   // Create list offsets from gather_map.
-  auto output_offset =
-    cudf::allocate_like(gather_map.offsets(), mask_allocation_policy::RETAIN, mr);
+  auto output_offset = cudf::allocate_like(
+    gather_map.offsets(), gather_map.size() + 1, mask_allocation_policy::RETAIN, mr);
   auto output_offset_view = output_offset->mutable_view();
-  cudf::copy_range_in_place(
-    gather_map.offsets(), output_offset_view, 0, gather_map.offsets().size(), 0);
+  cudf::copy_range_in_place(gather_map.offsets(),
+                            output_offset_view,
+                            gather_map.offset(),
+                            gather_map.offset() + output_offset_view.size(),
+                            0);
   // Assemble list column & return
   auto null_mask       = cudf::detail::copy_bitmask(value_column.parent(), stream, mr);
   size_type null_count = value_column.null_count();
