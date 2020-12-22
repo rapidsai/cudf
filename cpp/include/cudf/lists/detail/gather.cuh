@@ -293,9 +293,9 @@ std::unique_ptr<column> gather_list_leaf(
  *
  * * @code{.pseudo}
  * source_column   : [{"a", "b", "c", "d"}, {"1", "2", "3", "4"}, {"x", "y", "z"}]
- * gather_map_list : [{0, 1, 3, 2}, {1, 0, 3, 2}, {}]
+ * gather_map_list : [{0, 1, 3, 2}, {1, 3, 2}, {}]
  *
- * result          : [{"a", "b", "d", "c"}, {"2", "1", "4", "3"}, {}]
+ * result          : [{"a", "b", "d", "c"}, {"2", "4", "3"}, {}]
  * @endcode
  *
  * @throws cudf::logic_error if `gather_map_list` size is not same as `source_column` size.
