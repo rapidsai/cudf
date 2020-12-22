@@ -884,8 +884,7 @@ the number of times to repeat the previous length or repeat a zero
 length would result in more lengths in total than the number of
 symbols in the alphabet, then the stream should be rejected as
 invalid.
-
-**/
+*/
 
 // Decode Huffman tree (thread0-only)
 static __device__ uint32_t DecodeHuffmanTree(debrotli_state_s *s,
@@ -1073,7 +1072,7 @@ non - dictionary reference backward distance, is given by the following
 formula :
 
 window size = (1 << WBITS) - 16
-**/
+*/
 static __device__ void DecodeStreamHeader(debrotli_state_s *s)
 {
   uint32_t next32 = next32bits(s);
@@ -1158,7 +1157,7 @@ next byte boundary are ignored, and the rest of the meta - block contains
 MLEN bytes of literal data; this field is only present if the ISLAST bit is
 not set(if the ignored bits are not all zeros, the stream should be rejected
 as invalid)
-**/
+*/
 
 static __device__ void DecodeMetaBlockHeader(debrotli_state_s *s)
 {
@@ -1241,8 +1240,7 @@ block counts, appears only if NBLTYPESD >= 2
 
 Block count code + extra bits for first distance block count,
 appears only if NBLTYPESD >= 2
-
-**/
+*/
 
 static __device__ void DecodeHuffmanTables(debrotli_state_s *s)
 {
@@ -1409,8 +1407,7 @@ the same variable-length code as NBLTYPESD
 Distance context map, encoded as described in Section 7.3,
 appears only if NTREESD >= 2; otherwise, the context map has
 only zero values
-
-**/
+*/
 
 static __device__ debrotli_huff_tree_group_s *HuffmanTreeGroupInit(debrotli_state_s *s,
                                                                    uint32_t alphabet_size,
