@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@ TYPED_TEST_CASE(TypedColumnTest, cudf::test::Types<int32_t>);
  * @brief Verifies equality of the properties and data of a `column`'s views.
  *
  * @param col The `column` to verify
- **/
+ */
 void verify_column_views(cudf::column col)
 {
   cudf::column_view view                 = col;

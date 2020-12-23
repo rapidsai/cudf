@@ -17,7 +17,7 @@
 /**
  * @file reader_impl.cu
  * @brief cuDF-IO ORC reader class implementation
- **/
+ */
 
 #include "reader_impl.hpp"
 #include "timezone.cuh"
@@ -46,7 +46,7 @@ using namespace cudf::io;
 namespace {
 /**
  * @brief Function that translates ORC data kind to cuDF type enum
- **/
+ */
 constexpr type_id to_type_id(const orc::SchemaType &schema,
                              bool use_np_dtypes,
                              type_id timestamp_type_id,
@@ -83,7 +83,7 @@ constexpr type_id to_type_id(const orc::SchemaType &schema,
 
 /**
  * @brief Function that translates cuDF time unit to ORC clock frequency
- **/
+ */
 constexpr int32_t to_clockrate(type_id timestamp_type_id)
 {
   switch (timestamp_type_id) {
@@ -124,7 +124,7 @@ constexpr std::pair<gpu::StreamIndexType, uint32_t> get_index_type_and_pos(
 /**
  * @brief A helper class for ORC file metadata. Provides some additional
  * convenience methods for initializing and accessing metadata.
- **/
+ */
 class metadata {
   using OrcStripeInfo = std::pair<const StripeInformation *, const StripeFooter *>;
 
@@ -242,7 +242,7 @@ class metadata {
    * @param[out] has_timestamp_column Whether there is a orc::TIMESTAMP column
    *
    * @return List of ORC column indexes
-   **/
+   */
   auto select_columns(std::vector<std::string> use_names, bool &has_timestamp_column)
   {
     std::vector<int> selection;
@@ -292,7 +292,7 @@ class metadata {
 namespace {
 /**
  * @brief Struct that maps ORC streams to columns
- **/
+ */
 struct orc_stream_info {
   orc_stream_info() = default;
   explicit orc_stream_info(
@@ -313,7 +313,7 @@ struct orc_stream_info {
 
 /**
  * @brief Function that populates column descriptors stream/chunk
- **/
+ */
 size_t gather_stream_info(const size_t stripe_index,
                           const orc::StripeInformation *stripeinfo,
                           const orc::StripeFooter *stripefooter,

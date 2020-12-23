@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,8 +26,7 @@
  * regardless of the state of `NDEBUG`.
  *
  * Relies on the `__PRETTY_FUNCTION__` macro which is specific to GCC and Clang.
- *
- **/
+ */
 #if defined(__CUDA_ARCH__) && (defined(__clang__) || defined(__GNUC__))
 #define __ASSERT_STR_HELPER(x) #x
 #define release_assert(e)     \

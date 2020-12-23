@@ -25,7 +25,6 @@
  * https://github.com/asimonov-im/bzip2/blob/master/LICENSE
  * original source code available at
  * http://www.sourceware.org/bzip2/
- *
  */
 
 /*--

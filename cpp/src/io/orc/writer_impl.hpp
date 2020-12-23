@@ -47,7 +47,7 @@ using namespace cudf::io;
 
 /**
  * @brief Implementation for ORC writer
- **/
+ */
 class writer::impl {
   // ORC datasets start with a 3 byte header
   static constexpr const char* MAGIC = "ORC";
@@ -65,7 +65,7 @@ class writer::impl {
    * @param sink Output sink
    * @param options Settings for controlling behavior
    * @param mr Device memory resource to use for device memory allocation
-   **/
+   */
   explicit impl(std::unique_ptr<data_sink> sink,
                 orc_writer_options const& options,
                 rmm::mr::device_memory_resource* mr);
@@ -76,7 +76,7 @@ class writer::impl {
    * @param table The set of columns
    * @param metadata The metadata associated with the table
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void write(table_view const& table, const table_metadata* metadata, rmm::cuda_stream_view stream);
 
   /**
@@ -115,7 +115,7 @@ class writer::impl {
    * @param dict_index Dictionary index memory
    * @param dict List of dictionary chunks
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void init_dictionaries(orc_column_view* columns,
                          size_t num_rows,
                          std::vector<int> const& str_col_ids,
@@ -135,7 +135,7 @@ class writer::impl {
    * @param dict_index List of dictionary indices
    * @param stripe_dict List of stripe dictionaries
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void build_dictionaries(orc_column_view* columns,
                           size_t num_rows,
                           std::vector<int> const& str_col_ids,
@@ -155,7 +155,7 @@ class writer::impl {
    * @param strm_ids List of unique stream identifiers
    *
    * @return The streams
-   **/
+   */
   std::vector<Stream> gather_streams(orc_column_view* columns,
                                      size_t num_columns,
                                      size_t num_rows,
@@ -178,7 +178,7 @@ class writer::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return Device buffer containing encoded data
-   **/
+   */
   rmm::device_buffer encode_columns(orc_column_view* columns,
                                     size_t num_columns,
                                     size_t num_rows,
@@ -204,7 +204,7 @@ class writer::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The stripes' information
-   **/
+   */
   std::vector<StripeInformation> gather_stripes(size_t num_columns,
                                                 size_t num_rows,
                                                 size_t num_index_streams,
@@ -228,7 +228,7 @@ class writer::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return The statistic blobs
-   **/
+   */
   std::vector<std::vector<uint8_t>> gather_statistic_blobs(
     orc_column_view const* columns,
     size_t num_columns,
@@ -254,7 +254,7 @@ class writer::impl {
    * @param comp_out Output status for compressed streams
    * @param streams List of all streams
    * @param pbw Protobuf writer
-   **/
+   */
   void write_index_stream(int32_t stripe_id,
                           int32_t stream_id,
                           orc_column_view* columns,
@@ -279,7 +279,7 @@ class writer::impl {
    * @param stripe Stream's parent stripe
    * @param streams List of all streams
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void write_data_stream(gpu::StripeStream const& strm_desc,
                          gpu::EncChunk const& chunk,
                          uint8_t const* compressed_data,
@@ -300,7 +300,7 @@ class writer::impl {
    *
    * @tparam T Optional type
    * @param num_rows Number of rows
-   **/
+   */
   template <typename T = size_t>
   constexpr inline auto div_by_rowgroups(T num_rows) const
   {
@@ -312,7 +312,7 @@ class writer::impl {
    *
    * @tparam T Optional type
    * @param modulus Number to use for division
-   **/
+   */
   template <typename T = size_t>
   constexpr inline auto div_rowgroups_by(T modulus) const
   {
