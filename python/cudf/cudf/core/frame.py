@@ -1738,6 +1738,8 @@ class Frame(libcudf.table.Table):
             columns not included in `decimals` will be left as is. Elements
             of `decimals` which are not columns of the input will be
             ignored.
+        deep : boolean, optional, default False
+            Whether to make deep copy or shallow copy of the columns.
 
         Returns
         -------
@@ -1792,35 +1794,34 @@ class Frame(libcudf.table.Table):
         3   0.2   0.0
         """
 
-        def _series_round(s, decimals):
-            if pd.api.types.is_numeric_dtype(s.dtype):
-                return s.round(decimals)
-            return s
+        copy_data = self._data.copy(deep=True)
 
-        if isinstance(decimals, (dict, cudf.Series, pd.Series)):
+        if isinstance(decimals, cudf.Series):
+            decimals = decimals.to_pandas()
+
+        if isinstance(decimals, (dict, pd.Series)):
             if (
-                isinstance(decimals, (cudf.Series, pd.Series))
+                isinstance(decimals, pd.Series)
                 and not decimals.index.is_unique
             ):
                 raise ValueError("Index of decimals must be unique")
-            new_cols = []
-            for c in self.columns:
-                if c in decimals.keys():
-                    new_cols.append(_series_round(self[c], decimals[c]))
-                else:
-                    new_cols.append(self[c])
+            for name, col in copy_data.items():
+                if (
+                    pd.api.types.is_numeric_dtype(col.dtype)
+                    and name in decimals.keys()
+                ):
+                    copy_data[name] = col.round(decimals[name])
+
         elif isinstance(decimals, int):
-            new_cols = [_series_round(self[c], decimals) for c in self.columns]
+            for name, col in copy_data.items():
+                if pd.api.types.is_numeric_dtype(col.dtype):
+                    copy_data[name] = col.round(decimals)
         else:
             raise TypeError(
                 "decimals must be an integer, a dict-like or a Series"
             )
 
-        return self._constructor(
-            cudf.concat(new_cols, axis=1),
-            index=self.index,
-            columns=self.columns,
-        )
+        return self._from_table(Frame(copy_data, self._index))
 
     @annotate("SAMPLE", color="orange", domain="cudf_python")
     def sample(

@@ -3233,11 +3233,11 @@ def test_ndim():
         0,
         5,
         pd.Series([4, 3, -6], index=["x", "y", "z"]),
-        pd.Series([-2, 1, 12], index=["x", "y", "z"]),
+        gd.Series([-2, 1, 12], index=["x", "y", "z"]),
         {"x": 15, "y": -2, "z": 8},
     ],
 )
-def test_round(decimals):
+def test_dataframe_round(decimals):
     pdf = pd.DataFrame(
         {
             "x": np.random.normal(-100, 100, 10),
@@ -3260,8 +3260,13 @@ def test_round(decimals):
     )
     gdf = gd.DataFrame.from_pandas(pdf)
 
+    if isinstance(decimals, gd.Series):
+        pdecimals = decimals.to_pandas()
+    else:
+        pdecimals = decimals
+
     result = gdf.round(decimals)
-    expected = pdf.round(decimals)
+    expected = pdf.round(pdecimals)
     assert_eq(result, expected)
 
     # with nulls, maintaining existing null mask
@@ -3274,32 +3279,11 @@ def test_round(decimals):
     gdf = gd.DataFrame.from_pandas(pdf)
 
     result = gdf.round(decimals)
-    expected = pdf.round(decimals)
+    expected = pdf.round(pdecimals)
 
     assert_eq(result, expected)
     for c in gdf.columns:
         np.array_equal(gdf[c].nullmask.to_array(), result[c].to_array())
-
-
-@pytest.mark.parametrize(
-    "series",
-    [
-        gd.Series([1.0, None, np.nan, 4.0], nan_as_null=False),
-        gd.Series([1.24430, None, np.nan, 4.423530], nan_as_null=False),
-        gd.Series([1.24430, np.nan, 4.423530], nan_as_null=False),
-        gd.Series([-1.24430, np.nan, -4.423530], nan_as_null=False),
-        gd.Series(np.repeat(np.nan, 100)),
-    ],
-)
-@pytest.mark.parametrize("decimal", [0, 1, 2, 3])
-def test_round_nan_as_null_false(series, decimal):
-    pser = series.to_pandas()
-    ser = gd.Series(series)
-    result = ser.round(decimal)
-    expected = pser.round(decimal)
-    np.testing.assert_array_almost_equal(
-        result.to_pandas(), expected, decimal=10
-    )
 
 
 @pytest.mark.parametrize(

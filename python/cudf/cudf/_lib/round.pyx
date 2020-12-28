@@ -20,7 +20,7 @@ def round(Column input_col, int decimal_places=0):
 
     Parameters
     ----------
-    inout_col : Column whose values will be rounded
+    input_col : Column whose values will be rounded
     decimal_places : The number or decimal places to round to
 
     Returns
@@ -36,7 +36,7 @@ def round(Column input_col, int decimal_places=0):
             cpp_round(
                 input_col_view,
                 decimal_places,
-                cpp_rounding_method.HALF_UP,
+                cpp_rounding_method.HALF_EVEN,
             )
         )
 
