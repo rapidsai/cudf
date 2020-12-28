@@ -2305,15 +2305,9 @@ class StringMethods(ColumnMethodsMixin):
         Which will create a MultiIndex:
 
         >>> idx.str.partition()
-        MultiIndex(levels=[0    X
-        1    Y
-        dtype: object, 0
-        dtype: object, 0    123
-        1    999
-        dtype: object],
-        codes=   0  1  2
-        0  0  0  0
-        1  1  0  1)
+        MultiIndex([('X', ' ', '123'),
+                    ('Y', ' ', '999')],
+                   )
         """
         if expand is not True:
             raise NotImplementedError(
@@ -2375,15 +2369,9 @@ class StringMethods(ColumnMethodsMixin):
         Which will create a MultiIndex:
 
         >>> idx.str.rpartition()
-        MultiIndex(levels=[0    X
-        1    Y
-        dtype: object, 0
-        dtype: object, 0    123
-        1    999
-        dtype: object],
-        codes=   0  1  2
-        0  0  0  0
-        1  1  0  1)
+        MultiIndex([('X', ' ', '123'),
+                    ('Y', ' ', '999')],
+                   )
         """
         if expand is not True:
             raise NotImplementedError(
@@ -4883,6 +4871,9 @@ class StringColumn(column.ColumnBase):
     @classmethod
     def deserialize(cls, header, frames):
         size = header["size"]
+        if not isinstance(size, int):
+            size = pickle.loads(size)
+
         # Deserialize the mask, value, and offset frames
         buffers = [Buffer(each_frame) for each_frame in frames]
 
@@ -4925,15 +4916,13 @@ class StringColumn(column.ColumnBase):
         replacement = column.as_column(replacement, dtype=self.dtype)
         return libcudf.replace.replace(self, to_replace, replacement)
 
-    def fillna(self, fill_value, method=None):
-        if method is not None:
-            raise NotImplementedError(
-                "fillna for string column with `method` parameter is not"
-                "supported."
-            )
-        if not is_scalar(fill_value):
-            fill_value = column.as_column(fill_value, dtype=self.dtype)
-        return super().fillna(value=fill_value, dtype="object")
+    def fillna(self, fill_value=None, method=None):
+        if fill_value is not None:
+            if not is_scalar(fill_value):
+                fill_value = column.as_column(fill_value, dtype=self.dtype)
+            return super().fillna(value=fill_value, dtype="object")
+        else:
+            return super().fillna(method=method)
 
     def _find_first_and_last(self, value):
         found_indices = self.str().contains(f"^{value}$")

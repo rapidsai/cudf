@@ -735,7 +735,7 @@ std::unique_ptr<scalar> get_element(
 
 /**
  * @brief Indicates whether a row can be sampled more than once.
- **/
+ */
 enum class sample_with_replacement : bool {
   FALSE,  // A row can be sampled only once
   TRUE    // A row can be sampled more than once
