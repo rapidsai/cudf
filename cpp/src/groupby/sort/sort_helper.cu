@@ -45,7 +45,6 @@ namespace {
 /**
  * @brief Compares two `table` rows for equality as if the table were
  * ordered according to a specified permutation map.
- *
  */
 template <bool nullable = true>
 struct permuted_row_equality_comparator {

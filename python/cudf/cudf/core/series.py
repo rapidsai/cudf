@@ -1896,7 +1896,9 @@ class Series(Frame, Serializable):
     def fill(self, fill_value, begin=0, end=-1, inplace=False):
         return self._fill([fill_value], begin, end, inplace)
 
-    def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
+    def fillna(
+        self, value=None, method=None, axis=None, inplace=False, limit=None
+    ):
         if isinstance(value, pd.Series):
             value = Series.from_pandas(value)
 
@@ -2574,13 +2576,7 @@ class Series(Frame, Serializable):
         1    c
         dtype: object
         """
-        cats = self.dropna().unique().astype(self.dtype)
-
-        name = self.name  # label_encoding mutates self.name
-        labels = self.label_encoding(cats=cats, na_sentinel=na_sentinel)
-        self.name = name
-
-        return labels, cats
+        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
 
     # UDF related
 

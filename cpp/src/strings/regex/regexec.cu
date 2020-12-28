@@ -73,8 +73,8 @@ reprog_device::reprog_device(reprog& prog)
 // Create instance of the reprog that can be passed into a device kernel
 std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
   std::string const& pattern,
-  const uint8_t* codepoint_flags,
-  size_type strings_count,
+  uint8_t const* codepoint_flags,
+  int32_t strings_count,
   rmm::cuda_stream_view stream)
 {
   std::vector<char32_t> pattern32 = string_to_char32_vector(pattern);

@@ -7248,23 +7248,15 @@ def from_pandas(obj, nan_as_null=None):
                 (3, 2),
                 (4, 2),
                 (5, 1)],
-            names=['x', 'y'])
+               names=['x', 'y'])
     >>> gmidx = cudf.from_pandas(pmidx)
     >>> gmidx
-    MultiIndex(levels=[0    1
-    1    3
-    2    4
-    3    5
-    dtype: int64, 0    1
-    1    2
-    2    5
-    dtype: int64],
-    codes=   x  y
-    0  0  0
-    1  0  2
-    2  1  1
-    3  2  1
-    4  3  0)
+    MultiIndex([(1, 1),
+                (1, 5),
+                (3, 2),
+                (4, 2),
+                (5, 1)],
+               names=['x', 'y'])
     >>> type(gmidx)
     <class 'cudf.core.multiindex.MultiIndex'>
     >>> type(pmidx)

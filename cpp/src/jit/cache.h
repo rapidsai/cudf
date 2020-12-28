@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ using named_prog = std::pair<std::string, std::shared_ptr<Tv>>;
  * The default cache directory is `$HOME/.cudf/$CUDF_VERSION`. If no overrides
  * are used and if $HOME is not defined, returns an empty path and file
  * caching is not used.
- **/
+ */
 boost::filesystem::path getCacheDir();
 
 class cudfJitCache {
@@ -51,7 +51,7 @@ class cudfJitCache {
   /**
    * @brief Get a process wide singleton cache object
    *
-   **/
+   */
   static cudfJitCache& Instance()
   {
     // Meyers' singleton is thread safe in C++11
@@ -73,7 +73,7 @@ class cudfJitCache {
    * @param program    Jitify preprocessed program to get the kernel from
    * @param arguments  template arguments for kernel in vector of strings
    * @return  Pair of string kernel identifier and compiled kernel object
-   **/
+   */
   named_prog<jitify::experimental::KernelInstantiation> getKernelInstantiation(
     std::string const& kern_name,
     named_prog<jitify::experimental::Program> const& program,
@@ -92,7 +92,7 @@ class cudfJitCache {
    * @param given_options  vector of strings options to pass to NVRTC
    * @param file_callback  pointer to callback function to call whenever a header needs to be loaded
    * @return named_prog<jitify::experimental::Program>
-   **/
+   */
   named_prog<jitify::experimental::Program> getProgram(
     std::string const& prog_file_name,
     std::string const& cuda_source                         = "",
@@ -123,7 +123,7 @@ class cudfJitCache {
   /**
    * @brief Class to allow process wise exclusive access to cache files
    *
-   **/
+   */
   class cacheFile {
    private:
     std::string _file_name;
@@ -137,13 +137,13 @@ class cudfJitCache {
     /**
      * @brief Read this file and return the contents as a std::string
      *
-     **/
+     */
     std::string read();
 
     /**
      * @brief Write the passed string to this file
      *
-     **/
+     */
     void write(std::string);
 
     /**
@@ -151,7 +151,7 @@ class cudfJitCache {
      *
      * @return true Read was successful. String returned by `read()` is valid
      * @return false Read was unsuccessful. String returned by `read()` is empty
-     **/
+     */
     bool is_read_successful() { return successful_read; }
 
     /**
@@ -159,7 +159,7 @@ class cudfJitCache {
      *
      * @return true Write was successful.
      * @return false Write was unsuccessful. File state is undefined
-     **/
+     */
     bool is_write_successful() { return successful_write; }
   };
 
