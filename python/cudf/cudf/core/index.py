@@ -232,7 +232,7 @@ class Index(Frame, Serializable):
         Examples
         --------
         >>> import cudf
-        >>> idx = cudf.core.index.StringIndex(["a","b","c"])
+        >>> idx = cudf.Index(["a", "b", "c"])
         >>> idx.get_level_values(0)
         StringIndex(['a' 'b' 'c'], dtype='object')
         """
@@ -1438,7 +1438,7 @@ class Index(Frame, Serializable):
         >>> data = [10, 20, 30, np.nan]
         >>> pdi = pd.Index(data)
         >>> cudf.core.index.Index.from_pandas(pdi)
-        Index(['10.0', '20.0', '30.0', 'null'], dtype='object')
+        Float64Index([10.0, 20.0, 30.0, <NA>], dtype='float64')
         >>> cudf.core.index.Index.from_pandas(pdi, nan_as_null=False)
         Float64Index([10.0, 20.0, 30.0, nan], dtype='float64')
         """
@@ -1879,7 +1879,7 @@ class GenericIndex(Index):
     """An array of orderable values that represent the indices of another Column
 
     Attributes
-    ---
+    ----------
     _values: A Column object
     name: A string
     """
@@ -2578,18 +2578,12 @@ class CategoricalIndex(GenericIndex):
     >>> import pandas as pd
     >>> cudf.CategoricalIndex(
     ... data=[1, 2, 3, 4], categories=[1, 2], ordered=False, name="a")
-    CategoricalIndex(['1', '2', 'null', 'null'],
-            categories=['1', '2', 'null'],
-            ordered=False,
-            dtype='category')
+    CategoricalIndex([1, 2, <NA>, <NA>], categories=[1, 2], ordered=False, name='a', dtype='category', name='a')
 
     >>> cudf.CategoricalIndex(
     ... data=[1, 2, 3, 4], dtype=pd.CategoricalDtype([1, 2, 3]), name="a")
-    CategoricalIndex(['1', '2', '3', 'null'],
-            categories=['1', '2', '3', 'null'],
-            ordered=False,
-            dtype='category')
-    """
+    CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], ordered=False, name='a', dtype='category', name='a')
+    """  # noqa: E501
 
     def __new__(
         cls,
