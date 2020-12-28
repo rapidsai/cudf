@@ -439,7 +439,7 @@ class Index(Frame, Serializable):
 
         See Also
         --------
-        cudf.Series.factorize
+        cudf.core.series.Series.factorize : Encode the input values of Series.
 
         """
         return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
