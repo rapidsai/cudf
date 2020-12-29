@@ -958,7 +958,7 @@ struct FixedPointTests : public cudf::test::BaseFixture {
 
 TYPED_TEST_CASE(FixedPointTests, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTests, MinMaxCount)
+TYPED_TEST(FixedPointTests, MinMaxCountLagLead)
 {
   using namespace numeric;
   using namespace cudf;
@@ -973,16 +973,22 @@ TYPED_TEST(FixedPointTests, MinMaxCount)
   auto const expected_max       = fp_wrapper{{42, 55, 55, 55, 2, 2}, {1, 1, 1, 1, 1, 1}, scale};
   auto const expected_count_val = fw_wrapper{{1, 2, 1, 2, 2, 2}, {1, 1, 1, 1, 1, 1}};
   auto const expected_count_all = fw_wrapper{{2, 3, 3, 3, 3, 2}, {1, 1, 1, 1, 1, 1}};
+  auto const expected_lag       = fp_wrapper{{0, 42, 1729, 55, 343, 1}, {0, 1, 0, 1, 0, 1}, scale};
+  auto const expected_lead      = fp_wrapper{{1729, 55, 343, 1, 2, 0}, {0, 1, 0, 1, 1, 0}, scale};
 
   auto const min   = rolling_window(input, 2, 1, 1, make_min_aggregation());
   auto const max   = rolling_window(input, 2, 1, 1, make_max_aggregation());
   auto const valid = rolling_window(input, 2, 1, 1, make_count_aggregation());
   auto const all   = rolling_window(input, 2, 1, 1, make_count_aggregation(null_policy::INCLUDE));
+  auto const lag   = rolling_window(input, 2, 1, 1, make_lag_aggregation(1));
+  auto const lead  = rolling_window(input, 2, 1, 1, make_lead_aggregation(1));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_min, min->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_max, max->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_val, valid->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_all, all->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lag, lag->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lead, lead->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
