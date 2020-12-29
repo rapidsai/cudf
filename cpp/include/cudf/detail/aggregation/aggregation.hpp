@@ -337,7 +337,7 @@ constexpr size_type ARGMIN_SENTINEL{-1};
  *
  * @tparam Source The type on which the aggregation is computed
  * @tparam k The aggregation performed
- **/
+ */
 template <typename Source, aggregation::Kind k, typename Enable = void>
 struct target_type_impl {
   using type = void;

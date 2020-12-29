@@ -62,7 +62,6 @@ class unordered_multiset_device_view {
 
 /*
  * Fixed size set on a device.
- *
  */
 template <typename Element,
           typename Hasher   = default_hash<Element>,
@@ -71,7 +70,7 @@ class unordered_multiset {
  public:
   /**
    * @brief Factory to construct a new unordered_multiset
-   **/
+   */
   static unordered_multiset<Element> create(column_view const &col, rmm::cuda_stream_view stream)
   {
     auto d_column = column_device_view::create(col, stream);

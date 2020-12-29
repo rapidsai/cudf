@@ -25,7 +25,6 @@ namespace detail {
 
 /**
  * @copydoc cudf::structs::detail::extract_ordered_struct_children
- *
  */
 std::vector<std::vector<column_view>> extract_ordered_struct_children(
   std::vector<column_view> const& struct_cols)

@@ -254,7 +254,7 @@ class Series(Frame, Serializable):
         0    10.0
         1    20.0
         2    30.0
-        3    null
+        3    <NA>
         dtype: float64
         >>> cudf.Series.from_pandas(pds, nan_as_null=False)
         0    10.0
@@ -1054,7 +1054,7 @@ class Series(Frame, Serializable):
         --------
         >>> import cudf
         >>> ser = cudf.Series([4, 3, 2, 1, 0])
-        >>> print(ser.tail(2))
+        >>> ser.tail(2)
         3    1
         4    0
         """
@@ -1446,12 +1446,12 @@ class Series(Frame, Serializable):
         >>> s
         0      10
         1      20
-        2    null
+        2    <NA>
         dtype: int64
         >>> s.rfloordiv(200)
         0      20
         1      10
-        2    null
+        2    <NA>
         dtype: int64
         >>> s.rfloordiv(200, fill_value=2)
         0     20
@@ -1868,7 +1868,7 @@ class Series(Frame, Serializable):
         >>> ser = cudf.Series(['', None, 'abc'])
         >>> ser
         0
-        1    None
+        1    <NA>
         2     abc
         dtype: object
         >>> ser.dropna()
@@ -1896,7 +1896,9 @@ class Series(Frame, Serializable):
     def fill(self, fill_value, begin=0, end=-1, inplace=False):
         return self._fill([fill_value], begin, end, inplace)
 
-    def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
+    def fillna(
+        self, value=None, method=None, axis=None, inplace=False, limit=None
+    ):
         if isinstance(value, pd.Series):
             value = Series.from_pandas(value)
 
@@ -2574,13 +2576,7 @@ class Series(Frame, Serializable):
         1    c
         dtype: object
         """
-        cats = self.dropna().unique().astype(self.dtype)
-
-        name = self.name  # label_encoding mutates self.name
-        labels = self.label_encoding(cats=cats, na_sentinel=na_sentinel)
-        self.name = name
-
-        return labels, cats
+        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
 
     # UDF related
 
@@ -5146,7 +5142,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     0    1.9876543
     1    2.9876654
     2    3.9876543
-    3         null
+    3         <NA>
     4          9.9
     5          1.0
     dtype: float64
@@ -5154,9 +5150,9 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     0    1.987654321
     1    2.987654321
     2    3.987654321
-    3           null
+    3           <NA>
     4           19.9
-    5           null
+    5           <NA>
     dtype: float64
     >>> cudf.isclose(s1, s2)
     0     True
@@ -5184,8 +5180,6 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     dtype: bool
     """
 
-    index = None
-
     if not can_convert_to_column(a):
         raise TypeError(
             f"Parameter `a` is expected to be a "
@@ -5201,6 +5195,8 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         a = Series.from_pandas(a)
     if isinstance(b, pd.Series):
         b = Series.from_pandas(b)
+
+    index = None
 
     if isinstance(a, cudf.Series) and isinstance(b, cudf.Series):
         b = b.reindex(a.index)

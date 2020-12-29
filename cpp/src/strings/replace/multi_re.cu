@@ -50,7 +50,6 @@ using found_range = thrust::pair<size_type, size_type>;
  * There are three call types based on the number of regex instructions in the given pattern.
  * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
  * Longer patterns require global memory. Shorter patterns are common in data cleaning.
- *
  */
 template <size_t stack_size>
 struct replace_multi_regex_fn {
@@ -89,7 +88,8 @@ struct replace_multi_regex_fn {
           continue;                             // or later in the string
         reprog_device prog = progs[ptn_idx];
         prog.set_stack_mem(data1, data2);
-        size_type begin = ch_pos, end = nchars;
+        auto begin = static_cast<int32_t>(ch_pos);
+        auto end   = static_cast<int32_t>(nchars);
         if (!prog.is_empty() && prog.find(idx, d_str, begin, end) > 0)
           d_ranges[ptn_idx] = found_range{begin, end};  // found a match
         else
@@ -124,7 +124,7 @@ struct replace_multi_regex_fn {
     if (out_ptr)  // copy the remainder
       memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);
     else
-      d_offsets[idx] = nbytes;
+      d_offsets[idx] = static_cast<int32_t>(nbytes);
   }
 };
 

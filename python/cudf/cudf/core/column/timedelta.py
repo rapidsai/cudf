@@ -9,7 +9,7 @@ from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
-from cudf.core.column import column, string
+from cudf.core.column import ColumnBase, column, string
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
 from cudf.utils.utils import _fillna_natwise
@@ -266,22 +266,24 @@ class TimeDeltaColumn(column.ColumnBase):
     def time_unit(self):
         return self._time_unit
 
-    def fillna(self, fill_value):
-        if cudf.utils.utils.isnat(fill_value):
-            return _fillna_natwise(self)
-        col = self
-        if is_scalar(fill_value):
-            if isinstance(fill_value, np.timedelta64):
-                dtype = determine_out_dtype(self.dtype, fill_value.dtype)
-                fill_value = fill_value.astype(dtype)
-                col = col.astype(dtype)
-            if not isinstance(fill_value, cudf.Scalar):
-                fill_value = cudf.Scalar(fill_value, dtype=dtype)
-        else:
-            fill_value = column.as_column(fill_value, nan_as_null=False)
+    def fillna(self, fill_value=None, method=None):
+        if fill_value is not None:
+            if cudf.utils.utils.isnat(fill_value):
+                return _fillna_natwise(self)
+            col = self
+            if is_scalar(fill_value):
+                if isinstance(fill_value, np.timedelta64):
+                    dtype = determine_out_dtype(self.dtype, fill_value.dtype)
+                    fill_value = fill_value.astype(dtype)
+                    col = col.astype(dtype)
+                if not isinstance(fill_value, cudf.Scalar):
+                    fill_value = cudf.Scalar(fill_value, dtype=dtype)
+            else:
+                fill_value = column.as_column(fill_value, nan_as_null=False)
 
-        result = libcudf.replace.replace_nulls(col, fill_value)
-        return result
+            return ColumnBase.fillna(col, fill_value)
+        else:
+            return super().fillna(method=method)
 
     def as_numerical_column(self, dtype):
         return self.as_numerical.astype(dtype)

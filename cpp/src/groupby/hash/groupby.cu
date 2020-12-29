@@ -503,7 +503,6 @@ std::pair<rmm::device_vector<size_type>, size_type> extract_populated_keys(
  * requested in `requests`, we gather sparse results into a column of dense
  * results using the aforementioned index vector. Dense results are stored into
  * the in/out parameter `cache`.
- *
  */
 template <bool keys_have_nulls>
 std::unique_ptr<table> groupby_null_templated(table_view const& keys,

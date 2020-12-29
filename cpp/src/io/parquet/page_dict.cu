@@ -44,7 +44,7 @@ struct dict_state_s {
 
 /**
  * @brief Computes a 16-bit dictionary hash
- **/
+ */
 inline __device__ uint32_t uint32_hash16(uint32_t v) { return (v + (v >> 16)) & 0xffff; }
 
 inline __device__ uint32_t uint64_hash16(uint64_t v)
@@ -82,7 +82,7 @@ inline __device__ uint32_t nvstr_hash16(const uint8_t *p, uint32_t len)
  *fetching)
  * @param[in] frag_start_row row position of current fragment
  * @param[in] t thread id
- **/
+ */
 __device__ void FetchDictionaryFragment(dict_state_s *s,
                                         uint32_t *dict_data,
                                         uint32_t frag_start_row,

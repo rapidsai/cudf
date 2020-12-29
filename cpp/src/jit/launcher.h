@@ -35,7 +35,6 @@ namespace cudf {
 namespace jit {
 /**
  * @brief Class used to handle compilation and execution of JIT kernels
- *
  */
 class launcher {
  public:
