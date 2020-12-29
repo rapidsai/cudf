@@ -673,6 +673,8 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
  */
 class chunked_parquet_writer_options_builder;
 
+enum class SingleWriteMode : bool { YES, NO };
+
 /**
  * @brief Settings for `write_parquet_chunked()`.
  */
@@ -859,11 +861,6 @@ class chunked_parquet_writer_options_builder {
 };
 
 /**
- * @brief Forward declaration of anonymous chunked-writer state struct.
- */
-struct pq_chunked_state;
-
-/**
  * @brief Begin the process of writing a parquet file in a chunked/stream form.
  *
  * The intent of the write_parquet_chunked_ path is to allow writing of an
@@ -936,6 +933,30 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
 std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 
+
+class parquet_writer {
+    std::unique_ptr<cudf::io::detail::parquet::writer> writer;
+
+    parquet_writer(parquet_writer_options const& op, rmm::mr::device_memory_resource* mr) {
+        writer = std::make_unique<cudf::io::detail::parquet::writer>(op.get_sink(), op, mr);
+    }
+
+    parquet_writer(chunked_parquet_writer_options const& op, rmm::mr::device_memory_resource* mr) {
+        writer = std::make_unique<cudf::io::detail::parquet::writer>(op.get_sink(), op, mr);
+    }
+
+    std::unique_ptr<std::vector<uint8_t>> write(table_view const &table, bool return_filemetadata, const std::string &column_chunks_file_path, bool int96_timestamps, rmm::cuda_stream_view stream) {
+        return writer->write(table, return_filemetadata, column_chunks_file_path, int96_timestamps, stream);
+    }
+
+    void write(table_view const &table, SingleWriteMode mode = SingleWriteMode::NO) {
+        writer->write(table, mode);
+    }
+    
+    std::unique_ptr<std::vector<uint8_t>> write_end(bool return_filemetadata, const std::string &column_chunks_file_path) {
+        return writer->write_end(return_filemetadata, column_chunks_file_path);
+    }
+}
 /** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

@@ -29,7 +29,7 @@
 
 namespace cudf {
 namespace io {
-
+#if 0
 enum class SingleWriteMode : bool { YES, NO };
 
 /**
@@ -69,6 +69,6 @@ struct pq_chunked_state {
   {
   }
 };
-
+#endif
 }  // namespace io
 }  // namespace cudf
