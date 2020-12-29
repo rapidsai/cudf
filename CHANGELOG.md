@@ -21,6 +21,7 @@
 - PR #6939 Use simplified `rmm::exec_policy`
 - PR #6512 Refactor rolling.cu to reduce compile time
 - PR #6982 Disable some pragma unroll statements in thrust `sort.h`
+- PR #7051 Verify decimal cast in java package
 
 ## Bug Fixes
 
