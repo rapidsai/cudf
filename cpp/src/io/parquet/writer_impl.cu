@@ -680,7 +680,6 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
   table_view const &table,
   bool return_filemetadata,
   const std::string &column_chunks_file_path,
-  bool int96_timestamps,
   rmm::cuda_stream_view stream)
 {
   stream_ = stream;
