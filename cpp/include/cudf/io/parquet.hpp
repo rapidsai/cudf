@@ -874,13 +874,14 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
 
 namespace detail{
 namespace parquet{
+    // Forward declaration
     class writer;
 }
 }
 
 class parquet_writer {
     public:
-    parquet_writer(parquet_writer_options const& op, rmm::mr::device_memory_resource* mr):table(op.get_table()), return_filemetadata(op.is_enabled_return_filemetadata()), column_chunks_file_path(op.get_column_chunks_file_path()) 
+    explicit parquet_writer(parquet_writer_options const& op, rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()); 
     
     std::unique_ptr<std::vector<uint8_t>> write(); 
 
@@ -894,17 +895,11 @@ class parquet_writer {
 
 class parquet_chunked_writer {
     public:
-    parquet_writer(chunked_parquet_writer_options const& op, rmm::mr::device_memory_resource* mr) {
-        writer = std::make_unique<cudf::io::detail::parquet::writer>(op.get_sink(), op, mr);
-    }
+    explicit parquet_chunked_writer(chunked_parquet_writer_options const& op, rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()); 
 
-    void write(table_view const &table, SingleWriteMode mode = SingleWriteMode::NO) {
-        writer->write(table, mode);
-    }
+    void write(table_view const &table, SingleWriteMode mode = SingleWriteMode::NO);
     
-    std::unique_ptr<std::vector<uint8_t>> write_end(bool return_filemetadata, const std::string &column_chunks_file_path) {
-        return writer->write_end(return_filemetadata, column_chunks_file_path);
-    }
+    std::unique_ptr<std::vector<uint8_t>> write_end(bool return_filemetadata, const std::string &column_chunks_file_path); 
 }
 /** @} */  // end of group
 }  // namespace io

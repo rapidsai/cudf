@@ -1245,10 +1245,8 @@ writer::~writer() = default;
 
 // Forward to implementation
 std::unique_ptr<std::vector<uint8_t>> writer::write(table_view const &table,
-                                                    const table_metadata *metadata,
                                                     bool return_filemetadata,
                                                     const std::string column_chunks_file_path,
-                                                    bool int96_timestamps,
                                                     rmm::cuda_stream_view stream)
 {
   return _impl->write(
@@ -1263,9 +1261,9 @@ void writer::write(table_view const &table, SingleWriteMode mode)
 
 // Forward to implementation
 std::unique_ptr<std::vector<uint8_t>> writer::write_end(
-  pq_chunked_state &state, bool return_filemetadata, const std::string &column_chunks_file_path)
+  bool return_filemetadata, const std::string &column_chunks_file_path)
 {
-  return _impl->write_end(state, return_filemetadata, column_chunks_file_path);
+  return _impl->write_end(return_filemetadata, column_chunks_file_path);
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(

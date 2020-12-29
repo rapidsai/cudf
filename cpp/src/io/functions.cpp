@@ -352,20 +352,6 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
   return reader->read(options);
 }
 
-// Freeform API wraps the detail writer class API
-std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options,
-                                                    rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  auto writer = make_writer<detail_parquet::writer>(options.get_sink(), options, mr);
-
-  return writer->write(options.get_table(),
-                       options.get_metadata(),
-                       options.is_enabled_return_filemetadata(),
-                       options.get_column_chunks_file_path(),
-                       options.is_enabled_int96_timestamps());
-}
-
 /**
  * @copydoc cudf::io::merge_rowgroup_metadata
  *
@@ -377,58 +363,26 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
   return detail_parquet::writer::merge_rowgroup_metadata(metadata_list);
 }
 
-/**
- * @copydoc cudf::io::write_parquet_chunked_begin
- *
- **/
-std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
-  chunked_parquet_writer_options const& op, rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  parquet_writer_options options = parquet_writer_options::builder()
-                                     .compression(op.get_compression())
-                                     .stats_level(op.get_stats_level())
-                                     .int96_timestamps(op.is_enabled_int96_timestamps());
-
-  auto state = std::make_shared<pq_chunked_state>();
-  state->wp  = make_writer<detail_parquet::writer>(op.get_sink(), options, mr);
-
-  // have to make a copy of the metadata here since we can't really
-  // guarantee the lifetime of the incoming pointer
-  if (op.get_nullable_metadata() != nullptr) {
-    state->user_metadata_with_nullability = *op.get_nullable_metadata();
-    state->user_metadata                  = &state->user_metadata_with_nullability;
-  }
-  state->int96_timestamps = op.is_enabled_int96_timestamps();
-  state->stream           = 0;
-  state->wp->write_chunked_begin(*state);
-  return state;
+parquet_writer::parquet_writer(parquet_writer_options const& op, rmm::mr::device_memory_resource* mr):table(op.get_table()), return_filemetadata(op.is_enabled_return_filemetadata()), column_chunks_file_path(op.get_column_chunks_file_path()) {
+    writer = std::make_unique<cudf::io::detail::parquet::writer>(op.get_sink(), op, mr);
 }
 
-/**
- * @copydoc cudf::io::write_parquet_chunked
- *
- **/
-void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_state> state)
-{
-  CUDF_FUNC_RANGE();
-  state->wp->write_chunk(table, *state);
+void parquet_writer::write() {
+    writer->(table, return_filemetadata, column_chunks_file_path, rmm::cuda_stream_default);
 }
 
-/**
- * @copydoc cudf::io::write_parquet_chunked_end
- *
- **/
-std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
-  std::shared_ptr<pq_chunked_state>& state,
-  bool return_filemetadata,
-  const std::string& column_chunks_file_path)
-{
-  CUDF_FUNC_RANGE();
-  auto meta = state->wp->write_chunked_end(*state, return_filemetadata, column_chunks_file_path);
-  state.reset();
-  return meta;
+parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options const& op, rmm::mr::device_memory_resource* mr) {
+    writer = std::make_unique<cudf::io::detail::parquet::writer>(op.get_sink(), op, mr);
 }
+
+void parquet_chunked_writer::write(table_view const &table, SingleWriteMode mode = SingleWriteMode::NO) {
+        writer->write(table, mode);
+}
+
+std::unique_ptr<std::vector<uint8_t>> parquet_chunked_writer::write_end(bool return_filemetadata, const std::string &column_chunks_file_path) {
+	return writer->write_end(return_filemetadata, column_chunks_file_path);
+}
+
 
 }  // namespace io
 }  // namespace cudf
