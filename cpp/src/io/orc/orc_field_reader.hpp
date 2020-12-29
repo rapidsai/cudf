@@ -118,7 +118,7 @@ inline bool ProtobufReader::function_builder(T &s, size_t maxlen, std::tuple<Ope
   constexpr int index = std::tuple_size<std::tuple<Operator...>>::value - 1;
   const uint8_t *end  = std::min(m_cur + maxlen, m_end);
   while (m_cur < end) {
-    int field          = get_u32();
+    auto const field   = get<uint32_t>();
     bool exit_function = FunctionSwitchImpl<index>::run(this, end, field, op);
     if (exit_function) { return false; }
   }
@@ -138,7 +138,7 @@ struct ProtobufReader::FieldInt32 {
 
   inline bool operator()(ProtobufReader *pbr, const uint8_t *end)
   {
-    value = pbr->get_i32();
+    value = pbr->get<int32_t>();
     return false;
   }
 };
@@ -157,7 +157,7 @@ struct ProtobufReader::FieldUInt32 {
 
   inline bool operator()(ProtobufReader *pbr, const uint8_t *end)
   {
-    value = pbr->get_u32();
+    value = pbr->get<uint32_t>();
     return false;
   }
 };
@@ -175,7 +175,7 @@ struct ProtobufReader::FieldInt64 {
 
   inline bool operator()(ProtobufReader *pbr, const uint8_t *end)
   {
-    value = pbr->get_i64();
+    value = pbr->get<int64_t>();
     return false;
   }
 };
@@ -194,7 +194,7 @@ struct ProtobufReader::FieldUInt64 {
 
   inline bool operator()(ProtobufReader *pbr, const uint8_t *end)
   {
-    value = pbr->get_u64();
+    value = pbr->get<uint64_t>();
     return false;
   }
 };
@@ -213,7 +213,7 @@ struct ProtobufReader::FieldEnum {
 
   inline bool operator()(ProtobufReader *pbr, const uint8_t *end)
   {
-    value = static_cast<Enum>(pbr->get_u32());
+    value = static_cast<Enum>(pbr->get<uint32_t>());
     return false;
   }
 };
@@ -234,9 +234,9 @@ struct ProtobufReader::FieldPackedUInt32 {
 
   inline bool operator()(ProtobufReader *pbr, const uint8_t *end)
   {
-    uint32_t len             = pbr->get_u32();
+    auto const len           = pbr->get<uint32_t>();
     const uint8_t *field_end = std::min(pbr->m_cur + len, end);
-    while (pbr->m_cur < field_end) value.push_back(pbr->get_u32());
+    while (pbr->m_cur < field_end) value.push_back(pbr->get<uint32_t>());
     return false;
   }
 };
@@ -255,7 +255,7 @@ struct ProtobufReader::FieldString {
 
   inline bool operator()(ProtobufReader *pbr, const uint8_t *end)
   {
-    uint32_t n = pbr->get_u32();
+    auto const n = pbr->get<uint32_t>();
     if (n > (size_t)(end - pbr->m_cur)) return true;
     value.assign((const char *)(pbr->m_cur), n);
     pbr->m_cur += n;
@@ -281,7 +281,7 @@ struct ProtobufReader::FieldRepeatedString {
 
   inline bool operator()(ProtobufReader *pbr, const uint8_t *end)
   {
-    uint32_t n = pbr->get_u32();
+    auto const n = pbr->get<uint32_t>();
     if (n > (size_t)(end - pbr->m_cur)) return true;
     value.resize(value.size() + 1);
     value.back().assign((const char *)(pbr->m_cur), n);
@@ -310,7 +310,7 @@ struct ProtobufReader::FieldRepeatedStructFunctor {
 
   inline bool operator()(ProtobufReader *pbr, const uint8_t *end)
   {
-    uint32_t n = pbr->get_u32();
+    auto const n = pbr->get<uint32_t>();
     if (n > (size_t)(end - pbr->m_cur)) return true;
     value.resize(value.size() + 1);
     if (!pbr->read(value.back(), n)) return true;
@@ -327,7 +327,7 @@ struct ProtobufReader::FieldStructFunctor {
 
   inline bool operator()(ProtobufReader *pbr, const uint8_t *end)
   {
-    auto const n = pbr->get_u32();
+    auto const n = pbr->get<uint32_t>();
     if (n > static_cast<uint32_t>(end - pbr->m_cur)) return true;
     return !pbr->read(value, n);
   }
@@ -352,7 +352,7 @@ struct ProtobufReader::FieldRepeatedStructBlobFunctor {
 
   inline bool operator()(ProtobufReader *pbr, const uint8_t *end)
   {
-    uint32_t n = pbr->get_u32();
+    auto const n = pbr->get<uint32_t>();
     if (n > (size_t)(end - pbr->m_cur)) return true;
     value.resize(value.size() + 1);
     value.back().assign(pbr->m_cur, pbr->m_cur + n);

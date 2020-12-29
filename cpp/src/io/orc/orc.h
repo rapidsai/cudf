@@ -23,6 +23,8 @@
 #include <string>
 #include <vector>
 
+#include <cudf/utilities/error.hpp>
+
 #include "io/comp/io_uncomp.h"
 #include "orc_common.h"
 
@@ -123,48 +125,20 @@ struct Metadata {
 
 class ProtobufReader {
  public:
-  ProtobufReader() { m_base = m_cur = m_end = nullptr; }
-  ProtobufReader(const uint8_t *base, size_t len) { init(base, len); }
-  void init(const uint8_t *base, size_t len)
-  {
-    m_base = m_cur = base;
-    m_end          = base + len;
-  }
+  ProtobufReader(const uint8_t *base, size_t len) : m_base(base), m_cur(base), m_end(base + len) {}
+
   ptrdiff_t bytecount() const { return m_cur - m_base; }
-  unsigned int getb() { return (m_cur < m_end) ? *m_cur++ : 0; }
   void skip_bytes(size_t bytecnt)
   {
     bytecnt = std::min(bytecnt, (size_t)(m_end - m_cur));
     m_cur += bytecnt;
   }
-  uint32_t get_u32()
+  template <typename T>
+  T get()
   {
-    uint32_t v = 0;
-    for (uint32_t l = 0;; l += 7) {
-      uint32_t c = getb();
-      v |= (c & 0x7f) << l;
-      if (c < 0x80) return v;
-    }
-  }
-  uint64_t get_u64()
-  {
-    uint64_t v = 0;
-    for (uint64_t l = 0;; l += 7) {
-      uint64_t c = getb();
-      v |= (c & 0x7f) << l;
-      if (c < 0x80) return v;
-    }
-  }
-  int32_t get_i32()
-  {
-    uint32_t u = get_u32();
-    return (int32_t)((u >> 1u) ^ -(int32_t)(u & 1));
-  }
-  int64_t get_i64()
-  {
-    uint64_t u = get_u64();
-    return (int64_t)((u >> 1u) ^ -(int64_t)(u & 1));
-  }
+    CUDF_FAIL("Unsupported return type");
+  };
+
   void skip_struct_field(int t);
 
  public:
@@ -220,10 +194,52 @@ class ProtobufReader {
   }
 
  protected:
-  const uint8_t *m_base;
+  const uint8_t *const m_base;
   const uint8_t *m_cur;
-  const uint8_t *m_end;
+  const uint8_t *const m_end;
 };
+
+template <>
+inline uint8_t ProtobufReader::get<uint8_t>()
+{
+  return (m_cur < m_end) ? *m_cur++ : 0;
+};
+
+template <>
+inline uint32_t ProtobufReader::get<uint32_t>()
+{
+  uint32_t v = 0;
+  for (uint32_t l = 0;; l += 7) {
+    uint32_t c = get<uint8_t>();
+    v |= (c & 0x7f) << l;
+    if (c < 0x80) return v;
+  }
+}
+
+template <>
+inline uint64_t ProtobufReader::get<uint64_t>()
+{
+  uint64_t v = 0;
+  for (uint64_t l = 0;; l += 7) {
+    uint64_t c = get<uint8_t>();
+    v |= (c & 0x7f) << l;
+    if (c < 0x80) return v;
+  }
+}
+
+template <>
+inline int32_t ProtobufReader::get<int32_t>()
+{
+  auto const u = get<uint32_t>();
+  return (int32_t)((u >> 1u) ^ -(int32_t)(u & 1));
+}
+
+template <>
+inline int64_t ProtobufReader::get<int64_t>()
+{
+  auto const u = get<uint64_t>();
+  return (int64_t)((u >> 1u) ^ -(int64_t)(u & 1));
+}
 
 /**
  * @brief Class for encoding Orc's metadata with Protocol Buffers

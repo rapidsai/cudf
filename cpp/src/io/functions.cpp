@@ -219,10 +219,9 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
   auto buffer            = source->host_read(len - max_ps_size, max_ps_size);
   const size_t ps_length = buffer->data()[max_ps_size - 1];
   const uint8_t* ps_data = &buffer->data()[max_ps_size - ps_length - 1];
-  orc::ProtobufReader pb;
   orc::PostScript ps;
-  pb.init(ps_data, ps_length);
-  CUDF_EXPECTS(pb.read(ps, ps_length), "Cannot read postscript");
+  CUDF_EXPECTS(orc::ProtobufReader(ps_data, ps_length).read(ps, ps_length),
+               "Cannot read postscript");
   CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
 
   // If compression is used, all the rest of the metadata is compressed
@@ -235,8 +234,8 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
   size_t ff_length = 0;
   auto ff_data     = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
   orc::FileFooter ff;
-  pb.init(ff_data, ff_length);
-  CUDF_EXPECTS(pb.read(ff, ff_length), "Cannot read filefooter");
+  CUDF_EXPECTS(orc::ProtobufReader(ff_data, ff_length).read(ff, ff_length),
+               "Cannot read filefooter");
   CUDF_EXPECTS(ff.types.size() > 0, "No columns found");
 
   // Read compressed metadata section
@@ -245,8 +244,7 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
   size_t md_length = 0;
   auto md_data     = decompressor->Decompress(buffer->data(), ps.metadataLength, &md_length);
   orc::Metadata md;
-  pb.init(md_data, md_length);
-  CUDF_EXPECTS(pb.read(md, md_length), "Cannot read metadata");
+  CUDF_EXPECTS(orc::ProtobufReader(md_data, md_length).read(md, md_length), "Cannot read metadata");
 
   // Initialize statistics to return
   std::vector<std::vector<std::string>> statistics_blobs;
@@ -258,16 +256,16 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
 
   // Get file-level statistics, statistics of each column of file
   std::vector<std::string> file_column_statistics_blobs;
-  for (orc::ColumnStatistics stats : ff.statistics) {
-    file_column_statistics_blobs.push_back(std::string(stats.begin(), stats.end()));
+  for (auto const& stats : ff.statistics) {
+    file_column_statistics_blobs.push_back(std::string(stats.cbegin(), stats.cend()));
   }
   statistics_blobs.push_back(file_column_statistics_blobs);
 
   // Get stripe-level statistics
-  for (orc::StripeStatistics stripe_stats : md.stripeStats) {
+  for (auto const& stripe_stats : md.stripeStats) {
     std::vector<std::string> stripe_column_statistics_blobs;
-    for (orc::ColumnStatistics stats : stripe_stats.colStats) {
-      stripe_column_statistics_blobs.push_back(std::string(stats.begin(), stats.end()));
+    for (auto const& stats : stripe_stats.colStats) {
+      stripe_column_statistics_blobs.push_back(std::string(stats.cbegin(), stats.cend()));
     }
     statistics_blobs.push_back(stripe_column_statistics_blobs);
   }
@@ -421,6 +419,22 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
   auto meta = state->wp->write_chunked_end(*state, return_filemetadata, column_chunks_file_path);
   state.reset();
   return meta;
+}
+
+void parse_orc_statistics(std::vector<std::vector<std::string>> const& blobs)
+{
+  // for (auto& bl : blobs) std::cout << bl.size() << std::endl;
+
+  // std::cout << blobs[1][0].size() << std::endl;
+
+  orc::ColumnStatistics cs;
+  CUDF_EXPECTS(
+    orc::ProtobufReader(reinterpret_cast<const uint8_t*>(blobs[1][1].c_str()), blobs[1][1].size())
+      .read(cs, sizeof(orc::ColumnStatistics)),
+    "Cannot read cs");
+
+  std::cout << cs.numberOfValues << ' ' << cs.intStatistics.minimum << " "
+            << cs.intStatistics.maximum << " " << cs.intStatistics.sum << std::endl;
 }
 
 }  // namespace io
