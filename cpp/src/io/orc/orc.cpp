@@ -114,6 +114,19 @@ bool ProtobufReader::read(StripeStatistics &s, size_t maxlen)
   return function_builder(s, maxlen, op);
 }
 
+bool ProtobufReader::read(ColumnStatistics &s, size_t maxlen)
+{
+  auto op = std::make_tuple(FieldUInt64(1, s.numberOfValues), FieldStruct(2, s.intStatistics));
+  return function_builder(s, maxlen, op);
+}
+
+bool ProtobufReader::read(IntegerStatistics &s, size_t maxlen)
+{
+  auto op =
+    std::make_tuple(FieldInt64(1, s.minimum), FieldInt64(2, s.maximum), FieldInt64(3, s.sum));
+  return function_builder(s, maxlen, op);
+}
+
 bool ProtobufReader::read(Metadata &s, size_t maxlen)
 {
   auto op = std::make_tuple(FieldRepeatedStruct(1, s.stripeStats));

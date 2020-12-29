@@ -237,21 +237,20 @@ __global__ void __launch_bounds__(encode_threads_per_block)
                         const statistics_chunk *chunks,
                         uint32_t statistics_count)
 {
-  __shared__ __align__(8) stats_state_s state_g[encode_chunks_per_block];
-  uint32_t t             = threadIdx.x;
-  uint32_t idx           = blockIdx.x * encode_chunks_per_block + threadIdx.y;
-  stats_state_s *const s = &state_g[threadIdx.y];
+  uint32_t const t             = threadIdx.x;
+  uint32_t const idx           = blockIdx.x * encode_chunks_per_block + threadIdx.y;
 
   // Encode and update actual bfr size
   if (idx < statistics_count && t == 0) {
-    s->chunk           = chunks[idx];
-    s->group           = groups[idx];
-    s->col             = *(s->group.col);
-    s->base            = blob_bfr + s->group.start_chunk;
-    s->end             = blob_bfr + s->group.start_chunk + s->group.num_chunks;
-    uint8_t *cur       = pb_put_uint(s->base, 1, s->chunk.non_nulls);
+    stats_state_s s;
+    s.chunk           = chunks[idx];
+    s.group           = groups[idx];
+    s.col             = *(s.group.col);
+    s.base            = blob_bfr + s.group.start_chunk;
+    s.end             = blob_bfr + s.group.start_chunk + s.group.num_chunks;
+    uint8_t *cur       = pb_put_uint(s.base, 1, s.chunk.non_nulls);
     uint8_t *fld_start = cur;
-    switch (s->col.stats_dtype) {
+    switch (s.col.stats_dtype) {
       case dtype_int8:
       case dtype_int16:
       case dtype_int32:
@@ -262,14 +261,14 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional sint64 maximum = 2;
         //  optional sint64 sum = 3;
         // }
-        if (s->chunk.has_minmax || s->chunk.has_sum) {
+        if (s.chunk.has_minmax || s.chunk.has_sum) {
           *cur = 2 * 8 + PB_TYPE_FIXEDLEN;
           cur += 2;
-          if (s->chunk.has_minmax) {
-            cur = pb_put_int(cur, 1, s->chunk.min_value.i_val);
-            cur = pb_put_int(cur, 2, s->chunk.max_value.i_val);
+          if (s.chunk.has_minmax) {
+            cur = pb_put_int(cur, 1, s.chunk.min_value.i_val);
+            cur = pb_put_int(cur, 2, s.chunk.max_value.i_val);
           }
-          if (s->chunk.has_sum) { cur = pb_put_int(cur, 3, s->chunk.sum.i_val); }
+          if (s.chunk.has_sum) { cur = pb_put_int(cur, 3, s.chunk.sum.i_val); }
           fld_start[1] = cur - (fld_start + 2);
         }
         break;
@@ -281,11 +280,11 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional double maximum = 2;
         //  optional double sum = 3;
         // }
-        if (s->chunk.has_minmax) {
+        if (s.chunk.has_minmax) {
           *cur = 3 * 8 + PB_TYPE_FIXEDLEN;
           cur += 2;
-          cur          = pb_put_fixed64(cur, 1, &s->chunk.min_value.fp_val);
-          cur          = pb_put_fixed64(cur, 2, &s->chunk.max_value.fp_val);
+          cur          = pb_put_fixed64(cur, 1, &s.chunk.min_value.fp_val);
+          cur          = pb_put_fixed64(cur, 2, &s.chunk.max_value.fp_val);
           fld_start[1] = cur - (fld_start + 2);
         }
         break;
@@ -296,18 +295,18 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional string maximum = 2;
         //  optional sint64 sum = 3; // sum will store the total length of all strings
         // }
-        if (s->chunk.has_minmax && s->chunk.has_sum) {
-          uint32_t sz = (pb_put_uint(cur, 3, s->chunk.sum.i_val) - cur) +
-                        (pb_put_uint(cur, 1, s->chunk.min_value.str_val.length) - cur) +
-                        (pb_put_uint(cur, 2, s->chunk.max_value.str_val.length) - cur) +
-                        s->chunk.min_value.str_val.length + s->chunk.max_value.str_val.length;
+        if (s.chunk.has_minmax && s.chunk.has_sum) {
+          uint32_t sz = (pb_put_uint(cur, 3, s.chunk.sum.i_val) - cur) +
+                        (pb_put_uint(cur, 1, s.chunk.min_value.str_val.length) - cur) +
+                        (pb_put_uint(cur, 2, s.chunk.max_value.str_val.length) - cur) +
+                        s.chunk.min_value.str_val.length + s.chunk.max_value.str_val.length;
           cur[0] = 4 * 8 + PB_TYPE_FIXEDLEN;
           cur    = pb_encode_uint(cur + 1, sz);
           cur    = pb_put_binary(
-            cur, 1, s->chunk.min_value.str_val.ptr, s->chunk.min_value.str_val.length);
+            cur, 1, s.chunk.min_value.str_val.ptr, s.chunk.min_value.str_val.length);
           cur = pb_put_binary(
-            cur, 2, s->chunk.max_value.str_val.ptr, s->chunk.max_value.str_val.length);
-          cur = pb_put_uint(cur, 3, s->chunk.sum.i_val);
+            cur, 2, s.chunk.max_value.str_val.ptr, s.chunk.max_value.str_val.length);
+          cur = pb_put_uint(cur, 3, s.chunk.sum.i_val);
         }
         break;
       case dtype_bool:
@@ -315,9 +314,9 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         // message BucketStatistics {
         //  repeated uint64 count = 1 [packed=true];
         // }
-        if (s->chunk.has_sum) {  // Sum is equal to the number of 'true' values
+        if (s.chunk.has_sum) {  // Sum is equal to the number of 'true' values
           cur[0]       = 5 * 8 + PB_TYPE_FIXEDLEN;
-          cur          = pb_put_packed_uint(cur + 2, 1, s->chunk.sum.i_val);
+          cur          = pb_put_packed_uint(cur + 2, 1, s.chunk.sum.i_val);
           fld_start[1] = cur - (fld_start + 2);
         }
         break;
@@ -329,7 +328,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional string maximum = 2;
         //  optional string sum = 3;
         // }
-        if (s->chunk.has_minmax) {
+        if (s.chunk.has_minmax) {
           // TODO: Decimal support (decimal min/max stored as strings)
         }
         break;
@@ -339,11 +338,11 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional sint32 minimum = 1;
         //  optional sint32 maximum = 2;
         // }
-        if (s->chunk.has_minmax) {
+        if (s.chunk.has_minmax) {
           cur[0] = 7 * 8 + PB_TYPE_FIXEDLEN;
           cur += 2;
-          cur          = pb_put_int(cur, 1, s->chunk.min_value.i_val);
-          cur          = pb_put_int(cur, 2, s->chunk.max_value.i_val);
+          cur          = pb_put_int(cur, 1, s.chunk.min_value.i_val);
+          cur          = pb_put_int(cur, 2, s.chunk.max_value.i_val);
           fld_start[1] = cur - (fld_start + 2);
         }
         break;
@@ -355,17 +354,17 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional sint64 minimumUtc = 3; // min,max values saved as milliseconds since UNIX epoch
         //  optional sint64 maximumUtc = 4;
         // }
-        if (s->chunk.has_minmax) {
+        if (s.chunk.has_minmax) {
           cur[0] = 9 * 8 + PB_TYPE_FIXEDLEN;
           cur += 2;
-          cur          = pb_put_int(cur, 3, s->chunk.min_value.i_val);  // minimumUtc
-          cur          = pb_put_int(cur, 4, s->chunk.max_value.i_val);  // maximumUtc
+          cur          = pb_put_int(cur, 3, s.chunk.min_value.i_val);  // minimumUtc
+          cur          = pb_put_int(cur, 4, s.chunk.max_value.i_val);  // maximumUtc
           fld_start[1] = cur - (fld_start + 2);
         }
         break;
       default: break;
     }
-    groups[idx].num_chunks = static_cast<uint32_t>(cur - s->base);
+    groups[idx].num_chunks = static_cast<uint32_t>(cur - s.base);
   }
 }
 

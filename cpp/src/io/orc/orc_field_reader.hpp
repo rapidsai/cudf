@@ -318,6 +318,21 @@ struct ProtobufReader::FieldRepeatedStructFunctor {
   }
 };
 
+template <typename Enum>
+struct ProtobufReader::FieldStructFunctor {
+  int field;
+  Enum &value;
+
+  FieldStructFunctor(int f, Enum &v) : field((f * 8) + PB_TYPE_FIXEDLEN), value(v) {}
+
+  inline bool operator()(ProtobufReader *pbr, const uint8_t *end)
+  {
+    auto const n = pbr->get_u32();
+    if (n > static_cast<uint32_t>(end - pbr->m_cur)) return true;
+    return !pbr->read(value, n);
+  }
+};
+
 /**
  * @brief Functor to append an enum read from metadata stream
  * to a vector of enums

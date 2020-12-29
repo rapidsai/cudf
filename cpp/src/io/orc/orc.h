@@ -64,17 +64,28 @@ struct UserMetadataItem {
   std::string value;  // the user defined binary value as string
 };
 
-typedef std::vector<uint8_t> ColumnStatistics;  // Column statistics blob
+struct IntegerStatistics {
+  int64_t minimum = 0;
+  int64_t maximum = 0;
+  int64_t sum     = 0;
+};
+
+struct ColumnStatistics {
+  uint64_t numberOfValues = 0;
+  IntegerStatistics intStatistics;
+};
+
+typedef std::vector<uint8_t> ColStatsBlob;  // Column statistics blob
 
 struct FileFooter {
-  uint64_t headerLength  = 0;                // the length of the file header in bytes (always 3)
-  uint64_t contentLength = 0;                // the length of the file header and body in bytes
-  std::vector<StripeInformation> stripes;    // the information about the stripes
-  std::vector<SchemaType> types;             // the schema information
-  std::vector<UserMetadataItem> metadata;    // the user metadata that was added
-  uint64_t numberOfRows = 0;                 // the total number of rows in the file
-  std::vector<ColumnStatistics> statistics;  // Column statistics blobs
-  uint32_t rowIndexStride = 0;               // the maximum number of rows in each index entry
+  uint64_t headerLength  = 0;              // the length of the file header in bytes (always 3)
+  uint64_t contentLength = 0;              // the length of the file header and body in bytes
+  std::vector<StripeInformation> stripes;  // the information about the stripes
+  std::vector<SchemaType> types;           // the schema information
+  std::vector<UserMetadataItem> metadata;  // the user metadata that was added
+  uint64_t numberOfRows = 0;               // the total number of rows in the file
+  std::vector<ColStatsBlob> statistics;    // Column statistics blobs
+  uint32_t rowIndexStride = 0;             // the maximum number of rows in each index entry
   // Helper methods
   std::string GetColumnName(uint32_t column_id);  // return the column name
 };
@@ -97,7 +108,7 @@ struct StripeFooter {
 };
 
 struct StripeStatistics {
-  std::vector<ColumnStatistics> colStats;  // Column statistics blobs
+  std::vector<ColStatsBlob> colStats;  // Column statistics blobs
 };
 
 struct Metadata {
@@ -166,6 +177,8 @@ class ProtobufReader {
   bool read(Stream &, size_t maxlen);
   bool read(ColumnEncoding &, size_t maxlen);
   bool read(StripeStatistics &, size_t maxlen);
+  bool read(ColumnStatistics &, size_t maxlen);
+  bool read(IntegerStatistics &, size_t maxlen);
   bool read(Metadata &, size_t maxlen);
 
  protected:
@@ -189,6 +202,8 @@ class ProtobufReader {
   template <typename Enum>
   struct FieldRepeatedStructBlobFunctor;
   template <typename Enum>
+  struct FieldStructFunctor;
+  template <typename Enum>
   FieldRepeatedStructFunctor<Enum> FieldRepeatedStruct(int f, std::vector<Enum> &v)
   {
     return FieldRepeatedStructFunctor<Enum>(f, v);
@@ -197,6 +212,11 @@ class ProtobufReader {
   FieldRepeatedStructBlobFunctor<Enum> FieldRepeatedStructBlob(int f, std::vector<Enum> &v)
   {
     return FieldRepeatedStructBlobFunctor<Enum>(f, v);
+  }
+  template <typename Enum>
+  FieldStructFunctor<Enum> FieldStruct(int f, Enum &v)
+  {
+    return FieldStructFunctor<Enum>(f, v);
   }
 
  protected:
