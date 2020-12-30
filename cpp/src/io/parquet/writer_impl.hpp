@@ -265,7 +265,7 @@ class writer::impl {
   table_metadata_with_nullability user_metadata_with_nullability;
   // special parameter only used by detail::write() to indicate that we are guaranteeing
   // a single table write.  this enables some internal optimizations.
-  table_metadata const* user_metadata     = nullptr;
+  table_metadata const* user_metadata = nullptr;
   // preserves chunked state
   std::unique_ptr<pq_chunked_state> state = nullptr;
 
