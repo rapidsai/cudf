@@ -61,7 +61,6 @@ class json_reader_options_builder;
  * | `date_unit`          | only millisecond units are supported             |
  * | `encoding`           | only ASCII-encoded data is supported             |
  * | `chunksize`          | use `byte_range_xxx` for chunking instead        |
- *
  */
 class json_reader_options {
   source_info _source;

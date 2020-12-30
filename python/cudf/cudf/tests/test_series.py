@@ -474,8 +474,8 @@ def test_series_factorize(data, na_sentinel):
     expected_labels, expected_cats = psr.factorize(na_sentinel=na_sentinel)
     actual_labels, actual_cats = gsr.factorize(na_sentinel=na_sentinel)
 
-    assert_eq(expected_labels, actual_labels.to_array())
-    assert_eq(expected_cats.values, actual_cats.to_array())
+    assert_eq(expected_labels, actual_labels.get())
+    assert_eq(expected_cats.values, actual_cats.to_pandas().values)
 
 
 @pytest.mark.parametrize(

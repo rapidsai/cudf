@@ -126,14 +126,9 @@ class Index(Frame, Serializable):
         UInt64Index([1, 2, 3], dtype='uint64', name='a')
 
         >>> cudf.Index(cudf.DataFrame({"a":[1, 2], "b":[2, 3]}))
-        MultiIndex(levels=[0    1
-        1    2
-        dtype: int64, 0    2
-        1    3
-        dtype: int64],
-        codes=   a  b
-        0  0  0
-        1  1  1)
+        MultiIndex([(1, 2),
+                    (2, 3)],
+                  names=['a', 'b'])
         """
         pass
 
@@ -237,7 +232,7 @@ class Index(Frame, Serializable):
         Examples
         --------
         >>> import cudf
-        >>> idx = cudf.core.index.StringIndex(["a","b","c"])
+        >>> idx = cudf.Index(["a", "b", "c"])
         >>> idx.get_level_values(0)
         StringIndex(['a' 'b' 'c'], dtype='object')
         """
@@ -407,31 +402,17 @@ class Index(Frame, Serializable):
         ...         names=["x", "y"],
         ...     )
         >>> midx
-        MultiIndex(levels=[0       1
-        1    null
-        2       4
-        3    null
-        dtype: int64, 0    1
-        1    2
-        2    5
-        dtype: int64],
-        codes=   x  y
-        0  0  0
-        1  0  2
-        2  1  1
-        3  2  1
-        4  3  0)
+        MultiIndex([(   1, 1),
+                    (   1, 5),
+                    (<NA>, 2),
+                    (   4, 2),
+                    (<NA>, 1)],
+                   names=['x', 'y'])
         >>> midx.dropna()
-        MultiIndex(levels=[0    1
-        1    4
-        dtype: int64, 0    1
-        1    2
-        2    5
-        dtype: int64],
-        codes=   x  y
-        0  0  0
-        1  0  2
-        2  1  1)
+        MultiIndex([(1, 1),
+                    (1, 5),
+                    (4, 2)],
+                   names=['x', 'y'])
         """
         return super().dropna(how=how)
 
@@ -451,6 +432,17 @@ class Index(Frame, Serializable):
             )
         else:
             return self
+
+    def factorize(self, na_sentinel=-1):
+        """
+        Encode the input values as integer labels
+
+        See Also
+        --------
+        cudf.core.series.Series.factorize : Encode the input values of Series.
+
+        """
+        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
 
     @property
     def nlevels(self):
@@ -505,16 +497,11 @@ class Index(Frame, Serializable):
         >>> idx = cudf.MultiIndex.from_product([['python', 'cobra'],
         ... [2018, 2019]])
         >>> idx
-        MultiIndex(levels=[0     cobra
-        1    python
-        dtype: object, 0    2018
-        1    2019
-        dtype: int64],
-        codes=   0  1
-        0  1  0
-        1  1  1
-        2  0  0
-        3  0  1)
+        MultiIndex([('python', 2018),
+                    ('python', 2019),
+                    ( 'cobra', 2018),
+                    ( 'cobra', 2019)],
+                   )
         >>> idx.names
         FrozenList([None, None])
         >>> idx.set_names(['kind', 'year'], inplace=True)
@@ -611,20 +598,12 @@ class Index(Frame, Serializable):
         ...      names=["x", "y"],
         ... )
         >>> index
-        MultiIndex(levels=[0     1
-        1     3
-        2     4
-        3   -10
-        dtype: int64, 0     1
-        1    11
-        2     5
-        dtype: int64],
-        codes=   x  y
-        0  0  0
-        1  0  2
-        2  1  1
-        3  2  1
-        4  3  0)
+        MultiIndex([(  1,  1),
+                    (  1,  5),
+                    (  3, 11),
+                    (  4, 11),
+                    (-10,  1)],
+                   names=['x', 'y'])
         >>> index.argsort()
         array([4, 0, 1, 2, 3], dtype=int32)
         >>> index.argsort(ascending=False)
@@ -969,50 +948,26 @@ class Index(Frame, Serializable):
         ...      names=["x", "y"],
         ... )
         >>> midx
-        MultiIndex(levels=[0     1
-        1     3
-        2     4
-        3   -10
-        dtype: int64, 0     1
-        1    11
-        2     5
-        dtype: int64],
-        codes=   x  y
-        0  0  0
-        1  0  2
-        2  1  1
-        3  2  1
-        4  3  0)
+        MultiIndex([(  1,  1),
+                    (  1,  5),
+                    (  3, 11),
+                    (  4, 11),
+                    (-10,  1)],
+                   names=['x', 'y'])
         >>> midx.sort_values()
-        MultiIndex(levels=[0     1
-        1     3
-        2     4
-        3   -10
-        dtype: int64, 0     1
-        1    11
-        2     5
-        dtype: int64],
-        codes=   x  y
-        4  3  0
-        0  0  0
-        1  0  2
-        2  1  1
-        3  2  1)
+        MultiIndex([(-10,  1),
+                    (  1,  1),
+                    (  1,  5),
+                    (  3, 11),
+                    (  4, 11)],
+                   names=['x', 'y'])
         >>> midx.sort_values(ascending=False)
-        MultiIndex(levels=[0     1
-        1     3
-        2     4
-        3   -10
-        dtype: int64, 0     1
-        1    11
-        2     5
-        dtype: int64],
-        codes=   x  y
-        3  2  1
-        2  1  1
-        1  0  2
-        0  0  0
-        4  3  0)
+        MultiIndex([(  4, 11),
+                    (  3, 11),
+                    (  1,  5),
+                    (  1,  1),
+                    (-10,  1)],
+                   names=['x', 'y'])
         """
         if key is not None:
             raise NotImplementedError("key parameter is not yet implemented.")
@@ -1127,16 +1082,18 @@ class Index(Frame, Serializable):
         >>> lhs = cudf.DataFrame(
         ...     {"a":[2, 3, 1], "b":[3, 4, 2]}).set_index(['a', 'b']
         ... ).index
+        >>> lhs
+        MultiIndex([(2, 3),
+                    (3, 4),
+                    (1, 2)],
+                   names=['a', 'b'])
         >>> rhs = cudf.DataFrame({"a":[1, 4, 3]}).set_index('a').index
+        >>> rhs
+        Int64Index([1, 4, 3], dtype='int64', name='a')
         >>> lhs.join(rhs, how='inner')
-        MultiIndex(levels=[0    1
-        1    3
-        dtype: int64, 0    2
-        1    4
-        dtype: int64],
-        codes=   a  b
-        0  1  1
-        1  0  0)
+        MultiIndex([(3, 4),
+                    (1, 2)],
+                   names=['a', 'b'])
         """
 
         if isinstance(self, cudf.MultiIndex) and isinstance(
@@ -1481,7 +1438,7 @@ class Index(Frame, Serializable):
         >>> data = [10, 20, 30, np.nan]
         >>> pdi = pd.Index(data)
         >>> cudf.core.index.Index.from_pandas(pdi)
-        Index(['10.0', '20.0', '30.0', 'null'], dtype='object')
+        Float64Index([10.0, 20.0, 30.0, <NA>], dtype='float64')
         >>> cudf.core.index.Index.from_pandas(pdi, nan_as_null=False)
         Float64Index([10.0, 20.0, 30.0, nan], dtype='float64')
         """
@@ -1756,7 +1713,7 @@ class RangeIndex(Index):
         name = pickle.loads(header["name"])
         start = h["start"]
         stop = h["stop"]
-        step = h["step"]
+        step = h.get("step", 1)
         return RangeIndex(start=start, stop=stop, step=step, name=name)
 
     @property
@@ -1922,7 +1879,7 @@ class GenericIndex(Index):
     """An array of orderable values that represent the indices of another Column
 
     Attributes
-    ---
+    ----------
     _values: A Column object
     name: A string
     """
@@ -2621,18 +2578,12 @@ class CategoricalIndex(GenericIndex):
     >>> import pandas as pd
     >>> cudf.CategoricalIndex(
     ... data=[1, 2, 3, 4], categories=[1, 2], ordered=False, name="a")
-    CategoricalIndex(['1', '2', 'null', 'null'],
-            categories=['1', '2', 'null'],
-            ordered=False,
-            dtype='category')
+    CategoricalIndex([1, 2, <NA>, <NA>], categories=[1, 2], ordered=False, name='a', dtype='category', name='a')
 
     >>> cudf.CategoricalIndex(
     ... data=[1, 2, 3, 4], dtype=pd.CategoricalDtype([1, 2, 3]), name="a")
-    CategoricalIndex(['1', '2', '3', 'null'],
-            categories=['1', '2', '3', 'null'],
-            ordered=False,
-            dtype='category')
-    """
+    CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], ordered=False, name='a', dtype='category', name='a')
+    """  # noqa: E501
 
     def __new__(
         cls,

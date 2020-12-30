@@ -295,8 +295,7 @@ void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resourc
 
 /**
  * @copydoc cudf::io::write_orc_chunked_begin
- *
- **/
+ */
 std::shared_ptr<orc_chunked_state> write_orc_chunked_begin(chunked_orc_writer_options const& opts,
                                                            rmm::mr::device_memory_resource* mr)
 {
@@ -320,8 +319,7 @@ std::shared_ptr<orc_chunked_state> write_orc_chunked_begin(chunked_orc_writer_op
 
 /**
  * @copydoc cudf::io::write_orc_chunked
- *
- **/
+ */
 void write_orc_chunked(table_view const& table, std::shared_ptr<orc_chunked_state> state)
 {
   CUDF_FUNC_RANGE();
@@ -330,8 +328,7 @@ void write_orc_chunked(table_view const& table, std::shared_ptr<orc_chunked_stat
 
 /**
  * @copydoc cudf::io::write_orc_chunked_end
- *
- **/
+ */
 void write_orc_chunked_end(std::shared_ptr<orc_chunked_state>& state)
 {
   CUDF_FUNC_RANGE();
@@ -354,8 +351,7 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
 
 /**
  * @copydoc cudf::io::merge_rowgroup_metadata
- *
- **/
+ */
 std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list)
 {

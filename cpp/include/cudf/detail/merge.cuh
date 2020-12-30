@@ -67,7 +67,6 @@ using index_vector = rmm::device_vector<index_type>;
  * As a result, a special comparison logic is necessary whereby the index is "tagged" with side
  * information and consequently comparator functors (predicates) must operate on these tagged
  * indices rather than on raw indices.
- *
  */
 template <bool has_nulls = true>
 struct tagged_element_relational_comparator {

@@ -44,7 +44,6 @@ namespace {
  * There are three call types based on the number of regex instructions in the given pattern.
  * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
  * Longer patterns require global memory.
- *
  */
 template <size_t stack_size>
 struct contains_fn {
@@ -159,7 +158,6 @@ namespace detail {
 namespace {
 /**
  * @brief This counts the number of times the regex pattern matches in each string.
- *
  */
 template <size_t stack_size>
 struct count_fn {
