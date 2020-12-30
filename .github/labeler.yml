@@ -3,23 +3,23 @@
 # Labels culled from https://github.com/rapidsai/cudf/labels
 
 cuDF (Python):
-  - python/
-  - notebooks/
+  - python/**
+  - notebooks/**
   
 libcudf:
-  - cpp/
+  - cpp/**
 
 CMake:
   - **/CMakeLists.txt
-  - **/cmake/
+  - **/cmake/**
   
 cuDF (Java):
-  - java/
+  - java/**
   
 Ops:
-  - .github/
-  - /ci/
-  - conda/
+  - .github/**
+  - /ci/**
+  - conda/**
   - **/Dockerfile
   - **/.dockerignore
-  - docker/
+  - docker/**
