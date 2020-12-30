@@ -103,9 +103,9 @@ class writer::impl {
                 rmm::mr::device_memory_resource* mr);
 
   /**
-   * @brief Initialize the required state before writing.
+   * @brief Initializes the states before writing.
    *
-   * @param[in] pq_chunked_state Internal state maintained between chunks.
+   * @param[in] mode Option to write at once or in chunks.
    */
   void init_state(SingleWriteMode mode = SingleWriteMode::NO);
 
@@ -257,15 +257,16 @@ class writer::impl {
   Compression compression_           = Compression::UNCOMPRESSED;
   statistics_freq stats_granularity_ = statistics_freq::STATISTICS_NONE;
   bool int96_timestamps              = false;
-  /// Cuda stream to be used
+  // Cuda stream to be used
   rmm::cuda_stream_view stream_ = rmm::cuda_stream_default;
-  /// Overall file metadata.  Filled in during the process and written during write_chunked_end()
+  // Overall file metadata.  Filled in during the process and written during write_chunked_end()
   cudf::io::parquet::FileMetaData md;
-  /// optional user metadata
+  // optional user metadata
   table_metadata_with_nullability user_metadata_with_nullability;
-  /// special parameter only used by detail::write() to indicate that we are guaranteeing
-  /// a single table write.  this enables some internal optimizations.
+  // special parameter only used by detail::write() to indicate that we are guaranteeing
+  // a single table write.  this enables some internal optimizations.
   table_metadata const* user_metadata     = nullptr;
+  // preserves chunked state
   std::unique_ptr<pq_chunked_state> state = nullptr;
 
   std::vector<uint8_t> buffer_;

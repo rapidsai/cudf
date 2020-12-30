@@ -115,7 +115,7 @@ class writer {
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Constructor for writer for chunked parquet.
+   * @brief Constructor for writer to handle chunked parquet options.
    *
    * @param sink The data sink to write the data to
    * @param options Settings for controlling writing behavior for chunked writer
@@ -155,7 +155,6 @@ class writer {
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] pq_chunked_state Internal state maintained between chunks.
    * @param[in] return_filemetadata If true, return the raw file metadata
    * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
    *

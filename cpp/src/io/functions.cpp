@@ -32,7 +32,6 @@
 
 #include "io/orc/orc.h"
 #include "orc/chunked_state.hpp"
-#include "parquet/chunked_state.hpp"
 
 namespace cudf {
 namespace io {

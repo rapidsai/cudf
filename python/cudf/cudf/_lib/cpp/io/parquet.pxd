@@ -124,10 +124,6 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
 
         parquet_writer_options build() except +
 
-    cdef unique_ptr[vector[uint8_t]] write_parquet(
-        parquet_writer_options args
-    ) except +
-
     cdef cppclass chunked_parquet_writer_options:
         chunked_parquet_writer_options() except +
         cudf_io_types.sink_info get_sink() except +
