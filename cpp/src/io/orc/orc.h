@@ -25,7 +25,8 @@
 
 #include <cudf/utilities/error.hpp>
 
-#include "io/comp/io_uncomp.h"
+#include <io/comp/io_uncomp.h>
+#include <cudf/io/datasource.hpp>
 #include "orc_common.h"
 
 namespace cudf {
@@ -56,9 +57,6 @@ struct SchemaType {
     0;  // optional: the maximum length of the type for varchar or char in UTF-8 characters
   uint32_t precision = 0;  // optional: the precision and scale for decimal
   uint32_t scale     = 0;
-  // Inferred fields
-  int32_t parent_idx = -1;  // parent node (equal to current node for root nodes)
-  int32_t field_idx  = -1;  // field index in parent's subtype vector
 };
 
 struct UserMetadataItem {
@@ -77,10 +75,6 @@ struct FileFooter {
   uint64_t numberOfRows = 0;               // the total number of rows in the file
   std::vector<ColStatsBlob> statistics;    // Column statistics blobs
   uint32_t rowIndexStride = 0;             // the maximum number of rows in each index entry
-
-  std::string GetColumnName(uint32_t column_id);
-  // Initializes the parent_idx field in the schema
-  void init_schema();
 };
 
 struct Stream {
@@ -289,6 +283,68 @@ class OrcDecompressor {
   uint32_t const m_blockSize;
   std::unique_ptr<HostDecompressor> m_decompressor;
   std::vector<uint8_t> m_buf;
+};
+
+/**
+ * @brief A helper class for ORC file metadata. Provides some additional
+ * convenience methods for initializing and accessing metadata.
+ */
+class metadata {
+  using OrcStripeInfo = std::pair<const StripeInformation *, const StripeFooter *>;
+
+ public:
+  explicit metadata(datasource *const src);
+
+  /**
+   * @brief Filters and reads the info of only a selection of stripes
+   *
+   * @param[in] stripes Indices of individual stripes
+   * @param[in] row_start Starting row of the selection
+   * @param[in,out] row_count Total number of rows selected
+   *
+   * @return List of stripe info and total number of selected rows
+   */
+  std::vector<OrcStripeInfo> select_stripes(const std::vector<size_type> &stripes,
+                                            size_type &row_start,
+                                            size_type &row_count);
+
+  /**
+   * @brief Filters and reduces down to a selection of columns
+   *
+   * @param[in] use_names List of column names to select
+   * @param[out] has_timestamp_column Whether there is a orc::TIMESTAMP column
+   *
+   * @return List of ORC column indexes
+   */
+  std::vector<int> select_columns(std::vector<std::string> use_names, bool &has_timestamp_column);
+
+  size_t get_total_rows() const { return ff.numberOfRows; }
+  int get_num_stripes() const { return ff.stripes.size(); }
+  int get_num_columns() const { return ff.types.size(); }
+  std::string const &get_column_name(int32_t column_id)
+  {
+    if (column_names.empty() && get_num_columns() != 0) { init_column_names(); }
+    return column_names[column_id];
+  }
+  int get_row_index_stride() const { return ff.rowIndexStride; }
+
+ public:
+  PostScript ps;
+  FileFooter ff;
+  Metadata md;
+  std::vector<StripeFooter> stripefooters;
+  std::unique_ptr<OrcDecompressor> decompressor;
+
+ private:
+  struct schema_indexes {
+    int32_t parent = -1;
+    int32_t field  = -1;
+  };
+  std::vector<schema_indexes> get_schema_indexes() const;
+  void init_column_names();
+
+  std::vector<std::string> column_names;
+  datasource *const source;
 };
 
 }  // namespace orc

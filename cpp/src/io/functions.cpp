@@ -211,57 +211,27 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
     CUDF_FAIL("Unsupported source type");
   }
 
-  // Get size of file and size of postscript
-  const auto len         = source->size();
-  const auto max_ps_size = std::min(len, static_cast<size_t>(256));
-
-  // Read uncompressed postscript section (max 255 bytes + 1 byte for length)
-  auto buffer            = source->host_read(len - max_ps_size, max_ps_size);
-  const size_t ps_length = buffer->data()[max_ps_size - 1];
-  const uint8_t* ps_data = &buffer->data()[max_ps_size - ps_length - 1];
-  orc::PostScript ps;
-  orc::ProtobufReader(ps_data, ps_length).read(ps, ps_length);
-  CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
-
-  // If compression is used, all the rest of the metadata is compressed
-  // If no compressed is used, the decompressor is simply a pass-through
-  std::unique_ptr<orc::OrcDecompressor> decompressor =
-    std::make_unique<orc::OrcDecompressor>(ps.compression, ps.compressionBlockSize);
-
-  // Read compressed filefooter section
-  buffer           = source->host_read(len - ps_length - 1 - ps.footerLength, ps.footerLength);
-  size_t ff_length = 0;
-  auto ff_data     = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
-  orc::FileFooter ff;
-  orc::ProtobufReader(ff_data, ff_length).read(ff, ff_length);
-  ff.init_schema();
-  CUDF_EXPECTS(ff.types.size() > 0, "No columns found");
-
-  // Read compressed metadata section
-  buffer =
-    source->host_read(len - ps_length - 1 - ps.footerLength - ps.metadataLength, ps.metadataLength);
-  size_t md_length = 0;
-  auto md_data     = decompressor->Decompress(buffer->data(), ps.metadataLength, &md_length);
-  orc::Metadata md;
-  orc::ProtobufReader(md_data, md_length).read(md, md_length);
+  orc::metadata metadata(source.get());
 
   // Initialize statistics to return
   std::vector<std::vector<std::string>> statistics_blobs;
 
   // Get column names
   std::vector<std::string> column_names;
-  for (auto i = 0; i < ff.types.size(); i++) { column_names.push_back(ff.GetColumnName(i)); }
+  for (auto i = 0; i < metadata.get_num_columns(); i++) {
+    column_names.push_back(metadata.get_column_name(i));
+  }
   statistics_blobs.push_back(column_names);
 
   // Get file-level statistics, statistics of each column of file
   std::vector<std::string> file_column_statistics_blobs;
-  for (auto const& stats : ff.statistics) {
+  for (auto const& stats : metadata.ff.statistics) {
     file_column_statistics_blobs.push_back(std::string(stats.cbegin(), stats.cend()));
   }
   statistics_blobs.push_back(file_column_statistics_blobs);
 
   // Get stripe-level statistics
-  for (auto const& stripe_stats : md.stripeStats) {
+  for (auto const& stripe_stats : metadata.md.stripeStats) {
     std::vector<std::string> stripe_column_statistics_blobs;
     for (auto const& stats : stripe_stats.colStats) {
       stripe_column_statistics_blobs.push_back(std::string(stats.cbegin(), stats.cend()));
