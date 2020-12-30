@@ -71,11 +71,9 @@ struct FunctionSwitchImpl<0> {
 };
 
 /**
- * @brief Function to ascertain the return value of ProtobufReader::read
- * function.
+ * @brief Function to ascertain the return value of ProtobufReader::read function.
  *
- * Throws if current pointer to metadata stream is out of
- * bounds.
+ * @throws cudf::logic_error if current pointer to metadata stream is out of bounds.
  */
 template <typename T>
 inline void ProtobufReader::function_builder_return(T &s, const uint8_t *end)
@@ -84,12 +82,11 @@ inline void ProtobufReader::function_builder_return(T &s, const uint8_t *end)
 }
 
 /**
- * @brief Function to ascertain the return value of
- * `ProtobufReader::read(FileFooter*, ...)` function.
+ * @brief Function to ascertain the return value of `ProtobufReader::read(FileFooter*, ...)`
+ * function.
  *
- * Throws if current pointer to metadata stream is out of
- * bounds or if the initialization of the parent_idx field of FileFooter
- * is not done correctly.
+ * @throws cudf::logic_error if current pointer to metadata stream is out of bounds or if the
+ * initialization of the `parent_idx` field of `FileFooter` is not done correctly.
  */
 template <>
 inline void ProtobufReader::function_builder_return<FileFooter>(FileFooter &s, const uint8_t *end)
@@ -99,15 +96,11 @@ inline void ProtobufReader::function_builder_return<FileFooter>(FileFooter &s, c
 }
 
 /**
- * @brief Function to implement ProtobufReader::read based on the tuple of
- * functors provided
+ * @brief Function to implement ProtobufReader::read based on the tuple of functors provided.
  *
- * Bytes are read from the internal metadata stream and field types are
- * matched up against user supplied reading functors. If they match then the
- * corresponding values are written to references pointed to by the functors.
- *
- * @return Returns 'false' if an unexpected field is encountered while reading.
- * Otherwise 'true' is returned.
+ * Bytes are read from the internal metadata stream and field types are matched up against user
+ * supplied reading functors. If they match then the corresponding values are written to references
+ * pointed to by the functors.
  */
 template <typename T, typename... Operator>
 inline void ProtobufReader::function_builder(T &s, size_t maxlen, std::tuple<Operator...> &op)
@@ -122,7 +115,7 @@ inline void ProtobufReader::function_builder(T &s, size_t maxlen, std::tuple<Ope
 }
 
 /**
- * @brief Functor to set value to 32 bit integer read from metadata stream
+ * @brief Functor to set value to 32 bit integer read from metadata stream.
  */
 struct ProtobufReader::FieldInt32 {
   int const field;
@@ -134,8 +127,7 @@ struct ProtobufReader::FieldInt32 {
 };
 
 /**
- * @brief Functor to set value to 32 bit unsigned integer read from metadata
- * stream
+ * @brief Functor to set value to 32 bit unsigned integer read from metadata stream.
  */
 struct ProtobufReader::FieldUInt32 {
   int const field;
@@ -159,8 +151,7 @@ struct ProtobufReader::FieldInt64 {
 };
 
 /**
- * @brief Functor to set value to 64 bit unsigned integer read from metadata
- * stream
+ * @brief Functor to set value to 64 bit unsigned integer read from metadata stream
  */
 struct ProtobufReader::FieldUInt64 {
   int const field;
@@ -226,8 +217,7 @@ struct ProtobufReader::FieldString {
 };
 
 /**
- * @brief Functor to append a string read from metadata stream
- * to a vector of strings
+ * @brief Functor to append a string read from metadata stream to a vector of strings
  */
 struct ProtobufReader::FieldRepeatedString {
   int const field;
@@ -249,8 +239,7 @@ struct ProtobufReader::FieldRepeatedString {
 };
 
 /**
- * @brief Functor to append an enum read from metadata stream
- * to a vector of enums
+ * @brief Functor to append an enum read from metadata stream to a vector of enums
  */
 template <typename Enum>
 struct ProtobufReader::FieldRepeatedStructFunctor {
@@ -271,24 +260,8 @@ struct ProtobufReader::FieldRepeatedStructFunctor {
   }
 };
 
-template <typename Enum>
-struct ProtobufReader::FieldStructFunctor {
-  int const field;
-  Enum &value;
-
-  FieldStructFunctor(int f, Enum &v) : field((f * 8) + PB_TYPE_FIXEDLEN), value(v) {}
-
-  inline void operator()(ProtobufReader *pbr, const uint8_t *end)
-  {
-    auto const n = pbr->get<uint32_t>();
-    CUDF_EXPECTS(n <= (uint32_t)(end - pbr->m_cur), "Protobuf parsing out of bounds");
-    pbr->read(value, n);
-  }
-};
-
 /**
- * @brief Functor to append an enum read from metadata stream
- * to a vector of enums
+ * @brief Functor to append an enum read from metadata stream to a vector of enums
  */
 template <typename Enum>
 struct ProtobufReader::FieldRepeatedStructBlobFunctor {

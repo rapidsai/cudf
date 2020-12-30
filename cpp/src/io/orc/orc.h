@@ -66,17 +66,6 @@ struct UserMetadataItem {
   std::string value;  // the user defined binary value as string
 };
 
-struct IntegerStatistics {
-  int64_t minimum = 0;
-  int64_t maximum = 0;
-  int64_t sum     = 0;
-};
-
-struct ColumnStatistics {
-  uint64_t numberOfValues = 0;
-  IntegerStatistics intStatistics;
-};
-
 typedef std::vector<uint8_t> ColStatsBlob;  // Column statistics blob
 
 struct FileFooter {
@@ -133,11 +122,9 @@ class ProtobufReader {
     bytecnt = std::min(bytecnt, (size_t)(m_end - m_cur));
     m_cur += bytecnt;
   }
+
   template <typename T>
-  T get()
-  {
-    CUDF_FAIL("Unsupported return type");
-  };
+  T get();
 
   void skip_struct_field(int t);
 
@@ -151,8 +138,6 @@ class ProtobufReader {
   void read(Stream &, size_t maxlen);
   void read(ColumnEncoding &, size_t maxlen);
   void read(StripeStatistics &, size_t maxlen);
-  void read(ColumnStatistics &, size_t maxlen);
-  void read(IntegerStatistics &, size_t maxlen);
   void read(Metadata &, size_t maxlen);
 
  protected:
@@ -176,8 +161,6 @@ class ProtobufReader {
   template <typename Enum>
   struct FieldRepeatedStructBlobFunctor;
   template <typename Enum>
-  struct FieldStructFunctor;
-  template <typename Enum>
   FieldRepeatedStructFunctor<Enum> FieldRepeatedStruct(int f, std::vector<Enum> &v)
   {
     return FieldRepeatedStructFunctor<Enum>(f, v);
@@ -186,11 +169,6 @@ class ProtobufReader {
   FieldRepeatedStructBlobFunctor<Enum> FieldRepeatedStructBlob(int f, std::vector<Enum> &v)
   {
     return FieldRepeatedStructBlobFunctor<Enum>(f, v);
-  }
-  template <typename Enum>
-  FieldStructFunctor<Enum> FieldStruct(int f, Enum &v)
-  {
-    return FieldStructFunctor<Enum>(f, v);
   }
 
  protected:

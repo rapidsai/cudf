@@ -114,19 +114,6 @@ void ProtobufReader::read(StripeStatistics &s, size_t maxlen)
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(ColumnStatistics &s, size_t maxlen)
-{
-  auto op = std::make_tuple(FieldUInt64(1, s.numberOfValues), FieldStruct(2, s.intStatistics));
-  function_builder(s, maxlen, op);
-}
-
-void ProtobufReader::read(IntegerStatistics &s, size_t maxlen)
-{
-  auto op =
-    std::make_tuple(FieldInt64(1, s.minimum), FieldInt64(2, s.maximum), FieldInt64(3, s.sum));
-  function_builder(s, maxlen, op);
-}
-
 void ProtobufReader::read(Metadata &s, size_t maxlen)
 {
   auto op = std::make_tuple(FieldRepeatedStruct(1, s.stripeStats));
@@ -168,7 +155,7 @@ void ProtobufReader::InitSchema(FileFooter &ff)
     for (int32_t j = 0; j < num_children; j++) {
       uint32_t column_id = ff.types[i].subtypes[j];
       CUDF_EXPECTS(column_id > (uint32_t)i && column_id < (uint32_t)schema_size,
-                   "Invalid column id(or at least not a schema index");
+                   "Invalid column id");
       CUDF_EXPECTS(ff.types[column_id].parent_idx == -1, "Same node referenced twice");
       ff.types[column_id].parent_idx = i;
       ff.types[column_id].field_idx  = j;

@@ -419,19 +419,5 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
   return meta;
 }
 
-void parse_orc_statistics(std::vector<std::vector<std::string>> const& blobs)
-{
-  // for (auto& bl : blobs) std::cout << bl.size() << std::endl;
-
-  // std::cout << blobs[1][0].size() << std::endl;
-
-  orc::ColumnStatistics cs;
-  orc::ProtobufReader(reinterpret_cast<const uint8_t*>(blobs[1][1].c_str()), blobs[1][1].size())
-    .read(cs, sizeof(orc::ColumnStatistics));
-
-  std::cout << cs.numberOfValues << ' ' << cs.intStatistics.minimum << " "
-            << cs.intStatistics.maximum << " " << cs.intStatistics.sum << std::endl;
-}
-
 }  // namespace io
 }  // namespace cudf

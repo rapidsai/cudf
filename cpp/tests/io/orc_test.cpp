@@ -942,37 +942,4 @@ TEST_F(OrcReaderTest, CombinedSkipRowTest)
   skip_row.test(2, 100, 110);
 }
 
-TEST_F(OrcChunkedWriterTest, ChunkedStats)
-{
-  auto sequence = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
-
-  constexpr auto num_rows = 100;
-  column_wrapper<int32_t, typename decltype(sequence)::value_type> col(
-    sequence, sequence + num_rows, validity);
-
-  std::vector<std::unique_ptr<column>> cols;
-  cols.push_back(col.release());
-  auto expected = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(1, expected->num_columns());
-
-  auto const halves = cudf::slice(expected->view(), {0, num_rows / 2, num_rows / 2, num_rows});
-
-  auto filepath = temp_env->get_temp_filepath("OrcStatsMerge.orc");
-  cudf_io::chunked_orc_writer_options opts =
-    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath});
-  auto state = cudf_io::write_orc_chunked_begin(opts);
-  cudf_io::write_orc_chunked(halves[0], state);
-  cudf_io::write_orc_chunked(halves[1], state);
-  cudf_io::write_orc_chunked_end(state);
-
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).use_index(false);
-  auto result = cudf_io::read_orc(in_opts);
-
-  auto const stats = cudf_io::read_orc_statistics(cudf_io::source_info{filepath});
-
-  CUDF_TEST_EXPECT_TABLES_EQUAL(halves[1], result.tbl->view());
-}
-
 CUDF_TEST_PROGRAM_MAIN()
