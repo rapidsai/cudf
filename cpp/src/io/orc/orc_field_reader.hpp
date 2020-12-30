@@ -71,31 +71,6 @@ struct FunctionSwitchImpl<0> {
 };
 
 /**
- * @brief Function to ascertain the return value of ProtobufReader::read function.
- *
- * @throws cudf::logic_error if current pointer to metadata stream is out of bounds.
- */
-template <typename T>
-inline void ProtobufReader::function_builder_return(T &s, const uint8_t *end)
-{
-  CUDF_EXPECTS(m_cur <= end, "current pointer to metadata stream is out of bounds");
-}
-
-/**
- * @brief Function to ascertain the return value of `ProtobufReader::read(FileFooter*, ...)`
- * function.
- *
- * @throws cudf::logic_error if current pointer to metadata stream is out of bounds or if the
- * initialization of the `parent_idx` field of `FileFooter` is not done correctly.
- */
-template <>
-inline void ProtobufReader::function_builder_return<FileFooter>(FileFooter &s, const uint8_t *end)
-{
-  CUDF_EXPECTS(m_cur <= end, "current pointer to metadata stream is out of bounds");
-  InitSchema(s);
-}
-
-/**
  * @brief Function to implement ProtobufReader::read based on the tuple of functors provided.
  *
  * Bytes are read from the internal metadata stream and field types are matched up against user
@@ -111,7 +86,7 @@ inline void ProtobufReader::function_builder(T &s, size_t maxlen, std::tuple<Ope
     auto const field = get<uint32_t>();
     FunctionSwitchImpl<index>::run(this, end, field, op);
   }
-  function_builder_return(s, end);
+  CUDF_EXPECTS(m_cur <= end, "Current pointer to metadata stream is out of bounds");
 }
 
 /**

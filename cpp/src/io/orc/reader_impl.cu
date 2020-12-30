@@ -150,6 +150,7 @@ class metadata {
     size_t ff_length = 0;
     auto ff_data     = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
     ProtobufReader(ff_data, ff_length).read(ff, ff_length);
+    ff.init_schema();
     CUDF_EXPECTS(get_num_columns() > 0, "No columns found");
   }
 

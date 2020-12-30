@@ -142,23 +142,21 @@ std::string FileFooter::GetColumnName(uint32_t column_id)
   return s;
 }
 
-// Initializes the parent_idx field in the schema
-void ProtobufReader::InitSchema(FileFooter &ff)
+void FileFooter::init_schema()
 {
-  int32_t schema_size = (int32_t)ff.types.size();
-  for (int32_t i = 0; i < schema_size; i++) {
-    int32_t num_children = (int32_t)ff.types[i].subtypes.size();
-    if (ff.types[i].parent_idx == -1)  // Not initialized
+  auto const schema_size = static_cast<uint32_t>(types.size());
+  for (uint32_t i = 0; i < schema_size; i++) {
+    auto const num_children = static_cast<uint32_t>(types[i].subtypes.size());
+    if (types[i].parent_idx == -1)  // Not initialized
     {
-      ff.types[i].parent_idx = i;  // set root node as its own parent
+      types[i].parent_idx = i;  // set root node as its own parent
     }
-    for (int32_t j = 0; j < num_children; j++) {
-      uint32_t column_id = ff.types[i].subtypes[j];
-      CUDF_EXPECTS(column_id > (uint32_t)i && column_id < (uint32_t)schema_size,
-                   "Invalid column id");
-      CUDF_EXPECTS(ff.types[column_id].parent_idx == -1, "Same node referenced twice");
-      ff.types[column_id].parent_idx = i;
-      ff.types[column_id].field_idx  = j;
+    for (uint32_t j = 0; j < num_children; j++) {
+      auto const column_id = types[i].subtypes[j];
+      CUDF_EXPECTS(column_id > i && column_id < schema_size, "Invalid column id");
+      CUDF_EXPECTS(types[column_id].parent_idx == -1, "Same node referenced twice");
+      types[column_id].parent_idx = i;
+      types[column_id].field_idx  = j;
     }
   }
 }

@@ -77,8 +77,10 @@ struct FileFooter {
   uint64_t numberOfRows = 0;               // the total number of rows in the file
   std::vector<ColStatsBlob> statistics;    // Column statistics blobs
   uint32_t rowIndexStride = 0;             // the maximum number of rows in each index entry
-  // Helper methods
-  std::string GetColumnName(uint32_t column_id);  // return the column name
+
+  std::string GetColumnName(uint32_t column_id);
+  // Initializes the parent_idx field in the schema
+  void init_schema();
 };
 
 struct Stream {
@@ -140,13 +142,9 @@ class ProtobufReader {
   void read(StripeStatistics &, size_t maxlen);
   void read(Metadata &, size_t maxlen);
 
- protected:
-  void InitSchema(FileFooter &);
-
+ private:
   template <typename T, typename... Operator>
   void function_builder(T &s, size_t maxlen, std::tuple<Operator...> &op);
-  template <typename T>
-  void function_builder_return(T &s, const uint8_t *end);
   struct FieldInt32;
   struct FieldUInt32;
   struct FieldInt64;

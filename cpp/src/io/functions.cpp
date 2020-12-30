@@ -234,6 +234,7 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
   auto ff_data     = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
   orc::FileFooter ff;
   orc::ProtobufReader(ff_data, ff_length).read(ff, ff_length);
+  ff.init_schema();
   CUDF_EXPECTS(ff.types.size() > 0, "No columns found");
 
   // Read compressed metadata section
