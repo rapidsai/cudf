@@ -1234,7 +1234,7 @@ TEST_F(ParquetChunkedWriterTest, WrongNullability)
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath})
       .nullable_metadata(&nullable_metadata);
   cudf_io::parquet_chunked_writer writer2(args2);
-  //cudf_io::parquet_chunked_writer writer2(args2);
+  // cudf_io::parquet_chunked_writer writer2(args2);
   EXPECT_THROW(writer2.write(*table1), cudf::logic_error);
 }
 

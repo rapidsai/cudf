@@ -32,14 +32,18 @@
 #include <string>
 #include <vector>
 
-
 namespace cudf {
 namespace io {
+/**
+ * @brief Whether writer writes in chunks or at once
+ */
 enum class SingleWriteMode : bool { YES, NO };
 
+// Forward declaration
 class parquet_reader_options;
 class parquet_writer_options;
 class chunked_parquet_writer_options;
+
 namespace detail {
 namespace parquet {
 /**
@@ -111,16 +115,15 @@ class writer {
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Constructor for output to a file.
+   * @brief Constructor for writer for chunked parquet.
    *
    * @param sink The data sink to write the data to
-   * @param options Settings for controlling writing behavior
+   * @param options Settings for controlling writing behavior for chunked writer
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   chunked_parquet_writer_options const& options,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -131,10 +134,8 @@ class writer {
    * @brief Writes the dataset as per options provided.
    *
    * @param table Set of columns to output
-   * @param metadata Table metadata and column names
    * @param return_filemetadata If true, return the raw file metadata
    * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
-   * @param int96_timestamps If true, write timestamps as INT96 values
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   std::unique_ptr<std::vector<uint8_t>> write(
@@ -147,7 +148,7 @@ class writer {
    * @brief Writes a single subtable as part of a larger parquet file/table write.
    *
    * @param[in] table The table information to be written
-   * @param[in] pq_chunked_state Internal state maintained between chunks.
+   * @param[in] mode Option to write at once or in chunks.
    */
   void write(table_view const& table, SingleWriteMode mode);
 
@@ -160,9 +161,8 @@ class writer {
    *
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list
    */
-  std::unique_ptr<std::vector<uint8_t>> write_end(
-    bool return_filemetadata                   = false,
-    const std::string& column_chunks_file_path = "");
+  std::unique_ptr<std::vector<uint8_t>> write_end(bool return_filemetadata = false,
+                                                  const std::string& column_chunks_file_path = "");
 
   /**
    * @brief Merges multiple metadata blobs returned by write_all into a single metadata blob

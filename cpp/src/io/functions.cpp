@@ -363,50 +363,56 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
   return detail_parquet::writer::merge_rowgroup_metadata(metadata_list);
 }
 
-parquet_writer::parquet_writer(parquet_writer_options const& op, rmm::mr::device_memory_resource* mr):table(op.get_table()), return_filemetadata(op.is_enabled_return_filemetadata()), column_chunks_file_path(op.get_column_chunks_file_path()) {
-    std::cout<<"RGSL : Table size is "<<table.num_rows()<<std::endl;
-    writer = make_writer<detail_parquet::writer>(op.get_sink(), op, mr);
-}
-
-parquet_writer::~parquet_writer()
+// Constructor to create parquet writer
+parquet_writer::parquet_writer(parquet_writer_options const& op,
+                               rmm::mr::device_memory_resource* mr)
+  : table(op.get_table()),
+    return_filemetadata(op.is_enabled_return_filemetadata()),
+    column_chunks_file_path(op.get_column_chunks_file_path())
 {
-    writer.reset();
+  writer = make_writer<detail_parquet::writer>(op.get_sink(), op, mr);
 }
 
-std::unique_ptr<std::vector<uint8_t>> parquet_writer::write() {
-    std::cout<<"RGSL : Table size is "<<table.num_rows()<<std::endl;
-    return writer->write(table, return_filemetadata, column_chunks_file_path, rmm::cuda_stream_default);
+// Writes table to output
+std::unique_ptr<std::vector<uint8_t>> parquet_writer::write()
+{
+  return writer->write(
+    table, return_filemetadata, column_chunks_file_path, rmm::cuda_stream_default);
 }
-    
+
+// Handles move for objects
 parquet_writer& parquet_writer::operator=(parquet_writer&& rhs)
 {
-    writer = std::move(rhs.writer);
-    return *this;
+  writer = std::move(rhs.writer);
+  return *this;
 }
 
-parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options const& op, rmm::mr::device_memory_resource* mr) {
-    writer = make_writer<detail_parquet::writer>(op.get_sink(), op, mr);
-}
-
-parquet_chunked_writer::~parquet_chunked_writer()
+// Constructor to create parquet chunked writer
+parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options const& op,
+                                               rmm::mr::device_memory_resource* mr)
 {
-    writer.reset();
+  writer = make_writer<detail_parquet::writer>(op.get_sink(), op, mr);
 }
 
+// Handles move for objects
 parquet_chunked_writer& parquet_chunked_writer::operator=(parquet_chunked_writer&& rhs)
 {
-    writer = std::move(rhs.writer);
-    return *this;
+  writer = std::move(rhs.writer);
+  return *this;
 }
 
-void parquet_chunked_writer::write(table_view const &table) {
-        writer->write(table, SingleWriteMode::NO);
+// Writes table to output
+void parquet_chunked_writer::write(table_view const& table)
+{
+  writer->write(table, SingleWriteMode::NO);
 }
 
-std::unique_ptr<std::vector<uint8_t>> parquet_chunked_writer::write_end(bool return_filemetadata, const std::string &column_chunks_file_path) {
-	return writer->write_end(return_filemetadata, column_chunks_file_path);
+// Finishes the chunked/streamed write process
+std::unique_ptr<std::vector<uint8_t>> parquet_chunked_writer::write_end(
+  bool return_filemetadata, const std::string& column_chunks_file_path)
+{
+  return writer->write_end(return_filemetadata, column_chunks_file_path);
 }
-
 
 }  // namespace io
 }  // namespace cudf

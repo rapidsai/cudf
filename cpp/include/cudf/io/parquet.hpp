@@ -16,11 +16,11 @@
 
 #pragma once
 
+#include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/io/detail/parquet.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
@@ -871,43 +871,99 @@ class chunked_parquet_writer_options_builder {
 std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 
-//namespace detail{
-//namespace parquet{
-    // Forward declaration
-//    class writer;
-//}
-//}
-
+/**
+ * @brief parquet writer class to handle options and write.
+ */
 class parquet_writer {
-    public:
-    parquet_writer()=default;
-    parquet_writer(parquet_writer_options const& op, rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-    ~parquet_writer();
-    parquet_writer& operator=(parquet_writer&& rhs);
-    
-    std::unique_ptr<std::vector<uint8_t>> write(); 
+ public:
+  /**
+   * @brief Default constructor, this should never be used.
+   */
+  parquet_writer() = default;
 
-    std::unique_ptr<cudf::io::detail::parquet::writer> writer;
-    private:
-    table_view table;
-    bool return_filemetadata = false;
-    std::string column_chunks_file_path = "";
+  /**
+   * @brief Constructor with writer options
+   *
+   * @param[in] op options used to write table
+   * @param[in] mr Device memory resource to use for device memory allocation
+   */
+  parquet_writer(parquet_writer_options const& op,
+                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  
+  /**
+   * @brief operator overloaded to handle move
+   *
+   * @param[in] rhs writer class that needs to be moved
+   */
+  parquet_writer& operator=(parquet_writer&& rhs);
 
-   };
+  /**
+   * @brief Writes table to output
+   *
+   * @return unique_ptr to FileMetadata thrift message if requested
+   */
+  std::unique_ptr<std::vector<uint8_t>> write();
 
-class parquet_chunked_writer {
-    public:
-    parquet_chunked_writer()=default;
-    parquet_chunked_writer(chunked_parquet_writer_options const& op, rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()); 
-    ~parquet_chunked_writer(); 
-    parquet_chunked_writer& operator=(parquet_chunked_writer&& rhs);
+  // Unique pointer to impl writer class
+  std::unique_ptr<cudf::io::detail::parquet::writer> writer;
 
-    void write(table_view const &table);
-    
-    std::unique_ptr<std::vector<uint8_t>> write_end(bool return_filemetadata=false, const std::string &column_chunks_file_path=""); 
-    
-    std::unique_ptr<cudf::io::detail::parquet::writer> writer;
+ private:
+  // Input table
+  table_view table;
+  // To enable/disable option to return file metadata 
+  bool return_filemetadata            = false;
+  // Column chunks file path to be set in metadata
+  std::string column_chunks_file_path = "";
 };
+
+/**
+ * @brief chunked parquet writer class to handle options and write tables in chunks.
+ */
+class parquet_chunked_writer {
+ public:
+  /**
+   * @brief Default constructor, this should never be used.
+   */
+  parquet_chunked_writer() = default;
+
+  /**
+   * @brief Constructor with chunked writer options
+   *
+   * @param[in] op options used to write table
+   * @param[in] mr Device memory resource to use for device memory allocation
+   */
+  parquet_chunked_writer(
+    chunked_parquet_writer_options const& op,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  
+  /**
+   * @brief operator overloaded to handle move
+   *
+   * @param[in] rhs writer class that needs to be moved
+   */
+  parquet_chunked_writer& operator=(parquet_chunked_writer&& rhs);
+
+  /**
+   * @brief Writes table to output.
+   *
+   * @param[in] table Table that needs to be written
+   */
+  void write(table_view const& table);
+
+  /**
+   * @brief Finishes the chunked/streamed write process.
+   *
+   * @param[in] return_filemetadata If true, return the raw parquet file metadata
+   * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
+   * @return unique_ptr to FileMetadata thrift message if requested
+   */
+  std::unique_ptr<std::vector<uint8_t>> write_end(bool return_filemetadata = false,
+                                                  const std::string& column_chunks_file_path = "");
+
+  // Unique pointer to impl writer class
+  std::unique_ptr<cudf::io::detail::parquet::writer> writer;
+};
+
 /** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

@@ -400,7 +400,7 @@ cpdef write_parquet(
             .int96_timestamps(_int96_timestamps)
             .build()
         )
-        
+
         writer.reset(new cpp_parquet_writer(args))
         out_metadata_c = move(writer.get()[0].write())
 
@@ -422,7 +422,7 @@ cdef class ParquetWriter:
     --------
     cudf.io.parquet.write_parquet
     """
-    cdef bool initialized;
+    cdef bool initialized
     cdef unique_ptr[cpp_parquet_chunked_writer] writer
     cdef cudf_io_types.sink_info sink
     cdef unique_ptr[cudf_io_types.data_sink] _data_sink

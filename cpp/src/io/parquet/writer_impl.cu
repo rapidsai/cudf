@@ -673,7 +673,7 @@ void writer::impl::init_state(SingleWriteMode mode)
   file_header_s fhdr;
   fhdr.magic = parquet_magic;
   out_sink_->host_write(&fhdr, sizeof(fhdr));
-  state = std::make_unique<pq_chunked_state>(mode);
+  state                       = std::make_unique<pq_chunked_state>(mode);
   state->current_chunk_offset = sizeof(file_header_s);
 }
 
@@ -683,7 +683,6 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
   const std::string &column_chunks_file_path,
   rmm::cuda_stream_view stream)
 {
-
   stream_ = stream;
   init_state(SingleWriteMode::YES);
   write(table);
@@ -692,9 +691,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
 
 void writer::impl::write(table_view const &table, SingleWriteMode mode)
 {
-  if(state == nullptr) {
-      init_state(mode);
-  }
+  if (state == nullptr) { init_state(mode); }
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
 
@@ -727,12 +724,8 @@ void writer::impl::write(table_view const &table, SingleWriteMode mode)
     auto const &this_column_nullability =
       (state->single_write_mode) ? std::vector<bool>{} : per_column_nullability[current_id];
 
-    parquet_columns.emplace_back(current_id,
-                                 col,
-                                 this_column_nullability,
-                                 user_metadata,
-                                 int96_timestamps,
-                                 stream_);
+    parquet_columns.emplace_back(
+      current_id, col, this_column_nullability, user_metadata, int96_timestamps, stream_);
   }
 
   // first call. setup metadata. num_rows will get incremented as write_chunk is
@@ -996,10 +989,9 @@ void writer::impl::write(table_view const &table, SingleWriteMode mode)
           num_dictionaries++;
         }
       }
-      ck->has_dictionary                                      = dict_enable;
-      md.row_groups[global_r].columns[i].meta_data.type = parquet_columns[i].physical_type();
-      md.row_groups[global_r].columns[i].meta_data.encodings = {Encoding::PLAIN,
-                                                                      Encoding::RLE};
+      ck->has_dictionary                                     = dict_enable;
+      md.row_groups[global_r].columns[i].meta_data.type      = parquet_columns[i].physical_type();
+      md.row_groups[global_r].columns[i].meta_data.encodings = {Encoding::PLAIN, Encoding::RLE};
       if (dict_enable) {
         md.row_groups[global_r].columns[i].meta_data.encodings.push_back(
           Encoding::PLAIN_DICTIONARY);
@@ -1144,7 +1136,7 @@ void writer::impl::write(table_view const &table, SingleWriteMode mode)
         uint8_t *dev_bfr;
         if (ck->is_compressed) {
           md.row_groups[global_r].columns[i].meta_data.codec = compression_;
-          dev_bfr                                                  = ck->compressed_bfr;
+          dev_bfr                                            = ck->compressed_bfr;
         } else {
           dev_bfr = ck->uncompressed_bfr;
         }
@@ -1154,14 +1146,13 @@ void writer::impl::write(table_view const &table, SingleWriteMode mode)
           out_sink_->device_write(dev_bfr + ck->ck_stat_size, ck->compressed_size, stream_);
           // we still need to do a (much smaller) memcpy for the statistics.
           if (ck->ck_stat_size != 0) {
-            md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(
-              ck->ck_stat_size);
-            CUDA_TRY(cudaMemcpyAsync(
-              md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(),
-              dev_bfr,
-              ck->ck_stat_size,
-              cudaMemcpyDeviceToHost,
-              stream_.value()));
+            md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
+            CUDA_TRY(
+              cudaMemcpyAsync(md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(),
+                              dev_bfr,
+                              ck->ck_stat_size,
+                              cudaMemcpyDeviceToHost,
+                              stream_.value()));
             stream_.synchronize();
           }
         } else {
@@ -1174,8 +1165,7 @@ void writer::impl::write(table_view const &table, SingleWriteMode mode)
           stream_.synchronize();
           out_sink_->host_write(host_bfr.get() + ck->ck_stat_size, ck->compressed_size);
           if (ck->ck_stat_size != 0) {
-            md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(
-              ck->ck_stat_size);
+            md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
             memcpy(md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(),
                    host_bfr.get(),
                    ck->ck_stat_size);
@@ -1187,8 +1177,7 @@ void writer::impl::write(table_view const &table, SingleWriteMode mode)
         md.row_groups[global_r].columns[i].meta_data.dictionary_page_offset =
           (ck->has_dictionary) ? state->current_chunk_offset : 0;
         md.row_groups[global_r].columns[i].meta_data.total_uncompressed_size = ck->bfr_size;
-        md.row_groups[global_r].columns[i].meta_data.total_compressed_size =
-          ck->compressed_size;
+        md.row_groups[global_r].columns[i].meta_data.total_compressed_size   = ck->compressed_size;
         state->current_chunk_offset += ck->compressed_size;
       }
     }
@@ -1251,19 +1240,15 @@ std::unique_ptr<std::vector<uint8_t>> writer::write(table_view const &table,
                                                     const std::string column_chunks_file_path,
                                                     rmm::cuda_stream_view stream)
 {
-  return _impl->write(
-    table, return_filemetadata, column_chunks_file_path, stream);
+  return _impl->write(table, return_filemetadata, column_chunks_file_path, stream);
 }
 
 // Forward to implementation
-void writer::write(table_view const &table, SingleWriteMode mode)
-{
-  _impl->write(table, mode);
-}
+void writer::write(table_view const &table, SingleWriteMode mode) { _impl->write(table, mode); }
 
 // Forward to implementation
-std::unique_ptr<std::vector<uint8_t>> writer::write_end(
-  bool return_filemetadata, const std::string &column_chunks_file_path)
+std::unique_ptr<std::vector<uint8_t>> writer::write_end(bool return_filemetadata,
+                                                        const std::string &column_chunks_file_path)
 {
   return _impl->write_end(return_filemetadata, column_chunks_file_path);
 }

@@ -21,8 +21,6 @@
 
 #pragma once
 
-#include "chunked_state.hpp"
-
 #include <io/parquet/parquet.hpp>
 #include <io/parquet/parquet_gpu.hpp>
 
@@ -51,17 +49,20 @@ class parquet_column_view;
 using namespace cudf::io::parquet;
 using namespace cudf::io;
 
-
+/**
+ * @brief Chunked writer state struct. Contains pieces of information
+ *        needed that span the write() / end() call process.
+ */
 struct pq_chunked_state {
   /// current write position for rowgroups/chunks
   std::size_t current_chunk_offset;
   /// only used in the write_chunked() case. copied from the (optionally) user supplied
-  /// argument to write_parquet_chunked_begin()
+  /// argument to write()
   bool single_write_mode;
 
   pq_chunked_state() = default;
 
-  pq_chunked_state(SingleWriteMode mode         = SingleWriteMode::NO)
+  pq_chunked_state(SingleWriteMode mode = SingleWriteMode::NO)
     : single_write_mode({mode == SingleWriteMode::YES})
   {
   }
@@ -90,22 +91,28 @@ class writer::impl {
                 parquet_writer_options const& options,
                 rmm::mr::device_memory_resource* mr);
 
+  /**
+   * @brief Constructor with chunked writer options.
+   *
+   * @param filepath Filepath if storing dataset to a file
+   * @param options Settings for controlling behavior
+   * @param mr Device memory resource to use for device memory allocation
+   **/
   explicit impl(std::unique_ptr<data_sink> sink,
                 chunked_parquet_writer_options const& options,
                 rmm::mr::device_memory_resource* mr);
 
   /**
-   * @brief Begins the chunked/streamed write process.
+   * @brief Initialize the required state before writing.
    *
    * @param[in] pq_chunked_state Internal state maintained between chunks.
    */
-   void init_state(SingleWriteMode mode = SingleWriteMode::NO);
+  void init_state(SingleWriteMode mode = SingleWriteMode::NO);
 
   /**
    * @brief Write an entire dataset to parquet format.
    *
    * @param table The set of columns
-   * @param metadata The metadata associated with the table
    * @param return_filemetadata If true, return the raw parquet file metadata
    * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
    * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -115,12 +122,13 @@ class writer::impl {
                                               bool return_filemetadata,
                                               const std::string& column_chunks_file_path,
                                               rmm::cuda_stream_view stream);
- 
+
   /**
-   * @brief Writes a single subtable as part of a larger parquet file/table write.
+   * @brief Writes a single subtable as part of a larger parquet file/table write,
+   * normally used for chunked writing.
    *
    * @param[in] table The table information to be written
-   * @param[in] pq_chunked_state Internal state maintained between chunks.
+   * @param[in] mode Option to write at once or in chunks.
    * boundaries.
    */
   void write(table_view const& table, SingleWriteMode mode = SingleWriteMode::NO);
@@ -128,14 +136,12 @@ class writer::impl {
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] pq_chunked_state Internal state maintained between chunks.
-   * @param return_filemetadata If true, return the raw parquet file metadata
-   * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
+   * @param[in] return_filemetadata If true, return the raw parquet file metadata
+   * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
    * @return unique_ptr to FileMetadata thrift message if requested
    */
-  std::unique_ptr<std::vector<uint8_t>> write_end(
-    bool return_filemetadata                   = false,
-    const std::string& column_chunks_file_path = "");
+  std::unique_ptr<std::vector<uint8_t>> write_end(bool return_filemetadata = false,
+                                                  const std::string& column_chunks_file_path = "");
 
  private:
   /**
@@ -252,14 +258,14 @@ class writer::impl {
   statistics_freq stats_granularity_ = statistics_freq::STATISTICS_NONE;
   bool int96_timestamps              = false;
   /// Cuda stream to be used
-  rmm::cuda_stream_view stream_ = 0;
+  rmm::cuda_stream_view stream_ = rmm::cuda_stream_default;
   /// Overall file metadata.  Filled in during the process and written during write_chunked_end()
   cudf::io::parquet::FileMetaData md;
   /// optional user metadata
   table_metadata_with_nullability user_metadata_with_nullability;
   /// special parameter only used by detail::write() to indicate that we are guaranteeing
   /// a single table write.  this enables some internal optimizations.
-  table_metadata const* user_metadata = nullptr;
+  table_metadata const* user_metadata     = nullptr;
   std::unique_ptr<pq_chunked_state> state = nullptr;
 
   std::vector<uint8_t> buffer_;
