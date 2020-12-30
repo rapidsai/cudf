@@ -844,7 +844,7 @@ TEST_F(ParquetChunkedWriterTest, SingleTable)
   auto filepath = temp_env->get_temp_filepath("ChunkedSingle.parquet");
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
-  auto writer = cudf_io::parquet_chunked_writer(args);
+  cudf_io::parquet_chunked_writer writer(args);
   writer.write(*table1);
   writer.write_end();
 
@@ -866,7 +866,7 @@ TEST_F(ParquetChunkedWriterTest, SimpleTable)
   auto filepath = temp_env->get_temp_filepath("ChunkedSimple.parquet");
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
-  auto writer = cudf_io::parquet_chunked_writer(args);
+  cudf_io::parquet_chunked_writer writer(args);
   writer.write(*table1);
   writer.write(*table2);
   writer.write_end();
@@ -889,7 +889,7 @@ TEST_F(ParquetChunkedWriterTest, LargeTables)
   auto filepath = temp_env->get_temp_filepath("ChunkedLarge.parquet");
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
-  auto writer = cudf_io::parquet_chunked_writer(args);
+  cudf_io::parquet_chunked_writer writer(args);
   writer.write(*table1);
   writer.write(*table2);
   auto md = writer.write_end();
@@ -919,8 +919,8 @@ TEST_F(ParquetChunkedWriterTest, ManyTables)
   auto filepath = temp_env->get_temp_filepath("ChunkedManyTables.parquet");
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
-  auto writer = cudf_io::parquet_chunked_writer(args);
-  std::for_each(table_views.begin(), table_views.end(), [&state](table_view const& tbl) {
+  cudf_io::parquet_chunked_writer writer(args);
+  std::for_each(table_views.begin(), table_views.end(), [&writer](table_view const& tbl) {
     writer.write(tbl);
   });
   auto md = writer.write_end(true, "dummy/path");
@@ -954,7 +954,7 @@ TEST_F(ParquetChunkedWriterTest, Strings)
   auto filepath = temp_env->get_temp_filepath("ChunkedStrings.parquet");
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
-  auto writer = cudf_io::parquet_chunked_writer(args);
+  cudf_io::parquet_chunked_writer writer(args);
   writer.write(tbl1);
   writer.write(tbl2);
   writer.write_end();
@@ -1016,7 +1016,7 @@ TEST_F(ParquetChunkedWriterTest, ListColumn)
   auto filepath = temp_env->get_temp_filepath("ChunkedLists.parquet");
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
-  auto writer = cudf_io::parquet_chunked_writer(args);
+  cudf_io::parquet_chunked_writer writer(args);
   writer.write(tbl0);
   writer.write(tbl1);
   writer.write_end();
@@ -1037,7 +1037,7 @@ TEST_F(ParquetChunkedWriterTest, MismatchedTypes)
   auto filepath = temp_env->get_temp_filepath("ChunkedMismatchedTypes.parquet");
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
-  auto writer = cudf_io::parquet_chunked_writer(args);
+  cudf_io::parquet_chunked_writer writer(args);
   writer.write(*table1);
   EXPECT_THROW(writer.write(*table2);, cudf::logic_error);
   writer.write_end();
@@ -1052,7 +1052,7 @@ TEST_F(ParquetChunkedWriterTest, MismatchedStructure)
   auto filepath = temp_env->get_temp_filepath("ChunkedMismatchedStructure.parquet");
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
-  auto writer = cudf_io::parquet_chunked_writer(args);
+  cudf_io::parquet_chunked_writer writer(args);
   writer.write(*table1);
   EXPECT_THROW(writer.write(*table2), cudf::logic_error);
   writer.write_end();
@@ -1092,7 +1092,7 @@ TEST_F(ParquetChunkedWriterTest, MismatchedStructureList)
   auto filepath = temp_env->get_temp_filepath("ChunkedLists.parquet");
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
-  auto writer = cudf_io::parquet_chunked_writer(args);
+  cudf_io::parquet_chunked_writer writer(args);
   writer.write(tbl0);
   CUDF_EXPECT_THROW_MESSAGE(writer.write(tbl1),
                             "Mismatch in schema between multiple calls to write_chunk");
@@ -1109,7 +1109,7 @@ TEST_F(ParquetChunkedWriterTest, DifferentNullability)
   auto filepath = temp_env->get_temp_filepath("ChunkedNullable.parquet");
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
-  auto writer = cudf_io::parquet_chunked_writer(args);
+  cudf_io::parquet_chunked_writer writer(args);
   writer.write(*table1);
   writer.write(*table2);
   writer.write_end();
@@ -1142,7 +1142,7 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullability)
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath})
       .nullable_metadata(&nullable_metadata);
-  auto writer = cudf_io::parquet_chunked_writer(args);
+  cudf_io::parquet_chunked_writer writer(args);
   writer.write(*table1);
   writer.write(*table2);
   writer.write_end();
@@ -1201,7 +1201,7 @@ TEST_F(ParquetChunkedWriterTest, ForcedNullabilityList)
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath})
       .nullable_metadata(&nullable_metadata);
-  auto writer = cudf_io::parquet_chunked_writer(args);
+  cudf_io::parquet_chunked_writer writer(args);
   writer.write(table1);
   writer.write(table2);
   writer.write_end();
@@ -1225,7 +1225,7 @@ TEST_F(ParquetChunkedWriterTest, WrongNullability)
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath})
       .nullable_metadata(&nullable_metadata);
-  auto writer = cudf_io::parquet_chunked_writer(args);
+  cudf_io::parquet_chunked_writer writer(args);
   EXPECT_THROW(writer.write(*table1), cudf::logic_error);
 
   nullable_metadata.column_nullable.clear();
@@ -1233,7 +1233,8 @@ TEST_F(ParquetChunkedWriterTest, WrongNullability)
   cudf_io::chunked_parquet_writer_options args2 =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath})
       .nullable_metadata(&nullable_metadata);
-  auto writer2 = cudf_io::parquet_chunked_writer(args2);
+  auto writer2 = std::move(cudf_io::parquet_chunked_writer(args2));
+  //cudf_io::parquet_chunked_writer writer2(args2);
   EXPECT_THROW(writer2.write(*table1), cudf::logic_error);
 }
 
@@ -1248,7 +1249,7 @@ TEST_F(ParquetChunkedWriterTest, ReadRowGroups)
   auto filepath = temp_env->get_temp_filepath("ChunkedRowGroups.parquet");
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
-  auto writer = cudf_io::parquet_chunked_writer(args);
+  cudf_io::parquet_chunked_writer writer(args);
   writer.write(*table1);
   writer.write(*table2);
   writer.write_end();
@@ -1269,7 +1270,7 @@ TEST_F(ParquetChunkedWriterTest, ReadRowGroupsError)
   auto filepath = temp_env->get_temp_filepath("ChunkedRowGroupsError.parquet");
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
-  auto writer = cudf_io::parquet_chunked_writer(args);
+  cudf_io::parquet_chunked_writer writer(args);
   writer.write(*table1);
   writer.write_end();
 
@@ -1320,7 +1321,7 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize)
   auto filepath = temp_env->get_temp_filepath("ChunkedUnalignedSize.parquet");
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
-  auto writer = cudf_io::parquet_chunked_writer(args);
+  cudf_io::parquet_chunked_writer writer(args);
   writer.write(tbl1);
   writer.write(tbl2);
   writer.write_end();
@@ -1370,7 +1371,7 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
   auto filepath = temp_env->get_temp_filepath("ChunkedUnalignedSize2.parquet");
   cudf_io::chunked_parquet_writer_options args =
     cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info{filepath});
-  auto writer = cudf_io::parquet_chunked_writer(args);
+  cudf_io::parquet_chunked_writer writer(args);
   writer.write(tbl1);
   writer.write(tbl2);
   writer.write_end();

@@ -647,7 +647,8 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
-    out_sink_(std::move(sink))
+    out_sink_(std::move(sink)),
+    user_metadata(options.get_metadata())
 {
 }
 
@@ -682,6 +683,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
   const std::string &column_chunks_file_path,
   rmm::cuda_stream_view stream)
 {
+
   stream_ = stream;
   init_state(SingleWriteMode::YES);
   write(table);
@@ -691,7 +693,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
 void writer::impl::write(table_view const &table, SingleWriteMode mode)
 {
   if(state == nullptr) {
-      init_state(mode)
+      init_state(mode);
   }
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
@@ -730,7 +732,7 @@ void writer::impl::write(table_view const &table, SingleWriteMode mode)
                                  this_column_nullability,
                                  user_metadata,
                                  int96_timestamps,
-                                 stream);
+                                 stream_);
   }
 
   // first call. setup metadata. num_rows will get incremented as write_chunk is
@@ -1250,7 +1252,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::write(table_view const &table,
                                                     rmm::cuda_stream_view stream)
 {
   return _impl->write(
-    table, metadata, return_filemetadata, column_chunks_file_path, int96_timestamps, stream);
+    table, return_filemetadata, column_chunks_file_path, stream);
 }
 
 // Forward to implementation

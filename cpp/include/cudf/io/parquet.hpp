@@ -881,7 +881,9 @@ namespace parquet{
 
 class parquet_writer {
     public:
-    explicit parquet_writer(parquet_writer_options const& op, rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()); 
+    parquet_writer()=default;
+    parquet_writer(parquet_writer_options const& op, rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+    ~parquet_writer();
     
     std::unique_ptr<std::vector<uint8_t>> write(); 
 
@@ -891,16 +893,21 @@ class parquet_writer {
     bool return_filemetadata = false;
     std::string column_chunks_file_path = "";
 
-   }
+   };
 
 class parquet_chunked_writer {
     public:
-    explicit parquet_chunked_writer(chunked_parquet_writer_options const& op, rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()); 
+    parquet_chunked_writer()=default;
+    parquet_chunked_writer(chunked_parquet_writer_options const& op, rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()); 
+    ~parquet_chunked_writer(); 
 
-    void write(table_view const &table, SingleWriteMode mode = SingleWriteMode::NO);
+    void write(table_view const &table);
     
-    std::unique_ptr<std::vector<uint8_t>> write_end(bool return_filemetadata, const std::string &column_chunks_file_path); 
-}
+    std::unique_ptr<std::vector<uint8_t>> write_end(bool return_filemetadata=false, const std::string &column_chunks_file_path=""); 
+    
+    private:
+    std::unique_ptr<cudf::io::detail::parquet::writer> writer;
+};
 /** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

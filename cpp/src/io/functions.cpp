@@ -364,19 +364,29 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
 }
 
 parquet_writer::parquet_writer(parquet_writer_options const& op, rmm::mr::device_memory_resource* mr):table(op.get_table()), return_filemetadata(op.is_enabled_return_filemetadata()), column_chunks_file_path(op.get_column_chunks_file_path()) {
-    writer = std::make_unique<cudf::io::detail::parquet::writer>(op.get_sink(), op, mr);
+    writer = make_writer<detail_parquet::writer>(op.get_sink(), op, mr);
 }
 
-void parquet_writer::write() {
-    writer->(table, return_filemetadata, column_chunks_file_path, rmm::cuda_stream_default);
+parquet_writer::~parquet_writer()
+{
+    writer.reset();
+}
+
+std::unique_ptr<std::vector<uint8_t>> parquet_writer::write() {
+    return writer->write(table, return_filemetadata, column_chunks_file_path, rmm::cuda_stream_default);
 }
 
 parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options const& op, rmm::mr::device_memory_resource* mr) {
-    writer = std::make_unique<cudf::io::detail::parquet::writer>(op.get_sink(), op, mr);
+    writer = make_writer<detail_parquet::writer>(op.get_sink(), op, mr);
 }
 
-void parquet_chunked_writer::write(table_view const &table, SingleWriteMode mode = SingleWriteMode::NO) {
-        writer->write(table, mode);
+parquet_chunked_writer::~parquet_chunked_writer()
+{
+    writer.reset();
+}
+
+void parquet_chunked_writer::write(table_view const &table) {
+        writer->write(table, SingleWriteMode::NO);
 }
 
 std::unique_ptr<std::vector<uint8_t>> parquet_chunked_writer::write_end(bool return_filemetadata, const std::string &column_chunks_file_path) {

@@ -168,22 +168,20 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
 
         chunked_parquet_writer_options build() except +
 
-    cdef shared_ptr[pq_chunked_state] write_parquet_chunked_begin(
-        chunked_parquet_writer_options args
-    ) except +
-
-    cdef void write_parquet_chunked(cudf_table_view.table_view table_,
-                                    shared_ptr[pq_chunked_state]) except +
-
-    cdef unique_ptr[vector[uint8_t]] write_parquet_chunked_end(
-        shared_ptr[pq_chunked_state],
-        bool return_meta,
-        string column_chunks_file_path,
-    ) except +
-
-    cdef cppclass pq_chunked_state:
-        pass
-
+    cdef cppclass parquet_writer:
+        parquet_writer() except+
+        parquet_writer(parquet_writer_options args) except+
+        unique_ptr[vector[uint8_t]] write() except+
+    
+    cdef cppclass parquet_chunked_writer:
+        parquet_chunked_writer() except+
+        parquet_chunked_writer(chunked_parquet_writer_options args) except+
+        unique_ptr[vector[uint8_t]] write(
+            cudf_table_view.table_view table_,
+        ) except+
+        unique_ptr[vector[uint8_t]] write_end(
+                bool return_meta,
+                string column_chunks_file_path,) except+
     cdef unique_ptr[vector[uint8_t]] merge_rowgroup_metadata(
         const vector[unique_ptr[vector[uint8_t]]]& metadata_list
     ) except +

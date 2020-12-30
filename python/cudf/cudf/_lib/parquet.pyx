@@ -42,14 +42,11 @@ from cudf._lib.cpp.io.parquet cimport (
     read_parquet as parquet_reader,
     parquet_reader_options,
     parquet_writer_options,
-    write_parquet as parquet_writer,
+    parquet_writer as cpp_parquet_writer,
+    parquet_chunked_writer as cpp_parquet_chunked_writer,
     chunked_parquet_writer_options,
     chunked_parquet_writer_options_builder,
-    write_parquet_chunked_begin,
-    write_parquet_chunked,
-    write_parquet_chunked_end,
     merge_rowgroup_metadata as parquet_merge_metadata,
-    pq_chunked_state
 )
 from cudf._lib.column cimport Column
 from cudf._lib.io.utils cimport (
@@ -389,6 +386,7 @@ cpdef write_parquet(
     if metadata_file_path is not None:
         c_column_chunks_file_path = str.encode(metadata_file_path)
         return_filemetadata = True
+    cdef cpp_parquet_writer writer
 
     # Perform write
     with nogil:
@@ -402,7 +400,9 @@ cpdef write_parquet(
             .int96_timestamps(_int96_timestamps)
             .build()
         )
-        out_metadata_c = move(parquet_writer(args))
+        
+        writer = move(cpp_parquet_writer(args))
+        out_metadata_c = move(writer.write())
 
     if metadata_file_path is not None:
         out_metadata_py = BufferArrayFromVector.from_unique_ptr(
@@ -422,7 +422,8 @@ cdef class ParquetWriter:
     --------
     cudf.io.parquet.write_parquet
     """
-    cdef shared_ptr[pq_chunked_state] state
+    cdef bool initialized;
+    cdef cpp_parquet_chunked_writer writer
     cdef cudf_io_types.sink_info sink
     cdef unique_ptr[cudf_io_types.data_sink] _data_sink
     cdef cudf_io_types.statistics_freq stat_freq
@@ -435,10 +436,11 @@ cdef class ParquetWriter:
         self.stat_freq = _get_stat_freq(statistics)
         self.comp_type = _get_comp_type(compression)
         self.index = index
+        self.initialized = False
 
     def write_table(self, Table table):
         """ Writes a single table to the file """
-        if not self.state:
+        if not self.initialized:
             self._initialize_chunked_state(table)
 
         cdef table_view tv = table.data_view()
@@ -448,14 +450,14 @@ cdef class ParquetWriter:
                 tv = table.view()
 
         with nogil:
-            write_parquet_chunked(tv, self.state)
+            self.writer.write(tv)
 
     def close(self, object metadata_file_path=None):
         cdef unique_ptr[vector[uint8_t]] out_metadata_c
         cdef bool return_meta
         cdef string column_chunks_file_path
 
-        if not self.state:
+        if not self.initialized:
             return None
 
         # Update metadata-collection options
@@ -467,11 +469,10 @@ cdef class ParquetWriter:
 
         with nogil:
             out_metadata_c = move(
-                write_parquet_chunked_end(
-                    self.state, return_meta, column_chunks_file_path
+                self.writer.write_end(
+                    return_meta, column_chunks_file_path
                 )
             )
-            self.state.reset()
 
         if metadata_file_path is not None:
             out_metadata_py = BufferArrayFromVector.from_unique_ptr(
@@ -505,7 +506,8 @@ cdef class ParquetWriter:
                 .stats_level(self.stat_freq)
                 .build()
             )
-            self.state = write_parquet_chunked_begin(args)
+            self.writer = move(cpp_parquet_chunked_writer(args))
+        self.initialized = True
 
 
 cpdef merge_filemetadata(object filemetadata_list):

@@ -62,7 +62,7 @@ struct pq_chunked_state {
   pq_chunked_state() = default;
 
   pq_chunked_state(SingleWriteMode mode         = SingleWriteMode::NO)
-    : single_write_mode{mode == SingleWriteMode::YES})
+    : single_write_mode({mode == SingleWriteMode::YES})
   {
   }
 };
@@ -90,6 +90,10 @@ class writer::impl {
                 parquet_writer_options const& options,
                 rmm::mr::device_memory_resource* mr);
 
+  explicit impl(std::unique_ptr<data_sink> sink,
+                chunked_parquet_writer_options const& options,
+                rmm::mr::device_memory_resource* mr);
+
   /**
    * @brief Begins the chunked/streamed write process.
    *
@@ -108,10 +112,8 @@ class writer::impl {
    * @return unique_ptr to FileMetadata thrift message if requested
    **/
   std::unique_ptr<std::vector<uint8_t>> write(table_view const& table,
-                                              const table_metadata* metadata,
                                               bool return_filemetadata,
                                               const std::string& column_chunks_file_path,
-                                              bool int96_timestamps,
                                               rmm::cuda_stream_view stream);
  
   /**
@@ -250,7 +252,7 @@ class writer::impl {
   statistics_freq stats_granularity_ = statistics_freq::STATISTICS_NONE;
   bool int96_timestamps              = false;
   /// Cuda stream to be used
-  rmm::cuda_stream_view stream = 0;
+  rmm::cuda_stream_view stream_ = 0;
   /// Overall file metadata.  Filled in during the process and written during write_chunked_end()
   cudf::io::parquet::FileMetaData md;
   /// optional user metadata
@@ -258,7 +260,7 @@ class writer::impl {
   /// special parameter only used by detail::write() to indicate that we are guaranteeing
   /// a single table write.  this enables some internal optimizations.
   table_metadata const* user_metadata = nullptr;
-  pq_chunked_state* state = nullptr;
+  std::unique_ptr<pq_chunked_state> state = nullptr;
 
   std::vector<uint8_t> buffer_;
   std::unique_ptr<data_sink> out_sink_;

@@ -97,6 +97,18 @@ class writer {
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
+   * @brief Constructor for output to a file.
+   *
+   * @param sink The data sink to write the data to
+   * @param options Settings for controlling writing behavior
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
+                  chunked_parquet_writer_options const& options,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+
+  /**
    * @brief Destructor explicitly-declared to avoid inlined in header
    */
   ~writer();
