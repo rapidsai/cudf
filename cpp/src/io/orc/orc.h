@@ -125,6 +125,11 @@ class ProtobufReader {
   void skip_struct_field(int t);
 
  public:
+  template <typename T>
+  void read(T &s)
+  {
+    read(s, m_end - m_cur);
+  }
   void read(PostScript &, size_t maxlen);
   void read(FileFooter &, size_t maxlen);
   void read(StripeInformation &, size_t maxlen);

@@ -362,7 +362,7 @@ metadata::metadata(datasource *const src) : source(src)
   auto buffer            = source->host_read(len - max_ps_size, max_ps_size);
   const size_t ps_length = buffer->data()[max_ps_size - 1];
   const uint8_t *ps_data = &buffer->data()[max_ps_size - ps_length - 1];
-  ProtobufReader(ps_data, ps_length).read(ps, ps_length);
+  ProtobufReader(ps_data, ps_length).read(ps);
   CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
 
   // If compression is used, all the rest of the metadata is compressed
@@ -373,7 +373,7 @@ metadata::metadata(datasource *const src) : source(src)
   buffer           = source->host_read(len - ps_length - 1 - ps.footerLength, ps.footerLength);
   size_t ff_length = 0;
   auto ff_data     = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
-  ProtobufReader(ff_data, ff_length).read(ff, ff_length);
+  ProtobufReader(ff_data, ff_length).read(ff);
   CUDF_EXPECTS(get_num_columns() > 0, "No columns found");
 
   // Read compressed metadata section
@@ -381,7 +381,7 @@ metadata::metadata(datasource *const src) : source(src)
     source->host_read(len - ps_length - 1 - ps.footerLength - ps.metadataLength, ps.metadataLength);
   size_t md_length = 0;
   auto md_data     = decompressor->Decompress(buffer->data(), ps.metadataLength, &md_length);
-  orc::ProtobufReader(md_data, md_length).read(md, md_length);
+  orc::ProtobufReader(md_data, md_length).read(md);
 }
 
 std::vector<metadata::OrcStripeInfo> metadata::select_stripes(const std::vector<size_type> &stripes,
@@ -441,7 +441,7 @@ std::vector<metadata::OrcStripeInfo> metadata::select_stripes(const std::vector<
       const auto buffer = source->host_read(sf_comp_offset, sf_comp_length);
       size_t sf_length  = 0;
       auto sf_data      = decompressor->Decompress(buffer->data(), sf_comp_length, &sf_length);
-      ProtobufReader(sf_data, sf_length).read(stripefooters[i], sf_length);
+      ProtobufReader(sf_data, sf_length).read(stripefooters[i]);
       selection[i].second = &stripefooters[i];
     }
   }
