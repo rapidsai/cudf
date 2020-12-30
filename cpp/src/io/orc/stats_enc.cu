@@ -237,17 +237,17 @@ __global__ void __launch_bounds__(encode_threads_per_block)
                         const statistics_chunk *chunks,
                         uint32_t statistics_count)
 {
-  uint32_t const t             = threadIdx.x;
-  uint32_t const idx           = blockIdx.x * encode_chunks_per_block + threadIdx.y;
+  uint32_t const t   = threadIdx.x;
+  uint32_t const idx = blockIdx.x * encode_chunks_per_block + threadIdx.y;
 
   // Encode and update actual bfr size
   if (idx < statistics_count && t == 0) {
     stats_state_s s;
-    s.chunk           = chunks[idx];
-    s.group           = groups[idx];
-    s.col             = *(s.group.col);
-    s.base            = blob_bfr + s.group.start_chunk;
-    s.end             = blob_bfr + s.group.start_chunk + s.group.num_chunks;
+    s.chunk            = chunks[idx];
+    s.group            = groups[idx];
+    s.col              = *(s.group.col);
+    s.base             = blob_bfr + s.group.start_chunk;
+    s.end              = blob_bfr + s.group.start_chunk + s.group.num_chunks;
     uint8_t *cur       = pb_put_uint(s.base, 1, s.chunk.non_nulls);
     uint8_t *fld_start = cur;
     switch (s.col.stats_dtype) {
@@ -302,10 +302,10 @@ __global__ void __launch_bounds__(encode_threads_per_block)
                         s.chunk.min_value.str_val.length + s.chunk.max_value.str_val.length;
           cur[0] = 4 * 8 + PB_TYPE_FIXEDLEN;
           cur    = pb_encode_uint(cur + 1, sz);
-          cur    = pb_put_binary(
-            cur, 1, s.chunk.min_value.str_val.ptr, s.chunk.min_value.str_val.length);
-          cur = pb_put_binary(
-            cur, 2, s.chunk.max_value.str_val.ptr, s.chunk.max_value.str_val.length);
+          cur =
+            pb_put_binary(cur, 1, s.chunk.min_value.str_val.ptr, s.chunk.min_value.str_val.length);
+          cur =
+            pb_put_binary(cur, 2, s.chunk.max_value.str_val.ptr, s.chunk.max_value.str_val.length);
           cur = pb_put_uint(cur, 3, s.chunk.sum.i_val);
         }
         break;
