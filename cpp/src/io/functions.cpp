@@ -217,26 +217,23 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
   std::vector<std::vector<std::string>> statistics_blobs;
 
   // Get column names
-  std::vector<std::string> column_names;
+  statistics_blobs.emplace_back();
   for (auto i = 0; i < metadata.get_num_columns(); i++) {
-    column_names.push_back(metadata.get_column_name(i));
+    statistics_blobs.back().push_back(metadata.get_column_name(i));
   }
-  statistics_blobs.push_back(column_names);
 
   // Get file-level statistics, statistics of each column of file
-  std::vector<std::string> file_column_statistics_blobs;
+  statistics_blobs.emplace_back();
   for (auto const& stats : metadata.ff.statistics) {
-    file_column_statistics_blobs.push_back(std::string(stats.cbegin(), stats.cend()));
+    statistics_blobs.back().push_back(std::string(stats.cbegin(), stats.cend()));
   }
-  statistics_blobs.push_back(file_column_statistics_blobs);
 
   // Get stripe-level statistics
   for (auto const& stripe_stats : metadata.md.stripeStats) {
-    std::vector<std::string> stripe_column_statistics_blobs;
+    statistics_blobs.emplace_back();
     for (auto const& stats : stripe_stats.colStats) {
-      stripe_column_statistics_blobs.push_back(std::string(stats.cbegin(), stats.cend()));
+      statistics_blobs.back().push_back(std::string(stats.cbegin(), stats.cend()));
     }
-    statistics_blobs.push_back(stripe_column_statistics_blobs);
   }
 
   return statistics_blobs;
