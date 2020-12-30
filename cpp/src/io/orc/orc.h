@@ -142,26 +142,26 @@ class ProtobufReader {
   void skip_struct_field(int t);
 
  public:
-  bool read(PostScript &, size_t maxlen);
-  bool read(FileFooter &, size_t maxlen);
-  bool read(StripeInformation &, size_t maxlen);
-  bool read(SchemaType &, size_t maxlen);
-  bool read(UserMetadataItem &, size_t maxlen);
-  bool read(StripeFooter &, size_t maxlen);
-  bool read(Stream &, size_t maxlen);
-  bool read(ColumnEncoding &, size_t maxlen);
-  bool read(StripeStatistics &, size_t maxlen);
-  bool read(ColumnStatistics &, size_t maxlen);
-  bool read(IntegerStatistics &, size_t maxlen);
-  bool read(Metadata &, size_t maxlen);
+  void read(PostScript &, size_t maxlen);
+  void read(FileFooter &, size_t maxlen);
+  void read(StripeInformation &, size_t maxlen);
+  void read(SchemaType &, size_t maxlen);
+  void read(UserMetadataItem &, size_t maxlen);
+  void read(StripeFooter &, size_t maxlen);
+  void read(Stream &, size_t maxlen);
+  void read(ColumnEncoding &, size_t maxlen);
+  void read(StripeStatistics &, size_t maxlen);
+  void read(ColumnStatistics &, size_t maxlen);
+  void read(IntegerStatistics &, size_t maxlen);
+  void read(Metadata &, size_t maxlen);
 
  protected:
-  bool InitSchema(FileFooter &);
+  void InitSchema(FileFooter &);
 
   template <typename T, typename... Operator>
-  bool function_builder(T &s, size_t maxlen, std::tuple<Operator...> &op);
+  void function_builder(T &s, size_t maxlen, std::tuple<Operator...> &op);
   template <typename T>
-  bool function_builder_return(T &s, const uint8_t *end);
+  void function_builder_return(T &s, const uint8_t *end);
   struct FieldInt32;
   struct FieldUInt32;
   struct FieldInt64;

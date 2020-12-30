@@ -220,8 +220,7 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
   const size_t ps_length = buffer->data()[max_ps_size - 1];
   const uint8_t* ps_data = &buffer->data()[max_ps_size - ps_length - 1];
   orc::PostScript ps;
-  CUDF_EXPECTS(orc::ProtobufReader(ps_data, ps_length).read(ps, ps_length),
-               "Cannot read postscript");
+  orc::ProtobufReader(ps_data, ps_length).read(ps, ps_length);
   CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
 
   // If compression is used, all the rest of the metadata is compressed
@@ -234,8 +233,7 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
   size_t ff_length = 0;
   auto ff_data     = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
   orc::FileFooter ff;
-  CUDF_EXPECTS(orc::ProtobufReader(ff_data, ff_length).read(ff, ff_length),
-               "Cannot read filefooter");
+  orc::ProtobufReader(ff_data, ff_length).read(ff, ff_length);
   CUDF_EXPECTS(ff.types.size() > 0, "No columns found");
 
   // Read compressed metadata section
@@ -244,7 +242,7 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
   size_t md_length = 0;
   auto md_data     = decompressor->Decompress(buffer->data(), ps.metadataLength, &md_length);
   orc::Metadata md;
-  CUDF_EXPECTS(orc::ProtobufReader(md_data, md_length).read(md, md_length), "Cannot read metadata");
+  orc::ProtobufReader(md_data, md_length).read(md, md_length);
 
   // Initialize statistics to return
   std::vector<std::vector<std::string>> statistics_blobs;
@@ -428,10 +426,8 @@ void parse_orc_statistics(std::vector<std::vector<std::string>> const& blobs)
   // std::cout << blobs[1][0].size() << std::endl;
 
   orc::ColumnStatistics cs;
-  CUDF_EXPECTS(
-    orc::ProtobufReader(reinterpret_cast<const uint8_t*>(blobs[1][1].c_str()), blobs[1][1].size())
-      .read(cs, sizeof(orc::ColumnStatistics)),
-    "Cannot read cs");
+  orc::ProtobufReader(reinterpret_cast<const uint8_t*>(blobs[1][1].c_str()), blobs[1][1].size())
+    .read(cs, sizeof(orc::ColumnStatistics));
 
   std::cout << cs.numberOfValues << ' ' << cs.intStatistics.minimum << " "
             << cs.intStatistics.maximum << " " << cs.intStatistics.sum << std::endl;

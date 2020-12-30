@@ -35,7 +35,7 @@ void ProtobufReader::skip_struct_field(int t)
   }
 }
 
-bool ProtobufReader::read(PostScript &s, size_t maxlen)
+void ProtobufReader::read(PostScript &s, size_t maxlen)
 {
   auto op = std::make_tuple(FieldUInt64(1, s.footerLength),
                             FieldEnum<CompressionKind>(2, s.compression),
@@ -43,10 +43,10 @@ bool ProtobufReader::read(PostScript &s, size_t maxlen)
                             FieldPackedUInt32(4, s.version),
                             FieldUInt64(5, s.metadataLength),
                             FieldString(8000, s.magic));
-  return function_builder(s, maxlen, op);
+  function_builder(s, maxlen, op);
 }
 
-bool ProtobufReader::read(FileFooter &s, size_t maxlen)
+void ProtobufReader::read(FileFooter &s, size_t maxlen)
 {
   auto op = std::make_tuple(FieldUInt64(1, s.headerLength),
                             FieldUInt64(2, s.contentLength),
@@ -56,20 +56,20 @@ bool ProtobufReader::read(FileFooter &s, size_t maxlen)
                             FieldUInt64(6, s.numberOfRows),
                             FieldRepeatedStructBlob(7, s.statistics),
                             FieldUInt32(8, s.rowIndexStride));
-  return function_builder(s, maxlen, op);
+  function_builder(s, maxlen, op);
 }
 
-bool ProtobufReader::read(StripeInformation &s, size_t maxlen)
+void ProtobufReader::read(StripeInformation &s, size_t maxlen)
 {
   auto op = std::make_tuple(FieldUInt64(1, s.offset),
                             FieldUInt64(2, s.indexLength),
                             FieldUInt64(3, s.dataLength),
                             FieldUInt32(4, s.footerLength),
                             FieldUInt32(5, s.numberOfRows));
-  return function_builder(s, maxlen, op);
+  function_builder(s, maxlen, op);
 }
 
-bool ProtobufReader::read(SchemaType &s, size_t maxlen)
+void ProtobufReader::read(SchemaType &s, size_t maxlen)
 {
   auto op = std::make_tuple(FieldEnum<TypeKind>(1, s.kind),
                             FieldPackedUInt32(2, s.subtypes),
@@ -77,60 +77,60 @@ bool ProtobufReader::read(SchemaType &s, size_t maxlen)
                             FieldUInt32(4, s.maximumLength),
                             FieldUInt32(5, s.precision),
                             FieldUInt32(6, s.scale));
-  return function_builder(s, maxlen, op);
+  function_builder(s, maxlen, op);
 }
 
-bool ProtobufReader::read(UserMetadataItem &s, size_t maxlen)
+void ProtobufReader::read(UserMetadataItem &s, size_t maxlen)
 {
   auto op = std::make_tuple(FieldString(1, s.name), FieldString(2, s.value));
-  return function_builder(s, maxlen, op);
+  function_builder(s, maxlen, op);
 }
 
-bool ProtobufReader::read(StripeFooter &s, size_t maxlen)
+void ProtobufReader::read(StripeFooter &s, size_t maxlen)
 {
   auto op = std::make_tuple(FieldRepeatedStruct(1, s.streams),
                             FieldRepeatedStruct(2, s.columns),
                             FieldString(3, s.writerTimezone));
-  return function_builder(s, maxlen, op);
+  function_builder(s, maxlen, op);
 }
 
-bool ProtobufReader::read(Stream &s, size_t maxlen)
+void ProtobufReader::read(Stream &s, size_t maxlen)
 {
   auto op = std::make_tuple(
     FieldEnum<StreamKind>(1, s.kind), FieldUInt32(2, s.column), FieldUInt64(3, s.length));
-  return function_builder(s, maxlen, op);
+  function_builder(s, maxlen, op);
 }
 
-bool ProtobufReader::read(ColumnEncoding &s, size_t maxlen)
+void ProtobufReader::read(ColumnEncoding &s, size_t maxlen)
 {
   auto op =
     std::make_tuple(FieldEnum<ColumnEncodingKind>(1, s.kind), FieldUInt32(2, s.dictionarySize));
-  return function_builder(s, maxlen, op);
+  function_builder(s, maxlen, op);
 }
 
-bool ProtobufReader::read(StripeStatistics &s, size_t maxlen)
+void ProtobufReader::read(StripeStatistics &s, size_t maxlen)
 {
   auto op = std::make_tuple(FieldRepeatedStructBlob(1, s.colStats));
-  return function_builder(s, maxlen, op);
+  function_builder(s, maxlen, op);
 }
 
-bool ProtobufReader::read(ColumnStatistics &s, size_t maxlen)
+void ProtobufReader::read(ColumnStatistics &s, size_t maxlen)
 {
   auto op = std::make_tuple(FieldUInt64(1, s.numberOfValues), FieldStruct(2, s.intStatistics));
-  return function_builder(s, maxlen, op);
+  function_builder(s, maxlen, op);
 }
 
-bool ProtobufReader::read(IntegerStatistics &s, size_t maxlen)
+void ProtobufReader::read(IntegerStatistics &s, size_t maxlen)
 {
   auto op =
     std::make_tuple(FieldInt64(1, s.minimum), FieldInt64(2, s.maximum), FieldInt64(3, s.sum));
-  return function_builder(s, maxlen, op);
+  function_builder(s, maxlen, op);
 }
 
-bool ProtobufReader::read(Metadata &s, size_t maxlen)
+void ProtobufReader::read(Metadata &s, size_t maxlen)
 {
   auto op = std::make_tuple(FieldRepeatedStruct(1, s.stripeStats));
-  return function_builder(s, maxlen, op);
+  function_builder(s, maxlen, op);
 }
 
 // return the column name
@@ -156,7 +156,7 @@ std::string FileFooter::GetColumnName(uint32_t column_id)
 }
 
 // Initializes the parent_idx field in the schema
-bool ProtobufReader::InitSchema(FileFooter &ff)
+void ProtobufReader::InitSchema(FileFooter &ff)
 {
   int32_t schema_size = (int32_t)ff.types.size();
   for (int32_t i = 0; i < schema_size; i++) {
@@ -167,19 +167,13 @@ bool ProtobufReader::InitSchema(FileFooter &ff)
     }
     for (int32_t j = 0; j < num_children; j++) {
       uint32_t column_id = ff.types[i].subtypes[j];
-      if (column_id <= (uint32_t)i || column_id >= (uint32_t)schema_size) {
-        // Invalid column id (or at least not a schema index)
-        return false;
-      }
-      if (ff.types[column_id].parent_idx != -1) {
-        // Same node referenced twice
-        return false;
-      }
+      CUDF_EXPECTS(column_id > (uint32_t)i && column_id < (uint32_t)schema_size,
+                   "Invalid column id(or at least not a schema index");
+      CUDF_EXPECTS(ff.types[column_id].parent_idx == -1, "Same node referenced twice");
       ff.types[column_id].parent_idx = i;
       ff.types[column_id].field_idx  = j;
     }
   }
-  return true;
 }
 
 /**
