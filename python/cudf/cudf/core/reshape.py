@@ -972,18 +972,15 @@ def unstack(df, level, fill_value=None):
 
     Unstacking single level index dataframe:
 
-    >>> df.unstack(['b', 'd']).unstack()
-       b  d  a
-    c  1  a  1       5
-             2    <NA>
-          d  1    <NA>
-             2       8
-       2  b  1       6
-             2    <NA>
-          e  1    <NA>
-             2       9
-       3  a  1       7
-             2    <NA>
+    >>> df = cudf.DataFrame({('c', 1): [1, 2, 3], ('c', 2):[9, 8, 7]})
+    >>> df.unstack()
+    c  1  0    1
+          1    2
+          2    3
+       2  0    9
+          1    8
+          2    7
+    dtype: int64
     """
     if fill_value is not None:
         raise NotImplementedError("fill_value is not supported.")
