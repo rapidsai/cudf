@@ -178,6 +178,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         unique_ptr[vector[uint8_t]] write_end(
             bool return_meta,
             string column_chunks_file_path,) except+
+
     cdef unique_ptr[vector[uint8_t]] merge_rowgroup_metadata(
         const vector[unique_ptr[vector[uint8_t]]]& metadata_list
     ) except +

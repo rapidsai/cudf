@@ -383,7 +383,7 @@ table_with_metadata read_parquet(
 class parquet_writer_options_builder;
 
 /**
- * @brief Settings for `write_parquet()`.
+ * @brief Settings for `parquet_writer()`.
  */
 class parquet_writer_options {
   // Specify the sink to use for writer output
@@ -635,10 +635,6 @@ class parquet_writer_options_builder {
   parquet_writer_options&& build() { return std::move(options); }
 };
 
-std::unique_ptr<std::vector<uint8_t>> write_parquet(
-  parquet_writer_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
 /**
  * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
  * into a single metadata blob.
@@ -861,7 +857,7 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
  *  cudf::io::parquet_writer_options options =
  *  cudf::io::parquet_writer_options::builder(cudf::sink_info(filepath), table->view());
  *  ...
- *  auto writer = cudf::io::parquet_writer(options);
+ *  cudf::io::parquet_writer writer(options);
  *  writer.write()
  * @endcode
  */
@@ -882,7 +878,7 @@ class parquet_writer {
                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief operator overloaded to handle move
+   * @brief Moves writer unique pointer to object
    *
    * @param[in] rhs writer class that needs to be moved
    */
@@ -947,7 +943,7 @@ class parquet_chunked_writer {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief operator overloaded to handle move
+   * @brief Moves writer unique pointer to object
    *
    * @param[in] rhs writer class that needs to be moved
    */

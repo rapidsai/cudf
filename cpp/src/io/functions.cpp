@@ -375,7 +375,7 @@ std::unique_ptr<std::vector<uint8_t>> parquet_writer::write()
     table, return_filemetadata, column_chunks_file_path, rmm::cuda_stream_default);
 }
 
-// Handles move for objects
+// Moves writer unique pointer to object
 parquet_writer& parquet_writer::operator=(parquet_writer&& rhs)
 {
   writer = std::move(rhs.writer);
@@ -389,7 +389,7 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
   writer = make_writer<detail_parquet::writer>(op.get_sink(), op, mr);
 }
 
-// Handles move for objects
+// Moves writer unique pointer to object
 parquet_chunked_writer& parquet_chunked_writer::operator=(parquet_chunked_writer&& rhs)
 {
   writer = std::move(rhs.writer);
