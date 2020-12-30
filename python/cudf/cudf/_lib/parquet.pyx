@@ -386,7 +386,7 @@ cpdef write_parquet(
     if metadata_file_path is not None:
         c_column_chunks_file_path = str.encode(metadata_file_path)
         return_filemetadata = True
-    cdef cpp_parquet_writer writer
+    cdef unique_ptr[cpp_parquet_writer] writer
 
     # Perform write
     with nogil:
@@ -401,8 +401,8 @@ cpdef write_parquet(
             .build()
         )
         
-        writer = move(cpp_parquet_writer(args))
-        out_metadata_c = move(writer.write())
+        writer.reset(new cpp_parquet_writer(args))
+        out_metadata_c = move(writer.get()[0].write())
 
     if metadata_file_path is not None:
         out_metadata_py = BufferArrayFromVector.from_unique_ptr(
@@ -423,7 +423,7 @@ cdef class ParquetWriter:
     cudf.io.parquet.write_parquet
     """
     cdef bool initialized;
-    cdef cpp_parquet_chunked_writer writer
+    cdef unique_ptr[cpp_parquet_chunked_writer] writer
     cdef cudf_io_types.sink_info sink
     cdef unique_ptr[cudf_io_types.data_sink] _data_sink
     cdef cudf_io_types.statistics_freq stat_freq
@@ -450,7 +450,7 @@ cdef class ParquetWriter:
                 tv = table.view()
 
         with nogil:
-            self.writer.write(tv)
+            self.writer.get()[0].write(tv)
 
     def close(self, object metadata_file_path=None):
         cdef unique_ptr[vector[uint8_t]] out_metadata_c
@@ -469,7 +469,7 @@ cdef class ParquetWriter:
 
         with nogil:
             out_metadata_c = move(
-                self.writer.write_end(
+                self.writer.get()[0].write_end(
                     return_meta, column_chunks_file_path
                 )
             )
@@ -506,7 +506,7 @@ cdef class ParquetWriter:
                 .stats_level(self.stat_freq)
                 .build()
             )
-            self.writer = move(cpp_parquet_chunked_writer(args))
+            self.writer.reset(new cpp_parquet_chunked_writer(args))
         self.initialized = True
 
 

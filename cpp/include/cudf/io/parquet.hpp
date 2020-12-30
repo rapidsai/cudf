@@ -20,6 +20,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/io/detail/parquet.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
@@ -673,8 +674,6 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
  */
 class chunked_parquet_writer_options_builder;
 
-enum class SingleWriteMode : bool { YES, NO };
-
 /**
  * @brief Settings for `write_parquet_chunked()`.
  */
@@ -872,23 +871,24 @@ class chunked_parquet_writer_options_builder {
 std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 
-namespace detail{
-namespace parquet{
+//namespace detail{
+//namespace parquet{
     // Forward declaration
-    class writer;
-}
-}
+//    class writer;
+//}
+//}
 
 class parquet_writer {
     public:
     parquet_writer()=default;
     parquet_writer(parquet_writer_options const& op, rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
     ~parquet_writer();
+    parquet_writer& operator=(parquet_writer&& rhs);
     
     std::unique_ptr<std::vector<uint8_t>> write(); 
 
-    private:
     std::unique_ptr<cudf::io::detail::parquet::writer> writer;
+    private:
     table_view table;
     bool return_filemetadata = false;
     std::string column_chunks_file_path = "";
@@ -900,12 +900,12 @@ class parquet_chunked_writer {
     parquet_chunked_writer()=default;
     parquet_chunked_writer(chunked_parquet_writer_options const& op, rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()); 
     ~parquet_chunked_writer(); 
+    parquet_chunked_writer& operator=(parquet_chunked_writer&& rhs);
 
     void write(table_view const &table);
     
     std::unique_ptr<std::vector<uint8_t>> write_end(bool return_filemetadata=false, const std::string &column_chunks_file_path=""); 
     
-    private:
     std::unique_ptr<cudf::io::detail::parquet::writer> writer;
 };
 /** @} */  // end of group

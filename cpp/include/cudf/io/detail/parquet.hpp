@@ -20,12 +20,26 @@
 
 #pragma once
 
-#include <cudf/io/parquet.hpp>
-
+#include <cudf/io/types.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
+
+#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
+
 
 namespace cudf {
 namespace io {
+enum class SingleWriteMode : bool { YES, NO };
+
+class parquet_reader_options;
+class parquet_writer_options;
+class chunked_parquet_writer_options;
 namespace detail {
 namespace parquet {
 /**
