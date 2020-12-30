@@ -902,6 +902,11 @@ def unstack(df, level, fill_value=None):
     Pivots the specified levels of the index labels of df to the innermost
     levels of the columns labels of the result.
 
+    * If the index of ``df`` has multiple levels, returns a ``Dataframe`` with
+      specified level of the index pivoted to the column levels.
+    * If the index of ``df`` has single level, returns a ``Series`` with all
+      column levels pivoted to the index levels.
+
     Parameters
     ----------
     df : DataFrame
@@ -913,7 +918,7 @@ def unstack(df, level, fill_value=None):
 
     Returns
     -------
-    DataFrame with specified index levels pivoted to column levels
+    Series or DataFrame
 
     Examples
     --------
@@ -964,6 +969,21 @@ def unstack(df, level, fill_value=None):
     a
     1     5  <NA>     6  <NA>     7
     2  <NA>     8  <NA>     9  <NA>
+
+    Unstacking single level index dataframe:
+
+    >>> df.unstack(['b', 'd']).unstack()
+       b  d  a
+    c  1  a  1       5
+             2    <NA>
+          d  1    <NA>
+             2       8
+       2  b  1       6
+             2    <NA>
+          e  1    <NA>
+             2       9
+       3  a  1       7
+             2    <NA>
     """
     if fill_value is not None:
         raise NotImplementedError("fill_value is not supported.")
