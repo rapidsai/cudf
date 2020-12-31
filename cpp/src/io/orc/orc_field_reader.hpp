@@ -90,70 +90,6 @@ inline void ProtobufReader::function_builder(T &s, size_t maxlen, std::tuple<Ope
 }
 
 /**
- * @brief Functor to set value to 32 bit integer read from metadata stream.
- */
-struct ProtobufReader::FieldInt32 {
-  int const field;
-  int32_t &value;
-
-  FieldInt32(int f, int32_t &v) : field((f * 8) + PB_TYPE_VARINT), value(v) {}
-
-  inline void operator()(ProtobufReader *pbr, const uint8_t *end) { value = pbr->get<int32_t>(); }
-};
-
-/**
- * @brief Functor to set value to 32 bit unsigned integer read from metadata stream.
- */
-struct ProtobufReader::FieldUInt32 {
-  int const field;
-  uint32_t &value;
-
-  FieldUInt32(int f, uint32_t &v) : field((f * 8) + PB_TYPE_VARINT), value(v) {}
-
-  inline void operator()(ProtobufReader *pbr, const uint8_t *end) { value = pbr->get<uint32_t>(); }
-};
-
-/**
- * @brief Functor to set value to 64 bit integer read from metadata stream
- */
-struct ProtobufReader::FieldInt64 {
-  int const field;
-  int64_t &value;
-
-  FieldInt64(int f, int64_t &v) : field((f * 8) + PB_TYPE_VARINT), value(v) {}
-
-  inline void operator()(ProtobufReader *pbr, const uint8_t *end) { value = pbr->get<int64_t>(); }
-};
-
-/**
- * @brief Functor to set value to 64 bit unsigned integer read from metadata stream
- */
-struct ProtobufReader::FieldUInt64 {
-  int const field;
-  uint64_t &value;
-
-  FieldUInt64(int f, uint64_t &v) : field((f * 8) + PB_TYPE_VARINT), value(v) {}
-
-  inline void operator()(ProtobufReader *pbr, const uint8_t *end) { value = pbr->get<uint64_t>(); }
-};
-
-/**
- * @brief Functor to set value to enum read from metadata stream
- */
-template <typename Enum>
-struct ProtobufReader::FieldEnum {
-  int const field;
-  Enum &value;
-
-  FieldEnum(int f, Enum &v) : field((f * 8) + PB_TYPE_VARINT), value(v) {}
-
-  inline void operator()(ProtobufReader *pbr, const uint8_t *end)
-  {
-    value = static_cast<Enum>(pbr->get<uint32_t>());
-  }
-};
-
-/**
  * @brief Functor to append a 32 bit integer to a vector of integers
  * read from metadata stream
  */
@@ -219,12 +155,9 @@ struct ProtobufReader::FieldRepeatedString {
 template <typename Enum>
 struct ProtobufReader::FieldRepeatedStructFunctor {
   int const field;
-  std::vector<Enum> &value;
+  Enum &value;
 
-  FieldRepeatedStructFunctor(int f, std::vector<Enum> &v)
-    : field((f * 8) + PB_TYPE_FIXEDLEN), value(v)
-  {
-  }
+  FieldRepeatedStructFunctor(int f, Enum &v) : field((f * 8) + PB_TYPE_FIXEDLEN), value(v) {}
 
   inline void operator()(ProtobufReader *pbr, const uint8_t *end)
   {
@@ -241,12 +174,9 @@ struct ProtobufReader::FieldRepeatedStructFunctor {
 template <typename Enum>
 struct ProtobufReader::FieldRepeatedStructBlobFunctor {
   int const field;
-  std::vector<Enum> &value;
+  Enum &value;
 
-  FieldRepeatedStructBlobFunctor(int f, std::vector<Enum> &v)
-    : field((f * 8) + PB_TYPE_FIXEDLEN), value(v)
-  {
-  }
+  FieldRepeatedStructBlobFunctor(int f, Enum &v) : field((f * 8) + PB_TYPE_FIXEDLEN), value(v) {}
 
   inline void operator()(ProtobufReader *pbr, const uint8_t *end)
   {

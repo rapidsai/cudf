@@ -37,46 +37,46 @@ void ProtobufReader::skip_struct_field(int t)
 
 void ProtobufReader::read(PostScript &s, size_t maxlen)
 {
-  auto op = std::make_tuple(FieldUInt64(1, s.footerLength),
-                            FieldEnum<CompressionKind>(2, s.compression),
-                            FieldUInt32(3, s.compressionBlockSize),
+  auto op = std::make_tuple(make_field_reader(1, s.footerLength),
+                            make_field_reader(2, s.compression),
+                            make_field_reader(3, s.compressionBlockSize),
                             FieldPackedUInt32(4, s.version),
-                            FieldUInt64(5, s.metadataLength),
+                            make_field_reader(5, s.metadataLength),
                             FieldString(8000, s.magic));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(FileFooter &s, size_t maxlen)
 {
-  auto op = std::make_tuple(FieldUInt64(1, s.headerLength),
-                            FieldUInt64(2, s.contentLength),
+  auto op = std::make_tuple(make_field_reader(1, s.headerLength),
+                            make_field_reader(2, s.contentLength),
                             FieldRepeatedStruct(3, s.stripes),
                             FieldRepeatedStruct(4, s.types),
                             FieldRepeatedStruct(5, s.metadata),
-                            FieldUInt64(6, s.numberOfRows),
+                            make_field_reader(6, s.numberOfRows),
                             FieldRepeatedStructBlob(7, s.statistics),
-                            FieldUInt32(8, s.rowIndexStride));
+                            make_field_reader(8, s.rowIndexStride));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(StripeInformation &s, size_t maxlen)
 {
-  auto op = std::make_tuple(FieldUInt64(1, s.offset),
-                            FieldUInt64(2, s.indexLength),
-                            FieldUInt64(3, s.dataLength),
-                            FieldUInt32(4, s.footerLength),
-                            FieldUInt32(5, s.numberOfRows));
+  auto op = std::make_tuple(make_field_reader(1, s.offset),
+                            make_field_reader(2, s.indexLength),
+                            make_field_reader(3, s.dataLength),
+                            make_field_reader(4, s.footerLength),
+                            make_field_reader(5, s.numberOfRows));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(SchemaType &s, size_t maxlen)
 {
-  auto op = std::make_tuple(FieldEnum<TypeKind>(1, s.kind),
+  auto op = std::make_tuple(make_field_reader(1, s.kind),
                             FieldPackedUInt32(2, s.subtypes),
                             FieldRepeatedString(3, s.fieldNames),
-                            FieldUInt32(4, s.maximumLength),
-                            FieldUInt32(5, s.precision),
-                            FieldUInt32(6, s.scale));
+                            make_field_reader(4, s.maximumLength),
+                            make_field_reader(5, s.precision),
+                            make_field_reader(6, s.scale));
   function_builder(s, maxlen, op);
 }
 
@@ -97,14 +97,13 @@ void ProtobufReader::read(StripeFooter &s, size_t maxlen)
 void ProtobufReader::read(Stream &s, size_t maxlen)
 {
   auto op = std::make_tuple(
-    FieldEnum<StreamKind>(1, s.kind), FieldUInt32(2, s.column), FieldUInt64(3, s.length));
+    make_field_reader(1, s.kind), make_field_reader(2, s.column), make_field_reader(3, s.length));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(ColumnEncoding &s, size_t maxlen)
 {
-  auto op =
-    std::make_tuple(FieldEnum<ColumnEncodingKind>(1, s.kind), FieldUInt32(2, s.dictionarySize));
+  auto op = std::make_tuple(make_field_reader(1, s.kind), make_field_reader(2, s.dictionarySize));
   function_builder(s, maxlen, op);
 }
 
