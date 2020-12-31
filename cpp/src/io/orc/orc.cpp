@@ -42,7 +42,7 @@ void ProtobufReader::read(PostScript &s, size_t maxlen)
                             make_field_reader(3, s.compressionBlockSize),
                             FieldPackedUInt32(4, s.version),
                             make_field_reader(5, s.metadataLength),
-                            FieldString(8000, s.magic));
+                            make_field_reader(8000, s.magic));
   function_builder(s, maxlen, op);
 }
 
@@ -82,7 +82,7 @@ void ProtobufReader::read(SchemaType &s, size_t maxlen)
 
 void ProtobufReader::read(UserMetadataItem &s, size_t maxlen)
 {
-  auto op = std::make_tuple(FieldString(1, s.name), FieldString(2, s.value));
+  auto op = std::make_tuple(make_field_reader(1, s.name), make_field_reader(2, s.value));
   function_builder(s, maxlen, op);
 }
 
@@ -90,7 +90,7 @@ void ProtobufReader::read(StripeFooter &s, size_t maxlen)
 {
   auto op = std::make_tuple(FieldRepeatedStruct(1, s.streams),
                             FieldRepeatedStruct(2, s.columns),
-                            FieldString(3, s.writerTimezone));
+                            make_field_reader(3, s.writerTimezone));
   function_builder(s, maxlen, op);
 }
 

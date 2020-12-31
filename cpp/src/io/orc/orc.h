@@ -124,8 +124,7 @@ class ProtobufReader {
 
   void skip_struct_field(int t);
 
- public:
-  template <typename T>
+template <typename T>
   void read(T &s)
   {
     read(s, m_end - m_cur);
@@ -145,7 +144,6 @@ class ProtobufReader {
   template <typename T, typename... Operator>
   void function_builder(T &s, size_t maxlen, std::tuple<Operator...> &op);
   struct FieldPackedUInt32;
-  struct FieldString;
   struct FieldRepeatedString;
   template <typename Enum>
   struct FieldRepeatedStructFunctor;
@@ -162,55 +160,64 @@ class ProtobufReader {
     return FieldRepeatedStructBlobFunctor<Vec>(f, v);
   }
 
- protected:
+  template <
+    typename T,
+    typename std::enable_if_t<!std::is_integral<T>::value and !std::is_enum<T>::value> * = nullptr>
+  int static constexpr field_enum(int f)
+  {
+    return (f * 8) + PB_TYPE_FIXEDLEN;
+  }
+
+  template <
+    typename T,
+    typename std::enable_if_t<std::is_integral<T>::value or std::is_enum<T>::value> * = nullptr>
+  int static constexpr field_enum(int f)
+  {
+    return (f * 8) + PB_TYPE_VARINT;
+  }
+
+  template <typename T, typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    value = get<T>();
+  }
+
+  template <typename T, typename std::enable_if_t<std::is_enum<T>::value> * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    value = static_cast<T>(get<uint32_t>());
+  }
+
+  template <typename T, typename std::enable_if_t<std::is_same<T, std::string>::value> * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    auto const n = get<uint32_t>();
+    CUDF_EXPECTS(n <= (uint32_t)(end - m_cur), "Protobuf parsing out of bounds");
+    value.assign((const char *)(m_cur), n);
+    m_cur += n;
+  }
+
+  template <typename T>
+  struct field_reader {
+    int const field;
+    T &value;
+
+    field_reader(int f, T &v) : field(field_enum<T>(f)), value(v) {}
+
+    inline void operator()(ProtobufReader *pbr, const uint8_t *end) { pbr->read_field(value, end); }
+  };
+
   const uint8_t *const m_base;
   const uint8_t *m_cur;
   const uint8_t *const m_end;
+
+ public:
+  template <typename T>
+  static auto make_field_reader(int f, T &v)
+  {
+    return field_reader<T>(f, v);
+  }
 };
-
-template <
-  typename T,
-  typename std::enable_if_t<!std::is_integral<T>::value and !std::is_enum<T>::value> * = nullptr>
-int constexpr field_enum(int f)
-{
-  return (f * 8) + PB_TYPE_FIXEDLEN;
-}
-
-template <
-  typename T,
-  typename std::enable_if_t<std::is_integral<T>::value or std::is_enum<T>::value> * = nullptr>
-int constexpr field_enum(int f)
-{
-  return (f * 8) + PB_TYPE_VARINT;
-}
-
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
-void read_field(ProtobufReader *pbr, T &value, const uint8_t *end)
-{
-  value = pbr->get<T>();
-}
-
-template <typename T, typename std::enable_if_t<std::is_enum<T>::value> * = nullptr>
-void read_field(ProtobufReader *pbr, T &value, const uint8_t *end)
-{
-  value = static_cast<T>(pbr->get<uint32_t>());
-}
-
-template <typename T>
-struct field_reader {
-  int const field;
-  T &value;
-
-  field_reader(int f, T &v) : field(field_enum<T>(f)), value(v) {}
-
-  inline void operator()(ProtobufReader *pbr, const uint8_t *end) { read_field(pbr, value, end); }
-};
-
-template <typename T>
-auto make_field_reader(int f, T &v)
-{
-  return field_reader<T>(f, v);
-}
 
 template <>
 inline uint8_t ProtobufReader::get<uint8_t>()

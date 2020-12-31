@@ -110,24 +110,6 @@ struct ProtobufReader::FieldPackedUInt32 {
 };
 
 /**
- * @brief Functor to set value to string read from metadata stream
- */
-struct ProtobufReader::FieldString {
-  int const field;
-  std::string &value;
-
-  FieldString(int f, std::string &v) : field((f * 8) + PB_TYPE_FIXEDLEN), value(v) {}
-
-  inline void operator()(ProtobufReader *pbr, const uint8_t *end)
-  {
-    auto const n = pbr->get<uint32_t>();
-    CUDF_EXPECTS(n <= (uint32_t)(end - pbr->m_cur), "Protobuf parsing out of bounds");
-    value.assign((const char *)(pbr->m_cur), n);
-    pbr->m_cur += n;
-  }
-};
-
-/**
  * @brief Functor to append a string read from metadata stream to a vector of strings
  */
 struct ProtobufReader::FieldRepeatedString {
