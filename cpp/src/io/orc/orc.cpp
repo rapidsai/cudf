@@ -40,7 +40,7 @@ void ProtobufReader::read(PostScript &s, size_t maxlen)
   auto op = std::make_tuple(make_field_reader(1, s.footerLength),
                             make_field_reader(2, s.compression),
                             make_field_reader(3, s.compressionBlockSize),
-                            FieldPackedUInt32(4, s.version),
+                            make_field_reader(4, s.version),
                             make_field_reader(5, s.metadataLength),
                             make_field_reader(8000, s.magic));
   function_builder(s, maxlen, op);
@@ -50,9 +50,9 @@ void ProtobufReader::read(FileFooter &s, size_t maxlen)
 {
   auto op = std::make_tuple(make_field_reader(1, s.headerLength),
                             make_field_reader(2, s.contentLength),
-                            FieldRepeatedStruct(3, s.stripes),
-                            FieldRepeatedStruct(4, s.types),
-                            FieldRepeatedStruct(5, s.metadata),
+                            make_field_reader(3, s.stripes),
+                            make_field_reader(4, s.types),
+                            make_field_reader(5, s.metadata),
                             make_field_reader(6, s.numberOfRows),
                             FieldRepeatedStructBlob(7, s.statistics),
                             make_field_reader(8, s.rowIndexStride));
@@ -72,8 +72,8 @@ void ProtobufReader::read(StripeInformation &s, size_t maxlen)
 void ProtobufReader::read(SchemaType &s, size_t maxlen)
 {
   auto op = std::make_tuple(make_field_reader(1, s.kind),
-                            FieldPackedUInt32(2, s.subtypes),
-                            FieldRepeatedString(3, s.fieldNames),
+                            make_field_reader(2, s.subtypes),
+                            make_field_reader(3, s.fieldNames),
                             make_field_reader(4, s.maximumLength),
                             make_field_reader(5, s.precision),
                             make_field_reader(6, s.scale));
@@ -88,8 +88,8 @@ void ProtobufReader::read(UserMetadataItem &s, size_t maxlen)
 
 void ProtobufReader::read(StripeFooter &s, size_t maxlen)
 {
-  auto op = std::make_tuple(FieldRepeatedStruct(1, s.streams),
-                            FieldRepeatedStruct(2, s.columns),
+  auto op = std::make_tuple(make_field_reader(1, s.streams),
+                            make_field_reader(2, s.columns),
                             make_field_reader(3, s.writerTimezone));
   function_builder(s, maxlen, op);
 }
@@ -115,7 +115,7 @@ void ProtobufReader::read(StripeStatistics &s, size_t maxlen)
 
 void ProtobufReader::read(Metadata &s, size_t maxlen)
 {
-  auto op = std::make_tuple(FieldRepeatedStruct(1, s.stripeStats));
+  auto op = std::make_tuple(make_field_reader(1, s.stripeStats));
   function_builder(s, maxlen, op);
 }
 

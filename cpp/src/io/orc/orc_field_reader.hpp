@@ -90,67 +90,6 @@ inline void ProtobufReader::function_builder(T &s, size_t maxlen, std::tuple<Ope
 }
 
 /**
- * @brief Functor to append a 32 bit integer to a vector of integers
- * read from metadata stream
- */
-struct ProtobufReader::FieldPackedUInt32 {
-  int const field;
-  std::vector<uint32_t> &value;
-
-  FieldPackedUInt32(int f, std::vector<uint32_t> &v) : field((f * 8) + PB_TYPE_FIXEDLEN), value(v)
-  {
-  }
-
-  inline void operator()(ProtobufReader *pbr, const uint8_t *end)
-  {
-    auto const len           = pbr->get<uint32_t>();
-    const uint8_t *field_end = std::min(pbr->m_cur + len, end);
-    while (pbr->m_cur < field_end) value.push_back(pbr->get<uint32_t>());
-  }
-};
-
-/**
- * @brief Functor to append a string read from metadata stream to a vector of strings
- */
-struct ProtobufReader::FieldRepeatedString {
-  int const field;
-  std::vector<std::string> &value;
-
-  FieldRepeatedString(int f, std::vector<std::string> &v)
-    : field((f * 8) + PB_TYPE_FIXEDLEN), value(v)
-  {
-  }
-
-  inline void operator()(ProtobufReader *pbr, const uint8_t *end)
-  {
-    auto const n = pbr->get<uint32_t>();
-    CUDF_EXPECTS(n <= (uint32_t)(end - pbr->m_cur), "Protobuf parsing out of bounds");
-    value.resize(value.size() + 1);
-    value.back().assign((const char *)(pbr->m_cur), n);
-    pbr->m_cur += n;
-  }
-};
-
-/**
- * @brief Functor to append an enum read from metadata stream to a vector of enums
- */
-template <typename Enum>
-struct ProtobufReader::FieldRepeatedStructFunctor {
-  int const field;
-  Enum &value;
-
-  FieldRepeatedStructFunctor(int f, Enum &v) : field((f * 8) + PB_TYPE_FIXEDLEN), value(v) {}
-
-  inline void operator()(ProtobufReader *pbr, const uint8_t *end)
-  {
-    auto const n = pbr->get<uint32_t>();
-    CUDF_EXPECTS(n <= (uint32_t)(end - pbr->m_cur), "Protobuf parsing out of bounds");
-    value.resize(value.size() + 1);
-    pbr->read(value.back(), n);
-  }
-};
-
-/**
  * @brief Functor to append an enum read from metadata stream to a vector of enums
  */
 template <typename Enum>

@@ -124,7 +124,7 @@ class ProtobufReader {
 
   void skip_struct_field(int t);
 
-template <typename T>
+  template <typename T>
   void read(T &s)
   {
     read(s, m_end - m_cur);
@@ -143,17 +143,9 @@ template <typename T>
  private:
   template <typename T, typename... Operator>
   void function_builder(T &s, size_t maxlen, std::tuple<Operator...> &op);
-  struct FieldPackedUInt32;
-  struct FieldRepeatedString;
-  template <typename Enum>
-  struct FieldRepeatedStructFunctor;
+
   template <typename Enum>
   struct FieldRepeatedStructBlobFunctor;
-  template <typename Vec>
-  FieldRepeatedStructFunctor<Vec> FieldRepeatedStruct(int f, Vec &v)
-  {
-    return FieldRepeatedStructFunctor<Vec>(f, v);
-  }
   template <typename Vec>
   FieldRepeatedStructBlobFunctor<Vec> FieldRepeatedStructBlob(int f, Vec &v)
   {
@@ -195,6 +187,39 @@ template <typename T>
     CUDF_EXPECTS(n <= (uint32_t)(end - m_cur), "Protobuf parsing out of bounds");
     value.assign((const char *)(m_cur), n);
     m_cur += n;
+  }
+
+  template <typename T,
+            typename std::enable_if_t<std::is_same<T, std::vector<uint32_t>>::value> * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    auto const len       = get<uint32_t>();
+    auto const field_end = std::min(m_cur + len, end);
+    while (m_cur < field_end) value.push_back(get<uint32_t>());
+  }
+
+  template <typename T,
+            typename std::enable_if_t<std::is_same<T, std::vector<std::string>>::value> * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    auto const n = get<uint32_t>();
+    CUDF_EXPECTS(n <= (uint32_t)(end - m_cur), "Protobuf parsing out of bounds");
+    value.resize(value.size() + 1);
+    value.back().assign((const char *)(m_cur), n);
+    m_cur += n;
+  }
+
+  template <
+    typename T,
+    typename std::enable_if_t<std::is_same<T, std::vector<typename T::value_type>>::value and
+                              !std::is_same<std::string, typename T::value_type>::value and
+                              !std::is_same<uint32_t, typename T::value_type>::value> * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    auto const n = get<uint32_t>();
+    CUDF_EXPECTS(n <= (uint32_t)(end - m_cur), "Protobuf parsing out of bounds");
+    value.resize(value.size() + 1);
+    read(value.back(), n);
   }
 
   template <typename T>
