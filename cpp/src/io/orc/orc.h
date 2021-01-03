@@ -112,18 +112,6 @@ class ProtobufReader {
  public:
   ProtobufReader(const uint8_t *base, size_t len) : m_base(base), m_cur(base), m_end(base + len) {}
 
-  ptrdiff_t bytecount() const { return m_cur - m_base; }
-  void skip_bytes(size_t bytecnt)
-  {
-    bytecnt = std::min(bytecnt, (size_t)(m_end - m_cur));
-    m_cur += bytecnt;
-  }
-
-  template <typename T>
-  T get();
-
-  void skip_struct_field(int t);
-
   template <typename T>
   void read(T &s)
   {
@@ -141,6 +129,20 @@ class ProtobufReader {
   void read(Metadata &, size_t maxlen);
 
  private:
+  template <int index>
+  friend class FunctionSwitchImpl;
+
+  void skip_bytes(size_t bytecnt)
+  {
+    bytecnt = std::min(bytecnt, (size_t)(m_end - m_cur));
+    m_cur += bytecnt;
+  }
+
+  template <typename T>
+  T get();
+
+  void skip_struct_field(int t);
+
   template <typename T, typename... Operator>
   void function_builder(T &s, size_t maxlen, std::tuple<Operator...> &op);
 
