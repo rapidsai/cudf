@@ -189,13 +189,12 @@ class ProtobufReader {
     m_cur += n;
   }
 
-  template <typename T,
-            typename std::enable_if_t<std::is_same<T, std::vector<uint32_t>>::value> * = nullptr>
-  void read_field(T &value, const uint8_t *end)
+  template <typename T>
+  void read_packed_field(T &value, const uint8_t *end)
   {
     auto const len       = get<uint32_t>();
     auto const field_end = std::min(m_cur + len, end);
-    while (m_cur < field_end) value.push_back(get<uint32_t>());
+    while (m_cur < field_end) value.push_back(get<typename T::value_type>());
   }
 
   template <typename T,
@@ -232,6 +231,16 @@ class ProtobufReader {
     inline void operator()(ProtobufReader *pbr, const uint8_t *end) { pbr->read_field(value, end); }
   };
 
+    template <typename T>
+  struct packed_field_reader {
+    int const field;
+    T &value;
+
+    packed_field_reader(int f, T &v) : field(field_enum<T>(f)), value(v) {}
+
+    inline void operator()(ProtobufReader *pbr, const uint8_t *end) { pbr->read_packed_field(value, end); }
+  };
+
   const uint8_t *const m_base;
   const uint8_t *m_cur;
   const uint8_t *const m_end;
@@ -241,6 +250,11 @@ class ProtobufReader {
   static auto make_field_reader(int f, T &v)
   {
     return field_reader<T>(f, v);
+  }
+    template <typename T>
+  static auto make_packed_field_reader(int f, T &v)
+  {
+    return packed_field_reader<T>(f, v);
   }
 };
 

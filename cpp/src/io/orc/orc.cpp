@@ -40,7 +40,7 @@ void ProtobufReader::read(PostScript &s, size_t maxlen)
   auto op = std::make_tuple(make_field_reader(1, s.footerLength),
                             make_field_reader(2, s.compression),
                             make_field_reader(3, s.compressionBlockSize),
-                            make_field_reader(4, s.version),
+                            make_packed_field_reader(4, s.version),
                             make_field_reader(5, s.metadataLength),
                             make_field_reader(8000, s.magic));
   function_builder(s, maxlen, op);
@@ -72,7 +72,7 @@ void ProtobufReader::read(StripeInformation &s, size_t maxlen)
 void ProtobufReader::read(SchemaType &s, size_t maxlen)
 {
   auto op = std::make_tuple(make_field_reader(1, s.kind),
-                            make_field_reader(2, s.subtypes),
+                            make_packed_field_reader(2, s.subtypes),
                             make_field_reader(3, s.fieldNames),
                             make_field_reader(4, s.maximumLength),
                             make_field_reader(5, s.precision),
