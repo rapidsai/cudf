@@ -144,14 +144,6 @@ class ProtobufReader {
   template <typename T, typename... Operator>
   void function_builder(T &s, size_t maxlen, std::tuple<Operator...> &op);
 
-  template <typename Enum>
-  struct FieldRepeatedStructBlobFunctor;
-  template <typename Vec>
-  FieldRepeatedStructBlobFunctor<Vec> FieldRepeatedStructBlob(int f, Vec &v)
-  {
-    return FieldRepeatedStructBlobFunctor<Vec>(f, v);
-  }
-
   template <
     typename T,
     typename std::enable_if_t<!std::is_integral<T>::value and !std::is_enum<T>::value> * = nullptr>
@@ -168,6 +160,8 @@ class ProtobufReader {
     return (f * 8) + PB_TYPE_VARINT;
   }
 
+  uint32_t read_field_size(const uint8_t *end);
+
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
   void read_field(T &value, const uint8_t *end)
   {
@@ -183,10 +177,29 @@ class ProtobufReader {
   template <typename T, typename std::enable_if_t<std::is_same<T, std::string>::value> * = nullptr>
   void read_field(T &value, const uint8_t *end)
   {
-    auto const n = get<uint32_t>();
-    CUDF_EXPECTS(n <= (uint32_t)(end - m_cur), "Protobuf parsing out of bounds");
-    value.assign((const char *)(m_cur), n);
-    m_cur += n;
+    auto const size = read_field_size(end);
+    value.assign((const char *)(m_cur), size);
+    m_cur += size;
+  }
+
+  template <typename T,
+            typename std::enable_if_t<std::is_same<T, std::vector<std::string>>::value> * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    auto const size = read_field_size(end);
+    value.emplace_back(reinterpret_cast<const char *>(m_cur), size);
+    m_cur += size;
+  }
+
+  template <typename T,
+            typename std::enable_if_t<
+              std::is_same<T, std::vector<typename T::value_type>>::value and
+              !std::is_same<std::string, typename T::value_type>::value> * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    auto const size = read_field_size(end);
+    value.emplace_back();
+    read(value.back(), size);
   }
 
   template <typename T>
@@ -197,28 +210,12 @@ class ProtobufReader {
     while (m_cur < field_end) value.push_back(get<typename T::value_type>());
   }
 
-  template <typename T,
-            typename std::enable_if_t<std::is_same<T, std::vector<std::string>>::value> * = nullptr>
-  void read_field(T &value, const uint8_t *end)
+  template <typename T>
+  void read_raw_field(T &value, const uint8_t *end)
   {
-    auto const n = get<uint32_t>();
-    CUDF_EXPECTS(n <= (uint32_t)(end - m_cur), "Protobuf parsing out of bounds");
-    value.resize(value.size() + 1);
-    value.back().assign((const char *)(m_cur), n);
-    m_cur += n;
-  }
-
-  template <
-    typename T,
-    typename std::enable_if_t<std::is_same<T, std::vector<typename T::value_type>>::value and
-                              !std::is_same<std::string, typename T::value_type>::value and
-                              !std::is_same<uint32_t, typename T::value_type>::value> * = nullptr>
-  void read_field(T &value, const uint8_t *end)
-  {
-    auto const n = get<uint32_t>();
-    CUDF_EXPECTS(n <= (uint32_t)(end - m_cur), "Protobuf parsing out of bounds");
-    value.resize(value.size() + 1);
-    read(value.back(), n);
+    auto const size = read_field_size(end);
+    value.emplace_back(m_cur, m_cur + size);
+    m_cur += size;
   }
 
   template <typename T>
@@ -231,14 +228,30 @@ class ProtobufReader {
     inline void operator()(ProtobufReader *pbr, const uint8_t *end) { pbr->read_field(value, end); }
   };
 
-    template <typename T>
+  template <typename T>
   struct packed_field_reader {
     int const field;
     T &value;
 
     packed_field_reader(int f, T &v) : field(field_enum<T>(f)), value(v) {}
 
-    inline void operator()(ProtobufReader *pbr, const uint8_t *end) { pbr->read_packed_field(value, end); }
+    inline void operator()(ProtobufReader *pbr, const uint8_t *end)
+    {
+      pbr->read_packed_field(value, end);
+    }
+  };
+
+  template <typename T>
+  struct raw_field_reader {
+    int const field;
+    T &value;
+
+    raw_field_reader(int f, T &v) : field(field_enum<T>(f)), value(v) {}
+
+    inline void operator()(ProtobufReader *pbr, const uint8_t *end)
+    {
+      pbr->read_raw_field(value, end);
+    }
   };
 
   const uint8_t *const m_base;
@@ -251,10 +264,17 @@ class ProtobufReader {
   {
     return field_reader<T>(f, v);
   }
-    template <typename T>
+
+  template <typename T>
   static auto make_packed_field_reader(int f, T &v)
   {
     return packed_field_reader<T>(f, v);
+  }
+
+  template <typename T>
+  static auto make_raw_field_reader(int f, T &v)
+  {
+    return raw_field_reader<T>(f, v);
   }
 };
 

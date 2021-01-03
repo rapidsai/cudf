@@ -89,26 +89,6 @@ inline void ProtobufReader::function_builder(T &s, size_t maxlen, std::tuple<Ope
   CUDF_EXPECTS(m_cur <= end, "Current pointer to metadata stream is out of bounds");
 }
 
-/**
- * @brief Functor to append an enum read from metadata stream to a vector of enums
- */
-template <typename Enum>
-struct ProtobufReader::FieldRepeatedStructBlobFunctor {
-  int const field;
-  Enum &value;
-
-  FieldRepeatedStructBlobFunctor(int f, Enum &v) : field((f * 8) + PB_TYPE_FIXEDLEN), value(v) {}
-
-  inline void operator()(ProtobufReader *pbr, const uint8_t *end)
-  {
-    auto const n = pbr->get<uint32_t>();
-    CUDF_EXPECTS(n <= (uint32_t)(end - pbr->m_cur), "Protobuf parsing out of bounds");
-    value.resize(value.size() + 1);
-    value.back().assign(pbr->m_cur, pbr->m_cur + n);
-    pbr->m_cur += n;
-  }
-};
-
 }  // namespace orc
 }  // namespace io
 }  // namespace cudf

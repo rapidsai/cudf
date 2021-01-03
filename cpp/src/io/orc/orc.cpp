@@ -22,6 +22,14 @@
 namespace cudf {
 namespace io {
 namespace orc {
+
+uint32_t ProtobufReader::read_field_size(const uint8_t *end)
+{
+  auto const size = get<uint32_t>();
+  CUDF_EXPECTS(size <= (uint32_t)(end - m_cur), "Protobuf parsing out of bounds");
+  return size;
+}
+
 void ProtobufReader::skip_struct_field(int t)
 {
   switch (t) {
@@ -54,7 +62,7 @@ void ProtobufReader::read(FileFooter &s, size_t maxlen)
                             make_field_reader(4, s.types),
                             make_field_reader(5, s.metadata),
                             make_field_reader(6, s.numberOfRows),
-                            FieldRepeatedStructBlob(7, s.statistics),
+                            make_raw_field_reader(7, s.statistics),
                             make_field_reader(8, s.rowIndexStride));
   function_builder(s, maxlen, op);
 }
@@ -109,7 +117,7 @@ void ProtobufReader::read(ColumnEncoding &s, size_t maxlen)
 
 void ProtobufReader::read(StripeStatistics &s, size_t maxlen)
 {
-  auto op = std::make_tuple(FieldRepeatedStructBlob(1, s.colStats));
+  auto op = std::make_tuple(make_raw_field_reader(1, s.colStats));
   function_builder(s, maxlen, op);
 }
 
