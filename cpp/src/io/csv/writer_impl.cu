@@ -311,19 +311,15 @@ struct column_to_strings_fn {
     }();
 
     // handle the cases where delimiter / line-terminator can be
-    // "-" or ":", in which case they are to be dropped from the format:
+    // "-" or ":", in which case we need to add quotes to the format
     //
     std::string delimiter{options_.get_inter_column_delimiter()};
     std::string newline{options_.get_line_terminator()};
 
     constexpr char const* dash{"-"};
     constexpr char const* colon{":"};
-    if (delimiter == dash || newline == dash) {
-      format.erase(std::remove(format.begin(), format.end(), dash[0]), format.end());
-    }
-
-    if (delimiter == colon || newline == colon) {
-      format.erase(std::remove(format.begin(), format.end(), colon[0]), format.end());
+    if (delimiter == dash || newline == dash || delimiter == colon || newline == colon) {
+      format = "\"" + format + "\"";
     }
 
     auto conv_col_ptr = cudf::strings::from_timestamps(column, format, mr_);
