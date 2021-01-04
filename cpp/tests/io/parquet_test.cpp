@@ -334,7 +334,7 @@ TEST_F(ParquetWriterTest, MultiColumn)
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
       .metadata(&expected_metadata);
   std::vector<uint8_t> precisions = {10, 20};
-  out_opts.set_decimal_precisions(precisions);
+  out_opts.set_decimal_precision(precisions);
   cudf_io::write_parquet(out_opts);
 
   cudf_io::parquet_reader_options in_opts =
@@ -413,7 +413,7 @@ TEST_F(ParquetWriterTest, MultiColumnWithNulls)
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
       .metadata(&expected_metadata);
   std::vector<uint8_t> precisions = {9, 20};
-  out_opts.set_decimal_precisions(precisions);
+  out_opts.set_decimal_precision(precisions);
 
   cudf_io::write_parquet(out_opts);
 

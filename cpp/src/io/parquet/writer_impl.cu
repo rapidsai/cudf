@@ -747,12 +747,12 @@ void writer::impl::write_chunk(table_view const &table, pq_chunked_state &state)
                                  this_column_nullability,
                                  state.user_metadata,
                                  state.int96_timestamps,
-                                 state._decimal_precisions,
+                                 state._decimal_precision,
                                  decimal_precision_idx,
                                  state.stream);
   }
 
-  CUDF_EXPECTS(decimal_precision_idx == state._decimal_precisions.size(),
+  CUDF_EXPECTS(decimal_precision_idx == state._decimal_precision.size(),
                "Too many decimal precision values!");
 
   // first call. setup metadata. num_rows will get incremented as write_chunk is

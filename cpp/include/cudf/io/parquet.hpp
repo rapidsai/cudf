@@ -403,7 +403,7 @@ class parquet_writer_options {
   std::string _column_chunks_file_path;
   /// vector of precision values for decimal writing. Exactly one entry
   /// per decimal column. Optional unless decimals are being written.
-  std::vector<uint8_t> _decimal_precisions;
+  std::vector<uint8_t> _decimal_precision;
 
   /**
    * @brief Constructor from sink and table.
@@ -486,7 +486,7 @@ class parquet_writer_options {
   /**
    * @brief Returns a constant reference to the decimal precision vector.
    */
-  std::vector<uint8_t> const& get_decimal_precisions() const { return _decimal_precisions; }
+  std::vector<uint8_t> const& get_decimal_precision() const { return _decimal_precision; }
 
   /**
    * @brief Sets metadata.
@@ -537,7 +537,7 @@ class parquet_writer_options {
   /**
    * @brief Sets the decimal precision vector data.
    */
-  void set_decimal_precisions(std::vector<uint8_t> dp) { _decimal_precisions = std::move(dp); }
+  void set_decimal_precision(std::vector<uint8_t> dp) { _decimal_precision = std::move(dp); }
 };
 
 class parquet_writer_options_builder {

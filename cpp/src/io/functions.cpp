@@ -363,7 +363,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
                        options.get_metadata(),
                        options.is_enabled_return_filemetadata(),
                        options.get_column_chunks_file_path(),
-                       options.get_decimal_precisions());
+                       options.get_decimal_precision());
 }
 
 /**
@@ -399,9 +399,9 @@ std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
     state->user_metadata_with_nullability = *op.get_nullable_metadata();
     state->user_metadata                  = &state->user_metadata_with_nullability;
   }
-  state->int96_timestamps    = op.is_enabled_int96_timestamps();
-  state->_decimal_precisions = op.get_decimal_precision();
-  state->stream              = 0;
+  state->int96_timestamps   = op.is_enabled_int96_timestamps();
+  state->_decimal_precision = op.get_decimal_precision();
+  state->stream             = 0;
   state->wp->write_chunked_begin(*state);
   return state;
 }
