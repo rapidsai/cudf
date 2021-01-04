@@ -901,6 +901,81 @@ void split_structs(bool include_validity, SplitFunc Split, CompareFunc Compare)
 }
 
 template <typename SplitFunc, typename CompareFunc>
+void split_structs_no_children(SplitFunc Split, CompareFunc Compare)
+{
+  using namespace cudf::test;
+
+  // no nulls
+  {
+    auto struct_column = cudf::make_structs_column(4, {}, 0, rmm::device_buffer{});
+    auto expected      = cudf::make_structs_column(2, {}, 0, rmm::device_buffer{});
+
+    // split
+    std::vector<cudf::size_type> splits{2};
+    auto result = Split(*struct_column, splits);
+
+    EXPECT_EQ(result.size(), 2);
+    Compare(*expected, result[0]);
+    Compare(*expected, result[1]);
+  }
+
+  // all nulls
+  {
+    std::vector<bool> struct_validity{false, false, false, false};
+    auto struct_column = cudf::make_structs_column(
+      4, {}, 4, detail::make_null_mask(struct_validity.begin(), struct_validity.end()));
+
+    std::vector<bool> expected_validity{false, false};
+    auto expected = cudf::make_structs_column(
+      2, {}, 2, detail::make_null_mask(expected_validity.begin(), expected_validity.end()));
+
+    // split
+    std::vector<cudf::size_type> splits{2};
+    auto result = Split(*struct_column, splits);
+
+    EXPECT_EQ(result.size(), 2);
+    Compare(*expected, result[0]);
+    Compare(*expected, result[1]);
+  }
+
+  // no nulls, empty output column
+  {
+    auto struct_column = cudf::make_structs_column(4, {}, 0, rmm::device_buffer{});
+    auto expected0     = cudf::make_structs_column(4, {}, 0, rmm::device_buffer{});
+    auto expected1     = cudf::make_structs_column(0, {}, 0, rmm::device_buffer{});
+
+    // split
+    std::vector<cudf::size_type> splits{4};
+    auto result = Split(*struct_column, splits);
+
+    EXPECT_EQ(result.size(), 2);
+    Compare(*expected0, result[0]);
+    Compare(*expected1, result[1]);
+  }
+
+  // all nulls, empty output column
+  {
+    std::vector<bool> struct_validity{false, false, false, false};
+    auto struct_column = cudf::make_structs_column(
+      4, {}, 4, detail::make_null_mask(struct_validity.begin(), struct_validity.end()));
+
+    std::vector<bool> expected_validity0{false, false, false, false};
+    auto expected0 = cudf::make_structs_column(
+      4, {}, 4, detail::make_null_mask(expected_validity0.begin(), expected_validity0.end()));
+
+    auto expected1 = cudf::make_structs_column(0, {}, 0, rmm::device_buffer{});
+
+    // split
+    std::vector<cudf::size_type> splits{4};
+    auto result = Split(*struct_column, splits);
+
+    EXPECT_EQ(result.size(), 2);
+    Compare(*expected0, result[0]);
+    Compare(*expected1, result[1]);
+  }
+}
+
+template <typename SplitFunc, typename CompareFunc>
 void split_nested_struct_of_list(SplitFunc Split, CompareFunc Compare)
 {
   // Struct<List<List>>
@@ -1005,6 +1080,17 @@ TEST_F(SplitNestedTypesTest, StructsWithNulls)
 {
   split_structs(
     true,
+    [](cudf::column_view const& t, std::vector<cudf::size_type> const& splits) {
+      return cudf::split(t, splits);
+    },
+    [](cudf::column_view const& expected, cudf::column_view const& result) {
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result);
+    });
+}
+
+TEST_F(SplitNestedTypesTest, StructsNoChildren)
+{
+  split_structs_no_children(
     [](cudf::column_view const& t, std::vector<cudf::size_type> const& splits) {
       return cudf::split(t, splits);
     },
@@ -1277,11 +1363,13 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitTable)
   }
 }
 
-TEST_F(ContiguousSplitTableCornerCases, NestedEmptyStrings)
+TEST_F(ContiguousSplitTableCornerCases, NestedEmpty)
 {
+  // this produces an empty strings column with no children,
+  // nested inside a list
   {
     auto empty_string = cudf::strings::detail::make_empty_strings_column();
-    auto offsets      = cudf::test::fixed_width_column_wrapper<int>({0, 1});
+    auto offsets      = cudf::test::fixed_width_column_wrapper<int>({0, 0});
     auto list         = cudf::make_lists_column(
       1, offsets.release(), std::move(empty_string), 0, rmm::device_buffer{0});
 
@@ -1289,8 +1377,87 @@ TEST_F(ContiguousSplitTableCornerCases, NestedEmptyStrings)
 
     std::vector<cudf::size_type> splits({0});
     EXPECT_NO_THROW(contiguous_split(src_table, splits));
+
+    std::vector<cudf::size_type> splits2({1});
+    EXPECT_NO_THROW(contiguous_split(src_table, splits2));
+  }
+
+  // this produces an empty strings column with children that have no data,
+  // nested inside a list
+  {
+    cudf::test::strings_column_wrapper str{"abc"};
+    auto empty_string = cudf::empty_like(str);
+    auto offsets      = cudf::test::fixed_width_column_wrapper<int>({0, 0});
+    auto list         = cudf::make_lists_column(
+      1, offsets.release(), std::move(empty_string), 0, rmm::device_buffer{0});
+
+    cudf::table_view src_table({static_cast<cudf::column_view>(*list)});
+
+    std::vector<cudf::size_type> splits({0});
+    EXPECT_NO_THROW(contiguous_split(src_table, splits));
+
+    std::vector<cudf::size_type> splits2({1});
+    EXPECT_NO_THROW(contiguous_split(src_table, splits2));
+  }
+
+  // this produces an empty lists column with children that have no data,
+  // nested inside a list
+  {
+    cudf::test::lists_column_wrapper<float> listw{{1.0f, 2.0f}, {3.0f, 4.0f}};
+    auto empty_list = cudf::empty_like(listw);
+    auto offsets    = cudf::test::fixed_width_column_wrapper<int>({0, 0});
+    auto list       = cudf::make_lists_column(
+      1, offsets.release(), std::move(empty_list), 0, rmm::device_buffer{0});
+
+    cudf::table_view src_table({static_cast<cudf::column_view>(*list)});
+
+    std::vector<cudf::size_type> splits({0});
+    EXPECT_NO_THROW(contiguous_split(src_table, splits));
+
+    std::vector<cudf::size_type> splits2({1});
+    EXPECT_NO_THROW(contiguous_split(src_table, splits2));
+  }
+
+  // this produces an empty lists column with children that have no data,
+  // nested inside a list
+  {
+    cudf::test::lists_column_wrapper<float> listw{{1.0f, 2.0f}, {3.0f, 4.0f}};
+    auto empty_list = cudf::empty_like(listw);
+    auto offsets    = cudf::test::fixed_width_column_wrapper<int>({0, 0});
+    auto list       = cudf::make_lists_column(
+      1, offsets.release(), std::move(empty_list), 0, rmm::device_buffer{0});
+
+    cudf::table_view src_table({static_cast<cudf::column_view>(*list)});
+
+    std::vector<cudf::size_type> splits({0});
+    EXPECT_NO_THROW(contiguous_split(src_table, splits));
+
+    std::vector<cudf::size_type> splits2({1});
+    EXPECT_NO_THROW(contiguous_split(src_table, splits2));
+  }
+
+  // this produces an empty struct column with children that have no data,
+  // nested inside a list
+  {
+    cudf::test::fixed_width_column_wrapper<int> ints{0, 1, 2, 3, 4};
+    cudf::test::fixed_width_column_wrapper<float> floats{4, 3, 2, 1, 0};
+    auto struct_column = cudf::test::structs_column_wrapper({ints, floats});
+    auto empty_struct  = cudf::empty_like(struct_column);
+    auto offsets       = cudf::test::fixed_width_column_wrapper<int>({0, 0});
+    auto list          = cudf::make_lists_column(
+      1, offsets.release(), std::move(empty_struct), 0, rmm::device_buffer{0});
+
+    cudf::table_view src_table({static_cast<cudf::column_view>(*list)});
+
+    std::vector<cudf::size_type> splits({0});
+    EXPECT_NO_THROW(contiguous_split(src_table, splits));
+
+    std::vector<cudf::size_type> splits2({1});
+    EXPECT_NO_THROW(contiguous_split(src_table, splits2));
   }
 }
+
+TEST_F(ContiguousSplitTableCornerCases, MalformedColumns) {}
 
 struct ContiguousSplitNestedTypesTest : public cudf::test::BaseFixture {
 };
@@ -1336,6 +1503,18 @@ TEST_F(ContiguousSplitNestedTypesTest, StructsWithNulls)
 {
   split_structs(
     true,
+    [](cudf::column_view const& c, std::vector<cudf::size_type> const& splits) {
+      cudf::table_view t({c});
+      return cudf::contiguous_split(t, splits);
+    },
+    [](cudf::column_view const& expected, cudf::contiguous_split_result const& result) {
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result.table.column(0));
+    });
+}
+
+TEST_F(ContiguousSplitNestedTypesTest, StructsNoChildren)
+{
+  split_structs_no_children(
     [](cudf::column_view const& c, std::vector<cudf::size_type> const& splits) {
       cudf::table_view t({c});
       return cudf::contiguous_split(t, splits);
