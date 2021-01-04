@@ -396,9 +396,9 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarNoNulls)
 {
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
+  using Type = cudf::device_storage_type_t<TypeParam>;
 
-  auto const source =
-    scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(100), true);
+  auto const source = scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<Type>(100), true);
   std::reference_wrapper<const cudf::scalar> slr_ref{source};
   std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{slr_ref};
 
@@ -418,9 +418,9 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarTargetNulls)
 {
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
+  using Type = cudf::device_storage_type_t<TypeParam>;
 
-  auto const source =
-    scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(100), true);
+  auto const source = scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<Type>(100), true);
   std::reference_wrapper<const cudf::scalar> slr_ref{source};
   std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{slr_ref};
 
@@ -442,9 +442,10 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarSourceNulls)
 {
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
+  using Type = cudf::device_storage_type_t<TypeParam>;
 
   auto const source =
-    scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(100), false);
+    scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<Type>(100), false);
   std::reference_wrapper<const cudf::scalar> slr_ref{source};
   std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{slr_ref};
 
@@ -465,9 +466,10 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarBothNulls)
 {
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
+  using Type = cudf::device_storage_type_t<TypeParam>;
 
   auto const source =
-    scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(100), false);
+    scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<Type>(100), false);
   std::reference_wrapper<const cudf::scalar> slr_ref{source};
   std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{slr_ref};
 

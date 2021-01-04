@@ -32,7 +32,7 @@ namespace kafka {
  * @brief libcudf datasource for Apache Kafka
  *
  * @ingroup io_datasources
- **/
+ */
 class kafka_consumer : public cudf::io::datasource {
  public:
   /**
@@ -48,7 +48,7 @@ class kafka_consumer : public cudf::io::datasource {
    *
    * @param configs key/value pairs of librdkafka configurations that will be
    *                passed to the librdkafka client
-   **/
+   */
   kafka_consumer(std::map<std::string, std::string> const &configs);
 
   /**
@@ -65,7 +65,7 @@ class kafka_consumer : public cudf::io::datasource {
    * @param batch_timeout maximum (millisecond) read time allowed. If end_offset is not reached
    * before batch_timeout, a smaller subset will be returned
    * @param delimiter optional delimiter to insert into the output between kafka messages, Ex: "\n"
-   **/
+   */
   kafka_consumer(std::map<std::string, std::string> const &configs,
                  std::string const &topic_name,
                  int partition,
@@ -195,7 +195,7 @@ class kafka_consumer : public cudf::io::datasource {
 
   /**
    * Convenience method for getting "now()" in Kafka's standard format
-   **/
+   */
   int64_t now();
 
   void consume_to_buffer();

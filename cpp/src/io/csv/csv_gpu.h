@@ -36,7 +36,7 @@ namespace gpu {
  * QUOTE: Within a quoted field
  * COMMENT: Within a comment line (discard every character until terminator)
  * EOF: End state (EOF reached)
- **/
+ */
 enum { ROW_CTX_NONE = 0, ROW_CTX_QUOTE = 1, ROW_CTX_COMMENT = 2, ROW_CTX_EOF = 3 };
 
 constexpr uint32_t rowofs_block_dim = 512;
@@ -47,7 +47,7 @@ constexpr uint32_t rowofs_block_bytes = rowofs_block_dim * 32;  // 16KB/threadbl
  * Row parsing context with row count
  * Format: row_count * 4 + id, where `row_count` is the number of rows
  * in a character block, and `id` is the row parser state at the end of the block.
- **/
+ */
 typedef uint32_t rowctx32_t;
 typedef uint64_t rowctx64_t;
 
@@ -60,7 +60,7 @@ typedef uint64_t rowctx64_t;
  * to 18-bit) and concatenated to form a 80-bit value, whose upper 16 bits are
  * always zero (EOF input state implies a zero row count) and therefore
  * stored as 64-bit.
- **/
+ */
 typedef uint64_t packed_rowctx_t;
 
 /**
@@ -68,8 +68,7 @@ typedef uint64_t packed_rowctx_t;
  *
  * The 32-bit row context consists of the 2-bit parser state stored in the lower 2-bits
  * and a 30-bit row count in the upper 30 bits.
- *
- **/
+ */
 inline __host__ __device__ rowctx32_t make_row_context(uint32_t row_count, uint32_t out_ctx)
 {
   return (row_count << 2) + out_ctx;
@@ -86,8 +85,7 @@ inline __host__ __device__ rowctx32_t make_row_context(uint32_t row_count, uint3
  * since a block starting in a EOF state can only have a zero row count (and the output
  * state corresponding to an EOF input state can only be EOF, so only the first 3 output
  * states are included as parameters, and the EOF->EOF state transition is hardcoded)
- *
- **/
+ */
 constexpr __host__ __device__ packed_rowctx_t pack_row_contexts(rowctx32_t ctx0,
                                                                 rowctx32_t ctx1,
                                                                 rowctx32_t ctx2)
@@ -98,7 +96,7 @@ constexpr __host__ __device__ packed_rowctx_t pack_row_contexts(rowctx32_t ctx0,
 
 /**
  * @brief Unpack a row context  (select one of the 4 contexts in packed form)
- **/
+ */
 inline __host__ __device__ rowctx32_t get_row_context(packed_rowctx_t packed_ctx, uint32_t ctxid)
 {
   return static_cast<rowctx32_t>((packed_ctx >> (ctxid * 20)) & ((1 << 20) - 1));
@@ -114,7 +112,7 @@ inline __host__ __device__ rowctx32_t get_row_context(packed_rowctx_t packed_ctx
  * @param sel_ctx input context (2-bit context id, 62-bit row count)
  * @param packed_ctx row context of character block
  * @return total_row_count * 4 + output context id
- **/
+ */
 inline __host__ __device__ rowctx64_t select_row_context(rowctx64_t sel_ctx,
                                                          packed_rowctx_t packed_ctx)
 {
@@ -150,7 +148,7 @@ inline __host__ __device__ rowctx64_t select_row_context(rowctx64_t sel_ctx,
  * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return Number of row contexts
- **/
+ */
 uint32_t gather_row_offsets(cudf::io::parse_options_view const &options,
                             uint64_t *row_ctx,
                             device_span<uint64_t> offsets_out,
@@ -171,8 +169,7 @@ uint32_t gather_row_offsets(cudf::io::parse_options_view const &options,
  * @param data Character data buffer
  * @param row_offsets Row offsets in the character data buffer
  * @param stream CUDA stream used for device memory operations and kernel launches.
- *
- **/
+ */
 size_t count_blank_rows(cudf::io::parse_options_view const &options,
                         device_span<char const> data,
                         device_span<uint64_t const> row_offsets,
@@ -185,8 +182,7 @@ size_t count_blank_rows(cudf::io::parse_options_view const &options,
  * @param data Character data buffer
  * @param row_offsets Row offsets in the character data buffer
  * @param stream CUDA stream used for device memory operations and kernel launches.
- *
- **/
+ */
 void remove_blank_rows(const cudf::io::parse_options_view &options,
                        device_span<char const> data,
                        rmm::device_vector<uint64_t> &row_offsets,
@@ -202,7 +198,7 @@ void remove_blank_rows(const cudf::io::parse_options_view &options,
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return stats Histogram of each dtypes' occurrence for each column
- **/
+ */
 thrust::host_vector<column_type_histogram> detect_column_types(
   cudf::io::parse_options_view const &options,
   device_span<char const> data,
@@ -222,7 +218,7 @@ thrust::host_vector<column_type_histogram> detect_column_types(
  * @param[out] columns Device memory output of column data
  * @param[out] valids Device memory output of column valids bitmap data
  * @param[in] stream CUDA stream to use, default 0
- **/
+ */
 void decode_row_column_data(cudf::io::parse_options_view const &options,
                             device_span<char const> data,
                             device_span<column_parse::flags const> column_flags,

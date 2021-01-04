@@ -44,7 +44,6 @@ namespace {
  * There are three call types based on the number of regex instructions in the given pattern.
  * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
  * Longer patterns require global memory.
- *
  */
 template <size_t stack_size>
 struct contains_fn {
@@ -159,7 +158,6 @@ namespace detail {
 namespace {
 /**
  * @brief This counts the number of times the regex pattern matches in each string.
- *
  */
 template <size_t stack_size>
 struct count_fn {
@@ -172,11 +170,11 @@ struct count_fn {
     prog.set_stack_mem(data1, data2);
     if (d_strings.is_null(idx)) return 0;
     string_view d_str  = d_strings.element<string_view>(idx);
+    auto const nchars  = d_str.length();
     int32_t find_count = 0;
-    size_type nchars   = d_str.length();
-    size_type begin    = 0;
-    while (begin <= nchars) {
-      auto end = nchars;
+    int32_t begin      = 0;
+    while (begin < nchars) {
+      auto end = static_cast<int32_t>(nchars);
       if (prog.find(idx, d_str, begin, end) <= 0) break;
       ++find_count;
       begin = end > begin ? end : begin + 1;

@@ -62,8 +62,7 @@ static inline __device__ uint32_t nvstr_init_hash(char const *ptr, uint32_t len)
  *
  * @param[in,out] s dictionary builder state
  * @param[in] t thread id
- *
- **/
+ */
 static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
 {
   if (t == 0) { s->nnz = 0; }
@@ -75,11 +74,14 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
         s->scratch_red[t] = 0xffffffffu;
       } else {
         uint32_t row = s->chunk.start_row + i + t * 32;
-        uint32_t v   = (row < s->chunk.start_row + s->chunk.num_rows) ? valid_map[row >> 5] : 0;
+        uint32_t v   = (row < s->chunk.start_row + s->chunk.num_rows)
+                       ? valid_map[(row + s->chunk.column_offset) / 32]
+                       : 0;
         if (row & 0x1f) {
-          uint32_t v1 =
-            (row + 32 < s->chunk.start_row + s->chunk.num_rows) ? valid_map[(row >> 5) + 1] : 0;
-          v = __funnelshift_r(v, v1, row & 0x1f);
+          uint32_t v1 = (row + 32 < s->chunk.start_row + s->chunk.num_rows)
+                          ? valid_map[((row + s->chunk.column_offset) / 32) + 1]
+                          : 0;
+          v = __funnelshift_r(v, v1, row + s->chunk.column_offset);
         }
         s->scratch_red[t] = v;
       }
@@ -107,8 +109,7 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
  *
  * @param[in] chunks DictionaryChunk device array [rowgroup][column]
  * @param[in] num_columns Number of columns
- *
- **/
+ */
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 2)
@@ -295,8 +296,7 @@ __global__ void __launch_bounds__(block_size, 2)
  * @param[in] stripes StripeDictionary device array [stripe][column]
  * @param[in] chunks DictionaryChunk device array [rowgroup][column]
  * @param[in] num_columns Number of columns
- *
- **/
+ */
 // blockDim {1024,1,1}
 extern "C" __global__ void __launch_bounds__(1024)
   gpuCompactChunkDictionaries(StripeDictionary *stripes,
@@ -354,8 +354,7 @@ struct build_state_s {
  *
  * @param[in] stripes StripeDictionary device array [stripe][column]
  * @param[in] num_columns Number of string columns
- *
- **/
+ */
 // NOTE: Prone to poor utilization on small datasets due to 1 block per dictionary
 // blockDim {1024,1,1}
 template <int block_size>

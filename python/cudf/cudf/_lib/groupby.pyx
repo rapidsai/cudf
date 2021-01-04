@@ -51,6 +51,7 @@ _STRING_AGGS = {
     "min",
     "nunique",
     "nth",
+    "collect"
 }
 
 _LIST_AGGS = {
