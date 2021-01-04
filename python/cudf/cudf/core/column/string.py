@@ -295,7 +295,7 @@ class StringMethods(ColumnMethodsMixin):
         0       3
         1       0
         2       1
-        3    null
+        3    <NA>
         dtype: int32
         """
 
@@ -388,7 +388,7 @@ class StringMethods(ColumnMethodsMixin):
         >>> s.str.cat(['A', 'B', 'C', 'D'], sep=',')
         0     a,A
         1     b,B
-        2    None
+        2    <NA>
         3     d,D
         dtype: object
 
@@ -489,7 +489,7 @@ class StringMethods(ColumnMethodsMixin):
               0     1
         0     a     1
         1     b     2
-        2  None  None
+        2  <NA>  <NA>
 
         A pattern with one group will return a DataFrame with one
         column if expand=True.
@@ -498,14 +498,14 @@ class StringMethods(ColumnMethodsMixin):
               0
         0     1
         1     2
-        2  None
+        2  <NA>
 
         A pattern with one group will return a Series if expand=False.
 
         >>> s.str.extract(r'[ab](\d)', expand=False)                    # noqa W605
         0       1
         1       2
-        2    None
+        2    <NA>
         dtype: object
         """
         if flags != 0:
@@ -557,22 +557,24 @@ class StringMethods(ColumnMethodsMixin):
         1                 dog
         2    house and parrot
         3                  23
-        4                None
+        4                <NA>
         dtype: object
         >>> s1.str.contains('og', regex=False)
         0    False
         1     True
         2    False
         3    False
-        4     null
+        4     <NA>
         dtype: bool
 
         Returning an Index of booleans using only a literal pattern.
 
         >>> data = ['Mouse', 'dog', 'house and parrot', '23.0', np.NaN]
-        >>> ind = cudf.core.index.StringIndex(data)
-        >>> ind.str.contains('23', regex=False)
-        Index(['False', 'False', 'False', 'True', 'null'], dtype='object')
+        >>> idx = cudf.Index(data)
+        >>> idx
+        StringIndex(['Mouse' 'dog' 'house and parrot' '23.0' None], dtype='object')
+        >>> idx.str.contains('23', regex=False)
+        GenericIndex([False, False, False, True, <NA>], dtype='bool')
 
         Returning ‘house’ or ‘dog’ when either expression occurs in a string.
 
@@ -581,7 +583,7 @@ class StringMethods(ColumnMethodsMixin):
         1     True
         2     True
         3    False
-        4     null
+        4     <NA>
         dtype: bool
 
         Returning any digit using regular expression.
@@ -591,7 +593,7 @@ class StringMethods(ColumnMethodsMixin):
         1    False
         2    False
         3     True
-        4     null
+        4     <NA>
         dtype: bool
 
         Ensure ``pat`` is a not a literal pattern when ``regex`` is set
@@ -617,7 +619,7 @@ class StringMethods(ColumnMethodsMixin):
         1     True
         2     True
         3     True
-        4     null
+        4     <NA>
         dtype: bool
         """
         if case is not True:
@@ -685,7 +687,7 @@ class StringMethods(ColumnMethodsMixin):
         >>> s
         0     foo
         1     fuz
-        2    None
+        2    <NA>
         dtype: object
 
         When pat is a string and regex is True (the default), the given pat
@@ -696,7 +698,7 @@ class StringMethods(ColumnMethodsMixin):
         >>> s.str.replace('f.', 'ba', regex=True)
         0     bao
         1     baz
-        2    None
+        2    <NA>
         dtype: object
 
         When pat is a string and `regex` is False, every pat is replaced
@@ -705,7 +707,7 @@ class StringMethods(ColumnMethodsMixin):
         >>> s.str.replace('f.', 'ba', regex=False)
         0     foo
         1     fuz
-        2    None
+        2    <NA>
         dtype: object
         """
         if case is not None:
@@ -2305,15 +2307,9 @@ class StringMethods(ColumnMethodsMixin):
         Which will create a MultiIndex:
 
         >>> idx.str.partition()
-        MultiIndex(levels=[0    X
-        1    Y
-        dtype: object, 0
-        dtype: object, 0    123
-        1    999
-        dtype: object],
-        codes=   0  1  2
-        0  0  0  0
-        1  1  0  1)
+        MultiIndex([('X', ' ', '123'),
+                    ('Y', ' ', '999')],
+                   )
         """
         if expand is not True:
             raise NotImplementedError(
@@ -2375,15 +2371,9 @@ class StringMethods(ColumnMethodsMixin):
         Which will create a MultiIndex:
 
         >>> idx.str.rpartition()
-        MultiIndex(levels=[0    X
-        1    Y
-        dtype: object, 0
-        dtype: object, 0    123
-        1    999
-        dtype: object],
-        codes=   0  1  2
-        0  0  0  0
-        1  1  0  1)
+        MultiIndex([('X', ' ', '123'),
+                    ('Y', ' ', '999')],
+                   )
         """
         if expand is not True:
             raise NotImplementedError(
@@ -2531,7 +2521,7 @@ class StringMethods(ColumnMethodsMixin):
         0      -1
         1       1
         2    1000
-        3    None
+        3    <NA>
         dtype: object
 
         Note that ``None`` is not string, therefore it is converted
@@ -2546,7 +2536,7 @@ class StringMethods(ColumnMethodsMixin):
         0     0-1
         1     001
         2    1000
-        3    None
+        3    <NA>
         dtype: object
         """
         if not pd.api.types.is_integer(width):
@@ -2582,31 +2572,31 @@ class StringMethods(ColumnMethodsMixin):
         >>> s.str.center(1)
         0       a
         1       b
-        2    None
+        2    <NA>
         3       d
         dtype: object
         >>> s.str.center(1, fillchar='-')
         0       a
         1       b
-        2    None
+        2    <NA>
         3       d
         dtype: object
         >>> s.str.center(2, fillchar='-')
         0      a-
         1      b-
-        2    None
+        2    <NA>
         3      d-
         dtype: object
         >>> s.str.center(5, fillchar='-')
         0    --a--
         1    --b--
-        2     None
+        2     <NA>
         3    --d--
         dtype: object
         >>> s.str.center(6, fillchar='-')
         0    --a---
         1    --b---
-        2      None
+        2      <NA>
         3    --d---
         dtype: object
         """
@@ -2772,19 +2762,19 @@ class StringMethods(ColumnMethodsMixin):
         0    1. Ant.
         1    2. Bee!\\n
         2    3. Cat?\\t
-        3         None
+        3         <NA>
         dtype: object
         >>> s.str.strip()
         0    1. Ant.
         1    2. Bee!
         2    3. Cat?
-        3       None
+        3       <NA>
         dtype: object
         >>> s.str.strip('123.!? \\n\\t')
         0     Ant
         1     Bee
         2     Cat
-        3    None
+        3    <NA>
         dtype: object
         """
         if to_strip is None:
@@ -2831,7 +2821,7 @@ class StringMethods(ColumnMethodsMixin):
         0     Ant.
         1     Bee!\\n
         2     Cat?\\t
-        3       None
+        3       <NA>
         dtype: object
         """
         if to_strip is None:
@@ -2880,13 +2870,13 @@ class StringMethods(ColumnMethodsMixin):
         0    1. Ant.
         1    2. Bee!\\n
         2    3. Cat?\\t
-        3         None
+        3         <NA>
         dtype: object
         >>> s.str.rstrip('.!? \\n\\t')
         0    1. Ant
         1    2. Bee
         2    3. Cat
-        3      None
+        3      <NA>
         dtype: object
         """
         if to_strip is None:
@@ -3022,7 +3012,7 @@ class StringMethods(ColumnMethodsMixin):
         1       0
         2       2
         3       2
-        4    null
+        4    <NA>
         5       0
         6       1
         dtype: int32
@@ -3079,9 +3069,9 @@ class StringMethods(ColumnMethodsMixin):
 
         >>> s.str.findall('Monkey')
                 0
-        0    None
+        0    <NA>
         1  Monkey
-        2    None
+        2    <NA>
 
         When the pattern matches more than one string
         in the Series, all matches are returned:
@@ -3090,7 +3080,7 @@ class StringMethods(ColumnMethodsMixin):
               0
         0    on
         1    on
-        2  None
+        2  <NA>
 
         Regular expressions are supported too. For instance,
         the search for all the strings ending with
@@ -3099,16 +3089,16 @@ class StringMethods(ColumnMethodsMixin):
         >>> s.str.findall('on$')
               0
         0    on
-        1  None
-        2  None
+        1  <NA>
+        2  <NA>
 
         If the pattern is found more than once in the same
         string, then multiple strings are returned as columns:
 
         >>> s.str.findall('b')
               0     1
-        0  None  None
-        1  None  None
+        0  <NA>  <NA>
+        1  <NA>  <NA>
         2     b     b
         """
         if flags != 0:
@@ -3228,13 +3218,13 @@ class StringMethods(ColumnMethodsMixin):
         0     bat
         1    bear
         2     caT
-        3    None
+        3    <NA>
         dtype: object
         >>> s.str.endswith('t')
         0     True
         1    False
         2    False
-        3     null
+        3     <NA>
         dtype: bool
         """
         if pat is None:
@@ -3283,17 +3273,18 @@ class StringMethods(ColumnMethodsMixin):
         Examples
         --------
         >>> import cudf
+        >>> s = cudf.Series(['bat', 'Bear', 'cat', None])
         >>> s
         0     bat
         1    Bear
         2     cat
-        3    None
+        3    <NA>
         dtype: object
         >>> s.str.startswith('b')
         0     True
         1    False
         2    False
-        3     null
+        3     <NA>
         dtype: bool
         """
         if pat is None:
@@ -4883,6 +4874,9 @@ class StringColumn(column.ColumnBase):
     @classmethod
     def deserialize(cls, header, frames):
         size = header["size"]
+        if not isinstance(size, int):
+            size = pickle.loads(size)
+
         # Deserialize the mask, value, and offset frames
         buffers = [Buffer(each_frame) for each_frame in frames]
 
@@ -4925,10 +4919,13 @@ class StringColumn(column.ColumnBase):
         replacement = column.as_column(replacement, dtype=self.dtype)
         return libcudf.replace.replace(self, to_replace, replacement)
 
-    def fillna(self, fill_value):
-        if not is_scalar(fill_value):
-            fill_value = column.as_column(fill_value, dtype=self.dtype)
-        return libcudf.replace.replace_nulls(self, fill_value, dtype="object")
+    def fillna(self, fill_value=None, method=None):
+        if fill_value is not None:
+            if not is_scalar(fill_value):
+                fill_value = column.as_column(fill_value, dtype=self.dtype)
+            return super().fillna(value=fill_value, dtype="object")
+        else:
+            return super().fillna(method=method)
 
     def _find_first_and_last(self, value):
         found_indices = self.str().contains(f"^{value}$")

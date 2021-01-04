@@ -214,9 +214,14 @@ class fixed_point_scalar_device_view : public detail::scalar_device_view_base {
   using rep_type = typename T::rep;
 
   fixed_point_scalar_device_view(data_type type, rep_type* data, bool* is_valid)
-    : detail::scalar_device_view_base(type, is_valid)
+    : detail::scalar_device_view_base(type, is_valid), _data(data)
   {
   }
+
+  __device__ void set_value(rep_type value) { *_data = value; }
+
+ private:
+  rep_type* _data{};
 };
 
 /**
@@ -308,6 +313,15 @@ template <typename T>
 auto get_scalar_device_view(duration_scalar<T>& s)
 {
   return duration_scalar_device_view<T>(s.type(), s.data(), s.validity_data());
+}
+
+/**
+ * @brief Get the device view of a fixed_point_scalar
+ */
+template <typename T>
+auto get_scalar_device_view(fixed_point_scalar<T>& s)
+{
+  return fixed_point_scalar_device_view<T>(s.type(), s.data(), s.validity_data());
 }
 
 }  // namespace cudf

@@ -49,17 +49,17 @@ class CategoricalAccessor(ColumnMethodsMixin):
         dtype: category
         Categories (3, int64): [3, 2, 1]
         >>> s.cat.remove_categories([1])
-        0   null
-        1      2
-        2      3
+        0    <NA>
+        1       2
+        2       3
         dtype: category
         Categories (2, int64): [2, 3]
         >>> s.cat.set_categories(list('abcde'))
-        0   null
-        1   null
-        2   null
+        0    <NA>
+        1    <NA>
+        2    <NA>
         dtype: category
-        Categories (5, object): [a, b, c, d, e]
+        Categories (5, object): ['a', 'b', 'c', 'd', 'e']
         >>> s.cat.as_ordered()
         0    1
         1    2
@@ -360,13 +360,13 @@ class CategoricalAccessor(ColumnMethodsMixin):
         dtype: category
         Categories (3, int64): [1, 2, 10]
         >>> s.cat.remove_categories([1])
-        0     10
-        1   null
-        2   null
-        3      2
-        4     10
-        5      2
-        6     10
+        0      10
+        1    <NA>
+        2    <NA>
+        3       2
+        4      10
+        5       2
+        6      10
         dtype: category
         Categories (2, int64): [2, 10]
         >>> s
@@ -381,13 +381,13 @@ class CategoricalAccessor(ColumnMethodsMixin):
         Categories (3, int64): [1, 2, 10]
         >>> s.cat.remove_categories([10], inplace=True)
         >>> s
-        0   null
-        1      1
-        2      1
-        3      2
-        4   null
-        5      2
-        6   null
+        0    <NA>
+        1       1
+        2       1
+        3       2
+        4    <NA>
+        5       2
+        6    <NA>
         dtype: category
         Categories (2, int64): [1, 2]
         """
@@ -475,22 +475,22 @@ class CategoricalAccessor(ColumnMethodsMixin):
         dtype: category
         Categories (3, int64): [1, 2, 10]
         >>> s.cat.set_categories([1, 10])
-        0      1
-        1      1
-        2   null
-        3     10
-        4   null
-        5     10
+        0       1
+        1       1
+        2    <NA>
+        3      10
+        4    <NA>
+        5      10
         dtype: category
         Categories (2, int64): [1, 10]
         >>> s.cat.set_categories([1, 10], inplace=True)
         >>> s
-        0      1
-        1      1
-        2   null
-        3     10
-        4   null
-        5     10
+        0       1
+        1       1
+        2    <NA>
+        3      10
+        4    <NA>
+        5      10
         dtype: category
         Categories (2, int64): [1, 10]
         """
@@ -1038,36 +1038,40 @@ class CategoricalColumn(column.ColumnBase):
             ordered=self.dtype.ordered,
         )
 
-    def fillna(self, fill_value):
+    def fillna(self, fill_value=None, method=None):
         """
         Fill null values with *fill_value*
         """
         if not self.nullable:
             return self
 
-        fill_is_scalar = np.isscalar(fill_value)
+        if fill_value is not None:
+            fill_is_scalar = np.isscalar(fill_value)
 
-        if fill_is_scalar:
-            if fill_value == self.default_na_value():
-                fill_value = self.codes.dtype.type(fill_value)
-            else:
-                try:
-                    fill_value = self._encode(fill_value)
+            if fill_is_scalar:
+                if fill_value == self.default_na_value():
                     fill_value = self.codes.dtype.type(fill_value)
-                except (ValueError) as err:
-                    err_msg = "fill value must be in categories"
-                    raise ValueError(err_msg) from err
-        else:
-            fill_value = column.as_column(fill_value, nan_as_null=False)
-            # TODO: only required if fill_value has a subset of the categories:
-            fill_value = fill_value.cat()._set_categories(
-                fill_value.cat().categories, self.categories, is_unique=True
-            )
-            fill_value = column.as_column(fill_value.codes).astype(
-                self.codes.dtype
-            )
+                else:
+                    try:
+                        fill_value = self._encode(fill_value)
+                        fill_value = self.codes.dtype.type(fill_value)
+                    except (ValueError) as err:
+                        err_msg = "fill value must be in categories"
+                        raise ValueError(err_msg) from err
+            else:
+                fill_value = column.as_column(fill_value, nan_as_null=False)
+                # TODO: only required if fill_value has a subset of the
+                # categories:
+                fill_value = fill_value.cat()._set_categories(
+                    fill_value.cat().categories,
+                    self.categories,
+                    is_unique=True,
+                )
+                fill_value = column.as_column(fill_value.codes).astype(
+                    self.codes.dtype
+                )
 
-        result = libcudf.replace.replace_nulls(self, fill_value)
+        result = super().fillna(value=fill_value, method=method)
 
         result = column.build_categorical_column(
             categories=self.dtype.categories,

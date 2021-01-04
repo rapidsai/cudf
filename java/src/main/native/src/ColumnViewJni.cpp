@@ -640,7 +640,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(handle);
     cudf::data_type n_data_type = cudf::jni::make_data_type(type, scale);
     std::unique_ptr<cudf::column> result;
-    if (n_data_type.id() == column->type().id()) {
+    if (n_data_type == column->type()) {
       std::unique_ptr<cudf::column> copy(new cudf::column(*column));
       return reinterpret_cast<jlong>(copy.release());
     }

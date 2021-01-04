@@ -256,7 +256,7 @@ Examples
 --------
 >>> import cudf
 >>> num_rows, stripes, names = cudf.io.read_orc_metadata(filename)
->>> df = [cudf.read_orc(fname, stripe=i) for i in range(stripes)]
+>>> df = [cudf.read_orc(fname, stripes=i) for i in range(stripes)]
 >>> df = cudf.concat(df)
 >>> df
   num1                datetime text

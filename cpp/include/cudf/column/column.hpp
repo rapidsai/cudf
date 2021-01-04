@@ -53,7 +53,7 @@ class column {
    * @brief Construct a new column by deep copying the contents of `other`.
    *
    * @param other The column to copy
-   **/
+   */
   column(column const& other);
 
   /**
@@ -77,7 +77,7 @@ class column {
    * After the move, `other.size() == 0` and `other.type() = {EMPTY}`
    *
    * @param other The column whose contents will be moved into the new column
-   **/
+   */
   column(column&& other) noexcept;
 
   /**
@@ -95,7 +95,7 @@ class column {
    * `UNKNOWN_NULL_COUNT` to indicate that the null count should be computed on
    * the first invocation of `null_count()`.
    * @param children Optional, vector of child columns
-   **/
+   */
   template <typename B1, typename B2 = rmm::device_buffer>
   column(data_type dtype,
          size_type size,

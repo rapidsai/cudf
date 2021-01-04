@@ -7,6 +7,9 @@
 - PR #6814 Implement `cudf::reduce` for `decimal32` and `decimal64` (part 1)
 - PR #6929 Add `Index.set_names` api
 - PR #6907 Add `replace_null` API with `replace_policy` parameter, `fixed_width` column support
+- PR #6885 Share `factorize` implementation with Index and cudf module
+
+- PR #6775 Implement cudf.DateOffset for months
 
 ## Improvements
 
@@ -17,10 +20,12 @@
 - PR #6585 Add dictionary support to libcudf groupby functions
 - PR #6909 Support reading byte array backed decimal columns from parquet files
 - PR #6939 Use simplified `rmm::exec_policy`
+- PR #6512 Refactor rolling.cu to reduce compile time
 - PR #6982 Disable some pragma unroll statements in thrust `sort.h`
 
 ## Bug Fixes
 
+- PR #6884 Correct the sampling range when sampling with replacement
 - PR #6903 Add null count test for apply_boolean_mask
 - PR #6922 Fix N/A detection for empty fields in CSV reader
 - PR #6912 Fix rmm_mode=managed parameter for gtests
