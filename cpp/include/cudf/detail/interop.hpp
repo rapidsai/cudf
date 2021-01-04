@@ -100,7 +100,7 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type);
  * @copydoc cudf::to_arrow
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
- **/
+ */
 std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        std::vector<column_metadata> const& metadata = {},
                                        rmm::cuda_stream_view stream = rmm::cuda_stream_default,
@@ -110,7 +110,7 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
  * @copydoc cudf::arrow_to_cudf
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
- **/
+ */
 std::unique_ptr<table> from_arrow(
   arrow::Table const& input_table,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,

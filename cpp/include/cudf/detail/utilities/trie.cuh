@@ -17,7 +17,6 @@
 /**
  * @brief Serialized trie implementation for C++/CUDA
  * @file trie.cuh
- *
  */
 
 #pragma once
@@ -89,8 +88,12 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(
   // Serialize the tree trie
   std::deque<IndexedTrieNode> to_visit;
   thrust::host_vector<SerialTrieNode> nodes;
-  // suport for matching empty input
+
+  // If the Tree trie matches empty strings, the root node is marked as 'end of word'.
+  // The first node in the serialized trie is also used to match empty strings, so we're
+  // initializing it using the `is_end_of_word` value from the root node.
   nodes.push_back(SerialTrieNode(trie_terminating_character, tree_trie.is_end_of_word));
+
   // Add root node to queue. this node is not included to the serialized trie
   to_visit.emplace_back(&tree_trie, -1);
   while (!to_visit.empty()) {
