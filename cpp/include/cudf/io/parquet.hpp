@@ -636,6 +636,30 @@ class parquet_writer_options_builder {
 };
 
 /**
+ * @brief Writes a set of columns to parquet format.
+ *
+ * The following code snippet demonstrates how to write columns to a file:
+ * @code
+ *  ...
+ *  std::string filepath = "dataset.parquet";
+ *  cudf::io::parquet_writer_options options =
+ *  cudf::io::parquet_writer_options::builder(cudf::sink_info(filepath), table->view());
+ *  ...
+ *  cudf::write_parquet(options);
+ * @endcode
+ *
+ * @param options Settings for controlling writing behavior.
+ * @param mr Device memory resource to use for device memory allocation.
+ *
+ * @return A blob that contains the file metadata (parquet FileMetadata thrift message) if
+ *         requested in parquet_writer_options (empty blob otherwise).
+ */
+
+std::unique_ptr<std::vector<uint8_t>> write_parquet(
+  parquet_writer_options const& options,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
  * into a single metadata blob.
  *
@@ -848,62 +872,6 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 
 /**
- * @brief parquet writer class to handle options and write.
- *
- * The following code snippet demonstrates how to write columns to a file:
- * @code
- *  ...
- *  std::string filepath = "dataset.parquet";
- *  cudf::io::parquet_writer_options options =
- *  cudf::io::parquet_writer_options::builder(cudf::sink_info(filepath), table->view());
- *  ...
- *  cudf::io::parquet_writer writer(options);
- *  writer.write()
- * @endcode
- */
-class parquet_writer {
- public:
-  /**
-   * @brief Default constructor, this should never be used.
-   */
-  parquet_writer() = default;
-
-  /**
-   * @brief Constructor with writer options
-   *
-   * @param[in] op options used to write table
-   * @param[in] mr Device memory resource to use for device memory allocation
-   */
-  parquet_writer(parquet_writer_options const& op,
-                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-  /**
-   * @brief Moves writer unique pointer to object
-   *
-   * @param[in] rhs writer class that needs to be moved
-   */
-  parquet_writer& operator=(parquet_writer&& rhs);
-
-  /**
-   * @brief Writes table to output
-   *
-   * @return unique_ptr to FileMetadata thrift message if requested
-   */
-  std::unique_ptr<std::vector<uint8_t>> write();
-
-  // Unique pointer to impl writer class
-  std::unique_ptr<cudf::io::detail::parquet::writer> writer;
-
- private:
-  // Input table
-  table_view table;
-  // To enable/disable option to return file metadata
-  bool return_filemetadata = false;
-  // Column chunks file path to be set in metadata
-  std::string column_chunks_file_path = "";
-};
-
-/**
  * @brief chunked parquet writer class to handle options and write tables in chunks.
  *
  * The intent of the parquet_chunked_writer is to allow writing of an
@@ -929,6 +897,7 @@ class parquet_chunked_writer {
  public:
   /**
    * @brief Default constructor, this should never be used.
+   *        This is added just to satisfy cython.
    */
   parquet_chunked_writer() = default;
 

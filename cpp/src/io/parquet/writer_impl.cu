@@ -667,6 +667,11 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   }
 }
 
+writer::impl::~impl()
+{
+  if (not is_written) write_end(false, "");
+}
+
 void writer::impl::init_state(SingleWriteMode mode)
 {
   // Write file header
@@ -683,6 +688,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
   const std::string &column_chunks_file_path,
   rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(not is_written, "Data has already been flushed to out and closed");
   stream_ = stream;
   init_state(SingleWriteMode::YES);
   write(table);
@@ -691,6 +697,8 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
 
 void writer::impl::write(table_view const &table, SingleWriteMode mode)
 {
+  CUDF_EXPECTS(not is_written, "Data has already been flushed to out and closed");
+
   if (state == nullptr) { init_state(mode); }
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
@@ -1187,6 +1195,8 @@ void writer::impl::write(table_view const &table, SingleWriteMode mode)
 std::unique_ptr<std::vector<uint8_t>> writer::impl::write_end(
   bool return_filemetadata, const std::string &column_chunks_file_path)
 {
+  CUDF_EXPECTS(not is_written, "Data has already been flushed to out and closed");
+  is_written = true;
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;
   buffer_.resize(0);

@@ -358,28 +358,17 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
   return detail_parquet::writer::merge_rowgroup_metadata(metadata_list);
 }
 
-// Constructor to create parquet writer
-parquet_writer::parquet_writer(parquet_writer_options const& op,
-                               rmm::mr::device_memory_resource* mr)
-  : table(op.get_table()),
-    return_filemetadata(op.is_enabled_return_filemetadata()),
-    column_chunks_file_path(op.get_column_chunks_file_path())
+// Freeform API wraps the detail writer class API
+std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options,
+                                                    rmm::mr::device_memory_resource* mr)
 {
-  writer = make_writer<detail_parquet::writer>(op.get_sink(), op, mr);
-}
+  CUDF_FUNC_RANGE();
+  auto writer = make_writer<detail_parquet::writer>(options.get_sink(), options, mr);
 
-// Writes table to output
-std::unique_ptr<std::vector<uint8_t>> parquet_writer::write()
-{
-  return writer->write(
-    table, return_filemetadata, column_chunks_file_path, rmm::cuda_stream_default);
-}
-
-// Moves writer unique pointer to object
-parquet_writer& parquet_writer::operator=(parquet_writer&& rhs)
-{
-  writer = std::move(rhs.writer);
-  return *this;
+  return writer->write(options.get_table(),
+                       options.is_enabled_return_filemetadata(),
+                       options.get_column_chunks_file_path(),
+                       rmm::cuda_stream_default);
 }
 
 // Constructor to create parquet chunked writer

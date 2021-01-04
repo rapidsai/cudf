@@ -42,7 +42,7 @@ from cudf._lib.cpp.io.parquet cimport (
     read_parquet as parquet_reader,
     parquet_reader_options,
     parquet_writer_options,
-    parquet_writer as cpp_parquet_writer,
+    write_parquet as parquet_writer,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
     chunked_parquet_writer_options,
     chunked_parquet_writer_options_builder,
@@ -386,7 +386,6 @@ cpdef write_parquet(
     if metadata_file_path is not None:
         c_column_chunks_file_path = str.encode(metadata_file_path)
         return_filemetadata = True
-    cdef unique_ptr[cpp_parquet_writer] writer
 
     # Perform write
     with nogil:
@@ -400,9 +399,7 @@ cpdef write_parquet(
             .int96_timestamps(_int96_timestamps)
             .build()
         )
-
-        writer.reset(new cpp_parquet_writer(args))
-        out_metadata_c = move(writer.get()[0].write())
+        out_metadata_c = move(parquet_writer(args))
 
     if metadata_file_path is not None:
         out_metadata_py = BufferArrayFromVector.from_unique_ptr(

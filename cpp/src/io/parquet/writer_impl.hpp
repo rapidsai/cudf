@@ -103,6 +103,11 @@ class writer::impl {
                 rmm::mr::device_memory_resource* mr);
 
   /**
+   * @brief Destructor to complete any incomplete write and release resources.
+   **/
+  ~impl();
+
+  /**
    * @brief Initializes the states before writing.
    *
    * @param[in] mode Option to write at once or in chunks.
@@ -268,6 +273,8 @@ class writer::impl {
   table_metadata const* user_metadata = nullptr;
   // preserves chunked state
   std::unique_ptr<pq_chunked_state> state = nullptr;
+  // to track if the output has been written to file
+  bool is_written = false;
 
   std::vector<uint8_t> buffer_;
   std::unique_ptr<data_sink> out_sink_;
