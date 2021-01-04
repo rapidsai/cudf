@@ -982,6 +982,12 @@ def unstack(df, level, fill_value=None):
           2    7
     dtype: int64
     """
+    if not isinstance(df, cudf.DataFrame):
+        raise ValueError("`df` should be a cudf Dataframe object.")
+
+    if df.empty:
+        raise ValueError("Cannot unstack an empty dataframe.")
+
     if fill_value is not None:
         raise NotImplementedError("fill_value is not supported.")
     if pd.api.types.is_list_like(level):
@@ -990,15 +996,21 @@ def unstack(df, level, fill_value=None):
     df = df.copy(deep=False)
     if not isinstance(df.index, cudf.MultiIndex):
         if isinstance(df, cudf.DataFrame):
+            dtype = df._columns[0].dtype
+            if any(
+                [
+                    not df._columns[i].dtype == dtype
+                    for i in range(len(df._columns))
+                ]
+            ):
+                raise ValueError(
+                    "Calling unstack() on single index dataframe"
+                    " with different column datatype is not supported."
+                )
             res = df.T.stack(dropna=False)
             # Result's index is a multiindex
             res.index.names = tuple(df.columns.names) + df.index.names
             return res
-        else:
-            raise NotImplementedError(
-                "Calling unstack() on a Series without a MultiIndex "
-                "is not supported"
-            )
     else:
         columns = df.index._poplevels(level)
         index = df.index

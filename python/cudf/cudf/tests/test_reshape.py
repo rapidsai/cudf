@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -450,6 +452,18 @@ def test_unstack_index(data, index, col_idx):
     gdf.columns = cudf.from_pandas(col_idx)
 
     assert_eq(pdf.unstack(), gdf.unstack())
+
+
+def test_unstack_index_invalid():
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Calling unstack() on single index dataframe with "
+            "different column datatype is not supported."
+        ),
+    ):
+        gdf.unstack()
 
 
 def test_pivot_duplicate_error():
