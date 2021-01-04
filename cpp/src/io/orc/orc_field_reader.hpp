@@ -43,13 +43,13 @@ struct FunctionSwitchImpl {
   template <typename... Operator>
   static inline void run(ProtobufReader *pbr,
                          const uint8_t *end,
-                         const int &field,
+                         const int &encoded_field_number,
                          std::tuple<Operator...> &ops)
   {
-    if (field == std::get<index>(ops).field) {
+    if (encoded_field_number == std::get<index>(ops).encoded_field_number) {
       std::get<index>(ops)(pbr, end);
     } else {
-      FunctionSwitchImpl<index - 1>::run(pbr, end, field, ops);
+      FunctionSwitchImpl<index - 1>::run(pbr, end, encoded_field_number, ops);
     }
   }
 };
@@ -59,13 +59,13 @@ struct FunctionSwitchImpl<0> {
   template <typename... Operator>
   static inline void run(ProtobufReader *pbr,
                          const uint8_t *end,
-                         const int &field,
+                         const int &encoded_field_number,
                          std::tuple<Operator...> &ops)
   {
-    if (field == std::get<0>(ops).field) {
+    if (encoded_field_number == std::get<0>(ops).encoded_field_number) {
       std::get<0>(ops)(pbr, end);
     } else {
-      pbr->skip_struct_field(field & 7);
+      pbr->skip_struct_field(encoded_field_number & 7);
     }
   }
 };

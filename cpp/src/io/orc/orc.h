@@ -149,17 +149,17 @@ class ProtobufReader {
   template <
     typename T,
     typename std::enable_if_t<!std::is_integral<T>::value and !std::is_enum<T>::value> * = nullptr>
-  int static constexpr field_enum(int f)
+  int static constexpr encode_field_number(int field_number) noexcept
   {
-    return (f * 8) + PB_TYPE_FIXEDLEN;
+    return (field_number * 8) + PB_TYPE_FIXEDLEN;
   }
 
   template <
     typename T,
     typename std::enable_if_t<std::is_integral<T>::value or std::is_enum<T>::value> * = nullptr>
-  int static constexpr field_enum(int f)
+  int static constexpr encode_field_number(int field_number) noexcept
   {
-    return (f * 8) + PB_TYPE_VARINT;
+    return (field_number * 8) + PB_TYPE_VARINT;
   }
 
   uint32_t read_field_size(const uint8_t *end);
@@ -222,37 +222,49 @@ class ProtobufReader {
 
   template <typename T>
   struct field_reader {
-    int const field;
-    T &value;
+    int const encoded_field_number;
+    T &output_value;
 
-    field_reader(int f, T &v) : field(field_enum<T>(f)), value(v) {}
+    field_reader(int field_number, T &field_value)
+      : encoded_field_number(encode_field_number<T>(field_number)), output_value(field_value)
+    {
+    }
 
-    inline void operator()(ProtobufReader *pbr, const uint8_t *end) { pbr->read_field(value, end); }
+    inline void operator()(ProtobufReader *pbr, const uint8_t *end)
+    {
+      pbr->read_field(output_value, end);
+    }
   };
 
   template <typename T>
   struct packed_field_reader {
-    int const field;
-    T &value;
+    int const encoded_field_number;
+    T &output_value;
 
-    packed_field_reader(int f, T &v) : field(field_enum<T>(f)), value(v) {}
+    packed_field_reader(int field_number, T &field_value)
+      : encoded_field_number(encode_field_number<T>(field_number)), output_value(field_value)
+    {
+    }
 
     inline void operator()(ProtobufReader *pbr, const uint8_t *end)
     {
-      pbr->read_packed_field(value, end);
+      pbr->read_packed_field(output_value, end);
     }
   };
 
   template <typename T>
   struct raw_field_reader {
-    int const field;
-    T &value;
+    int const encoded_field_number;
+    T &output_value;
 
-    raw_field_reader(int f, T &v) : field(field_enum<T>(f)), value(v) {}
+    raw_field_reader(int field_number, T &field_value)
+      : encoded_field_number(encode_field_number<T>(field_number)), output_value(field_value)
+    {
+    }
 
     inline void operator()(ProtobufReader *pbr, const uint8_t *end)
     {
-      pbr->read_raw_field(value, end);
+      pbr->read_raw_field(output_value, end);
     }
   };
 
@@ -261,22 +273,47 @@ class ProtobufReader {
   const uint8_t *const m_end;
 
  public:
+  /**
+   * @brief Returns a field reader object of correct type, based on the `field_value` type.
+   *
+   * @tparam Type of the field (inferred from `field_value` type)
+   * @param field_number The field number of the field to be read
+   * @param field_value Reference to the object the field reader will write to
+   * @return the field reader object of the right type
+   */
   template <typename T>
-  static auto make_field_reader(int f, T &v)
+  static auto make_field_reader(int field_number, T &field_value)
   {
-    return field_reader<T>(f, v);
+    return field_reader<T>(field_number, field_value);
   }
 
+  /**
+   * @brief Returns a reader object for packed fields, based on the `field_value` type.
+   *
+   * @tparam Type of the field (inferred from `field_value` type)
+   * @param field_number The field number of the field to be read
+   * @param field_value Reference to the object the field reader will write to
+   * @return the packed field reader object of the right type
+   */
   template <typename T>
-  static auto make_packed_field_reader(int f, T &v)
+  static auto make_packed_field_reader(int field_number, T &field_value)
   {
-    return packed_field_reader<T>(f, v);
+    return packed_field_reader<T>(field_number, field_value);
   }
 
+  /**
+   * @brief Returns a field reader that does not decode data, with type based on the `field_value`
+   * type.
+   *
+   * @tparam Type of the field (inferred from `field_value` type)
+   * @param field_number The field number of the field to be read
+   * @param field_value Reference to the object the field reader will write to
+   * @return the raw field reader object of the right type
+   */
   template <typename T>
-  static auto make_raw_field_reader(int f, T &v)
+  static auto make_raw_field_reader(int field_number, T &field_value)
   {
-    return raw_field_reader<T>(f, v);
+    return raw_field_reader<T>(field_number, field_value);
   }
 };
 
