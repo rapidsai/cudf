@@ -26,7 +26,7 @@ namespace orc {
 uint32_t ProtobufReader::read_field_size(const uint8_t *end)
 {
   auto const size = get<uint32_t>();
-  CUDF_EXPECTS(size <= (uint32_t)(end - m_cur), "Protobuf parsing out of bounds");
+  CUDF_EXPECTS(size <= static_cast<uint32_t>(end - m_cur), "Protobuf parsing out of bounds");
   return size;
 }
 
