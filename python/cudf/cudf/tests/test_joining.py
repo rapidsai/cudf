@@ -12,7 +12,7 @@ from cudf.tests.utils import (
     assert_eq,
     assert_exceptions_equal,
 )
-
+from cudf.core.dtypes import CategoricalDtype
 
 def make_params():
     np.random.seed(0)
@@ -1204,6 +1204,181 @@ def test_typecast_on_join_categorical(dtype_l, dtype_r):
 
     got = gdf_l.merge(gdf_r, on="join_col", how="inner")
     assert_eq(expect, got)
+
+def make_categorical_dataframe(categories, ordered=False):
+    dtype = CategoricalDtype(categories=categories, ordered=ordered)
+    data = cudf.Series(categories, dtype=dtype)
+    return cudf.DataFrame({'key': data})
+
+def test_categorical_typecast_inner():
+    # Inner join casting rules for categoricals
+
+    # Equal categories, equal ordering -> common categorical
+    left = make_categorical_dataframe([1,2,3], ordered=False)
+    right = make_categorical_dataframe([1,2,3], ordered=False)
+    result = left.merge(right, how='inner', on='a')
+
+    expect_dtype = ltype
+    expect_data = cudf.Series([1,2,3], dtype=expect_dtype)
+
+    assert_eq(expect_data, result['a'])
+
+    # Equal categories, unequal ordering -> error
+    left = make_categorical_dataframe([1,2,3], ordered=False)
+    right = make_categorical_dataframe([1,2,3], ordered=True)
+
+    with pytest.raises(TypeError):
+        result = left.merge(right, how='inner', on='a')
+
+    # Unequal categories 
+    # Neither ordered -> unordered categorical with intersection
+    left = make_categorical_dataframe([1,2,3], ordered=False)
+    left = make_categorical_dataframe([2,3,4], ordered=False)
+
+    result = left.merge(right, how='inner', on='a')
+
+    expect_dtype = cudf.CategoricalDtype(categories=[1,2], ordered=False)
+    expect_data = cudf.Series([1,2], dtype=expect_dtype)
+
+    assert_eq(expect_data, result['a'])
+
+    # One is ordered -> error
+    left = make_categorical_dataframe([1,2,3], ordered=False)
+    right = make_categorical_dataframe([2,3,4], ordered=True)
+
+    with pytest.raises(TypeError):
+        result = left.merge(right, how='inner', on='a')
+
+    # Both are ordered -> error
+    left = make_categorical_dataframe([1,2,3], ordered=True)
+    right = make_categorical_dataframe([2,3,4], ordered=True)
+
+    with pytest.raises(TypeError('Ambiguous')):
+        result = left.merge(right, how='inner', on='a')
+
+def test_categorical_typecast_left(how):
+    # TODO: generalize to right or write another test
+    # Inner join casting rules for categoricals
+
+    # equal categories, neither ordered -> common dtype
+    left = make_categorical_dataframe([1,2,3], ordered=False)
+    right = make_categorical_dataframe([1,2,3], ordered=False)
+
+    result = left.merge(right, on='key', how='left')
+
+    expect_dtype = CategoricalDtype(categories=[1,2,3], ordered=False)
+    expect_data = cudf.Series([1,2,3], dtype=expect_dtype)
+
+    assert_eq(expect_data, result['key'])
+
+    # equal categories, left is ordered, right is not
+    # left dtype takes precedence 
+    left = make_categorical_dataframe([1,2,3], ordered=True)
+    right = make_categorical_dataframe([1,2,3], ordered=False)
+
+    result = left.merge(right, on='key', how='left')
+
+    expect_dtype = CategoricalDtype(categories=[1,2,3], ordered=True)
+    expect_data = cudf.Series([1,2,3], dtype=expect_dtype)
+
+    assert_eq(expect_data, result['key'])
+
+    # equal categories, left is not ordered, right is ordered
+    # This is an ambiguous case
+    left = make_categorical_dataframe([1,2,3], ordered=False)
+    right = make_categorical_dataframe([1,2,3], ordered=True)
+
+    result = left.merge(right, on='key', how='left')
+
+    expect_dtype = CategoricalDtype(categories=[1,2,3], ordered=True)
+    expect_data = cudf.Series([1,2,3], dtype=expect_dtype)
+
+    with pytest.raises(TypeError):
+        assert_eq(expect_data, result['key'])
+
+    # unequal categories neither ordered -> left dtype
+    left = make_categorical_dataframe([1,2,3], ordered=False)
+    right = make_categorical_dataframe([2,3,4], ordered=False)
+
+    result = left.merge(right, on='key', how='left')
+
+    expect_dtype = CategoricalDtype(categories=[1,2,3], ordered=False)
+    expect_data = cudf.Series([2,3], dtype=expect_dtype)
+
+    assert_eq(expect_data, result['key'])
+
+    # unequal categories, left ordered -> left dtype
+    left = make_categorical_dataframe([1,2,3], ordered=True)
+    right = make_categorical_dataframe([2,3,4], ordered=False)
+
+    result = left.merge(right, on='key', how='left')
+    expect_dtype = CategoricalDtype(categories=[1,2,3], ordered=True)
+    expect_data = cudf.Series([2,3], dtype=expect_dtype)
+
+    assert_eq(expect_data, result['key'])
+
+    # unequal categories, right ordered -> error
+    left = make_categorical_dataframe([1,2,3], ordered=True)
+    right = make_categorical_dataframe([2,3,4], ordered=False)
+
+    with pytest.raises(TypeError):
+        result = left.merge(right, on='key', how='left')
+
+    # unequal categories, both ordered -> error
+    left = make_categorical_dataframe([1,2,3], ordered=True)
+    right = make_categorical_dataframe([2,3,4], ordered=True)
+
+    with pytest.raises(TypeError):
+        result = left.merge(right, on='key', how='left')
+
+def test_categorical_typecast_outer()
+    # Outer join casting rules for categoricals
+
+    # equal categories, neither ordered -> common dtype
+    left = make_categorical_dataframe([1,2,3], ordered=False)
+    right = make_categorical_dataframe([1,2,3], ordered=False)
+
+    result = left.merge(right, on='key', how='outer')
+
+    expect_dtype = CategoricalDtype(categories=[1,2,3], ordered=False)
+    expect_data = cudf.Series([1,2,3], dtype=expect_dtype)
+
+    assert_eq(expect_data, result['key'])
+
+    # equal categories, one ordered -> error
+    left = make_categorical_dataframe([1,2,3], ordered=False)
+    right = make_categorical_dataframe([1,2,3], ordered=True)
+
+    with pytest.raises(TypeError):
+        result = left.merge(right, how='outer', on='a')
+    with pytest.raises(TypeError):
+        result = right.merge(left, how='outer', on='a')
+
+    # unequal categories, neither ordered -> superset
+    left = make_categorical_dataframe([1,2,3], ordered=False)
+    right = make_categorical_dataframe([2,3,4], ordered=False)
+
+    result = left.merge(right, on='key', how='outer')
+
+    expect_dtype = CategoricalDtype(categories=[1,2,3,4], ordered=False)
+    expect_data = cudf.Series([1,2,3,4], dtype=expect_dtype)
+
+    assert_eq(expect_data, result['key'])
+
+    # unequal categories, one ordered -> error
+    left = make_categorical_dataframe([1,2,3], ordered=False)
+    right = make_categorical_dataframe([2,3,4], ordered=True)
+
+    with pytest.raises(TypeError):
+        result = left.merge(right, how='outer', on='a')
+    with pytest.raises(TypeError):
+        result = right.merge(left, how='outer', on='a')
+
+    # unequal categories, both ordered -> error
+    left = make_categorical_dataframe([1,2,3], ordered=True)
+    right = make_categorical_dataframe([2,3,4], ordered=True)
+    with pytest.raises(TypeError):
+        result = left.merge(right, how='outer', on='a')
 
 
 @pytest.mark.parametrize(
