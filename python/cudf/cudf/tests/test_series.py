@@ -704,9 +704,7 @@ def test_round_nan_as_null_false(series, decimal):
     ser = cudf.Series(series)
     result = ser.round(decimal)
     expected = pser.round(decimal)
-    np.testing.assert_array_almost_equal(
-        result.to_pandas(), expected, decimal=10
-    )
+    assert_eq(result, expected, atol=1e-10)
 
 
 @pytest.mark.parametrize("ps", _series_na_data())
