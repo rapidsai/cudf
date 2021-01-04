@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,5 +92,13 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
 }
 
 }  // namespace detail
+
+std::unique_ptr<column> segmented_gather(lists_column_view const& source_column,
+                                         lists_column_view const& gather_map_list,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  return detail::segmented_gather(source_column, gather_map_list, rmm::cuda_stream_default, mr);
+}
+
 }  // namespace lists
 }  // namespace cudf
