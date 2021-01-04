@@ -699,8 +699,9 @@ def digitize(column, bins, right=False):
     ----------
     column : Column
         Input column.
-    bins : np.array
-        1-D monotonically increasing array of bins with same type as `column`.
+    bins : Column-like
+        1-D column-like object of bins with same type as `column`, should be
+        monotonically increasing.
     right : bool
         Indicates whether interval contains the right or left bin edge.
 
