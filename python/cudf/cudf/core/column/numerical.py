@@ -708,9 +708,15 @@ def digitize(column, bins, right=False):
     -------
     A device array containing the indices
     """
-    assert column.dtype == bins.dtype
-    bins_buf = Buffer(bins.view("|u1"))
-    bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
+    if not column.dtype == bins.dtype:
+        raise ValueError(
+            "Digitize() expects bins and input column have the same datatype."
+        )
+
+    bin_col = as_column(bins, dtype=bins.dtype)
+    if bin_col.nullable:
+        raise ValueError("Argument `bins` contains null entries.")
+
     return as_column(
         libcudf.sort.digitize(column.as_frame(), bin_col.as_frame(), right)
     )
