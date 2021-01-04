@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/gather.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/sorting.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -38,6 +39,7 @@ std::unique_ptr<cudf::column> sort(strings_column_view strings,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
 
