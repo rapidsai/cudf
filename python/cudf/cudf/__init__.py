@@ -39,6 +39,7 @@ from cudf.core import (
     from_pandas,
     merge,
 )
+from cudf.core.algorithms import factorize
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.groupby import Grouper
 from cudf.core.ops import (
@@ -63,7 +64,7 @@ from cudf.core.ops import (
 )
 from cudf.core.reshape import concat, get_dummies, melt, merge_sorted
 from cudf.core.series import isclose
-from cudf.core.tools.datetimes import to_datetime
+from cudf.core.tools.datetimes import to_datetime, DateOffset
 from cudf.core.tools.numeric import to_numeric
 from cudf.io import (
     from_dlpack,

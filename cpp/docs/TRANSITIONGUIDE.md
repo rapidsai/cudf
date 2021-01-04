@@ -777,7 +777,7 @@ namespace experimental{
  * @param mr Memory resource used to allocate device memory for the returned
  * output column
  * @return std::unique_ptr<column> Newly allocated output column
- **/
+ */
 std::unique_ptr<column> new_function(cudf::column_view input, 
                                      cudf::mutable_column_view in_out, 
                                      cudf::table_view input_table,
