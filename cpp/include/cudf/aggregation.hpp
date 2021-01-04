@@ -73,7 +73,7 @@ class aggregation {
     ARGMIN,          ///< Index of min element
     NUNIQUE,         ///< count number of unique elements
     NTH_ELEMENT,     ///< get the nth element
-    ROW_NUMBER,      ///< get row-number of element
+    ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
     COLLECT,         ///< collect values into a list
     LEAD,            ///< window function, accesses row at specified offset following current row
     LAG,             ///< window function, accesses row at specified offset preceding current row

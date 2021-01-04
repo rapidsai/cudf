@@ -131,9 +131,8 @@ bool __device__ process_rolling_window(column_device_view input,
 }
 
 /**
- * @brief Calculates row-number within [start_index, end_index).
- *        Count is updated depending on `min_periods`
- *        Returns true if it was valid, else false.
+ * @brief Calculates row-number of current index within [start_index, end_index). Count is updated
+ *        depending on `min_periods`. Returns `true` if it was valid, else `false`.
  */
 template <typename InputType,
           typename OutputType,
