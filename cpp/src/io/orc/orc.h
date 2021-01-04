@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,8 +108,7 @@ struct Metadata {
 
 /**
  * @brief Class for parsing Orc's Protocol Buffers encoded metadata
- *
- **/
+ */
 
 class ProtobufReader {
  public:
@@ -208,8 +207,7 @@ class ProtobufReader {
 
 /**
  * @brief Class for encoding Orc's metadata with Protocol Buffers
- *
- **/
+ */
 class ProtobufWriter {
  public:
   ProtobufWriter() { m_buf = nullptr; }
@@ -258,8 +256,7 @@ class ProtobufWriter {
 
 /**
  * @brief Class for decompressing Orc data blocks using the CPU
- *
- **/
+ */
 
 class OrcDecompressor {
  public:

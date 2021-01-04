@@ -123,7 +123,6 @@ struct dst_buf_info {
  * @param stride Size of the kernel block
  * @param value_shift Shift incoming 4-byte offset values down by this amount
  * @param bit_shift Shift incoming data right by this many bits
- *
  */
 __device__ void copy_buffer(uint8_t* __restrict__ dst,
                             uint8_t* __restrict__ src,
@@ -203,7 +202,6 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
  * @param src_bufs Input source buffers (N)
  * @param dst_bufs Desination buffers (N*M)
  * @param buf_info Information on the range of values to be copied for each destination buffer.
- *
  */
 __global__ void copy_partition(int num_src_bufs,
                                int num_partitions,
@@ -667,7 +665,6 @@ struct dst_offset_output_iterator {
  *
  * Note: columns types which themselves inherently have no data (strings, lists,
  * structs) return 0.
- *
  */
 struct size_of_helper {
   template <typename T>

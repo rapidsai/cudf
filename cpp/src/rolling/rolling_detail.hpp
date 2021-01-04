@@ -54,7 +54,10 @@ static constexpr bool is_rolling_supported()
     return (op == aggregation::MIN) or (op == aggregation::MAX) or
            (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
            (op == aggregation::ROW_NUMBER) or (op == aggregation::LEAD) or (op == aggregation::LAG);
-
+  } else if (cudf::is_fixed_point<ColumnType>()) {
+    return (op == aggregation::MIN) or (op == aggregation::MAX) or
+           (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
+           (op == aggregation::LEAD) or (op == aggregation::LAG);
   } else if (std::is_same<ColumnType, cudf::string_view>()) {
     return (op == aggregation::MIN) or (op == aggregation::MAX) or
            (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or

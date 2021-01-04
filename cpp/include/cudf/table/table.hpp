@@ -45,7 +45,7 @@ class table {
 
   /**
    * @brief Construct a new table by copying the contents of another table.
-   **/
+   */
   table(table const& other);
 
   /**
@@ -54,7 +54,7 @@ class table {
    *
    * @param columns The vector of `unique_ptr`s to columns whose contents will
    * be moved into the new table.
-   **/
+   */
   table(std::vector<std::unique_ptr<column>>&& columns);
 
   /**
@@ -63,43 +63,43 @@ class table {
    * @param view The view whose contents will be copied to create a new `table`
    * @param stream CUDA stream used for device memory operations.
    * @param mr Device memory resource used for allocating the device memory for the new columns
-   **/
+   */
   table(table_view view,
         rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
         rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Returns the number of columns in the table
-   **/
+   */
   size_type num_columns() const noexcept { return _columns.size(); }
 
   /**
    * @brief Returns the number of rows
-   **/
+   */
   size_type num_rows() const noexcept { return _num_rows; }
 
   /**
    * @brief Returns an immutable, non-owning `table_view` of the contents of
    *this `table`.
-   **/
+   */
   table_view view() const;
 
   /**
    * @brief Conversion operator to an immutable, non-owning `table_view` of the
    * contents of this `table`.
-   **/
+   */
   operator table_view() const { return this->view(); };
 
   /**
    * @brief Returns a mutable, non-owning `mutable_table_view` of the contents
    * of this `table`.
-   **/
+   */
   mutable_table_view mutable_view();
 
   /**
    * @brief Conversion operator to a mutable, non-owning `mutable_table_view` of
    *the contents of this `table`.
-   **/
+   */
   operator mutable_table_view() { return this->mutable_view(); };
 
   /**
@@ -107,7 +107,7 @@ class table {
    * `unique_ptr`s to the constituent columns.
    *
    * After `release()`, `num_columns() == 0` and `num_rows() == 0`
-   **/
+   */
   std::vector<std::unique_ptr<column>> release();
 
   /**
@@ -119,7 +119,7 @@ class table {
    * @param column_indices Indices of columns in the table
    * @return A table_view consisting of columns from the original table
    * specified by the elements of `column_indices`
-   **/
+   */
   table_view select(std::vector<cudf::size_type> const& column_indices) const;
 
   /**
@@ -130,7 +130,7 @@ class table {
    *
    * @param i Index of the desired column
    * @return A reference to the desired column
-   **/
+   */
   column& get_column(cudf::size_type column_index) { return *(_columns.at(column_index)); }
 
   /**
@@ -141,7 +141,7 @@ class table {
    *
    * @param i Index of the desired column
    * @return A const reference to the desired column
-   **/
+   */
   column const& get_column(cudf::size_type i) const { return *(_columns.at(i)); }
 
  private:
