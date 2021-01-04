@@ -229,7 +229,11 @@ struct parse_datetime {
       // special logic for each specifier
       switch (item.value) {
         case 'Y': timeparts[TP_YEAR] = str2int(ptr, item.length); break;
-        case 'y': timeparts[TP_YEAR] = str2int(ptr, item.length) + 1900; break;
+        case 'y': {
+          auto const year    = str2int(ptr, item.length);
+          timeparts[TP_YEAR] = year + (year < 69 ? 2000 : 1900);
+          break;
+        }
         case 'm': timeparts[TP_MONTH] = str2int(ptr, item.length); break;
         case 'd': timeparts[TP_DAY] = str2int(ptr, item.length); break;
         case 'j': timeparts[TP_DAY_OF_YEAR] = str2int(ptr, item.length); break;
@@ -452,9 +456,9 @@ struct check_datetime_format {
   /**
    * @brief Specialized function to return the value and check for non-decimal characters.
    *
-   * If non-decimal characters are found with `str` and `str + bytes` the false
-   * is returned for the second pair value. Otherwise, true is returned along
-   * with the parsed integer value.
+   * If non-decimal characters are found within `str` and `str + bytes` then
+   * the returned result is `thrust::nullopt` (_does not contain a value_).
+   * Otherwise, the parsed integer result is returned.
    *
    * @param str Beginning of characters to read/check.
    * @param bytes Number of bytes in str to read/check.
@@ -534,7 +538,8 @@ struct check_datetime_format {
         case 'y': {
           if (auto value = str2int(ptr, item.length)) {
             result             = true;
-            dateparts[TP_YEAR] = value.value() + 1900;
+            auto const year    = value.value();
+            dateparts[TP_YEAR] = year + (year < 69 ? 2000 : 1900);
           }
           break;
         }
