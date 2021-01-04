@@ -143,7 +143,7 @@ void check_float_column(cudf::column_view const& col,
 
 /**
  * @brief Base test fixture for JSON reader tests
- **/
+ */
 struct JsonReaderTest : public cudf::test::BaseFixture {
 };
 

@@ -24,7 +24,6 @@ namespace cudf {
 /**
  * @brief A non-owning, immutable view of device data that represents
  * a list of elements of arbitrary type (including further nested lists).
- *
  */
 class list_device_view {
   using lists_column_device_view = cudf::detail::lists_column_device_view;

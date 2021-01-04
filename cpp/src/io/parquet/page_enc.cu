@@ -107,8 +107,7 @@ inline __device__ uint32_t uint64_init_hash(uint64_t v)
  * @param[in] col_desc Column description array [column_id]
  * @param[in] num_fragments Number of fragments per column
  * @param[in] num_columns Number of columns
- *
- **/
+ */
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment *frag,
@@ -191,12 +190,16 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
   size_type nvals           = s->frag.num_leaf_values;
   size_type start_value_idx = s->start_value_idx;
 
+  size_type validity_offset = (s->col.nesting_offsets == nullptr) ? s->col.column_offset : 0;
   for (uint32_t i = 0; i < nvals; i += block_size) {
     const uint32_t *valid = s->col.valid_map_base;
     uint32_t val_idx      = start_value_idx + i + t;
-    uint32_t is_valid     = (i + t < nvals && val_idx < s->col.num_values)
-                          ? (valid) ? (valid[val_idx >> 5] >> (val_idx & 0x1f)) & 1 : 1
-                          : 0;
+    uint32_t is_valid =
+      (i + t < nvals && val_idx < s->col.num_values)
+        ? (valid)
+            ? (valid[(val_idx + validity_offset) / 32] >> ((val_idx + validity_offset) % 32)) & 1
+            : 1
+        : 0;
     uint32_t valid_warp = ballot(is_valid);
     uint32_t len, nz_pos, hash;
     if (is_valid) {
@@ -643,13 +646,13 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
 /**
  * @brief Mask table representing how many consecutive repeats are needed to code a repeat run
  *[nbits-1]
- **/
+ */
 static __device__ __constant__ uint32_t kRleRunMask[16] = {
   0x00ffffff, 0x0fff, 0x00ff, 0x3f, 0x0f, 0x0f, 0x7, 0x7, 0x3, 0x3, 0x3, 0x3, 0x1, 0x1, 0x1, 0x1};
 
 /**
  * @brief Variable-length encode an integer
- **/
+ */
 inline __device__ uint8_t *VlqEncode(uint8_t *p, uint32_t v)
 {
   while (v > 0x7f) {
@@ -662,7 +665,7 @@ inline __device__ uint8_t *VlqEncode(uint8_t *p, uint32_t v)
 
 /**
  * @brief Pack literal values in output bitstream (1,2,4,8,12 or 16 bits per value)
- **/
+ */
 inline __device__ void PackLiterals(
   uint8_t *dst, uint32_t v, uint32_t count, uint32_t w, uint32_t t)
 {
@@ -964,6 +967,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   }
   __syncthreads();
 
+  size_type validity_offset = (s->col.nesting_offsets == nullptr) ? s->col.column_offset : 0;
   // Encode Repetition and Definition levels
   if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.level_bits != 0 &&
       s->col.nesting_levels == 0) {
@@ -984,9 +988,12 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         uint32_t row         = s->page.start_row + rle_numvals + t;
         // Definition level encodes validity. Checks the valid map and if it is valid, then sets the
         // def_lvl accordingly and sets it in s->vals which is then given to RleEncode to encode
-        uint32_t def_lvl = (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
-                             ? (valid) ? (valid[row >> 5] >> (row & 0x1f)) & 1 : 1
-                             : 0;
+        uint32_t def_lvl =
+          (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
+            ? (valid != nullptr)
+                ? (valid[(row + validity_offset) / 32] >> ((row + validity_offset) % 32)) & 1
+                : 1
+            : 0;
         s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = def_lvl;
         __syncthreads();
         rle_numvals += nrows;
@@ -1083,9 +1090,12 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
       val_idx  = (is_valid) ? s->col.dict_data[val_idx] : val_idx;
     } else {
       const uint32_t *valid = s->col.valid_map_base;
-      is_valid = (val_idx < s->col.num_values && cur_val_idx + t < s->page.num_leaf_values)
-                   ? (valid) ? (valid[val_idx >> 5] >> (val_idx & 0x1f)) & 1 : 1
-                   : 0;
+      is_valid =
+        (val_idx < s->col.num_values && cur_val_idx + t < s->page.num_leaf_values)
+          ? (valid != nullptr)
+              ? (valid[(val_idx + validity_offset) / 32] >> ((val_idx + validity_offset) % 32)) & 1
+              : 1
+          : 0;
     }
     warp_valids = ballot(is_valid);
     cur_val_idx += nvals;
@@ -1310,7 +1320,7 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(EncColumnChunk *chun
 
 /**
  * Minimal thrift compact protocol support
- **/
+ */
 inline __device__ uint8_t *cpw_put_uint32(uint8_t *p, uint32_t v)
 {
   while (v > 0x7f) {

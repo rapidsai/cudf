@@ -192,7 +192,7 @@ class ListMethods(ColumnMethodsMixin):
         >>> a = cudf.Series([[[1, None], [3, 4]], None, [[5, 6]]])
         >>> a.list.leaves
         0       1
-        1    null
+        1    <NA>
         2       3
         3       4
         4       5

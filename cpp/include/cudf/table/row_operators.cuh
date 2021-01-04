@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,8 +37,7 @@ namespace cudf {
  *
  * Equivalence is defined as `not (a<b) and not (b<a)`. Elements that are
  * EQUIVALENT may not necessarily be *equal*.
- *
- **/
+ */
 enum class weak_ordering {
   LESS,        ///< Indicates `a` is less than (ordered before) `b`
   EQUIVALENT,  ///< Indicates `a` is ordered neither before nor after `b`
@@ -53,7 +52,7 @@ namespace detail {
  * @param[in] rhs second element
  * @return weak_ordering Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
- **/
+ */
 template <typename Element>
 __device__ weak_ordering compare_elements(Element lhs, Element rhs)
 {
@@ -140,7 +139,7 @@ __device__ bool equality_compare(Element const lhs, Element const rhs)
  * @brief Performs an equality comparison between two elements in two columns.
  *
  * @tparam has_nulls Indicates the potential for null values in either column.
- **/
+ */
 template <bool has_nulls = true>
 class element_equality_comparator {
  public:
@@ -153,7 +152,7 @@ class element_equality_comparator {
    * @param lhs The column containing the first element
    * @param rhs The column containing the second element (may be the same as lhs)
    * @param nulls_are_equal Indicates if two null elements are treated as equivalent
-   **/
+   */
   __host__ __device__ element_equality_comparator(column_device_view lhs,
                                                   column_device_view rhs,
                                                   bool nulls_are_equal = true)
@@ -232,7 +231,7 @@ class row_equality_comparator {
  * @brief Performs a relational comparison between two elements in two columns.
  *
  * @tparam has_nulls Indicates the potential for null values in either column.
- **/
+ */
 template <bool has_nulls = true>
 class element_relational_comparator {
  public:
@@ -246,7 +245,7 @@ class element_relational_comparator {
    * @param rhs The column containing the second element (may be the same as lhs)
    * @param null_precedence Indicates how null values are ordered with other
    * values
-   **/
+   */
   __host__ __device__ element_relational_comparator(column_device_view lhs,
                                                     column_device_view rhs,
                                                     null_order null_precedence)
@@ -316,7 +315,7 @@ class element_relational_comparator {
  * `aac < abb`.
  *
  * @tparam has_nulls Indicates the potential for null values in either row.
- **/
+ */
 template <bool has_nulls = true>
 class row_lexicographic_comparator {
  public:
@@ -388,7 +387,7 @@ class row_lexicographic_comparator {
  *
  * @tparam hash_function Hash functor to use for hashing elements.
  * @tparam has_nulls Indicates the potential for null values in the column.
- **/
+ */
 template <template <typename> class hash_function, bool has_nulls = true>
 class element_hasher {
  public:
@@ -432,7 +431,7 @@ class element_hasher_with_seed {
  *
  * @tparam hash_function Hash functor to use for hashing elements.
  * @tparam has_nulls Indicates the potential for null values in the table.
- **/
+ */
 template <template <typename> class hash_function, bool has_nulls = true>
 class row_hasher {
  public:
@@ -472,7 +471,7 @@ class row_hasher {
  *
  * @tparam hash_function Hash functor to use for hashing elements.
  * @tparam has_nulls Indicates the potential for null values in the table.
- **/
+ */
 template <template <typename> class hash_function, bool has_nulls = true>
 class row_hasher_initial_values {
  public:

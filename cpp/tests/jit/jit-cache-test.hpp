@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,7 +108,7 @@ struct JitCacheTest : public ::testing::Test, public cudf::jit::cudfJitCache {
 /**
  * @brief Similar to JitCacheTest but it doesn't run warmUp() test in SetUp and
  * purgeFileCache() in TearDown
- **/
+ */
 struct JitCacheMultiProcessTest : public JitCacheTest {
   virtual void SetUp() { purgeFileCache(); }
 

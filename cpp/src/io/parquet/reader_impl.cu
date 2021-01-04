@@ -137,7 +137,9 @@ type_id to_type_id(SchemaElement const &schema,
         return type_id::DECIMAL32;
       else if (physical == parquet::INT64)
         return type_id::DECIMAL64;
-      else {
+      else if (physical == parquet::FIXED_LEN_BYTE_ARRAY && schema.type_length <= 8) {
+        return type_id::DECIMAL64;
+      } else {
         CUDF_EXPECTS(strict_decimal_types == false, "Unsupported decimal type read!");
         return type_id::FLOAT64;
       }
@@ -704,7 +706,6 @@ class aggregate_metadata {
  * @param remap Maps column schema index to the R/D remapping vectors for that column
  * @param src_col_schema The column schema to generate the new mapping for
  * @param md File metadata information
- *
  */
 void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::vector<int>>> &remap,
                                int src_col_schema,
@@ -1195,11 +1196,24 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
   rmm::device_vector<gpu::nvstrdesc_s> str_dict_index;
   if (total_str_dict_indexes > 0) { str_dict_index.resize(total_str_dict_indexes); }
 
-  std::vector<hostdevice_vector<uint32_t *>> chunk_nested_valids;
-  std::vector<hostdevice_vector<void *>> chunk_nested_data;
+  // TODO (dm): hd_vec should have begin and end iterator members
+  size_t sum_max_depths =
+    std::accumulate(chunks.host_ptr(),
+                    chunks.host_ptr(chunks.size()),
+                    0,
+                    [&](size_t cursum, gpu::ColumnChunkDesc const &chunk) {
+                      return cursum + _metadata->get_output_nesting_depth(chunk.src_col_schema);
+                    });
+
+  // In order to reduce the number of allocations of hostdevice_vector, we allocate a single vector
+  // to store all per-chunk pointers to nested data/nullmask. `chunk_offsets[i]` will store the
+  // offset into `chunk_nested_data`/`chunk_nested_valids` for the array of pointers for chunk `i`
+  auto chunk_nested_valids = hostdevice_vector<uint32_t *>(sum_max_depths);
+  auto chunk_nested_data   = hostdevice_vector<void *>(sum_max_depths);
+  auto chunk_offsets       = std::vector<size_t>();
 
   // Update chunks with pointers to column data.
-  for (size_t c = 0, page_count = 0, str_ofs = 0; c < chunks.size(); c++) {
+  for (size_t c = 0, page_count = 0, str_ofs = 0, chunk_off = 0; c < chunks.size(); c++) {
     input_column_info const &input_col = _input_columns[chunks[c].src_col_index];
     CUDF_EXPECTS(input_col.schema_idx == chunks[c].src_col_schema,
                  "Column/page schema index mismatch");
@@ -1210,16 +1224,19 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
     }
 
     size_t max_depth = _metadata->get_output_nesting_depth(chunks[c].src_col_schema);
+    chunk_offsets.push_back(chunk_off);
 
-    // allocate (gpu) an array of pointers to validity data of size : nesting depth
-    chunk_nested_valids.emplace_back(hostdevice_vector<uint32_t *>{max_depth});
-    hostdevice_vector<uint32_t *> &valids = chunk_nested_valids.back();
-    chunks[c].valid_map_base              = valids.device_ptr();
+    // get a slice of size `nesting depth` from `chunk_nested_valids` to store an array of pointers
+    // to validity data
+    auto valids              = chunk_nested_valids.host_ptr(chunk_off);
+    chunks[c].valid_map_base = chunk_nested_valids.device_ptr(chunk_off);
 
-    // allocate (gpu) an array of pointers to out data of size : nesting depth
-    chunk_nested_data.emplace_back(hostdevice_vector<void *>{max_depth});
-    hostdevice_vector<void *> &data = chunk_nested_data.back();
-    chunks[c].column_data_base      = data.device_ptr();
+    // get a slice of size `nesting depth` from `chunk_nested_data` to store an array of pointers to
+    // out data
+    auto data                  = chunk_nested_data.host_ptr(chunk_off);
+    chunks[c].column_data_base = chunk_nested_data.device_ptr(chunk_off);
+
+    chunk_off += max_depth;
 
     // fill in the arrays on the host.  there are some important considerations to
     // take into account here for nested columns.  specifically, with structs
@@ -1269,15 +1286,13 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
       }
     }
 
-    // copy to the gpu
-    valids.host_to_device(stream);
-    data.host_to_device(stream);
-
     // column_data_base will always point to leaf data, even for nested types.
     page_count += chunks[c].max_num_pages;
   }
 
   chunks.host_to_device(stream);
+  chunk_nested_valids.host_to_device(stream);
+  chunk_nested_data.host_to_device(stream);
 
   if (total_str_dict_indexes > 0) {
     gpu::BuildStringDictionaryIndex(chunks.device_ptr(), chunks.size(), stream);
@@ -1337,7 +1352,9 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
       cols          = &out_buf.children;
 
       // if I wasn't the one who wrote out the validity bits, skip it
-      if (chunk_nested_valids[pi->chunk_idx][l_idx] == nullptr) { continue; }
+      if (chunk_nested_valids.host_ptr(chunk_offsets[pi->chunk_idx])[l_idx] == nullptr) {
+        continue;
+      }
       out_buf.null_count() += pni[l_idx].value_count - pni[l_idx].valid_count;
     }
   }

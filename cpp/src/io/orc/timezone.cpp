@@ -398,9 +398,21 @@ timezone_table build_timezone_transition_table(std::string const &timezone_name)
     offsets.push_back(utcoff);
     if (!earliest_std_idx && !tzf.ttype[idx].isdst) { earliest_std_idx = ttimes.size() - 1; }
   }
-  if (!earliest_std_idx) { earliest_std_idx = 1; }
-  ttimes[0]  = ttimes[earliest_std_idx];
-  offsets[0] = offsets[earliest_std_idx];
+
+  if (tzf.timecnt() != 0) {
+    if (!earliest_std_idx) { earliest_std_idx = 1; }
+    ttimes[0]  = ttimes[earliest_std_idx];
+    offsets[0] = offsets[earliest_std_idx];
+  } else {
+    if (tzf.typecnt() == 0 || tzf.ttype[0].utcoff == 0) {
+      // No transitions, offset is zero; Table would be a no-op.
+      // Return an empty table to speed up parsing.
+      return {};
+    }
+    // No transitions to use for the time/offset - use the first offset and apply to all timestamps
+    ttimes[0]  = std::numeric_limits<int64_t>::max();
+    offsets[0] = tzf.ttype[0].utcoff;
+  }
 
   // Generate entries for times after the last transition
   auto future_std_offset = offsets[tzf.timecnt()];
