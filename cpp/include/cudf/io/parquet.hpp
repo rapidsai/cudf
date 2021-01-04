@@ -484,7 +484,7 @@ class parquet_writer_options {
   std::string get_column_chunks_file_path() const { return _column_chunks_file_path; }
 
   /**
-   * @brief Returns a pointer to the decimal precision vector.
+   * @brief Returns a constant reference to the decimal precision vector.
    */
   std::vector<uint8_t> const& get_decimal_precisions() const { return _decimal_precisions; }
 
@@ -535,9 +535,9 @@ class parquet_writer_options {
   }
 
   /**
-   * @brief Sets a pointer to the decimal precision vector.
+   * @brief Sets the decimal precision vector data.
    */
-  void set_decimal_precisions(std::vector<uint8_t> const& dp) { _decimal_precisions = dp; }
+  void set_decimal_precisions(std::vector<uint8_t> dp) { _decimal_precisions = std::move(dp); }
 };
 
 class parquet_writer_options_builder {
