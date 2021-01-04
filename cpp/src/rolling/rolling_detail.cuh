@@ -506,6 +506,9 @@ struct rolling_window_launcher {
                             std::unique_ptr<aggregation> const& agg,
                             rmm::cuda_stream_view stream)
   {
+    using Type    = device_storage_type_t<T>;
+    using OutType = device_storage_type_t<target_type_t<InputType, op>>;
+
     constexpr cudf::size_type block_size = 256;
     cudf::detail::grid_1d grid(input.size(), block_size);
 
@@ -516,7 +519,7 @@ struct rolling_window_launcher {
     rmm::device_scalar<size_type> device_valid_count{0, stream};
 
     if (input.has_nulls()) {
-      gpu_rolling<T, target_type_t<InputType, op>, agg_op, op, block_size, true>
+      gpu_rolling<Type, OutType, agg_op, op, block_size, true>
         <<<grid.num_blocks, block_size, 0, stream.value()>>>(*input_device_view,
                                                              *default_outputs_device_view,
                                                              *output_device_view,
@@ -525,7 +528,7 @@ struct rolling_window_launcher {
                                                              following_window_begin,
                                                              min_periods);
     } else {
-      gpu_rolling<T, target_type_t<InputType, op>, agg_op, op, block_size, false>
+      gpu_rolling<Type, OutType, agg_op, op, block_size, false>
         <<<grid.num_blocks, block_size, 0, stream.value()>>>(*input_device_view,
                                                              *default_outputs_device_view,
                                                              *output_device_view,
@@ -558,6 +561,9 @@ struct rolling_window_launcher {
                             agg_op const& device_agg_op,
                             rmm::cuda_stream_view stream)
   {
+    using Type    = device_storage_type_t<T>;
+    using OutType = device_storage_type_t<target_type_t<InputType, op>>;
+
     constexpr cudf::size_type block_size = 256;
     cudf::detail::grid_1d grid(input.size(), block_size);
 
@@ -568,7 +574,7 @@ struct rolling_window_launcher {
     rmm::device_scalar<size_type> device_valid_count{0, stream};
 
     if (input.has_nulls()) {
-      gpu_rolling<T, target_type_t<InputType, op>, agg_op, op, block_size, true>
+      gpu_rolling<Type, OutType, agg_op, op, block_size, true>
         <<<grid.num_blocks, block_size, 0, stream.value()>>>(*input_device_view,
                                                              *default_outputs_device_view,
                                                              *output_device_view,
@@ -578,7 +584,7 @@ struct rolling_window_launcher {
                                                              min_periods,
                                                              device_agg_op);
     } else {
-      gpu_rolling<T, target_type_t<InputType, op>, agg_op, op, block_size, false>
+      gpu_rolling<Type, OutType, agg_op, op, block_size, false>
         <<<grid.num_blocks, block_size, 0, stream.value()>>>(*input_device_view,
                                                              *default_outputs_device_view,
                                                              *output_device_view,

@@ -29,7 +29,7 @@
  * initialized upfront, or gradually initialized as required.
  * The host-side memory can be used to manipulate data on the CPU before and
  * after operating on the same data on the GPU.
- **/
+ */
 template <typename T>
 class hostdevice_vector {
  public:

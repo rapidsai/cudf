@@ -26,7 +26,7 @@ namespace detail {
  * @copydoc cudf::transform
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
- **/
+ */
 std::unique_ptr<column> transform(
   column_view const& input,
   std::string const& unary_udf,
@@ -39,7 +39,7 @@ std::unique_ptr<column> transform(
  * @copydoc cudf::nans_to_nulls
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
- **/
+ */
 std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
   column_view const& input,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -49,7 +49,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  * @copydoc cudf::bools_to_mask
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
- **/
+ */
 std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
   column_view const& input,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -59,7 +59,7 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
  * @copydoc cudf::encode
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
- **/
+ */
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   cudf::table_view const& input,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -69,7 +69,7 @@ std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
  * @copydoc cudf::mask_to_bools
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
- **/
+ */
 std::unique_ptr<column> mask_to_bools(
   bitmask_type const* null_mask,
   size_type begin_bit,

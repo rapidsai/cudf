@@ -388,7 +388,6 @@ struct MurmurHash3_32 {
     return h;
   }
 
-  /* --------------------------------------------------------------------------*/
   /**
    * @brief  Combines two hash values into a new single hash value. Called
    * repeatedly to create a hash value from several variables.
@@ -400,7 +399,6 @@ struct MurmurHash3_32 {
    *
    * @returns A hash value that intelligently combines the lhs and rhs hash values
    */
-  /* ----------------------------------------------------------------------------*/
   CUDA_HOST_DEVICE_CALLABLE result_type hash_combine(result_type lhs, result_type rhs)
   {
     result_type combined{lhs};
@@ -548,17 +546,14 @@ MurmurHash3_32<double>::operator()(double const& key) const
   return this->compute_floating_point(key);
 }
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  This hash function simply returns the value that is asked to be hash
- reinterpreted as the result_type of the functor.
+ * reinterpreted as the result_type of the functor.
  */
-/* ----------------------------------------------------------------------------*/
 template <typename Key>
 struct IdentityHash {
   using result_type = hash_value_type;
 
-  /* --------------------------------------------------------------------------*/
   /**
    * @brief  Combines two hash values into a new single hash value. Called
    * repeatedly to create a hash value from several variables.
@@ -570,7 +565,6 @@ struct IdentityHash {
    *
    * @returns A hash value that intelligently combines the lhs and rhs hash values
    */
-  /* ----------------------------------------------------------------------------*/
   CUDA_HOST_DEVICE_CALLABLE result_type hash_combine(result_type lhs, result_type rhs) const
   {
     result_type combined{lhs};

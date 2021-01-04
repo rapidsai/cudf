@@ -17,7 +17,6 @@ namespace cudf {
  *
  * This exception should not be thrown directly and is instead thrown by the
  * CUDF_EXPECTS macro.
- *
  */
 struct logic_error : public std::logic_error {
   logic_error(char const* const message) : std::logic_error(message) {}
@@ -59,7 +58,7 @@ struct cuda_error : public std::runtime_error {
  * @param[in] reason String literal description of the reason that cond is
  * expected to be true
  * @throw cudf::logic_error if the condition evaluates to false.
- **/
+ */
 #define CUDF_EXPECTS(cond, reason)                                  \
   (!!(cond)) ? static_cast<void>(0)                                 \
              : throw cudf::logic_error("cuDF failure at: " __FILE__ \
@@ -77,7 +76,7 @@ struct cuda_error : public std::runtime_error {
  * ```
  *
  * @param[in] reason String literal description of the reason
- **/
+ */
 #define CUDF_FAIL(reason) \
   throw cudf::logic_error("cuDF failure at: " __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " reason)
 
@@ -99,8 +98,7 @@ inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int l
  * Invokes a CUDA runtime API function call, if the call does not return
  * cudaSuccess, invokes cudaGetLastError() to clear the error and throws an
  * exception detailing the CUDA error that occurred
- *
- **/
+ */
 #define CUDA_TRY(call)                                            \
   do {                                                            \
     cudaError_t const status = (call);                            \
@@ -122,8 +120,7 @@ inline void throw_cuda_error(cudaError_t error, const char* file, unsigned int l
  * deterministic execution for debugging asynchronous CUDA execution. It should
  * be used after any asynchronous CUDA call, e.g., cudaMemcpyAsync, or an
  * asynchronous kernel launch.
- *
- **/
+ */
 #ifndef NDEBUG
 #define CHECK_CUDA(stream)                   \
   do {                                       \

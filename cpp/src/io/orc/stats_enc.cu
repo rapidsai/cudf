@@ -33,8 +33,7 @@ namespace gpu {
  * @param[in] num_columns Number of columns
  * @param[in] num_rowgroups Number of rowgroups
  * @param[in] row_index_stride Rowgroup size in rows
- *
- **/
+ */
 constexpr unsigned int init_threads_per_group = 32;
 constexpr unsigned int init_groups_per_block  = 4;
 constexpr unsigned int init_threads_per_block = init_threads_per_group * init_groups_per_block;
@@ -65,8 +64,7 @@ __global__ void __launch_bounds__(init_threads_per_block)
  *
  * @param[in,out] groups Statistics merge groups
  * @param[in] statistics_count Number of statistics buffers
- *
- **/
+ */
 constexpr unsigned int buffersize_reduction_dim = 32;
 constexpr unsigned int buffersize_threads_per_block =
   buffersize_reduction_dim * buffersize_reduction_dim;
@@ -152,7 +150,6 @@ struct stats_state_s {
 /*
  * Protobuf encoding - see
  * https://developers.google.com/protocol-buffers/docs/encoding
- *
  */
 // Protobuf varint encoding for unsigned int
 __device__ inline uint8_t *pb_encode_uint(uint8_t *p, uint64_t v)
@@ -228,8 +225,7 @@ __device__ inline uint8_t *pb_put_fixed64(uint8_t *p, uint32_t id, const void *r
  *  optional TimestampStatistics timestampStatistics = 9;
  *  optional bool hasNull = 10;
  * }
- *
- **/
+ */
 constexpr unsigned int encode_threads_per_chunk = 32;
 constexpr unsigned int encode_chunks_per_block  = 4;
 constexpr unsigned int encode_threads_per_block =

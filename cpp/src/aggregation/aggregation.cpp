@@ -155,10 +155,13 @@ std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
 namespace detail {
 namespace {
 struct target_type_functor {
+  data_type type;
   template <typename Source, aggregation::Kind k>
   constexpr data_type operator()() const noexcept
   {
-    return data_type{type_to_id<target_type_t<Source, k>>()};
+    auto const id = type_to_id<target_type_t<Source, k>>();
+    return id == type_id::DECIMAL32 || id == type_id::DECIMAL64 ? data_type{id, type.scale()}
+                                                                : data_type{id};
   }
 };
 
@@ -174,7 +177,7 @@ struct is_valid_aggregation_impl {
 // Return target data_type for the given source_type and aggregation
 data_type target_type(data_type source, aggregation::Kind k)
 {
-  return dispatch_type_and_aggregation(source, k, target_type_functor{});
+  return dispatch_type_and_aggregation(source, k, target_type_functor{source});
 }
 
 // Verifies the aggregation `k` is valid on the type `source`

@@ -32,14 +32,14 @@ constexpr uint32_t parquet_magic = (('P' << 0) | ('A' << 8) | ('R' << 16) | ('1'
 
 /**
  * @brief Struct that describes the Parquet file data header
- **/
+ */
 struct file_header_s {
   uint32_t magic;
 };
 
 /**
  * @brief Struct that describes the Parquet file data postscript
- **/
+ */
 struct file_ender_s {
   uint32_t footer_len;
   uint32_t magic;
@@ -209,7 +209,7 @@ struct SchemaElement {
 
 /**
  * @brief Thrift-derived struct describing a column chunk
- **/
+ */
 struct ColumnChunkMetaData {
   Type type = BOOLEAN;
   std::vector<Encoding> encodings;
@@ -234,7 +234,7 @@ struct ColumnChunkMetaData {
  * Each column chunk lives in a particular row group and are guaranteed to be
  * contiguous in the file. Any mssing or corrupted chunks can be skipped during
  * reading.
- **/
+ */
 struct ColumnChunk {
   std::string file_path = "";
   int64_t file_offset   = 0;
@@ -253,7 +253,7 @@ struct ColumnChunk {
  *
  * There may be one or more row groups within a dataset, with each row group
  * consisting of a column chunk for each column.
- **/
+ */
 struct RowGroup {
   int64_t total_byte_size = 0;
   std::vector<ColumnChunk> columns;
@@ -262,7 +262,7 @@ struct RowGroup {
 
 /**
  * @brief Thrift-derived struct describing a key-value pair, for user metadata
- **/
+ */
 struct KeyValue {
   std::string key;
   std::string value;
@@ -274,7 +274,7 @@ struct KeyValue {
  * The additional information stored in the key_value_metadata can be used
  * during reading to reconstruct the output data to the exact original dataset
  * prior to conversion to Parquet.
- **/
+ */
 struct FileMetaData {
   int32_t version = 0;
   std::vector<SchemaElement> schema;
@@ -287,7 +287,7 @@ struct FileMetaData {
 
 /**
  * @brief Thrift-derived struct describing the header for a data page
- **/
+ */
 struct DataPageHeader {
   int32_t num_values                 = 0;  // Number of values, including NULLs, in this data page.
   Encoding encoding                  = Encoding::PLAIN;  // Encoding used for this data page
@@ -297,7 +297,7 @@ struct DataPageHeader {
 
 /**
  * @brief Thrift-derived struct describing the header for a dictionary page
- **/
+ */
 struct DictionaryPageHeader {
   int32_t num_values = 0;                // Number of values in the dictionary
   Encoding encoding  = Encoding::PLAIN;  // Encoding using this dictionary page
@@ -311,7 +311,7 @@ struct DictionaryPageHeader {
  * can be multiple page types interleaved in a column chunk, and each page is
  * individually compressed and encoded. Any missing or corrupted pages can be
  * skipped during reading.
- **/
+ */
 struct PageHeader {
   PageType type =
     PageType::DATA_PAGE;  // the type of the page: indicates which of the *_header fields is set
@@ -323,7 +323,7 @@ struct PageHeader {
 
 /**
  * @brief Count the number of leading zeros in an unsigned integer
- **/
+ */
 static inline int CountLeadingZeros32(uint32_t value)
 {
 #if defined(__clang__) || defined(__GNUC__)
@@ -350,7 +350,7 @@ static inline int CountLeadingZeros32(uint32_t value)
  *
  * The parser handles both V1 and V2 Parquet datasets, although not all
  * compression codecs are supported yet.
- **/
+ */
 class CompactProtocolReader {
  protected:
   static const uint8_t g_list2struct[16];
