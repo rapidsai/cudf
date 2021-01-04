@@ -372,7 +372,7 @@ metadata::metadata(datasource *const src) : source(src)
   ProtobufReader(ps_data, ps_length).read(ps);
   CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
 
-  // If compression is used, all the rest of the metadata is compressed
+  // If compression is used, the rest of the metadata is compressed
   // If no compressed is used, the decompressor is simply a pass-through
   decompressor = std::make_unique<OrcDecompressor>(ps.compression, ps.compressionBlockSize);
 
