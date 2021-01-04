@@ -55,6 +55,16 @@ class ParquetReader(IOFuzz):
                 # https://github.com/pandas-dev/pandas/issues/37327
                 - {"uint32"}
             )
+            dtypes_list.extend(
+                [
+                    cudf.core.dtypes.ListDtype("int32"),
+                    cudf.core.dtypes.ListDtype(
+                        cudf.core.dtypes.ListDtype(
+                            cudf.core.dtypes.ListDtype("str")
+                        )
+                    ),
+                ]
+            )
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
@@ -133,6 +143,16 @@ class ParquetWriter(IOFuzz):
                 # TODO: Remove uint32 below after this bug is fixed
                 # https://github.com/pandas-dev/pandas/issues/37327
                 - {"uint32"}
+            )
+            dtypes_list.extend(
+                [
+                    cudf.core.dtypes.ListDtype("int32"),
+                    cudf.core.dtypes.ListDtype(
+                        cudf.core.dtypes.ListDtype(
+                            cudf.core.dtypes.ListDtype("str")
+                        )
+                    ),
+                ]
             )
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
