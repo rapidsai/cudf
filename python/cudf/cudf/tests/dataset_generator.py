@@ -17,6 +17,8 @@ import pyarrow as pa
 from mimesis import Generic
 from pyarrow import parquet as pq
 
+import cudf
+
 
 class ColumnParameters:
     """Parameters for generating column of data
@@ -122,13 +124,18 @@ def _generate_column(column_params, num_rows):
                 else None,
             )
 
+        if hasattr(column_params.dtype, "to_arrow"):
+            arrow_type = column_params.dtype.to_arrow()
+        elif column_params.dtype is not None:
+            arrow_type = pa.from_numpy_dtype(column_params.dtype)
+        else:
+            arrow_type = None
+
         vals = pa.array(
             column_params.generator,
             size=column_params.cardinality,
             safe=False,
-            type=pa.from_numpy_dtype(column_params.dtype)
-            if column_params.dtype is not None
-            else None,
+            type=arrow_type,
         )
         # Generate data for current column
         return pa.array(
@@ -145,9 +152,7 @@ def _generate_column(column_params, num_rows):
             else None,
             size=num_rows,
             safe=False,
-            type=pa.from_numpy_dtype(column_params.dtype)
-            if column_params.dtype is not None
-            else None,
+            type=arrow_type,
         )
 
     else:
@@ -208,28 +213,35 @@ def get_dataframe(parameters, use_threads):
             column_params.generator = column_params.generator()
 
     # Get schema for each column
-    schema = pa.schema(
-        [
+    table_fields = []
+    for i, column_params in enumerate(parameters.column_parameters):
+        if (
+            isinstance(column_params.dtype, str)
+            and column_params.dtype == "category"
+        ):
+            arrow_type = pa.dictionary(
+                index_type=pa.int64(),
+                value_type=pa.from_numpy_dtype(
+                    type(next(iter(column_params.generator)))
+                ),
+            )
+        elif hasattr(column_params.dtype, "to_arrow"):
+            arrow_type = column_params.dtype.to_arrow()
+        else:
+            arrow_type = pa.from_numpy_dtype(
+                type(next(iter(column_params.generator)))
+                if column_params.dtype is None
+                else column_params.dtype
+            )
+        table_fields.append(
             pa.field(
                 name=str(i),
-                type=pa.dictionary(
-                    index_type=pa.int64(),
-                    value_type=pa.from_numpy_dtype(
-                        type(next(iter(column_params.generator)))
-                    ),
-                )
-                if isinstance(column_params.dtype, str)
-                and column_params.dtype == "category"
-                else pa.from_numpy_dtype(
-                    type(next(iter(column_params.generator)))
-                    if column_params.dtype is None
-                    else column_params.dtype
-                ),
+                type=arrow_type,
                 nullable=column_params.null_frequency > 0,
             )
-            for i, column_params in enumerate(parameters.column_parameters)
-        ]
-    )
+        )
+
+    schema = pa.schema(table_fields)
 
     # Initialize column data and which columns should be sorted
     column_data = [None] * len(parameters.column_parameters)
@@ -299,7 +311,17 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
         null_frequency = copy.deepcopy(meta["null_frequency"])
         cardinality = copy.deepcopy(meta["cardinality"])
 
-        if dtype == "category":
+        if isinstance(dtype, cudf.core.dtypes.ListDtype):
+            column_params.append(
+                ColumnParameters(
+                    cardinality=cardinality,
+                    null_frequency=null_frequency,
+                    generator=list_generator(dtype=dtype, size=cardinality),
+                    is_sorted=False,
+                    dtype=dtype,
+                )
+            )
+        elif dtype == "category":
             column_params.append(
                 ColumnParameters(
                     cardinality=cardinality,
@@ -437,3 +459,46 @@ def timedelta_generator(dtype, size):
 
 def boolean_generator(size):
     return lambda: np.random.choice(a=[False, True], size=size)
+
+
+def get_nested_list(dtype, cardinality, nesting_levels):
+    dtype = np.dtype(dtype)
+    if dtype.kind in ("i", "u"):
+        values = int_generator(dtype=dtype, size=cardinality)()
+    elif dtype.kind == "f":
+        values = float_generator(dtype=dtype, size=cardinality)()
+    elif dtype.kind in ("U", "O"):
+        values = [
+            mimesis.random.random.schoice(string.printable, 100,)
+            for _ in range(cardinality)
+        ]
+    elif dtype.kind == "M":
+        values = datetime_generator(dtype=dtype, size=cardinality)()
+    elif dtype.kind == "m":
+        values = timedelta_generator(dtype=dtype, size=cardinality)()
+    elif dtype.kind == "b":
+        values = boolean_generator(cardinality)()
+    else:
+        raise TypeError(f"Unsupported dtype: {dtype}")
+
+    while nesting_levels > 1:
+        values = [values]
+        nesting_levels -= 1
+    return values
+
+
+def list_generator(dtype, size):
+    arrow_type = dtype.to_arrow()
+    nesting_levels = 0
+    while isinstance(arrow_type, pa.ListType):
+        arrow_type = arrow_type.value_type
+        nesting_levels += 1
+
+    return lambda: [
+        get_nested_list(
+            dtype=dtype.leaf_type,
+            cardinality=size,
+            nesting_levels=nesting_levels,
+        )
+        for _ in range(size)
+    ]
