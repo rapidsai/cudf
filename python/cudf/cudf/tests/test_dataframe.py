@@ -2246,7 +2246,7 @@ def test_series_digitize_invalid_bins():
     bins = gd.Series([2, None, None, 50, 90], dtype="int32")
 
     with pytest.raises(
-        ValueError, match="Argument `bins` contains null entries."
+        ValueError, match="`bins` cannot contain null entries."
     ):
         _ = s.digitize(bins)
 
