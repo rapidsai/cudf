@@ -386,9 +386,11 @@ parquet_chunked_writer& parquet_chunked_writer::operator=(parquet_chunked_writer
 }
 
 // Writes table to output
-void parquet_chunked_writer::write(table_view const& table)
+parquet_chunked_writer& parquet_chunked_writer::write(table_view const& table)
 {
   writer->write(table, SingleWriteMode::NO);
+
+  return *this;
 }
 
 // Finishes the chunked/streamed write process

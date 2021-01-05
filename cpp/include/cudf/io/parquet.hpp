@@ -915,6 +915,7 @@ class parquet_chunked_writer {
    * @brief Moves writer unique pointer to object
    *
    * @param[in] rhs writer class that needs to be moved
+   * @return returns reference of the class object
    */
   parquet_chunked_writer& operator=(parquet_chunked_writer&& rhs);
 
@@ -922,8 +923,9 @@ class parquet_chunked_writer {
    * @brief Writes table to output.
    *
    * @param[in] table Table that needs to be written
+   * @return returns reference of the class object
    */
-  void write(table_view const& table);
+  parquet_chunked_writer& write(table_view const& table);
 
   /**
    * @brief Finishes the chunked/streamed write process.

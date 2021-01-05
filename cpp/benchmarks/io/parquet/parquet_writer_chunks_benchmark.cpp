@@ -72,11 +72,11 @@ void PQ_write_chunked(benchmark::State& state)
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::chunked_parquet_writer_options opts =
       cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info());
-    auto writer = cudf_io::parquet_chunked_writer(opts);
+    cudf_io::parquet_chunked_writer writer(opts);
     std::for_each(tables.begin(), tables.end(), [&writer](std::unique_ptr<cudf::table> const& tbl) {
       writer.write(*tbl);
     });
-    writer.write_end(writer_state);
+    writer.write_end();
   }
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0));

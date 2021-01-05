@@ -56,8 +56,8 @@ using namespace cudf::io;
 struct pq_chunked_state {
   /// current write position for rowgroups/chunks
   std::size_t current_chunk_offset;
-  /// only used in the write_chunked() case. copied from the (optionally) user supplied
-  /// argument to write()
+  // special parameter only used by detail::write() to indicate that we are guaranteeing
+  // a single table write.  this enables some internal optimizations.
   bool single_write_mode;
 
   pq_chunked_state() = default;
@@ -97,14 +97,14 @@ class writer::impl {
    * @param filepath Filepath if storing dataset to a file
    * @param options Settings for controlling behavior
    * @param mr Device memory resource to use for device memory allocation
-   **/
+   */
   explicit impl(std::unique_ptr<data_sink> sink,
                 chunked_parquet_writer_options const& options,
                 rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Destructor to complete any incomplete write and release resources.
-   **/
+   */
   ~impl();
 
   /**
@@ -268,12 +268,12 @@ class writer::impl {
   cudf::io::parquet::FileMetaData md;
   // optional user metadata
   table_metadata_with_nullability user_metadata_with_nullability;
-  // special parameter only used by detail::write() to indicate that we are guaranteeing
-  // a single table write.  this enables some internal optimizations.
+  /// only used in the write_chunked() case. copied from the (optionally) user supplied
+  /// argument to write()
   table_metadata const* user_metadata = nullptr;
   // preserves chunked state
   std::unique_ptr<pq_chunked_state> state = nullptr;
-  // to track if the output has been written to file
+  // to track if the output has been written to sink
   bool is_written = false;
 
   std::vector<uint8_t> buffer_;
