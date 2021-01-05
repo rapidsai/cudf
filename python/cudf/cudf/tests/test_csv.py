@@ -1905,21 +1905,14 @@ def test_csv_reader_category_error():
         cudf.read_csv(StringIO(csv_buf), dtype="category")
 
 
-def test_csv_writer_datetime_sep_error():
-    # TODO: Remove this test once following
-    # issues is fixed: https://github.com/rapidsai/cudf/issues/6699
+def test_csv_writer_datetime_sep():
     df = cudf.DataFrame(
         {"a": cudf.Series([22343, 2323423, 234324234], dtype="datetime64[ns]")}
     )
-
-    with pytest.raises(
-        ValueError,
-        match=re.escape(
-            "sep cannot be '-' when writing a datetime64 dtype to csv, "
-            "refer to: https://github.com/rapidsai/cudf/issues/6699"
-        ),
-    ):
-        df.to_csv(sep="-")
+    df["a"] = df["a"].astype("datetime64[s]")
+    expected = df.to_pandas().to_csv(date_format="%Y-%m-%dT%H:%M:%SZ", sep="-")
+    actual = df.to_csv(sep="-")
+    assert expected == actual
 
 
 def test_na_filter_empty_fields():

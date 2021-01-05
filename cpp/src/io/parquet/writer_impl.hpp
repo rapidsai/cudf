@@ -275,6 +275,9 @@ class writer::impl {
   std::unique_ptr<pq_chunked_state> state = nullptr;
   // to track if the output has been written to sink
   bool is_written = false;
+  /// vector of precision values for decimal writing. Exactly one entry
+  /// per decimal column.
+  std::vector<uint8_t> decimal_precision;
 
   std::vector<uint8_t> buffer_;
   std::unique_ptr<data_sink> out_sink_;

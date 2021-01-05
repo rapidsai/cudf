@@ -52,7 +52,10 @@ std::unique_ptr<column> hash(table_view const& input,
   switch (hash_function) {
     case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, initial_hash, stream, mr);
     case (hash_id::HASH_MD5): return md5_hash(input, stream, mr);
-    case (hash_id::HASH_SERIAL_MURMUR3): return serial_murmur_hash3_32(input, seed, stream, mr);
+    case (hash_id::HASH_SERIAL_MURMUR3):
+      return serial_murmur_hash3_32<MurmurHash3_32>(input, seed, stream, mr);
+    case (hash_id::HASH_SPARK_MURMUR3):
+      return serial_murmur_hash3_32<SparkMurmurHash3_32>(input, seed, stream, mr);
     default: return nullptr;
   }
 }
@@ -119,6 +122,7 @@ std::unique_ptr<column> md5_hash(table_view const& input,
                              mr);
 }
 
+template <template <typename> class hash_function>
 std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
                                                uint32_t seed,
                                                rmm::cuda_stream_view stream,
@@ -145,7 +149,7 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
                          [rindex = row_index] __device__(auto hash, auto column) {
                            return cudf::type_dispatcher(
                              column.type(),
-                             element_hasher_with_seed<MurmurHash3_32, true>{hash, hash},
+                             element_hasher_with_seed<hash_function, true>{hash, hash},
                              column,
                              rindex);
                          });
@@ -163,7 +167,7 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
                          [rindex = row_index] __device__(auto hash, auto column) {
                            return cudf::type_dispatcher(
                              column.type(),
-                             element_hasher_with_seed<MurmurHash3_32, false>{hash, hash},
+                             element_hasher_with_seed<hash_function, false>{hash, hash},
                              column,
                              rindex);
                          });

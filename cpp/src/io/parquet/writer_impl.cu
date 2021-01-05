@@ -164,6 +164,8 @@ class parquet_column_view {
                                std::vector<bool> const &nullability,
                                const table_metadata *metadata,
                                bool int96_timestamps,
+                               std::vector<uint8_t> const &decimal_precision,
+                               uint &decimal_precision_idx,
                                rmm::cuda_stream_view stream)
     : _col(col),
       _leaf_col(get_leaf_col(col)),
@@ -295,6 +297,28 @@ class parquet_column_view {
         _converted_type = ConvertedType::UTF8;
         _stats_dtype    = statistics_dtype::dtype_string;
         break;
+      case cudf::type_id::DECIMAL32:
+        _physical_type  = Type::INT32;
+        _converted_type = ConvertedType::DECIMAL;
+        _stats_dtype    = statistics_dtype::dtype_int32;
+        _decimal_scale  = -_leaf_col.type().scale();  // parquet and cudf disagree about scale signs
+        CUDF_EXPECTS(decimal_precision.size() > decimal_precision_idx,
+                     "Not enough decimal precision values passed for data!");
+        CUDF_EXPECTS(decimal_precision[decimal_precision_idx] > _decimal_scale,
+                     "Precision must be greater than scale!");
+        _decimal_precision = decimal_precision[decimal_precision_idx++];
+        break;
+      case cudf::type_id::DECIMAL64:
+        _physical_type  = Type::INT64;
+        _converted_type = ConvertedType::DECIMAL;
+        _stats_dtype    = statistics_dtype::dtype_decimal64;
+        _decimal_scale  = -_leaf_col.type().scale();  // parquet and cudf disagree about scale signs
+        CUDF_EXPECTS(decimal_precision.size() > decimal_precision_idx,
+                     "Not enough decimal precision values passed for data!");
+        CUDF_EXPECTS(decimal_precision[decimal_precision_idx] > _decimal_scale,
+                     "Precision must be greater than scale!");
+        _decimal_precision = decimal_precision[decimal_precision_idx++];
+        break;
       default:
         _physical_type = UNDEFINED_TYPE;
         _stats_dtype   = dtype_none;
@@ -381,6 +405,8 @@ class parquet_column_view {
   uint32_t const *nulls() const noexcept { return _nulls; }
   size_type offset() const noexcept { return _offset; }
   bool level_nullable(size_t level) const { return _nullability[level]; }
+  int32_t decimal_scale() const noexcept { return _decimal_scale; }
+  uint8_t decimal_precision() const noexcept { return _decimal_precision; }
 
   // List related data
   column_view cudf_col() const noexcept { return _col; }
@@ -466,6 +492,10 @@ class parquet_column_view {
 
   // String-related members
   rmm::device_buffer _indexes;
+
+  // Decimal-related members
+  int32_t _decimal_scale     = 0;
+  uint8_t _decimal_precision = 0;
 };
 
 void writer::impl::init_page_fragments(hostdevice_vector<gpu::PageFragment> &frag,
@@ -648,6 +678,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
     out_sink_(std::move(sink)),
+    decimal_precision(options.get_decimal_precision()),
     user_metadata(options.get_metadata())
 {
 }
@@ -659,6 +690,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
+    decimal_precision(options.get_decimal_precision()),
     out_sink_(std::move(sink))
 {
   if (options.get_nullable_metadata() != nullptr) {
@@ -720,6 +752,8 @@ void writer::impl::write(table_view const &table, SingleWriteMode mode)
       ? std::vector<std::vector<bool>>{}
       : get_per_column_nullability(table, user_metadata_with_nullability.column_nullable);
 
+  uint decimal_precision_idx = 0;
+
   for (auto it = table.begin(); it < table.end(); ++it) {
     const auto col        = *it;
     const auto current_id = parquet_columns.size();
@@ -732,9 +766,18 @@ void writer::impl::write(table_view const &table, SingleWriteMode mode)
     auto const &this_column_nullability =
       (state->single_write_mode) ? std::vector<bool>{} : per_column_nullability[current_id];
 
-    parquet_columns.emplace_back(
-      current_id, col, this_column_nullability, user_metadata, int96_timestamps, stream_);
+    parquet_columns.emplace_back(current_id,
+                                 col,
+                                 this_column_nullability,
+                                 user_metadata,
+                                 int96_timestamps,
+                                 decimal_precision,
+                                 decimal_precision_idx,
+                                 stream_);
   }
+
+  CUDF_EXPECTS(decimal_precision_idx == decimal_precision.size(),
+               "Too many decimal precision values!");
 
   // first call. setup metadata. num_rows will get incremented as write_chunk is
   // called multiple times.
@@ -786,7 +829,9 @@ void writer::impl::write(table_view const &table, SingleWriteMode mode)
         list_schema[nesting_depth * 2].type = physical_type;
         list_schema[nesting_depth * 2].converted_type =
           physical_type == parquet::Type::INT96 ? ConvertedType::UNKNOWN : col.converted_type();
-        list_schema[nesting_depth * 2].num_children = 0;
+        list_schema[nesting_depth * 2].num_children      = 0;
+        list_schema[nesting_depth * 2].decimal_precision = col.decimal_precision();
+        list_schema[nesting_depth * 2].decimal_scale     = col.decimal_scale();
 
         std::vector<std::string> path_in_schema;
         std::transform(
@@ -809,8 +854,10 @@ void writer::impl::write(table_view const &table, SingleWriteMode mode)
             ? OPTIONAL
             : REQUIRED;
 
-        col_schema.name         = col.name();
-        col_schema.num_children = 0;  // Leaf node
+        col_schema.name              = col.name();
+        col_schema.num_children      = 0;  // Leaf node
+        col_schema.decimal_precision = col.decimal_precision();
+        col_schema.decimal_scale     = col.decimal_scale();
 
         this_table_schema.push_back(std::move(col_schema));
       }
