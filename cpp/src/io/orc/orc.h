@@ -180,7 +180,7 @@ class ProtobufReader {
   void read_field(T &value, const uint8_t *end)
   {
     auto const size = read_field_size(end);
-    value.assign((const char *)(m_cur), size);
+    value.assign(reinterpret_cast<const char *>(m_cur), size);
     m_cur += size;
   }
 
@@ -345,18 +345,23 @@ inline uint64_t ProtobufReader::get<uint64_t>()
   }
 }
 
+template <typename T>
+auto decode_zigzag(T u)
+{
+  using signed_t = std::make_signed_t<T>;
+  return static_cast<signed_t>((u >> 1u) ^ -static_cast<signed_t>(u & 1));
+}
+
 template <>
 inline int32_t ProtobufReader::get<int32_t>()
 {
-  auto const u = get<uint32_t>();
-  return (int32_t)((u >> 1u) ^ -(int32_t)(u & 1));
+  return decode_zigzag(get<uint32_t>());
 }
 
 template <>
 inline int64_t ProtobufReader::get<int64_t>()
 {
-  auto const u = get<uint64_t>();
-  return (int64_t)((u >> 1u) ^ -(int64_t)(u & 1));
+  return decode_zigzag(get<uint64_t>());
 }
 
 /**

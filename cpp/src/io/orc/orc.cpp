@@ -498,10 +498,11 @@ void metadata::init_column_names()
     uint32_t idx        = col_id;
     do {
       idx        = parent_idx;
-      parent_idx = (idx < types.size()) ? (uint32_t)schema_idxs[idx].parent : ~0;
+      parent_idx = (idx < types.size()) ? static_cast<uint32_t>(schema_idxs[idx].parent) : ~0;
       if (parent_idx >= types.size()) break;
 
-      auto const field_idx = (parent_idx < types.size()) ? (uint32_t)schema_idxs[idx].field : ~0;
+      auto const field_idx =
+        (parent_idx < types.size()) ? static_cast<uint32_t>(schema_idxs[idx].field) : ~0;
       if (field_idx < types[parent_idx].fieldNames.size()) {
         col_name =
           types[parent_idx].fieldNames[field_idx] + (col_name.empty() ? "" : ("." + col_name));
@@ -520,9 +521,8 @@ std::vector<metadata::schema_indexes> metadata::get_schema_indexes() const
   for (uint32_t i = 0; i < schema_size; i++) {
     auto const &subtypes    = ff.types[i].subtypes;
     auto const num_children = static_cast<uint32_t>(subtypes.size());
-    if (result[i].parent == -1)  // Not initialized
-    {
-      result[i].parent = i;  // set root node as its own parent
+    if (result[i].parent == -1) {  // Not initialized
+      result[i].parent = i;        // set root node as its own parent
     }
     for (uint32_t j = 0; j < num_children; j++) {
       auto const column_id = subtypes[j];
