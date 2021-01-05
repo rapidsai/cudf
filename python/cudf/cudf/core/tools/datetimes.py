@@ -11,6 +11,7 @@ from cudf._lib.strings.char_types import is_integer as cpp_is_integer
 from cudf.core import column
 from cudf.core.index import as_index
 from cudf.utils.dtypes import is_scalar
+import cudf._lib as libcudf
 
 _unit_dtype_map = {
     "ns": "datetime64[ns]",
@@ -494,6 +495,14 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
         # if there are no other kwargs, return
         assert not kwargs
         return days
+
+    def _datetime_binop(self, datetime_col, op):
+        if self._is_no_op:
+            return datetime_col
+        else:
+            rhs = self._generate_column(len(datetime_col), op)
+            out = libcudf.datetime.add_months(datetime_col, rhs)
+        return out
 
     def _generate_column(self, size, op):
         months = self._scalars._gpu_scalars["months"]

@@ -1488,7 +1488,7 @@ def test_scalar_power_invalid(dtype_l, dtype_r):
 )
 def test_datetime_dateoffset_binaryop(date_col, n_periods, frequency, dtype):
     # TODO: test that we fail for non-integer n_periods
-
+    # TODO: test reflected ops
     gsr = cudf.Series(date_col, dtype=dtype)
     psr = gsr.to_pandas()  # converts to nanos
 
