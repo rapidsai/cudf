@@ -456,10 +456,11 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
             "minute",
             "second",
             "microsecond",
-            "millisecond" "nanosecond",
+            "millisecond",
+            "nanosecond",
         }
 
-        supported_kwargs = {"months"}
+        supported_kwargs = {"months", "years"}
 
         scalars = {}
         for k, v in kwds.items():
@@ -472,11 +473,24 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
 
         wrong_kwargs = set(kwds.keys()).difference(supported_kwargs)
         if len(wrong_kwargs) > 0:
-            raise ValueError(
+            raise NotImplementedError(
                 f"Keyword arguments '{','.join(list(wrong_kwargs))}'"
                 " are not yet supported in cuDF DateOffsets"
             )
         self._scalars = _DateOffsetScalars(scalars)
+
+    def _combine_months_and_years(self, months, years):
+        raise NotImplementedError
+        # TODO: check if month arithmetic and timedelta arithmetic commute
+
+
+    def _combine_timedeltas_to_lcd(self, **kwargs):
+        weeks = kwargs.pop("weeks", 0)
+        days = kwargs.pop("days", 0) + 7 * weeks
+
+        # if there are no other kwargs, return
+        assert(not kwargs)
+        return days
 
     def _generate_column(self, size, op):
         months = self._scalars._gpu_scalars["months"]

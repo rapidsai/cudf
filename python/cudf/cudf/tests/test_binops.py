@@ -1476,9 +1476,7 @@ def test_scalar_power_invalid(dtype_l, dtype_r):
     "frequency",
     [
         "months",
-        pytest.param(
-            "years", marks=pytest.mark.xfail(reason="not yet implemented")
-        ),
+        "years",
         pytest.param(
             "days", marks=pytest.mark.xfail(reason="not yet implemented")
         ),
