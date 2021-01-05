@@ -1472,7 +1472,7 @@ def test_scalar_power_invalid(dtype_l, dtype_r):
     ],
 )
 @pytest.mark.parametrize("n_periods", [0, 1, -1, 12, -12])
-@pytest.mark.parametrize("frequency", ["months"])
+@pytest.mark.parametrize("frequency", ["months", pytest.param("years", marks=pytest.mark.xfail(reason="not yet implemented"))])
 @pytest.mark.parametrize(
     "dtype",
     ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
