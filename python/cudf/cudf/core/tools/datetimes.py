@@ -462,6 +462,8 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
 
         supported_kwargs = {"months", "years"}
 
+        kwds = self._combine_months_and_years(**kwds)
+
         scalars = {}
         for k, v in kwds.items():
             if k in all_possible_kwargs:
@@ -479,17 +481,18 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
             )
         self._scalars = _DateOffsetScalars(scalars)
 
-    def _combine_months_and_years(self, months, years):
-        raise NotImplementedError
-        # TODO: check if month arithmetic and timedelta arithmetic commute
-
+    def _combine_months_and_years(self, **kwargs):
+        kwargs["months"] = kwargs.pop("years", 0) * 12 + kwargs.pop(
+            "months", 0
+        )
+        return kwargs
 
     def _combine_timedeltas_to_lcd(self, **kwargs):
         weeks = kwargs.pop("weeks", 0)
         days = kwargs.pop("days", 0) + 7 * weeks
 
         # if there are no other kwargs, return
-        assert(not kwargs)
+        assert not kwargs
         return days
 
     def _generate_column(self, size, op):
