@@ -51,15 +51,17 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask(
                           d_lists.size());
   }
 
-  return cudf::detail::valid_if(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(d_lists.size()), [d_lists] __device__(auto const& row_index) {
-      auto list = cudf::list_device_view(d_lists, row_index);
-      if (list.is_null()) { return false; }
-      return thrust::none_of(thrust::seq,
-                             thrust::make_counting_iterator(0),
-                             thrust::make_counting_iterator(list.size()),
-                             [&list] __device__(auto const& i) { return list.is_null(i); });
-    });
+  return cudf::detail::valid_if(thrust::make_counting_iterator(0),
+                                thrust::make_counting_iterator(d_lists.size()),
+                                [d_lists] __device__(auto const& row_index) {
+                                  auto list = cudf::list_device_view(d_lists, row_index);
+                                  if (list.is_null()) { return false; }
+                                  return thrust::none_of(
+                                    thrust::seq,
+                                    thrust::make_counting_iterator(0),
+                                    thrust::make_counting_iterator(list.size()),
+                                    [&list] __device__(auto const& i) { return list.is_null(i); });
+                                });
 }
 
 std::pair<rmm::device_buffer, size_type> construct_null_mask(
