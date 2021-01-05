@@ -70,3 +70,11 @@ def test_leaves(data):
     expect = cudf.Series(pa_array, dtype=dtype)
     got = cudf.Series(data).list.leaves
     assert_eq(expect, got)
+
+
+def test_list_to_pandas_nullable_true():
+    df = cudf.DataFrame({"a": cudf.Series([[1, 2, 3]])})
+    actual = df.to_pandas(nullable=True)
+    expected = pd.DataFrame({"a": pd.Series([[1, 2, 3]])})
+
+    assert_eq(actual, expected)

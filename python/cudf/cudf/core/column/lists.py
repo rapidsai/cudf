@@ -102,6 +102,13 @@ class ListColumn(ColumnBase):
             pa_type, len(self), buffers, children=[elements]
         )
 
+    def to_pandas(self, index=None, nullable=False, **kwargs):
+        pd_series = self.to_arrow().to_pandas(**kwargs)
+
+        if index is not None:
+            pd_series.index = index
+        return pd_series
+
     def set_base_data(self, value):
         if value is not None:
             raise RuntimeError(
@@ -113,7 +120,6 @@ class ListColumn(ColumnBase):
 
     def serialize(self):
         header = {}
-        frames = []
         header["type-serialized"] = pickle.dumps(type(self))
         header["dtype"] = pickle.dumps(self.dtype)
         header["null_count"] = self.null_count
