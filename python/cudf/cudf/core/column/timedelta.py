@@ -18,7 +18,7 @@ from cudf._typing import (
     ScalarObj,
 )
 from cudf.core.buffer import Buffer
-from cudf.core.column import column, string
+from cudf.core.column import ColumnBase, column, string
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
 from cudf.utils.utils import _fillna_natwise
@@ -310,7 +310,7 @@ class TimeDeltaColumn(column.ColumnBase):
                     fill_value = cudf.Scalar(fill_value, dtype=dtype)
             else:
                 fill_value = column.as_column(fill_value, nan_as_null=False)
-            return super().fillna(fill_value)
+            return cast("TimeDeltaColumn", ColumnBase.fillna(col, fill_value))
         else:
             return super().fillna(method=method)
 
