@@ -711,12 +711,12 @@ def digitize(column, bins, right=False):
     """
     if not column.dtype == bins.dtype:
         raise ValueError(
-            "Digitize() expects bins and input column have the same datatype."
+            "Digitize() expects bins and input column have the same dtype."
         )
 
     bin_col = as_column(bins, dtype=bins.dtype)
     if bin_col.nullable:
-        raise ValueError("Argument `bins` contains null entries.")
+        raise ValueError("`bins` cannot contain null entries.")
 
     return as_column(
         libcudf.sort.digitize(column.as_frame(), bin_col.as_frame(), right)
