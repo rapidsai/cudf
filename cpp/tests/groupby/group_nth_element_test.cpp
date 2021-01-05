@@ -353,14 +353,10 @@ TEST_F(groupby_nth_element_string_test, dictionary)
   using K = int32_t;
   using V = std::string;
 
-  // clang-format off
-  fixed_width_column_wrapper<K> keys  {1,   2,   3,   1,   2,   2,   1,   3,   3,   2};
-  dictionary_column_wrapper<V>  vals{"AB", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
-  // groupby =>  key:  { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
-  //             vals: {AB, 3, 6, 1, 4, 5, 9, 2, 7, 8};
-  fixed_width_column_wrapper<K> expect_keys{ 1,   2,   3};
+  fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  dictionary_column_wrapper<V> vals{"AB", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+  fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
   dictionary_column_wrapper<V> expect_vals_w{"6", "5", "8"};
-  // clang-format on
 
   auto expect_vals = cudf::dictionary::set_keys(expect_vals_w, vals.keys());
 

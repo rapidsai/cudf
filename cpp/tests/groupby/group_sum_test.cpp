@@ -136,7 +136,9 @@ TYPED_TEST(groupby_sum_test, null_keys_and_values)
 }
 // clang-format on
 
-TYPED_TEST(groupby_sum_test, dictionary)
+// These tests will not work until the following ptxas bug is fixed in 10.2
+// https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
+TYPED_TEST(groupby_sum_test, DISABLED_dictionary)
 {
   using K = int32_t;
   using V = TypeParam;
@@ -150,11 +152,9 @@ TYPED_TEST(groupby_sum_test, dictionary)
   fixed_width_column_wrapper<R, int> expect_vals{ 9, 19, 17};
   // clang-format on
 
-  // These tests will not work until the following ptxas bug is fixed in 10.2
-  // https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
-  // test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_sum_aggregation());
-  // test_single_agg(
-  //  keys, vals, expect_keys, expect_vals, cudf::make_sum_aggregation(), force_use_sort_impl::YES);
+  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_sum_aggregation());
+  test_single_agg(
+    keys, vals, expect_keys, expect_vals, cudf::make_sum_aggregation(), force_use_sort_impl::YES);
 }
 
 }  // namespace test

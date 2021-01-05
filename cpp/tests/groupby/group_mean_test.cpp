@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -141,7 +141,9 @@ TYPED_TEST(groupby_mean_test, null_keys_and_values)
 struct groupby_dictionary_mean_test : public cudf::test::BaseFixture {
 };
 
-TEST_F(groupby_dictionary_mean_test, basic)
+// This tests will not work until the following ptxas bug is fixed in 10.2
+// https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
+TEST_F(groupby_dictionary_mean_test, DISABLED_basic)
 {
   using K = int32_t;
   using V = int16_t;
@@ -155,9 +157,7 @@ TEST_F(groupby_dictionary_mean_test, basic)
   fixed_width_column_wrapper<R, double> expect_vals({ 9./3, 19./4, 17./3});
   // clang-format on
 
-  // This tests will not work until the following ptxas bug is fixed in 10.2
-  // https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
-  // test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_mean_aggregation());
+  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_mean_aggregation());
 }
 
 }  // namespace test

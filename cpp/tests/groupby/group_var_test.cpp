@@ -144,7 +144,9 @@ TYPED_TEST(groupby_var_test, ddof_non_default)
 }
 // clang-format on
 
-TYPED_TEST(groupby_var_test, dictionary)
+// This test will not work until the following ptxas bug is fixed in 10.2
+// https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
+TYPED_TEST(groupby_var_test, DISABLED_dictionary)
 {
   using K = int32_t;
   using V = TypeParam;
@@ -160,9 +162,7 @@ TYPED_TEST(groupby_var_test, dictionary)
   fixed_width_column_wrapper<R> expect_vals( { 9.,      131./12,     31./3 }, all_valid());
   // clang-format on
 
-  // This test will not work until the following ptxas bug is fixed in 10.2
-  // https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
-  // test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_variance_aggregation());
+  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_variance_aggregation());
 }
 
 }  // namespace test
