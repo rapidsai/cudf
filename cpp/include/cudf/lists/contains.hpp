@@ -27,9 +27,9 @@ namespace lists {
  *
  * The output column has as many elements as the input `lists` column.
  * Output `column[i]` is set to true if the lists row `lists[i]` contains the value
- * specified in skey. Otherwise, it is set to false.
+ * specified in `skey`. Otherwise, it is set to false.
  *
- * Output `column[i]` is set to null if even one of the following holds true:
+ * Output `column[i]` is set to null if one or more of the following are true:
  *   1. The search key `skey` is null
  *   2. The list row `lists[i]` is null
  *   3. The list row `lists[i]` contains even *one* null
@@ -52,7 +52,7 @@ std::unique_ptr<column> contains(
  * Output `column[i]` is set to true if the lists row `lists[i]` contains the value
  * in `skey[i]`. Otherwise, it is set to false.
  *
- * Output `column[i]` is set to null if even one of the following holds true:
+ * Output `column[i]` is set to null if one or more of the following are true:
  *   1. The row `skey[i]` is null
  *   2. The list row `lists[i]` is null
  *   3. The list row `lists[i]` contains even *one* null

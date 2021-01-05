@@ -32,11 +32,6 @@ namespace lists {
 
 namespace {
 
-auto CUDA_HOST_DEVICE_CALLABLE counting_iter(size_type n)
-{
-  return thrust::make_counting_iterator(n);
-}
-
 std::pair<rmm::device_buffer, size_type> construct_null_mask(
   cudf::detail::lists_column_device_view const& d_lists,
   cudf::scalar const& skey,
@@ -57,12 +52,12 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask(
   }
 
   return cudf::detail::valid_if(
-    counting_iter(0), counting_iter(d_lists.size()), [d_lists] __device__(auto const& row_index) {
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(d_lists.size()), [d_lists] __device__(auto const& row_index) {
       auto list = cudf::list_device_view(d_lists, row_index);
       if (list.is_null()) { return false; }
       return thrust::none_of(thrust::seq,
-                             counting_iter(0),
-                             counting_iter(list.size()),
+                             thrust::make_counting_iterator(0),
+                             thrust::make_counting_iterator(list.size()),
                              [&list] __device__(auto const& i) { return list.is_null(i); });
     });
 }
@@ -82,8 +77,8 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask(
     return std::make_pair(rmm::device_buffer{0, stream, mr}, size_type{0});
   }
 
-  return cudf::detail::valid_if(counting_iter(0),
-                                counting_iter(d_lists.size()),
+  return cudf::detail::valid_if(thrust::make_counting_iterator(0),
+                                thrust::make_counting_iterator(d_lists.size()),
                                 [d_lists, d_skeys] __device__(auto const& row_index) {
                                   if (d_skeys.is_null(row_index)) { return false; }
 
@@ -93,8 +88,8 @@ std::pair<rmm::device_buffer, size_type> construct_null_mask(
 
                                   return thrust::none_of(
                                     thrust::seq,
-                                    counting_iter(0),
-                                    counting_iter(list.size()),
+                                    thrust::make_counting_iterator(0),
+                                    thrust::make_counting_iterator(list.size()),
                                     [&list] __device__(auto const& i) { return list.is_null(i); });
                                 });
 }
@@ -121,8 +116,8 @@ struct lookup_functor {
     auto d_scalar = cudf::get_scalar_device_view(h_scalar);
 
     thrust::transform(rmm::exec_policy(stream),
-                      counting_iter(0),
-                      counting_iter(d_lists.size()),
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(d_lists.size()),
                       output_bools.data<bool>(),
                       [d_lists, d_scalar] __device__(auto row_index) {
                         auto list = cudf::list_device_view(d_lists, row_index);
@@ -145,8 +140,8 @@ struct lookup_functor {
              rmm::mr::device_memory_resource* mr) const
   {
     thrust::transform(rmm::exec_policy(stream),
-                      counting_iter(0),
-                      counting_iter(d_lists.size()),
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(d_lists.size()),
                       output_bools.data<bool>(),
                       [d_lists, d_skeys] __device__(auto row_index) {
                         if (d_skeys.is_null(row_index)) { return false; }
@@ -252,6 +247,7 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
                                  cudf::scalar const& skey,
                                  rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::contains(lists, skey, rmm::cuda_stream_default, mr);
 }
 
@@ -259,6 +255,7 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
                                  cudf::column_view const& skeys,
                                  rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::contains(lists, skeys, rmm::cuda_stream_default, mr);
 }
 
