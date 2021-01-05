@@ -76,7 +76,7 @@ void PQ_write_chunked(benchmark::State& state)
     std::for_each(tables.begin(), tables.end(), [&writer](std::unique_ptr<cudf::table> const& tbl) {
       writer.write(*tbl);
     });
-    writer.write_end();
+    writer.close();
   }
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * state.range(0));

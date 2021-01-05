@@ -50,25 +50,6 @@ using namespace cudf::io::parquet;
 using namespace cudf::io;
 
 /**
- * @brief Chunked writer state struct. Contains pieces of information
- *        needed that span the write() / end() call process.
- */
-struct pq_chunked_state {
-  /// current write position for rowgroups/chunks
-  std::size_t current_chunk_offset;
-  // special parameter only used by detail::write() to indicate that we are guaranteeing
-  // a single table write.  this enables some internal optimizations.
-  bool single_write_mode;
-
-  pq_chunked_state() = default;
-
-  pq_chunked_state(SingleWriteMode mode = SingleWriteMode::NO)
-    : single_write_mode({mode == SingleWriteMode::YES})
-  {
-  }
-};
-
-/**
  * @brief Implementation for parquet writer
  */
 class writer::impl {
@@ -85,10 +66,12 @@ class writer::impl {
    *
    * @param filepath Filepath if storing dataset to a file
    * @param options Settings for controlling behavior
+   * @param mode Option to write at once or in chunks.
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<data_sink> sink,
                 parquet_writer_options const& options,
+                SingleWriteMode mode,
                 rmm::mr::device_memory_resource* mr);
 
   /**
@@ -96,10 +79,12 @@ class writer::impl {
    *
    * @param filepath Filepath if storing dataset to a file
    * @param options Settings for controlling behavior
+   * @param mode Option to write at once or in chunks.
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<data_sink> sink,
                 chunked_parquet_writer_options const& options,
+                SingleWriteMode mode,
                 rmm::mr::device_memory_resource* mr);
 
   /**
@@ -109,10 +94,8 @@ class writer::impl {
 
   /**
    * @brief Initializes the states before writing.
-   *
-   * @param[in] mode Option to write at once or in chunks.
    */
-  void init_state(SingleWriteMode mode = SingleWriteMode::NO);
+  void init_state();
 
   /**
    * @brief Write an entire dataset to parquet format.
@@ -133,10 +116,8 @@ class writer::impl {
    * normally used for chunked writing.
    *
    * @param[in] table The table information to be written
-   * @param[in] mode Option to write at once or in chunks.
-   * boundaries.
    */
-  void write(table_view const& table, SingleWriteMode mode = SingleWriteMode::NO);
+  void write(table_view const& table);
 
   /**
    * @brief Finishes the chunked/streamed write process.
@@ -145,8 +126,8 @@ class writer::impl {
    * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
    * @return unique_ptr to FileMetadata thrift message if requested
    */
-  std::unique_ptr<std::vector<uint8_t>> write_end(bool return_filemetadata = false,
-                                                  const std::string& column_chunks_file_path = "");
+  std::unique_ptr<std::vector<uint8_t>> close(bool return_filemetadata                   = false,
+                                              const std::string& column_chunks_file_path = "");
 
  private:
   /**
@@ -271,13 +252,18 @@ class writer::impl {
   /// only used in the write_chunked() case. copied from the (optionally) user supplied
   /// argument to write()
   table_metadata const* user_metadata = nullptr;
-  // preserves chunked state
-  std::unique_ptr<pq_chunked_state> state = nullptr;
   // to track if the output has been written to sink
-  bool is_written = false;
+  bool is_closed = false;
   /// vector of precision values for decimal writing. Exactly one entry
   /// per decimal column.
   std::vector<uint8_t> decimal_precision;
+  /// current write position for rowgroups/chunks
+  std::size_t current_chunk_offset;
+  // special parameter only used by detail::write() to indicate that we are guaranteeing
+  // a single table write.  this enables some internal optimizations.
+  bool const single_write_mode = true;
+  // To track whether necessary members have been initialized
+  bool initialized = false;
 
   std::vector<uint8_t> buffer_;
   std::unique_ptr<data_sink> out_sink_;

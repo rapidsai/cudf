@@ -672,6 +672,7 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
                    parquet_writer_options const &options,
+                   SingleWriteMode mode,
                    rmm::mr::device_memory_resource *mr)
   : _mr(mr),
     compression_(to_parquet_compression(options.get_compression())),
@@ -679,18 +680,21 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     int96_timestamps(options.is_enabled_int96_timestamps()),
     out_sink_(std::move(sink)),
     decimal_precision(options.get_decimal_precision()),
+    single_write_mode(mode == SingleWriteMode::YES),
     user_metadata(options.get_metadata())
 {
 }
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
                    chunked_parquet_writer_options const &options,
+                   SingleWriteMode mode,
                    rmm::mr::device_memory_resource *mr)
   : _mr(mr),
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
     decimal_precision(options.get_decimal_precision()),
+    single_write_mode(mode == SingleWriteMode::YES),
     out_sink_(std::move(sink))
 {
   if (options.get_nullable_metadata() != nullptr) {
@@ -701,17 +705,17 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 
 writer::impl::~impl()
 {
-  if (not is_written) write_end(false, "");
+  if (not is_closed) close(false, "");
 }
 
-void writer::impl::init_state(SingleWriteMode mode)
+void writer::impl::init_state()
 {
   // Write file header
   file_header_s fhdr;
   fhdr.magic = parquet_magic;
   out_sink_->host_write(&fhdr, sizeof(fhdr));
-  state                       = std::make_unique<pq_chunked_state>(mode);
-  state->current_chunk_offset = sizeof(file_header_s);
+  current_chunk_offset = sizeof(file_header_s);
+  initialized          = true;
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
@@ -720,18 +724,18 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write(
   const std::string &column_chunks_file_path,
   rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(not is_written, "Data has already been flushed to out and closed");
+  CUDF_EXPECTS(not is_closed, "Data has already been flushed to out and closed");
   stream_ = stream;
-  init_state(SingleWriteMode::YES);
+  init_state();
   write(table);
-  return write_end(return_filemetadata, column_chunks_file_path);
+  return close(return_filemetadata, column_chunks_file_path);
 }
 
-void writer::impl::write(table_view const &table, SingleWriteMode mode)
+void writer::impl::write(table_view const &table)
 {
-  CUDF_EXPECTS(not is_written, "Data has already been flushed to out and closed");
+  CUDF_EXPECTS(not is_closed, "Data has already been flushed to out and closed");
 
-  if (state == nullptr) { init_state(mode); }
+  if (initialized == false) { init_state(); }
   size_type num_columns = table.num_columns();
   size_type num_rows    = 0;
 
@@ -748,7 +752,7 @@ void writer::impl::write(table_view const &table, SingleWriteMode mode)
   // The user can pass in information about the nullability of a column to be enforced across
   // write_chunk() calls, in a flattened bool vector. Figure out that per column.
   auto per_column_nullability =
-    (state->single_write_mode)
+    (single_write_mode)
       ? std::vector<std::vector<bool>>{}
       : get_per_column_nullability(table, user_metadata_with_nullability.column_nullable);
 
@@ -764,7 +768,7 @@ void writer::impl::write(table_view const &table, SingleWriteMode mode)
     // one table tell us everything we need to know about their nullability.
     // Empty nullability means the writer figures out the nullability from the cudf columns.
     auto const &this_column_nullability =
-      (state->single_write_mode) ? std::vector<bool>{} : per_column_nullability[current_id];
+      (single_write_mode) ? std::vector<bool>{} : per_column_nullability[current_id];
 
     parquet_columns.emplace_back(current_id,
                                  col,
@@ -849,8 +853,7 @@ void writer::impl::write(table_view const &table, SingleWriteMode mode)
           physical_type == parquet::Type::INT96 ? ConvertedType::UNKNOWN : col.converted_type();
 
         col_schema.repetition_type =
-          (col.max_def_level() == 1 ||
-           (state->single_write_mode && col.row_count() < (size_t)num_rows))
+          (col.max_def_level() == 1 || (single_write_mode && col.row_count() < (size_t)num_rows))
             ? OPTIONAL
             : REQUIRED;
 
@@ -1228,22 +1231,22 @@ void writer::impl::write(table_view const &table, SingleWriteMode mode)
         }
         md.row_groups[global_r].total_byte_size += ck->compressed_size;
         md.row_groups[global_r].columns[i].meta_data.data_page_offset =
-          state->current_chunk_offset + ((ck->has_dictionary) ? ck->dictionary_size : 0);
+          current_chunk_offset + ((ck->has_dictionary) ? ck->dictionary_size : 0);
         md.row_groups[global_r].columns[i].meta_data.dictionary_page_offset =
-          (ck->has_dictionary) ? state->current_chunk_offset : 0;
+          (ck->has_dictionary) ? current_chunk_offset : 0;
         md.row_groups[global_r].columns[i].meta_data.total_uncompressed_size = ck->bfr_size;
         md.row_groups[global_r].columns[i].meta_data.total_compressed_size   = ck->compressed_size;
-        state->current_chunk_offset += ck->compressed_size;
+        current_chunk_offset += ck->compressed_size;
       }
     }
   }
 }
 
-std::unique_ptr<std::vector<uint8_t>> writer::impl::write_end(
+std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
   bool return_filemetadata, const std::string &column_chunks_file_path)
 {
-  CUDF_EXPECTS(not is_written, "Data has already been flushed to out and closed");
-  is_written = true;
+  CUDF_EXPECTS(not is_closed, "Data has already been flushed to out and closed");
+  is_closed = true;
   CompactProtocolWriter cpw(&buffer_);
   file_ender_s fendr;
   buffer_.resize(0);
@@ -1276,15 +1279,17 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::write_end(
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
                parquet_writer_options const &options,
+               SingleWriteMode mode,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(std::move(sink), options, mr))
+  : _impl(std::make_unique<impl>(std::move(sink), options, mode, mr))
 {
 }
 
 writer::writer(std::unique_ptr<data_sink> sink,
                chunked_parquet_writer_options const &options,
+               SingleWriteMode mode,
                rmm::mr::device_memory_resource *mr)
-  : _impl(std::make_unique<impl>(std::move(sink), options, mr))
+  : _impl(std::make_unique<impl>(std::move(sink), options, mode, mr))
 {
 }
 
@@ -1301,13 +1306,13 @@ std::unique_ptr<std::vector<uint8_t>> writer::write(table_view const &table,
 }
 
 // Forward to implementation
-void writer::write(table_view const &table, SingleWriteMode mode) { _impl->write(table, mode); }
+void writer::write(table_view const &table) { _impl->write(table); }
 
 // Forward to implementation
-std::unique_ptr<std::vector<uint8_t>> writer::write_end(bool return_filemetadata,
-                                                        const std::string &column_chunks_file_path)
+std::unique_ptr<std::vector<uint8_t>> writer::close(bool return_filemetadata,
+                                                    const std::string &column_chunks_file_path)
 {
-  return _impl->write_end(return_filemetadata, column_chunks_file_path);
+  return _impl->close(return_filemetadata, column_chunks_file_path);
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(

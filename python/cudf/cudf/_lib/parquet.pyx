@@ -466,7 +466,7 @@ cdef class ParquetWriter:
 
         with nogil:
             out_metadata_c = move(
-                self.writer.get()[0].write_end(
+                self.writer.get()[0].close(
                     return_meta, column_chunks_file_path
                 )
             )

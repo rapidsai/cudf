@@ -918,7 +918,7 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
  *  writer.write(table0)
  *  writer.write(table1)
  *  ...
- *  writer.write_end()
+ *  writer.close()
  *  @endcode
  */
 class parquet_chunked_writer {
@@ -962,8 +962,8 @@ class parquet_chunked_writer {
    * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
    * @return unique_ptr to FileMetadata thrift message if requested
    */
-  std::unique_ptr<std::vector<uint8_t>> write_end(bool return_filemetadata = false,
-                                                  const std::string& column_chunks_file_path = "");
+  std::unique_ptr<std::vector<uint8_t>> close(bool return_filemetadata                   = false,
+                                              const std::string& column_chunks_file_path = "");
 
   // Unique pointer to impl writer class
   std::unique_ptr<cudf::io::detail::parquet::writer> writer;
