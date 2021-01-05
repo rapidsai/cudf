@@ -244,7 +244,9 @@ Device [memory resources](#memory_resource) are used in libcudf to abstract and 
 
 ### Output Memory
 
-Any libcudf API that allocates memory that is *returned* to a user must accept a `device_memory_resource`. Example:
+Any libcudf API that allocates memory that is *returned* to a user must accept a pointer to a `device_memory_resource` as the last parameter. Inside the API, this memory resource must be used
+to allocate any memory for returned objects. It should therefore be passed into functions whose
+outputs will be returned. Example:
 
 ```c++
 // Returned `column` contains newly allocated memory, 
@@ -259,9 +261,10 @@ void does_not_allocate_output_memory(...);
 
 ### Temporary Memory
 
-Not all memory allocated within a libcudf feature is returned to the caller.
-Oftentimes in implementing an algorithm, it is necessary to allocate temporary, scratch memory for intermediate results.
-For these temporary memory allocations, the default resource returned from `rmm::mr::get_current_device_resource()` should *always* be used. Example:
+Not all memory allocated within a libcudf API is returned to the caller. Often algorithms must 
+allocate temporary, scratch memory for intermediate results. Always use the default resource
+obtained from `rmm::mr::get_current_device_resource()` for temporary memory allocations. Example:
+
 ```c++
 rmm::device_buffer some_function(..., rmm::mr::device_memory_resource mr * = rmm::mr::get_current_device_resource()){
     rmm::device_buffer returned_buffer(..., mr); // Returned buffer uses the passed in MR
@@ -274,7 +277,8 @@ rmm::device_buffer some_function(..., rmm::mr::device_memory_resource mr * = rmm
 
 ### Memory Management
 
-RMM provides three classes built to use `device_memory_resource`(*)s for device memory allocation with automated lifetime management:
+RMM provides classes built to use `device_memory_resource`(*)s for device memory allocation with
+automated lifetime management:
 
 #### `rmm::device_buffer`
 Allocates a specified number of bytes of untyped, uninitialized device memory. 
@@ -291,9 +295,9 @@ rmm::device_buffer moved_to(std::move(buff)); // Moves contents of `buff` into `
 ```
 
 #### `rmm::device_scalar<T>`
-Allocates a single element of the specified type initialized to the specified value.
-Use this for scalar input/outputs into device kernels, e.g., reduction results, null count, etc.
-This is effectively a convenience wrapper around a `rmm::device_vector<T>` of length 1.
+Allocates a single element of the specified type initialized to the specified value. Use this for 
+scalar input/outputs into device kernels, e.g., reduction results, null count, etc. This is 
+effectively a convenience wrapper around a `rmm::device_vector<T>` of length 1.
 
 ```c++
 // Allocates device memory for a single int using the specified resource and stream
@@ -310,16 +314,20 @@ int host_value = int_scalar.value();
 
 #### `rmm::device_vector<T>`
 
-Allocates a specified number of elements of the specified type.
-If no initialization value is provided, all elements are default initialized (this incurs a kernel launch).
+Allocates a specified number of elements of the specified type. If no initialization value is 
+provided, all elements are default initialized (this incurs a kernel launch).
 
-(*) Note: `rmm::device_vector<T>` is not yet updated to use `device_memory_resource`s, but support is forthcoming. Likewise, `device_vector` operations cannot be stream ordered.
+(*) Note: `rmm::device_vector<T>` is not yet updated to use `device_memory_resource`s, but support 
+is forthcoming. Likewise, `device_vector` operations cannot be stream ordered.
 
 #### `rmm::device_uvector<T>`
 
-Similar to a `device_vector`, allocates a contiguous set of elements in device memory but with key differences:
-- As an optimization, elements are uninitialized and no synchronization occurs at construction. This limits the types `T` to trivially copyable types.
-- All operations are stream ordered (i.e., they accept a `cuda_stream_view` specifying the stream on which the operation is performed).
+Similar to a `device_vector`, allocates a contiguous set of elements in device memory but with key 
+differences:
+- As an optimization, elements are uninitialized and no synchronization occurs at construction.
+This limits the types `T` to trivially copyable types.
+- All operations are stream ordered (i.e., they accept a `cuda_stream_view` specifying the stream 
+on which the operation is performed).
 
 ```c++
 cuda_stream s;
@@ -333,7 +341,6 @@ rmm::mr::device_memory_resource * mr = new my_custom_resource{...};
 // Allocates uninitialized storage for 100 `int32_t` elements on stream `s` using the resource `mr`
 rmm::device_uvector<int32_t> v2{100, s, mr}; 
 ```
-
 
 ## Input/Output Style<a name="inout_style"></a>
 
