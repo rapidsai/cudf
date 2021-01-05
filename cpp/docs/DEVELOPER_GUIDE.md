@@ -1,6 +1,7 @@
 # libcudf C++ Developer Guide
 
-This document serves as a guide for contributors to libcudf C++ code.
+This document serves as a guide for contributors to libcudf C++ code. Refer also to the 
+[Documentation Guide](DOCUMENTATION.md) for guidelines on documenting libcudf code.
 
 # Directory Structure and File Naming
 
