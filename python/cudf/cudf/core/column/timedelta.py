@@ -310,7 +310,7 @@ class TimeDeltaColumn(column.ColumnBase):
                     fill_value = cudf.Scalar(fill_value, dtype=dtype)
             else:
                 fill_value = column.as_column(fill_value, nan_as_null=False)
-            return super().fillna(col, fill_value)
+            return super().fillna(fill_value)
         else:
             return super().fillna(method=method)
 
