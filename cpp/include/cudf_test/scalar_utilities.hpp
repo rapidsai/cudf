@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ namespace test {
  *
  * @param lhs                   The first scalar
  * @param rhs                   The second scalar
- **/
+ */
 void expect_scalars_equal(cudf::scalar const& lhs, cudf::scalar const& rhs);
 
 }  // namespace test

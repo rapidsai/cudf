@@ -750,12 +750,14 @@ class ColumnBase(Column, Serializable):
 
         self._mimic_inplace(out, inplace=True)
 
-    def fillna(self, value):
+    def fillna(self, value=None, method=None, dtype=None):
         """Fill null values with ``value``.
 
         Returns a copy with null filled.
         """
-        raise NotImplementedError
+        return libcudf.replace.replace_nulls(
+            input_col=self, replacement=value, method=method, dtype=dtype
+        )
 
     def isnull(self):
         """Identify missing values in a Column.
@@ -2108,5 +2110,5 @@ def full(size, fill_value, dtype=None):
     """
 
     return libcudf.column.make_column_from_scalar(
-        as_device_scalar(fill_value, dtype), size
+        cudf.Scalar(fill_value, dtype), size
     )

@@ -33,8 +33,7 @@ namespace parquet {
  * @brief Class for parsing Parquet's Thrift Compact Protocol encoded metadata
  *
  * This class takes in the Parquet structs and outputs a Thrift-encoded binary blob
- *
- **/
+ */
 class CompactProtocolWriter {
  public:
   CompactProtocolWriter(std::vector<uint8_t> *output) : m_buf(*output) {}

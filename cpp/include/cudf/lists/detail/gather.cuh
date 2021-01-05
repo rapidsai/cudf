@@ -232,7 +232,6 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
  *
  * @returns The gather_data struct needed to construct the gather map for the
  *          next level of recursion.
- *
  */
 template <bool NullifyOutOfBounds, typename MapItType>
 gather_data make_gather_data(cudf::lists_column_view const& source_column,
@@ -261,7 +260,6 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
  * @param mr Memory resource to use for all allocations
  *
  * @returns column with elements gathered based on `gather_data`
- *
  */
 std::unique_ptr<column> gather_list_nested(
   lists_column_view const& list,
@@ -280,7 +278,6 @@ std::unique_ptr<column> gather_list_nested(
  * @param mr Memory resource to use for all allocations
  *
  * @returns column with elements gathered based on `gather_data`
- *
  */
 std::unique_ptr<column> gather_list_leaf(
   column_view const& column,

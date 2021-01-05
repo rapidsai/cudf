@@ -99,7 +99,6 @@ rmm::device_scalar<OutputType> reduce_device(InputIterator d_in,
  * @brief Functor that accepts two minmax_pairs and returns a
  * minmax_pair whose minimum and maximum values are the min() and max()
  * respectively of the minimums and maximums of the input pairs.
- *
  */
 template <typename T>
 struct minmax_binary_op
@@ -113,7 +112,6 @@ struct minmax_binary_op
 
 /**
  * @brief Creates a minmax_pair<T> from a T
- *
  */
 template <typename T>
 struct create_minmax {
@@ -124,7 +122,6 @@ struct create_minmax {
  * @brief Functor that takes a thrust::pair<T, bool> and produces a minmax_pair
  * that is <T, T> for minimum and maximum or <cudf::DeviceMin::identity<T>(),
  * cudf::DeviceMax::identity<T>()>
- *
  */
 template <typename T>
 struct create_minmax_with_nulls {
