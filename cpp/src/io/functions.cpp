@@ -239,6 +239,16 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
   return statistics_blobs;
 }
 
+void parse_orc_statistics(std::vector<std::vector<std::string>> const& blobs)
+{
+  auto& cstats = blobs[1];
+  auto reader =
+    orc::ProtobufReader(reinterpret_cast<const uint8_t*>(cstats[1].c_str()), cstats[1].size());
+  orc::ColumnStatistics cs;
+  reader.read(cs);
+  std::cout << cs.numberOfValues << '\n';
+}
+
 // Freeform API wraps the detail reader class API
 table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_memory_resource* mr)
 {

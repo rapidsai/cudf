@@ -115,6 +115,12 @@ void ProtobufReader::read(ColumnEncoding &s, size_t maxlen)
   function_builder(s, maxlen, op);
 }
 
+void ProtobufReader::read(ColumnStatistics &s, size_t maxlen)
+{
+  auto op = std::make_tuple(make_field_reader(1, s.numberOfValues));
+  function_builder(s, maxlen, op);
+}
+
 void ProtobufReader::read(StripeStatistics &s, size_t maxlen)
 {
   auto op = std::make_tuple(make_raw_field_reader(1, s.colStats));

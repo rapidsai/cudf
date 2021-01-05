@@ -64,7 +64,7 @@ struct UserMetadataItem {
   std::string value;  // the user defined binary value as string
 };
 
-typedef std::vector<uint8_t> ColStatsBlob;  // Column statistics blob
+using ColStatsBlob = std::vector<uint8_t>;  // Column statistics blob
 
 struct FileFooter {
   uint64_t headerLength  = 0;              // the length of the file header in bytes (always 3)
@@ -92,6 +92,10 @@ struct StripeFooter {
   std::vector<Stream> streams;          // the location of each stream
   std::vector<ColumnEncoding> columns;  // the encoding of each column
   std::string writerTimezone = "";      // time zone of the writer
+};
+
+struct ColumnStatistics {
+  uint64_t numberOfValues = 0;
 };
 
 struct StripeStatistics {
@@ -125,6 +129,7 @@ class ProtobufReader {
   void read(StripeFooter &, size_t maxlen);
   void read(Stream &, size_t maxlen);
   void read(ColumnEncoding &, size_t maxlen);
+  void read(ColumnStatistics &, size_t maxlen);
   void read(StripeStatistics &, size_t maxlen);
   void read(Metadata &, size_t maxlen);
 

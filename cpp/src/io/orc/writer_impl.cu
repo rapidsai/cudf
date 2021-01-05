@@ -796,16 +796,8 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
     col_stats->start_chunk            = static_cast<uint32_t>(i * stripe_list.size());
     col_stats->num_chunks             = static_cast<uint32_t>(stripe_list.size());
   }
-  CUDA_TRY(cudaMemcpyAsync(stat_desc.device_ptr(),
-                           stat_desc.host_ptr(),
-                           stat_desc.memory_size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
-  CUDA_TRY(cudaMemcpyAsync(stat_merge.device_ptr(),
-                           stat_merge.host_ptr(),
-                           stat_merge.memory_size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  stat_desc.host_to_device(stream);
+  stat_merge.host_to_device(stream);
   gpu::orc_init_statistics_groups(stat_groups.data().get(),
                                   stat_desc.device_ptr(),
                                   num_columns,
@@ -827,11 +819,8 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
                         stream);
   gpu::orc_init_statistics_buffersize(
     stat_merge.device_ptr(), stat_chunks.data().get() + num_chunks, num_stat_blobs, stream);
-  CUDA_TRY(cudaMemcpyAsync(stat_merge.host_ptr(),
-                           stat_merge.device_ptr(),
-                           stat_merge.memory_size(),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
+
+  stat_merge.device_to_host(stream);
   stream.synchronize();
 
   hostdevice_vector<uint8_t> blobs(stat_merge[num_stat_blobs - 1].start_chunk +
@@ -841,16 +830,9 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
                              stat_chunks.data().get() + num_chunks,
                              num_stat_blobs,
                              stream);
-  CUDA_TRY(cudaMemcpyAsync(stat_merge.host_ptr(),
-                           stat_merge.device_ptr(),
-                           stat_merge.memory_size(),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  CUDA_TRY(cudaMemcpyAsync(blobs.host_ptr(),
-                           blobs.device_ptr(),
-                           blobs.memory_size(),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
+
+  stat_merge.device_to_host(stream);
+  blobs.device_to_host(stream);
   stream.synchronize();
 
   for (size_t i = 0; i < num_stat_blobs; i++) {

@@ -222,7 +222,7 @@ class writer::impl {
    * @param num_columns Total number of columns
    * @param num_rows Total number of rows
    * @param num_rowgroups Total number of row groups
-   * @param stripe_list List of stripe boundaries
+   * @param stripe_list Number of rowgroups in each stripe
    * @param stripes Stripe information
    * @param chunks List of column data chunks
    * @param stream CUDA stream used for device memory operations and kernel launches.
